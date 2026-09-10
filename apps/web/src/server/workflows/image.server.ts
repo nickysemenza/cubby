@@ -7,6 +7,7 @@ import type {
   initiateUploadWithoutEntitySchema,
   mcpAttachFileInput,
 } from "@cubby/schemas/image";
+import type { AppErrorReason } from "@cubby/shared";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -22,125 +23,144 @@ import {
   initiateDocumentUpload,
   initiateImageUploadWithoutEntity,
 } from "~/server/services/image-storage.service";
-export const markImageUploadedWorkflow = async (
-  db: Database,
-  input: z.output<typeof getImageByIdSchema>,
-) => markImageUploaded(db, await resolveOrThrow(db, "image", input.id));
-export const initiateImageUploadWorkflow = async (
-  db: Database,
-  input: z.output<typeof initiateUploadWithoutEntitySchema>,
-) => {
-  try {
-    const result = await initiateImageUploadWithoutEntity(db, input);
-    return {
-      uploadUrl: result.uploadUrl,
-      imageId: result.imageId,
-      key: result.key,
-      url: result.url,
-    };
-  } catch (error) {
-    throw createAppError(
-      "IMAGE_UPLOAD_FAILED",
-      "Failed to initiate upload",
-      error,
-    );
-  }
-};
-export const initiateDocumentUploadWorkflow = async (
-  db: Database,
-  input: z.output<typeof initiateDocumentUploadSchema>,
-) => {
-  try {
-    const result = await initiateDocumentUpload(db, input);
-    return {
-      uploadUrl: result.uploadUrl,
-      imageId: result.imageId,
-      key: result.key,
-      url: result.url,
-    };
-  } catch (error) {
-    throw createAppError(
-      "IMAGE_UPLOAD_FAILED",
-      "Failed to initiate upload",
-      error,
-    );
-  }
-};
-export const importImageFromUrlWorkflow = async (
-  db: Database,
-  input: z.output<typeof importImageFromUrlSchema>,
-) => {
-  try {
-    const filenamePrefix = `${input.entityType ?? "image"}-url-import`;
-    const result = await importImageFromUrl(db, {
-      sourceUrl: input.url,
-      filenamePrefix,
-    });
-    if (!result) throw new Error("Failed to fetch image from URL");
-    const filename =
-      new URL(input.url).pathname.split("/").pop() || `${filenamePrefix}.jpg`;
-    return {
-      imageId: result.imageId,
-      key: result.key,
-      url: result.url,
-      filename,
-    };
-  } catch (error) {
-    throw createAppError(
-      "IMAGE_IMPORT_FAILED",
-      "Failed to import image from URL",
-      error,
-    );
-  }
-};
-export const attachFileWorkflow = async (
-  db: Database,
-  input: z.output<typeof mcpAttachFileInput>,
-) => {
-  try {
-    return await attachFileToEntity(db, input);
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw createAppError("IMAGE_UPLOAD_FAILED", "Failed to attach file", error);
-  }
-};
-export const createFileUploadWorkflow = async (
-  db: Database,
-  input: z.output<typeof createFileUploadInput>,
-) => {
-  try {
-    return await createFileUpload(db, input);
-  } catch (error) {
-    if (error instanceof AppError) throw error;
-    throw createAppError(
-      "IMAGE_UPLOAD_FAILED",
-      "Failed to create file upload",
-      error,
-    );
-  }
-};
-export const cullPendingImagesWorkflow = async (
-  db: Database,
-  input: z.output<typeof cullPendingImagesSchema>,
-) => {
-  try {
-    return await cullPendingImageStorage(db, input.olderThanHours);
-  } catch (error) {
-    throw createAppError(
-      "IMAGE_CULL_FAILED",
-      "Failed to cull pending images",
-      error,
-    );
-  }
-};
-export const cleanupUnreferencedImagesWorkflow = async (db: Database) => {
-  try {
-    return await cleanupUnreferencedImageStorage(db);
-  } catch (error) {
-    throw createAppError(
-      "IMAGE_CULL_FAILED",
-      "Failed to clean up unreferenced files",
-      error,
-    );
-  }
-};
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
+
+type MarkUploadedInput = z.output<typeof getImageByIdSchema>;
+export const markImageUploadedWorkflow = bindWorkflow(
+  workflow<Database, MarkUploadedInput>("image.markUploaded")
+    .call("resolveImage", async ({ context }, { input }) =>
+      resolveOrThrow(context, "image", input.id),
+    )
+    .commit("markUploaded", async ({ context }, { resolveImage }) =>
+      markImageUploaded(context, resolveImage),
+    )
+    .output(({ markUploaded }) => markUploaded),
+  (db: Database, input: MarkUploadedInput) => ({ context: db, input }),
+);
+
+const imageFailure =
+  (reason: AppErrorReason, message: string, preserveAppError = false) =>
+  async (
+    _: { context: Database },
+    { error }: { error: unknown },
+  ): Promise<never> => {
+    if (preserveAppError && error instanceof AppError) throw error;
+    throw createAppError(reason, message, error);
+  };
+
+const imageOperation = <Input, Output>(
+  name: string,
+  run: (db: Database, input: Input) => Promise<Output>,
+  reason: AppErrorReason,
+  message: string,
+  preserveAppError = false,
+) =>
+  bindWorkflow(
+    workflow<Database, Input>(name)
+      .commit("run", async ({ context }, { input }) => run(context, input))
+      .output(
+        ({ run: result }) => result,
+        imageFailure(reason, message, preserveAppError),
+      ),
+    (db: Database, input: Input) => ({ context: db, input }),
+  );
+
+type ImageUploadInput = z.output<typeof initiateUploadWithoutEntitySchema>;
+export const initiateImageUploadWorkflow = bindWorkflow(
+  workflow<Database, ImageUploadInput>("image.initiateUpload")
+    .commit("createUpload", async ({ context }, { input }) =>
+      initiateImageUploadWithoutEntity(context, input),
+    )
+    .output(
+      ({ createUpload: result }) => ({
+        uploadUrl: result.uploadUrl,
+        imageId: result.imageId,
+        key: result.key,
+        url: result.url,
+      }),
+      imageFailure("IMAGE_UPLOAD_FAILED", "Failed to initiate upload"),
+    ),
+  (db: Database, input: ImageUploadInput) => ({ context: db, input }),
+);
+
+type DocumentUploadInput = z.output<typeof initiateDocumentUploadSchema>;
+export const initiateDocumentUploadWorkflow = bindWorkflow(
+  workflow<Database, DocumentUploadInput>("image.initiateDocumentUpload")
+    .commit("createUpload", async ({ context }, { input }) =>
+      initiateDocumentUpload(context, input),
+    )
+    .output(
+      ({ createUpload: result }) => ({
+        uploadUrl: result.uploadUrl,
+        imageId: result.imageId,
+        key: result.key,
+        url: result.url,
+      }),
+      imageFailure("IMAGE_UPLOAD_FAILED", "Failed to initiate upload"),
+    ),
+  (db: Database, input: DocumentUploadInput) => ({ context: db, input }),
+);
+
+type ImageImportInput = z.output<typeof importImageFromUrlSchema>;
+export const importImageFromUrlWorkflow = bindWorkflow(
+  workflow<Database, ImageImportInput>("image.importFromUrl")
+    .commit("importImage", async ({ context }, { input }) => {
+      const request = {
+        sourceUrl: input.url,
+        filenamePrefix: `${input.entityType ?? "image"}-url-import`,
+      };
+      const result = await importImageFromUrl(context, request);
+      if (!result) throw new Error("Failed to fetch image from URL");
+      const filename =
+        new URL(request.sourceUrl).pathname.split("/").pop() ||
+        `${request.filenamePrefix}.jpg`;
+      return {
+        imageId: result.imageId,
+        key: result.key,
+        url: result.url,
+        filename,
+      };
+    })
+    .output(
+      ({ importImage }) => importImage,
+      imageFailure("IMAGE_IMPORT_FAILED", "Failed to import image from URL"),
+    ),
+  (db: Database, input: ImageImportInput) => ({ context: db, input }),
+);
+
+export const attachFileWorkflow = imageOperation(
+  "image.attachFile",
+  (db: Database, input: z.output<typeof mcpAttachFileInput>) =>
+    attachFileToEntity(db, input),
+  "IMAGE_UPLOAD_FAILED",
+  "Failed to attach file",
+  true,
+);
+export const createFileUploadWorkflow = imageOperation(
+  "image.createFileUpload",
+  (db: Database, input: z.output<typeof createFileUploadInput>) =>
+    createFileUpload(db, input),
+  "IMAGE_UPLOAD_FAILED",
+  "Failed to create file upload",
+  true,
+);
+export const cullPendingImagesWorkflow = imageOperation(
+  "image.cullPending",
+  (db: Database, input: z.output<typeof cullPendingImagesSchema>) =>
+    cullPendingImageStorage(db, input.olderThanHours),
+  "IMAGE_CULL_FAILED",
+  "Failed to cull pending images",
+);
+const cleanupImages = imageOperation<
+  undefined,
+  Awaited<ReturnType<typeof cleanupUnreferencedImageStorage>>
+>(
+  "image.cleanupUnreferenced",
+  cleanupUnreferencedImageStorage,
+  "IMAGE_CULL_FAILED",
+  "Failed to clean up unreferenced files",
+);
+export const cleanupUnreferencedImagesWorkflow = bindWorkflow(
+  cleanupImages.definition,
+  (db: Database) => ({ context: db, input: undefined }),
+);

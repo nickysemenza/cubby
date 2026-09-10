@@ -10,8 +10,8 @@
     "check:all": "NX_DAEMON=false nx run-many --projects=cubby-checks --outputStyle=stream --targets=entity,start-ops,types,lint,format,soft-delete,identifiers,knip,bindings,openapi,script-tests,security",
     "typecheck": "pnpm -r --workspace-concurrency=2 typecheck && tsc --noEmit -p tsconfig.json",
     "typecheck:web": "pnpm --filter @cubby/web typecheck",
-    "entity:generate": "node scripts/entity-literal-generator.ts",
-    "entity:check": "node scripts/entity-literal-generator.ts --check",
+    "entity:generate": "tsx scripts/entity-generator.ts",
+    "entity:check": "tsx scripts/entity-generator.ts --check",
     "start-operations:generate": "node scripts/start-operation-registry-generator.ts",
     "knip": "knip --no-config-hints --cache",
     "dedupe:check": "pnpm dedupe --check",
@@ -52,6 +52,7 @@
     "oxc-parser": "0.147.0",
     "oxfmt": "0.65.0",
     "oxlint": "1.80.0",
+    "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "zod": "^4.4.3"
   }

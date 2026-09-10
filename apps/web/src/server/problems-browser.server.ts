@@ -77,7 +77,9 @@ export const integrityProblemsHandlers = implementOperationDomain(
 export const problemsStreamHandlers = implementSubscriptionDomain(
   problemsStreams,
   {
-    reparseStale: (context) => reparseStaleWorkflow(context),
-    pruneAllUnusedAliases: (context) => pruneAllUnusedAliasesWorkflow(context),
+    reparseStale: (context, _input, signal) =>
+      reparseStaleWorkflow(context, undefined, signal),
+    pruneAllUnusedAliases: (context, _input, signal) =>
+      pruneAllUnusedAliasesWorkflow(context, undefined, signal),
   },
 );

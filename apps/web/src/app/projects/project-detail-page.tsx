@@ -54,7 +54,6 @@ import { expense } from "~/app/expenses/expense.functions";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { TaskBoard } from "~/app/tasks/board/TaskBoard";
 import { task } from "~/app/tasks/task.functions";
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -81,6 +80,7 @@ import {
 } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { image } from "~/entities/image.functions";
 import { focusOnMount } from "~/hooks/focus-on-mount";
@@ -467,16 +467,14 @@ const projectProgress = (project: ProjectOut, hasSubtree: boolean) => {
     : undefined;
 };
 
-const buildProjectOverviewFields = (args: {
+const buildProjectOverviewRenderers = (args: {
   project: ProjectOut;
-  hasSubtree: boolean;
   parentProjectOptions: ParentProjectOption[];
   saveProject: SaveProject;
-}): BasicInfoField[] => {
-  const { project, hasSubtree, parentProjectOptions, saveProject } = args;
-  return [
-    {
-      label: "Name",
+}) => {
+  const { project, parentProjectOptions, saveProject } = args;
+  return {
+    name: () => ({
       value: (
         <EditableCell
           value={project.name}
@@ -487,9 +485,8 @@ const buildProjectOverviewFields = (args: {
           renderValue={(value) => value ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Icon",
+    }),
+    icon: () => ({
       value: (
         <EditableCell
           value={project.icon}
@@ -498,9 +495,8 @@ const buildProjectOverviewFields = (args: {
           renderValue={(value) => value ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Status",
+    }),
+    status: () => ({
       value: (
         <EditableCell
           value={project.status}
@@ -527,9 +523,8 @@ const buildProjectOverviewFields = (args: {
           label={`Show all ${PROJECT_STATUS_LABELS[project.status].toLowerCase()} projects`}
         />
       ),
-    },
-    {
-      label: "Kind",
+    }),
+    kind: () => ({
       value: (
         <EditableCell
           value={project.kind}
@@ -545,10 +540,9 @@ const buildProjectOverviewFields = (args: {
           label={`Show all projects of kind ${project.kind}`}
         />
       ) : undefined,
-    },
-    {
+    }),
+    startDate: () => ({
       // The field displays the effective start but edits only the raw override.
-      label: "Start date",
       value: (
         <ProjectDateField
           side="start"
@@ -559,9 +553,8 @@ const buildProjectOverviewFields = (args: {
           onSave={async (startDate) => saveProject({ startDate })}
         />
       ),
-    },
-    {
-      label: "End date",
+    }),
+    endDate: () => ({
       value: (
         <ProjectDateField
           side="end"
@@ -572,9 +565,8 @@ const buildProjectOverviewFields = (args: {
           onSave={async (endDate) => saveProject({ endDate })}
         />
       ),
-    },
-    {
-      label: "Estimate",
+    }),
+    costEstimate: () => ({
       value: (
         <EditableCell
           value={project.costEstimate}
@@ -585,13 +577,8 @@ const buildProjectOverviewFields = (args: {
           }
         />
       ),
-    },
-    {
-      label: "Progress",
-      value: projectProgress(project, hasSubtree),
-    },
-    {
-      label: "Parent project",
+    }),
+    parentProjectId: () => ({
       value: (
         <EditableCell
           value={project.parentProjectId}
@@ -625,26 +612,24 @@ const buildProjectOverviewFields = (args: {
           label={`Show all projects inside ${project.parentProjectName ?? "this project"}`}
         />
       ) : undefined,
-    },
-    {
-      label: "Locations",
+    }),
+    locations: () => ({
       value: (
         <EditableLocations
           locations={project.locations}
           onSave={async (locations) => saveProject({ locations })}
         />
       ),
-    },
-    {
-      label: "Last updated",
+    }),
+    updatedAt: () => ({
       // UTC ISO date keeps this SSR output deterministic across time zones.
       value: (
         <span className="font-mono">
           {project.updatedAt.toISOString().slice(0, 10)}
         </span>
       ),
-    },
-  ];
+    }),
+  };
 };
 
 type ProjectNotesSection = {
@@ -1006,9 +991,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
   const saveProject: SaveProject = async (data) => {
     await updateMutation.mutateAsync({ id: project.id, data });
   };
-  const fields = buildProjectOverviewFields({
+  const overviewRenderers = buildProjectOverviewRenderers({
     project,
-    hasSubtree,
     parentProjectOptions,
     saveProject,
   });
@@ -1105,7 +1089,18 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     title: "Overview",
     icon: Info,
     placement: "supporting",
-    content: <BasicInfo fields={fields} />,
+    content: (
+      <EntityBasicInfo
+        entity="project"
+        record={project}
+        overrides={overviewRenderers}
+        afterFields={{
+          costEstimate: [
+            { label: "Progress", value: projectProgress(project, hasSubtree) },
+          ],
+        }}
+      />
+    ),
   };
 
   const reusableResourcesSection: DetailSection = {
@@ -1122,10 +1117,12 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
     icon: ExternalLink,
     placement: "supporting",
     content: (
-      <BasicInfo
-        fields={[
-          {
-            label: "Google Drive folder",
+      <EntityBasicInfo
+        entity="project"
+        record={project}
+        section="resources"
+        overrides={{
+          googleDriveFolderUrl: () => ({
             value: (
               <ProjectResourceLink
                 value={project.googleDriveFolderUrl}
@@ -1139,9 +1136,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 }}
               />
             ),
-          },
-          {
-            label: "Notion page",
+          }),
+          notionPageUrl: () => ({
             value: (
               <ProjectResourceLink
                 value={project.notionPageUrl}
@@ -1155,8 +1151,8 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 }}
               />
             ),
-          },
-        ]}
+          }),
+        }}
       />
     ),
   };

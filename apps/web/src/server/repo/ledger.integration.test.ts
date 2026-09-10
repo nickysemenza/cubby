@@ -245,6 +245,10 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     );
     expect(transfer.output?.classification).toBe("reimbursement");
+    expect(transfer.output).toMatchObject({
+      fromPartyName: member.output.name,
+      toPartyName: otherMember.output.name,
+    });
     await expect(
       updateFinancialTransaction(
         ctx.db,

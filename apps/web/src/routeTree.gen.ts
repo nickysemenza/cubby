@@ -16,6 +16,7 @@ import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './rout
 import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known.oauth-protected-resource'
 import { Route as DotwellKnownOpenidConfigurationRouteImport } from './routes/[.]well-known.openid-configuration'
 import { Route as AuthenticatedShortcodeRouteImport } from './routes/_authenticated/$shortcode'
+import { Route as AuthenticatedActivitiesRouteImport } from './routes/_authenticated/activities'
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
 import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
@@ -29,6 +30,7 @@ import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
 import { Route as AuthenticatedPantryViewRouteImport } from './routes/_authenticated/pantry-view'
 import { Route as AuthenticatedProblemsRouteImport } from './routes/_authenticated/problems'
+import { Route as AuthenticatedRecordsRouteImport } from './routes/_authenticated/records'
 import { Route as AuthenticatedScanRouteImport } from './routes/_authenticated/scan'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedToolsRouteImport } from './routes/_authenticated/tools'
@@ -149,6 +151,11 @@ const AuthenticatedShortcodeRoute = AuthenticatedShortcodeRouteImport.update({
   path: '/$shortcode',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedActivitiesRoute = AuthenticatedActivitiesRouteImport.update({
+  id: '/activities',
+  path: '/activities',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedActivityRoute = AuthenticatedActivityRouteImport.update({
   id: '/activity',
   path: '/activity',
@@ -215,6 +222,11 @@ const AuthenticatedPantryViewRoute = AuthenticatedPantryViewRouteImport.update({
 const AuthenticatedProblemsRoute = AuthenticatedProblemsRouteImport.update({
   id: '/problems',
   path: '/problems',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedRecordsRoute = AuthenticatedRecordsRouteImport.update({
+  id: '/records',
+  path: '/records',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedScanRoute = AuthenticatedScanRouteImport.update({
@@ -701,6 +713,7 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
+  '/activities': typeof AuthenticatedActivitiesRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ai-usage': typeof AuthenticatedAiUsageRoute
@@ -714,6 +727,7 @@ export interface FileRoutesByFullPath {
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
+  '/records': typeof AuthenticatedRecordsRoute
   '/scan': typeof AuthenticatedScanRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/tools': typeof AuthenticatedToolsRoute
@@ -803,6 +817,7 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/$shortcode': typeof AuthenticatedShortcodeRoute
+  '/activities': typeof AuthenticatedActivitiesRoute
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ai-usage': typeof AuthenticatedAiUsageRoute
@@ -816,6 +831,7 @@ export interface FileRoutesByTo {
   '/mcp': typeof AuthenticatedMcpRoute
   '/pantry-view': typeof AuthenticatedPantryViewRoute
   '/problems': typeof AuthenticatedProblemsRoute
+  '/records': typeof AuthenticatedRecordsRoute
   '/scan': typeof AuthenticatedScanRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/tools': typeof AuthenticatedToolsRoute
@@ -908,6 +924,7 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/_authenticated/$shortcode': typeof AuthenticatedShortcodeRoute
+  '/_authenticated/activities': typeof AuthenticatedActivitiesRoute
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/_authenticated/ai-usage': typeof AuthenticatedAiUsageRoute
@@ -921,6 +938,7 @@ export interface FileRoutesById {
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
   '/_authenticated/pantry-view': typeof AuthenticatedPantryViewRoute
   '/_authenticated/problems': typeof AuthenticatedProblemsRoute
+  '/_authenticated/records': typeof AuthenticatedRecordsRoute
   '/_authenticated/scan': typeof AuthenticatedScanRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/tools': typeof AuthenticatedToolsRoute
@@ -1013,6 +1031,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/.well-known/openid-configuration'
     | '/$shortcode'
+    | '/activities'
     | '/activity'
     | '/ai-smoke-test'
     | '/ai-usage'
@@ -1026,6 +1045,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/pantry-view'
     | '/problems'
+    | '/records'
     | '/scan'
     | '/settings'
     | '/tools'
@@ -1115,6 +1135,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/.well-known/openid-configuration'
     | '/$shortcode'
+    | '/activities'
     | '/activity'
     | '/ai-smoke-test'
     | '/ai-usage'
@@ -1128,6 +1149,7 @@ export interface FileRouteTypes {
     | '/mcp'
     | '/pantry-view'
     | '/problems'
+    | '/records'
     | '/scan'
     | '/settings'
     | '/tools'
@@ -1219,6 +1241,7 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource'
     | '/.well-known/openid-configuration'
     | '/_authenticated/$shortcode'
+    | '/_authenticated/activities'
     | '/_authenticated/activity'
     | '/_authenticated/ai-smoke-test'
     | '/_authenticated/ai-usage'
@@ -1232,6 +1255,7 @@ export interface FileRouteTypes {
     | '/_authenticated/mcp'
     | '/_authenticated/pantry-view'
     | '/_authenticated/problems'
+    | '/_authenticated/records'
     | '/_authenticated/scan'
     | '/_authenticated/settings'
     | '/_authenticated/tools'
@@ -1383,6 +1407,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/activities': {
+      id: '/_authenticated/activities'
+      path: '/activities'
+      fullPath: '/activities'
+      preLoaderRoute: typeof AuthenticatedActivitiesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/activity': {
       id: '/_authenticated/activity'
       path: '/activity'
@@ -1472,6 +1503,13 @@ declare module '@tanstack/react-router' {
       path: '/problems'
       fullPath: '/problems'
       preLoaderRoute: typeof AuthenticatedProblemsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/records': {
+      id: '/_authenticated/records'
+      path: '/records'
+      fullPath: '/records'
+      preLoaderRoute: typeof AuthenticatedRecordsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/scan': {
@@ -2053,6 +2091,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedShortcodeRoute: typeof AuthenticatedShortcodeRoute
+  AuthenticatedActivitiesRoute: typeof AuthenticatedActivitiesRoute
   AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
   AuthenticatedAiSmokeTestRoute: typeof AuthenticatedAiSmokeTestRoute
   AuthenticatedAiUsageRoute: typeof AuthenticatedAiUsageRoute
@@ -2066,6 +2105,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
   AuthenticatedPantryViewRoute: typeof AuthenticatedPantryViewRoute
   AuthenticatedProblemsRoute: typeof AuthenticatedProblemsRoute
+  AuthenticatedRecordsRoute: typeof AuthenticatedRecordsRoute
   AuthenticatedScanRoute: typeof AuthenticatedScanRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedToolsRoute: typeof AuthenticatedToolsRoute
@@ -2141,6 +2181,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedShortcodeRoute: AuthenticatedShortcodeRoute,
+  AuthenticatedActivitiesRoute: AuthenticatedActivitiesRoute,
   AuthenticatedActivityRoute: AuthenticatedActivityRoute,
   AuthenticatedAiSmokeTestRoute: AuthenticatedAiSmokeTestRoute,
   AuthenticatedAiUsageRoute: AuthenticatedAiUsageRoute,
@@ -2155,6 +2196,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedMcpRoute: AuthenticatedMcpRoute,
   AuthenticatedPantryViewRoute: AuthenticatedPantryViewRoute,
   AuthenticatedProblemsRoute: AuthenticatedProblemsRoute,
+  AuthenticatedRecordsRoute: AuthenticatedRecordsRoute,
   AuthenticatedScanRoute: AuthenticatedScanRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedToolsRoute: AuthenticatedToolsRoute,

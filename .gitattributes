@@ -1,0 +1,9 @@
+# Generated outputs remain reviewable, but GitHub collapses their diffs by
+# default and excludes them from language statistics.
+**/*.gen.ts linguist-generated
+**/src/generated/** linguist-generated
+**/drizzle/meta/*.json linguist-generated
+**/migrations/meta/*.json linguist-generated
+**/worker-configuration.d.ts linguist-generated
+apps/web/src/routeTree.gen.ts linguist-generated
+apps/web/src/server/db/__snapshots__/application-schema.json linguist-generated

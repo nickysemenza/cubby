@@ -16,7 +16,7 @@ test("calendar events open an anchored editor, save atomically, and restore focu
   await event.click();
   const editor = page.getByRole("dialog", { name });
   await editor.getByLabel("Name").fill(updatedName);
-  const committed = waitForDndMutation(page, "task.update");
+  const committed = waitForDndMutation(page, "task");
   await editor.getByRole("button", { name: "Save" }).click();
   await committed;
   await expect(page.getByRole("dialog")).toHaveCount(0);

@@ -31,6 +31,12 @@ import type {
   PlannedLine,
 } from "~/server/services/availability.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
+import {
+  defineWorkflowOperation,
+  bindWorkflow,
+  workflow,
+} from "~/server/workflow-runtime";
+import { type WorkflowFunctionContext } from "~/server/workflow-runtime/definition";
 
 const mealShortcodes = bindShortcodeResolver("meal");
 
@@ -41,84 +47,143 @@ const refreshMealEmbedding = (db: Database, id: MealId, source: string) =>
     source,
   });
 
-export const getMealsByDateRangeWorkflow = (
-  db: Database,
-  input: { from: string; to: string },
-) => getMealsByDateRange(db, input.from, input.to);
-export const getUpcomingMealSummaryWorkflow = (
-  db: Database,
-  input: { from: string; to: string },
-) => getUpcomingMealSummary(db, input.from, input.to);
-export const getMealPreparationsWorkflow = (
-  db: Database,
-  input: GetMealPreparationsInput,
-) => getMealPreparations(db, input);
-export const saveMealRecipePreparationWorkflow = async (
-  db: Database,
-  input: SaveMealRecipePreparationInput,
-  actorContext: Parameters<typeof saveMealRecipePreparation>[2],
-) => {
-  const saved = await saveMealRecipePreparation(db, input, actorContext);
-  const affectedIds = await mealShortcodes.all(db, saved.affectedMealIds);
-  await Promise.all(
-    affectedIds.map((id) =>
-      refreshMealEmbedding(db, id, "meal.savePreparation"),
-    ),
-  );
-  return saved;
-};
-export const addRecipeToMealWorkflow = async (
-  db: Database,
-  input: typeof mealAddRecipeInput._output,
-  actorContext: Parameters<typeof addRecipeToMeal>[3],
-) => {
-  const mealId = await mealShortcodes.one(db, input.mealId);
-  const updated = await addRecipeToMeal(
-    db,
-    mealId,
-    {
-      recipeId: input.recipeId,
-      scale: input.scale,
-      sortOrder: input.sortOrder,
-    },
-    actorContext,
-  );
-  await refreshMealEmbedding(db, mealId, "meal.addRecipe");
-  return updated;
-};
-export const updateMealRecipeWorkflow = async (
-  db: Database,
-  input: typeof mealUpdateRecipeInput._output,
-  actorContext: Parameters<typeof updateMealRecipeWithEntityId>[3],
-) =>
-  (
-    await updateMealRecipeWithEntityId(
-      db,
-      input.id,
-      { scale: input.scale, sortOrder: input.sortOrder },
-      actorContext,
-    )
-  ).output;
-export const removeMealRecipeWorkflow = async (
-  db: Database,
-  input: typeof mealRecipeIdInput._output,
-  actorContext: Parameters<typeof removeMealRecipeWithEntityId>[2],
-) => {
-  const { output, entityId } = await removeMealRecipeWithEntityId(
-    db,
-    input.id,
-    actorContext,
-  );
-  await refreshMealEmbedding(db, entityId, "meal.removeRecipe");
-  return output;
+export const getMealsByDateRangeWorkflow = defineWorkflowOperation(
+  "meal.getByDateRange",
+  (db: Database, input: { from: string; to: string }) =>
+    getMealsByDateRange(db, input.from, input.to),
+);
+export const getUpcomingMealSummaryWorkflow = defineWorkflowOperation(
+  "meal.upcomingSummary",
+  (db: Database, input: { from: string; to: string }) =>
+    getUpcomingMealSummary(db, input.from, input.to),
+);
+export const getMealPreparationsWorkflow = defineWorkflowOperation(
+  "meal.getPreparations",
+  (db: Database, input: GetMealPreparationsInput) =>
+    getMealPreparations(db, input),
+);
+
+type MealMutationContext = {
+  db: Database;
+  actorContext: Parameters<typeof saveMealRecipePreparation>[2];
 };
 
-export const getShoppingListWorkflow = async (
-  db: Database,
-  input: typeof shoppingListInput._output,
-  availability: Pick<AvailabilityService, "getAggregatedNeeds">,
+export const saveMealRecipePreparationWorkflow = bindWorkflow(
+  workflow<MealMutationContext, SaveMealRecipePreparationInput>(
+    "meal.savePreparation",
+  )
+    .commit("saved", async ({ context }, { input }) =>
+      saveMealRecipePreparation(context.db, input, context.actorContext),
+    )
+    .effect("embeddings", async ({ context }, { saved }) => {
+      const affectedIds = await mealShortcodes.all(
+        context.db,
+        saved.affectedMealIds,
+      );
+      return Promise.all(
+        affectedIds.map((id) =>
+          refreshMealEmbedding(context.db, id, "meal.savePreparation"),
+        ),
+      );
+    })
+    .output(({ saved }) => saved),
+  (
+    db: Database,
+    input: SaveMealRecipePreparationInput,
+    actorContext: MealMutationContext["actorContext"],
+  ) => ({ context: { db, actorContext }, input }),
+);
+
+export const addRecipeToMealWorkflow = bindWorkflow(
+  workflow<MealMutationContext, typeof mealAddRecipeInput._output>(
+    "meal.addRecipe",
+  )
+    .call("mealId", async ({ context }, { input }) =>
+      mealShortcodes.one(context.db, input.mealId),
+    )
+    .commit("updated", async ({ context }, { input, mealId }) =>
+      addRecipeToMeal(
+        context.db,
+        mealId,
+        {
+          recipeId: input.recipeId,
+          scale: input.scale,
+          sortOrder: input.sortOrder,
+        },
+        context.actorContext,
+      ),
+    )
+    .effect("embedding", async ({ context }, { mealId }) =>
+      refreshMealEmbedding(context.db, mealId, "meal.addRecipe"),
+    )
+    .output(({ updated }) => updated),
+  (
+    db: Database,
+    input: typeof mealAddRecipeInput._output,
+    actorContext: MealMutationContext["actorContext"],
+  ) => ({ context: { db, actorContext }, input }),
+);
+
+export const updateMealRecipeWorkflow = bindWorkflow(
+  workflow<MealMutationContext, typeof mealUpdateRecipeInput._output>(
+    "meal.updateRecipe",
+  )
+    .commit(
+      "updated",
+      async ({ context }, { input }) =>
+        (
+          await updateMealRecipeWithEntityId(
+            context.db,
+            input.id,
+            { scale: input.scale, sortOrder: input.sortOrder },
+            context.actorContext,
+          )
+        ).output,
+    )
+    .output(({ updated }) => updated),
+  (
+    db: Database,
+    input: typeof mealUpdateRecipeInput._output,
+    actorContext: MealMutationContext["actorContext"],
+  ) => ({ context: { db, actorContext }, input }),
+);
+
+export const removeMealRecipeWorkflow = bindWorkflow(
+  workflow<MealMutationContext, typeof mealRecipeIdInput._output>(
+    "meal.removeRecipe",
+  )
+    .commit("removed", async ({ context }, { input }) =>
+      removeMealRecipeWithEntityId(context.db, input.id, context.actorContext),
+    )
+    .effect("embedding", async ({ context }, { removed }) =>
+      refreshMealEmbedding(context.db, removed.entityId, "meal.removeRecipe"),
+    )
+    .output(({ removed }) => removed.output),
+  (
+    db: Database,
+    input: typeof mealRecipeIdInput._output,
+    actorContext: MealMutationContext["actorContext"],
+  ) => ({ context: { db, actorContext }, input }),
+);
+
+type ShoppingInput = typeof shoppingListInput._output;
+type ShoppingContext = {
+  db: Database;
+  availability: Pick<AvailabilityService, "getAggregatedNeeds">;
+};
+
+const loadShoppingMeals = async (
+  { context }: WorkflowFunctionContext<ShoppingContext>,
+  input: ShoppingInput,
+) => ({
+  input,
+  meals: await getMealsByDateRange(context.db, input.from, input.to),
+});
+
+const selectShoppingRequirements = async (
+  _execution: WorkflowFunctionContext<ShoppingContext>,
+  { input, meals }: Awaited<ReturnType<typeof loadShoppingMeals>>,
 ) => {
-  const meals = await getMealsByDateRange(db, input.from, input.to);
   const publicLines: PlannedLine[] = [];
   const lineMeta: Omit<
     ShoppingListContribution,
@@ -148,8 +213,28 @@ export const getShoppingListWorkflow = async (
         scale: mr.scale,
       });
     }
-  const { needs, unexpanded } =
-    await availability.getAggregatedNeeds(publicLines);
+  return { input, cookedMeals, omittedMeals, publicLines, lineMeta };
+};
+
+const aggregateShoppingRequirements = async (
+  { context }: WorkflowFunctionContext<ShoppingContext>,
+  selected: Awaited<ReturnType<typeof selectShoppingRequirements>>,
+) => ({
+  ...selected,
+  ...(await context.availability.getAggregatedNeeds(selected.publicLines)),
+});
+
+const presentShoppingRequirements = async (
+  _execution: WorkflowFunctionContext<ShoppingContext>,
+  {
+    input,
+    cookedMeals,
+    omittedMeals,
+    lineMeta,
+    needs,
+    unexpanded,
+  }: Awaited<ReturnType<typeof aggregateShoppingRequirements>>,
+) => {
   const items = needs
     .map((n: AggregatedNeed) => ({
       ingredientId: n.ingredientId,
@@ -222,3 +307,38 @@ export const getShoppingListWorkflow = async (
     }),
   };
 };
+
+const shoppingWorkflow = workflow<ShoppingContext, ShoppingInput>(
+  "meal.shopping",
+)
+  .call("meals", (execution, values) =>
+    loadShoppingMeals(execution, values.input),
+  )
+  .call("selection", (execution, values) =>
+    selectShoppingRequirements(execution, {
+      input: values.meals.input,
+      meals: values.meals.meals,
+    }),
+  )
+  .call("requirements", (execution, values) =>
+    aggregateShoppingRequirements(execution, {
+      input: values.input,
+      cookedMeals: values.selection.cookedMeals,
+      omittedMeals: values.selection.omittedMeals,
+      publicLines: values.selection.publicLines,
+      lineMeta: values.selection.lineMeta,
+    }),
+  )
+  .call("shopping", (execution, values) =>
+    presentShoppingRequirements(execution, values.requirements),
+  )
+  .output(({ shopping }) => shopping);
+
+export const getShoppingListWorkflow = bindWorkflow(
+  shoppingWorkflow,
+  (
+    db: Database,
+    input: ShoppingInput,
+    availability: ShoppingContext["availability"],
+  ) => ({ context: { db, availability }, input }),
+);

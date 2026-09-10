@@ -4,39 +4,26 @@ import { uniq } from "es-toolkit";
 import {
   Activity,
   AlertTriangle,
-  ArrowLeftRight,
-  BookOpen,
   Bot,
-  Boxes,
-  CalendarRange,
-  Camera,
-  ChefHat,
-  CreditCard,
   Database,
   FileText,
   Home,
-  House,
-  Landmark,
-  ListChecks,
   MoreHorizontal,
   Network,
-  Package,
   Palette,
   Plug,
   QrCode,
-  Receipt,
   ScanBarcode,
   Search,
   Settings,
-  ShoppingCart,
   Sparkles,
-  Utensils,
   Wrench,
 } from "lucide-react";
 import { useMemo } from "react";
 
 import { entities } from "~/entities/entities";
 
+import { activityViews, recordViews } from "./application-views";
 import type { WayfindingDomain } from "./domain-wayfinding";
 
 /** A navigable destination. `to` is typed against the generated route tree. */
@@ -86,16 +73,6 @@ export function navItemLinkProps(item: NavItem, active: boolean) {
 // is inlined where it's used.
 /** Home is a direct workspace destination rather than a grouped leaf. */
 export const homeNavItem: NavItem = { to: "/", label: "Home", icon: Home };
-const recipes: NavItem = {
-  to: "/recipes",
-  label: "Recipes",
-  icon: entities.recipe.lucideIcon,
-};
-const locations: NavItem = {
-  to: "/locations",
-  label: "Locations",
-  icon: entities.location.lucideIcon,
-};
 const inventory: NavItem = {
   to: "/inventory",
   label: "Inventory",
@@ -125,130 +102,30 @@ export function getSidebarGroupItems(group: NavGroup): NavItem[] {
  * `Dev` is intentionally always present in the manifest — cubby is a personal
  * tool, so utility navigation and Cmd-K retain it without a production gate.
  */
+const activityDirectoryNavItem: NavItem = {
+  to: "/activities",
+  label: "Activities",
+  icon: Activity,
+};
+const recordDirectoryNavItem: NavItem = {
+  to: "/records",
+  label: "Records",
+  icon: Database,
+};
+
 export const desktopNav: NavNode[] = [
-  {
-    label: "Cook",
-    icon: ChefHat,
-    domain: "cook",
+  activityDirectoryNavItem,
+  ...activityViews.map((view): NavGroup => ({
+    label: view.label,
+    icon: view.icon,
+    domain: view.key,
     tier: "primary",
-    children: [
-      recipes,
-      { to: "/cookbooks", label: "Cookbooks", icon: BookOpen },
-      // Ingredients are daily cooking reference data, not a developer surface —
-      // they live beside recipes/cookbooks rather than under Dev.
-      {
-        to: "/ingredients",
-        label: "Ingredients",
-        icon: entities.ingredient.lucideIcon,
-      },
-      { to: "/ingredients/workbench", label: "Workbench", icon: ListChecks },
-      {
-        to: "/ingredients/equivalences",
-        label: "Equivalences",
-        icon: ArrowLeftRight,
-      },
-    ],
-  },
+    children: [...view.destinations],
+  })),
   {
-    label: "Pantry",
-    icon: Boxes,
-    domain: "pantry",
+    ...recordDirectoryNavItem,
     tier: "primary",
-    children: [
-      inventory,
-      locations,
-      { to: "/collections", label: "Collections", icon: Palette },
-      { to: "/pantry-view", label: "Pantry view", icon: Package },
-    ],
-  },
-  {
-    label: "Plan",
-    icon: CalendarRange,
-    domain: "plan",
-    tier: "primary",
-    children: [
-      { to: "/calendar", label: "Calendar", icon: CalendarRange },
-      { to: "/meals", label: "Meals", icon: Utensils },
-      {
-        to: "/meals/suggestions",
-        label: "What can I make?",
-        icon: Sparkles,
-      },
-      {
-        to: "/meals/shopping-list",
-        label: "Shopping list",
-        icon: ShoppingCart,
-      },
-      { to: "/wishes", label: "Wishlist", icon: entities.wish.lucideIcon },
-    ],
-  },
-  {
-    label: "House",
-    icon: House,
-    domain: "house",
-    tier: "primary",
-    children: [
-      { to: "/projects", label: "Projects", icon: entities.project.lucideIcon },
-      { to: "/tools", label: "Tools", icon: Wrench },
-      { to: "/tasks", label: "Tasks", icon: entities.task.lucideIcon },
-    ],
-  },
-  {
-    label: "Finance",
-    icon: CreditCard,
-    domain: "finance",
-    tier: "primary",
-    children: [
-      { to: "/expenses", label: "Expenses", icon: entities.expense.lucideIcon },
-      {
-        to: "/purchases",
-        label: "Purchases",
-        icon: entities.purchase.lucideIcon,
-      },
-      { to: "/vendors", label: "Vendors", icon: entities.vendor.lucideIcon },
-      { to: "/financial-accounts", label: "Accounts", icon: Landmark },
-      {
-        to: "/financial-transactions",
-        label: "Transactions",
-        icon: CreditCard,
-      },
-      {
-        to: "/household-contribution",
-        label: "Contribution ledger",
-        icon: ArrowLeftRight,
-      },
-      {
-        to: "/ledger-parties",
-        label: "Ledger Parties",
-        icon: entities.ledgerParty.lucideIcon,
-      },
-      {
-        to: "/ledger-transfers",
-        label: "Transfers",
-        icon: entities.ledgerTransfer.lucideIcon,
-      },
-      {
-        to: "/statement-rows",
-        label: "Statement Rows",
-        icon: Receipt,
-      },
-    ],
-  },
-  {
-    // Data surfaces — the reference/admin tables behind the workflows above.
-    // Pulled out of Pantry/Dev where they were miscategorized. (The old
-    // Reports group is gone: Insights folded into the home dashboard,
-    // Activity moved to More.)
-    label: "Data",
-    icon: Database,
-    tier: "utility",
-    children: [
-      { to: "/products", label: "Products", icon: entities.product.lucideIcon },
-      { to: "/usda", label: "USDA", icon: entities["usda-food"].lucideIcon },
-      { to: "/images", label: "Images", icon: entities.image.lucideIcon },
-      { to: "/entities", label: "Entities", icon: Network },
-      { to: "/problems", label: "Problems", icon: AlertTriangle },
-    ],
+    children: [...recordViews],
   },
   {
     label: "More",
@@ -256,14 +133,11 @@ export const desktopNav: NavNode[] = [
     tier: "utility",
     children: [
       scan,
-      {
-        to: "/inventory/session",
-        label: "Recount",
-        icon: ScanBarcode,
-      },
-      { to: "/locations/photo-pass", label: "Photo pass", icon: Camera },
-      { to: "/activity", label: "Activity", icon: Activity },
       { to: "/labels", label: "Labels", icon: QrCode },
+      { to: "/problems", label: "Problems", icon: AlertTriangle },
+      { to: "/activity", label: "Activity", icon: Activity },
+      { to: "/collections", label: "Collections", icon: Palette },
+      { to: "/entities", label: "Entity explorer", icon: Network },
       { to: "/ask", label: "Ask AI", icon: Bot },
       { to: "/search", label: "Search", icon: Search },
       settingsNavItem,
@@ -288,13 +162,19 @@ export const desktopNav: NavNode[] = [
   },
 ];
 
-/** Every authed leaf, flattened out of the tree (groups expanded). */
+/** Every rendered authed leaf, including contextual links under Activities. */
 export const desktopLeaves: NavItem[] = desktopNav.flatMap((node) =>
   isNavGroup(node) ? node.children : [node],
 );
 
-/** Complete signed-in destination universe, including the direct Home leaf. */
-export const completeNavLeaves: NavItem[] = [homeNavItem, ...desktopLeaves];
+/** Canonical signed-in destination universe, with contextual links deduped. */
+export const completeNavLeaves: NavItem[] = [
+  homeNavItem,
+  ...desktopLeaves,
+].filter(
+  (item, index, all) =>
+    all.findIndex((candidate) => candidate.to === item.to) === index,
+);
 
 /** Tiered views derived from the canonical manifest. Never hand-copy leaves
  * into a second navigation tree: breadcrumbs, Cmd-K and shells must agree. */
@@ -325,6 +205,8 @@ export const todayNavItems: NavItem[] = [
 /** Secondary phone destinations shown before the deeper taxonomy. */
 export const mobileHouseholdItems: NavItem[] = [
   homeNavItem,
+  activityDirectoryNavItem,
+  recordDirectoryNavItem,
   leafAt("/inventory/session"),
   leafAt("/locations"),
   leafAt("/calendar"),
@@ -382,9 +264,20 @@ export function getEntityNavGroup(
   entity: BrowserRoutedEntity,
 ): NavGroup | undefined {
   const listRoute = entities[entity].routes.list;
-  return desktopNav.find(
-    (node): node is NavGroup =>
-      isNavGroup(node) && node.children.some((child) => child.to === listRoute),
+  // Entity lists have contextual Activity shortcuts, while Records is the
+  // canonical roster parent used for breadcrumbs and page wayfinding.
+  return (
+    desktopNav.find(
+      (node): node is NavGroup =>
+        isNavGroup(node) &&
+        node.label === "Records" &&
+        node.children.some((child) => child.to === listRoute),
+    ) ??
+    desktopNav.find(
+      (node): node is NavGroup =>
+        isNavGroup(node) &&
+        node.children.some((child) => child.to === listRoute),
+    )
   );
 }
 

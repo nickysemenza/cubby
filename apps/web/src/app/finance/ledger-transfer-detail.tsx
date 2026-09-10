@@ -1,4 +1,3 @@
-import type { LedgerPartyOut } from "@cubby/schemas/ledger-party";
 import type { LedgerTransferOut } from "@cubby/schemas/ledger-transfer";
 import { useQueries } from "@tanstack/react-query";
 import { Info, ReceiptText } from "lucide-react";
@@ -9,23 +8,22 @@ import { DetailSections } from "~/app/_components/data-table/detail-page";
 import type { RelationshipEntity } from "~/app/_components/relationships/relationship-tree";
 import { RelationshipTree } from "~/app/_components/relationships/relationship-tree";
 import { TableLink } from "~/app/_components/table/TableLink";
-import { BasicInfo } from "~/components/common/basic-info";
 import { Page } from "~/components/page/Page";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { formatCurrency } from "~/lib/utils";
 
 import { ledgerTransferClassificationOptions } from "./ledger-transfer-columns";
 
-/** A resolved party name, falling back to the bare shortcode while loading. */
-function partyLink(id: string, party: LedgerPartyOut | null | undefined) {
+function partyLink(id: string, name: string) {
   return (
     <TableLink
       to={entities.ledgerParty.routes.detail}
       params={entityDetailParams(id)}
       className="inline"
     >
-      {party?.name ?? id}
+      {name}
     </TableLink>
   );
 }
@@ -43,15 +41,6 @@ export function LedgerTransferDetail({
 }: {
   transfer: LedgerTransferOut;
 }) {
-  const partyQueries = useQueries({
-    queries: [transfer.fromPartyId, transfer.toPartyId].map((id) =>
-      entityDetailFor("ledgerParty").queryOptions(id),
-    ),
-    combine: (results) => ({
-      fromParty: results[0]?.data,
-      toParty: results[1]?.data,
-    }),
-  });
   const evidenceQueries = useQueries({
     queries: transfer.evidenceTransactionIds.map((id) =>
       entityDetailFor("financialTransaction").queryOptions(id),
@@ -94,30 +83,26 @@ export function LedgerTransferDetail({
             icon: Info,
             placement: "primary",
             content: (
-              <BasicInfo
-                fields={[
-                  {
-                    label: "From",
-                    value: partyLink(
-                      transfer.fromPartyId,
-                      partyQueries.fromParty,
-                    ),
-                  },
-                  {
-                    label: "To",
-                    value: partyLink(transfer.toPartyId, partyQueries.toParty),
-                  },
-                  { label: "Amount", value: formatCurrency(transfer.amount) },
-                  { label: "Date", value: transfer.date },
-                  {
-                    label: "Classification",
+              <EntityBasicInfo
+                entity="ledgerTransfer"
+                record={transfer}
+                overrides={{
+                  fromPartyId: (record) => ({
+                    value: partyLink(record.fromPartyId, record.fromPartyName),
+                  }),
+                  toPartyId: (record) => ({
+                    value: partyLink(record.toPartyId, record.toPartyName),
+                  }),
+                  amount: (record) => ({
+                    value: formatCurrency(record.amount),
+                  }),
+                  classification: (record) => ({
                     value: renderOptionCell(
-                      transfer.classification,
+                      record.classification,
                       ledgerTransferClassificationOptions,
                     ),
-                  },
-                  { label: "Notes", value: transfer.notes ?? "—" },
-                ]}
+                  }),
+                }}
               />
             ),
           },

@@ -1,0 +1,549 @@
+import { defineEntity } from "./definition.js";
+import { vendorShortcode } from "../identifier-fields.js";
+import { imageOut } from "./field-primitives.js";
+import { money } from "@cubby/schemas/money";
+import { plainDate } from "@cubby/schemas/base-entity";
+import {
+  dateRangeFields,
+  numericRangeFields,
+} from "@cubby/schemas/base-entity";
+import { z } from "zod";
+export const filterSchemas = {
+  search: z.string().optional(),
+  ...numericRangeFields("purchaseCount", { int: true, nonnegative: true }),
+  ...numericRangeFields("spend"),
+  ...dateRangeFields("latestPurchaseDate"),
+};
+export default defineEntity({
+  key: "vendor",
+  names: { singular: "Vendor", plural: "Vendors" },
+  route: { basePath: "vendors" },
+  table: "Vendor",
+  identifiers: { brand: "VendorId", shortcode: "VEN-", legacy: null },
+  presentation: { titleField: "name" },
+  model: {
+    fields: [
+      {
+        key: "name",
+        kind: "text",
+        control: { kind: "text" },
+        display: { list: true, detail: true, standard: "name" },
+        validation: {
+          read: z.string().min(1),
+          create: z.string().min(1),
+          update: z.string().min(1).optional(),
+        },
+      },
+      {
+        key: "website",
+        kind: "text",
+        nullable: true,
+        control: { kind: "text", renderer: "url" },
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
+        },
+      },
+      {
+        key: "orderUrlTemplate",
+        kind: "text",
+        nullable: true,
+        label: "Order URL",
+        control: { kind: "text", renderer: "url", section: "details" },
+        display: { detail: true },
+        validation: {
+          read: z
+            .string()
+            .describe(
+              "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
+            )
+            .nullable(),
+          create: z
+            .string()
+            .describe(
+              "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
+            )
+            .nullable()
+            .default(null),
+          update: z
+            .string()
+            .describe(
+              "URL pattern for this vendor's order-details page, with the literal token {orderId} standing in for a purchase's order id — e.g. \"https://www.amazon.com/gp/your-account/order-details?orderID={orderId}\". Null for vendors with no order lookup. The per-purchase link is derived from this at read time, never stored on the purchase.",
+            )
+            .nullable()
+            .optional(),
+        },
+      },
+      {
+        key: "notes",
+        kind: "text",
+        nullable: true,
+        control: { kind: "textarea" },
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string().nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
+        },
+      },
+      {
+        key: "id",
+        kind: "identifier",
+        validation: {
+          read: vendorShortcode,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "purchaseCount",
+        kind: "number",
+        label: "Purchases",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.number().int().min(0),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "spend",
+        kind: "number",
+        display: { list: true, detail: true },
+        validation: {
+          read: money,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "latestPurchaseDate",
+        kind: "date",
+        nullable: true,
+        display: { list: true, detail: true },
+        validation: {
+          read: plainDate.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "logo",
+        kind: "json",
+        nullable: true,
+        validation: {
+          read: imageOut.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        display: { detail: true },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        display: { detail: true },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
+      },
+      { key: "shortcode", kind: "text", readKey: null },
+      {
+        key: "logoImageId",
+        kind: "identifier",
+        nullable: true,
+        label: "Logo Image ID",
+        readKey: null,
+        reference: { entity: "image" },
+      },
+      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+    ],
+    storage: [
+      { key: "id", default: "generated", specialized: "primary-key:VendorId" },
+      { key: "shortcode", specialized: "shortcode" },
+      "name",
+      "website",
+      { key: "logoImageId", reference: "image" },
+      "orderUrlTemplate",
+      "notes",
+      { key: "createdAt", default: "now" },
+      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      "deletedAt",
+    ],
+    create: ["name", "website", "orderUrlTemplate", "notes"],
+    update: ["name", "website", "orderUrlTemplate", "notes"],
+    bulk: [],
+    audit: ["name", "website", "orderUrlTemplate", "notes"],
+    output: [
+      "id",
+      "name",
+      "website",
+      "orderUrlTemplate",
+      "notes",
+      "purchaseCount",
+      "spend",
+      "latestPurchaseDate",
+      "logo",
+      "createdAt",
+      "updatedAt",
+    ],
+  },
+  fields: {
+    create: { module: "@cubby/schemas/vendor", export: "vendorCreateInput" },
+    update: { module: "@cubby/schemas/vendor", export: "vendorUpdateData" },
+    output: { module: "@cubby/schemas/vendor", export: "vendorOut" },
+  },
+  filters: {
+    audit: true,
+    schema: { module: "@cubby/schemas/vendor", export: "vendorFilterFields" },
+    descriptors: [
+      {
+        columnId: "name",
+        field: "search",
+        urlKey: "q",
+        kind: "text",
+        placeholder: "Search vendors...",
+        deriveSchema: true,
+      },
+      {
+        columnId: "purchaseCount",
+        kind: "range",
+        placeholder: "Filter purchase count...",
+        deriveSchema: true,
+        options: [
+          { value: "has", label: "Has purchases", meta: true },
+          { value: "none", label: "(none)", meta: true },
+          { value: "1", label: "1+ purchases" },
+          { value: "2", label: "2+ purchases" },
+          { value: "5", label: "5+ purchases" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveVendorPurchases",
+        },
+      },
+      {
+        columnId: "spend",
+        kind: "range",
+        placeholder: "Filter spend...",
+        deriveSchema: true,
+        options: [
+          { value: "positive", label: "Positive basis" },
+          { value: "zero", label: "Zero basis" },
+          { value: "negative", label: "Credit / negative" },
+          { value: "gte100", label: "$100 and up" },
+          { value: "gte500", label: "$500 and up" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveVendorSpend",
+        },
+      },
+      {
+        columnId: "latestPurchaseDate",
+        kind: "range",
+        placeholder: "Filter latest purchase...",
+        deriveSchema: true,
+        options: [
+          { value: "has", label: "Has purchase", meta: true },
+          { value: "none", label: "(none)", meta: true },
+          { value: "30d", label: "Last 30 days" },
+          { value: "90d", label: "Last 90 days" },
+          { value: "ytd", label: "Year to date" },
+          { value: "1y", label: "Last 12 months" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveLatestPurchaseDate",
+        },
+      },
+      {
+        columnId: "logo",
+        field: "logoPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter logos...",
+        options: [
+          { value: "has", label: "Has logo", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "related:vendor.expenses",
+        field: "expenseSearch",
+        urlKey: "related-expense",
+        kind: "text",
+        placeholder: "Search related recent expenses...",
+      },
+      {
+        columnId: "expenseId",
+        kind: "idMulti",
+        placeholder: "Filter by related recent expenses id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "expensePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related recent expenses presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:vendor.purchases",
+        field: "purchaseSearch",
+        urlKey: "related-purchase",
+        kind: "text",
+        placeholder: "Search related purchases...",
+      },
+      {
+        columnId: "purchaseId",
+        kind: "idMulti",
+        placeholder: "Filter by related purchases id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "purchasePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related purchases presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:vendor.products",
+        field: "productSearch",
+        urlKey: "related-product",
+        kind: "text",
+        placeholder: "Search related products...",
+      },
+      {
+        columnId: "productId",
+        kind: "idMulti",
+        placeholder: "Filter by related products id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "productPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related products presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:vendor.projects",
+        field: "projectSearch",
+        urlKey: "related-project",
+        kind: "text",
+        placeholder: "Search related projects...",
+      },
+      {
+        columnId: "projectId",
+        kind: "idMulti",
+        placeholder: "Filter by related projects id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "projectPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related projects presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:vendor.transactions",
+        field: "financialTransactionSearch",
+        urlKey: "related-financialTransaction",
+        kind: "text",
+        placeholder: "Search related financial transactions...",
+      },
+      {
+        columnId: "financialTransactionId",
+        kind: "idMulti",
+        placeholder: "Filter by related financial transactions id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "financialTransactionPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related financial transactions presence...",
+        urlOnly: true,
+      },
+    ],
+  },
+  relations: [
+    {
+      key: "logo",
+      label: "Logo image",
+      target: "image",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Vendor.logoImageId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Vendor.logoImageId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "expenses",
+      label: "Recent expenses",
+      target: "expense",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "incoming" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Expense.purchaseId", direction: "outgoing" },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "purchases",
+      label: "Purchases",
+      target: "purchase",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Purchase.vendorId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Purchase.vendorId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "products",
+      label: "Products",
+      target: "product",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "incoming" },
+          { edge: "Expense.productId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Expense.productId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "outgoing" },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "projects",
+      label: "Projects",
+      target: "project",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "incoming" },
+          { edge: "Expense.projectId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Expense.projectId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "outgoing" },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "transactions",
+      label: "Financial transactions",
+      target: "financialTransaction",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          {
+            edge: "FinancialTransactionAllocation.purchaseId",
+            direction: "incoming",
+          },
+          {
+            edge: "FinancialTransactionAllocation.transactionId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "FinancialTransactionAllocation.transactionId",
+            direction: "incoming",
+          },
+          {
+            edge: "FinancialTransactionAllocation.purchaseId",
+            direction: "outgoing",
+          },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+    },
+  ],
+  search: { enabled: true },
+  capabilities: {
+    auditable: true,
+    images: false,
+    countable: true,
+    softDelete: true,
+    delete: { mode: "soft", bulk: true },
+    bulkUpdate: null,
+    merge: true,
+    operationOwners: { delete: "kernel", merge: "kernel" },
+    mcp: ["get", "list", "search", "create", "update", "delete", "merge"],
+  },
+  extensions: {
+    countFilter: null,
+    relatednessSignals: null,
+    mcpNames: null,
+    ports: {
+      repository: {
+        module: "~/server/repo/vendor.entity-adapter",
+        export: "vendorEntityAdapter",
+      },
+      references: {
+        label: { module: "~/entities/entities", export: "entityLabel" },
+        resolver: {
+          module: "~/server/repo/shortcode-resolver",
+          export: "resolveLiveShortcode",
+        },
+      },
+      filters: {
+        module: "~/entities/filter-manifest",
+        export: "getEntityFilters",
+      },
+      search: {
+        projection: {
+          module: "~/server/repo/search-document",
+          export: "refreshSearchDocument",
+        },
+        semanticText: {
+          module: "~/server/repo/search-document",
+          export: "getSearchDocumentEmbeddingText",
+        },
+        dependentRefresh: {
+          module: "~/server/services/mutation-side-effects",
+          export: "runMutationSideEffects",
+        },
+      },
+    },
+  },
+});

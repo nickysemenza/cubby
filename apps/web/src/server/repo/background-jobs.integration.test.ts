@@ -32,6 +32,12 @@ import {
   startOrReuseBackgroundWorkflow,
 } from "~/server/repo/background-jobs";
 import { getDb } from "~/server/repo/database-helpers";
+import { executeWorkflow } from "~/server/workflow-runtime";
+import { backfillLocationDescriptionsWorkflow } from "~/server/workflows/ai.server";
+import {
+  retryBackgroundBatchWorkflow,
+  retryBackgroundJobWorkflow,
+} from "~/server/workflows/background-jobs.server";
 
 type QueueBody = Parameters<BackgroundQueueProducer["send"]>[0];
 type QueueMessage = { body: QueueBody };
@@ -53,6 +59,76 @@ describe("background job persistence", () => {
   const ctx = withTestDb();
 
   afterEach(() => setCfEnv());
+
+  it("preserves both empty location-backfill progress events and its durable batch", async () => {
+    const sent: QueueMessage[][] = [];
+    setCfEnv(queueEnv(sent));
+    const events = [];
+    for await (const event of backfillLocationDescriptionsWorkflow(ctx.db))
+      events.push(event);
+    expect(events.slice(0, 2)).toEqual([
+      { type: "progress", done: 0, total: 0 },
+      { type: "progress", done: 0, total: 0 },
+    ]);
+    expect(events).toHaveLength(3);
+    const final = events.at(-1);
+    if (final?.type !== "done")
+      throw new Error("Location backfill did not finish");
+    expect(final.result).toMatchObject({ enqueued: 0, total: 0 });
+    expect(
+      (await getBackgroundBatchDetail(ctx.db, final.result.batchId))?.jobs,
+    ).toEqual([]);
+    expect(sent).toEqual([]);
+  });
+
+  it.each(["job", "batch"] as const)(
+    "dispatches a committed %s retry before reporting cancellation",
+    async (kind) => {
+      const sent: QueueMessage[][] = [];
+      setCfEnv(queueEnv(sent));
+      const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
+        kind: "location-ai.description.refresh",
+        source: "backfill",
+        jobs: [
+          {
+            kind: "location-ai.description.refresh",
+            dedupeKey: `test:cancelled-retry:${kind}`,
+            payload: { locationId: crypto.randomUUID() },
+            maxAttempts: 1,
+          },
+        ],
+      });
+      const jobId = jobIds[0]!;
+      await markBackgroundJobRunning(ctx.db, jobId);
+      await failOrRetryBackgroundJob(ctx.db, jobId, new Error("retry fixture"));
+      const controller = new AbortController();
+      const options = {
+        context: ctx.db,
+        signal: controller.signal,
+        observer: (event: { type: string; state: string }) => {
+          if (event.type === "committedCall" && event.state === "succeeded")
+            controller.abort();
+        },
+      };
+      const execution =
+        kind === "job"
+          ? executeWorkflow(retryBackgroundJobWorkflow.definition, {
+              ...options,
+              input: { jobId },
+            })
+          : executeWorkflow(retryBackgroundBatchWorkflow.definition, {
+              ...options,
+              input: { batchId },
+            });
+      await expect(execution).rejects.toMatchObject({
+        name: "WorkflowCancelledError",
+        committed: true,
+      });
+      expect(sent.flat()).toHaveLength(1);
+      const detail = await getBackgroundBatchDetail(ctx.db, batchId);
+      expect(detail?.jobs[0]?.status).toBe("queued");
+    },
+  );
 
   it("summarizes job transitions on the batch", async () => {
     const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {

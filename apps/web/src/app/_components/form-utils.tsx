@@ -1,5 +1,12 @@
 import type { VariantProps } from "class-variance-authority";
-import { lazy, type ReactNode, Suspense, useEffect, useRef } from "react";
+import {
+  lazy,
+  type ReactNode,
+  Suspense,
+  useEffect,
+  useId,
+  useRef,
+} from "react";
 import {
   Controller,
   type FieldValues,
@@ -364,24 +371,28 @@ export function PlainDateField<TFieldValues extends FieldValues = FieldValues>({
   form,
   name,
   label,
+  description,
 }: {
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
+  description?: string;
 }) {
+  const controlId = useId();
   return (
     <Controller
       control={form.control}
       name={name}
       render={({ field, fieldState }) => (
         <FormFieldGroup
-          htmlFor={name}
+          htmlFor={controlId}
           label={label}
+          description={description}
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
           <DatePickerInput
-            id={name}
+            id={controlId}
             name={name}
             value={field.value ?? null}
             onChange={(v) => field.onChange(v)}
@@ -666,6 +677,7 @@ export function UnifiedTextField<
   form,
   name,
   label,
+  description,
   placeholder,
   nullable = false,
   getIcon,
@@ -674,6 +686,7 @@ export function UnifiedTextField<
   form: UseFormReturn<TFieldValues>;
   name: FieldPathByValue<TFieldValues, string | null | undefined>;
   label: string;
+  description?: string;
   placeholder: string;
   nullable?: boolean;
   getIcon?: (value: string | null) => ReactNode;
@@ -691,6 +704,7 @@ export function UnifiedTextField<
           <FormFieldGroup
             htmlFor={name}
             label={label}
+            description={description}
             invalid={fieldState.invalid}
             error={fieldState.error}
           >
@@ -748,7 +762,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   form: UseFormReturn<TFieldValues>;
   name: Path<TFieldValues>;
   label: string;
-  options: {
+  options: readonly {
     value: string;
     label: string;
     icon?: React.ReactNode;
@@ -759,6 +773,7 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
   disabled?: boolean;
   description?: string;
 }) {
+  const controlId = useId();
   // Build items list, prepending "None" option if nullable
   const items = nullable
     ? [{ value: "__none__", label: "None" }, ...options]
@@ -770,13 +785,14 @@ export function SelectField<TFieldValues extends FieldValues = FieldValues>({
       name={name}
       render={({ field, fieldState }) => (
         <FormFieldGroup
-          htmlFor={name}
+          htmlFor={controlId}
           label={label}
           description={description}
           invalid={fieldState.invalid}
           error={fieldState.error}
         >
           <StaticPicker
+            inputId={controlId}
             items={items}
             value={field.value ?? (nullable ? "__none__" : null)}
             onValueChange={(value) =>

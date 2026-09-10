@@ -4,15 +4,12 @@ import type {
 } from "@cubby/schemas/ledger-party";
 import { useMemo } from "react";
 
-import {
-  createCreatedAtColumn,
-  createUpdatedAtColumn,
-} from "~/app/_components/data-table/columnHelpers";
 import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 
 import {
@@ -30,12 +27,14 @@ export function LedgerPartyList() {
   const helper = useMemo(() => createCubbyColumnHelper<LedgerPartyOut>(), []);
   const columns = useMemo(
     () =>
-      createCubbyColumnCollection<LedgerPartyOut>((add) => {
-        add(createLedgerPartyIdentityColumn(helper));
-        add(createLedgerPartyKindColumn(helper));
-        add(createCreatedAtColumn(helper));
-        add(createUpdatedAtColumn(helper));
-      }),
+      createEntityDisplayColumns(
+        "ledgerParty",
+        helper,
+        createCubbyColumnCollection<LedgerPartyOut>((add) => {
+          add(createLedgerPartyIdentityColumn(helper));
+          add(createLedgerPartyKindColumn(helper));
+        }),
+      ),
     [helper],
   );
   return (

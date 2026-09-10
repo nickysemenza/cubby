@@ -13,12 +13,12 @@ import { Link } from "@tanstack/react-router";
 import type { FC } from "react";
 
 import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
@@ -73,19 +73,13 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     error: (err) => getErrorMessage(err) || "Failed to update product",
   });
 
-  const fields: BasicInfoField[] = [
-    { label: "Name", value: product.name },
-    // Shortcode (if assigned)
-    ...(product.id
-      ? [
-          {
-            label: "Shortcode",
-            value: <span className="font-mono text-xs">{product.id}</span>,
-          },
-        ]
-      : []),
-    {
-      label: "Manufacturer",
+  const overrides = {
+    id: () => ({
+      value: product.id ? (
+        <span className="font-mono text-xs">{product.id}</span>
+      ) : undefined,
+    }),
+    manufacturer: () => ({
       value: product.manufacturer ? (
         <EntityFilterLink
           to="/products"
@@ -96,9 +90,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           {product.manufacturer}
         </EntityFilterLink>
       ) : undefined,
-    },
-    {
-      label: "Model",
+    }),
+    model: () => ({
       value: product.model ? (
         <EntityFilterLink
           to="/products"
@@ -109,9 +102,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           {product.model}
         </EntityFilterLink>
       ) : undefined,
-    },
-    {
-      label: "Valuation price",
+    }),
+    price: () => ({
       value: (
         <Stack gap="xs">
           <EditableCell
@@ -133,9 +125,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           </span>
         </Stack>
       ),
-    },
-    {
-      label: "Category",
+    }),
+    category: () => ({
       value: (
         <EditableCell
           value={category}
@@ -160,8 +151,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           label={`Show all products in ${category}`}
         />
       ) : undefined,
-    },
-    {
+    }),
+    primaryGtin: () => ({
       label: primaryIsbn ? "ISBN-13" : "UPC",
       // Rendered as the printed encoding, not the stored GTIN-14 — the operator
       // is comparing this against the barcode on the package, and the USDA page
@@ -177,9 +168,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           {displayGtin(product.primaryGtin)}
         </Link>
       ) : undefined,
-    },
-    {
-      label: "USDA FDC ID",
+    }),
+    fdc_id: () => ({
       value: product.fdc_id ? (
         <Link
           to="/usda/$id"
@@ -189,9 +179,8 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           {product.fdc_id}
         </Link>
       ) : undefined,
-    },
-    {
-      label: "Ingredient",
+    }),
+    ingredientId: () => ({
       value: product.ingredient ? (
         <EntityInlineLink
           displayImage={undefined}
@@ -209,88 +198,86 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
           label={`Show all products for ${product.ingredient.name}`}
         />
       ) : undefined,
-    },
-    {
-      label: "USDA Food",
-      value: product.food ? (
-        <EntityInlineLink
-          displayImage={undefined}
-          entity="usda-food"
-          data={product.food}
-        />
-      ) : undefined,
-    },
-    ...(product.externalIds && product.externalIds.length > 0
-      ? [
-          {
-            label: "External IDs",
-            value: (
-              <div className="flex flex-wrap gap-x-2 gap-y-1 font-mono text-xs">
-                {product.externalIds.map((eid) => {
-                  const label = `${eid.source} (${eid.kind.replaceAll("_", " ")}): ${eid.externalId}`;
-                  return eid.url ? (
-                    <a
-                      key={eid.id}
-                      href={eid.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline"
-                    >
-                      {label}
-                    </a>
-                  ) : (
-                    <span key={eid.id} className="text-muted-foreground">
-                      {label}
-                    </span>
-                  );
-                })}
-              </div>
-            ),
-          },
-        ]
-      : []),
-    ...(product.tags.length > 0
-      ? [
-          {
-            label: "Tags",
-            value: (
-              <Row gap="xs" wrap justify="end">
-                {product.tags.map((tag) => {
-                  const collection = collectionSlugFromTag(tag);
-                  return collection ? (
-                    <Link
-                      key={tag}
-                      to="/collections/$collection"
-                      params={{ collection }}
-                      aria-label={`Open ${formatCollectionLabel(collection)} Collection`}
-                    >
-                      <Badge variant="secondary">
-                        {formatCollectionLabel(collection)}
-                      </Badge>
-                    </Link>
-                  ) : (
-                    <EntityFilterLink
-                      key={tag}
-                      to="/products"
-                      search={{ view: "table", tags: tag }}
-                      label={`Show all products tagged ${tag}`}
-                      variant="value"
-                      className="no-underline"
-                    >
-                      <Badge variant="outline">{tag}</Badge>
-                    </EntityFilterLink>
-                  );
-                })}
-              </Row>
-            ),
-          },
-        ]
-      : []),
-  ];
+    }),
+    externalIds: () => ({
+      value:
+        product.externalIds && product.externalIds.length > 0 ? (
+          <div className="flex flex-wrap gap-x-2 gap-y-1 font-mono text-xs">
+            {product.externalIds.map((eid) => {
+              const label = `${eid.source} (${eid.kind.replaceAll("_", " ")}): ${eid.externalId}`;
+              return eid.url ? (
+                <a
+                  key={eid.id}
+                  href={eid.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  {label}
+                </a>
+              ) : (
+                <span key={eid.id} className="text-muted-foreground">
+                  {label}
+                </span>
+              );
+            })}
+          </div>
+        ) : undefined,
+    }),
+    tags: () => ({
+      value:
+        product.tags.length > 0 ? (
+          <Row gap="xs" wrap justify="end">
+            {product.tags.map((tag) => {
+              const collection = collectionSlugFromTag(tag);
+              return collection ? (
+                <Link
+                  key={tag}
+                  to="/collections/$collection"
+                  params={{ collection }}
+                  aria-label={`Open ${formatCollectionLabel(collection)} Collection`}
+                >
+                  <Badge variant="secondary">
+                    {formatCollectionLabel(collection)}
+                  </Badge>
+                </Link>
+              ) : (
+                <EntityFilterLink
+                  key={tag}
+                  to="/products"
+                  search={{ view: "table", tags: tag }}
+                  label={`Show all products tagged ${tag}`}
+                  variant="value"
+                  className="no-underline"
+                >
+                  <Badge variant="outline">{tag}</Badge>
+                </EntityFilterLink>
+              );
+            })}
+          </Row>
+        ) : undefined,
+    }),
+  };
 
   return (
-    <BasicInfo
-      fields={fields}
+    <EntityBasicInfo
+      entity="product"
+      record={product}
+      overrides={overrides}
+      afterFields={{
+        ingredientId: [
+          {
+            label: "USDA Food",
+            value: product.food ? (
+              <EntityInlineLink
+                displayImage={undefined}
+                entity="usda-food"
+                data={product.food}
+              />
+            ) : undefined,
+          },
+        ],
+      }}
       // Notes and the price suggestion render as blocks below the fact rows —
       // InfoRow's right-aligned value span is hostile to multi-line markdown
       // and to anything with its own action button.

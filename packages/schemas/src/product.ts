@@ -1,6 +1,6 @@
+import { productTopLevelOut } from "./product-output-fields";
 import {
   inventoryPlacementValues,
-  productCategoryValues,
   UNSPECIFIED_MANUFACTURER,
 } from "@cubby/shared";
 import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
@@ -9,7 +9,6 @@ import { productRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
   dateRangeFields,
-  deriveUpdateData,
   numericRangeFields,
   timestampedFields,
 } from "./base-entity";
@@ -27,11 +26,9 @@ import {
   positiveMoneyNullable,
 } from "./money";
 import {
-  externalIdInputs,
   externalIdKind,
   externalIdOut,
   externalIdSource,
-  externalIdValues,
   gtin,
 } from "./external-id";
 import { isbn } from "./isbn";
@@ -72,16 +69,17 @@ import { plainDate, taskStatusSchema } from "./project";
 import { recipeUsageMcpEntityOut, recipeUsageOut } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
+  generatedProductFieldSchemas,
+  generatedProductFilterFields,
+} from "./generated/entity-field-schemas.product.gen";
+import {
   mcpUnitMappingOut,
-  mcpUnitMappingInput,
-  unitMappingInput,
   unitMappingOut,
   unitMappingWithMetadata,
 } from "./unitmapping";
+import { productCategory, productPricingOut } from "./product-fields";
 
-export const productCategory = z
-  .enum(productCategoryValues)
-  .describe("Product category");
+export { productCategory, productPricingOut } from "./product-fields";
 
 export type ProductCategory = z.infer<typeof productCategory>;
 
@@ -104,108 +102,14 @@ export const hasFoodIndicators = (product: {
   hasFdcLink(product.fdc_id) ||
   (product.ingredientId != null && product.ingredientId.length > 0);
 
-const productCreateFields = {
-  // Override the output/read `name` (lax for reads) with a non-empty constraint on
-  // the create/update boundary; keep the mock hint for test fixtures.
-  name: requiredName("Product name")
-    .describe("Product name")
-    .meta({ mock: "commerce.productName" }),
-  aliases: z
-    .array(z.string())
-    .default([])
-    .describe(
-      "Alternate names for this product — searched alongside the name. Replaces the existing list when provided.",
-    ),
-  tags: z
-    .array(z.string())
-    .default([])
-    .describe(
-      'Free-form compatibility/grouping tags, e.g. "grinder-4.5in" or "M18". Tag the tool AND the consumables that fit it with the same value; `category` says which side each is. Replaces the existing list when provided.',
-    ),
-  upc: gtin.nullable(),
-  isbn: isbn
-    .nullable()
-    .optional()
-    .describe(
-      "Physical-book ISBN-10 or ISBN-13; stored as the equivalent canonical GTIN-14 and categorizes the Product as books",
-    ),
-  fdc_id: fdcId
-    .nullable()
-    .optional()
-    .describe(
-      "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's barcode). null to unlink.",
-    ),
-  manufacturer: z
-    .string()
-    .describe("Manufacturer or 'generic'")
-    .meta({ mock: "company.name" }),
-  model: z.string().nullish().describe("model number"),
-  notes: z.string().nullish().describe("product notes, URLs, or other details"),
-  expectedQuantity: z
-    .number()
-    .int()
-    .positive()
-    .nullable()
-    .describe("null means unlimited, 1 for unique items"),
-  category: productCategory.nullable().optional(),
-  ingredientId: ingredientShortcode
-    .nullable()
-    .describe(
-      "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
-    ),
-  price: positiveMoneyNullable
-    .optional()
-    .describe(
-      "Current chosen per-each costing/replacement price ($), not historical spend. 0 means genuinely free; null means no current price is recorded.",
-    ),
-  unitMappings: z
-    .array(unitMappingInput)
-    .default([])
-    .describe(
-      'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
-    ),
-  externalIds: externalIdInputs.default([]),
-  usdaUnavailable: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe("no USDA food exists — expect manual weight/volume/calories"),
-  stockTracked: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe(
-      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
-    ),
-  // Public `IMG-` shortcode — `Image` mints one at insert time, so the repo
-  // layer resolves this to a uuid before the join-table write.
-  pendingImageIds: z.array(imageShortcode).optional(),
-};
-
-export const productCreateInput = z.object(productCreateFields);
-
-// A partial update makes every create field optional and — critically — strips
-// the create-time `.default([])` off `unitMappings`/`externalIds` so omitting
-// them leaves the existing rows UNCHANGED (see deriveUpdateData). `removeImageIds`
-// is update-only.
-export const productUpdateData = deriveUpdateData(productCreateFields, {
-  extend: {
-    // Public `IMG-` codes, as returned by the web `ProductOut.images[].id` —
-    // resolved to uuids in the repo before they reach the `ProductImage` join
-    // table. The MCP surface is a separate schema (`mcpProductUpdateInput`
-    // below) that still speaks raw uuids, matching `productMcpImageOut`.
-    removeImageIds: z
-      .array(imageShortcode)
-      .optional()
-      .describe(
-        "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-      ),
-    imageOrder: z
-      .array(imageShortcode)
-      .optional()
-      .describe("existing image ids in display order; first = cover"),
-  },
-});
+export const productCreateInput = z.object(generatedProductFieldSchemas.create);
+export const productUpdateData = z
+  .object(generatedProductFieldSchemas.update)
+  .partial()
+  .extend({
+    removeImageIds: z.array(imageShortcode).optional(),
+    imageOrder: z.array(imageShortcode).optional(),
+  });
 
 export const productUpdateInput = z.object({
   id: productShortcode,
@@ -284,30 +188,15 @@ export const productMarkUsdaUnavailableManyInput = z.object({
 export const productFilterFields = {
   ...auditDateFilterFields,
   ...productRelatedFilterFields,
-  nameFilter: z.string().optional().describe("Filter by product name"),
+  ...generatedProductFilterFields,
   manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
-  manufacturerExact: oneOrMany(z.string()).optional(),
-  upcFilter: z
-    .string()
-    .optional()
-    .describe("Filter by UPC/barcode — matches ANY of the product's barcodes"),
   upcPresenceFilter: presenceFilter,
-  modelFilter: z
-    .string()
-    .optional()
-    .describe(
-      "Filter by model number — a tool's real identity when the name is generic.",
-    ),
   modelPresenceFilter: presenceFilter,
-  notesFilter: z.string().optional(),
   notesPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
   dataStatus: dataQualityStatus.optional(),
   dataGap: oneOrMany(productDataCheck).optional(),
-  categoryFilter: oneOrMany(productCategory)
-    .optional()
-    .describe("Filter by category"),
   inventoryPresenceFilter: presenceFilter,
   inventoryMultiplicity: z
     .enum(["duplicate_within_placement"])
@@ -380,7 +269,6 @@ export const productFilterFields = {
   ),
   ...numericRangeFields("expenseCount", { int: true, nonnegative: true }),
   ...numericRangeFields("expenseTotal"),
-  ...numericRangeFields("expectedQuantity"),
   quantityVarianceFilter: z
     .enum(["mismatched", "matched"])
     .optional()
@@ -677,70 +565,11 @@ export const productDiscardOut = z.object({
 });
 export type ProductDiscardOut = z.infer<typeof productDiscardOut>;
 
-export const productPricingOut = z.object({
-  derivedPrice: moneyNullable,
-  effectivePrice: moneyNullable,
-  source: z.enum(["explicit", "derived", "none"]),
-  knownExpenseCount: z.number().int().nonnegative(),
-  unknownExpenseCount: z.number().int().nonnegative(),
-  knownUnitCount: z.number().int().nonnegative(),
-  partial: z.boolean(),
-});
 export type ProductPricingOut = z.infer<typeof productPricingOut>;
 
-const productTopLevelFields = {
-  id: productShortcode,
-  name: z
-    .string()
-    .describe("Product name")
-    .meta({ mock: "commerce.productName" }),
-  aliases: z
-    .array(z.string())
-    .default([])
-    .describe("Alternate names for this product (searched + embedded)"),
-  tags: z
-    .array(z.string())
-    .default([])
-    .describe(
-      'Free-form compatibility/grouping tags, e.g. "grinder-4.5in", "M18"',
-    ),
-  primaryGtin: gtin.nullable(),
-  fdc_id: fdcId
-    .nullable()
-    .describe(
-      "USDA FoodData Central id — links the product to any USDA food (takes precedence over the product's barcode). null to unlink.",
-    ),
-  manufacturer: z
-    .string()
-    .describe("Manufacturer or 'generic'")
-    .meta({ mock: "company.name" }),
-  model: z.string().nullable().describe("model number"),
-  notes: z
-    .string()
-    .nullable()
-    .describe("product notes, URLs, or other details"),
-  expectedQuantity: z
-    .number()
-    .int()
-    .positive()
-    .nullable()
-    .describe("null means unlimited, 1 for unique items"),
-  category: productCategory
-    .nullable()
-    .describe("product category for filtering"),
-  images: z.array(imageOut),
-  externalIds: z.array(externalIdOut),
-  price: moneyNullable.describe(
-    "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
-  ),
-  pricing: productPricingOut,
-  usdaUnavailable: z.boolean().nullable(),
-  stockTracked: z.boolean().nullable(),
-  dataQuality,
-  ...timestampedFields,
-};
+const productTopLevelFields = generatedProductFieldSchemas.read;
 
-export const productTopLevelOut = z.object(productTopLevelFields);
+export { productTopLevelOut } from "./product-output-fields";
 
 /**
  * find-or-create result: the product plus whether it was newly created (vs a
@@ -1157,144 +986,6 @@ export const productQuickCreatePayload = z.object({
 export type ProductQuickCreatePayload = z.infer<
   typeof productQuickCreatePayload
 >;
-
-export const mcpProductCreateInput = z.object({
-  name: requiredName("Product name")
-    .describe("Product name")
-    .meta({ mock: "commerce.productName" }),
-  // Nullish, not nullable: a bare `.nullable()` still makes the KEY required,
-  // so creating a product with no barcode meant sending an explicit `null` —
-  // and an MCP client that surfaces this as a plain string field cannot express
-  // one, which made a Product with no UPC uncreatable over MCP. That is the
-  // ordinary case for a kit parent or a retailer composite, neither of which
-  // carries a barcode. `mcpProductUpdateInput` already had both fields
-  // optional; create is what diverged.
-  upc: gtin.nullish(),
-  isbn: isbn
-    .nullish()
-    .describe(
-      "Physical-book ISBN-10 or ISBN-13; stored in the canonical GTIN identifier slot",
-    ),
-  manufacturer: z
-    .string()
-    .describe("Manufacturer or 'generic'")
-    .meta({ mock: "company.name" }),
-  aliases: z
-    .array(z.string())
-    .default([])
-    .describe("Alternate names (replaces the complete alias set)"),
-  tags: z
-    .array(z.string())
-    .default([])
-    .describe("Compatibility/grouping tags (replaces the complete tag set)"),
-  fdc_id: fdcId
-    .nullable()
-    .optional()
-    .describe("USDA FoodData Central id; null means no explicit USDA link"),
-  model: z
-    .string()
-    .nullish()
-    .describe("Maker-issued model or MPN, not a retailer SKU"),
-  notes: z.string().nullish().describe("Product notes, URLs, or other details"),
-  expectedQuantity: z.number().int().positive().nullable().optional(),
-  category: productCategory.nullable().optional(),
-  ingredientId: ingredientShortcode
-    .nullish()
-    .describe(
-      "Link this product to an ingredient (its id) so recipes using that ingredient can cost from this product.",
-    ),
-  price: positiveMoneyNullable
-    .optional()
-    .describe(
-      "Current chosen per-each costing/replacement price ($), not historical spend. 0 means genuinely free; null means no current price is recorded.",
-    ),
-  unitMappings: z
-    .array(mcpUnitMappingInput)
-    .default([])
-    .describe(
-      'Conversion/price edges, e.g. 8 oz = $10 → [{ a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }]. For a weight-measured ingredient an oz/g → dollar edge is the cost basis.',
-    ),
-  externalIds: externalIdValues
-    .default([])
-    .describe("Typed manufacturer, marketplace, or retailer identifiers"),
-  usdaUnavailable: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe("no USDA food exists — expect manual weight/volume/calories"),
-  stockTracked: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe(
-      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
-    ),
-});
-
-export const mcpProductUpdateInput = z.object({
-  name: requiredName("Product name")
-    .describe("Product name")
-    .meta({ mock: "commerce.productName" })
-    .optional(),
-  aliases: z
-    .array(z.string())
-    .optional()
-    .describe("Alternate names (replaces the existing list)"),
-  tags: z
-    .array(z.string())
-    .optional()
-    .describe(
-      'Compatibility/grouping tags, e.g. "grinder-4.5in" or "M18" (replaces the existing list). Tag a tool and the consumables that fit it with the same value; `category` distinguishes which is which.',
-    ),
-  externalIds: externalIdValues
-    .optional()
-    .describe(
-      "Retailer/vendor identifiers. Pass the COMPLETE desired set: it replaces the existing list. A (source, kind) slot takes one PRIMARY plus any number of secondaries — mark the extras isPrimary: false.",
-    ),
-  upc: gtin.nullable().optional(),
-  isbn: isbn
-    .nullable()
-    .optional()
-    .describe(
-      "Physical-book ISBN-10 or ISBN-13; null retires the primary book barcode",
-    ),
-  fdc_id: fdcId.nullable().optional(),
-  manufacturer: z
-    .string()
-    .describe("Manufacturer or 'generic'")
-    .meta({ mock: "company.name" })
-    .optional(),
-  model: z.string().nullish(),
-  notes: z.string().nullish(),
-  expectedQuantity: z.number().int().positive().nullable().optional(),
-  category: productCategory.nullable().optional(),
-  ingredientId: ingredientShortcode.nullable().optional(),
-  price: positiveMoneyNullable.optional(),
-  unitMappings: z
-    .array(mcpUnitMappingInput)
-    .optional()
-    .describe(
-      "Complete replacement set of conversion/price mappings; an empty array clears all mappings.",
-    ),
-  usdaUnavailable: z.boolean().nullable().optional(),
-  stockTracked: z
-    .boolean()
-    .nullable()
-    .optional()
-    .describe(
-      "whether shelf records are kept for this kind of thing: null = undecided, false = reviewed/no shelf claim, true = tracked",
-    ),
-  removeImageIds: z
-    .array(imageShortcode)
-    .optional()
-    .describe(
-      "Product image ids (`IMG-` codes, as returned by attach_file and get_product) to detach; an id not currently attached to this product is silently ignored. Detaching DELETES the stored file when nothing else references it — there is no restore.",
-    ),
-  imageOrder: z
-    .array(imageShortcode)
-    .optional()
-    .describe("Product image ids in display order; first valid image is cover"),
-});
 
 const productMcpFields = {
   id: productShortcode,

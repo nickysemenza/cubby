@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { CellData } from "@tanstack/react-table";
@@ -187,8 +188,9 @@ export function useStandardColumns<TData extends BaseListRow>({
   // Memoize entity config to prevent re-renders when entity doesn't change
   const { standardColumns, shouldUseMappings } = useMemo(() => {
     const listConfig = browserEntityDefinition(entity).list;
-    const standardColumns: readonly string[] =
-      listConfig?.standardColumns ?? [];
+    const standardColumns = entityFieldModels[entity].fields.filter(
+      (field) => field.display.list && field.display.standard,
+    );
     const listHasUnitMappings = listConfig?.hasUnitMappings ?? false;
     return {
       standardColumns,
@@ -262,7 +264,9 @@ export function useStandardColumns<TData extends BaseListRow>({
         }
 
         // Prepend standard columns
-        if (standardColumns.includes("image")) {
+        if (
+          standardColumns.some((field) => field.display.standard === "image")
+        ) {
           add(
             withManifestFilter(
               createImageColumn(columnHelper, {
@@ -270,7 +274,7 @@ export function useStandardColumns<TData extends BaseListRow>({
                 // The one asserted `rowImages`. `TData` is unbound here, so a
                 // conditional "optional only when the row has images" would defer
                 // and fail to resolve; the assertion holds because only `product`
-                // and `recipe` declare `standardColumns: ["image"]`, and both carry
+                // and `recipe` declare the standard image display, and both carry
                 // a required `images` on their list row. Any new entity opting in
                 // must add one too — or pass its own cascade resolver.
                 // SAFETY: the manifest allows the standard image column only for
@@ -283,9 +287,13 @@ export function useStandardColumns<TData extends BaseListRow>({
             ),
           );
         }
-        if (standardColumns.includes("name")) {
+        const nameField = standardColumns.find(
+          (field) => field.display.standard === "name",
+        );
+        if (nameField) {
           const nameFilterConfig = getFilterConfig("name");
           const nameColumnOptions = {
+            header: nameField.label,
             filterConfig: nameFilterConfig,
             className: nameClassName,
             editable: nameEditable,

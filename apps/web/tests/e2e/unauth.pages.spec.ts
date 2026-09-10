@@ -40,6 +40,8 @@ test("footer metadata is server rendered and reused across client navigation", a
   expect(serverText).toBeTruthy();
   const footer = page.getByTestId("build-metadata");
   await expect(footer).toHaveText(serverText!);
+  // SSR links work before hydration, but only hydrated links exercise client navigation.
+  await expect(page.locator('[data-nav-hydrated="true"]')).toBeVisible();
 
   await page.getByRole("link", { name: "Docs", exact: true }).click();
   await expect(page).toHaveURL(/\/docs(?:\/|$)/);

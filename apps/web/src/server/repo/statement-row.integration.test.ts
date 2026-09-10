@@ -1,6 +1,7 @@
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import {
+  listStatementRowsInput,
   recordStatementRowsInput,
   type StatementImportInput,
   type StatementRowInput,
@@ -8,6 +9,11 @@ import {
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+
+import {
+  listStatementRowsWorkflow,
+  recordStatementRowsWorkflow,
+} from "~/server/workflows/statement-row.server";
 
 import { getDb } from "./database-helpers";
 import { createFinancialAccount } from "./financial-account";
@@ -57,14 +63,14 @@ const record = (
   importOverrides: Partial<StatementImportInput> = {},
   dryRun = false,
 ) =>
-  recordStatementRows(
+  recordStatementRowsWorkflow(
     db,
+    actor,
     recordStatementRowsInput.parse({
       import: importInput(importOverrides),
       rows,
       dryRun,
     }),
-    actor,
   );
 
 describe("statement row ledger", () => {
@@ -103,7 +109,10 @@ describe("statement row ledger", () => {
       rowCountStored: 2,
     });
 
-    const listed = await listStatementRows(ctx.db, {});
+    const listed = await listStatementRowsWorkflow(
+      ctx.db,
+      listStatementRowsInput.parse({}),
+    );
     expect(listed.count).toBe(2);
     const charge = listed.data.find((row) => row.providerAmount === -128.5);
     expect(charge).toMatchObject({

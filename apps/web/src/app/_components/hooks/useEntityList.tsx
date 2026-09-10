@@ -68,10 +68,8 @@ function fixedPreviewEntity(
   return options.entity ?? listEntity;
 }
 
-const routeSearchSchema = z.record(
-  z.string(),
-  z.union([z.string(), z.array(z.string()), z.undefined()]),
-);
+// Router search also carries typed dialog and pagination state, not just filters.
+const routeSearchSchema = z.record(z.string(), z.json().optional());
 
 /**
  * Server-backed tree presentation. Filtering and pagination remain manual, so

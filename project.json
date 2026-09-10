@@ -3,7 +3,7 @@
   "name": "cubby-checks",
   "targets": {
     "entity": {
-      "command": "node scripts/entity-literal-generator.ts --check",
+      "command": "tsx scripts/entity-generator.ts --check",
       "cache": true
     },
     "start-ops": {

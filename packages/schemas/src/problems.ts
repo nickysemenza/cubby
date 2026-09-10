@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { amount } from "./codec";
+import { amount, baseKind } from "./codec";
 import { money, moneyNullable } from "./money";
 import { shortcodeEntities, type ShortcodeEntity } from "./entity-manifest";
 import { referentialLivenessViolationSchema } from "./entity-integrity";
@@ -33,8 +33,7 @@ const publicEntityIdSchema = anyShortcodeSchema(
   nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
 );
 
-export const baseKind = z.enum(["weight", "volume", "money", "calories"]);
-export type BaseKind = z.infer<typeof baseKind>;
+export { baseKind, type BaseKind } from "./codec";
 
 const productProblemFields = {
   id: productShortcode,

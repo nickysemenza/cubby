@@ -60,7 +60,8 @@ type AggregateRow = {
 };
 type BucketRow = AggregateRow & { key: string; label: string };
 type CellRow = AggregateRow & { rowKey: string; columnKey: string | null };
-type FacetId = ExpenseFacetCountsInput["facetIds"][number];
+export type ExpenseFacetId = ExpenseFacetCountsInput["facetIds"][number];
+type FacetId = ExpenseFacetId;
 
 /**
  * The analyzer's closed set of axes. Project and vendor deliberately carry
@@ -111,7 +112,7 @@ const scalarFacetSpecs = {
 
 type ScalarFacetId = keyof typeof scalarFacetSpecs;
 
-function isScalarFacetId(id: FacetId): id is ScalarFacetId {
+export function isExpenseScalarFacet(id: FacetId): id is ScalarFacetId {
   return Object.hasOwn(scalarFacetSpecs, id);
 }
 
@@ -193,7 +194,10 @@ const hasPrincipalAxis = (input: ExpenseAnalyzeInput) =>
   input.columnDimension === "trade" ||
   input.columnDimension === "costType";
 
-const analysisWhere = (where: SQL | undefined, input: ExpenseAnalyzeInput) =>
+export const expenseAnalysisWhere = (
+  where: SQL | undefined,
+  input: ExpenseAnalyzeInput,
+) =>
   hasPrincipalAxis(input)
     ? and(where, eq(expense.lineKind, "principal"))
     : where;
@@ -274,7 +278,7 @@ async function groupedCells(
   return rows.map((row) => ({ ...row, rowKey: String(row.rowKey) }));
 }
 
-function previousFilters(filters: ExpenseFilters) {
+export function previousExpenseFilters(filters: ExpenseFilters) {
   // The schema rejects unbounded comparison requests. This guard keeps the
   // repository sound for direct internal callers as well.
   if (!filters.dateFrom || !filters.dateTo) {
@@ -300,7 +304,7 @@ function previousFilters(filters: ExpenseFilters) {
   };
 }
 
-function emptyFacetFilters(
+function emptyExpenseFacetFilters(
   filters: ExpenseFilters,
   facet: ExpenseFacetCountsInput["facetIds"][number],
 ): ExpenseFilters {
@@ -344,7 +348,7 @@ function emptyFacetFilters(
  * SQL can only return populated groups. Preserve a currently-selected option
  * with a zero so a filtered-away chip remains intelligible and removable.
  */
-function selectedFacetValues(
+export function selectedExpenseFacetValues(
   filters: ExpenseFilters,
   facet: ExpenseFacetCountsInput["facetIds"][number],
 ): string[] {
@@ -384,7 +388,7 @@ function selectedFacetValues(
   }
 }
 
-function includeSelectedZeroOptions(
+export function includeSelectedExpenseFacetZeroOptions(
   options: ExpenseFacetCountsOut["facets"][number]["options"],
   selected: string[],
 ) {
@@ -397,13 +401,14 @@ function includeSelectedZeroOptions(
   ];
 }
 
-type FacetOption = ExpenseFacetCountsOut["facets"][number]["options"][number];
+export type ExpenseFacetOption =
+  ExpenseFacetCountsOut["facets"][number]["options"][number];
 
 async function scalarFacetOptions(
   db: Database,
   where: SQL | undefined,
   spec: (typeof scalarFacetSpecs)[keyof typeof scalarFacetSpecs],
-): Promise<FacetOption[]> {
+): Promise<ExpenseFacetOption[]> {
   const rows = await getDb(db)
     .select({ value: spec.value, count: sql<number>`count(*)::int` })
     .from(expense)
@@ -425,7 +430,7 @@ async function entityFacetOptions(
   db: Database,
   where: SQL | undefined,
   dimension: "project" | "vendor",
-): Promise<FacetOption[]> {
+): Promise<ExpenseFacetOption[]> {
   const spec = dimensionSpecs[dimension];
   const charge = alias(purchase, "facetDimensionCharge");
   const rows = await getDb(db)
@@ -458,7 +463,7 @@ async function presenceFacetOptions(
   db: Database,
   where: SQL | undefined,
   column: typeof expense.projectId | typeof expense.purchaseId,
-): Promise<FacetOption[]> {
+): Promise<ExpenseFacetOption[]> {
   const [presence] = await getDb(db)
     .select({
       any: sql<number>`count(*) filter (where ${column} is not null)::int`,
@@ -472,7 +477,7 @@ async function presenceFacetOptions(
   ];
 }
 
-type AnalysisPeriod = {
+export type ExpenseAnalysisPeriod = {
   rows: BucketRow[];
   columns: BucketRow[];
   cells: CellRow[];
@@ -486,13 +491,13 @@ const asOneDimensionCells = (rows: BucketRow[]): CellRow[] =>
     columnKey: null,
   }));
 
-const loadAnalysisPeriod = async (
+export const loadExpenseAnalysisPeriod = async (
   db: Database,
   gridWhere: SQL | undefined,
   scopeWhere: SQL | undefined,
   rowDimension: ExpenseAnalyzeRowDimension,
   columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
-): Promise<AnalysisPeriod> => {
+): Promise<ExpenseAnalysisPeriod> => {
   const rowsPromise = groupedDimension(db, gridWhere, rowDimension);
   const [rows, columns, cells, scope] = await Promise.all([
     rowsPromise,
@@ -567,7 +572,7 @@ const mergeAnalysisCells = (
   return { cells, count: keys.size };
 };
 
-const analysisCauses = async (
+export const loadExpenseAnalysisCauses = async (
   db: Database,
   input: ExpenseAnalyzeInput,
   where: SQL | undefined,
@@ -620,13 +625,17 @@ const projectAnalysisBuckets = (
     filter: bucketFilter(dimension, row.key, principalOnly),
   }));
 
-type AnalysisCauses = Awaited<ReturnType<typeof analysisCauses>>;
-type AnalysisComparison = ReturnType<typeof previousFilters> | null;
+export type ExpenseAnalysisCauses = Awaited<
+  ReturnType<typeof loadExpenseAnalysisCauses>
+>;
+export type ExpenseAnalysisComparison = ReturnType<
+  typeof previousExpenseFilters
+> | null;
 
-const buildAnalysisGrid = (
-  current: AnalysisPeriod,
-  previous: AnalysisPeriod | null,
-  comparison: AnalysisComparison,
+export const buildExpenseAnalysisGrid = (
+  current: ExpenseAnalysisPeriod,
+  previous: ExpenseAnalysisPeriod | null,
+  comparison: ExpenseAnalysisComparison,
   columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
 ) => {
   const rowMap = new Map(
@@ -675,11 +684,11 @@ const analysisPair = (
 ) => ({ current, previous });
 
 const buildAnalysisReconciliation = (
-  current: AnalysisPeriod,
-  previous: AnalysisPeriod | null,
-  grid: ReturnType<typeof buildAnalysisGrid>,
-  currentCauses: AnalysisCauses,
-  previousCauses: AnalysisCauses | null,
+  current: ExpenseAnalysisPeriod,
+  previous: ExpenseAnalysisPeriod | null,
+  grid: ReturnType<typeof buildExpenseAnalysisGrid>,
+  currentCauses: ExpenseAnalysisCauses,
+  previousCauses: ExpenseAnalysisCauses | null,
 ) => ({
   tail: analysisPair(
     subtractAggregate(current.scope, grid.gridCurrent),
@@ -703,14 +712,14 @@ const buildAnalysisReconciliation = (
   },
 });
 
-const readyAnalysisOutput = (
+export const readyExpenseAnalysisOutput = (
   input: ExpenseAnalyzeInput,
-  comparison: AnalysisComparison,
-  current: AnalysisPeriod,
-  previous: AnalysisPeriod | null,
-  grid: ReturnType<typeof buildAnalysisGrid>,
-  currentCauses: AnalysisCauses,
-  previousCauses: AnalysisCauses | null,
+  comparison: ExpenseAnalysisComparison,
+  current: ExpenseAnalysisPeriod,
+  previous: ExpenseAnalysisPeriod | null,
+  grid: ReturnType<typeof buildExpenseAnalysisGrid>,
+  currentCauses: ExpenseAnalysisCauses,
+  previousCauses: ExpenseAnalysisCauses | null,
 ): ExpenseAnalyzeOut => {
   const principalOnly = hasPrincipalAxis(input);
   return {
@@ -748,127 +757,53 @@ const readyAnalysisOutput = (
   };
 };
 
-export async function expenseAnalyze(
+export const loadExpenseFacetWhere = async (
   db: Database,
-  input: ExpenseAnalyzeInput,
-): Promise<ExpenseAnalyzeOut> {
-  const currentWhere = await buildExpenseWhereClause(db, input.filters);
-  const comparison =
-    input.comparison === "previousPeriod"
-      ? previousFilters(input.filters)
-      : null;
-  const previousWhere = comparison
-    ? await buildExpenseWhereClause(db, comparison.filters)
-    : undefined;
-  const [current, previous] = await Promise.all([
-    loadAnalysisPeriod(
-      db,
-      analysisWhere(currentWhere, input),
-      currentWhere,
-      input.rowDimension,
-      input.columnDimension,
-    ),
-    comparison
-      ? loadAnalysisPeriod(
-          db,
-          analysisWhere(previousWhere, input),
-          previousWhere,
-          input.rowDimension,
-          input.columnDimension,
-        )
-      : Promise.resolve(null),
-  ]);
+  filters: ExpenseFilters,
+  id: ExpenseFacetId,
+) => buildExpenseWhereClause(db, emptyExpenseFacetFilters(filters, id));
 
-  const grid = buildAnalysisGrid(
-    current,
-    previous,
-    comparison,
-    input.columnDimension,
-  );
-  if (grid.limitResult) return grid.limitResult;
-  const [currentCauses, previousCauses] = await Promise.all([
-    analysisCauses(db, input, currentWhere),
-    comparison
-      ? analysisCauses(db, input, previousWhere)
-      : Promise.resolve(null),
-  ]);
-  return readyAnalysisOutput(
-    input,
-    comparison,
-    current,
-    previous,
-    grid,
-    currentCauses,
-    previousCauses,
-  );
-}
-
-export async function expenseFacetCounts(
+export const loadExpenseScalarFacetOptions = (
   db: Database,
-  input: ExpenseFacetCountsInput,
-): Promise<ExpenseFacetCountsOut> {
-  const facets = await Promise.all(
-    input.facetIds.map(async (id) => {
-      const where = await buildExpenseWhereClause(
-        db,
-        emptyFacetFilters(input.filters, id),
-      );
-      const database = getDb(db);
-      if (isScalarFacetId(id)) {
-        return {
-          id,
-          options: await scalarFacetOptions(db, where, scalarFacetSpecs[id]),
-        };
-      }
-      switch (id) {
-        case "orderIdPresence": {
-          const charge = alias(purchase, "facetOrderCharge");
-          const rows = await database
-            .select({
-              value: sql<string>`case when ${charge.orderId} is null then 'none' else 'has' end`,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(expense)
-            .leftJoin(
-              charge,
-              and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
-            )
-            .where(where)
-            .groupBy(
-              sql`case when ${charge.orderId} is null then 'none' else 'has' end`,
-            );
-          return { id, options: rows.map((row) => ({ ...row, label: null })) };
-        }
-        case "project": {
-          const [rows, presence] = await Promise.all([
-            entityFacetOptions(db, where, "project"),
-            presenceFacetOptions(db, where, expense.projectId),
-          ]);
-          return {
-            id,
-            options: [...presence, ...rows],
-          };
-        }
-        case "vendor": {
-          const [rows, presence] = await Promise.all([
-            entityFacetOptions(db, where, "vendor"),
-            presenceFacetOptions(db, where, expense.purchaseId),
-          ]);
-          return {
-            id,
-            options: [...presence, ...rows],
-          };
-        }
-      }
-    }),
+  where: SQL | undefined,
+  id: ScalarFacetId,
+) => scalarFacetOptions(db, where, scalarFacetSpecs[id]);
+
+export const loadExpenseEntityFacetOptions = (
+  db: Database,
+  where: SQL | undefined,
+  id: "project" | "vendor",
+) => entityFacetOptions(db, where, id);
+
+export const loadExpensePresenceFacetOptions = (
+  db: Database,
+  where: SQL | undefined,
+  id: "project" | "vendor",
+) =>
+  presenceFacetOptions(
+    db,
+    where,
+    id === "project" ? expense.projectId : expense.purchaseId,
   );
-  return {
-    facets: facets.map((facet) => ({
-      ...facet,
-      options: includeSelectedZeroOptions(
-        facet.options,
-        selectedFacetValues(input.filters, facet.id),
-      ),
-    })),
-  };
-}
+
+export const loadExpenseOrderIdFacetOptions = async (
+  db: Database,
+  where: SQL | undefined,
+): Promise<ExpenseFacetOption[]> => {
+  const charge = alias(purchase, "facetOrderCharge");
+  const rows = await getDb(db)
+    .select({
+      value: sql<string>`case when ${charge.orderId} is null then 'none' else 'has' end`,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(expense)
+    .leftJoin(
+      charge,
+      and(eq(expense.purchaseId, charge.id), notDeleted(charge)),
+    )
+    .where(where)
+    .groupBy(
+      sql`case when ${charge.orderId} is null then 'none' else 'has' end`,
+    );
+  return rows.map((row) => ({ ...row, label: null }));
+};

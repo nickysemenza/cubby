@@ -9,20 +9,27 @@ import {
   type ExpenseCreateInput,
   expenseCreateInput,
 } from "@cubby/schemas/project";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
   financialTransaction,
+  ingredient,
   product,
   productComponent,
   recipe,
 } from "~/server/db/schema";
 
+import { requireActor } from "../request-context";
 import { runDiagnostic } from "../services/problem-diagnostics.service";
 import { findFastProblems } from "../services/problems.service";
+import { createTestRequestContext } from "../testing/request-context";
+import {
+  pruneAllUnusedAliasesWorkflow,
+  reparseStaleWorkflow,
+} from "../workflows/problems.server";
 import { setDataException } from "./data-quality";
 import { getDb } from "./database-helpers";
 import { createExpense, updateExpense } from "./expense";
@@ -874,5 +881,87 @@ describe("title-size suggestions — food eligibility", () => {
       ),
     );
     expect(count.count).toBe(eligible.length);
+  });
+});
+
+describe("Problems maintenance coordinator", () => {
+  const ctx = withTestDb();
+  const context = () =>
+    requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+
+  it("preserves one empty progress event and the public result", async () => {
+    const prune = [];
+    for await (const event of pruneAllUnusedAliasesWorkflow(context()))
+      prune.push(event);
+    expect(prune).toEqual([
+      { type: "progress", done: 0, total: 0 },
+      { type: "done", result: { pruned: 0 } },
+    ]);
+    const reparse = [];
+    for await (const event of reparseStaleWorkflow(context()))
+      reparse.push(event);
+    expect(reparse).toEqual([
+      { type: "progress", done: 0, total: 0 },
+      { type: "done", result: { updated: 0, recipesAffected: 0 } },
+    ]);
+  });
+
+  it("does not prune on early close and commits the selected alias batch once", async () => {
+    for (const name of ["Batch salt", "Batch pepper"]) {
+      await createIngredientFixture(
+        ctx.db,
+        { name, aliases: [`${name} alias`] },
+        ctx.actor,
+      );
+    }
+    const aliases = () =>
+      getDb(ctx.db).select({ aliases: ingredient.aliases }).from(ingredient);
+    const before = await aliases();
+    const stream = pruneAllUnusedAliasesWorkflow(context());
+    expect(await stream.next()).toEqual({
+      done: false,
+      value: { type: "progress", done: 0, total: 2 },
+    });
+    await stream.return();
+    expect(await aliases()).toEqual(before);
+    const events = [];
+    for await (const event of pruneAllUnusedAliasesWorkflow(context()))
+      events.push(event);
+    expect(events).toEqual([
+      { type: "progress", done: 0, total: 2 },
+      { type: "progress", done: 2, total: 2 },
+      { type: "done", result: { pruned: 2 } },
+    ]);
+    expect(await aliases()).toEqual([{ aliases: [] }, { aliases: [] }]);
+  });
+  it("rolls back the entire prune batch when a later ingredient write fails", async () => {
+    for (const name of ["Atomic first", "Atomic second"]) {
+      await createIngredientFixture(
+        ctx.db,
+        { name, aliases: [`${name} alias`] },
+        ctx.actor,
+      );
+    }
+    await getDb(ctx.db).execute(sql`
+      ALTER TABLE "Ingredient" ADD CONSTRAINT fixture_reject_empty_alias
+      CHECK (name <> 'Atomic second' OR cardinality(aliases) > 0)
+    `);
+    const stream = pruneAllUnusedAliasesWorkflow(context());
+    await stream.next();
+    await expect(stream.next()).rejects.toMatchObject({
+      cause: { constraint: "fixture_reject_empty_alias" },
+    });
+    const rows = await getDb(ctx.db)
+      .select({ name: ingredient.name, aliases: ingredient.aliases })
+      .from(ingredient)
+      .orderBy(ingredient.name);
+    expect(rows).toEqual([
+      { name: "Atomic first", aliases: ["Atomic first alias"] },
+      { name: "Atomic second", aliases: ["Atomic second alias"] },
+    ]);
   });
 });

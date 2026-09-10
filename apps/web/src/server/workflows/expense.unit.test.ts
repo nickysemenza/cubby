@@ -6,8 +6,14 @@ import type {
 } from "@cubby/schemas/project";
 import { describe, expect, it } from "vitest";
 
+import { inspectWorkflow } from "~/server/workflow-runtime";
+
 import {
   expenseAnalyzeTraceAttributes,
+  expenseAnalyzeWorkflow,
+  expenseChargeContextWorkflow,
+  expenseChartDataWorkflow,
+  expenseFacetCountsWorkflow,
   expenseFacetTraceAttributes,
 } from "./expense.server";
 
@@ -18,7 +24,86 @@ const input: ExpenseAnalyzeInput = {
   comparison: "none",
 };
 
+const expectAnalyzerGraph = () => {
+  expect(inspectWorkflow(expenseChartDataWorkflow.definition)).toMatchObject({
+    name: "expense.chartData",
+    steps: [{ type: "call", name: "list", dependencies: ["$input"] }],
+  });
+  const analysis = inspectWorkflow(expenseAnalyzeWorkflow.definition);
+  expect(analysis.steps.map(({ type, name }) => ({ type, name }))).toEqual([
+    { type: "call", name: "currentWhere" },
+    { type: "call", name: "comparison" },
+    { type: "call", name: "previousWhere" },
+    { type: "parallel", name: "periods" },
+    { type: "call", name: "grid" },
+    { type: "branch", name: "withinGridLimits" },
+  ]);
+  expect(analysis.steps[3]?.branches).toMatchObject({
+    current: { name: "current" },
+    previous: { name: "previous" },
+  });
+  expect(analysis.steps[5]?.branches?.whenTrue?.steps).toMatchObject([
+    { type: "parallel", name: "causes", concurrency: 2 },
+  ]);
+  expect(analysis.steps[5]?.branches?.whenFalse?.steps).toEqual([]);
+};
+
+const expectFacetGraph = () => {
+  const facets = inspectWorkflow(expenseFacetCountsWorkflow.definition);
+  const map = facets.steps[0];
+  expect(map).toMatchObject({ type: "map", name: "facets", concurrency: 9 });
+  if (!map || map.type !== "map") throw new Error("Facet graph lacks map");
+  const item = map.branches?.item;
+  if (!item) throw new Error("Facet graph lacks mapped item workflow");
+  const itemSteps = item.steps;
+  expect(itemSteps).toMatchObject([
+    { type: "call", name: "where" },
+    { type: "branch", name: "facetKind" },
+  ]);
+  const kind = itemSteps[1];
+  if (!kind || kind.type !== "branch")
+    throw new Error("Facet graph lacks kind branch");
+  const otherwise = kind.branches?.whenFalse;
+  if (!otherwise) throw new Error("Facet graph lacks non-scalar branch");
+  expect(otherwise.steps).toMatchObject([
+    { type: "branch", name: "entityFacet" },
+  ]);
+};
+
+const expectChargeContextGraph = () => {
+  const chargeContext = inspectWorkflow(
+    expenseChargeContextWorkflow.definition,
+  );
+  expect(chargeContext.steps.map(({ type, name }) => ({ type, name }))).toEqual(
+    [
+      { type: "call", name: "resolveExpense" },
+      { type: "call", name: "loadExpense" },
+      { type: "call", name: "resolvePurchase" },
+      { type: "branch", name: "purchaseAvailable" },
+    ],
+  );
+  expect(chargeContext.steps[3]?.branches?.whenTrue?.steps).toMatchObject([
+    {
+      type: "parallel",
+      name: "chargeReads",
+      concurrency: 2,
+      branches: {
+        purchase: { name: "purchase" },
+        lines: { name: "lines" },
+      },
+    },
+  ]);
+  expect(chargeContext.steps[3]?.branches?.whenFalse?.steps).toEqual([]);
+};
+
 describe("expense workflow observability", () => {
+  it("exposes direct and branched application workflow graphs", () => {
+    expect.hasAssertions();
+    expectAnalyzerGraph();
+    expectFacetGraph();
+    expectChargeContextGraph();
+  });
+
   it("records bounded result shape without filter values", () => {
     const zero = { actual: 0, committed: 0, credits: 0, net: 0, count: 0 };
     const result = {

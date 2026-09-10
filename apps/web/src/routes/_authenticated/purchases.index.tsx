@@ -4,7 +4,7 @@ import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { PurchaseList } from "~/app/purchases/purchaselist";
 import { purchaseCaptureRequest } from "~/entities/editing/editor-requests";
-import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
+import { entityListLoader } from "~/entities/entity-list-ssr";
 import {
   purchaseSearchDefaults,
   purchaseSearchSchema,
@@ -24,13 +24,7 @@ export const Route = createFileRoute("/_authenticated/purchases/")({
   validateSearch: purchaseSearchSchema,
   search: { middlewares: [stripSearchParams(purchaseSearchDefaults)] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps, abortController }) =>
-    ensureEntityListSsr({
-      queryClient: context.queryClient,
-      entity: "purchase",
-      search: deps,
-      signal: abortController.signal,
-    }),
+  loader: entityListLoader("purchase"),
   head: () => ({ meta: [{ title: pageTitle("Purchases") }] }),
   component: PurchasesPage,
 });

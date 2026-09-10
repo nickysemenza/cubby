@@ -28,6 +28,8 @@ import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { sectionRuleClass } from "~/components/ui/section-rule";
 import { Spinner } from "~/components/ui/spinner";
+import type { EditMode } from "~/entities/editing/entity-field-presentation";
+import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 import type { useImageState } from "~/hooks/useImageState";
 import { upc } from "~/lib/upc.functions";
 import { cn } from "~/lib/utils";
@@ -36,7 +38,6 @@ import type { ComboboxItem } from "../combobox/combobox-types";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
 import {
   NullableNumericField,
-  NullableTextareaField,
   SelectField,
   SideBySideFields,
   UnifiedTextField,
@@ -185,6 +186,7 @@ export interface ProductFormFieldValues extends FieldValues {
 }
 
 interface ProductFormFieldsProps<TFieldValues extends ProductFormFieldValues> {
+  mode: EditMode;
   form: UseFormReturn<TFieldValues>;
   paths: ProductFormFieldPaths<TFieldValues>;
   imageHandlers: ImageHandlers;
@@ -207,6 +209,7 @@ type ProductFormSectionProps<TFieldValues extends ProductFormFieldValues> =
   Pick<ProductFormFieldsProps<TFieldValues>, "form" | "paths" | "compact">;
 
 function ProductDetailsFields<TFieldValues extends ProductFormFieldValues>({
+  mode,
   form,
   paths,
   compact,
@@ -217,6 +220,7 @@ function ProductDetailsFields<TFieldValues extends ProductFormFieldValues>({
   isFoodForced,
   isBookForced,
 }: ProductFormSectionProps<TFieldValues> & {
+  mode: EditMode;
   hideNameField: boolean;
   nameValue: string;
   manufacturerValue: string;
@@ -228,38 +232,43 @@ function ProductDetailsFields<TFieldValues extends ProductFormFieldValues>({
     <FormSection title="Product details" compact={compact} plate>
       {!hideNameField && (
         <SideBySideFields>
-          <UnifiedTextField
-            form={form}
-            name={paths.model}
-            label="Model Number"
-            placeholder="Enter model number"
-            nullable={true}
+          <EntityPrimitiveFields
+            entity="product"
+            mode={mode}
+            section="identity-model"
+            paths={{ model: paths.model }}
+            options={{ model: { placeholder: "Enter model number" } }}
           />
-          <UnifiedTextField
-            form={form}
-            name={paths.name}
-            label="Product Name"
-            placeholder="Enter product name"
-            nullable={false}
+          <EntityPrimitiveFields
+            entity="product"
+            mode={mode}
+            section="identity-name"
+            paths={{ name: paths.name }}
+            options={{ name: { placeholder: "Enter product name" } }}
           />
         </SideBySideFields>
       )}
 
-      <NullableTextareaField
-        form={form}
-        name={paths.notes}
-        label="Notes"
-        placeholder="Notes, URLs, etc. — Markdown supported"
+      <EntityPrimitiveFields
+        entity="product"
+        mode={mode}
+        section="notes"
+        paths={{ notes: paths.notes }}
+        options={{
+          notes: { placeholder: "Notes, URLs, etc. — Markdown supported" },
+        }}
       />
 
       {!isMisc && (
         <SideBySideFields>
-          <UnifiedTextField
-            form={form}
-            name={paths.manufacturer}
-            label="Manufacturer"
-            placeholder="Enter manufacturer"
-            nullable={false}
+          <EntityPrimitiveFields
+            entity="product"
+            mode={mode}
+            section="manufacturer"
+            paths={{ manufacturer: paths.manufacturer }}
+            options={{
+              manufacturer: { placeholder: "Enter manufacturer" },
+            }}
           />
           <CategoryFieldWithAI
             form={form}
@@ -639,6 +648,7 @@ function ProductExternalIds<TFieldValues extends ProductFormFieldValues>({
  * Used by both ProductForm (full form) and QuickInventoryAdd (inline create mode).
  */
 export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
+  mode,
   form,
   paths,
   imageHandlers,
@@ -749,6 +759,7 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
   const content = (
     <>
       <ProductDetailsFields
+        mode={mode}
         form={form}
         paths={paths}
         compact={compact}

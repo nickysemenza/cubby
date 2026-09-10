@@ -17,58 +17,70 @@ import {
   setCollectionAssignment,
 } from "~/server/repo/collection";
 import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  bindWorkflow,
+  defineWorkflowOperation,
+  workflow,
+} from "~/server/workflow-runtime";
 
 export type CollectionWorkflowContext = {
   db: Database;
   actorContext: ActorContext;
 };
 
-export const listCollectionSummaries = (context: CollectionWorkflowContext) =>
-  listCollections(context.db);
+export const listCollectionSummaries = defineWorkflowOperation(
+  "collection.list",
+  async (context: CollectionWorkflowContext) => listCollections(context.db),
+);
 
-export async function readCollectionDetail(
-  context: CollectionWorkflowContext,
-  input: z.output<typeof collectionDetailInput>,
-) {
-  const result = await getCollectionDetail(
-    context.db,
-    input.collection,
-    input.search,
-    input.pagination,
-  );
-  if (!result) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `Collection not found: ${input.collection}`,
-    );
-  }
-  return result;
-}
+export const readCollectionDetail = bindWorkflow(
+  workflow<CollectionWorkflowContext, z.output<typeof collectionDetailInput>>(
+    "collection.detail",
+  )
+    .call("read", async ({ context }, { input }) =>
+      getCollectionDetail(
+        context.db,
+        input.collection,
+        input.search,
+        input.pagination,
+      ),
+    )
+    .output(({ read, input }) => {
+      if (!read)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Collection not found: ${input.collection}`,
+        );
+      return read;
+    }),
+  (
+    context: CollectionWorkflowContext,
+    input: z.output<typeof collectionDetailInput>,
+  ) => ({ context, input }),
+);
 
-export const readCollectionMatrix = (
+export const readCollectionMatrix = defineWorkflowOperation(
+  "collection.matrix",
+  async (
+    context: CollectionWorkflowContext,
+    input: z.output<typeof collectionMatrixInput>,
+  ) =>
+    getCollectionMatrix(
+      context.db,
+      input.subject,
+      input.search,
+      input.sort,
+      input.collection,
+      input.membership,
+      input.pagination,
+    ),
+);
+
+const runCollectionEffects = async (
   context: CollectionWorkflowContext,
-  input: z.output<typeof collectionMatrixInput>,
+  entity: Awaited<ReturnType<typeof setCollectionAssignment>>,
 ) =>
-  getCollectionMatrix(
-    context.db,
-    input.subject,
-    input.search,
-    input.sort,
-    input.collection,
-    input.membership,
-    input.pagination,
-  );
-
-async function setCollectionTag(
-  context: CollectionWorkflowContext,
-  input: z.output<typeof collectionTagSetInput>,
-) {
-  const entity = await setCollectionAssignment(
-    context.db,
-    context.actorContext,
-    input,
-  );
-  await runMutationSideEffectsForEntities(context.db, [
+  runMutationSideEffectsForEntities(context.db, [
     {
       action: "updated",
       entity: parseEntityRef<"product" | "location">(
@@ -79,24 +91,40 @@ async function setCollectionTag(
         entity.entityType === "product" ? "product.update" : "location.update",
     },
   ]);
-}
 
-export async function setCollectionMembership(
-  context: CollectionWorkflowContext,
-  input: z.output<typeof collectionTagSetInput>,
-) {
-  await setCollectionTag(context, input);
-  return { collection: input.collection, assigned: input.assigned };
-}
+export const setCollectionMembership = bindWorkflow(
+  workflow<CollectionWorkflowContext, z.output<typeof collectionTagSetInput>>(
+    "collection.membership.set",
+  )
+    .commit("assigned", async ({ context }, { input }) =>
+      setCollectionAssignment(context.db, context.actorContext, input),
+    )
+    .effect("effects", async ({ context }, { assigned }) =>
+      runCollectionEffects(context, assigned),
+    )
+    .output(({ input }) => ({
+      collection: input.collection,
+      assigned: input.assigned,
+    })),
+);
 
-export async function createCollection(
-  context: CollectionWorkflowContext,
-  input: z.output<typeof collectionCreateInput>,
-) {
-  await setCollectionTag(context, { ...input, assigned: true });
-  const summary = (await listCollections(context.db)).find(
-    (item) => item.slug === input.collection,
-  );
-  if (!summary) throw new Error("Created Collection did not resolve");
-  return summary;
-}
+export const createCollection = bindWorkflow(
+  workflow<CollectionWorkflowContext, z.output<typeof collectionCreateInput>>(
+    "collection.create",
+  )
+    .commit("assigned", async ({ context }, { input }) =>
+      setCollectionAssignment(context.db, context.actorContext, {
+        ...input,
+        assigned: true,
+      }),
+    )
+    .effect("effects", async ({ context }, { assigned }) =>
+      runCollectionEffects(context, assigned),
+    )
+    .call("summaries", async ({ context }) => listCollections(context.db))
+    .output(({ input, summaries }) => {
+      const summary = summaries.find((item) => item.slug === input.collection);
+      if (!summary) throw new Error("Created Collection did not resolve");
+      return summary;
+    }),
+);

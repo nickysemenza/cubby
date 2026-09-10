@@ -1,21 +1,36 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { testEntityId } from "@cubby/schemas/testing";
+import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import {
   entityEmbedding,
+  auditLog,
   ingredient,
   inventoryEntry,
+  product,
 } from "~/server/db/schema";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { deleteRecipes } from "~/server/repo/recipe";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
+import { executeWorkflow, workflow } from "~/server/workflow-runtime";
+import { precomputeEnrichmentProposalsWorkflow } from "~/server/workflows/ai.server";
+import {
+  mergeWorkflow,
+  resolveOrCreateWorkflow,
+} from "~/server/workflows/ingredient.server";
 
 import { getDb, withTransaction } from "./database-helpers";
 import { findOrphanedEntityEmbeddings } from "./entity-embedding";
+import { patchEntityRows } from "./entity-patch";
 import {
   createIngredient,
+  enrichmentWorkbenchIngredients,
+  getIngredientsByIDsLean,
   deleteIngredients,
   findOrCreateIngredient,
   getIngredientByID,
@@ -26,13 +41,225 @@ import {
 } from "./ingredient";
 import {
   createRecipeFixture as createRecipe,
+  createProductFixture,
   ingredientRef,
   makeRecipeInput,
+  makeProductInput,
 } from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 
 describe("ingredient", () => {
   const ctx = withTestDb();
+
+  it("loads workbench gaps without enriching soft-deleted linked products", async () => {
+    const item = await createIngredient(
+      ctx.db,
+      { name: "Workbench fixture" },
+      ctx.actor,
+    );
+    await createRecipe(
+      ctx.db,
+      makeRecipeInput({
+        name: "Workbench recipe",
+        sections: [
+          {
+            name: "Main",
+            instructions: [],
+            ingredients: [ingredientRef(item.id)],
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    const live = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Live fixture", ingredientId: item.id }),
+      ctx.actor,
+    );
+    const removed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Removed fixture", ingredientId: item.id }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, removed.entityId));
+    const rows = await enrichmentWorkbenchIngredients(ctx.db);
+    expect(
+      rows
+        .find((row) => row.id === item.id)
+        ?.product.map((linked) => linked.id),
+    ).toEqual([live.id]);
+    const id = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, item.id, "ingredient"))!,
+    );
+    const detail = await getIngredientByID(ctx.db, id);
+    expect(detail?.product.map((linked) => linked.id)).toEqual([live.id]);
+    const lean = await getIngredientsByIDsLean(ctx.db, [id]);
+    expect(lean[0]?.product.map((linked) => linked.id)).toEqual([live.id]);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, live.entityId));
+    const gaps = await enrichmentWorkbenchIngredients(ctx.db);
+    expect(gaps.find((row) => row.id === item.id)?.product).toEqual([]);
+  });
+
+  it("streams declared enrichment windows with public ids and skips unresolved subjects", async () => {
+    const items = [];
+    for (let index = 0; index < 7; index++) {
+      const created = await createIngredient(
+        ctx.db,
+        { name: `Enrichment fixture ${index}` },
+        ctx.actor,
+      );
+      items.push({
+        id: created.id,
+        name: `Enrichment fixture ${index}`,
+        wantUsda: false,
+        wantMerge: false,
+      });
+    }
+    const context = requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const events = [];
+    for await (const event of precomputeEnrichmentProposalsWorkflow(context, {
+      items: [
+        ...items,
+        {
+          id: testShortcode("ingredient", "ING-ZZZZ"),
+          name: "Missing enrichment subject",
+          wantUsda: false,
+          wantMerge: false,
+        },
+      ],
+    }))
+      events.push(event);
+    expect(events[0]).toEqual({ type: "progress", done: 0, total: 7 });
+    expect(events.slice(1, -1)).toEqual(
+      items.map((item, index) => ({
+        type: "progress",
+        done: index + 1,
+        total: 7,
+        item: {
+          id: item.id,
+          usda: { food: null, confidence: "low", reasoning: "" },
+          merge: null,
+        },
+      })),
+    );
+    expect(events.at(-1)).toEqual({ type: "done", result: { processed: 7 } });
+  });
+
+  it("resolves aliases through the workflow and keeps automatic creations off the staple list", async () => {
+    const existing = await createIngredient(
+      ctx.db,
+      {
+        name: "Workflow salt",
+        aliases: ["Workflow seasoning"],
+        usuallyOnHand: true,
+      },
+      ctx.actor,
+    );
+    const rows = await resolveOrCreateWorkflow(ctx.db, {
+      names: ["Workflow seasoning", "Workflow pepper", " workflow pepper "],
+    });
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({ id: existing.id, created: false });
+    expect(rows[1]).toMatchObject({ created: true });
+    expect(rows[2]?.id).toBe(rows[1]?.id);
+    const id = rows[1]?.entityId;
+    expect(id).toBeDefined();
+    if (!id) throw new Error("Expected newly resolved ingredient");
+    expect(
+      (await getIngredientByID(ctx.db, parseEntityId("ingredient", id)))
+        .usuallyOnHand,
+    ).toBe(false);
+  });
+
+  it("rolls back a shared scalar patch with its audit and preserves omitted values", async () => {
+    const row = await findOrCreateIngredient(ctx.db, "scalar patch fixture");
+    const definition = {
+      entity: "ingredient",
+      table: ingredient,
+      fields: ["usuallyOnHand"],
+    } as const;
+    const audits = () =>
+      getDb(ctx.db)
+        .select()
+        .from(auditLog)
+        .where(eq(auditLog.entityId, row.id));
+    const before = await audits();
+    await expect(
+      withTransaction(ctx.db, async (tx) => {
+        await patchEntityRows(tx, ctx.actor, definition, [row.id], {
+          usuallyOnHand: true,
+        });
+        throw new Error("abort outer operation");
+      }),
+    ).rejects.toThrow("abort outer operation");
+    expect((await getIngredientByID(ctx.db, row.id)).usuallyOnHand).toBe(false);
+    expect(await audits()).toEqual(before);
+
+    expect(
+      await patchEntityRows(ctx.db, ctx.actor, definition, [row.id], {
+        usuallyOnHand: undefined,
+      }),
+    ).toEqual([]);
+    expect(
+      await patchEntityRows(ctx.db, ctx.actor, definition, [row.id], {
+        usuallyOnHand: false,
+      }),
+    ).toEqual([]);
+    expect(await audits()).toEqual(before);
+    await expect(
+      patchEntityRows(ctx.db, ctx.actor, definition, [row.id], {
+        name: "not permitted",
+      }),
+    ).rejects.toThrow("Undeclared ingredient patch field");
+    expect((await getIngredientByID(ctx.db, row.id)).name).toBe(
+      "scalar patch fixture",
+    );
+  });
+
+  it("finishes required effects after a repository-owned commit before reporting cancellation", async () => {
+    const row = await findOrCreateIngredient(ctx.db, "committed call fixture");
+    const controller = new AbortController();
+    const observed: boolean[] = [];
+    const definition = workflow<Database, typeof row.id>("ownedTransaction")
+      .commit("mark", async ({ context }, { input }) => {
+        const result = await updateIngredientsUsuallyOnHand(
+          context,
+          [input],
+          { usuallyOnHand: true },
+          ctx.actor,
+        );
+        controller.abort();
+        return result;
+      })
+      .effect("observe", async ({ context, signal, scope }, { input }) => {
+        expect(signal.aborted).toBe(false);
+        expect(scope).toBe("afterCommit");
+        observed.push((await getIngredientByID(context, input)).usuallyOnHand);
+      })
+      .output(({ mark }) => mark);
+    await expect(
+      executeWorkflow(definition, {
+        context: ctx.db,
+        input: row.id,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({
+      name: "WorkflowCancelledError",
+      committed: true,
+      effectsPending: false,
+    });
+    expect(observed).toEqual([true]);
+    expect((await getIngredientByID(ctx.db, row.id)).usuallyOnHand).toBe(true);
+  });
 
   it("persists pantry assumptions separately from aliases, merges, and inventory", async () => {
     const plain = await createIngredient(
@@ -110,10 +337,9 @@ describe("ingredient", () => {
       { name: "pantry loser", aliases: [], usuallyOnHand: false },
       ctx.actor,
     );
-    await mergeIngredients(
-      ctx.db,
+    await mergeWorkflow(
+      entityKernelContextSchema.parse(createTestRequestContext(ctx.db)),
       { keepId: keeper.id, mergeIds: [loser.id] },
-      ctx.actor,
     );
     const keeperId = parseEntityId(
       "ingredient",
@@ -234,30 +460,6 @@ describe("ingredient", () => {
     expect(keeper).toBeDefined();
     expect(keeper!.aliases).toHaveLength(0);
   });
-
-  // `dryRun` is gone: `previewMergeIngredients` (preview_entity_operation) is
-  // the preview, and it reads the same edge policy the mutation writes against.
-  // What replaced the dry run's exactness on this path is `merged` — the rows
-  // the DELETE actually removed, not the count the caller asked for.
-
-  // Regression: the lean workbench fetch uses a relational query with raw-SQL
-  // `extras` (recipeCount/cookbookOnly correlated subqueries) — exercise it end to
-  // end so a Drizzle codegen break can't slip past typecheck. Replaced the 24 MB
-  // full-relation fetch that made the workbench ~40s.
-
-  // Regression: the ingredient list is lean — `appearsInRecipes` is {id,name}
-  // refs (count + first pill), NOT the full recipe bodies / recipeUsages the old
-  // `relations.ingredient.full` shipped (the over-fetch).
-
-  // Regression: `productPresenceFilter` replaced the old boolean
-  // `missingProductsOnly` param — "has" and "none" must partition ingredients
-  // by whether they have at least one linked product, and the count returned
-  // alongside the page must match (a plain leftJoin+count() over-counts "has"
-  // once an ingredient has more than one product; the fix groups by ingredient
-  // id before counting).
-
-  // Regression: the presence join must carry notDeleted(product) — an
-  // ingredient whose only product is soft-deleted counts as "none", not "has".
 });
 
 describe("deleteIngredients", () => {

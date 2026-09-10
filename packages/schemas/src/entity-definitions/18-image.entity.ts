@@ -1,0 +1,380 @@
+import { defineEntity } from "./definition.js";
+import { imageShortcode } from "../identifier-fields.js";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const generatedImageStatusValues = [
+  "PENDING",
+  "UPLOADED",
+  "FAILED",
+] as const;
+export const generatedImageRenderStatusValues = [
+  "unverified",
+  "verified",
+  "failed",
+] as const;
+export const generatedImageStorageStatusValues = [
+  "unverified",
+  "available",
+  "missing",
+  "metadata_mismatch",
+] as const;
+export const filterSchemas = {
+  nameFilter: z.string().optional().describe("Filter by filename (substring)"),
+  status: oneOrMany(z.enum(generatedImageStatusValues))
+    .optional()
+    .describe("Filter by upload status"),
+};
+export default defineEntity({
+  key: "image",
+  names: { singular: "Image", plural: "Images" },
+  route: { basePath: "images" },
+  table: "Image",
+  identifiers: { brand: "ImageId", shortcode: "IMG-", legacy: null },
+  presentation: { titleField: "filename" },
+  model: {
+    fields: [
+      {
+        key: "filename",
+        kind: "text",
+        control: { kind: "text" },
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: z.string().trim().min(1).max(255),
+        },
+      },
+      {
+        key: "id",
+        kind: "identifier",
+        validation: {
+          read: imageShortcode,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "url",
+        kind: "text",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.url(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "key",
+        kind: "text",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "size",
+        kind: "number",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.number().int().positive(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "contentType",
+        kind: "text",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "status",
+        kind: "enum",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.enum(generatedImageStatusValues),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "width",
+        kind: "number",
+        nullable: true,
+        display: { list: true, detail: true },
+        validation: {
+          read: z.number().int().positive().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "height",
+        kind: "number",
+        nullable: true,
+        display: { list: true, detail: true },
+        validation: {
+          read: z.number().int().positive().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "detectedContentType",
+        kind: "text",
+        nullable: true,
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "sha256",
+        kind: "text",
+        nullable: true,
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "renderStatus",
+        kind: "enum",
+        nullable: true,
+        display: { list: true, detail: true },
+        validation: {
+          read: z.enum(generatedImageRenderStatusValues).nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "storageStatus",
+        kind: "enum",
+        nullable: true,
+        display: { list: true, detail: true },
+        validation: {
+          read: z.enum(generatedImageStorageStatusValues).nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "verifiedAt",
+        kind: "timestamp",
+        nullable: true,
+        display: { list: true, detail: true },
+        validation: {
+          read: z.date().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        display: { detail: true },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        display: { detail: true },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
+      },
+      { key: "shortcode", kind: "text", readKey: null },
+      { key: "targetType", kind: "enum", nullable: true, readKey: null },
+      {
+        key: "targetId",
+        kind: "identifier",
+        nullable: true,
+        label: "Target ID",
+        readKey: null,
+      },
+      { key: "idempotencyKey", kind: "text", nullable: true, readKey: null },
+      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+    ],
+    storage: [
+      { key: "id", default: "generated", specialized: "primary-key:ImageId" },
+      { key: "shortcode", specialized: "shortcode" },
+      "key",
+      "filename",
+      "size",
+      "contentType",
+      {
+        key: "status",
+        default: "literal",
+        defaultValue: "'PENDING'",
+        specialized: "enum:ImageStatus",
+      },
+      "width",
+      "height",
+      "detectedContentType",
+      "sha256",
+      { key: "renderStatus", specialized: "enum:ImageRenderStatus" },
+      { key: "storageStatus", specialized: "enum:ImageStorageStatus" },
+      "verifiedAt",
+      { key: "targetType", specialized: "enum:targetType" },
+      "targetId",
+      "idempotencyKey",
+      { key: "createdAt", default: "now" },
+      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      "deletedAt",
+    ],
+    create: [],
+    update: ["filename"],
+    bulk: [],
+    audit: [],
+    output: [
+      "id",
+      "url",
+      "key",
+      "filename",
+      "size",
+      "contentType",
+      "status",
+      "width",
+      "height",
+      "detectedContentType",
+      "sha256",
+      "renderStatus",
+      "storageStatus",
+      "verifiedAt",
+      "createdAt",
+      "updatedAt",
+    ],
+  },
+  fields: {
+    create: null,
+    update: { module: "@cubby/schemas/image", export: "imageUpdateInput" },
+    output: { module: "@cubby/schemas/image", export: "imageOut" },
+    list: {
+      module: "@cubby/schemas/image",
+      export: "imageWithEntitySchema",
+    },
+    detail: {
+      module: "@cubby/schemas/image",
+      export: "imageWithEntitySchema",
+    },
+  },
+  filters: {
+    schema: { module: "@cubby/schemas/image", export: "imageFilterFields" },
+    descriptors: [
+      {
+        columnId: "filename",
+        field: "nameFilter",
+        kind: "text",
+        placeholder: "Filter by filename...",
+        deriveSchema: true,
+        schemaDescription: "Filter by filename (substring)",
+      },
+      {
+        columnId: "status",
+        kind: "multiselect",
+        placeholder: "Filter by upload status...",
+        deriveSchema: true,
+        schemaDescription: "Filter by upload status",
+        options: [
+          { value: "PENDING", label: "Pending", color: "var(--slate)" },
+          { value: "UPLOADED", label: "Uploaded", color: "var(--positive)" },
+          { value: "FAILED", label: "Failed", color: "var(--destructive)" },
+        ],
+      },
+      {
+        columnId: "entity",
+        field: "referencePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter references...",
+        options: [
+          { value: "has", label: "Has reference", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "createdAt",
+        kind: "range",
+        placeholder: "Filter by created date...",
+        options: [
+          { value: "olderThan1h", label: "Older than 1 hour" },
+          { value: "30d", label: "Last 30 days" },
+          { value: "90d", label: "Last 90 days" },
+          { value: "ytd", label: "Year to date" },
+          { value: "1y", label: "Last 12 months" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveImageCreatedDate",
+        },
+      },
+      {
+        columnId: "updatedAt",
+        kind: "range",
+        placeholder: "Filter by updated date...",
+        options: [
+          { value: "30d", label: "Last 30 days" },
+          { value: "90d", label: "Last 90 days" },
+          { value: "ytd", label: "Year to date" },
+          { value: "1y", label: "Last 12 months" },
+        ],
+        expandRef: {
+          module: "~/entities/filter-behavior",
+          export: "resolveUpdatedDate",
+        },
+      },
+    ],
+  },
+  relations: [],
+  search: { enabled: false },
+  capabilities: {
+    auditable: false,
+    images: false,
+    countable: true,
+    softDelete: true,
+    delete: { mode: "hard", bulk: true },
+    bulkUpdate: null,
+    merge: false,
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "update", "delete"],
+  },
+  extensions: {
+    countFilter: null,
+    relatednessSignals: null,
+    mcpNames: null,
+    ports: {
+      repository: {
+        module: "~/server/repo/image.entity-adapter",
+        export: "imageEntityAdapter",
+      },
+      references: {
+        label: { module: "~/entities/entities", export: "entityLabel" },
+        resolver: {
+          module: "~/server/repo/shortcode-resolver",
+          export: "resolveLiveShortcode",
+        },
+      },
+      filters: {
+        module: "~/entities/filter-manifest",
+        export: "getEntityFilters",
+      },
+      search: { projection: null, semanticText: null, dependentRefresh: null },
+    },
+  },
+});

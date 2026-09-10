@@ -3,9 +3,9 @@ import type { FC } from "react";
 import type { z } from "zod";
 
 import { AuditedHint } from "~/app/inventory/session/_components/AuditedHint";
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { MutedBox } from "~/components/layout/muted-box";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+import { EntityBasicInfo } from "~/entities/entity-display";
 
 import { EntityInlineLink } from "../EntityInlineLink";
 import { UnitMappingGraph } from "../units/unit-mapping-graph";
@@ -22,59 +22,52 @@ interface InventoryBasicInfoProps {
 export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
   inventoryitem,
 }) => {
-  const fields: BasicInfoField[] = [
-    {
-      label: "Amount",
-      value: showAmountAndPrice(
-        inventoryitem.amount,
-        inventoryitem.product.unitMappings,
-      ),
-    },
-    {
-      label: "Location",
-      value: (
-        <EntityInlineLink
-          displayImage={undefined}
-          entity="location"
-          data={inventoryitem.location}
-        />
-      ),
-      filterAction: (
-        <EntityFilterLink
-          to="/inventory"
-          search={{ locationId: inventoryitem.location.id }}
-          label={`Show all inventory in ${inventoryitem.location.name}`}
-        />
-      ),
-    },
-    {
-      label: "Product",
-      value: (
-        <EntityInlineLink
-          displayImage={undefined}
-          entity="product"
-          data={inventoryitem.product}
-        />
-      ),
-      filterAction: (
-        <EntityFilterLink
-          to="/inventory"
-          search={{ productId: inventoryitem.product.id }}
-          label={`Show all inventory entries for ${inventoryitem.product.name}`}
-        />
-      ),
-    },
-    {
-      // Last deliberate recount, not `updatedAt` — inventory truth is only
-      // restored by a recount, and the hint tints warning once it goes stale.
-      label: "Verified",
-      value: <AuditedHint at={inventoryitem.verifiedAt} label="verified" />,
-    },
-  ];
-
   return (
-    <BasicInfo
-      fields={fields}
+    <EntityBasicInfo
+      entity="inventory"
+      record={inventoryitem}
+      overrides={{
+        amount: (record) => ({
+          value: showAmountAndPrice(record.amount, record.product.unitMappings),
+        }),
+        locationId: (record) => ({
+          value: (
+            <EntityInlineLink
+              displayImage={undefined}
+              entity="location"
+              data={record.location}
+            />
+          ),
+          filterAction: (
+            <EntityFilterLink
+              to="/inventory"
+              search={{ locationId: record.location.id }}
+              label={`Show all inventory in ${record.location.name}`}
+            />
+          ),
+        }),
+        productId: (record) => ({
+          value: (
+            <EntityInlineLink
+              displayImage={undefined}
+              entity="product"
+              data={record.product}
+            />
+          ),
+          filterAction: (
+            <EntityFilterLink
+              to="/inventory"
+              search={{ productId: record.product.id }}
+              label={`Show all inventory entries for ${record.product.name}`}
+            />
+          ),
+        }),
+        verifiedAt: (record) => ({
+          // Last deliberate recount, not `updatedAt` — inventory truth is only
+          // restored by a recount, and the hint tints warning once it goes stale.
+          value: <AuditedHint at={record.verifiedAt} label="verified" />,
+        }),
+      }}
       footer={
         <MutedBox>
           <UnitMappingGraph mappings={inventoryitem.product.unitMappings} />

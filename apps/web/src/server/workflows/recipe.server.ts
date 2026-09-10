@@ -2,15 +2,13 @@ import type {
   CandidateEquivalence,
   EquivalenceReport,
 } from "@cubby/schemas/equivalences";
-import type { IngredientCooccurrence } from "@cubby/schemas/ingredient-cooccurrence";
-import type { IngredientUsage } from "@cubby/schemas/ingredient-usage";
+import type { RecipeId } from "@cubby/schemas/identifiers";
 import type {
   recipeCooccurrenceInput,
   recipeCookbookScopeInput,
   recipeIdInput,
   recipeIdsInput,
 } from "@cubby/schemas/recipe";
-import type { RecipeDependencyGraph } from "@cubby/schemas/recipe-dependency-graph";
 import type {
   recipeFlowGenerateInputSchema,
   recipeFlowGetInputSchema,
@@ -20,10 +18,8 @@ import type {
   recipeAvailabilityInput,
 } from "@cubby/schemas/suggestions";
 import { uniq } from "es-toolkit";
-import pMap from "p-map";
 import type { z } from "zod";
 
-import { streamProgress } from "~/lib/bulk-progress";
 import { harvestEquivalences } from "~/lib/harvest-equivalences";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
@@ -46,114 +42,242 @@ import {
   getRecipeFlowState,
 } from "~/server/services/recipe-flow/recipe-flow.service";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
+import {
+  bindWorkflow,
+  bindCoordinatorStream,
+  defineCoordinatorStream,
+  defineWorkflowOperation,
+  workflow,
+} from "~/server/workflow-runtime";
 
 const recipeShortcodes = bindShortcodeResolver("recipe");
 const cookbookShortcodes = bindShortcodeResolver("cookbook");
 const CANDIDATE_CAP = 500;
 
-export const getManyByIDsWorkflow = async (
-  db: Database,
-  input: typeof recipeIdsInput._output,
-) => getRecipesByIDs(db, await recipeShortcodes.all(db, input.ids));
+export const getManyByIDsWorkflow = bindWorkflow(
+  workflow<Database, typeof recipeIdsInput._output>("recipe.getManyByIDs")
+    .call("ids", async ({ context }, { input }) =>
+      recipeShortcodes.all(context, input.ids),
+    )
+    .call("recipes", async ({ context }, { ids }) =>
+      getRecipesByIDs(context, ids),
+    )
+    .output(({ recipes }) => recipes),
+  (db: Database, input: typeof recipeIdsInput._output) => ({
+    context: db,
+    input,
+  }),
+);
 
-export const getAllTagsWorkflow = (db: Database) => getAllTags(db);
+export const getAllTagsWorkflow = defineWorkflowOperation(
+  "recipe.getAllTags",
+  (db: Database) => getAllTags(db),
+);
 
-export const duplicateWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: typeof recipeIdInput._output,
-) => {
-  const sourceId = await recipeShortcodes.one(context.db, input.id);
-  const duplicated = await duplicateRecipe(
-    context.db,
-    sourceId,
-    context.actorContext,
+export const duplicateWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, typeof recipeIdInput._output>(
+    "recipe.duplicate",
+  )
+    .call("sourceId", async ({ context }, { input }) =>
+      recipeShortcodes.one(context.db, input.id),
+    )
+    .commit("duplicated", async ({ context }, { sourceId }) =>
+      duplicateRecipe(context.db, sourceId, context.actorContext),
+    )
+    .effect("entityId", async ({ context }, { duplicated }) =>
+      recipeShortcodes.one(context.db, duplicated.id),
+    )
+    .effect("costing", async ({ context }, { entityId }) =>
+      context.services.recipeCosting.dispatchRecompute([entityId], {
+        source: "recipe.duplicate",
+        entity: { entityType: "recipe", entityId },
+      }),
+    )
+    .effect("background", async ({ context }, { entityId }) =>
+      runMutationSideEffects(context.db, {
+        action: "created",
+        entity: { entity: "recipe", id: entityId },
+        source: "recipe.duplicate",
+      }),
+    )
+    .output(({ duplicated, costing, background }) => ({
+      ...duplicated,
+      sideEffects: { backgroundBatches: [...costing, ...background] },
+    })),
+  (
+    context: AuthenticatedStartOperationContext,
+    input: typeof recipeIdInput._output,
+  ) => ({ context, input }),
+);
+
+export const getIngredientCooccurrenceWorkflow = defineWorkflowOperation(
+  "recipe.getIngredientCooccurrence",
+  async (db: Database, input: typeof recipeCooccurrenceInput._output) =>
+    getIngredientCooccurrence(db, input?.minEdgeWeight ?? 2),
+);
+
+const cookbookRead = <Output>(
+  name: string,
+  read: (
+    db: Database,
+    id: Parameters<typeof getRecipeDependencyGraph>[1],
+  ) => Promise<Output>,
+) =>
+  bindWorkflow(
+    workflow<Database, typeof recipeCookbookScopeInput._output>(name)
+      .call("cookbookId", async ({ context }, { input }) =>
+        input?.cookbookId
+          ? cookbookShortcodes.one(context, input.cookbookId)
+          : undefined,
+      )
+      .call("read", async ({ context }, { cookbookId }) =>
+        read(context, cookbookId),
+      )
+      .output(({ read }) => read),
+    (db: Database, input: typeof recipeCookbookScopeInput._output) => ({
+      context: db,
+      input,
+    }),
   );
-  const entityId = await recipeShortcodes.one(context.db, duplicated.id);
-  const recipeBatches = await context.services.recipeCosting.dispatchRecompute(
-    [entityId],
-    { source: "recipe.duplicate", entity: { entityType: "recipe", entityId } },
-  );
-  const backgroundBatches = await runMutationSideEffects(context.db, {
-    action: "created",
-    entity: { entity: "recipe", id: entityId },
-    source: "recipe.duplicate",
-  });
-  return {
-    ...duplicated,
-    sideEffects: {
-      backgroundBatches: [...recipeBatches, ...backgroundBatches],
-    },
-  };
+export const getDependencyGraphWorkflow = cookbookRead(
+  "recipe.getDependencyGraph",
+  getRecipeDependencyGraph,
+);
+export const getIngredientUsageWorkflow = cookbookRead(
+  "recipe.getIngredientUsage",
+  getIngredientUsage,
+);
+
+type Costing = AuthenticatedStartOperationContext["services"]["recipeCosting"];
+export const recomputeOneWorkflow = bindWorkflow(
+  workflow<{ db: Database; costing: Costing }, typeof recipeIdInput._output>(
+    "recipe.recomputeOne",
+  )
+    .call("id", async ({ context }, { input }) =>
+      recipeShortcodes.one(context.db, input.id),
+    )
+    .commit("processed", async ({ context }, { id }) =>
+      context.costing.recompute([id]),
+    )
+    .output(({ processed }) => ({ processed })),
+  (db: Database, input: typeof recipeIdInput._output, costing: Costing) => ({
+    context: { db, costing },
+    input,
+  }),
+);
+
+type RecipeCostingCoordinatorInput = {
+  readonly input: undefined;
+  readonly selection: RecipeId[];
+};
+type RecipeCostingCoordinatorResult = {
+  readonly enqueued: number;
+  readonly total: number;
+  readonly batchId: string | null;
 };
 
-export const getIngredientCooccurrenceWorkflow = (
-  db: Database,
-  input: typeof recipeCooccurrenceInput._output,
-): Promise<IngredientCooccurrence> =>
-  getIngredientCooccurrence(db, input?.minEdgeWeight ?? 2);
-
-export const getDependencyGraphWorkflow = async (
-  db: Database,
-  input: typeof recipeCookbookScopeInput._output,
-): Promise<RecipeDependencyGraph> =>
-  getRecipeDependencyGraph(
-    db,
-    input?.cookbookId
-      ? await cookbookShortcodes.one(db, input.cookbookId)
-      : undefined,
-  );
-
-export const getIngredientUsageWorkflow = async (
-  db: Database,
-  input: typeof recipeCookbookScopeInput._output,
-): Promise<IngredientUsage> =>
-  getIngredientUsage(
-    db,
-    input?.cookbookId
-      ? await cookbookShortcodes.one(db, input.cookbookId)
-      : undefined,
-  );
-
-export const recomputeOneWorkflow = async (
-  db: Database,
-  input: typeof recipeIdInput._output,
-  costing: AuthenticatedStartOperationContext["services"]["recipeCosting"],
-) => ({
-  processed: await costing.recompute([
-    await recipeShortcodes.one(db, input.id),
-  ]),
-});
-
-export const recomputeAllDurableWorkflow = (
-  costing: AuthenticatedStartOperationContext["services"]["recipeCosting"],
-) => streamProgress(costing.recomputeAllQueued(), (result) => result);
-export const recomputeStaleDurableWorkflow = (
-  costing: AuthenticatedStartOperationContext["services"]["recipeCosting"],
-) => streamProgress(costing.recomputeStaleQueued(), (result) => result);
-
-export const dryRunRecomputeTotalsWorkflow = (
-  costing: AuthenticatedStartOperationContext["services"]["recipeCosting"],
-) => costing.dryRunRecomputeTotals();
-
-export const explainCostingWorkflow = async (
-  db: Database,
-  input: typeof recipeIdInput._output,
-  costing: AuthenticatedStartOperationContext["services"]["recipeCosting"],
-) => costing.explainRecipe(await recipeShortcodes.one(db, input.id));
-
-export const getFlowWorkflow = async (
-  db: Database,
-  input: typeof recipeFlowGetInputSchema._output,
-) => getRecipeFlowState(db, await recipeShortcodes.one(db, input.id));
-
-export const generateFlowWorkflow = async (
-  db: Database,
-  input: typeof recipeFlowGenerateInputSchema._output,
+const recipeCostingCoordinator = (
+  name: "recipe.recomputeAllDurable" | "recipe.recomputeStaleDurable",
+  select: (costing: Costing) => Promise<RecipeId[]>,
+  enqueue: (
+    costing: Costing,
+    ids: RecipeId[],
+  ) => Promise<RecipeCostingCoordinatorResult>,
 ) =>
-  generateRecipeFlow(db, {
-    ...input,
-    id: await recipeShortcodes.one(db, input.id),
+  defineCoordinatorStream({
+    name,
+    select: workflow<Costing, undefined>(`${name}.select`)
+      .call("recipeIds", async ({ context }) => select(context))
+      .output(({ recipeIds }) => recipeIds),
+    commit: workflow<Costing, RecipeCostingCoordinatorInput>(`${name}.enqueue`)
+      .commit("queued", async ({ context }, { input: { selection } }) =>
+        enqueue(context, selection),
+      )
+      .output(({ queued }) => queued),
+    total: (ids) => ids.length,
   });
+
+const recomputeAllDurableDefinition = recipeCostingCoordinator(
+  "recipe.recomputeAllDurable",
+  (costing) => costing.selectAllQueued(),
+  (costing, ids) => costing.enqueueAllQueued(ids),
+);
+const recomputeStaleDurableDefinition = recipeCostingCoordinator(
+  "recipe.recomputeStaleDurable",
+  (costing) => costing.selectStaleQueued(),
+  (costing, ids) => costing.enqueueStaleQueued(ids),
+);
+
+export const recomputeAllDurableWorkflow = bindCoordinatorStream(
+  recomputeAllDurableDefinition,
+  (costing: Costing, signal?: AbortSignal) => ({
+    context: costing,
+    input: undefined,
+    signal,
+  }),
+);
+export const recomputeStaleDurableWorkflow = bindCoordinatorStream(
+  recomputeStaleDurableDefinition,
+  (costing: Costing, signal?: AbortSignal) => ({
+    context: costing,
+    input: undefined,
+    signal,
+  }),
+);
+
+export const dryRunRecomputeTotalsWorkflow = defineWorkflowOperation(
+  "recipe.dryRunRecomputeTotals",
+  async (
+    costing: AuthenticatedStartOperationContext["services"]["recipeCosting"],
+  ) => costing.dryRunRecomputeTotals(),
+);
+
+export const explainCostingWorkflow = bindWorkflow(
+  workflow<{ db: Database; costing: Costing }, typeof recipeIdInput._output>(
+    "recipe.explainCosting",
+  )
+    .call("id", async ({ context }, { input }) =>
+      recipeShortcodes.one(context.db, input.id),
+    )
+    .call("explanation", async ({ context }, { id }) =>
+      context.costing.explainRecipe(id),
+    )
+    .output(({ explanation }) => explanation),
+  (db: Database, input: typeof recipeIdInput._output, costing: Costing) => ({
+    context: { db, costing },
+    input,
+  }),
+);
+export const getFlowWorkflow = bindWorkflow(
+  workflow<Database, typeof recipeFlowGetInputSchema._output>("recipe.getFlow")
+    .call("id", async ({ context }, { input }) =>
+      recipeShortcodes.one(context, input.id),
+    )
+    .call("flow", async ({ context }, { id }) =>
+      getRecipeFlowState(context, id),
+    )
+    .output(({ flow }) => flow),
+  (db: Database, input: typeof recipeFlowGetInputSchema._output) => ({
+    context: db,
+    input,
+  }),
+);
+export const generateFlowWorkflow = bindWorkflow(
+  workflow<Database, typeof recipeFlowGenerateInputSchema._output>(
+    "recipe.generateFlow",
+  )
+    .call("id", async ({ context }, { input }) =>
+      recipeShortcodes.one(context, input.id),
+    )
+    .commit("flow", async ({ context }, { input, id }) =>
+      generateRecipeFlow(context, { ...input, id }),
+    )
+    .output(({ flow }) => flow),
+  (db: Database, input: typeof recipeFlowGenerateInputSchema._output) => ({
+    context: db,
+    input,
+  }),
+);
 
 const convertWithinKind = (
   value: number,
@@ -173,20 +297,10 @@ const convertWithinKind = (
   }
 };
 
-export const harvestEquivalencesWorkflow = async (
-  db: Database,
-  usdaClient: Parameters<typeof getIngredientsByIDs>[1],
-): Promise<EquivalenceReport> => {
-  const rows = await getMultiMeasureRecipeIngredients(db);
-  const candidates = harvestEquivalences(rows, {
-    kindOf: (a) => wasm.amount_kind(a),
-    convert: convertWithinKind,
-  });
-  if (candidates.length === 0) return { candidates: [], hiddenCovered: 0 };
-  const ingredientIds = uniq(
-    candidates.map((candidate) => candidate.ingredientEntityId),
-  );
-  const ingredients = await getIngredientsByIDs(db, usdaClient, ingredientIds);
+const compareEquivalences = (
+  candidates: ReturnType<typeof harvestEquivalences>,
+  ingredients: Awaited<ReturnType<typeof getIngredientsByIDs>>,
+): EquivalenceReport => {
   const mappingsById = new Map(
     ingredients.map((ingredient) => [
       ingredient.id,
@@ -229,41 +343,95 @@ export const harvestEquivalencesWorkflow = async (
   return { candidates: visible, hiddenCovered };
 };
 
-export const getRecipeAvailabilityWorkflow = (
-  recipeId: z.output<typeof recipeAvailabilityInput>["recipeId"],
-  availability: Pick<
-    AuthenticatedStartOperationContext["services"]["availability"],
-    "getRecipeAvailability"
-  >,
-) => availability.getRecipeAvailability(recipeId);
-
-export const getMakeableWorkflow = async (
-  db: Database,
-  input: typeof makeableRecipesInput._output,
-  availability: Pick<
-    AuthenticatedStartOperationContext["services"]["availability"],
-    "getRecipeAvailability"
-  >,
-) => {
-  const minCoverage = input.minCoverage ?? 0;
-  const limit = input.limit ?? 24;
-  const { data: recipes, count } = await recipeList(
-    db,
-    { excludeSubRecipes: true },
-    [{ orderBy: "name", direction: "asc" }],
-    { pageIndex: 0, pageSize: CANDIDATE_CAP },
-  );
-  const availabilities = await pMap(
-    recipes,
-    (recipe) => availability.getRecipeAvailability(recipe.id),
-    { concurrency: 8 },
-  );
-  return {
-    recipes: availabilities
-      .filter((availability) => availability.coverage >= minCoverage)
-      .sort((a, b) => b.coverage - a.coverage)
-      .slice(0, limit),
-    truncated: count > CANDIDATE_CAP,
-    candidateCap: CANDIDATE_CAP,
-  };
+type EquivalenceContext = {
+  db: Database;
+  usdaClient: Parameters<typeof getIngredientsByIDs>[1];
 };
+export const harvestEquivalencesWorkflow = bindWorkflow(
+  workflow<EquivalenceContext, void>("recipe.harvestEquivalences")
+    .call("rows", async ({ context }) =>
+      getMultiMeasureRecipeIngredients(context.db),
+    )
+    .call("candidates", async (_, { rows }) =>
+      harvestEquivalences(rows, {
+        kindOf: (amount) => wasm.amount_kind(amount),
+        convert: convertWithinKind,
+      }),
+    )
+    .branch("report", {
+      when: async (_, { candidates }) => candidates.length > 0,
+      whenTrue: (branch) =>
+        branch
+          .call("ingredients", async ({ context }, { input: { candidates } }) =>
+            getIngredientsByIDs(
+              context.db,
+              context.usdaClient,
+              uniq(candidates.map((candidate) => candidate.ingredientEntityId)),
+            ),
+          )
+          .output(({ input: { candidates }, ingredients }) =>
+            compareEquivalences(candidates, ingredients),
+          ),
+      whenFalse: (branch) =>
+        branch.output((): EquivalenceReport => ({
+          candidates: [],
+          hiddenCovered: 0,
+        })),
+    })
+    .output(({ report }) => report),
+  (db: Database, usdaClient: EquivalenceContext["usdaClient"]) => ({
+    context: { db, usdaClient },
+    input: undefined,
+  }),
+);
+
+export const getRecipeAvailabilityWorkflow = defineWorkflowOperation(
+  "suggestions.getRecipeAvailability",
+  async (
+    recipeId: z.output<typeof recipeAvailabilityInput>["recipeId"],
+    availability: Pick<
+      AuthenticatedStartOperationContext["services"]["availability"],
+      "getRecipeAvailability"
+    >,
+  ) => availability.getRecipeAvailability(recipeId),
+);
+
+type MakeableAvailability = Pick<
+  AuthenticatedStartOperationContext["services"]["availability"],
+  "getRecipeAvailability"
+>;
+export const getMakeableWorkflow = bindWorkflow(
+  workflow<
+    { db: Database; availability: MakeableAvailability },
+    typeof makeableRecipesInput._output
+  >("suggestions.getMakeable")
+    .call("candidates", async ({ context }) =>
+      recipeList(
+        context.db,
+        { excludeSubRecipes: true },
+        [{ orderBy: "name", direction: "asc" }],
+        { pageIndex: 0, pageSize: CANDIDATE_CAP },
+      ),
+    )
+    .map("availabilities", {
+      items: ({ candidates }) => candidates.data,
+      concurrency: 8,
+      run: async ({ context }, { item }) =>
+        context.availability.getRecipeAvailability(item.id),
+    })
+    .output(({ input, candidates, availabilities }) => ({
+      recipes: availabilities
+        .filter(
+          (availability) => availability.coverage >= (input.minCoverage ?? 0),
+        )
+        .sort((a, b) => b.coverage - a.coverage)
+        .slice(0, input.limit ?? 24),
+      truncated: candidates.count > CANDIDATE_CAP,
+      candidateCap: CANDIDATE_CAP,
+    })),
+  (
+    db: Database,
+    input: typeof makeableRecipesInput._output,
+    availability: MakeableAvailability,
+  ) => ({ context: { db, availability }, input }),
+);

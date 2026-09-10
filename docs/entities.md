@@ -1,10 +1,17 @@
 # Compiled entities
 
-Cubby's ordinary entity surfaces are compiled from restricted literal specs in
-`scripts/entity-literals/entities/*.entity.ts`. The generator parses them with
-Oxc; it never imports or executes them. This makes the spec usable by tooling
-without pulling application modules into scripts or depending on TypeScript's
-compiler API.
+Cubby's ordinary entity surfaces are compiled from typed TypeScript declarations
+in `packages/schemas/src/entity-definitions/*.entity.ts`. Each declaration uses
+real Zod schemas for read, create, and update modes. The generator imports these
+modules and emits references to the declared schemas; it never serializes Zod
+internals or reconstructs refinements.
+
+Declarations may import shared primitives and cycle-safe field modules. They
+must not import canonical schemas, generated artifacts, server implementations,
+or browser modules. Implementation references remain `{ module, export }` data.
+Browser metadata is generated separately and contains no executable schemas.
+A transitive import guard protects this boundary; shared identifier and field
+primitives compose domain projections without importing generated schema maps.
 
 Run:
 
@@ -13,17 +20,16 @@ pnpm entity:generate
 pnpm entity:check
 ```
 
-`entity:check` fails on invalid syntax, dynamic expressions, duplicate entity
-keys or routes, invalid relation policies, unsupported capability keys or
-values, and stale, missing, or extraneous generated files. Typecheck verifies
-that referenced schema modules and exports exist.
+`entity:check` fails on invalid metadata, duplicate entity keys or routes, invalid
+relation policies, unsupported capabilities, and stale, missing, or extraneous
+generated files. Typecheck verifies declaration types and referenced exports.
 
 ## One declaration, several consumers
 
-Each spec is a call whose argument is literal data:
+Each declaration co-locates schemas and field policy:
 
 ```ts
-export default literalEntity({
+export default defineEntity({
   key: "example",
   names: { singular: "Example", plural: "Examples" },
   route: { basePath: "examples" },
@@ -92,7 +98,7 @@ export default literalEntity({
 ```
 
 The exact accepted keys are enforced by the compiler. Source references name a
-module and export; they are not executable imports in the spec. `fields.detail`
+module and export; they do not import implementations into the declaration. `fields.detail`
 is optional and falls back to `fields.output`; declare it when the current
 detail read carries enriched relations or computed fields.
 
@@ -107,7 +113,89 @@ relationship itself. The generated inspector projects these references as
 client-safe data; generated server bindings import executable adapters.
 Repository closures still own transactions and service injection.
 
-Filter descriptors are restricted literal records. Static choices stay literal;
+The model owns scalar validation and physical column factories as well as
+presentation. `model.storage` declares stored columns; `create`, `update`,
+`output`, `bulk`, and `audit` select fields for their respective consumers.
+The generator emits field schemas and storage factories; canonical schemas
+compose those generated fields with explicit relationship and domain validators.
+Generic MCP inputs reuse the canonical create/update contracts. MCP output
+contracts name their audience-specific projections explicitly, which can extend
+canonical outputs; specialized tool digests retain their own projections.
+
+Use ordinary Zod composition for shared rules; spell out each mode:
+
+```ts
+model: {
+  fields: [{
+    key: "name",
+    kind: "text",
+    control: { kind: "text" },
+    display: { list: true, detail: true },
+    validation: {
+      read: z.string(),
+      create: z.string().trim().min(1),
+      update: z.string().trim().min(1).optional(),
+    },
+  }],
+  storage: ["name"],
+  create: ["name"], update: ["name"], output: ["name"],
+  bulk: [], audit: ["name"],
+}
+```
+
+Field defaults are non-nullable, a label derived from the camel-case key, and a
+read key equal to that key. Use `readKey: null` for fields without a scalar read
+projection. Missing controls and display flags expose no UI. A control defaults
+to the `main` section; a reference defaults to one entity. Explicit labels,
+nullability, read keys, sections, and renderers override these defaults.
+
+An omitted or null mode has no schema. Zod owns optionality, transformations,
+nullability, descriptions, refinements, and defaults. Put create-only defaults
+only on create schemas, and make partial update schemas explicitly optional so
+omitted values preserve existing data. Schema maps reference these exact objects.
+
+A storage string uses the declared field's kind and nullability, the key as its
+column name, and no database default. An object such as
+`{ key: "name", column: "title" }` overrides only the differing storage facts.
+Stored-field order and create/update/output/bulk/audit rosters remain explicit:
+presentation defaults never grant mutation capabilities or introduce columns.
+
+The `model.fields` roster owns field kinds, read keys, labels, validation,
+controls, and display membership. `EntityBasicInfo` reads `display.detail`;
+`createEntityDisplayColumns` reads `display.list`. Specialized overrides supply
+rendering and table metadata, while the declaration still owns membership and
+labels. `display.columnId` preserves an existing computed column identity when
+it differs from the field key (for example an evidence count); active list
+column IDs must be unique. An override must match a declared list field; an
+unmatched override fails instead of silently hiding the column. Computed
+identities and domain summaries outside the field model remain explicit columns
+alongside the compiled collection. Composite cells suppress their supporting
+fields in list metadata so IDs, names, and logos are not displayed twice.
+Standard name and image columns are declared by `display.standard` on their
+fields. The shared table renders them once, preserving its name editing, image,
+and tree controls; scalar column compilation skips those fields. There is no
+second standard-column roster in the browser registry.
+
+`display.detailOrder` optionally orders detail facts independently of model and
+list order; it must be a nonnegative integer. Unspecified facts retain model
+order after explicitly ordered facts. Detail overrides may provide a dynamic
+label when the value changes its meaning, such as ISBN versus UPC. Static labels
+remain declared. `EntityBasicInfo.afterFields` anchors computed facts after a
+declared detail field without inventing persisted fields or API contracts.
+Unknown detail override keys and computed-fact anchors fail explicitly.
+`display.detailSection` assigns a fact to an authored section, defaulting to
+`overview`. Pass that section to `EntityBasicInfo` instead of maintaining a local
+field subset. Project resource links use this to retain their own card while
+the declaration still owns their labels and membership.
+
+Declare object-valued outputs as `json`, and render relations and structured
+values through explicit overrides. A logo object is not a text field. Fields
+already owned by a dedicated section, such as Wish candidates, stay outside
+the basic-information roster. Mobile title slots use the column accessor value,
+so linked identity columns must return the readable name and retain the entity
+shortcode separately for navigation.
+
+Filter descriptors are typed metadata. Static choices stay in the declaration;
 icon-bearing option lists, identifier brands, and compound preset expansion use
 explicit `{ module, export }` references. The compiler rejects unsupported
 kinds/properties and duplicate columns or derived URL keys. `audit: true`
@@ -171,7 +259,10 @@ the transport adapter. Removing an operation has no deployment shim: a tab loade
 before that deployment must reload before calling the removed function.
 
 MCP invokes `executeEntity` directly through the `entity` tool and publishes its
-machine-readable contract at `entities://catalog`. Workflow-shaped MCP tools
+machine-readable contract at `entities://catalog`. The `get_entities` capability
+uses the same generated get/list/search contracts with mutation actions excluded
+by its input schema. The in-app assistant receives this read-only capability;
+the combined mutation tool remains excluded. Workflow-shaped MCP tools
 remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
 not import browser transport modules. Explicit workflow adapters and typed JSONL
 stream routes are the only transport seams; business behavior remains in
@@ -221,17 +312,20 @@ irreducible transaction and collision rules.
 
 ## Adding an entity
 
-1. Add its table, migration, branded id, and Zod input/output schemas.
-2. Add one literal `.entity.ts` spec with its capabilities and logical
-   relationships.
+1. Add one typed `.entity.ts` declaration with field validation, storage, mutation
+   policies, presentation, capabilities, and logical relationships.
+2. Add its branded id and compose its table and canonical input/output schemas
+   from the generated factories. Keep indexes, constraints, domain refinements,
+   and relationship projections explicit. A physical change still requires a
+   compatible migration; generation does not apply production DDL.
 3. Add a kernel repository adapter for the capabilities the spec declares.
 4. Add thin TanStack route modules and workflow extensions where needed.
 5. Run `pnpm entity:generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
    when the entity participates in deletion or merge.
-7. Run generated action contracts, PGlite mechanical contracts, and any
-   real-Postgres tests required by repositories, raw SQL, extensions, or
-   concurrency.
+7. Run generated action contracts and the affected PostgreSQL contracts, plus
+   UI and built-browser checks for changed presentation. Follow the repository
+   validation guide for final gates.
 
 The compiler owns mechanical catalogs and capabilities. Repositories retain the
 handwritten transaction seams until their ports can be generated without

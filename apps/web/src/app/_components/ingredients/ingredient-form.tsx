@@ -7,14 +7,14 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
-import { Controller, type Control, useForm, useWatch } from "react-hook-form";
+import { type Control, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent } from "~/components/ui/card";
-import { Checkbox } from "~/components/ui/checkbox";
 import { Description } from "~/components/ui/description";
+import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 import { entityListFor } from "~/entities/entity-list.functions";
 
 import { EntityInlineLink } from "../EntityInlineLink";
@@ -25,7 +25,6 @@ import {
   FormWrapper,
   getSubmitButtonText,
   submitOrCancel,
-  UnifiedTextField,
 } from "../form-utils";
 
 // Form schema for ingredient
@@ -167,7 +166,6 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
   };
 
   const buttonText = getSubmitButtonText(mode);
-
   return (
     <FormWrapper
       form={form}
@@ -179,12 +177,11 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
     >
       <Card>
         <CardContent className="px-4 py-1">
-          <UnifiedTextField
-            form={form}
-            name="name"
-            label="Name"
-            placeholder="Enter ingredient name"
-            nullable={false}
+          <EntityPrimitiveFields
+            entity="ingredient"
+            mode={mode}
+            section="identity"
+            options={{ name: { placeholder: "Enter ingredient name" } }}
           />
         </CardContent>
         {mode === "create" && <DuplicateNameHint control={form.control} />}
@@ -192,33 +189,11 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
 
       <AliasesField<IngredientFormValues> form={form} />
       <Card>
-        <CardContent className="px-4 py-3">
-          <Controller
-            control={form.control}
-            name="usuallyOnHand"
-            render={({ field }) => (
-              <Row gap="sm" align="start">
-                <Checkbox
-                  id="ingredient-usually-on-hand"
-                  checked={field.value}
-                  onCheckedChange={(checked) =>
-                    field.onChange(checked === true)
-                  }
-                />
-                <div className="space-y-1">
-                  <label
-                    htmlFor="ingredient-usually-on-hand"
-                    className="text-sm font-medium"
-                  >
-                    Usually on hand
-                  </label>
-                  <Description size="xs">
-                    Assume I have enough for recipe planning. Recorded inventory
-                    stays separate.
-                  </Description>
-                </div>
-              </Row>
-            )}
+        <CardContent className="space-y-3 px-4 py-3">
+          <EntityPrimitiveFields
+            entity="ingredient"
+            mode={mode}
+            section="main"
           />
         </CardContent>
       </Card>

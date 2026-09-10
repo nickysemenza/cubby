@@ -15,7 +15,6 @@ import {
   ingredientMcpListOut,
   ingredientMcpOut,
   ingredientResolveOrCreateResponseOut,
-  mcpIngredientCreateInput,
   ingredientUpdateData,
   type IngredientMcpOut,
 } from "./ingredient";
@@ -28,7 +27,6 @@ import {
 import {
   locationMcpListOut,
   locationMcpOut,
-  mcpLocationCreateInput,
   locationUpdateData,
   type LocationMcpOut,
 } from "./location";
@@ -48,8 +46,6 @@ import {
   problemsCountSchema,
 } from "./problems";
 import {
-  mcpProductCreateInput,
-  mcpProductUpdateInput,
   productMcpListOut,
   productMcpOut,
   type ProductMcpOut,
@@ -79,15 +75,11 @@ import { importRecipeSchema } from "./import-recipe";
 export { type McpUnitMappingInput, mcpUnitMappingInput };
 
 export {
-  mcpIngredientCreateInput,
   ingredientUpdateData,
-  mcpLocationCreateInput,
   locationUpdateData,
   mealAddRecipeInput,
   mealCreateInput,
   mealUpdateData,
-  mcpProductCreateInput,
-  mcpProductUpdateInput,
   mcpRecipeCreateInput,
   mcpRecipeUpdateInput,
 };

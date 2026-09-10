@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 
 import type { AuditEntityType } from "@cubby/schemas/audit";
+import { testShortcode } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { auditLog, product } from "~/server/db/schema";
 import { getAuditLog } from "~/server/repo/audit-log";
+import { listAuditLog } from "~/server/workflows/audit-log";
 
 import { insertAndReturn, withTransaction } from "./database-helpers";
 import {
@@ -27,6 +29,34 @@ import { insertWithShortcode } from "./shortcode-utils";
  */
 describe("getAuditLog — source + time window", () => {
   const ctx = withTestDb();
+
+  it("routes unknown and mismatched public audit subjects to an empty result", async () => {
+    const record = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Audit subject fixture" }),
+      ctx.actor,
+    );
+    const listed = await listAuditLog({
+      db: ctx.db,
+      data: { entityType: "product", entityId: record.id, limit: 50 },
+    });
+    expect(listed.entries.length).toBeGreaterThan(0);
+    expect(
+      await listAuditLog({
+        db: ctx.db,
+        data: { entityType: "ingredient", entityId: record.id, limit: 50 },
+      }),
+    ).toEqual({ entries: [] });
+    expect(
+      await listAuditLog({
+        db: ctx.db,
+        data: {
+          entityId: testShortcode("product", "missing-audit-subject"),
+          limit: 50,
+        },
+      }),
+    ).toEqual({ entries: [] });
+  });
 
   const makeEntry = (overrides: {
     createdAt: Date;

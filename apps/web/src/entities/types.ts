@@ -11,8 +11,6 @@ interface EntityRoutes {
 
 type CommonSectionType = "images" | "history" | "unit-mappings";
 
-type StandardColumnType = "image" | "name";
-
 /** First-visit row density; a stored Display choice always takes precedence. */
 type ListDefaultDensity = "comfortable" | "compact" | "dense";
 
@@ -31,7 +29,6 @@ interface EntityListConfig {
    * would otherwise open every name-sorted list Z→A.
    */
   defaultSortDirection?: "asc" | "desc";
-  standardColumns?: StandardColumnType[];
 }
 
 export interface EntityColor {

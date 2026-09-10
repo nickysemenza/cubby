@@ -11,7 +11,6 @@ import { locationType, type LocationType } from "@cubby/schemas/location";
 import type { ProductPricingOut } from "@cubby/schemas/product";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
-import { format } from "date-fns";
 import { uniqBy } from "es-toolkit";
 import {
   ChevronRight,
@@ -29,6 +28,7 @@ import {
   type EntityActionSubject,
 } from "~/app/_components/actions/entity-actions";
 import { tryFormatAmount } from "~/app/_components/inventory/format-amount";
+import { renderScalarValue } from "~/components/common/scalar-value";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { DotLabel } from "~/components/ui/dot-label";
@@ -56,7 +56,6 @@ import {
 } from "~/entities/entities";
 import { multiSelectFilterFn, multiSelectFilterFnBy } from "~/entities/filters";
 import { type BaseKind, gradedKinds } from "~/lib/conversion-coverage";
-import { parsePlainDate } from "~/lib/plain-date";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import {
@@ -76,7 +75,6 @@ import {
 } from "../combobox/with-search-hook";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
-import { HoverableTimestamp } from "../HoverableTimestamp";
 import { ImageThumbnail } from "../table/ImageThumbnail";
 import { TableLink } from "../table/TableLink";
 import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
@@ -438,7 +436,11 @@ export function createCreatedAtColumn<T extends BaseRow>(
     }),
     cell: (info) => {
       const value = info.getValue();
-      return value ? <HoverableTimestamp timestamp={value} /> : <NoneValue />;
+      return renderScalarValue(
+        value
+          ? { kind: "timestamp", raw: value }
+          : { kind: "empty", raw: null },
+      );
     },
   });
 }
@@ -457,7 +459,11 @@ export function createUpdatedAtColumn<T extends BaseRow>(
     }),
     cell: (info) => {
       const value = info.getValue();
-      return value ? <HoverableTimestamp timestamp={value} /> : <NoneValue />;
+      return renderScalarValue(
+        value
+          ? { kind: "timestamp", raw: value }
+          : { kind: "empty", raw: null },
+      );
     },
   });
 }
@@ -909,7 +915,9 @@ export function createTextColumn<
   },
 ) {
   const renderValue =
-    options?.renderValue ?? ((v: string | null) => (v ? v : <NoneValue />));
+    options?.renderValue ??
+    ((v: string | null) =>
+      renderScalarValue({ kind: "text", raw: v ?? "", label: v ?? "" }));
   const renderRow = (value: string | null, row: T) => renderValue(value, row);
   const editable = options?.editable;
   const textValue = (row: T): string | null => row[accessor] ?? null;
@@ -1821,7 +1829,9 @@ export function createTimestampColumn<
     }),
     cell: (info) => {
       const value = info.getValue();
-      return value ? <HoverableTimestamp timestamp={value} /> : fallback;
+      return value
+        ? renderScalarValue({ kind: "timestamp", raw: value })
+        : fallback;
     },
   });
 }
@@ -1934,7 +1944,7 @@ export function createPlainDateColumn<
   const renderValue = (value: string | null, muted?: boolean) =>
     value ? (
       <span className={muted ? "text-muted-foreground" : undefined}>
-        {format(parsePlainDate(value), "MMM d, yyyy")}
+        {renderScalarValue({ kind: "date", raw: value })}
       </span>
     ) : (
       <NoneValue />

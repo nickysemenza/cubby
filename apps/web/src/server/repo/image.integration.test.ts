@@ -1,11 +1,13 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { getImageByIdSchema } from "@cubby/schemas/image";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { cookbook, image, projectImage, vendor } from "~/server/db/schema";
+import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
 
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn, withTransaction } from "./database-helpers";
@@ -24,6 +26,27 @@ import { findOrCreateVendor } from "./vendor";
 
 describe("image repository", () => {
   const ctx = withTestDb();
+
+  it("resolves public image identity before marking an upload complete", async () => {
+    const pending = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "workflow-upload.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const input = getImageByIdSchema.parse({ id: pending.shortcode });
+    expect(await markImageUploadedWorkflow(ctx.db, input)).toMatchObject({
+      status: "UPLOADED",
+    });
+    await expect(markImageUploadedWorkflow(ctx.db, input)).rejects.toThrow(
+      "Failed to update record",
+    );
+    const [stored] = await getDb(ctx.db)
+      .select({ status: image.status })
+      .from(image)
+      .where(eq(image.id, pending.id));
+    expect(stored?.status).toBe("UPLOADED");
+  });
 
   /**
    * `Cookbook.coverImageId` and `Vendor.logoImageId` are declared `clearFk` in

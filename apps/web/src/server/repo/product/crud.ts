@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   displayGtin,
   type ExternalIdKind,
@@ -71,12 +72,7 @@ import {
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
-import {
-  type AuditEntryInput,
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   loadProductDataQualities,
   productAnyDataGapCondition,
@@ -111,6 +107,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { patchEntityRows } from "~/server/repo/entity-patch";
 import {
   productAcquisitionDateFilterSql,
   productAcquisitionDateSql,
@@ -1635,19 +1632,7 @@ export const updateProduct = async (
       const changes = computeChanges(
         { ...beforeProduct, externalIds: beforeExternalIds },
         { ...updated, externalIds: currentExternalIdRows },
-        [
-          "name",
-          "aliases",
-          "tags",
-          "manufacturer",
-          "category",
-          "externalIds",
-          "fdc_id",
-          "model",
-          "expectedQuantity",
-          "ingredientId",
-          "price",
-        ],
+        [...entityFieldModels.product.audit],
       );
 
       if (changes) {
@@ -1705,36 +1690,23 @@ export const setProductsStockTracked = async (
 
   const updatedShortcodes = await withTransaction(db, async (tx) => {
     const ids = await resolveAllOrThrow(tx, "product", input.ids);
-    const before = await tx.query.product.findMany({
-      where: and(inArray(product.id, ids), notDeleted(product)),
-      columns: { id: true, shortcode: true, stockTracked: true },
-    });
-    if (before.length === 0) return [];
+    await patchEntityRows(
+      tx,
+      actor,
+      {
+        entity: "product",
+        table: product,
+        fields: entityFieldModels.product.bulk,
+      },
+      ids,
+      { stockTracked },
+    );
 
-    await tx
-      .update(product)
-      .set({ stockTracked })
-      .where(and(inArray(product.id, ids), notDeleted(product)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(
-        row,
-        { id: row.id, shortcode: row.shortcode, stockTracked },
-        ["stockTracked"],
-      );
-      if (changes) {
-        auditEntries.push({
-          entityType: "product",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return before.map((row) => row.shortcode);
+    // Return every resolved selection, including rows whose value was already
+    // equal to the requested flag. The public bulk contract reports the
+    // selected rows, while patchEntityRows intentionally returns only changed
+    // rows for generic scalar callers.
+    return input.ids;
   });
 
   return getProductsByShortcodes(db, updatedShortcodes);

@@ -29,6 +29,16 @@ import {
   purchase,
   purchaseImage,
 } from "~/server/db/schema";
+import { requireActor } from "~/server/request-context";
+import { createTestRequestContext } from "~/server/testing/request-context";
+import {
+  attachPurchaseProductsWorkflow,
+  detachPurchaseProductsWorkflow,
+  linkExpensesToPurchaseWorkflow,
+  mergePurchasesWorkflow,
+  purchaseProductsWorkflow,
+  splitExpenseWorkflow,
+} from "~/server/workflows/purchase.server";
 
 import { getDb, insertAndReturn } from "./database-helpers";
 import { createExpense, getExpenseByShortcode } from "./expense";
@@ -64,6 +74,113 @@ import { findOrCreateVendor, getVendorByID } from "./vendor";
  */
 
 const page = { pageIndex: 0, pageSize: 100 };
+
+describe("purchase application workflows", () => {
+  const ctx = withTestDb();
+  it("preserves expense amounts and product links through link, split, and merge", async () => {
+    const context = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    const vendorId = await vendorShortcodeByName(ctx.db, "Workflow supplies");
+    const { output: keep } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId,
+        date: "2026-08-01",
+        orderId: "WORKFLOW-KEEP",
+      }),
+      ctx.actor,
+    );
+    const { output: source } = await createPurchase(
+      ctx.db,
+      purchaseCreateInput.parse({
+        vendorId,
+        date: "2026-08-01",
+        orderId: null,
+      }),
+      ctx.actor,
+    );
+    const { output: original } = await createExpense(
+      ctx.db,
+      expenseCreateInput.parse({
+        name: "Combined supplies",
+        cost: 12,
+        costType: "materials",
+        trade: "other",
+        date: "2026-08-01",
+      }),
+      ctx.actor,
+    );
+    await linkExpensesToPurchaseWorkflow(context, {
+      purchaseId: source.id,
+      expenseIds: [original.id],
+    });
+    expect((await expenseByShortcode(ctx.db, original.id)).purchaseId).toBe(
+      source.id,
+    );
+    const parts = await splitExpenseWorkflow(
+      context,
+      splitExpenseInput.parse({
+        expenseId: original.id,
+        parts: [
+          {
+            name: "First supply",
+            cost: 5,
+            costType: "materials",
+            trade: "other",
+          },
+          {
+            name: "Second supply",
+            cost: 7,
+            costType: "materials",
+            trade: "other",
+          },
+        ],
+      }),
+    );
+    expect(parts.map((part) => part.cost)).toEqual([5, 7]);
+    expect(await getExpenseByShortcode(ctx.db, original.id)).toBeNull();
+    const item = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Workflow durable item" }),
+      ctx.actor,
+    );
+    await attachPurchaseProductsWorkflow(context, {
+      purchaseId: source.id,
+      productIds: [item.id],
+    });
+    expect(
+      (await purchaseProductsWorkflow(context, { purchaseId: source.id })).map(
+        (row) => row.productId,
+      ),
+    ).toEqual([item.id]);
+    const merged = await mergePurchasesWorkflow(context, {
+      keepId: keep.id,
+      mergeIds: [source.id],
+    });
+    expect(merged.purchase.id).toBe(keep.id);
+    expect(await getPurchaseByShortcode(ctx.db, source.id)).toBeNull();
+    for (const part of parts) {
+      const saved = await expenseByShortcode(ctx.db, part.id);
+      expect(saved.purchaseId).toBe(keep.id);
+      expect(saved.cost).toBe(part.cost);
+    }
+    expect(
+      (await purchaseProductsWorkflow(context, { purchaseId: keep.id })).map(
+        (row) => row.productId,
+      ),
+    ).toEqual([item.id]);
+    await detachPurchaseProductsWorkflow(context, {
+      purchaseId: keep.id,
+      productIds: [item.id],
+    });
+    expect(
+      await purchaseProductsWorkflow(context, { purchaseId: keep.id }),
+    ).toEqual([]);
+  });
+});
 
 const purchaseUuid = async (
   db: Database,

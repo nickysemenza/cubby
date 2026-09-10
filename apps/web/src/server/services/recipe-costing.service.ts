@@ -660,23 +660,21 @@ export class RecipeCostingService {
    * triggered recompute already uses ({@link dispatchRecompute}); a full recompute
    * is just the widest possible affected set.
    */
-  async *recomputeAllQueued(): AsyncGenerator<
-    { done: number; total: number },
-    { enqueued: number; total: number; batchId: string | null }
-  > {
-    const ids = await selectAllActiveRecipeIds(this.db);
+  async selectAllQueued(): Promise<RecipeId[]> {
+    return selectAllActiveRecipeIds(this.db);
+  }
+
+  async enqueueAllQueued(ids: RecipeId[]) {
     const total = ids.length;
-    yield { done: 0, total };
     if (total === 0) return { enqueued: 0, total: 0, batchId: null };
     const [batch] = await this.dispatchRecompute(ids, {
       source: "maintenance.recompute-all",
     });
-    yield { done: total, total };
     return { enqueued: total, total, batchId: batch?.id ?? null };
   }
 
   /**
-   * DURABLE recompute-STALE: same queue-backed shape as {@link recomputeAllQueued},
+   * DURABLE recompute-STALE: same queue-backed shape as the all-recipes drain,
    * but seeded from {@link selectAllStaleRecipeIds} instead of every active recipe,
    * and calling {@link enqueueTargetedChunks} directly instead of
    * {@link dispatchRecompute}. `dispatchRecompute` starts by marking its ids stale
@@ -687,18 +685,16 @@ export class RecipeCostingService {
    * fresh invalidation instead of a drain of an already-known backlog. So this
    * enqueues the targeted chunks straight from the stale-id selection.
    */
-  async *recomputeStaleQueued(): AsyncGenerator<
-    { done: number; total: number },
-    { enqueued: number; total: number; batchId: string | null }
-  > {
-    const ids = await selectAllStaleRecipeIds(this.db);
+  async selectStaleQueued(): Promise<RecipeId[]> {
+    return selectAllStaleRecipeIds(this.db);
+  }
+
+  async enqueueStaleQueued(ids: RecipeId[]) {
     const total = ids.length;
-    yield { done: 0, total };
     if (total === 0) return { enqueued: 0, total: 0, batchId: null };
     const batch = await this.enqueueTargetedChunks(ids, undefined, {
       source: "maintenance.recompute-stale",
     });
-    yield { done: total, total };
     return { enqueued: total, total, batchId: batch.id };
   }
 }

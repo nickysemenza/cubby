@@ -13,10 +13,13 @@ import type {
   usdaFoodSuggestionBatchInput,
   usdaFoodSuggestionInput,
 } from "@cubby/schemas/ai";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  type IngredientId,
+  type LocationId,
+} from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
-import { streamProgress } from "~/lib/bulk-progress";
 import {
   CATEGORY_DESCRIPTIONS,
   getAnthropicClient,
@@ -30,181 +33,351 @@ import {
   resolveLiveShortcodes,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
-import { suggestIngredientMergeBatch } from "~/server/services/ai-enrichment/ingredient-merge";
+import {
+  suggestIngredientMerge,
+  suggestIngredientMergeBatch,
+} from "~/server/services/ai-enrichment/ingredient-merge";
 import { suggestLocationForProduct } from "~/server/services/ai-enrichment/location-suggest";
 import {
   approveDetectedInventoryItem,
-  backfillLocationDescriptions,
   describeLocation,
   detectInventoryItems,
+  enqueueLocationDescriptionBackfill,
+  selectLocationDescriptionBackfill,
 } from "~/server/services/ai-enrichment/location-vision";
-import { precomputeEnrichmentProposals } from "~/server/services/ai-enrichment/proposals";
+import type { EnrichmentProposal } from "~/server/services/ai-enrichment/proposals";
 import {
   suggestUsdaFood,
   suggestUsdaFoodBatch,
 } from "~/server/services/ai-enrichment/usda-match";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
-export const suggestCategoryWorkflow = (
-  db: Database,
-  input: z.output<typeof categorySuggestionInput>,
-) =>
-  getAnthropicClient().suggestCategory(input.productName, input.manufacturer, {
-    db,
-    feature: "product-category-suggestion",
-    operation: "suggestCategory",
-    cacheStatus: "none",
-  });
-export const suggestLocationTypeWorkflow = (
-  db: Database,
-  input: z.output<typeof locationTypeSuggestionInput>,
-) =>
-  getAnthropicClient().suggestLocationType(input.locationName, {
-    db,
-    feature: "location-type-suggestion",
-    operation: "suggestLocationType",
-    cacheStatus: "none",
-  });
-export const suggestLocationWorkflow = async (
-  db: Database,
-  input: z.output<typeof locationSuggestionInput>,
-) =>
-  suggestLocationForProduct(
-    db,
-    await resolveOrThrow(db, "product", input.productId),
-  );
-export const describeLocationWorkflow = async (
-  db: Database,
-  input: z.output<typeof aiLocationIdInput>,
-) =>
-  describeLocation(db, await resolveOrThrow(db, "location", input.locationId));
-export const detectInventoryItemsWorkflow = async (
-  db: Database,
-  input: z.output<typeof aiLocationIdInput>,
-) =>
-  detectInventoryItems(
-    db,
-    await resolveOrThrow(db, "location", input.locationId),
-  );
-export const approveDetectedInventoryItemWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof approveDetectedInventoryItemInput>,
-) =>
-  approveDetectedInventoryItem(
-    context.db,
-    {
-      ...input,
-      locationId: await resolveOrThrow(
+import {
+  bindBulkWorkflow,
+  bindCoordinatorStream,
+  bindWorkflow,
+  defineBulkWorkflow,
+  defineCoordinatorStream,
+  defineWorkflowOperation,
+  type BulkWorkflowSummary,
+  workflow,
+} from "~/server/workflow-runtime";
+export const suggestCategoryWorkflow = defineWorkflowOperation(
+  "ai.suggestCategory",
+  async (db: Database, input: z.output<typeof categorySuggestionInput>) =>
+    getAnthropicClient().suggestCategory(
+      input.productName,
+      input.manufacturer,
+      {
+        db,
+        feature: "product-category-suggestion",
+        operation: "suggestCategory",
+        cacheStatus: "none",
+      },
+    ),
+);
+export const suggestLocationTypeWorkflow = defineWorkflowOperation(
+  "ai.suggestLocationType",
+  async (db: Database, input: z.output<typeof locationTypeSuggestionInput>) =>
+    getAnthropicClient().suggestLocationType(input.locationName, {
+      db,
+      feature: "location-type-suggestion",
+      operation: "suggestLocationType",
+      cacheStatus: "none",
+    }),
+);
+type LocationSuggestionInput = z.output<typeof locationSuggestionInput>;
+export const suggestLocationWorkflow = bindWorkflow(
+  workflow<Database, LocationSuggestionInput>("ai.suggestLocation")
+    .call("productId", async ({ context }, { input }) =>
+      resolveOrThrow(context, "product", input.productId),
+    )
+    .call("suggestion", async ({ context }, { productId }) =>
+      suggestLocationForProduct(context, productId),
+    )
+    .output(({ suggestion }) => suggestion),
+  (db: Database, input: LocationSuggestionInput) => ({ context: db, input }),
+);
+
+type LocationIdInput = z.output<typeof aiLocationIdInput>;
+export const describeLocationWorkflow = bindWorkflow(
+  workflow<Database, LocationIdInput>("ai.describeLocation")
+    .call("locationId", async ({ context }, { input }) =>
+      resolveOrThrow(context, "location", input.locationId),
+    )
+    .commit("description", async ({ context }, { locationId }) =>
+      describeLocation(context, locationId),
+    )
+    .output(({ description }) => description),
+  (db: Database, input: LocationIdInput) => ({ context: db, input }),
+);
+
+export const detectInventoryItemsWorkflow = bindWorkflow(
+  workflow<Database, LocationIdInput>("ai.detectInventoryItems")
+    .call("locationId", async ({ context }, { input }) =>
+      resolveOrThrow(context, "location", input.locationId),
+    )
+    .commit("inventory", async ({ context }, { locationId }) =>
+      detectInventoryItems(context, locationId),
+    )
+    .output(({ inventory }) => inventory),
+  (db: Database, input: LocationIdInput) => ({ context: db, input }),
+);
+
+type ApproveDetectedInput = z.output<typeof approveDetectedInventoryItemInput>;
+export const approveDetectedInventoryItemWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, ApproveDetectedInput>(
+    "ai.approveDetectedInventoryItem",
+  )
+    .call("locationId", async ({ context }, { input }) =>
+      resolveOrThrow(context.db, "location", input.locationId),
+    )
+    .commit("approved", async ({ context }, { input, locationId }) =>
+      approveDetectedInventoryItem(
         context.db,
-        "location",
-        input.locationId,
+        { ...input, locationId },
+        context.actorContext,
       ),
-    },
-    context.actorContext,
-  );
-export const identifyProductWorkflow = (
-  db: Database,
-  input: z.output<typeof productIdentificationInput>,
-) =>
-  getAnthropicClient().identifyProduct(input.imageUrls, {
-    db,
-    feature: "product-identification",
-    operation: "identifyProduct",
-    cacheStatus: "none",
-  });
-export const suggestUsdaFoodWorkflow = (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof usdaFoodSuggestionInput>,
-) => suggestUsdaFood(context.usdaService, context.db, input.ingredientName);
-export const suggestUsdaFoodBatchWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof usdaFoodSuggestionBatchInput>,
-) => {
-  const ids = await resolveAllOrThrow(
-    context.db,
-    "ingredient",
-    input.ingredients.map((item) => item.id),
-  );
-  return suggestUsdaFoodBatch(
-    context.usdaService,
-    context.db,
-    input.ingredients.map((item, index) => ({
-      id: ids[index]!,
-      name: item.name,
-    })),
-  );
-};
-export const suggestIngredientMergeBatchWorkflow = async (
-  db: Database,
-  input: z.output<typeof ingredientMergeSuggestionBatchInput>,
-) => {
-  const ids = await resolveAllOrThrow(
-    db,
-    "ingredient",
-    input.ingredients.map((item) => item.id),
-  );
-  const result = await suggestIngredientMergeBatch(
-    db,
-    input.ingredients.map((item, index) => ({
-      id: ids[index]!,
-      shortcode: item.id,
-      name: item.name,
-    })),
-  );
-  return result.map(({ source, target, ...suggestion }) => ({
-    ...suggestion,
-    source: { id: source.shortcode, name: source.name },
-    target: target ? { id: target.shortcode, name: target.name } : null,
-  }));
-};
-export const precomputeEnrichmentProposalsWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof enrichmentProposalPrecomputeInput>,
-) => {
-  const resolved = await resolveLiveShortcodes(
-    context.db,
-    input.items.map((item) => item.id),
-    "ingredient",
-  );
-  const items = input.items.flatMap((item) => {
-    const id = resolved.get(item.id);
-    return id
-      ? [{ ...item, ingredientId: parseEntityId("ingredient", id) }]
-      : [];
-  });
-  return precomputeEnrichmentProposals(context.usdaService, context.db, items);
-};
-export const backfillLocationDescriptionsWorkflow = (db: Database) =>
-  streamProgress(backfillLocationDescriptions(db), (result) => result);
-export const parseSearchWorkflow = async (
-  db: Database,
-  input: z.output<typeof parseSearchInput>,
-) =>
-  getAnthropicClient().parseSearchQuery(
-    input.query,
-    await getLocationNames(db),
-    {
+    )
+    .output(({ approved }) => approved),
+  (
+    context: AuthenticatedStartOperationContext,
+    input: ApproveDetectedInput,
+  ) => ({ context, input }),
+);
+export const identifyProductWorkflow = defineWorkflowOperation(
+  "ai.identifyProduct",
+  async (db: Database, input: z.output<typeof productIdentificationInput>) =>
+    getAnthropicClient().identifyProduct(input.imageUrls, {
       db,
-      feature: "search-query-parse",
-      operation: "parseSearchQuery",
+      feature: "product-identification",
+      operation: "identifyProduct",
       cacheStatus: "none",
-    },
-  );
-export const auditCategoriesWorkflow = async (db: Database) =>
-  getAnthropicClient().auditCategories(
-    await getProductSummaryForAudit(db),
-    CATEGORY_DESCRIPTIONS,
-    {
-      db,
-      feature: "category-audit",
-      operation: "auditCategories",
-      cacheStatus: "none",
-    },
-  );
-export const listAiUsageRecentWorkflow = (
-  db: Database,
-  input: z.output<typeof aiUsageRecentInput>,
-) => listRecentAiUsage(db, input.limit);
-export const summarizeAiUsageWorkflow = (
-  db: Database,
-  input: z.output<typeof aiUsageSummaryInput>,
-) => summarizeAiUsage(db, input.days);
+    }),
+);
+type UsdaSuggestionInput = z.output<typeof usdaFoodSuggestionInput>;
+export const suggestUsdaFoodWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, UsdaSuggestionInput>(
+    "ai.suggestUsdaFood",
+  )
+    .call("suggestion", ({ context }, { input }) =>
+      suggestUsdaFood(context.usdaService, context.db, input.ingredientName),
+    )
+    .output(({ suggestion }) => suggestion),
+);
+
+type UsdaBatchInput = z.output<typeof usdaFoodSuggestionBatchInput>;
+export const suggestUsdaFoodBatchWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, UsdaBatchInput>(
+    "ai.suggestUsdaFoodBatch",
+  )
+    .call("ids", async ({ context }, { input }) =>
+      resolveAllOrThrow(
+        context.db,
+        "ingredient",
+        input.ingredients.map((item) => item.id),
+      ),
+    )
+    .call("suggestions", ({ context }, { input, ids }) =>
+      suggestUsdaFoodBatch(
+        context.usdaService,
+        context.db,
+        input.ingredients.map((item, index) => ({
+          id: ids[index]!,
+          name: item.name,
+        })),
+      ),
+    )
+    .output(({ suggestions }) => suggestions),
+);
+
+type IngredientMergeBatchInput = z.output<
+  typeof ingredientMergeSuggestionBatchInput
+>;
+export const suggestIngredientMergeBatchWorkflow = bindWorkflow(
+  workflow<Database, IngredientMergeBatchInput>(
+    "ai.suggestIngredientMergeBatch",
+  )
+    .call("ids", async ({ context }, { input }) =>
+      resolveAllOrThrow(
+        context,
+        "ingredient",
+        input.ingredients.map((item) => item.id),
+      ),
+    )
+    .call("suggestions", ({ context }, { input, ids }) =>
+      suggestIngredientMergeBatch(
+        context,
+        input.ingredients.map((item, index) => ({
+          id: ids[index]!,
+          shortcode: item.id,
+          name: item.name,
+        })),
+      ),
+    )
+    .output(({ suggestions }) =>
+      suggestions.map(({ source, target, ...suggestion }) => ({
+        ...suggestion,
+        source: { id: source.shortcode, name: source.name },
+        target: target ? { id: target.shortcode, name: target.name } : null,
+      })),
+    ),
+  (db: Database, input: IngredientMergeBatchInput) => ({ context: db, input }),
+);
+type EnrichmentPrecomputeInput = z.output<
+  typeof enrichmentProposalPrecomputeInput
+>;
+type EnrichmentPrecomputeItem = EnrichmentPrecomputeInput["items"][number] & {
+  ingredientId: IngredientId;
+};
+const skippedUsda: EnrichmentProposal["usda"] = {
+  food: null,
+  confidence: "low",
+  reasoning: "",
+};
+const precomputeEnrichmentDefinition = defineBulkWorkflow({
+  name: "ai.precomputeEnrichmentProposals",
+  items: workflow<
+    AuthenticatedStartOperationContext,
+    EnrichmentPrecomputeInput
+  >("ai.precomputeEnrichmentProposals.items")
+    .call("resolved", async ({ context }, { input }) => {
+      const resolved = await resolveLiveShortcodes(
+        context.db,
+        input.items.map((item) => item.id),
+        "ingredient",
+      );
+      return input.items.flatMap((item) => {
+        const id = resolved.get(item.id);
+        return id
+          ? [{ ...item, ingredientId: parseEntityId("ingredient", id) }]
+          : [];
+      });
+    })
+    .output(({ resolved }) => resolved),
+  item: workflow<AuthenticatedStartOperationContext, EnrichmentPrecomputeItem>(
+    "ai.precomputeEnrichmentProposals.item",
+  )
+    .parallel("lookups", 2, {
+      usda: async ({ context }, { input }) =>
+        input.wantUsda
+          ? suggestUsdaFood(context.usdaService, context.db, input.name, {
+              ingredientId: input.ingredientId,
+            })
+          : skippedUsda,
+      merge: async ({ context }, { input }) =>
+        input.wantMerge
+          ? suggestIngredientMerge(context.db, {
+              id: input.ingredientId,
+              name: input.name,
+            })
+          : null,
+    })
+    .output(({ input, lookups }): EnrichmentProposal => ({
+      id: input.id,
+      usda: lookups.usda,
+      merge: lookups.merge,
+    })),
+  finalize: workflow<
+    AuthenticatedStartOperationContext,
+    BulkWorkflowSummary<EnrichmentPrecomputeItem, EnrichmentProposal>
+  >("ai.precomputeEnrichmentProposals.finalize").output(({ input }) => ({
+    processed: input.succeeded.length + input.failed.length,
+  })),
+  onItemError: "continue",
+  concurrency: 5,
+  progress: (proposal) => proposal,
+  errorProgress: (error, item) => {
+    console.error(
+      `[precomputeEnrichmentProposals] ${item.name} failed:`,
+      error,
+    );
+    return {
+      id: item.id,
+      usda: {
+        food: null,
+        confidence: "low",
+        reasoning: "Lookup failed.",
+      },
+      merge: null,
+    } satisfies EnrichmentProposal;
+  },
+});
+export const precomputeEnrichmentProposalsWorkflow = bindBulkWorkflow(
+  precomputeEnrichmentDefinition,
+  (
+    context: AuthenticatedStartOperationContext,
+    input: EnrichmentPrecomputeInput,
+    signal: AbortSignal = new AbortController().signal,
+  ) => ({ context, input, signal }),
+);
+const locationDescriptionBackfillDefinition = defineCoordinatorStream({
+  name: "ai.backfillLocationDescriptions",
+  select: workflow<Database, undefined>(
+    "ai.backfillLocationDescriptions.select",
+  )
+    .call("locationIds", async ({ context }) =>
+      selectLocationDescriptionBackfill(context),
+    )
+    .output(({ locationIds }) => locationIds),
+  commit: workflow<
+    Database,
+    { readonly input: undefined; readonly selection: readonly LocationId[] }
+  >("ai.backfillLocationDescriptions.enqueue")
+    .commit("enqueued", async ({ context }, { input: { selection } }) =>
+      enqueueLocationDescriptionBackfill(context, selection),
+    )
+    .output(({ enqueued }) => enqueued),
+  total: (locationIds) => locationIds.length,
+  completionProgress: (locationIds, result) => ({
+    done: result.enqueued,
+    total: locationIds.length,
+  }),
+});
+export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
+  locationDescriptionBackfillDefinition,
+  (db: Database, signal?: AbortSignal) => ({
+    context: db,
+    input: undefined,
+    signal,
+  }),
+);
+type ParseSearchInput = z.output<typeof parseSearchInput>;
+export const parseSearchWorkflow = bindWorkflow(
+  workflow<Database, ParseSearchInput>("ai.parseSearch")
+    .call("locations", ({ context }) => getLocationNames(context))
+    .call("parsed", ({ context }, { input, locations }) =>
+      getAnthropicClient().parseSearchQuery(input.query, locations, {
+        db: context,
+        feature: "search-query-parse",
+        operation: "parseSearchQuery",
+        cacheStatus: "none",
+      }),
+    )
+    .output(({ parsed }) => parsed),
+  (db: Database, input: ParseSearchInput) => ({ context: db, input }),
+);
+
+export const auditCategoriesWorkflow = bindWorkflow(
+  workflow<Database, undefined>("ai.auditCategories")
+    .call("products", ({ context }) => getProductSummaryForAudit(context))
+    .call("audit", ({ context }, { products }) =>
+      getAnthropicClient().auditCategories(products, CATEGORY_DESCRIPTIONS, {
+        db: context,
+        feature: "category-audit",
+        operation: "auditCategories",
+        cacheStatus: "none",
+      }),
+    )
+    .output(({ audit }) => audit),
+  (db: Database) => ({ context: db, input: undefined }),
+);
+export const listAiUsageRecentWorkflow = defineWorkflowOperation(
+  "ai.usageRecent",
+  async (db: Database, input: z.output<typeof aiUsageRecentInput>) =>
+    listRecentAiUsage(db, input.limit),
+);
+export const summarizeAiUsageWorkflow = defineWorkflowOperation(
+  "ai.usageSummary",
+  async (db: Database, input: z.output<typeof aiUsageSummaryInput>) =>
+    summarizeAiUsage(db, input.days),
+);

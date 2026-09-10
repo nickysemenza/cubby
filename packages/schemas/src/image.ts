@@ -1,10 +1,10 @@
+import { imageOut } from "./entity-definitions/field-primitives";
 import { z } from "zod";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
-  oneOrMany,
   presenceFilter,
 } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
@@ -13,29 +13,27 @@ import type { ShortcodeEntity } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
 import { id, imageShortcode, projectShortcode } from "./identifiers";
+import {
+  generatedImageFieldSchemas,
+  generatedImageFilterFields,
+  generatedImageRenderStatusValues,
+  generatedImageStatusValues,
+  generatedImageStorageStatusValues,
+} from "./generated/entity-field-schemas.image.gen";
 
-// Image status values - single source of truth for both Zod and Drizzle
-export const imageStatusValues = ["PENDING", "UPLOADED", "FAILED"] as const;
-
-export const ImageStatus = z.enum(imageStatusValues);
+export const ImageStatus = generatedImageFieldSchemas.read.status;
+export const imageStatusValues = generatedImageStatusValues;
 export type ImageStatus = z.infer<typeof ImageStatus>;
 
 // These values describe bytes and storage independently of the browser upload
 // lifecycle above.  Keeping them nullable on Image makes this an expand-only
 // change for pre-existing and presigned-upload rows.
-export const imageRenderStatusValues = [
-  "unverified",
-  "verified",
-  "failed",
-] as const;
-export const imageStorageStatusValues = [
-  "unverified",
-  "available",
-  "missing",
-  "metadata_mismatch",
-] as const;
-export const ImageRenderStatus = z.enum(imageRenderStatusValues);
-export const ImageStorageStatus = z.enum(imageStorageStatusValues);
+export const ImageRenderStatus =
+  generatedImageFieldSchemas.read.renderStatus.unwrap();
+export const ImageStorageStatus =
+  generatedImageFieldSchemas.read.storageStatus.unwrap();
+export const imageRenderStatusValues = generatedImageRenderStatusValues;
+export const imageStorageStatusValues = generatedImageStorageStatusValues;
 export type ImageRenderStatus = z.infer<typeof ImageRenderStatus>;
 export type ImageStorageStatus = z.infer<typeof ImageStorageStatus>;
 
@@ -180,17 +178,14 @@ export const getImageByIdSchema = z.object({
 // Input for renaming an image. `filename` is the only safely user-editable
 // column — key/url/size/contentType/status are all derived (see the repo
 // comment on `updateImage`).
-export const imageUpdateInput = z.object({
-  filename: z.string().trim().min(1).max(255),
-});
+export const imageUpdateInput = z.object(generatedImageFieldSchemas.update);
 export type ImageUpdateInput = z.infer<typeof imageUpdateInput>;
 
 // Filters accepted by the image list endpoint (filters-only, matching every
 // other *FiltersSchema — the crud factory owns sort/pagination).
 export const imageFilterFields = {
   ...auditDateFilterFields,
-  nameFilter: z.string().optional().describe("Filter by filename (substring)"),
-  status: oneOrMany(ImageStatus).optional().describe("Filter by upload status"),
+  ...generatedImageFilterFields,
   referencePresenceFilter: presenceFilter.describe(
     "Filter to images that are or are not referenced by any owning entity.",
   ),
@@ -384,26 +379,7 @@ export const cullPendingImagesSchema = z.object({
   olderThanHours: z.int().positive().default(CULL_PENDING_IMAGES_DEFAULT_HOURS),
 });
 
-export const imageOut = z.object({
-  /** The public `IMG-` code. Images carry a shortcode like every other
-   *  local-table entity, so a raw uuid never reaches an API consumer. */
-  id: imageShortcode,
-  url: z.url(),
-  key: z.string(),
-  filename: z.string(),
-  size: z.int().positive(),
-  contentType: z.string(),
-  status: ImageStatus,
-  width: z.int().positive().nullable(),
-  height: z.int().positive().nullable(),
-  detectedContentType: z.string().nullable(),
-  sha256: z.string().nullable(),
-  renderStatus: ImageRenderStatus.nullable(),
-  storageStatus: ImageStorageStatus.nullable(),
-  verifiedAt: z.date().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
+export { imageOut } from "./entity-definitions/field-primitives";
 
 export type ImageOut = z.infer<typeof imageOut>;
 

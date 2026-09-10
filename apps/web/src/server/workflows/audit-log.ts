@@ -4,33 +4,50 @@ import type { z } from "zod";
 import type { Database } from "~/server/db";
 import { getAuditLog } from "~/server/repo/audit-log";
 import { resolveShortcode } from "~/server/repo/shortcode-resolver";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
-/**
- * Shared audit-log workflow for browser Start and in-process callers.
- * Public id resolution stays here so both callers get identical empty-result
- * behavior for an unknown or mismatched shortcode.
- */
-export async function listAuditLog(options: {
-  db: Database;
-  data: z.output<typeof auditLogListInput>;
-}): Promise<AuditLogListOut> {
-  const { db, data } = options;
-  const resolved = data.entityId
-    ? await resolveShortcode(db, data.entityId)
-    : null;
-  if (
-    data.entityId &&
-    (!resolved || (data.entityType && resolved.entity !== data.entityType))
-  ) {
-    return { entries: [] };
-  }
-  return await getAuditLog(db, {
-    entityType: data.entityType,
-    entityId: resolved?.id,
-    source: data.source,
-    createdAtFrom: data.createdAtFrom,
-    createdAtTo: data.createdAtTo,
-    limit: data.limit,
-    cursor: data.cursor,
-  });
-}
+type AuditInput = z.output<typeof auditLogListInput>;
+const auditLogWorkflow = workflow<Database, AuditInput>("auditLog.list")
+  .call("subject", async ({ context: db }, { input }) => ({
+    data: input,
+    resolved: input.entityId
+      ? await resolveShortcode(db, input.entityId)
+      : null,
+  }))
+  .branch("result", {
+    when: async (_, { subject }) =>
+      !(
+        subject.data.entityId &&
+        (!subject.resolved ||
+          (subject.data.entityType &&
+            subject.resolved.entity !== subject.data.entityType))
+      ),
+    whenTrue: (branch) =>
+      branch
+        .call("entries", async ({ context: db }, { input: { subject } }) =>
+          getAuditLog(db, {
+            entityType: subject.data.entityType,
+            entityId: subject.resolved?.id,
+            source: subject.data.source,
+            createdAtFrom: subject.data.createdAtFrom,
+            createdAtTo: subject.data.createdAtTo,
+            limit: subject.data.limit,
+            cursor: subject.data.cursor,
+          }),
+        )
+        .output(({ entries }) => entries),
+    whenFalse: (branch) =>
+      branch
+        .call("empty", async (): Promise<AuditLogListOut> => ({ entries: [] }))
+        .output(({ empty }) => empty),
+  })
+  .output(({ result }) => result);
+
+/** Unknown or mismatched public subjects deliberately produce an empty log. */
+export const listAuditLog = bindWorkflow(
+  auditLogWorkflow,
+  ({ db, data }: { db: Database; data: AuditInput }) => ({
+    context: db,
+    input: data,
+  }),
+);

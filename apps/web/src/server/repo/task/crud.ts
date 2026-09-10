@@ -8,6 +8,7 @@
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   ProductId,
@@ -53,6 +54,7 @@ import {
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { patchEntityRows } from "~/server/repo/entity-patch";
 import { removeEntity } from "~/server/repo/removal";
 import {
   type EntityRef,
@@ -381,17 +383,6 @@ export const createTask = async (
   return { output: await getTaskByID(db, id), entityId: id };
 };
 
-const AUDIT_FIELDS = [
-  "name",
-  "status",
-  "projectId",
-  "subjectProductId",
-  "parentTaskId",
-  "dueDate",
-  "dueEndDate",
-  "trade",
-] as const;
-
 export const updateTask = async (
   db: Database,
   shortcode: TaskShortcode,
@@ -486,7 +477,7 @@ export const updateTask = async (
     }
 
     const changes: TaskUpdateChanges = {
-      ...computeChanges(before, updated, [...AUDIT_FIELDS]),
+      ...computeChanges(before, updated, [...entityFieldModels.task.audit]),
     };
     if (data.blockedByIds !== undefined) {
       const blockedByChange = diffUnorderedIdSet(
@@ -610,11 +601,7 @@ export const updateTasksInBulk = async (
     const auditEntries: AuditEntryInput[] = [];
     for (const row of before) {
       const changes = computeChanges(row, { ...row, ...values }, [
-        "projectId",
-        "status",
-        "trade",
-        "dueDate",
-        "dueEndDate",
+        ...entityFieldModels.task.bulk,
       ]);
       if (changes) {
         auditEntries.push({
@@ -707,47 +694,30 @@ export const setTasksStatus = async (
 
   const updatedIds = await withTransaction(db, async (tx) => {
     const ids = await resolveLiveTaskIds(tx, input.ids);
-    const before = await tx.query.task.findMany({
-      where: and(inArray(task.id, ids), notDeleted(task)),
-      columns: { id: true, status: true },
-    });
-    if (before.length === 0) return [];
+    if (ids.length === 0) return [];
 
-    await tx
-      .update(task)
-      .set({ status })
-      .where(and(inArray(task.id, ids), notDeleted(task)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { id: row.id, status }, ["status"]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "task",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return before.map((row) => row.id);
+    await patchEntityRows(
+      tx,
+      actor,
+      {
+        entity: "task",
+        table: task,
+        fields: entityFieldModels.task.bulk,
+      },
+      ids,
+      { status },
+    );
+    // Preserve the convenience setter's all-live-selection result even when
+    // patchEntityRows finds no changed rows.
+    return ids;
   });
 
   return getTasksByIDs(db, updatedIds);
 };
 
-/**
- * Bulk manual-reorder — the board's "materialize" path. Re-assigns sparse
- * `sortOrder` values to a run of cards (one CASE-WHEN UPDATE via
- * {@link batchUpdateWithCaseWhen}) and, when the drop also crossed cells,
- * applies the dragged card's own axis change (`move`) in the same transaction.
- *
- * The rank write is deliberately un-audited — manual priority is ephemeral and
- * a materialize touches many rows; only the `move`'s axis change (if any) is
- * logged, mirroring `updateTask`'s status/project/trade diff.
- */
+/** Rank writes are deliberately unaudited: materializing manual priority
+ * touches many rows. Only the dragged card's axis change is audited, in the
+ * same transaction as the rank update. */
 export const reorderTasks = async (
   db: Database,
   input: TaskBulkReorderInput,

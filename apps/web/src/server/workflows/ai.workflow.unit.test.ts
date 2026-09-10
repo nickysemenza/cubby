@@ -1,0 +1,101 @@
+import { describe, expect, it } from "vitest";
+
+import { inspectWorkflow } from "~/server/workflow-runtime/definition";
+
+import {
+  approveDetectedInventoryItemWorkflow,
+  auditCategoriesWorkflow,
+  backfillLocationDescriptionsWorkflow,
+  describeLocationWorkflow,
+  detectInventoryItemsWorkflow,
+  parseSearchWorkflow,
+  precomputeEnrichmentProposalsWorkflow,
+  suggestIngredientMergeBatchWorkflow,
+  suggestLocationWorkflow,
+  suggestUsdaFoodBatchWorkflow,
+  suggestUsdaFoodWorkflow,
+} from "./ai.server";
+
+describe("AI workflow graphs", () => {
+  it("declares resolution before AI reads and writes", () => {
+    expect(
+      inspectWorkflow(suggestLocationWorkflow.definition).steps.map(
+        (step) => step.type,
+      ),
+    ).toEqual(["call", "call"]);
+    expect(
+      inspectWorkflow(describeLocationWorkflow.definition).steps.map(
+        (step) => step.type,
+      ),
+    ).toEqual(["call", "committedCall"]);
+    expect(
+      inspectWorkflow(detectInventoryItemsWorkflow.definition).steps.map(
+        (step) => step.type,
+      ),
+    ).toEqual(["call", "committedCall"]);
+    expect(
+      inspectWorkflow(
+        approveDetectedInventoryItemWorkflow.definition,
+      ).steps.map((step) => step.type),
+    ).toEqual(["call", "committedCall"]);
+  });
+
+  it("declares AI batch inputs and context preparation", () => {
+    expect(
+      inspectWorkflow(suggestUsdaFoodWorkflow.definition).steps.map(
+        (step) => step.type,
+      ),
+    ).toEqual(["call"]);
+    expect(
+      inspectWorkflow(suggestUsdaFoodBatchWorkflow.definition).steps.map(
+        (step) => step.type,
+      ),
+    ).toEqual(["call", "call"]);
+    expect(
+      inspectWorkflow(suggestIngredientMergeBatchWorkflow.definition).steps.map(
+        (step) => step.type,
+      ),
+    ).toEqual(["call", "call"]);
+    expect(
+      inspectWorkflow(parseSearchWorkflow.definition).steps.map(
+        (step) => step.type,
+      ),
+    ).toEqual(["call", "call"]);
+    expect(
+      inspectWorkflow(auditCategoriesWorkflow.definition).steps.map(
+        (step) => step.type,
+      ),
+    ).toEqual(["call", "call"]);
+  });
+
+  it("keeps precompute bounded and parallel while echoing shortcodes", () => {
+    const definition = precomputeEnrichmentProposalsWorkflow.definition;
+    expect(definition.concurrency).toBe(5);
+    expect(
+      inspectWorkflow(definition.items).steps.map((step) => step.name),
+    ).toEqual(["resolved"]);
+    const item = inspectWorkflow(definition.item);
+    expect(item.steps.map((step) => step.name)).toEqual(["lookups"]);
+    expect(item.steps[0]).toMatchObject({
+      type: "parallel",
+      concurrency: 2,
+      branches: { usda: { name: "usda" }, merge: { name: "merge" } },
+    });
+    expect(definition.onItemError).toBe("continue");
+    expect(definition.errorProgress).toEqual(expect.any(Function));
+  });
+
+  it("keeps location-description selection and durable enqueue inspectable", () => {
+    const definition = backfillLocationDescriptionsWorkflow.definition;
+    expect(definition).toMatchObject({
+      kind: "coordinator",
+      name: "ai.backfillLocationDescriptions",
+    });
+    expect(
+      inspectWorkflow(definition.select).steps.map((step) => step.name),
+    ).toEqual(["locationIds"]);
+    expect(inspectWorkflow(definition.commit).steps).toMatchObject([
+      { type: "committedCall", name: "enqueued" },
+    ]);
+  });
+});

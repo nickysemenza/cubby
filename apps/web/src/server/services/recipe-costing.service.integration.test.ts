@@ -7,6 +7,10 @@ import {
   selectAllStaleRecipeIds,
   updateRecipeTotalsBatch,
 } from "~/server/repo/recipe/totals";
+import {
+  recomputeAllDurableWorkflow,
+  recomputeStaleDurableWorkflow,
+} from "~/server/workflows/recipe.server";
 
 import { findOrCreateIngredient } from "../repo/ingredient";
 import {
@@ -66,6 +70,44 @@ describe("RecipeCostingService", () => {
       ctx.actor,
     );
   };
+
+  describe("maintenance coordinator selection", () => {
+    it("returns one empty progress event and summary without queue work", async () => {
+      for (const stream of [
+        recomputeAllDurableWorkflow(service()),
+        recomputeStaleDurableWorkflow(service()),
+      ]) {
+        const events = [];
+        for await (const event of stream) events.push(event);
+        expect(events).toEqual([
+          { type: "progress", done: 0, total: 0 },
+          { type: "done", result: { enqueued: 0, total: 0, batchId: null } },
+        ]);
+      }
+    });
+
+    it("selects active and stale work independently without writing on early close", async () => {
+      const recipe = await seedPricedRecipe("Coordinator selection fixture");
+      const costing = service();
+      await costing.recompute([recipe.entityId]);
+      const before = await getRecipeTotalsState(ctx.db, recipe.entityId);
+      const all = recomputeAllDurableWorkflow(costing);
+      const stale = recomputeStaleDurableWorkflow(costing);
+      expect(await all.next()).toEqual({
+        done: false,
+        value: { type: "progress", done: 0, total: 1 },
+      });
+      expect(await stale.next()).toEqual({
+        done: false,
+        value: { type: "progress", done: 0, total: 0 },
+      });
+      await all.return();
+      await stale.return();
+      expect(await getRecipeTotalsState(ctx.db, recipe.entityId)).toEqual(
+        before,
+      );
+    });
+  });
 
   describe("computeTotals", () => {
     it("marks a fully-mapped recipe complete with totals present", async () => {

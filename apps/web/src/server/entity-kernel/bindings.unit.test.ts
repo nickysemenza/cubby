@@ -3,7 +3,14 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
+import {
+  generatedMcpEntityCreateCommandSchema,
+  generatedMcpEntityUpdateCommandSchema,
+} from "~/server/generated/entity-bindings.gen";
+import {
+  ENTITY_KERNEL_BINDINGS,
+  ENTITY_KERNEL_OPERATIONS,
+} from "~/server/generated/entity-kernel-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 import { generatedMcpEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 
@@ -22,6 +29,59 @@ const includesAction = (actions: readonly string[], action: string) =>
   actions.includes(action);
 
 describe("entity kernel bindings", () => {
+  describe("live MCP product commands", () => {
+    const productData = {
+      name: "Example product",
+      aliases: [],
+      tags: [],
+      upc: null,
+      isbn: null,
+      fdc_id: null,
+      manufacturer: "Example maker",
+      model: null,
+      notes: null,
+      expectedQuantity: null,
+      category: null,
+      ingredientId: null,
+      unitMappings: [],
+      externalIds: [],
+      usdaUnavailable: null,
+      stockTracked: null,
+    };
+
+    it("accepts nullable identifiers and populated identifiers on create", () => {
+      expect(
+        generatedMcpEntityCreateCommandSchema.safeParse({
+          action: "create",
+          entity: "product",
+          data: productData,
+        }).success,
+      ).toBe(true);
+      expect(
+        generatedMcpEntityCreateCommandSchema.safeParse({
+          action: "create",
+          entity: "product",
+          data: {
+            ...productData,
+            upc: "00045242593057",
+            ingredientId: "ING-ABCD",
+          },
+        }).success,
+      ).toBe(true);
+    });
+
+    it("keeps product updates partial when identifiers are omitted", () => {
+      expect(
+        generatedMcpEntityUpdateCommandSchema.safeParse({
+          action: "update",
+          entity: "product",
+          id: "PRD-ABCD",
+          data: {},
+        }).success,
+      ).toBe(true);
+    });
+  });
+
   it("correlates command entity and action with the exact result variant", () => {
     type ProductGetCommand = EntityQueryCommand & {
       action: "get";
@@ -55,11 +115,35 @@ describe("entity kernel bindings", () => {
       [...ENTITY_KERNEL_ENTITIES].sort(),
     );
     expect(Object.keys(ENTITY_SCHEMA_BINDINGS).sort()).toEqual(
-      [...ENTITY_KERNEL_ENTITIES].sort(),
+      [...ENTITY_KERNEL_ENTITIES, "cookbook"].sort(),
     );
+    // Cookbook's existing read contract has no generic mutation repository.
+    const cookbook = ENTITY_SCHEMA_BINDINGS.cookbook;
+    expect(cookbook.createInput).toBeNull();
+    expect(cookbook.updateInput).toBeNull();
+    expect(cookbook.bulkUpdateInput).toBeNull();
+    expect(
+      entityCommandSchema.safeParse({
+        action: "create",
+        entity: "cookbook",
+        data: { name: "Example" },
+      }).success,
+    ).toBe(false);
 
     for (const entity of ENTITY_KERNEL_ENTITIES) {
       const binding = ENTITY_KERNEL_BINDINGS[entity];
+      for (const action of [
+        "get",
+        "list",
+        "create",
+        "update",
+        "delete",
+        "bulkUpdate",
+      ] as const) {
+        expect(ENTITY_KERNEL_OPERATIONS[entity][action].definition.name).toBe(
+          `${entity}.${action}`,
+        );
+      }
       expect(binding.entity).toBe(entity);
       expect(binding.sort.fields).toContain(binding.sort.default);
       expect(binding.lifecycle.delete).toBeDefined();

@@ -15,9 +15,10 @@ import {
   getActiveSuggestionDismissalKeys,
   suggestionCandidateKey,
 } from "~/server/repo/suggestion-dismissal";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
+import { findSimilarEntitiesWorkflow } from "~/server/workflows/semantic-similarity.server";
 
 import { buildProductRelatednessLedger } from "./relatedness-ledger";
-import { findSimilarEntitiesForPair } from "./semantic-search.service";
 
 export interface RelatednessDependencies {
   resolveSourceId: (
@@ -27,7 +28,7 @@ export interface RelatednessDependencies {
   ) => Promise<ProductId>;
   findSimilarEntities: (
     db: Database,
-    input: Parameters<typeof findSimilarEntitiesForPair>[1],
+    input: Parameters<typeof findSimilarEntitiesWorkflow>[1],
   ) => Promise<SimilarEntitiesOut>;
   getProductsSharingTags: (
     db: Database,
@@ -44,9 +45,9 @@ export interface RelatednessDependencies {
   makeCandidateKey: typeof suggestionCandidateKey;
 }
 
-const productionDependencies: RelatednessDependencies = {
+export const productionRelatednessDependencies: RelatednessDependencies = {
   resolveSourceId: resolveOrThrow,
-  findSimilarEntities: findSimilarEntitiesForPair,
+  findSimilarEntities: findSimilarEntitiesWorkflow,
   getProductsSharingTags,
   getProductsByShortcodes,
   getActiveDismissalKeys: getActiveSuggestionDismissalKeys,
@@ -57,153 +58,206 @@ const productionDependencies: RelatednessDependencies = {
  * Product's one active relatedness slice. Compatibility tags are intentionally
  * display-only evidence while the stored-vector candidates contribute a score.
  */
-export async function getProductRelatedness(
-  db: Database,
-  sourceId: ProductShortcode,
-  dependencies: RelatednessDependencies = productionDependencies,
-): Promise<RelatednessOut> {
-  const signals = entityManifest.product.relatednessSignals ?? [];
-  const semanticSignal = signals.find((signal) => signal.kind === "semantic");
-  const tagSignal = signals.find(
-    (signal) =>
-      signal.kind === "scalarOverlap" && signal.column === "Product.tags",
-  );
-  if (!semanticSignal || !tagSignal) {
-    throw new Error(
-      "Product relatedness signals are not declared in the manifest",
+type RelatednessContext = {
+  db: Database;
+  dependencies: RelatednessDependencies;
+};
+
+export const productRelatednessWorkflowDefinition = workflow<
+  RelatednessContext,
+  ProductShortcode
+>("relatedness.product")
+  .call("signals", async () => {
+    const signals = entityManifest.product.relatednessSignals ?? [];
+    const semantic = signals.find((signal) => signal.kind === "semantic");
+    const tag = signals.find(
+      (signal) =>
+        signal.kind === "scalarOverlap" && signal.column === "Product.tags",
     );
-  }
-  const sourceEntityId = await dependencies.resolveSourceId(
-    db,
-    "product",
-    sourceId,
-  );
-  const [semantic, siblings, dismissals] = await Promise.all([
-    dependencies.findSimilarEntities(db, {
-      pair: "product_to_product",
-      sourceId,
-      limit: semanticSignal.limit,
-    }),
-    dependencies.getProductsSharingTags(db, sourceEntityId),
-    dependencies.getActiveDismissalKeys(db, {
-      sourceEntityType: "product",
-      sourceEntityId,
-      suggestionKind: "product.related",
-    }),
-  ]);
-  const candidates = [
-    ...semantic.results.map(({ entity }) => entity.id),
-    ...siblings.map((sibling) => sibling.shortcode),
-  ];
-  const candidateKeys = new Map(
-    await Promise.all(
-      candidates.map(
-        async (shortcode) =>
-          [
-            shortcode,
-            await dependencies.makeCandidateKey("product.related", [shortcode]),
-          ] as const,
-      ),
-    ),
-  );
-  const visible = (shortcode: string) =>
-    !dismissals.has(candidateKeys.get(shortcode) ?? "");
-  return {
-    status: semantic.status,
-    items: buildProductRelatednessLedger(
-      semantic.results.map(({ entity, similarity }) => ({
-        id: entity.id,
-        title: entity.title,
-        similarity,
-      })),
-      siblings,
-      visible,
-      {
-        semantic: {
-          label: semanticSignal.label,
-          weight: semanticSignal.weight,
+    if (!semantic || !tag)
+      throw new Error(
+        "Product relatedness signals are not declared in the manifest",
+      );
+    return { semantic, tag };
+  })
+  .call("source", ({ context }, { input }) =>
+    context.dependencies.resolveSourceId(context.db, "product", input),
+  )
+  .parallel("evidence", 3, {
+    semantic: ({ context }, { input, signals }) =>
+      context.dependencies.findSimilarEntities(context.db, {
+        pair: "product_to_product",
+        sourceId: input,
+        limit: signals.semantic.limit,
+      }),
+    siblings: ({ context }, { source }) =>
+      context.dependencies.getProductsSharingTags(context.db, source),
+    dismissals: ({ context }, { source }) =>
+      context.dependencies.getActiveDismissalKeys(context.db, {
+        sourceEntityType: "product",
+        sourceEntityId: source,
+        suggestionKind: "product.related",
+      }),
+  })
+  .map("candidateKeys", {
+    items: ({ evidence }) => [
+      ...evidence.semantic.results.map(({ entity }) => entity.id),
+      ...evidence.siblings.map((sibling) => sibling.shortcode),
+    ],
+    concurrency: 8,
+    run: async ({ context }, { item: shortcode }) =>
+      [
+        shortcode,
+        await context.dependencies.makeCandidateKey("product.related", [
+          shortcode,
+        ]),
+      ] as const,
+  })
+  .output(({ signals, evidence, candidateKeys }): RelatednessOut => {
+    const keys = new Map(candidateKeys);
+    return {
+      status: evidence.semantic.status,
+      items: buildProductRelatednessLedger(
+        evidence.semantic.results.map(({ entity, similarity }) => ({
+          id: entity.id,
+          title: entity.title,
+          similarity,
+        })),
+        evidence.siblings,
+        (shortcode) => !evidence.dismissals.has(keys.get(shortcode) ?? ""),
+        {
+          semantic: {
+            label: signals.semantic.label,
+            weight: signals.semantic.weight,
+          },
+          tag: { label: signals.tag.label },
         },
-        tag: { label: tagSignal.label },
-      },
-    ),
-  };
-}
+      ),
+    };
+  });
+
+export const getProductRelatedness = bindWorkflow(
+  productRelatednessWorkflowDefinition,
+  (
+    db: Database,
+    sourceId: ProductShortcode,
+    dependencies: RelatednessDependencies = productionRelatednessDependencies,
+  ) => ({
+    context: { db, dependencies },
+    input: sourceId,
+  }),
+);
 
 /**
  * Tags are proposed only from current semantic neighbours. They remain out of
  * relatedness scoring, so the ground-truth label cannot vote for itself.
  */
-export async function getProductTagPropagation(
-  db: Database,
-  sourceId: ProductShortcode,
-  dependencies: RelatednessDependencies = productionDependencies,
-): Promise<TagPropagationRecommendationOut> {
-  const semanticSignal = (entityManifest.product.relatednessSignals ?? []).find(
-    (signal) => signal.kind === "semantic",
-  );
-  if (!semanticSignal) {
-    throw new Error("Product semantic relatedness signal is not declared");
-  }
-  const [sourceEntityId, semantic] = await Promise.all([
-    dependencies.resolveSourceId(db, "product", sourceId),
-    dependencies.findSimilarEntities(db, {
-      pair: "product_to_product",
-      sourceId,
-      limit: semanticSignal.limit,
-    }),
-  ]);
-  const [rows, dismissals] = await Promise.all([
-    dependencies.getProductsByShortcodes(db, [
-      sourceId,
-      ...semantic.results.map((result) => result.entity.id),
-    ]),
-    dependencies.getActiveDismissalKeys(db, {
-      sourceEntityType: "product",
-      sourceEntityId,
-      suggestionKind: "product.tag-propagation",
-    }),
-  ]);
-  const source = rows.find((row) => row.id === sourceId);
-  const currentTags = source?.tags ?? [];
-  if (semantic.status !== "ready") {
-    return { status: semantic.status, currentTags, proposals: [] };
-  }
-
-  const sourceTags = new Set(currentTags);
-  const votes = new Map<string, number>();
-  for (const candidate of rows) {
-    if (candidate.id === sourceId) continue;
-    for (const tag of new Set(candidate.tags)) {
-      if (sourceTags.has(tag) || isCollectionTag(tag)) continue;
-      votes.set(tag, (votes.get(tag) ?? 0) + 1);
-    }
-  }
-  const proposals = [...votes]
-    .filter(([, supportingProductCount]) => supportingProductCount >= 3)
-    .map(([tag, supportingProductCount]) => ({ tag, supportingProductCount }))
-    .sort(
-      (a, b) =>
-        b.supportingProductCount - a.supportingProductCount ||
-        a.tag.localeCompare(b.tag),
+export const productTagPropagationWorkflowDefinition = workflow<
+  RelatednessContext,
+  ProductShortcode
+>("recommendations.tagPropagation")
+  .call("signal", async () => {
+    const signal = (entityManifest.product.relatednessSignals ?? []).find(
+      (signal) => signal.kind === "semantic",
     );
-  const keys = new Map(
-    await Promise.all(
-      proposals.map(
-        async ({ tag }) =>
-          [
-            tag,
-            await dependencies.makeCandidateKey("product.tag-propagation", [
+    if (!signal)
+      throw new Error("Product semantic relatedness signal is not declared");
+    return signal;
+  })
+  .parallel("source", 2, {
+    id: ({ context }, { input }) =>
+      context.dependencies.resolveSourceId(context.db, "product", input),
+    semantic: ({ context }, { input, signal }) =>
+      context.dependencies.findSimilarEntities(context.db, {
+        pair: "product_to_product",
+        sourceId: input,
+        limit: signal.limit,
+      }),
+  })
+  .parallel("evidence", 2, {
+    rows: ({ context }, { input, source }) =>
+      context.dependencies.getProductsByShortcodes(context.db, [
+        input,
+        ...source.semantic.results.map((result) => result.entity.id),
+      ]),
+    dismissals: ({ context }, { source }) =>
+      context.dependencies.getActiveDismissalKeys(context.db, {
+        sourceEntityType: "product",
+        sourceEntityId: source.id,
+        suggestionKind: "product.tag-propagation",
+      }),
+  })
+  .branch("proposals", {
+    when: async (_, { source }) => source.semantic.status === "ready",
+    whenTrue: (branch) =>
+      branch
+        .call("votes", async (_, { input }) => {
+          const currentTags =
+            input.evidence.rows.find((row) => row.id === input.input)?.tags ??
+            [];
+          const sourceTags = new Set(currentTags);
+          const votes = new Map<string, number>();
+          for (const candidate of input.evidence.rows) {
+            if (candidate.id === input.input) continue;
+            for (const tag of new Set(candidate.tags)) {
+              if (sourceTags.has(tag) || isCollectionTag(tag)) continue;
+              votes.set(tag, (votes.get(tag) ?? 0) + 1);
+            }
+          }
+          return [...votes]
+            .filter(([, count]) => count >= 3)
+            .map(([tag, supportingProductCount]) => ({
               tag,
-            ]),
-          ] as const,
-      ),
-    ),
+              supportingProductCount,
+            }))
+            .sort(
+              (a, b) =>
+                b.supportingProductCount - a.supportingProductCount ||
+                a.tag.localeCompare(b.tag),
+            );
+        })
+        .map("candidates", {
+          items: ({ votes }) => votes,
+          concurrency: 8,
+          run: async ({ context }, { item }) => ({
+            proposal: item,
+            key: await context.dependencies.makeCandidateKey(
+              "product.tag-propagation",
+              [item.tag],
+            ),
+          }),
+        })
+        .output(({ input, candidates }) =>
+          candidates
+            .filter(
+              (candidate) => !input.evidence.dismissals.has(candidate.key),
+            )
+            .map((candidate) => candidate.proposal),
+        ),
+    whenFalse: (branch) =>
+      branch.output((): TagPropagationRecommendationOut["proposals"] => []),
+  })
+  .output(
+    ({
+      input,
+      source,
+      evidence,
+      proposals,
+    }): TagPropagationRecommendationOut => ({
+      status: source.semantic.status,
+      currentTags: evidence.rows.find((row) => row.id === input)?.tags ?? [],
+      proposals,
+    }),
   );
-  return {
-    status: semantic.status,
-    currentTags,
-    proposals: proposals.filter(
-      (proposal) => !dismissals.has(keys.get(proposal.tag) ?? ""),
-    ),
-  };
-}
+
+export const getProductTagPropagation = bindWorkflow(
+  productTagPropagationWorkflowDefinition,
+  (
+    db: Database,
+    sourceId: ProductShortcode,
+    dependencies: RelatednessDependencies = productionRelatednessDependencies,
+  ) => ({
+    context: { db, dependencies },
+    input: sourceId,
+  }),
+);

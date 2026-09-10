@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { anyShortcodeSchema } from "./identifiers";
+import { anyShortcodeSchema } from "./identifier-fields";
 
 export const purchaseDataCheck = z.enum([
   "purchase_date",

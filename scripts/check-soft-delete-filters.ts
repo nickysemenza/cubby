@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { softDeleteTableCatalog } from "./schema-storage.ts";
 /**
  * EXISTS subqueries over soft-deletable tables must filter deleted rows.
  * `// includes-deleted: <reason>` is the audited opt-out. Both Drizzle calls
@@ -14,31 +15,13 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const schemaPath = join(repoRoot, "apps/web/src/server/db/schema.ts");
 const OPT_OUT = "includes-deleted";
 
-/**
- * Soft-deletable tables declared with `...softDeletedAt()` in their pgTable
- * body, keyed both ways: `varNames` is the drizzle export (e.g. `expense`,
- * used by `.from(x)`/`.join(x)` and by `${x}` raw-SQL interpolation), and
- * `sqlNameToVar`/`varToSqlName` map the quoted SQL identifier (e.g.
- * `"Expense"`, used by raw SQL text) to and from that export name.
- */
 function softDeletableTables() {
-  const source = readFileSync(schemaPath, "utf8");
-  const decl = /export const (\w+) = pgTable\(\s*"(\w+)"/g;
-  const varNames = new Set();
-  const sqlNameToVar = new Map();
-  const varToSqlName = new Map();
-  let match;
-  while ((match = decl.exec(source))) {
-    const [, varName, sqlName] = match;
-    const next = source.indexOf("export const", match.index + 10);
-    const body = source.slice(match.index, next < 0 ? source.length : next);
-    if (body.includes("softDeletedAt()")) {
-      varNames.add(varName);
-      sqlNameToVar.set(sqlName, varName);
-      varToSqlName.set(varName, sqlName);
-    }
-  }
-  return { varNames, sqlNameToVar, varToSqlName };
+  return softDeleteTableCatalog(readFileSync(schemaPath, "utf8"), [
+    readFileSync(
+      join(repoRoot, "apps/web/src/server/db/generated/entity-columns.gen.ts"),
+      "utf8",
+    ),
+  ]);
 }
 
 function serverSources() {

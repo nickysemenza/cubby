@@ -36,6 +36,7 @@ import {
   getVendorByID,
   mergeVendors,
   vendorList,
+  updateVendor,
 } from "./vendor";
 
 /**
@@ -66,6 +67,64 @@ describe("vendor repository — findOrCreateVendor", () => {
       .from(vendor)
       .where(eq(vendor.name, "Flow Form Plumbing"));
     expect(rows).toHaveLength(1);
+  });
+});
+
+describe("vendor declared scalar updates", () => {
+  const ctx = withTestDb();
+
+  it("preserves omitted fields and audits only actual changes", async () => {
+    const id = await findOrCreateVendor(ctx.db, "Scalar patch vendor");
+    const original = await getVendorByID(ctx.db, id);
+    await updateVendor(
+      ctx.db,
+      original.id,
+      { notes: "Keep this note", website: "https://example.com" },
+      ctx.actor,
+    );
+    const changed = await updateVendor(
+      ctx.db,
+      original.id,
+      { name: "Renamed scalar vendor" },
+      ctx.actor,
+    );
+    expect(changed.output).toMatchObject({
+      name: "Renamed scalar vendor",
+      notes: "Keep this note",
+      website: "https://example.com",
+    });
+    const beforeNoop = await getDb(ctx.db)
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityType, "vendor"),
+          eq(auditLog.entityId, id),
+          eq(auditLog.action, "update"),
+        ),
+      );
+    expect(beforeNoop).toHaveLength(2);
+    await updateVendor(
+      ctx.db,
+      original.id,
+      { name: "Renamed scalar vendor" },
+      ctx.actor,
+    );
+    await updateVendor(ctx.db, original.id, {}, ctx.actor);
+    const afterNoop = await getDb(ctx.db)
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityType, "vendor"),
+          eq(auditLog.entityId, id),
+          eq(auditLog.action, "update"),
+        ),
+      );
+    expect(afterNoop).toHaveLength(2);
+    expect((await getVendorByID(ctx.db, id)).updatedAt).toEqual(
+      changed.output.updatedAt,
+    );
   });
 });
 

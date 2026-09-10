@@ -106,7 +106,45 @@ function schemaProperties<T>(value: T): JsonObject | undefined {
     : undefined;
 }
 
+function concreteOutputSchema(value: JSONType): boolean {
+  if (!isJsonObject(value)) return false;
+  const definitions = value.$defs ?? value.definitions ?? {};
+  if (!isJsonObject(definitions)) return false;
+  const visit = (node: JSONType, seen = new Set<string>()): boolean => {
+    if (!isJsonObject(node)) return false;
+    if (node.$ref !== undefined && isString(node.$ref)) {
+      const name = node.$ref.split("/").at(-1);
+      if (!name || seen.has(name) || !definitions[name]) return false;
+      return visit(definitions[name], new Set([...seen, name]));
+    }
+    if (node.properties && isJsonObject(node.properties))
+      return Object.keys(node.properties).length > 0;
+    const alternatives = node.anyOf ?? node.oneOf;
+    return (
+      Array.isArray(alternatives) &&
+      alternatives.length > 0 &&
+      alternatives.every((branch) => visit(branch, seen))
+    );
+  };
+  return visit(value);
+}
+
 describe("MCP catalog schemas", () => {
+  it("requires every output union branch to declare concrete fields", () => {
+    const concrete = {
+      type: "object",
+      properties: { item: { type: "string" } },
+    };
+    expect(concreteOutputSchema({ anyOf: [concrete, concrete] })).toBe(true);
+    expect(
+      concreteOutputSchema({
+        anyOf: [concrete, { type: "object", additionalProperties: true }],
+      }),
+    ).toBe(false);
+    expect(concreteOutputSchema({ type: "object", properties: {} })).toBe(
+      false,
+    );
+  });
   it("removes fixture-only mock keys recursively", () => {
     const stripped = stripMockFromJsonSchema({
       type: "object",
@@ -208,7 +246,7 @@ describe("MCP catalog schemas", () => {
       "list_actionable_tasks",
       "get_task_summary",
     ]);
-    const looseOutputs = new Set(["entity", "list_problems"]);
+    const looseOutputs = new Set(["list_problems"]);
     const emptyProperties = <TSchema>(schema: TSchema) => {
       const properties = schemaProperties(schema);
       return properties !== undefined && Object.keys(properties).length === 0;
@@ -242,8 +280,7 @@ describe("MCP catalog schemas", () => {
         .filter(
           (tool) =>
             !looseOutputs.has(tool.name) &&
-            (emptyProperties(tool.outputSchema) ||
-              schemaProperties(tool.outputSchema) === undefined),
+            !concreteOutputSchema(parseJson(tool.outputSchema)),
         )
         .map((tool) => tool.name),
     ).toEqual([]);
@@ -251,7 +288,6 @@ describe("MCP catalog schemas", () => {
 
   it("keeps public entity-id fields self-describing in the published schemas", async () => {
     const uuidExceptions = new Set([
-      "entity.command.id",
       "entity.command.ids",
       "entity.command.data.externalIds[].id",
       "entity.command.data.sections[].id",

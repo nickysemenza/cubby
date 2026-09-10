@@ -5,7 +5,7 @@ import {
   cookbookShortcode,
   productShortcode,
   recipeShortcode,
-} from "./identifiers";
+} from "./identifier-fields";
 import { cookbookSummary } from "./recipe";
 
 // Times arrive twice over: the prose string is verbatim what the source printed,

@@ -1,0 +1,251 @@
+import { defineEntity } from "./definition.js";
+import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
+import { cookbookShortcode } from "../identifier-fields.js";
+import { z } from "zod";
+export default defineEntity({
+  key: "cookbook",
+  names: { singular: "Cookbook", plural: "Cookbooks" },
+  route: { basePath: "cookbooks" },
+  table: "Cookbook",
+  identifiers: { brand: "CookbookId", shortcode: "CKB-", legacy: null },
+  presentation: { titleField: "book" },
+  model: {
+    fields: [
+      { key: "id", kind: "identifier", readKey: null },
+      {
+        key: "shortcode",
+        kind: "text",
+        readKey: "id",
+        validation: {
+          read: cookbookShortcode,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "name",
+        kind: "text",
+        readKey: "book",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "author",
+        kind: "text-array",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.array(z.string()),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "subjects",
+        kind: "text-array",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.array(z.string()),
+          create: null,
+          update: null,
+        },
+      },
+      { key: "sourceLabel", kind: "text", readKey: null },
+      { key: "rawJson", kind: "json", readKey: null },
+      {
+        key: "coverImageId",
+        kind: "identifier",
+        nullable: true,
+        label: "Cover Image ID",
+        readKey: null,
+        reference: { entity: "image" },
+      },
+      {
+        key: "productId",
+        kind: "identifier",
+        nullable: true,
+        label: "Product ID",
+        readKey: null,
+        reference: { entity: "product" },
+      },
+      { key: "importedAt", kind: "timestamp", readKey: null },
+      { key: "createdAt", kind: "timestamp", readKey: null },
+      { key: "updatedAt", kind: "timestamp", readKey: null },
+      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+      {
+        key: "recipeCount",
+        kind: "number",
+        label: "Recipes",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.number().int().min(0),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "coverUrl",
+        kind: "text",
+        nullable: true,
+        label: "Cover",
+        display: { list: true, detail: true },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "sourceRecipeCount",
+        kind: "number",
+        label: "Source recipes",
+        display: { detail: true },
+        validation: {
+          read: z.number().int().min(0),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "product",
+        kind: "json",
+        nullable: true,
+        label: "Physical copy",
+        reference: { entity: "product" },
+        display: { list: true, detail: true },
+        validation: {
+          read: cookbookProductSummary.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+    ],
+    storage: [
+      {
+        key: "id",
+        default: "generated",
+        specialized: "primary-key:CookbookId",
+      },
+      { key: "shortcode", specialized: "shortcode" },
+      "name",
+      {
+        key: "author",
+        default: "literal",
+        defaultValue: "'{}'::text[]",
+        specialized: "text-array",
+      },
+      {
+        key: "subjects",
+        default: "literal",
+        defaultValue: "'{}'::text[]",
+        specialized: "text-array",
+      },
+      "sourceLabel",
+      { key: "rawJson", specialized: "json:rawJson" },
+      { key: "coverImageId", reference: "image" },
+      { key: "productId", reference: "product" },
+      { key: "importedAt", default: "now" },
+      { key: "createdAt", default: "now" },
+      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      "deletedAt",
+    ],
+    create: [],
+    update: [],
+    bulk: [],
+    audit: [],
+    output: [
+      "shortcode",
+      "name",
+      "author",
+      "subjects",
+      "recipeCount",
+      "coverUrl",
+      "sourceRecipeCount",
+      "product",
+    ],
+  },
+  fields: {
+    create: null,
+    update: null,
+    output: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
+    list: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
+    detail: { module: "@cubby/schemas/recipe", export: "cookbookSummary" },
+  },
+  filters: { descriptors: [] },
+  relations: [
+    {
+      key: "cover",
+      label: "Cover image",
+      target: "image",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Cookbook.coverImageId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Cookbook.coverImageId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "product",
+      label: "Product",
+      target: "product",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Cookbook.productId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Cookbook.productId", direction: "incoming" }],
+      },
+    },
+  ],
+  search: { enabled: true },
+  capabilities: {
+    auditable: true,
+    images: true,
+    countable: true,
+    softDelete: true,
+    delete: { mode: "soft", bulk: false },
+    bulkUpdate: null,
+    merge: false,
+    operationOwners: { delete: "workflow", merge: null },
+    mcp: ["list"],
+  },
+  extensions: {
+    countFilter: null,
+    relatednessSignals: null,
+    mcpNames: null,
+    ports: {
+      repository: null,
+      references: {
+        label: { module: "~/entities/entities", export: "entityLabel" },
+        resolver: {
+          module: "~/server/repo/shortcode-resolver",
+          export: "resolveLiveShortcode",
+        },
+      },
+      filters: {
+        module: "~/entities/filter-manifest",
+        export: "getEntityFilters",
+      },
+      search: {
+        projection: {
+          module: "~/server/repo/search-document",
+          export: "refreshSearchDocument",
+        },
+        semanticText: {
+          module: "~/server/repo/search-document",
+          export: "getSearchDocumentEmbeddingText",
+        },
+        dependentRefresh: {
+          module: "~/server/services/mutation-side-effects",
+          export: "runMutationSideEffects",
+        },
+      },
+    },
+  },
+});

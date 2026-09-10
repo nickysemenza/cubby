@@ -1,8 +1,12 @@
-import { locationTypeValues, productCategoryValues } from "@cubby/shared";
+import { productCategoryValues } from "@cubby/shared";
 import { fdcId } from "@cubby/usda-schemas";
 import { gtin } from "./external-id";
 import { z } from "zod";
 import { locationRelatedFilterFields } from "./related-view";
+import {
+  generatedLocationFieldSchemas,
+  generatedLocationFilterFields,
+} from "./generated/entity-field-schemas.location.gen";
 import {
   auditDateFilterFields,
   deriveUpdateData,
@@ -12,7 +16,6 @@ import {
 import { amount } from "./codec";
 import { money, moneyNullable } from "./money";
 import { mutationSideEffectsSchema } from "./background-jobs";
-import { requiredName } from "./common";
 import {
   imageShortcode,
   inventoryShortcode,
@@ -23,13 +26,20 @@ import { firstDisplayableImage, type ImageOut, imageOut } from "./image";
 import {
   createPaginatedResponseSchema,
   entityFilterList,
-  oneOrMany,
   presenceFilter,
 } from "./pagination";
+import {
+  locationIdentityProductOut,
+  locationType,
+  locationValuation,
+} from "./location-fields";
 
-export const locationType = z
-  .enum(locationTypeValues)
-  .describe("type of location (room, container, etc)");
+export {
+  locationIdentityProductOut,
+  locationType,
+  locationValuation,
+} from "./location-fields";
+
 export type LocationType = z.infer<typeof locationType>;
 
 export { locationTypeValues } from "@cubby/shared";
@@ -37,11 +47,7 @@ export { locationTypeValues } from "@cubby/shared";
 export const locationFilterFields = {
   ...auditDateFilterFields,
   ...locationRelatedFilterFields,
-  nameFilter: z
-    .string()
-    .optional()
-    .describe("Filter by location name (substring)"),
-  itemTypeFilter: oneOrMany(locationType).optional(),
+  ...generatedLocationFilterFields,
   /**
    * Locations that ARE this product. Matches the identity link, not stock
    * held at the location — for that, use the inventory list.
@@ -129,12 +135,6 @@ export const locationPickerSortableFields = [
   "updatedAt",
 ] as const;
 
-const pricingCounts = z.object({
-  priced: z.number().int().nonnegative(),
-  missingPricing: z.number().int().nonnegative(),
-  miscNoPrice: z.number().int().nonnegative(),
-});
-
 /**
  * The four headline figures are STOCK ONLY — what you could walk over and
  * count. Fixed installations roll up separately in `installed`, because
@@ -145,40 +145,6 @@ const pricingCounts = z.object({
  * parse; the rollup always emits it, so a missing key means the location has
  * not been recomputed since.
  */
-export const locationValuation = z.object({
-  directValuation: money,
-  totalValuation: money,
-  directItemCount: z.number().int().nonnegative(),
-  totalItemCount: z.number().int().nonnegative(),
-  direct: pricingCounts,
-  total: pricingCounts,
-  installed: z
-    .object({
-      directValuation: money,
-      totalValuation: money,
-      directItemCount: z.number().int().nonnegative(),
-      totalItemCount: z.number().int().nonnegative(),
-    })
-    .optional(),
-  /**
-   * The vessels themselves, not their contents. A location that IS a product
-   * (`location.productId`) contributes its own price to its PARENT's
-   * container total, never to its own `directValuation` — "what is on this
-   * shelf" and "what is this shelf" are different questions, the same split
-   * `installed` already draws.
-   *
-   * Optional for the same reason as `installed`: rows persisted before the
-   * bucket existed still parse, and a missing key means "not recomputed since".
-   */
-  container: z
-    .object({
-      directValuation: money,
-      totalValuation: money,
-      directItemCount: z.number().int().nonnegative(),
-      totalItemCount: z.number().int().nonnegative(),
-    })
-    .optional(),
-});
 export type LocationValuation = z.infer<typeof locationValuation>;
 
 export const locationValuationSummaryOut = z.object({
@@ -203,15 +169,6 @@ export type LocationValuationSummaryOut = z.infer<
  * small sizes (its `type` is null), and the cover is its thumbnail. `price` is
  * what the container-valuation bucket rolls up.
  */
-export const locationIdentityProductOut = z.object({
-  id: productShortcode,
-  name: z.string(),
-  manufacturer: z.string(),
-  model: z.string().nullable(),
-  category: z.enum(productCategoryValues).nullable(),
-  coverImage: imageOut.nullable(),
-  price: moneyNullable,
-});
 export type LocationIdentityProductOut = z.infer<
   typeof locationIdentityProductOut
 >;
@@ -236,23 +193,7 @@ export const locationCoverImage = (loc: {
   firstDisplayableImage<ImageOut>(loc.images, loc.product?.coverImage);
 
 export const locationOutFields = {
-  id: locationShortcode,
-  name: z.string().describe("name of location"),
-  aliases: z
-    .array(z.string())
-    .default([])
-    .describe("Alternate names for this location (searched + embedded)"),
-  tags: z
-    .array(z.string())
-    .optional()
-    .describe("Namespaced Collection tags assigned directly to this location"),
-  type: locationType.nullable(),
-  product: locationIdentityProductOut.nullable(),
-  lastBulkInventory: z.date().nullable(),
-  aiDescription: z.string().nullable(),
-  images: z.array(imageOut),
-  valuation: locationValuation.nullable(),
-  ...timestampedFields,
+  ...generatedLocationFieldSchemas.read,
 };
 
 export const locationOut = z.object(locationOutFields);
@@ -448,34 +389,7 @@ export const infLocationWithSideEffects = infLocation.and(
 
 const optionalLocationShortcode = locationShortcode.nullable().optional();
 
-const locationCreateFields = {
-  // Override the output/read `name` (which stays lax for reads) with a non-empty
-  // constraint on the create/update boundary.
-  name: requiredName("Location name").describe("name of location"),
-  aliases: z
-    .array(z.string())
-    .default([])
-    .describe(
-      "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
-    ),
-  tags: z
-    .array(z.string())
-    .optional()
-    .describe("Tags assigned directly to this location"),
-  type: locationType.nullable().optional(),
-  productId: productShortcode
-    .nullable()
-    .optional()
-    .describe(
-      "The product this location IS — a tote, bin or rack you own. Sets the location's identity and form factor; leave `type` unset when using this.",
-    ),
-  parentId: optionalLocationShortcode.describe(
-    "Parent location id — nest this location under another (omit/null to place it directly under Home).",
-  ),
-  // Public `IMG-` shortcode — `Image` mints one at insert time, so the repo
-  // layer resolves this to a uuid before the join-table write.
-  pendingImageIds: z.array(imageShortcode).optional(),
-};
+const locationCreateFields = generatedLocationFieldSchemas.create;
 
 export const locationCreateInput = z.object(locationCreateFields);
 
@@ -529,25 +443,6 @@ export type LocationUpdateInput = z.infer<typeof locationUpdateInput>;
 export type LocationBulkUpdateParentInput = z.infer<
   typeof locationBulkUpdateParentInput
 >;
-
-export const mcpLocationCreateInput = z.object({
-  name: requiredName("Location name").describe("name of location"),
-  type: locationType
-    .nullable()
-    .optional()
-    .describe(
-      "Form factor of a location you don't own as a product (room, area, drawer). Omit when passing productId.",
-    ),
-  productId: productShortcode
-    .nullable()
-    .optional()
-    .describe(
-      "The product this location IS — a tote, bin or rack you own. Supplies the form factor, so omit `type` when using this.",
-    ),
-  parentId: optionalLocationShortcode.describe(
-    "Parent location id — nest this location under another (omit/null to place it directly under Home).",
-  ),
-});
 
 export const locationMcpOut = z.object({
   id: locationListItemFields.id,

@@ -120,78 +120,86 @@ export async function createAgentToolset(
     { jsonSchemaValidator: createMcpClientValidator() },
   );
 
-  await Promise.all([
-    server.connect(serverTransport),
-    client.connect(clientTransport),
-  ]);
-
-  const { tools: mcpTools } = await client.listTools();
-  const records: ToolCallRecord[] = [];
-
-  const tools: Tool[] = mcpTools
-    .filter((mcpTool) => isReadOnlyTool(mcpTool.name))
-    .map((mcpTool) =>
-      toolDefinition({
-        name: mcpTool.name,
-        description: mcpTool.description ?? mcpTool.name,
-        // MCP inputSchema is already a JSON Schema object; toolDefinition
-        // accepts plain JSON Schema.
-        inputSchema: mcpInputSchema.parse(mcpTool.inputSchema),
-      }).server(async (rawArgs) => {
-        const args = agentToolCallSchema.shape.args.parse(rawArgs ?? {});
-        const startedAt = Date.now();
-        let ok = true;
-        let text = "";
-        let parsed: JSONType = null;
-
-        try {
-          const res = CallToolResultSchema.parse(
-            await client.callTool({
-              name: mcpTool.name,
-              arguments: args,
-            }),
-          );
-          ok = res.isError !== true;
-          if (
-            ok &&
-            res.structuredContent !== undefined &&
-            res.structuredContent !== null
-          ) {
-            parsed = mcpResultSchema.parse(res.structuredContent);
-            text = JSON.stringify(parsed, null, 2);
-          } else {
-            text = res.content
-              .filter((content) => content.type === "text")
-              .map((content) => content.text)
-              .join("\n");
-            try {
-              parsed = mcpResultSchema.parse(JSON.parse(text));
-            } catch {
-              parsed = text;
-            }
-          }
-        } catch (error) {
-          ok = false;
-          text = getErrorMessage(error);
-          parsed = text;
-        }
-
-        records.push({
-          tool: mcpTool.name,
-          args,
-          durationMs: Date.now() - startedAt,
-          ok,
-          result: parsed,
-        });
-
-        // Return the same text payload the model would see over MCP.
-        return text;
-      }),
-    );
-
   const close = async () => {
     await Promise.allSettled([client.close(), server.close()]);
   };
+  try {
+    // Settle both connection attempts before releasing either transport.
+    const connections = await Promise.allSettled([
+      server.connect(serverTransport),
+      client.connect(clientTransport),
+    ]);
+    for (const connection of connections) {
+      if (connection.status === "rejected") throw connection.reason;
+    }
 
-  return { tools, records, close };
+    const { tools: mcpTools } = await client.listTools();
+    const records: ToolCallRecord[] = [];
+
+    const tools: Tool[] = mcpTools
+      .filter((mcpTool) => isReadOnlyTool(mcpTool.name))
+      .map((mcpTool) =>
+        toolDefinition({
+          name: mcpTool.name,
+          description: mcpTool.description ?? mcpTool.name,
+          // MCP inputSchema is already a JSON Schema object; toolDefinition
+          // accepts plain JSON Schema.
+          inputSchema: mcpInputSchema.parse(mcpTool.inputSchema),
+        }).server(async (rawArgs) => {
+          const args = agentToolCallSchema.shape.args.parse(rawArgs ?? {});
+          const startedAt = Date.now();
+          let ok = true;
+          let text = "";
+          let parsed: JSONType = null;
+
+          try {
+            const res = CallToolResultSchema.parse(
+              await client.callTool({
+                name: mcpTool.name,
+                arguments: args,
+              }),
+            );
+            ok = res.isError !== true;
+            if (
+              ok &&
+              res.structuredContent !== undefined &&
+              res.structuredContent !== null
+            ) {
+              parsed = mcpResultSchema.parse(res.structuredContent);
+              text = JSON.stringify(parsed, null, 2);
+            } else {
+              text = res.content
+                .filter((content) => content.type === "text")
+                .map((content) => content.text)
+                .join("\n");
+              try {
+                parsed = mcpResultSchema.parse(JSON.parse(text));
+              } catch {
+                parsed = text;
+              }
+            }
+          } catch (error) {
+            ok = false;
+            text = getErrorMessage(error);
+            parsed = text;
+          }
+
+          records.push({
+            tool: mcpTool.name,
+            args,
+            durationMs: Date.now() - startedAt,
+            ok,
+            result: parsed,
+          });
+
+          // Return the same text payload the model would see over MCP.
+          return text;
+        }),
+      );
+
+    return { tools, records, close };
+  } catch (error) {
+    await close();
+    throw error;
+  }
 }

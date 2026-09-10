@@ -1,7 +1,8 @@
+import { timestampedFields } from "./base-entity";
 import { fdcId, type NutrientKey } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { positiveAmount } from "./codec";
-import { cookbookShortcode } from "./identifiers";
+import { cookbookShortcode, recipeShortcode } from "./identifier-fields";
 import { money } from "./money";
 
 // Recipe source values - single source of truth for both Zod and Drizzle
@@ -278,3 +279,20 @@ export const recipeSource = z.discriminatedUnion("type", [
   z.object({ type: z.literal("other") }),
 ]);
 export type RecipeSource = z.infer<typeof recipeSource>;
+
+export const recipeTopLevelFields = {
+  id: recipeShortcode,
+  name: z.string(),
+  ...timestampedFields,
+  meta: recipeMeta,
+  // Strong provenance, derived from the DB columns on read. Output-only for now
+  // (`meta.url` still drives the write path); nullish so older rows are lenient.
+  source: recipeSource.nullish(),
+  yield: recipeYieldSchema.nullish(),
+  servings: recipeServings.nullish(),
+  tags: recipeTags.nullish(),
+  notes: recipeNotes.nullish(),
+};
+
+export const recipeTopLevel = z.object(recipeTopLevelFields);
+export type RecipeTopLevel = z.infer<typeof recipeTopLevel>;

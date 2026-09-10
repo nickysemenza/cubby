@@ -54,8 +54,8 @@ export const aiHandlers = implementOperationDomain(ai, {
 });
 
 export const aiStreamHandlers = implementSubscriptionDomain(aiStreams, {
-  backfillLocationDescriptions: (context) =>
-    backfillLocationDescriptionsWorkflow(context.db),
-  precomputeEnrichmentProposals: (context, input) =>
-    precomputeEnrichmentProposalsWorkflow(context, input),
+  backfillLocationDescriptions: (context, _input, signal) =>
+    backfillLocationDescriptionsWorkflow(context.db, signal),
+  precomputeEnrichmentProposals: (context, input, signal) =>
+    precomputeEnrichmentProposalsWorkflow(context, input, signal),
 });

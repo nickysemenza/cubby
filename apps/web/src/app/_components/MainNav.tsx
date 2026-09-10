@@ -5,6 +5,7 @@ import type * as React from "react";
 import { preloadCommandMenu } from "~/app/_components/command-menu-loader";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { useHydrated } from "~/hooks/useHydrated";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 
 import { MainNavEnhancements } from "./navbar/main-nav-enhancements";
@@ -23,9 +24,13 @@ export function MainNav({ className, onSearchClick, ...props }: MainNavProps) {
   // paint from the signed cookie, then live once the client session resolves —
   // so the nav never flashes the wrong state in either direction.
   const authed = useNavAuthed();
+  const hydrated = useHydrated();
 
   return (
-    <div className="flex w-full items-center justify-between">
+    <div
+      className="flex w-full items-center justify-between"
+      data-nav-hydrated={hydrated ? "true" : "false"}
+    >
       <Link to="/" className="flex min-h-11 items-center md:min-h-0">
         <Row align="center" gap="sm">
           <img src={LOGO_SRC} alt="" className="size-6 sm:h-7 sm:w-7" />

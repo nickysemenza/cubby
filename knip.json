@@ -11,8 +11,7 @@
         "scripts/ci-scope.ts!",
         "scripts/ci-scope.test.ts!",
         "scripts/ensure-wasm.ts!",
-        "scripts/entity-literal-generator.ts!",
-        "scripts/entity-literals/entities/*.entity.ts!"
+        "scripts/entity-generator.ts!"
       ],
       "project": ["scripts/**/*.ts!"],
       "ignoreDependencies": ["vitest", "vite"]
@@ -89,7 +88,11 @@
       "project": ["src/**/*.ts!"]
     },
     "packages/schemas": {
-      "entry": ["src/index.ts!", "src/**/*.test.ts!"],
+      "entry": [
+        "src/index.ts!",
+        "src/**/*.test.ts!",
+        "src/entity-definitions/*.entity.ts!"
+      ],
       "project": ["src/**/*.ts!"]
     },
     "packages/shared": {

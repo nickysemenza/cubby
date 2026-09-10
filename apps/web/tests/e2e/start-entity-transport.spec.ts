@@ -69,7 +69,10 @@ test("core entity list, detail, and mutation ride named Start operations", async
 
   // In-app navigation throughout: a `page.goto` runs the route loader on the
   // server, where no browser request is issued and nothing is observable.
-  await page.getByRole("link", { name: "Products", exact: true }).click();
+  await page
+    .getByLabel("Workspace navigation")
+    .getByRole("link", { name: "Products", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/products$/u, { timeout: 15000 });
   await expect(page.getByRole("heading", { name: "Products" })).toBeVisible({
     timeout: 15000,

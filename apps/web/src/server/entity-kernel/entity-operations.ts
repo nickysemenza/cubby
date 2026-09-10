@@ -17,6 +17,7 @@ import {
   isMutationSideEffectRef,
   runMutationSideEffects,
 } from "~/server/services/mutation-side-effects";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 import type {
   EntityBindingSchemas,
@@ -29,6 +30,15 @@ import {
   entityMutationResultSchema,
   entityQueryResultSchema,
 } from "./contracts";
+
+type EntityListInput<TFilters = unknown> = {
+  filters: TFilters;
+  sort?:
+    | { orderBy: string; direction: "asc" | "desc" }
+    | { orderBy: string; direction: "asc" | "desc" }[];
+  pagination?: PaginationParams;
+  groupBy?: string;
+};
 
 const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
 
@@ -103,192 +113,252 @@ export const defineEntityOperations = <
 >(
   binding: EntityKernelCoreBinding<E, S>,
 ) => ({
-  get: async (
-    ctx: EntityKernelContext,
-    command: { id: string; missing: "error" | "null" },
-  ) => {
-    const id = parseSchema<S["id"], string>(binding.schemas.id, command.id);
-    const readContext =
-      ctx.actorContext.source === "ui" && ctx.readDb !== ctx.db
-        ? { ...ctx, db: ctx.readDb }
-        : ctx;
-    const item = await binding.repository.get(readContext, id);
-    if (item === null && command.missing !== "null") {
-      throw createAppError(
-        ENTITY_NOT_FOUND_REASON[binding.entity],
-        `${ENTITY_LABEL[binding.entity]} ${command.id} not found`,
-      );
-    }
-    return entityQueryResultSchema.parse({
-      action: "get",
-      entity: binding.entity,
-      item:
-        item === null
-          ? null
-          : parseSchema<S["detail"], typeof item>(binding.schemas.detail, item),
-    });
-  },
-  list: async <TFilters>(
-    ctx: EntityKernelContext,
-    command: {
-      filters: TFilters;
-      sort?:
-        | { orderBy: string; direction: "asc" | "desc" }
-        | { orderBy: string; direction: "asc" | "desc" }[];
-      pagination?: PaginationParams;
-      groupBy?: string;
-    },
-  ) => {
-    const readContext =
-      ctx.readDb === ctx.db ? ctx : { ...ctx, db: ctx.readDb };
-    const filters = parseSchema<S["filters"], TFilters>(
-      binding.schemas.filters,
-      command.filters,
-    );
-    const pagination = command.pagination ?? DEFAULT_PAGINATION;
-    const { data, count, sums } = await binding.repository.list(
-      readContext,
-      filters,
-      parseSorts(binding, command.sort),
-      pagination,
-      parseGroupBy(binding, command.groupBy),
-    );
-    const items = z.array(binding.schemas.list).parse(data);
-    return entityQueryResultSchema.parse({
-      action: "list",
-      entity: binding.entity,
-      ...buildPaginatedResponse(pagination, items, count, sums),
-    });
-  },
-  create: async <TInput>(ctx: EntityKernelContext, input: TInput) => {
-    const schema = binding.schemas.createInput;
-    const create = binding.repository.create;
-    if (!schema || !create) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `${ENTITY_LABEL[binding.entity]} does not support create`,
-      );
-    }
-    const created = await create(
-      ctx,
-      parseSchema(presentSchema<S["createInput"]>(schema), input),
-    );
-    await deleteStoredObjects(created.detachedImageKeys ?? []);
-    const backgroundBatches = [
-      ...(created.backgroundBatches ?? []),
-      ...(await runSideEffects(
-        ctx,
-        binding,
-        "created",
-        created.entityId,
-        `${binding.entity}.create`,
-      )),
-    ];
-    return entityMutationResultSchema.parse({
-      action: "create",
-      entity: binding.entity,
-      item: parseSchema<S["output"], typeof created.output>(
-        binding.schemas.output,
-        created.output,
+  get: bindWorkflow(
+    workflow<EntityKernelContext, { id: string; missing: "error" | "null" }>(
+      `${binding.entity}.get`,
+    )
+      .call("id", async (_, { input }) =>
+        parseSchema<S["id"], string>(binding.schemas.id, input.id),
+      )
+      .call("item", async ({ context }, { id }) =>
+        binding.repository.get(
+          context.actorContext.source === "ui" && context.readDb !== context.db
+            ? { ...context, db: context.readDb }
+            : context,
+          id,
+        ),
+      )
+      .output(({ input, item }) => {
+        if (item === null && input.missing !== "null")
+          throw createAppError(
+            ENTITY_NOT_FOUND_REASON[binding.entity],
+            `${ENTITY_LABEL[binding.entity]} ${input.id} not found`,
+          );
+        return entityQueryResultSchema.parse({
+          action: "get",
+          entity: binding.entity,
+          item:
+            item === null
+              ? null
+              : parseSchema<S["detail"], typeof item>(
+                  binding.schemas.detail,
+                  item,
+                ),
+        });
+      }),
+    (
+      context: EntityKernelContext,
+      input: { id: string; missing: "error" | "null" },
+    ) => ({ context, input }),
+  ),
+  list: bindWorkflow(
+    workflow<EntityKernelContext, EntityListInput>(`${binding.entity}.list`)
+      .call("validated", async (_, { input }) => ({
+        filters: parseSchema<S["filters"], unknown>(
+          binding.schemas.filters,
+          input.filters,
+        ),
+        pagination: input.pagination ?? DEFAULT_PAGINATION,
+        sorts: parseSorts(binding, input.sort),
+        groupBy: parseGroupBy(binding, input.groupBy),
+      }))
+      .call("page", async ({ context }, { validated }) =>
+        binding.repository.list(
+          context.readDb === context.db
+            ? context
+            : { ...context, db: context.readDb },
+          validated.filters,
+          validated.sorts,
+          validated.pagination,
+          validated.groupBy,
+        ),
+      )
+      .output(({ validated, page }) =>
+        entityQueryResultSchema.parse({
+          action: "list",
+          entity: binding.entity,
+          ...buildPaginatedResponse(
+            validated.pagination,
+            z.array(binding.schemas.list).parse(page.data),
+            page.count,
+            page.sums,
+          ),
+        }),
       ),
-      sideEffects: { backgroundBatches },
-    });
-  },
-  update: async <TInput>(
-    ctx: EntityKernelContext,
-    idInput: string,
-    input: TInput,
-  ) => {
-    const schema = binding.schemas.updateInput;
-    const update = binding.repository.update;
-    if (!schema || !update) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `${ENTITY_LABEL[binding.entity]} does not support update`,
-      );
-    }
-    const id = parseSchema<S["id"], string>(binding.schemas.id, idInput);
-    const updated = await update(
-      ctx,
-      id,
-      parseSchema(presentSchema<S["updateInput"]>(schema), input),
-    );
-    await deleteStoredObjects(updated.detachedImageKeys ?? []);
-    const backgroundBatches = [
-      ...(updated.backgroundBatches ?? []),
-      ...(await runSideEffects(
-        ctx,
-        binding,
-        "updated",
-        updated.entityId,
-        `${binding.entity}.update`,
-      )),
-    ];
-    return entityMutationResultSchema.parse({
-      action: "update",
-      entity: binding.entity,
-      item: parseSchema<S["output"], typeof updated.output>(
-        binding.schemas.output,
-        updated.output,
+    <TFilters>(
+      context: EntityKernelContext,
+      input: EntityListInput<TFilters>,
+    ) => ({ context, input }),
+  ),
+  create: bindWorkflow(
+    workflow<EntityKernelContext, unknown>(`${binding.entity}.create`)
+      .call("validated", async (_, { input }) => {
+        const schema = binding.schemas.createInput;
+        const run = binding.repository.create;
+        if (!schema || !run)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `${ENTITY_LABEL[binding.entity]} does not support create`,
+          );
+        return {
+          run,
+          data: parseSchema(presentSchema<S["createInput"]>(schema), input),
+        };
+      })
+      .commit("created", async ({ context }, { validated }) =>
+        validated.run(context, validated.data),
+      )
+      .effect("storage", async (_, { created }) =>
+        deleteStoredObjects(created.detachedImageKeys ?? []),
+      )
+      .effect("backgroundBatches", async ({ context }, { created }) => [
+        ...(created.backgroundBatches ?? []),
+        ...(await runSideEffects(
+          context,
+          binding,
+          "created",
+          created.entityId,
+          `${binding.entity}.create`,
+        )),
+      ])
+      .output(({ created, backgroundBatches }) =>
+        entityMutationResultSchema.parse({
+          action: "create",
+          entity: binding.entity,
+          item: parseSchema<S["output"], typeof created.output>(
+            binding.schemas.output,
+            created.output,
+          ),
+          sideEffects: { backgroundBatches },
+        }),
       ),
-      sideEffects: { backgroundBatches },
-    });
-  },
-  delete: async (ctx: EntityKernelContext, idInputs: string[]) => {
-    const ids = idInputs.map((id) =>
-      parseSchema<S["id"], string>(binding.schemas.id, id),
-    );
-    const {
-      deletedReferences,
-      detachedImageKeys = [],
-      backgroundBatches = [],
-      affectedEdges,
-    } = await binding.repository.delete(ctx, ids);
-    if (!affectedEdges) {
-      throw new Error(
-        `${binding.entity} delete returned without affected-edge counts`,
-      );
-    }
-    await deleteStoredObjects(detachedImageKeys);
-    return entityMutationResultSchema.parse({
-      action: "delete",
-      entity: binding.entity,
-      deletedReferences,
-      affectedEdges,
-      sideEffects: { backgroundBatches },
-    });
-  },
-  bulkUpdate: async <TInput>(
-    ctx: EntityKernelContext,
-    idInputs: string[],
-    input: TInput,
-  ) => {
-    const schema = binding.schemas.bulkUpdateInput;
-    const bulkUpdate = binding.repository.bulkUpdate;
-    if (!schema || !bulkUpdate) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        `${ENTITY_LABEL[binding.entity]} does not support bulk update`,
-      );
-    }
-    const ids = idInputs.map((id) =>
-      parseSchema<S["id"], string>(binding.schemas.id, id),
-    );
-    const {
-      updatedReferences,
-      detachedImageKeys = [],
-      backgroundBatches = [],
-    } = await bulkUpdate(
-      ctx,
-      ids,
-      parseSchema(presentSchema<S["bulkUpdateInput"]>(schema), input),
-    );
-    await deleteStoredObjects(detachedImageKeys);
-    return entityMutationResultSchema.parse({
-      action: "bulkUpdate",
-      entity: binding.entity,
-      updatedReferences,
-      sideEffects: { backgroundBatches },
-    });
-  },
+    <TInput>(context: EntityKernelContext, input: TInput) => ({
+      context,
+      input,
+    }),
+  ),
+  update: bindWorkflow(
+    workflow<EntityKernelContext, { id: string; data: unknown }>(
+      `${binding.entity}.update`,
+    )
+      .call("validated", async (_, { input }) => {
+        const schema = binding.schemas.updateInput;
+        const run = binding.repository.update;
+        if (!schema || !run)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `${ENTITY_LABEL[binding.entity]} does not support update`,
+          );
+        return {
+          run,
+          id: parseSchema<S["id"], string>(binding.schemas.id, input.id),
+          data: parseSchema(
+            presentSchema<S["updateInput"]>(schema),
+            input.data,
+          ),
+        };
+      })
+      .commit("updated", async ({ context }, { validated }) =>
+        validated.run(context, validated.id, validated.data),
+      )
+      .effect("storage", async (_, { updated }) =>
+        deleteStoredObjects(updated.detachedImageKeys ?? []),
+      )
+      .effect("backgroundBatches", async ({ context }, { updated }) => [
+        ...(updated.backgroundBatches ?? []),
+        ...(await runSideEffects(
+          context,
+          binding,
+          "updated",
+          updated.entityId,
+          `${binding.entity}.update`,
+        )),
+      ])
+      .output(({ updated, backgroundBatches }) =>
+        entityMutationResultSchema.parse({
+          action: "update",
+          entity: binding.entity,
+          item: parseSchema<S["output"], typeof updated.output>(
+            binding.schemas.output,
+            updated.output,
+          ),
+          sideEffects: { backgroundBatches },
+        }),
+      ),
+    <TInput>(context: EntityKernelContext, id: string, data: TInput) => ({
+      context,
+      input: { id, data },
+    }),
+  ),
+  delete: bindWorkflow(
+    workflow<EntityKernelContext, string[]>(`${binding.entity}.delete`)
+      .call("ids", async (_, { input }) =>
+        input.map((id) => parseSchema<S["id"], string>(binding.schemas.id, id)),
+      )
+      .commit("deleted", async ({ context }, { ids }) =>
+        binding.repository.delete(context, ids),
+      )
+      .effect("receipt", async (_, { deleted }) => {
+        if (!deleted.affectedEdges)
+          throw new Error(
+            `${binding.entity} delete returned without affected-edge counts`,
+          );
+        return { ...deleted, affectedEdges: deleted.affectedEdges };
+      })
+      .effect("storage", async (_, { receipt }) =>
+        deleteStoredObjects(receipt.detachedImageKeys ?? []),
+      )
+      .output(({ receipt }) =>
+        entityMutationResultSchema.parse({
+          action: "delete",
+          entity: binding.entity,
+          deletedReferences: receipt.deletedReferences,
+          affectedEdges: receipt.affectedEdges,
+          sideEffects: { backgroundBatches: receipt.backgroundBatches ?? [] },
+        }),
+      ),
+    (context: EntityKernelContext, input: string[]) => ({ context, input }),
+  ),
+  bulkUpdate: bindWorkflow(
+    workflow<EntityKernelContext, { ids: string[]; data: unknown }>(
+      `${binding.entity}.bulkUpdate`,
+    )
+      .call("validated", async (_, { input }) => {
+        const schema = binding.schemas.bulkUpdateInput;
+        const run = binding.repository.bulkUpdate;
+        if (!schema || !run)
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            `${ENTITY_LABEL[binding.entity]} does not support bulk update`,
+          );
+        return {
+          run,
+          ids: input.ids.map((id) =>
+            parseSchema<S["id"], string>(binding.schemas.id, id),
+          ),
+          data: parseSchema(
+            presentSchema<S["bulkUpdateInput"]>(schema),
+            input.data,
+          ),
+        };
+      })
+      .commit("updated", async ({ context }, { validated }) =>
+        validated.run(context, validated.ids, validated.data),
+      )
+      .effect("storage", async (_, { updated }) =>
+        deleteStoredObjects(updated.detachedImageKeys ?? []),
+      )
+      .output(({ updated }) =>
+        entityMutationResultSchema.parse({
+          action: "bulkUpdate",
+          entity: binding.entity,
+          updatedReferences: updated.updatedReferences,
+          sideEffects: { backgroundBatches: updated.backgroundBatches ?? [] },
+        }),
+      ),
+    <TInput>(context: EntityKernelContext, ids: string[], data: TInput) => ({
+      context,
+      input: { ids, data },
+    }),
+  ),
 });

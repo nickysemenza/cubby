@@ -540,6 +540,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
         <div className="gap-6 @3xl/product:grid @3xl/product:grid-cols-[minmax(0,1fr)_minmax(360px,400px)] @3xl/product:items-start">
           <Stack>
             <ProductFormFields
+              mode={product ? "edit" : "create"}
               form={form}
               paths={productFormFieldPaths}
               imageHandlers={imageState}

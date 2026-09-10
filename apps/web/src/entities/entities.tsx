@@ -158,7 +158,7 @@ const newRouteExtensions = {
  * Stamps every definition with the display names its own key already implies.
  *
  * Both come straight from the entity's manifest literal (`names` in
- * `scripts/entity-literals/entities/*.entity.ts`, surfaced as `entityNames`),
+ * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced as `entityNames`),
  * so neither is spelled here and neither can disagree with the key it sits
  * under — `wish: { label: ... }` naming a vendor is no longer expressible.
  *
@@ -240,7 +240,6 @@ const entityDefinitions = withEntityNames({
     list: {
       hasUnitMappings: true,
       defaultSort: "createdAt",
-      standardColumns: [],
     },
     // The caller supplies a duplicate group in a deterministic order; the
     // first ingredient starts as keeper, with a deliberate picker override.
@@ -292,7 +291,6 @@ const entityDefinitions = withEntityNames({
     list: {
       hasUnitMappings: true,
       defaultSort: "createdAt",
-      standardColumns: ["image", "name"],
     },
     // The detector supplies duplicate rows in a stable order; the first starts
     // as keeper and the picker remains available for an intentional change.
@@ -345,7 +343,6 @@ const entityDefinitions = withEntityNames({
     ],
     list: {
       defaultSort: "createdAt",
-      standardColumns: ["image", "name"],
     },
   },
   cookbook: {
@@ -380,7 +377,6 @@ const entityDefinitions = withEntityNames({
     // Location supplies its domain columns explicitly; audit dates are shared.
     list: {
       defaultSort: "createdAt",
-      standardColumns: [],
     },
   },
   inventory: {
@@ -406,7 +402,6 @@ const entityDefinitions = withEntityNames({
     // Inventory list has custom columns (image from product, amount instead of name)
     list: {
       defaultSort: "createdAt",
-      standardColumns: [],
     },
   },
   meal: {
@@ -424,7 +419,6 @@ const entityDefinitions = withEntityNames({
     // doesn't support. Audit dates are appended for every entity list.
     list: {
       defaultSort: "date",
-      standardColumns: [],
     },
   },
   project: {
@@ -445,7 +439,6 @@ const entityDefinitions = withEntityNames({
     ],
     list: {
       defaultSort: "createdAt",
-      standardColumns: ["name"],
     },
   },
   task: {
@@ -465,7 +458,6 @@ const entityDefinitions = withEntityNames({
     ],
     list: {
       defaultSort: "createdAt",
-      standardColumns: ["name"],
     },
   },
   vendor: {
@@ -489,7 +481,6 @@ const entityDefinitions = withEntityNames({
       // landed the roster on Z→A.)
       defaultSort: "spend",
       defaultDensity: "dense",
-      standardColumns: ["name"],
     },
     // "fixed": the keeper is the vendor being viewed; candidates are every
     // OTHER vendor (mergeVendors has no cross-vendor refusal like
@@ -540,7 +531,6 @@ const entityDefinitions = withEntityNames({
     // a free-text name, so the list defines its columns explicitly (like location).
     list: {
       defaultSort: "date",
-      standardColumns: [],
     },
     // "fixed": the keeper is the purchase being viewed; candidates are every
     // OTHER purchase from the same vendor (mergePurchases refuses cross-vendor,
@@ -591,7 +581,6 @@ const entityDefinitions = withEntityNames({
     ],
     list: {
       defaultSort: "date",
-      standardColumns: ["name"],
     },
   },
   ledgerParty: {
@@ -604,7 +593,6 @@ const entityDefinitions = withEntityNames({
       defaultSort: "name",
       // A name roster reads A→Z, same rationale as financialAccount below.
       defaultSortDirection: "asc",
-      standardColumns: [],
     },
   },
   ledgerTransfer: {
@@ -615,7 +603,6 @@ const entityDefinitions = withEntityNames({
     sortableFields: ["date", "amount", "createdAt", "updatedAt"],
     list: {
       defaultSort: "date",
-      standardColumns: [],
     },
   },
   financialAccount: {
@@ -636,7 +623,6 @@ const entityDefinitions = withEntityNames({
       // A name roster reads A→Z; the table's blanket descending default was
       // opening the account list backwards.
       defaultSortDirection: "asc",
-      standardColumns: [],
     },
   },
   financialTransaction: {
@@ -658,7 +644,6 @@ const entityDefinitions = withEntityNames({
     list: {
       defaultSort: "transactionDate",
       defaultDensity: "dense",
-      standardColumns: [],
     },
   },
   wish: {
@@ -675,7 +660,6 @@ const entityDefinitions = withEntityNames({
     ],
     list: {
       defaultSort: "createdAt",
-      standardColumns: ["name"],
     },
   },
   "usda-food": {
@@ -692,7 +676,6 @@ const entityDefinitions = withEntityNames({
     // USDA foods are read-only, no detail/list conventions needed
     list: {
       defaultSort: "fdc_id",
-      standardColumns: [],
     },
   },
   image: {
@@ -709,7 +692,6 @@ const entityDefinitions = withEntityNames({
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
     list: {
       defaultSort: "createdAt",
-      standardColumns: [],
     },
   },
 } as const) satisfies Record<BrowserRoutedEntity, EntityDefinition>;

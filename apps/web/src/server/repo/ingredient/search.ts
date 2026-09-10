@@ -269,7 +269,9 @@ export const getIngredientsByIDsLean = async (
       // Unit mappings only — NOT images/externalIds. Costing + getManyByIDs never
       // read them, and pulling full Image records here was ~4MB + ~11s of drizzle
       // object-building per call (worker CPU that starved the recompute isolate).
-      with: { product: { with: { unitMappings: true } } },
+      with: {
+        product: { where: notDeleted(product), with: { unitMappings: true } },
+      },
     }),
     // This is still one batched GROUP BY, but it no longer serializes behind
     // drizzle's Product relation object-building. Product_ingredientId_idx and
@@ -333,6 +335,7 @@ export const enrichmentWorkbenchIngredients = async (
     ),
     with: {
       product: {
+        where: notDeleted(product),
         with: {
           unitMappings: true,
           externalIds: true,

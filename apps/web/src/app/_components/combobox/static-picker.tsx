@@ -12,6 +12,7 @@ interface StaticPickerOption {
 }
 
 interface StaticPickerProps {
+  inputId?: string;
   items: readonly StaticPickerOption[];
   value: string | null;
   onValueChange: (value: string | null) => void;
@@ -26,6 +27,7 @@ interface StaticPickerProps {
 
 /** String-valued form adapter for the shared Base UI picker shell. */
 export function StaticPicker({
+  inputId,
   items,
   value,
   onValueChange,
@@ -54,6 +56,7 @@ export function StaticPicker({
   return (
     <div className={className}>
       <EntityPicker
+        inputId={inputId}
         label={label}
         items={pickerItems}
         value={selected}

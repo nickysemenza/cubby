@@ -1,53 +1,96 @@
 import type { CalendarRangeInput } from "@cubby/schemas/calendar";
 import type { UserId } from "@cubby/schemas/identifiers";
 
+import type { CalDavCollection } from "~/server/calendar/caldav-types";
 import { calendarFeedStateFor } from "~/server/calendar/client";
 import type { Database } from "~/server/db";
 import { getCalendarRange } from "~/server/repo/calendar";
-export const getCalendarRangeWorkflow = async (
-  db: Database,
-  input: CalendarRangeInput,
-) => await getCalendarRange(db, input);
+import {
+  bindWorkflow,
+  defineWorkflowOperation,
+  workflow,
+} from "~/server/workflow-runtime";
 
-export const getCalendarFeedWorkflow = async (origin: string) => ({
-  token: await (await calendarFeedStateFor(origin)).getToken(),
-});
+type CalendarClient = Awaited<ReturnType<typeof calendarFeedStateFor>>;
 
-export const inspectCalendarFeedWorkflow = async (origin: string) =>
-  await (await calendarFeedStateFor(origin)).inspect();
+/** Calendar application actions share client resolution; the DO retains
+ * protocol state and owns each awaited write's commit boundary. */
+function calendarOperation<Input, Output, Args extends readonly unknown[]>(
+  name: string,
+  kind: "read" | "write",
+  run: (client: CalendarClient, input: Input) => Promise<Output>,
+  prepare: (...args: Args) => { context: string; input: Input },
+) {
+  const graph = workflow<string, Input>(name).call(
+    "client",
+    async ({ context }) => calendarFeedStateFor(context),
+  );
+  const withInvoke =
+    kind === "write"
+      ? graph.commit("invoke", async (_, { input, client }) =>
+          run(client, input),
+        )
+      : graph.call("invoke", async (_, { input, client }) =>
+          run(client, input),
+        );
+  return bindWorkflow(
+    withInvoke.output(({ invoke }) => invoke),
+    prepare,
+  );
+}
 
-export const rotateCalendarFeedWorkflow = async (origin: string) => ({
-  token: await (await calendarFeedStateFor(origin)).rotate(),
-});
-
-export const getCalendarCredentialWorkflow = async (
-  origin: string,
-  userId: UserId,
-) => await (await calendarFeedStateFor(origin)).getCalendarCredential(userId);
-
-export const rotateCalendarCredentialWorkflow = async (
-  origin: string,
-  userId: UserId,
-) =>
-  await (await calendarFeedStateFor(origin)).rotateCalendarCredential(userId);
-
-export const revokeCalendarCredentialWorkflow = async (
-  origin: string,
-  userId: UserId,
-) => {
-  await (await calendarFeedStateFor(origin)).revokeCalendarCredential(userId);
-  return { revoked: true };
-};
-
-export const clearCalendarUncertainWriteWorkflow = async (
-  origin: string,
-  input: {
-    collection: import("~/server/calendar/caldav-types").CalDavCollection;
-    filename: string;
+export const getCalendarRangeWorkflow = defineWorkflowOperation(
+  "calendar.range",
+  (db: Database, input: CalendarRangeInput) => getCalendarRange(db, input),
+);
+export const getCalendarFeedWorkflow = calendarOperation(
+  "calendar.feed",
+  "read",
+  async (client) => ({ token: await client.getToken() }),
+  (origin: string) => ({ context: origin, input: undefined }),
+);
+export const inspectCalendarFeedWorkflow = calendarOperation(
+  "calendar.feed.inspect",
+  "read",
+  (client) => client.inspect(),
+  (origin: string) => ({ context: origin, input: undefined }),
+);
+export const rotateCalendarFeedWorkflow = calendarOperation(
+  "calendar.feed.rotate",
+  "write",
+  async (client) => ({ token: await client.rotate() }),
+  (origin: string) => ({ context: origin, input: undefined }),
+);
+export const getCalendarCredentialWorkflow = calendarOperation(
+  "calendar.credential.get",
+  "read",
+  (client, userId: UserId) => client.getCalendarCredential(userId),
+  (origin: string, userId: UserId) => ({ context: origin, input: userId }),
+);
+export const rotateCalendarCredentialWorkflow = calendarOperation(
+  "calendar.credential.rotate",
+  "write",
+  (client, userId: UserId) => client.rotateCalendarCredential(userId),
+  (origin: string, userId: UserId) => ({ context: origin, input: userId }),
+);
+export const revokeCalendarCredentialWorkflow = calendarOperation(
+  "calendar.credential.revoke",
+  "write",
+  async (client, userId: UserId) => {
+    await client.revokeCalendarCredential(userId);
+    return { revoked: true };
   },
-) => {
-  await (
-    await calendarFeedStateFor(origin)
-  ).clearUncertainWrite(input.collection, input.filename);
-  return { cleared: true };
-};
+  (origin: string, userId: UserId) => ({ context: origin, input: userId }),
+);
+export const clearCalendarUncertainWriteWorkflow = calendarOperation(
+  "calendar.uncertainWrite.clear",
+  "write",
+  async (client, input: { collection: CalDavCollection; filename: string }) => {
+    await client.clearUncertainWrite(input.collection, input.filename);
+    return { cleared: true };
+  },
+  (
+    origin: string,
+    input: { collection: CalDavCollection; filename: string },
+  ) => ({ context: origin, input }),
+);

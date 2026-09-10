@@ -8,7 +8,7 @@ import { BookOpen, Link2, Plus, Share2 } from "lucide-react";
 import { listPage } from "~/app/_components/routing/entity-routes";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Button } from "~/components/ui/button";
-import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
+import { entityListLoader } from "~/entities/entity-list-ssr";
 import { recipeListSearchSchema } from "~/entities/list-search";
 import { pageTitle } from "~/lib/page-title";
 
@@ -52,13 +52,7 @@ export const Route = createFileRoute("/_authenticated/recipes/")({
   validateSearch: recipeListSearchSchema,
   search: { middlewares: [stripSearchParams({})] },
   loaderDeps: ({ search }) => search,
-  loader: ({ context, deps, abortController }) =>
-    ensureEntityListSsr({
-      queryClient: context.queryClient,
-      entity: "recipe",
-      search: deps,
-      signal: abortController.signal,
-    }),
+  loader: entityListLoader("recipe"),
   head: () => ({ meta: [{ title: pageTitle("Recipes") }] }),
   component: RecipesPage,
 });

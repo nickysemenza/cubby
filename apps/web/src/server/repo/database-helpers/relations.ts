@@ -207,6 +207,7 @@ export const relations = {
     full: {
       with: {
         product: {
+          where: notDeleted(product),
           with: {
             unitMappings: true,
             externalIds: true,

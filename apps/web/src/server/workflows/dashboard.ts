@@ -1,32 +1,31 @@
-import {
-  type DashboardCountsOut,
-  dashboardCountsOut,
-} from "@cubby/schemas/dashboard";
+import { dashboardCountsOut } from "@cubby/schemas/dashboard";
 
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { getEntityCounts } from "~/server/repo/dashboard";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
-type DashboardCountsReader = Pick<USDAClient, "getCounts">;
-
-/**
- * Shared dashboard workflow for browser Start and in-process callers.
- * USDA is ancillary: local counts remain useful when the bound worker is
- * unavailable.
- */
-export async function getDashboardCounts(options: {
+type DashboardContext = {
   db: Database;
-  usdaClient: DashboardCountsReader;
-}): Promise<DashboardCountsOut> {
-  const [entityCounts, usdaCounts] = await Promise.all([
-    getEntityCounts(options.db),
-    options.usdaClient.getCounts().catch((error) => {
-      console.warn("[dashboard.counts] USDA count unavailable; using 0", error);
-      return null;
-    }),
-  ]);
-  return dashboardCountsOut.parse({
-    ...entityCounts,
-    usdaFoods: usdaCounts?.usda_food ?? 0,
-  });
-}
+  usdaClient: Pick<USDAClient, "getCounts">;
+};
+
+export const getDashboardCounts = bindWorkflow(
+  workflow<DashboardContext, void>("dashboard.counts")
+    .parallel("counts", 2, {
+      local: ({ context }) => getEntityCounts(context.db),
+      usda: ({ context }) =>
+        context.usdaClient.getCounts().catch((error) => {
+          // USDA is ancillary: local counts remain useful when its worker is unavailable.
+          console.warn(
+            "[dashboard.counts] USDA count unavailable; using 0",
+            error,
+          );
+          return null;
+        }),
+    })
+    .output(({ counts: { local, usda } }) =>
+      dashboardCountsOut.parse({ ...local, usdaFoods: usda?.usda_food ?? 0 }),
+    ),
+  (context: DashboardContext) => ({ context, input: undefined }),
+);

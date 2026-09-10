@@ -12,7 +12,6 @@ import { type FC, useState } from "react";
 
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { OrderIdLink } from "~/app/_components/OrderIdLink";
-import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -22,6 +21,7 @@ import { Description } from "~/components/ui/description";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { EntityBasicInfo } from "~/entities/entity-display";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { formatCurrency } from "~/lib/utils";
 
@@ -81,17 +81,16 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
 
   const status = purchaseReconciliationStatus(purchase);
 
-  const fields: BasicInfoField[] = [
-    {
-      label: "Vendor",
+  const overrides = {
+    vendorId: (record: PurchaseOut) => ({
       value: (
         <EditableEntityCell
           value={
-            purchase.vendorId && purchase.vendorName
+            record.vendorId && record.vendorName
               ? {
-                  id: purchase.vendorId,
-                  shortcode: purchase.vendorId,
-                  name: purchase.vendorName,
+                  id: record.vendorId,
+                  shortcode: record.vendorId,
+                  name: record.vendorName,
                 }
               : null
           }
@@ -100,7 +99,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           onSave={async (vendorId) => {
             if (!vendorId) return;
             await updateMutation.mutateAsync({
-              id: purchase.id,
+              id: record.id,
               data: { vendorId },
             });
           }}
@@ -110,10 +109,7 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
               <EntityInlineLink
                 displayImage={undefined}
                 entity="vendor"
-                data={{
-                  id: value.id,
-                  name: value.name,
-                }}
+                data={{ id: value.id, name: value.name }}
                 compact
               />
             ) : (
@@ -122,23 +118,22 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           }
         />
       ),
-      filterAction: purchase.vendorId ? (
+      filterAction: record.vendorId ? (
         <EntityFilterLink
           to="/purchases"
-          search={{ vendor: purchase.vendorId }}
-          label={`Show all purchases from ${purchase.vendorName ?? "this vendor"}`}
+          search={{ vendor: record.vendorId }}
+          label={`Show all purchases from ${record.vendorName ?? "this vendor"}`}
         />
       ) : undefined,
-    },
-    {
-      label: "Order #",
+    }),
+    orderId: (record: PurchaseOut) => ({
       value: (
         <EditableCell
-          value={purchase.orderId}
+          value={record.orderId}
           config={{ type: "text", placeholder: "Vendor order / receipt #" }}
           onSave={async (orderId) => {
             await updateMutation.mutateAsync({
-              id: purchase.id,
+              id: record.id,
               data: { orderId },
             });
           }}
@@ -150,9 +145,9 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
               <Row align="center" gap="xs">
                 <span className="font-mono">{v}</span>
                 <OrderIdLink
-                  orderUrl={purchase.orderUrl}
+                  orderUrl={record.orderUrl}
                   orderId={v}
-                  vendorName={purchase.vendorName}
+                  vendorName={record.vendorName}
                 />
               </Row>
             ) : (
@@ -161,76 +156,72 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
           }
         />
       ),
-    },
-    {
-      label: "Display label",
+    }),
+    displayLabel: (record: PurchaseOut) => ({
       value: (
         <EditableCell
-          value={purchase.displayLabel}
+          value={record.displayLabel}
           config={{
             type: "text",
             placeholder: "e.g. pocket hole jig + bits",
           }}
           onSave={async (displayLabel) => {
             await updateMutation.mutateAsync({
-              id: purchase.id,
+              id: record.id,
               data: { displayLabel },
             });
           }}
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Date",
+    }),
+    date: (record: PurchaseOut) => ({
       value: (
         <EditableCell
-          value={purchase.date}
+          value={record.date}
           config={{ type: "date" }}
           onSave={async (date) => {
             if (date === null) return;
             await updateMutation.mutateAsync({
-              id: purchase.id,
+              id: record.id,
               data: { date },
             });
           }}
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-    {
-      label: "Stated total",
+    }),
+    statedTotal: (record: PurchaseOut) => ({
       value: (
         <EditableCell
-          value={purchase.statedTotal}
+          value={record.statedTotal}
           config={{ type: "currency" }}
           onSave={async (statedTotal) => {
             await updateMutation.mutateAsync({
-              id: purchase.id,
+              id: record.id,
               data: { statedTotal },
             });
           }}
           renderValue={(v) => (v != null ? formatCurrency(v) : <NoneValue />)}
         />
       ),
-    },
-    {
-      label: "Notes",
+    }),
+    notes: (record: PurchaseOut) => ({
       value: (
         <EditableCell
-          value={purchase.notes}
+          value={record.notes}
           config={{ type: "text", multiline: true, rows: 4 }}
           onSave={async (notes) => {
             await updateMutation.mutateAsync({
-              id: purchase.id,
+              id: record.id,
               data: { notes },
             });
           }}
           renderValue={(v) => v ?? <NoneValue />}
         />
       ),
-    },
-  ];
+    }),
+  };
 
   const sections: DetailSection[] = [
     // The lines ARE the purchase's money, so they lead the wide column.
@@ -331,7 +322,13 @@ export const PurchaseDetail: FC<{ purchase: PurchaseOut }> = ({ purchase }) => {
       title: "Overview",
       icon: Info,
       placement: "supporting",
-      content: <BasicInfo fields={fields} />,
+      content: (
+        <EntityBasicInfo
+          entity="purchase"
+          record={purchase}
+          overrides={overrides}
+        />
+      ),
     },
     {
       id: "reconciliation",

@@ -19,6 +19,8 @@ export function FormFieldGroup({
   description,
   error,
   invalid,
+  descriptionId,
+  errorId,
   children,
 }: {
   /** `id` of the control, wired to the label via `htmlFor`. */
@@ -31,6 +33,8 @@ export function FormFieldGroup({
   error?: RHFFieldError;
   /** Drives the `data-invalid` / `aria` invalid styling on the group. */
   invalid?: boolean;
+  descriptionId?: string;
+  errorId?: string;
   children: ReactNode;
 }) {
   return (
@@ -38,9 +42,11 @@ export function FormFieldGroup({
       {label && <FieldLabel htmlFor={htmlFor}>{label}</FieldLabel>}
       {children}
       {description && (
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p id={descriptionId} className="text-xs text-muted-foreground">
+          {description}
+        </p>
       )}
-      {error && <FieldError errors={[error]} />}
+      {error && <FieldError id={errorId} errors={[error]} />}
     </Field>
   );
 }

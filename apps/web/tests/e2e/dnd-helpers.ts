@@ -79,11 +79,13 @@ export async function dragByKeyboard(
 }
 
 /** Synchronize on the gesture's successful mutation; assertions stay UI-only. */
-export function waitForDndMutation(page: Page, _operation: string) {
+export function waitForDndMutation(page: Page, entity: string) {
   return page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       response.url().includes("/_serverFn/") &&
+      response.request().headers()["x-cubby-operation-kind"] === "mutation" &&
+      response.request().headers()["x-cubby-operation-entity"] === entity &&
       response.ok(),
   );
 }

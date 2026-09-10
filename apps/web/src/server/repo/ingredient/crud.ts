@@ -1,10 +1,10 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Ingredient CRUD operations.
  * Core create / update / read-by-id plus the find-or-create and batch
  * resolve-or-create primitives.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   type IngredientId,
   type IngredientShortcode,
@@ -15,16 +15,12 @@ import type {
   ingredientCreateInput,
   ingredientUpdateData,
 } from "@cubby/schemas/ingredient";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ingredient, product } from "~/server/db/schema";
-import {
-  computeChanges,
-  logAuditEntries,
-  logAuditEntry,
-} from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   notDeleted,
   relations,
@@ -33,6 +29,7 @@ import {
   withTransactionOn,
 } from "~/server/repo/database-helpers";
 import { createEntityCrud } from "~/server/repo/entity-crud-factory";
+import { patchEntityRows } from "~/server/repo/entity-patch";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
 import {
   findOrCreateWithShortcode,
@@ -66,7 +63,7 @@ const ingredientCrud = createEntityCrud({
   fetchById: fetchIngredientById,
   fromDB: (db, row: IngredientDeepDB) => dbIngredientToAPI(db, row),
   toUpdate: (data: z.infer<typeof ingredientUpdateData>) => data,
-  auditUpdateFields: ["name", "aliases", "naKinds", "usuallyOnHand"],
+  auditUpdateFields: [...entityFieldModels.ingredient.audit],
 });
 
 export const getIngredientByID = (
@@ -144,52 +141,18 @@ export const updateIngredientsUsuallyOnHand = async (
   data: Pick<z.infer<typeof ingredientUpdateData>, "usuallyOnHand">,
   actor: ActorContext,
 ): Promise<IngredientId[]> => {
-  if (ids.length === 0 || data.usuallyOnHand === undefined) return [];
-  return await withTransactionOn(db, async (tx) => {
-    const before = await tx
-      .select({ id: ingredient.id, usuallyOnHand: ingredient.usuallyOnHand })
-      .from(ingredient)
-      .where(and(inArray(ingredient.id, ids), notDeleted(ingredient)));
-    const changed = before.filter(
-      (row) => row.usuallyOnHand !== data.usuallyOnHand,
-    );
-    if (changed.length > 0) {
-      await tx
-        .update(ingredient)
-        .set({ usuallyOnHand: data.usuallyOnHand })
-        .where(
-          and(
-            inArray(
-              ingredient.id,
-              changed.map((row) => row.id),
-            ),
-            notDeleted(ingredient),
-          ),
-        );
-    }
-    await logAuditEntries(
-      tx,
-      actor,
-      changed.flatMap((row) => {
-        const changes = computeChanges(
-          row,
-          { ...row, usuallyOnHand: data.usuallyOnHand },
-          ["usuallyOnHand"],
-        );
-        return changes
-          ? [
-              {
-                entityType: "ingredient" as const,
-                entityId: row.id,
-                action: "update" as const,
-                changes,
-              },
-            ]
-          : [];
-      }),
-    );
-    return changed.map((row) => row.id);
-  });
+  const updated = await patchEntityRows(
+    db,
+    actor,
+    {
+      entity: "ingredient",
+      table: ingredient,
+      fields: entityFieldModels.ingredient.bulk,
+    },
+    ids,
+    data,
+  );
+  return updated.map((row) => row.id);
 };
 
 export const findOrCreateIngredient = async (

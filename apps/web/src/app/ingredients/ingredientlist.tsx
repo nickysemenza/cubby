@@ -29,6 +29,7 @@ import {
 } from "~/components/ui/tooltip";
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 
@@ -187,54 +188,63 @@ export function IngredientList() {
             },
           }),
         );
-        add(
-          createNameColumn(columnHelper, "ingredient", "name", {
-            // Cap the name (it would otherwise absorb all leftover width under the
-            // fixed layout and leave a big gap); the flex space goes to Recipes +
-            // Product below, whose content actually benefits from it.
-            className: "w-56",
-            editable: {
-              onSave: async (newName, ingredient) => {
-                await updateIngredientMutation.mutateAsync({
-                  id: ingredient.id,
-                  data: { name: newName },
-                });
-              },
-            },
+        createEntityDisplayColumns(
+          "ingredient",
+          columnHelper,
+          createCubbyColumnCollection<IngredientListItem>((add) => {
+            add(
+              createNameColumn(columnHelper, "ingredient", "name", {
+                // Cap the name (it would otherwise absorb all leftover width under the
+                // fixed layout and leave a big gap); the flex space goes to Recipes +
+                // Product below, whose content actually benefits from it.
+                className: "w-56",
+                editable: {
+                  onSave: async (newName, ingredient) => {
+                    await updateIngredientMutation.mutateAsync({
+                      id: ingredient.id,
+                      data: { name: newName },
+                    });
+                  },
+                },
+              }),
+            );
+            add(
+              columnHelper.accessor("aliases", {
+                header: "Aliases",
+                meta: {
+                  className: "w-48",
+                  mobile: { slot: "subtitle", priority: 20 },
+                },
+                cell: (info) => (
+                  <TruncatedList
+                    items={info.getValue()}
+                    maxItems={2}
+                    renderItem={(alias: string) => (
+                      <span key={alias} className="truncate text-xs">
+                        {alias}
+                      </span>
+                    )}
+                  />
+                ),
+              }),
+            );
+            add(
+              columnHelper.accessor("usuallyOnHand", {
+                header: "Usually on hand",
+                meta: {
+                  className: "w-36",
+                  mobile: { slot: "meta", priority: 25 },
+                },
+                cell: (info) =>
+                  info.getValue() ? (
+                    <Badge variant="secondary">Usually on hand</Badge>
+                  ) : (
+                    <NoneValue />
+                  ),
+              }),
+            );
           }),
-        );
-        add(
-          columnHelper.accessor("aliases", {
-            header: "Aliases",
-            meta: {
-              className: "w-48",
-              mobile: { slot: "subtitle", priority: 20 },
-            },
-            cell: (info) => (
-              <TruncatedList
-                items={info.getValue()}
-                maxItems={2}
-                renderItem={(alias: string) => (
-                  <span key={alias} className="truncate text-xs">
-                    {alias}
-                  </span>
-                )}
-              />
-            ),
-          }),
-        );
-        add(
-          columnHelper.accessor("usuallyOnHand", {
-            header: "Usually on hand",
-            meta: { className: "w-36", mobile: { slot: "meta", priority: 25 } },
-            cell: (info) =>
-              info.getValue() ? (
-                <Badge variant="secondary">Usually on hand</Badge>
-              ) : (
-                <NoneValue />
-              ),
-          }),
-        );
+        ).visit(add);
         add(
           columnHelper.accessor("appearsInRecipes", {
             id: "appearsInRecipes",

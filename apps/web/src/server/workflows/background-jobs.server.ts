@@ -12,72 +12,132 @@ import {
   retryBackgroundJob,
   retryFailedJobsForBatch,
 } from "~/server/repo/background-jobs";
+import {
+  bindWorkflow,
+  defineWorkflowOperation,
+  workflow,
+} from "~/server/workflow-runtime";
 
-export const listBackgroundBatchesWorkflow = async (
-  db: Database,
-  input: { limit: number },
-) => await listBackgroundBatches(db, input.limit);
+export const listBackgroundBatchesWorkflow = defineWorkflowOperation(
+  "background-batch.list",
+  (db: Database, input: { limit: number }) =>
+    listBackgroundBatches(db, input.limit),
+);
 
-export const getBackgroundBatchSummaryWorkflow = async (
-  db: Database,
-  input: { batchId: string },
-) => {
-  const batch = await getBackgroundBatchSummary(db, input.batchId);
-  if (!batch) {
-    throw createAppError(
-      "BACKGROUND_BATCH_NOT_FOUND",
-      "Background batch not found",
-    );
-  }
-  return batch;
-};
+type BatchSummaryInput = { batchId: string };
+type BatchInput = { batchId: string };
+type JobInput = { jobId: string };
+type LimitInput = { limit: number };
 
-export const listBackgroundBatchJobsWorkflow = async (
-  db: Database,
-  input: {
-    batchId: string;
-    pageIndex: number;
-    pageSize: number;
-    failedOnly: boolean;
-  },
-) => await listBackgroundBatchJobs(db, input);
+const backgroundBatchSummaryWorkflow = workflow<Database, BatchSummaryInput>(
+  "background-batch.summary",
+)
+  .call("loadSummary", ({ context }, { input }) =>
+    getBackgroundBatchSummary(context, input.batchId),
+  )
+  .call("requireSummary", async (_, { loadSummary }) => {
+    if (!loadSummary)
+      throw createAppError(
+        "BACKGROUND_BATCH_NOT_FOUND",
+        "Background batch not found",
+      );
+    return loadSummary;
+  })
+  .output(({ requireSummary }) => requireSummary);
 
-export const retryBackgroundBatchWorkflow = async (
-  db: Database,
-  input: { batchId: string },
-) => {
-  await retryFailedJobsForBatch(db, input.batchId);
-  await redispatchQueuedBatchJobs(db, input.batchId);
-  return { ok: true as const };
-};
+const retryBackgroundBatchWorkflowDefinition = workflow<Database, BatchInput>(
+  "background-batch.retry",
+)
+  .commit("retryFailed", async ({ context }, { input }) =>
+    retryFailedJobsForBatch(context, input.batchId),
+  )
+  .effect("redispatch", async ({ context }, { input }) =>
+    redispatchQueuedBatchJobs(context, input.batchId),
+  )
+  .output(() => ({ ok: true as const }));
 
-export const retryBackgroundJobWorkflow = async (
-  db: Database,
-  input: { jobId: string },
-) => {
-  const batchId = await retryBackgroundJob(db, input.jobId);
-  if (batchId) await redispatchQueuedBatchJobs(db, batchId);
-  return { ok: true as const };
-};
+const retryBackgroundJobWorkflowDefinition = workflow<Database, JobInput>(
+  "background-job.retry",
+)
+  .commit("retry", async ({ context }, { input }) =>
+    retryBackgroundJob(context, input.jobId),
+  )
+  .effect("redispatchIfRetried", async ({ context }, { retry }) => {
+    if (retry) await redispatchQueuedBatchJobs(context, retry);
+  })
+  .output(() => ({ ok: true as const }));
 
-export const cancelBackgroundBatchWorkflow = async (
-  db: Database,
-  input: { batchId: string },
-) => {
-  await cancelQueuedJobsForBatch(db, input.batchId);
-  return { ok: true as const };
-};
+const cancelBackgroundBatchWorkflowDefinition = workflow<Database, BatchInput>(
+  "background-batch.cancel",
+)
+  .commit("cancel", async ({ context }, { input }) => {
+    await cancelQueuedJobsForBatch(context, input.batchId);
+    return { ok: true as const };
+  })
+  .output(({ cancel }) => cancel);
 
-export const drainBackgroundJobsWorkflow = async (
-  db: Database,
-  input: { limit: number },
-) => await drainQueuedBackgroundJobs(db, input.limit);
+const countStrandedBackgroundJobsWorkflowDefinition = workflow<
+  Database,
+  undefined
+>("background-job.strandedCount")
+  .call("count", async ({ context }) => ({
+    abandoned: await countAbandonedStrandedJobs(context),
+  }))
+  .output(({ count }) => count);
 
-export const countStrandedBackgroundJobsWorkflow = async (db: Database) => ({
-  abandoned: await countAbandonedStrandedJobs(db),
-});
+const clearStrandedBackgroundJobsWorkflowDefinition = workflow<
+  Database,
+  LimitInput
+>("background-job.clearStranded")
+  .commit("clear", ({ context }, { input }) =>
+    cancelAbandonedStrandedJobs(context, input.limit),
+  )
+  .output(({ clear }) => clear);
 
-export const clearStrandedBackgroundJobsWorkflow = async (
-  db: Database,
-  input: { limit: number },
-) => await cancelAbandonedStrandedJobs(db, input.limit);
+export const getBackgroundBatchSummaryWorkflow = bindWorkflow(
+  backgroundBatchSummaryWorkflow,
+  (db: Database, input: BatchSummaryInput) => ({ context: db, input }),
+);
+export const listBackgroundBatchJobsWorkflow = defineWorkflowOperation(
+  "background-batch.jobs",
+  listBackgroundBatchJobs,
+);
+export const retryBackgroundBatchWorkflow = bindWorkflow(
+  retryBackgroundBatchWorkflowDefinition,
+  (db: Database, input: BatchInput) => ({
+    context: db,
+    input,
+  }),
+);
+export const retryBackgroundJobWorkflow = bindWorkflow(
+  retryBackgroundJobWorkflowDefinition,
+  (db: Database, input: JobInput) => ({ context: db, input }),
+);
+export const cancelBackgroundBatchWorkflow = bindWorkflow(
+  cancelBackgroundBatchWorkflowDefinition,
+  (db: Database, input: BatchInput) => ({
+    context: db,
+    input,
+  }),
+);
+export const drainBackgroundJobsWorkflow = bindWorkflow(
+  drainQueuedBackgroundJobs.definition,
+  (db: Database, input: LimitInput) => ({
+    context: db,
+    input,
+  }),
+);
+export const countStrandedBackgroundJobsWorkflow = bindWorkflow(
+  countStrandedBackgroundJobsWorkflowDefinition,
+  (db: Database) => ({
+    context: db,
+    input: undefined,
+  }),
+);
+export const clearStrandedBackgroundJobsWorkflow = bindWorkflow(
+  clearStrandedBackgroundJobsWorkflowDefinition,
+  (db: Database, input: LimitInput) => ({
+    context: db,
+    input,
+  }),
+);

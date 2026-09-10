@@ -31,92 +31,120 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
-export async function linkExpensesToPurchaseWorkflow(
-  ctx: EntityKernelContext,
-  input: typeof linkExpensesToPurchaseInput._output,
-) {
-  const result = await linkExpensesToPurchase(ctx.db, input, ctx.actorContext);
-  const resolvedIds = await resolveAllPresent(
-    ctx.db,
-    "expense",
-    input.expenseIds,
-  );
-  await runMutationSideEffectsForEntities(
-    ctx.db,
-    resolvedIds.map((entityId) => ({
-      action: "updated" as const,
-      entity: { entity: "expense" as const, id: entityId },
-      source: "purchase.link",
-    })),
-  );
-  return result;
-}
+export const linkExpensesToPurchaseWorkflow = bindWorkflow(
+  workflow<EntityKernelContext, typeof linkExpensesToPurchaseInput._output>(
+    "purchase.link",
+  )
+    .commit("link", ({ context }, { input }) =>
+      linkExpensesToPurchase(context.db, input, context.actorContext),
+    )
+    .effect("expenseIds", ({ context }, { input }) =>
+      resolveAllPresent(context.db, "expense", input.expenseIds),
+    )
+    .effect("effects", ({ context }, { expenseIds }) =>
+      runMutationSideEffectsForEntities(
+        context.db,
+        expenseIds.map((entityId) => ({
+          action: "updated" as const,
+          entity: { entity: "expense" as const, id: entityId },
+          source: "purchase.link",
+        })),
+      ),
+    )
+    .output(({ link }) => link),
+  (
+    ctx: EntityKernelContext,
+    input: typeof linkExpensesToPurchaseInput._output,
+  ) => ({ context: ctx, input }),
+);
 
-export async function splitExpenseWorkflow(
-  ctx: EntityKernelContext,
-  input: typeof splitExpenseInput._output,
-) {
-  const { items, priceAffectedProductIds } = await splitExpense(
-    ctx.db,
-    input,
-    ctx.actorContext,
-  );
-  const originalRef = await resolveShortcode(ctx.db, input.expenseId);
-  const newIds = await resolveAllPresent(
-    ctx.db,
-    "expense",
-    items.map((item) => item.id),
-  );
-  await runMutationSideEffectsForEntities(ctx.db, [
-    ...(originalRef?.entity === "expense"
-      ? [
-          {
-            action: "deleted" as const,
-            entity: {
-              entity: "expense" as const,
-              id: parseEntityId("expense", originalRef.id),
-            },
+export const splitExpenseWorkflow = bindWorkflow(
+  workflow<EntityKernelContext, typeof splitExpenseInput._output>(
+    "purchase.split",
+  )
+    .commit("split", ({ context }, { input }) =>
+      splitExpense(context.db, input, context.actorContext),
+    )
+    .effect("references", async ({ context }, { input, split }) => {
+      const originalRef = await resolveShortcode(context.db, input.expenseId);
+      const newIds = await resolveAllPresent(
+        context.db,
+        "expense",
+        split.items.map((item) => item.id),
+      );
+      return { originalRef, newIds };
+    })
+    .effect(
+      "effects",
+      async ({ context }, { references: { originalRef, newIds } }) => {
+        await runMutationSideEffectsForEntities(context.db, [
+          ...(originalRef?.entity === "expense"
+            ? [
+                {
+                  action: "deleted" as const,
+                  entity: {
+                    entity: "expense" as const,
+                    id: parseEntityId("expense", originalRef.id),
+                  },
+                  source: "purchase.split",
+                },
+              ]
+            : []),
+          ...newIds.map((entityId) => ({
+            action: "created" as const,
+            entity: { entity: "expense" as const, id: entityId },
             source: "purchase.split",
-          },
-        ]
-      : []),
-    ...newIds.map((entityId) => ({
-      action: "created" as const,
-      entity: { entity: "expense" as const, id: entityId },
-      source: "purchase.split",
-    })),
-  ]);
-  if (priceAffectedProductIds.length > 0) {
-    await recomputeRecipesForPriceAffectedProducts(
-      ctx.db,
-      ctx.services.recipeCosting,
-      priceAffectedProductIds,
-      "purchase.split",
-    );
-  }
-  return items;
-}
+          })),
+        ]);
+      },
+    )
+    .effect("pricing", async ({ context }, { split }) => {
+      if (split.priceAffectedProductIds.length > 0) {
+        await recomputeRecipesForPriceAffectedProducts(
+          context.db,
+          context.services.recipeCosting,
+          split.priceAffectedProductIds,
+          "purchase.split",
+        );
+      }
+    })
+    .output(({ split }) => split.items),
+  (ctx: EntityKernelContext, input: typeof splitExpenseInput._output) => ({
+    context: ctx,
+    input,
+  }),
+);
 
-export async function mergePurchasesWorkflow(
-  ctx: EntityKernelContext,
-  input: typeof mergePurchasesInput._output,
-) {
-  const output = await mergePurchases(ctx.db, input, ctx.actorContext);
-  const entityId = await resolveLiveShortcode(
-    ctx.db,
-    output.purchase.id,
-    "purchase",
-  );
-  if (entityId) {
-    await runMutationSideEffects(ctx.db, {
-      action: "updated",
-      entity: { entity: "purchase", id: parseEntityId("purchase", entityId) },
-      source: "purchase.merge",
-    });
-  }
-  return output;
-}
+export const mergePurchasesWorkflow = bindWorkflow(
+  workflow<EntityKernelContext, typeof mergePurchasesInput._output>(
+    "purchase.merge",
+  )
+    .commit("merge", ({ context }, { input }) =>
+      mergePurchases(context.db, input, context.actorContext),
+    )
+    .effect("entityId", ({ context }, { merge }) =>
+      resolveLiveShortcode(context.db, merge.purchase.id, "purchase"),
+    )
+    .effect("effects", async ({ context }, { entityId }) =>
+      entityId
+        ? runMutationSideEffects(context.db, {
+            action: "updated",
+            entity: {
+              entity: "purchase",
+              id: parseEntityId("purchase", entityId),
+            },
+            source: "purchase.merge",
+          })
+        : null,
+    )
+    .output(({ merge }) => merge),
+  (ctx: EntityKernelContext, input: typeof mergePurchasesInput._output) => ({
+    context: ctx,
+    input,
+  }),
+);
 
 async function resolvePurchaseProductIds(
   ctx: EntityKernelContext,
@@ -129,36 +157,63 @@ async function resolvePurchaseProductIds(
   return { purchaseId, productIds };
 }
 
-export async function purchaseProductsWorkflow(
-  ctx: EntityKernelContext,
-  input: typeof purchaseProductsInput._output,
-) {
-  const ids = await resolvePurchaseProductIds(ctx, input);
-  return listPurchaseProducts(ctx.readDb, ids.purchaseId);
-}
+export const purchaseProductsWorkflow = bindWorkflow(
+  workflow<EntityKernelContext, typeof purchaseProductsInput._output>(
+    "purchase.products",
+  )
+    .call("ids", async ({ context }, { input }) =>
+      resolvePurchaseProductIds(context, input),
+    )
+    .call("products", async ({ context }, { ids }) =>
+      listPurchaseProducts(context.readDb, ids.purchaseId),
+    )
+    .output(({ products }) => products),
+  (ctx: EntityKernelContext, input: typeof purchaseProductsInput._output) => ({
+    context: ctx,
+    input,
+  }),
+);
 
-export async function attachPurchaseProductsWorkflow(
-  ctx: EntityKernelContext,
-  input: typeof purchaseProductMutationInput._output,
-) {
-  const ids = await resolvePurchaseProductIds(ctx, input);
-  return attachPurchaseProducts(
-    ctx.db,
-    ids.purchaseId,
-    ids.productIds,
-    ctx.actorContext,
-  );
-}
+export const attachPurchaseProductsWorkflow = bindWorkflow(
+  workflow<EntityKernelContext, typeof purchaseProductMutationInput._output>(
+    "purchase.attachProducts",
+  )
+    .call("ids", ({ context }, { input }) =>
+      resolvePurchaseProductIds(context, input),
+    )
+    .commit("attach", ({ context }, { ids }) =>
+      attachPurchaseProducts(
+        context.db,
+        ids.purchaseId,
+        ids.productIds,
+        context.actorContext,
+      ),
+    )
+    .output(({ attach }) => attach),
+  (
+    ctx: EntityKernelContext,
+    input: typeof purchaseProductMutationInput._output,
+  ) => ({ context: ctx, input }),
+);
 
-export async function detachPurchaseProductsWorkflow(
-  ctx: EntityKernelContext,
-  input: typeof purchaseProductMutationInput._output,
-) {
-  const ids = await resolvePurchaseProductIds(ctx, input);
-  return detachPurchaseProducts(
-    ctx.db,
-    ids.purchaseId,
-    ids.productIds,
-    ctx.actorContext,
-  );
-}
+export const detachPurchaseProductsWorkflow = bindWorkflow(
+  workflow<EntityKernelContext, typeof purchaseProductMutationInput._output>(
+    "purchase.detachProducts",
+  )
+    .call("ids", ({ context }, { input }) =>
+      resolvePurchaseProductIds(context, input),
+    )
+    .commit("detach", ({ context }, { ids }) =>
+      detachPurchaseProducts(
+        context.db,
+        ids.purchaseId,
+        ids.productIds,
+        context.actorContext,
+      ),
+    )
+    .output(({ detach }) => detach),
+  (
+    ctx: EntityKernelContext,
+    input: typeof purchaseProductMutationInput._output,
+  ) => ({ context: ctx, input }),
+);

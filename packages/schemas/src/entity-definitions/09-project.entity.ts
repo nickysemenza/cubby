@@ -1,0 +1,924 @@
+import { defineEntity } from "./definition.js";
+import { plainDate } from "@cubby/schemas/base-entity";
+import { projectShortcode } from "../identifier-fields.js";
+import { positiveMoneyNullable } from "@cubby/schemas/money";
+import {
+  googleDriveFolderUrl,
+  notionPageUrl,
+  projectKindSchema,
+  projectStatusSchema,
+} from "@cubby/schemas/project-fields";
+import {
+  projectDateWindow,
+  projectRollup,
+} from "@cubby/schemas/project-output-fields";
+import { oneOrMany } from "@cubby/schemas/pagination";
+import { z } from "zod";
+export const filterSchemas = {
+  search: z.string().optional(),
+  status: oneOrMany(projectStatusSchema).optional(),
+  kind: oneOrMany(projectKindSchema).optional(),
+  location: oneOrMany(z.string())
+    .optional()
+    .describe("Any exact match against locations[]"),
+};
+export default defineEntity({
+  key: "project",
+  names: { singular: "Project", plural: "Projects" },
+  route: { basePath: "projects" },
+  table: "Project",
+  identifiers: { brand: "ProjectId", shortcode: "PRJ-", legacy: null },
+  presentation: { titleField: "name" },
+  model: {
+    fields: [
+      {
+        key: "name",
+        kind: "text",
+        control: { kind: "text" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 10,
+          detailSection: "overview",
+          standard: "name",
+        },
+        validation: {
+          read: z.string().min(1),
+          create: z.string().min(1),
+          update: z.string().min(1).optional(),
+        },
+      },
+      {
+        key: "status",
+        kind: "enum",
+        control: { kind: "select" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 30,
+          detailSection: "overview",
+        },
+        validation: {
+          read: projectStatusSchema,
+          create: projectStatusSchema.default("planning"),
+          update: projectStatusSchema.optional(),
+        },
+      },
+      {
+        key: "kind",
+        kind: "enum",
+        nullable: true,
+        control: { kind: "select" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 40,
+          detailSection: "overview",
+        },
+        validation: {
+          read: projectKindSchema.nullable(),
+          create: projectKindSchema.nullable().default(null),
+          update: projectKindSchema.nullable().optional(),
+        },
+      },
+      {
+        key: "locations",
+        kind: "text-array",
+        control: { kind: "specialized", renderer: "tag-list" },
+        display: { detail: true, detailOrder: 90, detailSection: "overview" },
+        validation: {
+          read: z.array(z.string()).describe("House/site names, free-form"),
+          create: z.array(z.string()).default([]),
+          update: z.array(z.string()).optional(),
+        },
+      },
+      {
+        key: "costEstimate",
+        kind: "number",
+        nullable: true,
+        label: "Estimate",
+        control: { kind: "number", renderer: "money" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 70,
+          detailSection: "overview",
+        },
+        validation: {
+          read: positiveMoneyNullable
+            .describe("Budget estimate in dollars")
+            .nullable(),
+          create: positiveMoneyNullable.default(null),
+          update: positiveMoneyNullable.optional(),
+        },
+      },
+      {
+        key: "parentProjectId",
+        kind: "identifier",
+        nullable: true,
+        label: "Parent project",
+        reference: { entity: "project" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 80,
+          detailSection: "overview",
+        },
+        validation: {
+          read: projectShortcode.nullable(),
+          create: projectShortcode.nullable().default(null),
+          update: projectShortcode.nullable().optional(),
+        },
+      },
+      {
+        key: "startDate",
+        kind: "date",
+        nullable: true,
+        label: "Start date",
+        control: { kind: "date", section: "schedule" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 50,
+          detailSection: "overview",
+        },
+        validation: {
+          read: plainDate
+            .describe("Manual start override; usually null")
+            .nullable(),
+          create: plainDate.nullable().default(null),
+          update: plainDate.nullable().optional(),
+        },
+      },
+      {
+        key: "endDate",
+        kind: "date",
+        nullable: true,
+        label: "End date",
+        control: { kind: "date", section: "schedule" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 60,
+          detailSection: "overview",
+        },
+        validation: {
+          read: plainDate
+            .describe("Manual end override; usually null")
+            .nullable(),
+          create: plainDate.nullable().default(null),
+          update: plainDate.nullable().optional(),
+        },
+      },
+      {
+        key: "icon",
+        kind: "text",
+        nullable: true,
+        control: { kind: "text", section: "details" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 20,
+          detailSection: "overview",
+        },
+        validation: {
+          read: z.string().describe("Emoji shown next to the name").nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
+        },
+      },
+      {
+        key: "notes",
+        kind: "text",
+        nullable: true,
+        control: { kind: "textarea", section: "details" },
+        display: { list: true },
+        validation: {
+          read: z.string().describe("Freeform markdown").nullable(),
+          create: z.string().nullable().default(null),
+          update: z.string().nullable().optional(),
+        },
+      },
+      {
+        key: "googleDriveFolderUrl",
+        kind: "text",
+        nullable: true,
+        label: "Google Drive folder",
+        control: { kind: "text", renderer: "url", section: "details" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 10,
+          detailSection: "resources",
+        },
+        validation: {
+          read: googleDriveFolderUrl,
+          create: googleDriveFolderUrl.default(null),
+          update: googleDriveFolderUrl.optional(),
+        },
+      },
+      {
+        key: "notionPageUrl",
+        kind: "text",
+        nullable: true,
+        label: "Notion page",
+        control: { kind: "text", renderer: "url", section: "details" },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 20,
+          detailSection: "resources",
+        },
+        validation: {
+          read: notionPageUrl,
+          create: notionPageUrl.default(null),
+          update: notionPageUrl.optional(),
+        },
+      },
+      {
+        key: "blockedByIds",
+        kind: "identifier",
+        label: "Blocked By IDs",
+        reference: { entity: "task", multiple: true },
+        control: { kind: "specialized", renderer: "entity-multi-select" },
+        display: { list: true },
+        validation: {
+          read: z.array(projectShortcode),
+          create: null,
+          update: z
+            .array(projectShortcode)
+            .describe("Full replacement set of blocking-project ids")
+            .optional(),
+        },
+      },
+      {
+        key: "id",
+        kind: "identifier",
+        validation: {
+          read: projectShortcode,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "parentProjectName",
+        kind: "text",
+        nullable: true,
+        display: { list: true },
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "childProjectIds",
+        kind: "identifier",
+        label: "Child Project IDs",
+        reference: { entity: "project", multiple: true },
+        display: { list: true },
+        validation: {
+          read: z.array(projectShortcode),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "blockingIds",
+        kind: "identifier",
+        label: "Blocking IDs",
+        reference: { entity: "task", multiple: true },
+        display: { list: true },
+        validation: {
+          read: z.array(projectShortcode),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "updatedAt",
+        kind: "timestamp",
+        label: "Last updated",
+        display: { detail: true, detailOrder: 100, detailSection: "overview" },
+        validation: {
+          read: z.date(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "rollup",
+        kind: "json",
+        validation: {
+          read: projectRollup,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "dates",
+        kind: "json",
+        validation: {
+          read: projectDateWindow,
+          create: null,
+          update: null,
+        },
+      },
+      { key: "shortcode", kind: "text", readKey: null },
+      {
+        key: "notionPageId",
+        kind: "text",
+        nullable: true,
+        label: "Notion Page ID",
+        readKey: null,
+      },
+      { key: "deletedAt", kind: "timestamp", nullable: true, readKey: null },
+    ],
+    storage: [
+      { key: "id", default: "generated", specialized: "primary-key:ProjectId" },
+      { key: "shortcode", specialized: "shortcode" },
+      "name",
+      {
+        key: "status",
+        default: "literal",
+        defaultValue: "'planning'",
+        specialized: "enum:status",
+      },
+      { key: "kind", specialized: "enum:kind" },
+      {
+        key: "locations",
+        default: "literal",
+        defaultValue: "'{}'::text[]",
+        specialized: "text-array",
+      },
+      { key: "costEstimate", specialized: "double-precision" },
+      { key: "parentProjectId", reference: "project" },
+      "startDate",
+      "endDate",
+      "icon",
+      "notes",
+      "googleDriveFolderUrl",
+      "notionPageUrl",
+      "notionPageId",
+      { key: "createdAt", default: "now" },
+      { key: "updatedAt", default: "now", specialized: "updated-at" },
+      "deletedAt",
+    ],
+    create: [
+      "name",
+      "status",
+      "kind",
+      "locations",
+      "costEstimate",
+      "parentProjectId",
+      "startDate",
+      "endDate",
+      "icon",
+      "notes",
+      "googleDriveFolderUrl",
+      "notionPageUrl",
+    ],
+    update: [
+      "name",
+      "status",
+      "kind",
+      "locations",
+      "costEstimate",
+      "parentProjectId",
+      "startDate",
+      "endDate",
+      "icon",
+      "notes",
+      "googleDriveFolderUrl",
+      "notionPageUrl",
+      "blockedByIds",
+    ],
+    bulk: [],
+    audit: [
+      "name",
+      "status",
+      "kind",
+      "locations",
+      "costEstimate",
+      "parentProjectId",
+      "startDate",
+      "endDate",
+      "icon",
+      "notes",
+      "googleDriveFolderUrl",
+      "notionPageUrl",
+    ],
+    output: [
+      "id",
+      "name",
+      "status",
+      "kind",
+      "locations",
+      "costEstimate",
+      "parentProjectId",
+      "startDate",
+      "endDate",
+      "icon",
+      "notes",
+      "googleDriveFolderUrl",
+      "notionPageUrl",
+      "parentProjectName",
+      "childProjectIds",
+      "blockedByIds",
+      "blockingIds",
+      "createdAt",
+      "updatedAt",
+      "rollup",
+      "dates",
+    ],
+  },
+  fields: {
+    create: { module: "@cubby/schemas/project", export: "projectCreateInput" },
+    update: { module: "@cubby/schemas/project", export: "projectUpdateData" },
+    output: { module: "@cubby/schemas/project", export: "projectOut" },
+  },
+  filters: {
+    audit: true,
+    schema: { module: "@cubby/schemas/project", export: "projectFilterFields" },
+    descriptors: [
+      {
+        columnId: "image",
+        field: "imagePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter images...",
+        options: [
+          { value: "has", label: "Has image", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "name",
+        field: "search",
+        kind: "text",
+        placeholder: "Filter by project name...",
+        deriveSchema: true,
+      },
+      {
+        columnId: "status",
+        urlKey: "statuses",
+        kind: "multiselect",
+        placeholder: "Filter by status...",
+        deriveSchema: true,
+        options: [
+          { value: "planning", label: "Planning", color: "var(--chart-5)" },
+          {
+            value: "not_started",
+            label: "Not started",
+            color: "var(--chart-neutral)",
+          },
+          {
+            value: "in_progress",
+            label: "In progress",
+            color: "var(--chart-1)",
+          },
+          { value: "done", label: "Done", color: "var(--chart-positive)" },
+        ],
+      },
+      {
+        columnId: "kind",
+        urlKey: "kinds",
+        kind: "multiselect",
+        placeholder: "Filter by kind...",
+        deriveSchema: true,
+        options: [
+          { value: "furniture", label: "Furniture" },
+          { value: "workshop", label: "Workshop" },
+          { value: "household", label: "Household" },
+          { value: "renovation", label: "Renovation" },
+          { value: "garden", label: "Garden" },
+          { value: "trip", label: "Trip" },
+        ],
+      },
+      {
+        columnId: "attention",
+        kind: "select",
+        placeholder: "Filter tracker attention...",
+        options: [
+          { value: "stalled", label: "Stalled" },
+          { value: "missing_budget", label: "Missing budget" },
+          {
+            value: "blocked_no_next_action",
+            label: "Blocked with no next action",
+          },
+        ],
+      },
+      {
+        columnId: "locations",
+        field: "location",
+        urlKey: "locations",
+        kind: "multiselect",
+        placeholder: "Filter by location...",
+        deriveSchema: true,
+        schemaDescription: "Any exact match against locations[]",
+        optionsKey: "projectLocations",
+      },
+      {
+        columnId: "dateRange",
+        urlKey: "date",
+        kind: "range",
+        placeholder: "Filter by project activity...",
+        options: [
+          { value: "30d", label: "Last 30 days" },
+          { value: "90d", label: "Last 90 days" },
+          { value: "ytd", label: "Year to date" },
+          { value: "1y", label: "Last 12 months" },
+        ],
+        expandRef: {
+          module: "~/app/expenses/expense-options",
+          export: "resolveDateRange",
+        },
+        urlOnly: true,
+      },
+      {
+        columnId: "completionYear",
+        urlKey: "completed",
+        kind: "select",
+        placeholder: "Filter by completion year...",
+        optionsKey: "projectCompletionYears",
+        urlOnly: true,
+      },
+      {
+        columnId: "parent",
+        field: "parentProjectId",
+        kind: "idMulti",
+        placeholder: "Filter by parent project...",
+        optionsKey: "project",
+        brandRef: { entity: "project", kind: "id" },
+        nullable: {
+          field: "parentProjectPresenceFilter",
+          label: "parent project",
+        },
+      },
+      {
+        columnId: "related:project.blockedBy",
+        field: "projectSearch",
+        urlKey: "related-project",
+        kind: "text",
+        placeholder: "Search related blocked by...",
+      },
+      {
+        columnId: "projectId",
+        kind: "idMulti",
+        placeholder: "Filter by related blocked by id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "projectPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related blocked by presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:project.tasks",
+        field: "taskSearch",
+        urlKey: "related-task",
+        kind: "text",
+        placeholder: "Search related tasks...",
+      },
+      {
+        columnId: "taskId",
+        kind: "idMulti",
+        placeholder: "Filter by related tasks id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "taskPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related tasks presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:project.expenses",
+        field: "expenseSearch",
+        urlKey: "related-expense",
+        kind: "text",
+        placeholder: "Search related expenses...",
+      },
+      {
+        columnId: "expenseId",
+        kind: "idMulti",
+        placeholder: "Filter by related expenses id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "expensePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related expenses presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:project.taskProducts",
+        field: "taskProductSearch",
+        urlKey: "related-taskProduct",
+        kind: "text",
+        placeholder: "Search related task products...",
+      },
+      {
+        columnId: "taskProductId",
+        kind: "idMulti",
+        placeholder: "Filter by related task products id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "taskProductPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related task products presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:project.purchasedProducts",
+        field: "purchasedProductSearch",
+        urlKey: "related-purchasedProduct",
+        kind: "text",
+        placeholder: "Search related purchased products...",
+      },
+      {
+        columnId: "purchasedProductId",
+        kind: "idMulti",
+        placeholder: "Filter by related purchased products id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "purchasedProductPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related purchased products presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:project.usedTools",
+        field: "usedToolSearch",
+        urlKey: "related-usedTool",
+        kind: "text",
+        placeholder: "Search related reusable resources...",
+      },
+      {
+        columnId: "usedToolId",
+        kind: "idMulti",
+        placeholder: "Filter by related reusable resources id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "usedToolPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related reusable resources presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:project.vendors",
+        field: "vendorSearch",
+        urlKey: "related-vendor",
+        kind: "text",
+        placeholder: "Search related vendors...",
+      },
+      {
+        columnId: "vendorId",
+        kind: "idMulti",
+        placeholder: "Filter by related vendors id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "vendorPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related vendors presence...",
+        urlOnly: true,
+      },
+    ],
+  },
+  relations: [
+    {
+      key: "parent",
+      label: "Parent project",
+      target: "project",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Project.parentProjectId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Project.parentProjectId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "blocked-by",
+      label: "Blocked by",
+      target: "project",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "ProjectDependency.projectId", direction: "incoming" },
+          {
+            edge: "ProjectDependency.blockedByProjectId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "ProjectDependency.blockedByProjectId",
+            direction: "incoming",
+          },
+          { edge: "ProjectDependency.projectId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "resources",
+      label: "Reusable resources",
+      target: "product",
+      cardinality: "many",
+      sourceKey: "explicit",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "ProjectToolUsage.projectId", direction: "incoming" },
+          { edge: "ProjectToolUsage.productId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "ProjectToolUsage.productId", direction: "incoming" },
+          { edge: "ProjectToolUsage.projectId", direction: "outgoing" },
+        ],
+      },
+      mutation: {
+        source: "explicit",
+        itemSchema: {
+          module: "@cubby/schemas/common",
+          export: "entityRelationReferenceItemSchema",
+        },
+        adapter: {
+          module: "~/server/repo/project/tools",
+          export: "projectResourcesRelationAdapter",
+        },
+        audiences: ["browser", "mcp"],
+      },
+    },
+    {
+      key: "tasks",
+      label: "Tasks",
+      target: "task",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Task.projectId", direction: "incoming" }],
+      },
+      inverse: { steps: [{ edge: "Task.projectId", direction: "outgoing" }] },
+    },
+    {
+      key: "expenses",
+      label: "Expenses",
+      target: "expense",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Expense.projectId", direction: "incoming" }],
+      },
+      inverse: {
+        steps: [{ edge: "Expense.projectId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "task-products",
+      label: "Task products",
+      target: "product",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Task.projectId", direction: "incoming" },
+          { edge: "Task.subjectProductId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Task.subjectProductId", direction: "incoming" },
+          { edge: "Task.projectId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "purchased-products",
+      label: "Purchased products",
+      target: "product",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Expense.projectId", direction: "incoming" },
+          { edge: "Expense.productId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Expense.productId", direction: "incoming" },
+          { edge: "Expense.projectId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "vendors",
+      label: "Vendors",
+      target: "vendor",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "Expense.projectId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "outgoing" },
+          { edge: "Purchase.vendorId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "Purchase.vendorId", direction: "incoming" },
+          { edge: "Expense.purchaseId", direction: "incoming" },
+          { edge: "Expense.projectId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "images",
+      label: "Images",
+      target: "image",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "ProjectImage.projectId", direction: "incoming" },
+          { edge: "ProjectImage.imageId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "ProjectImage.imageId", direction: "incoming" },
+          { edge: "ProjectImage.projectId", direction: "outgoing" },
+        ],
+      },
+    },
+  ],
+  search: { enabled: true },
+  capabilities: {
+    auditable: true,
+    images: true,
+    countable: true,
+    softDelete: true,
+    delete: { mode: "soft", bulk: true },
+    bulkUpdate: null,
+    merge: false,
+    operationOwners: { delete: "kernel", merge: null },
+    mcp: ["get", "list", "search", "create", "update", "delete"],
+  },
+  extensions: {
+    countFilter: null,
+    relatednessSignals: null,
+    mcpNames: null,
+    ports: {
+      repository: {
+        module: "~/server/repo/project/entity-adapter",
+        export: "projectEntityAdapter",
+      },
+      references: {
+        label: { module: "~/entities/entities", export: "entityLabel" },
+        resolver: {
+          module: "~/server/repo/shortcode-resolver",
+          export: "resolveLiveShortcode",
+        },
+      },
+      filters: {
+        module: "~/entities/filter-manifest",
+        export: "getEntityFilters",
+      },
+      search: {
+        projection: {
+          module: "~/server/repo/search-document",
+          export: "refreshSearchDocument",
+        },
+        semanticText: {
+          module: "~/server/repo/search-document",
+          export: "getSearchDocumentEmbeddingText",
+        },
+        dependentRefresh: {
+          module: "~/server/services/mutation-side-effects",
+          export: "runMutationSideEffects",
+        },
+      },
+    },
+  },
+});

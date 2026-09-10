@@ -85,6 +85,24 @@ describe("ProductBasicInfo filter links", () => {
     harness.dispose();
   });
 
+  it("preserves detail ordering and the printed ISBN label for a book barcode", () => {
+    const book = productWithFoodOut.parse({
+      ...product,
+      primaryGtin: "09780306406157",
+    });
+    const { container } = render(
+      <ProductBasicInfo product={book} onEdit={() => undefined} />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByText("ISBN-13")).toBeVisible();
+    expect(screen.getByText("9780306406157")).toBeVisible();
+    expect(screen.queryByText("UPC", { exact: true })).not.toBeInTheDocument();
+    expect(container).toHaveTextContent(
+      /Name.*Shortcode.*Manufacturer.*Model.*Valuation price.*Category.*ISBN-13.*Ingredient.*Tags/,
+    );
+    expect(screen.queryByText("Stock Tracked")).not.toBeInTheDocument();
+  });
+
   it("links read-only values and keeps editable/relationship cohorts separate", async () => {
     render(<ProductBasicInfo product={product} onEdit={() => undefined} />, {
       wrapper: harness.wrapper,

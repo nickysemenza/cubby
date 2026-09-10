@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   LedgerPartyId,
@@ -319,9 +320,7 @@ export async function updateLedgerParty(
       .set(values)
       .where(and(eq(ledgerParty.id, id), notDeleted(ledgerParty)));
     const changes = computeChanges(before, { ...before, ...values }, [
-      "name",
-      "kind",
-      "notes",
+      ...entityFieldModels.ledgerParty.audit,
     ]);
     if (changes)
       await logAuditEntry(tx, actor, {

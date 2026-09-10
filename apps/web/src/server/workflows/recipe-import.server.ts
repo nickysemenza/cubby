@@ -1,7 +1,7 @@
 import {
+  type CookbookId,
   parseShortcodeFor,
   type RecipeId,
-  type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
   attachCookbookRecipePhotoInput,
@@ -19,11 +19,6 @@ import type {
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
 
-import {
-  type BulkProgressEvent,
-  streamItems,
-  streamProgress,
-} from "~/lib/bulk-progress";
 import { getErrorMessage } from "~/lib/error-utils";
 import {
   importRecipeSignature,
@@ -35,7 +30,8 @@ import {
   getCookbookByName,
   getCookbookRecipePhotoSource,
   getCookbookSource,
-  reprocessCookbookStream,
+  prepareCookbookReprocessing,
+  reprocessCookbookRecipe,
   setCookbookProduct,
   upsertCookbook,
 } from "~/server/repo/cookbook";
@@ -79,16 +75,36 @@ import {
   htmlToImportRecipe,
   scrapeToImportRecipe,
 } from "~/server/utils/scraper";
+import {
+  bindBulkWorkflow,
+  bindWorkflow,
+  defineBulkWorkflow,
+  defineWorkflowOperation,
+  executeBulkWorkflow,
+  executeWorkflow,
+  type BulkWorkflowSummary,
+  workflow,
+} from "~/server/workflow-runtime";
+import {
+  projectCookbookImportEvent,
+  projectNotionImportEvent,
+  type CookbookImportProjection,
+  type NotionImportProjection,
+} from "~/server/workflows/recipe-import-projection";
 
 const cookbookShortcodes = bindShortcodeResolver("cookbook");
 const productShortcodes = bindShortcodeResolver("product");
 const recipeShortcodes = bindShortcodeResolver("recipe");
 
-export const scrapeWorkflow = (input: z.output<typeof scrapeRecipeInput>) =>
-  scrapeToImportRecipe(input);
-export const parseHtmlWorkflow = (
-  input: z.output<typeof parseRecipeHtmlInput>,
-) => htmlToImportRecipe(input.html, input.url);
+export const scrapeWorkflow = defineWorkflowOperation(
+  "recipe.scrape",
+  (input: z.output<typeof scrapeRecipeInput>) => scrapeToImportRecipe(input),
+);
+export const parseHtmlWorkflow = defineWorkflowOperation(
+  "recipe.parseHtml",
+  (input: z.output<typeof parseRecipeHtmlInput>) =>
+    Promise.resolve(htmlToImportRecipe(input.html, input.url)),
+);
 
 export interface RecipeImportWorkflowPorts {
   importImageFromUrl: ImageUrlImportPort;
@@ -98,82 +114,120 @@ const productionRecipeImportWorkflowPorts: RecipeImportWorkflowPorts = {
   importImageFromUrl: importStoredImageFromUrl,
 };
 
-export const insertImportWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof importRecipeSchema>,
-  ports: RecipeImportWorkflowPorts = productionRecipeImportWorkflowPorts,
-) => {
-  const result = await upsertImportRecipe(
-    input,
-    context.db,
-    context.actorContext,
-  );
-  if (input.image?.kind === "url")
-    await importRecipeImageFromUrl(context.db, result.id, input.image.url, {
-      ...productionRecipeImageImportPort,
-      importFromUrl: ports.importImageFromUrl,
-    });
-  await context.services.recipeCosting.dispatchRecompute([result.id], {
-    source: "recipe.import",
-    entity: { entityType: "recipe", entityId: result.id },
-  });
-  await runMutationSideEffects(context.db, {
-    action: "updated",
-    entity: { entity: "recipe", id: result.id },
-    source: "recipe.import",
-  });
-  return { id: parseShortcodeFor("recipe", result.shortcode) };
+type ImportRecipeInput = z.output<typeof importRecipeSchema>;
+type ImportRecipeContext = {
+  operation: AuthenticatedStartOperationContext;
+  ports: RecipeImportWorkflowPorts;
 };
+export const insertImportWorkflow = bindWorkflow(
+  workflow<ImportRecipeContext, ImportRecipeInput>("recipe.insertImport")
+    .commit("imported", async ({ context }, { input }) =>
+      upsertImportRecipe(
+        input,
+        context.operation.db,
+        context.operation.actorContext,
+      ),
+    )
+    .effect("image", async ({ context }, { input, imported }) => {
+      if (input.image?.kind !== "url") return undefined;
+      return importRecipeImageFromUrl(
+        context.operation.db,
+        imported.id,
+        input.image.url,
+        {
+          ...productionRecipeImageImportPort,
+          importFromUrl: context.ports.importImageFromUrl,
+        },
+      );
+    })
+    .effect("costing", ({ context }, { imported }) =>
+      context.operation.services.recipeCosting.dispatchRecompute(
+        [imported.id],
+        {
+          source: "recipe.import",
+          entity: { entityType: "recipe", entityId: imported.id },
+        },
+      ),
+    )
+    .effect("sideEffects", ({ context }, { imported }) =>
+      runMutationSideEffects(context.operation.db, {
+        action: "updated",
+        entity: { entity: "recipe", id: imported.id },
+        source: "recipe.import",
+      }),
+    )
+    .output(({ imported }) => ({
+      id: parseShortcodeFor("recipe", imported.shortcode),
+    })),
+  (
+    operation: AuthenticatedStartOperationContext,
+    input: ImportRecipeInput,
+    ports: RecipeImportWorkflowPorts = productionRecipeImportWorkflowPorts,
+  ) => ({ context: { operation, ports }, input }),
+);
 
-export const upsertCookbookWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof upsertCookbookInput>,
-) => {
-  const result = await upsertCookbook(context.db, input, {
-    ...context.actorContext,
-    source: "epub_import",
-  });
-  await runMutationSideEffects(context.db, {
-    action: "updated",
-    entity: { entity: "cookbook", id: result.entityId },
-    source: "cookbook.upsert",
-  });
-  if (input.isbn) {
-    try {
-      const { product } = await findOrCreateByUPC(
-        context.db,
-        context.usdaClient,
-        context.upcLookupClient,
-        input.isbn,
-        input.name,
-        context.actorContext,
-      );
-      await setCookbookProduct(
-        context.db,
-        context.actorContext,
-        result.entityId,
-        await productShortcodes.one(context.db, product.id),
-      );
-    } catch (error) {
-      console.error(
-        `[cookbook.upsert] ISBN ${input.isbn} did not resolve to a product; link it by hand:`,
-        error,
-      );
-    }
-  }
-  return result.output;
-};
+type UpsertCookbookInput = z.output<typeof upsertCookbookInput>;
+export const upsertCookbookWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, UpsertCookbookInput>(
+    "recipe.upsertCookbook",
+  )
+    .commit("upserted", ({ context }, { input }) =>
+      upsertCookbook(context.db, input, {
+        ...context.actorContext,
+        source: "epub_import",
+      }),
+    )
+    .effect("sideEffects", ({ context }, { upserted }) =>
+      runMutationSideEffects(context.db, {
+        action: "updated",
+        entity: { entity: "cookbook", id: upserted.entityId },
+        source: "cookbook.upsert",
+      }),
+    )
+    .effect("isbnLink", async ({ context }, { input, upserted }) => {
+      if (!input.isbn) return undefined;
+      try {
+        const { product } = await findOrCreateByUPC(
+          context.db,
+          context.usdaClient,
+          context.upcLookupClient,
+          input.isbn,
+          input.name,
+          context.actorContext,
+        );
+        return setCookbookProduct(
+          context.db,
+          context.actorContext,
+          upserted.entityId,
+          await productShortcodes.one(context.db, product.id),
+        );
+      } catch (error) {
+        console.error(
+          `[cookbook.upsert] ISBN ${input.isbn} did not resolve to a product; link it by hand:`,
+          error,
+        );
+        return undefined;
+      }
+    })
+    .output(({ upserted }) => upserted.output),
+);
 
-export const getCookbookSourceWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof cookbookIdInput>,
-) => {
-  const source = await getCookbookSource(
-    context.db,
-    await cookbookShortcodes.one(context.db, input.cookbookId),
-  );
-  return { ...source, id: input.cookbookId };
-};
+type CookbookIdInput = z.output<typeof cookbookIdInput>;
+export const getCookbookSourceWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, CookbookIdInput>(
+    "recipe.getCookbookSource",
+  )
+    .call("cookbookId", ({ context }, { input }) =>
+      cookbookShortcodes.one(context.db, input.cookbookId),
+    )
+    .call("source", ({ context }, { input, cookbookId }) =>
+      getCookbookSource(context.db, cookbookId).then((source) => ({
+        ...source,
+        id: input.cookbookId,
+      })),
+    )
+    .output(({ source }) => source),
+);
 
 type CookbookRecipePhotoInput = z.output<typeof attachCookbookRecipePhotoInput>;
 
@@ -185,217 +239,361 @@ const productionCookbookRecipePhotoPorts: CookbookRecipePhotoPorts = {
   attachFile: attachFileToEntity,
 };
 
-export const attachCookbookRecipePhotoWorkflow = async (
-  context: Pick<AuthenticatedStartOperationContext, "db">,
-  input: CookbookRecipePhotoInput,
-  ports: CookbookRecipePhotoPorts = productionCookbookRecipePhotoPorts,
-) => {
-  const cookbookId = await cookbookShortcodes.one(context.db, input.cookbookId);
-  const recipeId = await recipeShortcodes.one(context.db, input.recipeId);
-  const source = await getCookbookRecipePhotoSource(
-    context.db,
-    cookbookId,
-    recipeId,
-    input.sourceIndex,
-  );
-  if (await recipeHasImages(context.db, recipeId)) {
-    return { status: "skipped-existing" as const };
-  }
-  const filename = source.path.split("/").at(-1) || "recipe-photo";
-  const pathDigest = Array.from(
-    new Uint8Array(
-      await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(source.path),
-      ),
-    ),
-    (byte) => byte.toString(16).padStart(2, "0"),
-  ).join("");
-  const idempotencyKey = `epub-photo:${input.recipeId}:${pathDigest}`;
-
-  try {
-    const attached = await ports.attachFile(context.db, {
-      entityType: "recipe",
-      entityId: input.recipeId,
-      data: input.data,
-      contentType: source.mime,
-      filename,
-      idempotencyKey,
-      expectedImageCount: 0,
-    });
-    const status = attached.reused
-      ? ("reused" as const)
-      : ("attached" as const);
-    if (attached.cleanupWarning) {
-      return { status, cleanupWarning: attached.cleanupWarning };
-    }
-    return { status };
-  } catch (error) {
-    const appError = appErrorFromUnknown(error);
-    if (appError?.reason === "IMAGE_PRECONDITION_FAILED") {
-      return { status: "skipped-existing" as const };
-    }
-    if (appError) throw appError;
-    throw createAppError(
-      "IMAGE_ATTACH_FAILED",
-      "Could not attach the cookbook recipe photo",
-      error,
-    );
-  }
+type PhotoWorkflowContext = {
+  db: AuthenticatedStartOperationContext["db"];
+  ports: CookbookRecipePhotoPorts;
 };
-
-type ImportItemResult =
-  | { index: number; ok: true; id: RecipeShortcode; hasImage: boolean }
-  | { index: number; ok: false; error: string };
-type ImportSummary = { succeeded: number; failed: number };
-export async function* importCookbookWorkflow(
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof importCookbookStreamInput>,
-): AsyncGenerator<BulkProgressEvent<ImportItemResult, ImportSummary>> {
-  const actor = { ...context.actorContext, source: "epub_import" as const };
-  const cookbookId = await cookbookShortcodes.one(context.db, input.cookbookId);
-  const { name, recipes } = await getCookbookSource(context.db, cookbookId);
-  const importContext: CookbookImportContext = {
-    titleToId: await getCookbookRecipeIdsByTitle(context.db, cookbookId),
-    ingredientIdByName: new Map(),
-  };
-  const insertedIds: RecipeId[] = [];
-  yield* streamItems<number, ImportItemResult, ImportSummary>(
-    input.indices,
-    async (index) => {
-      const recipe = recipes[index];
-      if (!recipe)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          `Recipe index ${index} is out of range for this cookbook`,
-        );
-      const { id, shortcode } = await upsertCookbookRecipeFromCookbook(
-        recipe,
-        { id: cookbookId, name },
+export const attachCookbookRecipePhotoWorkflow = bindWorkflow(
+  workflow<PhotoWorkflowContext, CookbookRecipePhotoInput>(
+    "recipe.attachCookbookRecipePhoto",
+  )
+    .call("cookbookId", ({ context }, { input }) =>
+      cookbookShortcodes.one(context.db, input.cookbookId),
+    )
+    .call("recipeId", ({ context }, { input }) =>
+      recipeShortcodes.one(context.db, input.recipeId),
+    )
+    .call("source", ({ context }, { input, cookbookId, recipeId }) =>
+      getCookbookRecipePhotoSource(
         context.db,
-        actor,
-        importContext,
-      );
-      insertedIds.push(id);
-      return {
-        index,
-        ok: true,
-        id: parseShortcodeFor("recipe", shortcode),
-        hasImage: await recipeHasImages(context.db, id),
-      };
-    },
-    {
-      onError: (index, _i, error) => ({
-        index,
-        ok: false,
-        error: getErrorMessage(error),
-      }),
-      finalize: async (summary) => {
-        if (insertedIds.length) {
-          const source = "recipe.importCookbookStream";
-          await context.services.recipeCosting.dispatchRecompute(insertedIds, {
-            source,
-          });
-          await runMutationSideEffectsForEntities(
-            context.db,
-            insertedIds.map((id) => ({
-              action: "updated" as const,
-              entity: { entity: "recipe" as const, id: id },
-              source,
-            })),
-          );
-        }
-        return summary;
-      },
-    },
-  );
-}
+        cookbookId,
+        recipeId,
+        input.sourceIndex,
+      ),
+    )
+    .call("hasImages", ({ context }, { recipeId }) =>
+      recipeHasImages(context.db, recipeId),
+    )
+    .branch("attachment", {
+      when: (_, { hasImages }) => Promise.resolve(hasImages),
+      whenTrue: (branch) =>
+        branch.output(() => ({ status: "skipped-existing" as const })),
+      whenFalse: (branch) =>
+        branch
+          .call("request", async (_, { input: values }) => {
+            const { input, source } = values;
+            const filename = source.path.split("/").at(-1) || "recipe-photo";
+            const pathDigest = Array.from(
+              new Uint8Array(
+                await crypto.subtle.digest(
+                  "SHA-256",
+                  new TextEncoder().encode(source.path),
+                ),
+              ),
+              (byte) => byte.toString(16).padStart(2, "0"),
+            ).join("");
+            return {
+              entityType: "recipe" as const,
+              entityId: input.recipeId,
+              data: input.data,
+              contentType: source.mime,
+              filename,
+              idempotencyKey: `epub-photo:${input.recipeId}:${pathDigest}`,
+              expectedImageCount: 0,
+            };
+          })
+          .commit("attached", async ({ context }, { request }) => {
+            try {
+              const attached = await context.ports.attachFile(
+                context.db,
+                request,
+              );
+              return attached.cleanupWarning
+                ? {
+                    status: attached.reused
+                      ? ("reused" as const)
+                      : ("attached" as const),
+                    cleanupWarning: attached.cleanupWarning,
+                  }
+                : {
+                    status: attached.reused
+                      ? ("reused" as const)
+                      : ("attached" as const),
+                  };
+            } catch (error) {
+              const appError = appErrorFromUnknown(error);
+              if (appError?.reason === "IMAGE_PRECONDITION_FAILED")
+                return { status: "skipped-existing" as const };
+              if (appError) throw appError;
+              throw createAppError(
+                "IMAGE_ATTACH_FAILED",
+                "Could not attach the cookbook recipe photo",
+                error,
+              );
+            }
+          })
+          .output(({ attached }) => attached),
+    })
+    .output(({ attachment }) => attachment),
+  (
+    context: Pick<AuthenticatedStartOperationContext, "db"> &
+      Partial<Pick<AuthenticatedStartOperationContext, "actorContext">>,
+    input: CookbookRecipePhotoInput,
+    ports: CookbookRecipePhotoPorts = productionCookbookRecipePhotoPorts,
+  ) => ({ context: { db: context.db, ports }, input }),
+);
 
-export const getCookbookDiffWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof cookbookDiffInput>,
-) => {
-  const cookbook = await getCookbookByName(context.db, input.book);
-  return cookbook ? getCookbookRecipesForDiff(context.db, cookbook.id) : [];
+type ImportSummary = { succeeded: number; failed: number };
+type CookbookImportItem = {
+  readonly index: number;
+  readonly recipe: z.output<typeof importRecipeSchema> | undefined;
+  readonly cookbook: { readonly id: CookbookId; readonly name: string };
+  readonly importContext: CookbookImportContext;
 };
+type CookbookImportResult = CookbookImportProjection;
+const cookbookImportDefinition = defineBulkWorkflow({
+  name: "recipe.importCookbookStream",
+  items: workflow<
+    AuthenticatedStartOperationContext,
+    z.output<typeof importCookbookStreamInput>
+  >("recipe.importCookbookStream.select")
+    .call("cookbookId", ({ context }, { input }) =>
+      cookbookShortcodes.one(context.db, input.cookbookId),
+    )
+    .call("source", ({ context }, { cookbookId }) =>
+      getCookbookSource(context.db, cookbookId),
+    )
+    .call("importContext", async ({ context }, { cookbookId }) => ({
+      titleToId: await getCookbookRecipeIdsByTitle(context.db, cookbookId),
+      ingredientIdByName: new Map(),
+    }))
+    .output(({ input, cookbookId, source, importContext }) =>
+      input.indices.map((index): CookbookImportItem => ({
+        index,
+        recipe: source.recipes[index],
+        cookbook: { id: cookbookId, name: source.name },
+        importContext,
+      })),
+    ),
+  item: workflow<AuthenticatedStartOperationContext, CookbookImportItem>(
+    "recipe.importCookbookStream.item",
+  )
+    .call("recipe", async (_, { input }) => {
+      if (input.recipe) return input.recipe;
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `Recipe index ${input.index} is out of range for this cookbook`,
+      );
+    })
+    .commit("imported", ({ context }, { input, recipe }) =>
+      upsertCookbookRecipeFromCookbook(
+        recipe,
+        input.cookbook,
+        context.db,
+        { ...context.actorContext, source: "epub_import" },
+        input.importContext,
+      ),
+    )
+    .effect("event", ({ context }, { input, imported }) =>
+      projectCookbookImportEvent(
+        input.index,
+        imported,
+        recipeHasImages(context.db, imported.id),
+      ),
+    )
+    .output(({ event }) => event),
+  finalize: workflow<
+    AuthenticatedStartOperationContext,
+    BulkWorkflowSummary<CookbookImportItem, CookbookImportResult>
+  >("recipe.importCookbookStream.finalize")
+    .commit("costing", async ({ context }, { input }) => {
+      const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
+      return recipeIds.length
+        ? context.services.recipeCosting.dispatchRecompute(recipeIds, {
+            source: "recipe.importCookbookStream",
+          })
+        : [];
+    })
+    .effect("sideEffects", async ({ context }, { input }) => {
+      const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
+      return recipeIds.length
+        ? runMutationSideEffectsForEntities(
+            context.db,
+            recipeIds.map((id) => ({
+              action: "updated" as const,
+              entity: { entity: "recipe" as const, id },
+              source: "recipe.importCookbookStream",
+            })),
+          )
+        : [];
+    })
+    .output(({ input }): ImportSummary => ({
+      succeeded: input.succeeded.filter(({ result }) => result.event.ok).length,
+      failed:
+        input.failed.length +
+        input.succeeded.filter(({ result }) => !result.event.ok).length,
+    })),
+  onItemError: "continue",
+  progress: (result) => result.event,
+  errorProgress: (error, item) => ({
+    index: item.index,
+    ok: false as const,
+    error: getErrorMessage(error),
+  }),
+});
+export const importCookbookWorkflow = bindBulkWorkflow(
+  cookbookImportDefinition,
+  (
+    context: AuthenticatedStartOperationContext,
+    input: z.output<typeof importCookbookStreamInput>,
+    signal?: AbortSignal,
+  ) => ({ context, input, signal }),
+);
+
+type CookbookDiffInput = z.output<typeof cookbookDiffInput>;
+export const getCookbookDiffWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, CookbookDiffInput>(
+    "recipe.getCookbookDiff",
+  )
+    .call(
+      "cookbook",
+      async ({ context }, { input }) =>
+        await getCookbookByName(context.db, input.book),
+    )
+    .branch("recipes", {
+      when: async (_, { cookbook }) => cookbook != null,
+      whenTrue: (branch) =>
+        branch
+          .call("read", async ({ context }, { input }) =>
+            input.cookbook
+              ? await getCookbookRecipesForDiff(context.db, input.cookbook.id)
+              : [],
+          )
+          .output(({ read }) => read),
+      whenFalse: (branch) => branch.output(() => []),
+    })
+    .output(({ recipes }) => recipes),
+);
 
 const normalizeNotionId = (id: string) => id.replace(/-/g, "");
-export const previewNotionSyncWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-) => {
-  const client = context.notionClient;
-  if (!client) return [];
-  const rows = await client.queryRecipes();
-  const existing = new Map(
-    (await getNotionRecipesForDiff(context.db)).map((entry) => [
-      normalizeNotionId(entry.pageId),
-      { id: entry.recipe.id, sig: recipeOutSignature(entry.recipe) },
-    ]),
-  );
-  return Promise.all(
-    rows.map(async (row) => {
-      const recipe = notionPageToImportRecipe(
-        row,
-        await client.getPageContent(row.id),
-      );
-      const { status: lintStatus, reasons } = lintImportRecipe(recipe);
-      const prior = existing.get(normalizeNotionId(row.id));
-      const status =
-        lintStatus === "needs-formatting"
-          ? ("needs-formatting" as const)
-          : !prior
-            ? ("new" as const)
-            : importRecipeSignature(recipe, row.tags) === prior.sig
-              ? ("unchanged" as const)
-              : ("will-update" as const);
-      return {
-        pageId: row.id,
-        name: row.name,
-        notionUrl: row.notionUrl,
-        status,
-        existingId: prior?.id ?? null,
-        reasons,
-        recipe,
-      };
-    }),
-  );
-};
+const previewNotionSyncDefinition = workflow<
+  AuthenticatedStartOperationContext,
+  undefined
+>("recipe.previewNotionSync")
+  .branch("client", {
+    when: async ({ context }) => context.notionClient != null,
+    whenFalse: (branch) => branch.output(() => []),
+    whenTrue: (branch) =>
+      branch
+        .call("rows", async ({ context }) => {
+          const client = context.notionClient;
+          if (!client) return [];
+          return await client.queryRecipes();
+        })
+        .call(
+          "existing",
+          async ({ context }) =>
+            new Map(
+              (await getNotionRecipesForDiff(context.db)).map((entry) => [
+                normalizeNotionId(entry.pageId),
+                { id: entry.recipe.id, sig: recipeOutSignature(entry.recipe) },
+              ]),
+            ),
+        )
+        .map("pages", {
+          items: ({ rows, existing }) => rows.map((row) => ({ row, existing })),
+          concurrency: 10,
+          run: async ({ context }, { item }) => {
+            const client = context.notionClient;
+            if (!client)
+              throw new Error("Notion client disappeared during preview");
+            const { row, existing } = item;
+            const recipe = notionPageToImportRecipe(
+              row,
+              await client.getPageContent(row.id),
+            );
+            const { status: lintStatus, reasons } = lintImportRecipe(recipe);
+            const prior = existing.get(normalizeNotionId(row.id));
+            const status =
+              lintStatus === "needs-formatting"
+                ? ("needs-formatting" as const)
+                : !prior
+                  ? ("new" as const)
+                  : importRecipeSignature(recipe, row.tags) === prior.sig
+                    ? ("unchanged" as const)
+                    : ("will-update" as const);
+            return {
+              pageId: row.id,
+              name: row.name,
+              notionUrl: row.notionUrl,
+              status,
+              existingId: prior?.id ?? null,
+              reasons,
+              recipe,
+            };
+          },
+        })
+        .output(({ pages }) => pages),
+  })
+  .output(({ client }) => client);
 
-type NotionItemResult =
-  | {
-      pageId: string;
-      ok: true;
-      id: RecipeShortcode;
-      status: "created" | "updated";
-    }
-  | { pageId: string; ok: false; error: string };
+export const previewNotionSyncWorkflow = bindWorkflow(
+  previewNotionSyncDefinition,
+  (context: AuthenticatedStartOperationContext) => ({
+    context,
+    input: undefined,
+  }),
+);
+
 type NotionSummary = { succeeded: number; failed: number };
-export async function* importNotionSyncWorkflow(
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof importNotionSyncInput>,
-): AsyncGenerator<BulkProgressEvent<NotionItemResult, NotionSummary>> {
-  const client = context.notionClient;
-  if (!client)
-    throw createAppError("CONSTRAINT_VIOLATION", "Notion is not configured.");
-  const rowById = new Map(
-    (await client.queryRecipes()).map((row) => [row.id, row]),
-  );
-  const existing = new Set(
-    (await getNotionRecipePageIds(context.db)).map(normalizeNotionId),
-  );
-  const insertedIds: RecipeId[] = [];
-  yield* streamItems<string, NotionItemResult, NotionSummary>(
-    input.pageIds,
-    async (pageId) => {
-      const row = rowById.get(pageId);
-      if (!row)
+type NotionImportItem = {
+  readonly pageId: string;
+  readonly row:
+    | Awaited<
+        ReturnType<
+          NonNullable<
+            AuthenticatedStartOperationContext["notionClient"]
+          >["queryRecipes"]
+        >
+      >[number]
+    | null;
+  readonly existing: boolean;
+};
+type NotionImportResult = NotionImportProjection;
+const notionImportDefinition = defineBulkWorkflow({
+  name: "recipe.importNotionSyncStream",
+  items: workflow<
+    AuthenticatedStartOperationContext,
+    z.output<typeof importNotionSyncInput>
+  >("recipe.importNotionSyncStream.select")
+    .call("client", async ({ context }) => {
+      if (!context.notionClient)
         throw createAppError(
           "CONSTRAINT_VIOLATION",
-          "That page isn't in the Notion Recipes database.",
+          "Notion is not configured.",
         );
+      return context.notionClient;
+    })
+    .call("rows", async (_, { client }) => client.queryRecipes())
+    .call("existing", ({ context }) =>
+      getNotionRecipePageIds(context.db).then(
+        (pageIds) => new Set(pageIds.map(normalizeNotionId)),
+      ),
+    )
+    .output(({ input, rows, existing }) => {
+      const rowById = new Map(rows.map((row) => [row.id, row]));
+      return input.pageIds.map((pageId): NotionImportItem => ({
+        pageId,
+        row: rowById.get(pageId) ?? null,
+        existing: existing.has(normalizeNotionId(pageId)),
+      }));
+    }),
+  item: workflow<AuthenticatedStartOperationContext, NotionImportItem>(
+    "recipe.importNotionSyncStream.item",
+  )
+    .call("row", async (_, { input }) => {
+      if (input.row) return input.row;
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "That page isn't in the Notion Recipes database.",
+      );
+    })
+    .call("recipe", async ({ context }, { input, row }) => {
+      const client = context.notionClient;
+      if (!client) throw new Error("Notion client was lost after selection.");
       const recipe = notionPageToImportRecipe(
         row,
-        await client.getPageContent(pageId),
+        await client.getPageContent(input.pageId),
       );
       const { status, reasons } = lintImportRecipe(recipe);
       if (status === "needs-formatting")
@@ -403,121 +601,242 @@ export async function* importNotionSyncWorkflow(
           "CONSTRAINT_VIOLATION",
           `Recipe isn't import-ready: ${reasons.join(" ")}`,
         );
-      const result = await upsertNotionRecipeFromImport(
+      return recipe;
+    })
+    .commit("imported", ({ context }, { input, recipe, row }) =>
+      upsertNotionRecipeFromImport(
         recipe,
-        pageId,
+        input.pageId,
         row.tags,
         context.db,
         context.actorContext,
-      );
-      insertedIds.push(result.id);
-      return {
-        pageId,
-        ok: true,
-        id: parseShortcodeFor("recipe", result.shortcode),
-        status: existing.has(normalizeNotionId(pageId)) ? "updated" : "created",
-      };
-    },
-    {
-      onError: (pageId, _i, error) => ({
-        pageId,
-        ok: false,
-        error: getErrorMessage(error),
-      }),
-      finalize: async (summary) => {
-        if (insertedIds.length) {
-          const source = "recipe.importNotionSyncStream";
-          await context.services.recipeCosting.dispatchRecompute(insertedIds, {
-            source,
-          });
-          await runMutationSideEffectsForEntities(
+      ),
+    )
+    .effect("event", async (_, { input, imported }) =>
+      projectNotionImportEvent(input.pageId, input.existing, imported),
+    )
+    .output(({ event }) => event),
+  finalize: workflow<
+    AuthenticatedStartOperationContext,
+    BulkWorkflowSummary<NotionImportItem, NotionImportResult>
+  >("recipe.importNotionSyncStream.finalize")
+    .commit("costing", ({ context }, { input }) => {
+      const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
+      return recipeIds.length
+        ? context.services.recipeCosting.dispatchRecompute(recipeIds, {
+            source: "recipe.importNotionSyncStream",
+          })
+        : Promise.resolve([]);
+    })
+    .effect("sideEffects", ({ context }, { input }) => {
+      const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
+      return recipeIds.length
+        ? runMutationSideEffectsForEntities(
             context.db,
-            insertedIds.map((id) => ({
+            recipeIds.map((id) => ({
               action: "updated" as const,
-              entity: { entity: "recipe" as const, id: id },
-              source,
+              entity: { entity: "recipe" as const, id },
+              source: "recipe.importNotionSyncStream",
             })),
-          );
-        }
-        return summary;
-      },
-    },
-  );
-}
-
-export const setCookbookProductWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof setCookbookProductInput>,
-) =>
-  setCookbookProduct(
-    context.db,
-    context.actorContext,
-    await cookbookShortcodes.one(context.db, input.cookbookId),
-    input.productId
-      ? await productShortcodes.one(context.db, input.productId)
-      : null,
-  );
-
-export const deleteCookbookWorkflow = async (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof cookbookIdInput>,
-) => {
-  const cookbookId = await cookbookShortcodes.one(context.db, input.cookbookId);
-  const recipeIds = (
-    await getCookbookRecipesForDiff(context.db, cookbookId)
-  ).map((row) => row.entityId);
-  const deletedSet = new Set<RecipeId>(recipeIds);
-  const parentsByRecipe = await findParentRecipeIdsBatch(context.db, recipeIds);
-  const parentIds = uniq(
-    [...parentsByRecipe.values()].flat().filter((id) => !deletedSet.has(id)),
-  );
-  const { deletedRecipeIds, detachedImageKeys } = await deleteCookbook(
-    context.db,
-    cookbookId,
-    context.actorContext,
-  );
-  await deleteStoredObjects(detachedImageKeys);
-  await runMutationSideEffectsForEntities(
-    context.db,
-    deletedRecipeIds.map((id) => ({
-      action: "deleted" as const,
-      entity: { entity: "recipe" as const, id: id },
-      source: "recipe.deleteCookbook",
+          )
+        : Promise.resolve([]);
+    })
+    .output(({ input }): NotionSummary => ({
+      succeeded: input.succeeded.filter(({ result }) => result.event.ok).length,
+      failed:
+        input.failed.length +
+        input.succeeded.filter(({ result }) => !result.event.ok).length,
     })),
-  );
-  if (parentIds.length)
-    await context.services.recipeCosting.dispatchRecompute(parentIds, {
-      source: "recipe.deleteCookbook",
-    });
-  return { deletedRecipes: deletedRecipeIds.length };
-};
+  onItemError: "continue",
+  progress: (result) => result.event,
+  errorProgress: (error, item) => ({
+    pageId: item.pageId,
+    ok: false as const,
+    error: getErrorMessage(error),
+  }),
+});
+export const importNotionSyncWorkflow = bindBulkWorkflow(
+  notionImportDefinition,
+  (
+    context: AuthenticatedStartOperationContext,
+    input: z.output<typeof importNotionSyncInput>,
+    signal?: AbortSignal,
+  ) => ({ context, input, signal }),
+);
 
-export async function* reprocessCookbookWorkflow(
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof cookbookIdInput>,
-) {
-  const cookbookId = await cookbookShortcodes.one(context.db, input.cookbookId);
-  yield* streamProgress(
-    reprocessCookbookStream(context.db, cookbookId, context.actorContext),
-    async ({ recipeIds, reprocessed, importableExtras }) => {
-      await context.services.recipeCosting.dispatchRecompute(recipeIds, {
-        source: "recipe.reprocessCookbook",
+type SetCookbookProductInput = z.output<typeof setCookbookProductInput>;
+export const setCookbookProductWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, SetCookbookProductInput>(
+    "recipe.setCookbookProduct",
+  )
+    .call("cookbookId", ({ context }, { input }) =>
+      cookbookShortcodes.one(context.db, input.cookbookId),
+    )
+    .call("productId", async ({ context }, { input }) =>
+      input.productId
+        ? productShortcodes.one(context.db, input.productId)
+        : null,
+    )
+    .commit("updated", ({ context }, { cookbookId, productId }) =>
+      setCookbookProduct(
+        context.db,
+        context.actorContext,
+        cookbookId,
+        productId,
+      ),
+    )
+    .output(({ updated }) => updated),
+  (
+    context: AuthenticatedStartOperationContext,
+    input: SetCookbookProductInput,
+  ) => ({ context, input }),
+);
+
+type DeleteCookbookInput = z.output<typeof cookbookIdInput>;
+export const deleteCookbookWorkflow = bindWorkflow(
+  workflow<AuthenticatedStartOperationContext, DeleteCookbookInput>(
+    "recipe.deleteCookbook",
+  )
+    .call("cookbookId", ({ context }, { input }) =>
+      cookbookShortcodes.one(context.db, input.cookbookId),
+    )
+    .call("recipeIds", async ({ context }, { cookbookId }) =>
+      (await getCookbookRecipesForDiff(context.db, cookbookId)).map(
+        (row) => row.entityId,
+      ),
+    )
+    .call("parentIds", ({ context }, { recipeIds }) =>
+      findParentRecipeIdsBatch(context.db, recipeIds).then((parentsByRecipe) =>
+        uniq(
+          [...parentsByRecipe.values()]
+            .flat()
+            .filter((id) => !recipeIds.includes(id)),
+        ),
+      ),
+    )
+    .commit("deleted", ({ context }, { cookbookId }) =>
+      deleteCookbook(context.db, cookbookId, context.actorContext),
+    )
+    .effect("storage", (_, { deleted }) =>
+      deleteStoredObjects(deleted.detachedImageKeys),
+    )
+    .effect("sideEffects", ({ context }, { deleted }) =>
+      runMutationSideEffectsForEntities(
+        context.db,
+        deleted.deletedRecipeIds.map((id) => ({
+          action: "deleted" as const,
+          entity: { entity: "recipe" as const, id },
+          source: "recipe.deleteCookbook",
+        })),
+      ),
+    )
+    .effect("costing", ({ context }, { parentIds }) =>
+      parentIds.length
+        ? context.services.recipeCosting.dispatchRecompute(parentIds, {
+            source: "recipe.deleteCookbook",
+          })
+        : Promise.resolve([]),
+    )
+    .output(({ deleted }) => ({
+      deletedRecipes: deleted.deletedRecipeIds.length,
+    })),
+);
+
+type ReprocessPreparedContext = {
+  readonly operation: AuthenticatedStartOperationContext;
+  readonly selection: Awaited<ReturnType<typeof prepareCookbookReprocessing>>;
+};
+type ReprocessPreparedInput = {
+  readonly recipes: readonly z.output<typeof importRecipeSchema>[];
+};
+const reprocessCookbookPreparation = workflow<
+  AuthenticatedStartOperationContext,
+  z.output<typeof cookbookIdInput>
+>("recipe.reprocessCookbook.prepare")
+  .call("cookbookId", ({ context }, { input }) =>
+    cookbookShortcodes.one(context.db, input.cookbookId),
+  )
+  .call("selection", ({ context }, { cookbookId }) =>
+    prepareCookbookReprocessing(context.db, cookbookId),
+  )
+  .call("prepared", async ({ context }, { selection }) => ({
+    context: { operation: context, selection },
+    input: { recipes: selection.recipes },
+  }))
+  .output(({ prepared }) => prepared);
+const reprocessCookbookDefinition = defineBulkWorkflow({
+  name: "recipe.reprocessCookbook",
+  items: workflow<ReprocessPreparedContext, ReprocessPreparedInput>(
+    "recipe.reprocessCookbook.items",
+  ).output(({ input }) => input.recipes),
+  item: workflow<
+    ReprocessPreparedContext,
+    ReprocessPreparedInput["recipes"][number]
+  >("recipe.reprocessCookbook.item")
+    .commit("reprocessed", ({ context }, { input }) =>
+      reprocessCookbookRecipe(
+        context.operation.db,
+        context.selection,
+        input,
+        context.operation.actorContext,
+      ),
+    )
+    .output(({ reprocessed }) => reprocessed),
+  finalize: workflow<
+    ReprocessPreparedContext,
+    BulkWorkflowSummary<ReprocessPreparedInput["recipes"][number], RecipeId>
+  >("recipe.reprocessCookbook.finalize")
+    .commit("costing", ({ context }, { input }) =>
+      context.operation.services.recipeCosting.dispatchRecompute(
+        input.succeeded.map(({ result }) => result),
+        { source: "recipe.reprocessCookbook" },
+      ),
+    )
+    .effect("summary", async ({ context }, { input }) => ({
+      reprocessed: input.succeeded.length,
+      importableExtras: [...context.selection.importableExtras],
+    }))
+    .output(({ summary }) => summary),
+  initialProgress: false,
+  onItemError: "stop",
+  progress: () => undefined,
+});
+
+export const reprocessCookbookWorkflow = Object.assign(
+  (
+    context: AuthenticatedStartOperationContext,
+    input: z.output<typeof cookbookIdInput>,
+    signal?: AbortSignal,
+  ) => {
+    const run = async function* () {
+      const prepared = await executeWorkflow(reprocessCookbookPreparation, {
+        context,
+        input,
+        signal,
       });
-      return { reprocessed, importableExtras };
-    },
-  );
-}
-export const extractCookbookChunkWorkflow = (
-  context: AuthenticatedStartOperationContext,
-  input: z.output<typeof chunkRequestInput>,
-) =>
-  extractCookbookChunk(
-    {
-      system: input.system,
-      user: input.user,
-      toolName: input.toolName,
-      toolSchema: input.toolSchema,
-      escalate: input.escalate ?? false,
-    },
-    { db: context.db },
-  );
+      const { context: preparedContext, input: preparedInput } = prepared;
+      yield* executeBulkWorkflow(reprocessCookbookDefinition, {
+        context: preparedContext,
+        input: preparedInput,
+        signal,
+      });
+    };
+    return run();
+  },
+  { definition: reprocessCookbookDefinition },
+);
+type ChunkRequestInput = z.output<typeof chunkRequestInput>;
+export const extractCookbookChunkWorkflow = defineWorkflowOperation(
+  "recipe.extractCookbookChunk",
+  (context: AuthenticatedStartOperationContext, input: ChunkRequestInput) =>
+    extractCookbookChunk(
+      {
+        system: input.system,
+        user: input.user,
+        toolName: input.toolName,
+        toolSchema: input.toolSchema,
+        escalate: input.escalate ?? false,
+      },
+      { db: context.db },
+    ),
+);

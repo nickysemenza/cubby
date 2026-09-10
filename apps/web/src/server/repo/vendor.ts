@@ -1,6 +1,6 @@
-/** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
-
 import type { ActorContext } from "@cubby/schemas/context";
+/** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type {
   ImpactItem,
   OperationDisposition,
@@ -40,11 +40,10 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
+import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
   buildOrderBy,
-  buildPartialUpdateValues,
   buildSearchConditions,
   correlated,
   countWhere,
@@ -55,9 +54,9 @@ import {
   notDeleted,
   rangeConditions,
   unwrapDb,
-  updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { patchEntityRows } from "~/server/repo/entity-patch";
 import { reapUnreferencedImages } from "~/server/repo/image";
 import {
   displayableImageSql,
@@ -439,13 +438,6 @@ export const createVendor = async (
   return { output: await getVendorByID(db, id), entityId: id };
 };
 
-const VENDOR_AUDIT_FIELDS = [
-  "name",
-  "website",
-  "orderUrlTemplate",
-  "notes",
-] as const;
-
 export const updateVendor = async (
   db: Database,
   shortcode: VendorShortcode,
@@ -454,36 +446,17 @@ export const updateVendor = async (
 ): Promise<{ output: VendorOut; entityId: VendorId }> => {
   const id = await resolveOrThrow(db, "vendor", shortcode);
 
-  await withTransaction(db, async (tx) => {
-    const before = await tx.query.vendor.findFirst({
-      where: and(eq(vendor.id, id), notDeleted(vendor)),
-    });
-    if (!before) {
-      throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${id}`);
-    }
-
-    const after = await updateLiveAndReturn(
-      tx,
-      vendor,
-      buildPartialUpdateValues({
-        name: data.name?.trim(),
-        website: data.website,
-        orderUrlTemplate: data.orderUrlTemplate,
-        notes: data.notes,
-      }),
-      id,
-    );
-
-    const changes = computeChanges(before, after, [...VENDOR_AUDIT_FIELDS]);
-    if (changes) {
-      await logAuditEntry(tx, actor, {
-        entityType: "vendor",
-        entityId: id,
-        action: "update",
-        changes,
-      });
-    }
-  });
+  await patchEntityRows(
+    db,
+    actor,
+    {
+      entity: "vendor",
+      table: vendor,
+      fields: entityFieldModels.vendor.audit,
+    },
+    [id],
+    { ...data, name: data.name?.trim() },
+  );
 
   return { output: await getVendorByID(db, id), entityId: id };
 };

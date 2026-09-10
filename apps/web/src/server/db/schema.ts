@@ -9,25 +9,13 @@ import {
   backgroundJobKinds,
 } from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
-import type { DataException } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity-core";
-import {
-  expenseLineBasisValues,
-  expenseLineKindValues,
-} from "@cubby/schemas/expense-line-kind";
 import type {
-  FinancialAccountIdentity,
-  FinancialAccountSourceAlias,
-} from "@cubby/schemas/financial-account";
-import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";
-import type {
-  CookbookId,
   ExpenseAttributionId,
   ExpenseId,
   FinancialAccountId,
   FinancialTransactionId,
   IngredientId,
-  InventoryId,
   LedgerPartyId,
   LedgerTransferId,
   LocationId,
@@ -40,46 +28,19 @@ import type {
   RecipeId,
   TaskId,
   UserId,
-  VendorId,
   WishId,
 } from "@cubby/schemas/identifiers";
-import { imageStatusValues } from "@cubby/schemas/image";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
-import type {
-  ContributionRole,
-  LedgerPartyKind,
-} from "@cubby/schemas/ledger-party";
+import type { ContributionRole } from "@cubby/schemas/ledger-party";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
-import type { LocationValuation } from "@cubby/schemas/location";
-import {
-  mealKindValues,
-  mealTypeValues,
-} from "@cubby/schemas/meal-classification";
-import type { BaseKind } from "@cubby/schemas/problems";
-import { productCategoryValues } from "@cubby/schemas/product";
-import {
-  costTypeValues,
-  projectKindValues,
-  projectStatusValues,
-  taskStatusValues,
-  tradeValues,
-} from "@cubby/schemas/project";
 import {
   type PurchaseDocumentKind,
   purchaseDocumentKindValues,
 } from "@cubby/schemas/purchase";
-import {
-  type RecipeStoredMeta,
-  type RecipeTotals,
-  type RecipeYield,
-  recipeSourceValues,
-} from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import type {
   McpToolCallOutcome,
   McpToolCallSurface,
 } from "@cubby/schemas/telemetry";
-import { inventoryPlacementValues } from "@cubby/shared";
 import { relations, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -115,6 +76,39 @@ import {
   user,
   verification,
 } from "./auth.schema";
+import {
+  generatedCookbookColumns,
+  generatedExpenseColumns,
+  generatedFinancialAccountColumns,
+  generatedFinancialTransactionColumns,
+  generatedImageColumns,
+  generatedIngredientColumns,
+  generatedInventoryColumns,
+  generatedLedgerPartyColumns,
+  generatedLedgerTransferColumns,
+  generatedLocationColumns,
+  generatedMealColumns,
+  generatedProductColumns,
+  generatedProjectColumns,
+  generatedPurchaseColumns,
+  generatedRecipeColumns,
+  generatedTaskColumns,
+  generatedVendorColumns,
+  generatedWishColumns,
+  imageRenderStatusEnum,
+  imageStatusEnum,
+  imageStorageStatusEnum,
+  inventoryPlacementEnum,
+  recipeSourceEnum,
+} from "./generated/entity-columns.gen";
+
+export {
+  recipeSourceEnum,
+  imageStatusEnum,
+  inventoryPlacementEnum,
+  imageRenderStatusEnum,
+  imageStorageStatusEnum,
+};
 
 export type { Amount };
 export type Instruction = { text: string };
@@ -162,24 +156,6 @@ export {
   user,
   verification,
 };
-
-export const recipeSourceEnum = pgEnum("RecipeSource", recipeSourceValues);
-export const imageStatusEnum = pgEnum("ImageStatus", imageStatusValues);
-export const inventoryPlacementEnum = pgEnum(
-  "InventoryPlacement",
-  inventoryPlacementValues,
-);
-export const imageRenderStatusEnum = pgEnum("ImageRenderStatus", [
-  "unverified",
-  "verified",
-  "failed",
-]);
-export const imageStorageStatusEnum = pgEnum("ImageStorageStatus", [
-  "unverified",
-  "available",
-  "missing",
-  "metadata_mismatch",
-]);
 
 export const backgroundJobKindEnum = pgEnum(
   "BackgroundJobKind",
@@ -244,8 +220,6 @@ const pkUuid = <T extends string = string>() =>
  * comparisons. Repository mapper seams validate stored strings through the
  * entity-specific shortcode schemas instead.
  */
-const shortcodeColumn = () => text("shortcode").notNull();
-
 /**
  * Uniqueness over the WHOLE table, soft-deleted rows included. That is the
  * point: a code must never be reused, so a deleted row's code stays a permanent
@@ -258,41 +232,7 @@ const shortcodeUnique = (tableName: string, column: AnyPgColumn) =>
 
 export const recipe = pgTable(
   "Recipe",
-  {
-    id: pkUuid<RecipeId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-    SourceType: recipeSourceEnum("SourceType"),
-    SourceData: text("SourceData"),
-    cookbookId: uuid("cookbookId")
-      .$type<CookbookId>()
-      .references(() => cookbook.id),
-    yield: jsonb("yield").$type<RecipeYield>(),
-    servings: integer("servings"),
-    tags: text("tags").array(),
-    notes: text("notes"),
-    // Precomputed cost/calorie rollup + when it was last computed. `null`
-    // totalsComputedAt ⇒ stale (recomputed by the presence-driven drain). See
-    // recipe-costing.service.
-    totals: jsonb("totals").$type<RecipeTotals | null>(),
-    totalsComputedAt: timestamp("totalsComputedAt", { mode: "date" }),
-    // Import-carried times, split by what the list needs from SQL. These two are
-    // real columns because "sort by total time" and "under 30 minutes" are list
-    // membership and ordering — server work, never a React filter over fetched
-    // rows. Null is genuinely unknown: the source printed no time, or printed
-    // prose no parser would commit to a number for (see `meta.times` below).
-    activeMinutes: integer("activeMinutes"),
-    totalMinutes: integer("totalMinutes"),
-    // Everything else the importers extract that nothing sorts by: the four
-    // printed time strings, prep/cook minutes, special equipment, and the
-    // printed page number (the cross-reference to a physical cookbook).
-    // `meta.url` is deliberately NOT here — it stays derived from
-    // SourceType/SourceData (see `dbRecipeToTopLevelShape`), so provenance keeps
-    // one source of truth and this column needs no backfill.
-    meta: jsonb("meta").$type<RecipeStoredMeta | null>(),
-  },
+  generatedRecipeColumns({ cookbook: (): AnyPgColumn => cookbook.id }),
   (table) => [
     shortcodeUnique("Recipe", table.shortcode),
     // Non-cookbook recipes keep a globally-unique name. EPUB-imported (Book) and
@@ -344,36 +284,10 @@ export const recipe = pgTable(
 // "Tartine Book No. 3" and "Tartine: A Classic Revisited" are different books.
 export const cookbook = pgTable(
   "Cookbook",
-  {
-    id: pkUuid<CookbookId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    author: text("author")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    subjects: text("subjects")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    sourceLabel: text("sourceLabel").notNull(),
-    rawJson: jsonb("rawJson").notNull().$type<ImportRecipe[]>(),
-    coverImageId: uuid("coverImageId").references(() => image.id),
-    // The physical copy on the shelf, when one is owned. Nullable: most
-    // cookbooks are EPUB-only, and most shelf cookbooks were never imported.
-    // The `AnyPgColumn` annotation is load-bearing, same as `Task.parentTaskId`
-    // below: this FK closes a type-level cycle
-    // (Cookbook → Product → Ingredient → Recipe → Cookbook), and without it
-    // every table in the loop infers as `any` (TS7022).
-    productId: uuid("productId")
-      .$type<ProductId>()
-      .references((): AnyPgColumn => product.id),
-    importedAt: timestamp("importedAt", { mode: "date" })
-      .notNull()
-      .defaultNow(),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedCookbookColumns({
+    image: (): AnyPgColumn => image.id,
+    product: (): AnyPgColumn => product.id,
+  }),
   (table) => [
     shortcodeUnique("Cookbook", table.shortcode),
     uniqueIndex("Cookbook_name_key")
@@ -417,34 +331,7 @@ export const recipeSection = pgTable(
 
 export const ingredient = pgTable(
   "Ingredient",
-  {
-    id: pkUuid<IngredientId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    aliases: text("aliases")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    // Base measurement kinds the user has marked "not applicable" for this
-    // ingredient (e.g. volume on whole lemons you only ever buy by count). The
-    // coverage layer drops these from the graded universe so the ingredient can
-    // read "complete" instead of being nagged for a gap it can't/shouldn't fill.
-    // Read ONLY when building the `kinds` arg to conversionCoverage — never reaches
-    // the conversion engine, so it can't affect costing.
-    naKinds: text("naKinds")
-      .array()
-      .notNull()
-      .$type<BaseKind[]>()
-      .default(sql`'{}'::text[]`),
-    // Planning metadata only. This never represents recorded inventory or
-    // authorizes inventory adjustments.
-    usuallyOnHand: boolean("usuallyOnHand").notNull().default(false),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-    recipeId: uuid("recipeId")
-      .$type<RecipeId>()
-      .references(() => recipe.id),
-  },
+  generatedIngredientColumns({ recipe: (): AnyPgColumn => recipe.id }),
   (table) => [
     shortcodeUnique("Ingredient", table.shortcode),
     // Case-insensitive uniqueness must match the lower(name) matcher to prevent concurrent duplicate ingredients.
@@ -500,42 +387,12 @@ export const recipeSectionIngredient = pgTable(
   ],
 );
 
-export const meal = pgTable(
-  "Meal",
-  {
-    id: pkUuid<MealId>(),
-    shortcode: shortcodeColumn(),
-    // Calendar day (no time/tz) — planning is day-granular. mode:"string" returns
-    // a plain "YYYY-MM-DD"; a `date` read as a JS Date lands at UTC midnight and
-    // misfilters by a day in negative-offset timezones. The Postgres column type
-    // is unchanged (still `date`), so no migration is needed.
-    date: date("date", { mode: "string" }).notNull(),
-    name: text("name"),
-    sortOrder: integer("sortOrder"),
-    // Which eating occasion of the day. Nullable: a meal planned before this
-    // column existed is genuinely unslotted, and defaulting it to "dinner"
-    // would invent a fact. The planning calendar orders a day by declaration
-    // order in mealTypeValues, unslotted last.
-    mealType: text("mealType", { enum: mealTypeValues }),
-    // How the meal is eaten. NOT NULL default "cooked" — true of every meal
-    // that predates the column, so it's a real value rather than a stand-in
-    // for "unknown". This is what distinguishes an intentionally recipe-less
-    // meal (eating out) from one whose recipes just haven't been added yet;
-    // both were always legal, neither was previously expressible. Only
-    // "cooked" feeds the shopping list.
-    mealKind: text("mealKind", { enum: mealKindValues })
-      .notNull()
-      .default("cooked"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    shortcodeUnique("Meal", table.shortcode),
-    index("Meal_date_active_idx")
-      .on(table.date)
-      .where(sql`${table.deletedAt} IS NULL`),
-  ],
-);
+export const meal = pgTable("Meal", generatedMealColumns(), (table) => [
+  shortcodeUnique("Meal", table.shortcode),
+  index("Meal_date_active_idx")
+    .on(table.date)
+    .where(sql`${table.deletedAt} IS NULL`),
+]);
 
 export const mealRecipe = pgTable(
   "MealRecipe",
@@ -604,58 +461,7 @@ export const mealRecipePortion = pgTable(
 
 export const product = pgTable(
   "Product",
-  {
-    id: pkUuid<ProductId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    aliases: text("aliases")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    manufacturer: text("manufacturer").notNull(),
-    // Explicit USDA link by FoodData Central id (the universal PK across all food
-    // types). Takes precedence over UPC auto-resolution and can reach
-    // Foundation/Survey foods that have no UPC or NDB number. Non-unique: many
-    // products can share one reference food.
-    fdc_id: integer("fdc_id"),
-    model: text("model"),
-    expectedQuantity: integer("expectedQuantity"),
-    notes: text("notes"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-    ingredientId: uuid("ingredientId")
-      .$type<IngredientId>()
-      .references(() => ingredient.id),
-    category: text("category", {
-      enum: productCategoryValues,
-    }),
-    // Free-form compatibility/grouping tags, same convention as `recipe.tags`.
-    // The point is class compatibility, which a product→product edge table
-    // models badly: 3 angle grinders × 2 disc products would be 6 edges for one
-    // fact, and 13 M18 tools would need 13 more for a battery. One shared tag
-    // ("grinder-4.5in", "M18") on both the tool and the consumable does it, and
-    // `category` (tools vs tool-consumables) already carries which side is which
-    // — so the tag needs no direction of its own.
-    // `notNull` + `'{}'` default follows `aliases` above rather than
-    // `recipe.tags` (nullable), so the presence predicate is a plain
-    // `cardinality(tags) = 0`. No GIN index: ~380 products, and every extra GIN
-    // index widens the standing `db:push` drift for no measurable gain.
-    tags: text("tags")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    // Manual per-item valuation/replacement-price override. The effective price
-    // falls back to the live Expense-derived unit cost when this is null; that
-    // aggregate remains read-time so Expense stays the only historical-money
-    // authority.
-    price: real("price"),
-    usdaUnavailable: boolean("usdaUnavailable"),
-    stockTracked: boolean("stockTracked"),
-    dataExceptions: jsonb("dataExceptions")
-      .notNull()
-      .$type<DataException[]>()
-      .default([]),
-  },
+  generatedProductColumns({ ingredient: (): AnyPgColumn => ingredient.id }),
   (table) => [
     shortcodeUnique("Product", table.shortcode),
     index("Product_category_idx").on(table.category),
@@ -829,42 +635,10 @@ export const upcLookupCache = pgTable(
 
 export const location = pgTable(
   "Location",
-  {
-    id: pkUuid<LocationId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    aliases: text("aliases")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    tags: text("tags")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-    lastBulkInventory: timestamp("lastBulkInventory", { mode: "date" }),
-    parentId: uuid("parentId")
-      .$type<LocationId>()
-      .references((): AnyPgColumn => location.id),
-    // The SKU this location physically IS — "this bin is a Milwaukee
-    // 48-22-8443". Many locations to one Product: the pooled model has no
-    // per-unit identity, and only the count matters. Nullable because rooms,
-    // areas and drawers are never something you buy.
-    productId: uuid("productId")
-      .$type<ProductId>()
-      .references(() => product.id),
-    // Nullable on purpose, and in practice mutually exclusive with productId:
-    // form factor is a fact about the SKU, so a linked location leaves this
-    // null rather than restating what the Product already says. Only
-    // productless locations carry a type.
-    type: text("type"),
-    aiDescription: text("aiDescription"),
-    // Precomputed inventory-valuation rollup (direct + descendants), recomputed
-    // eagerly at inventory/price mutations — like recipe.totals. Null until the
-    // first recompute. See location-valuation.service.
-    valuation: jsonb("valuation").$type<LocationValuation | null>(),
-  },
+  generatedLocationColumns({
+    location: (): AnyPgColumn => location.id,
+    product: (): AnyPgColumn => product.id,
+  }),
   (table) => [
     shortcodeUnique("Location", table.shortcode),
     uniqueIndex("Location_name_key")
@@ -1025,35 +799,10 @@ export const suggestionDismissal = pgTable(
 
 export const inventoryEntry = pgTable(
   "InventoryEntry",
-  {
-    id: pkUuid<InventoryId>(),
-    shortcode: shortcodeColumn(),
-    productId: uuid("productId")
-      .notNull()
-      .$type<ProductId>()
-      .references(() => product.id),
-    amount: jsonb("amount").notNull().$type<Amount>(),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-    locationId: uuid("locationId")
-      .notNull()
-      .$type<LocationId>()
-      .references(() => location.id),
-    // Precomputed: the amount routed to money through the Product's unit-mapping
-    // graph (which carries a synthesized `1 each = $effectivePrice` edge), NOT
-    // `amount.value × price`. Null when this unit has no path to money — either
-    // the Product has no price, or it has one and this unit can't reach it.
-    valuation: real("valuation"),
-    // Durable record of when this entry was last verified in an audit session
-    // (set on session "Done"). Nullable: null = never verified.
-    verifiedAt: timestamp("verifiedAt", { mode: "date" }),
-    // Movable stock vs a fixed installation — see `inventoryPlacementValues`
-    // in @cubby/schemas/inventory for the full semantics. A pgEnum rather than
-    // text + check(): `drizzle-kit push` does not diff CHECK constraints, so a
-    // check here would exist in the test template (built via pushSchema) and
-    // never in production.
-    placement: inventoryPlacementEnum("placement").notNull().default("stock"),
-  },
+  generatedInventoryColumns({
+    product: (): AnyPgColumn => product.id,
+    location: (): AnyPgColumn => location.id,
+  }),
   (table) => [
     shortcodeUnique("InventoryEntry", table.shortcode),
     // Placement is part of the key so a spare on the shelf and one wired into
@@ -1069,49 +818,19 @@ export const inventoryEntry = pgTable(
   ],
 );
 
-export const image = pgTable(
-  "Image",
-  {
-    id: pkUuid(),
-    /** Public IMG- shortcode; every local-table entity has a public identifier. */
-    shortcode: shortcodeColumn(),
-    key: text("key").notNull(),
-    filename: text("filename").notNull(),
-    size: integer("size").notNull(),
-    contentType: text("contentType").notNull(),
-    status: imageStatusEnum("status").notNull().default("PENDING"),
-    // Attachment integrity is intentionally nullable: browser presigned uploads
-    // and legacy rows are verified later by the explicit verification path.
-    width: integer("width"),
-    height: integer("height"),
-    detectedContentType: text("detectedContentType"),
-    sha256: text("sha256"),
-    renderStatus: imageRenderStatusEnum("renderStatus"),
-    storageStatus: imageStorageStatusEnum("storageStatus"),
-    verifiedAt: timestamp("verifiedAt", { mode: "date" }),
-    // MCP attachment retries are scoped to a concrete gallery target. These
-    // generic columns deliberately have no FK because Image may target five
-    // different tables.
-    targetType: text("targetType"),
-    targetId: uuid("targetId"),
-    idempotencyKey: text("idempotencyKey"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    shortcodeUnique("Image", table.shortcode),
-    uniqueIndex("Image_key_key")
-      .on(table.key)
-      .where(sql`${table.deletedAt} IS NULL`),
-    index("Image_createdAt_idx").on(table.createdAt),
-    index("Image_status_idx").on(table.status),
-    uniqueIndex("Image_attachment_idempotency_key")
-      .on(table.targetType, table.targetId, table.idempotencyKey)
-      .where(
-        sql`${table.idempotencyKey} IS NOT NULL AND ${table.deletedAt} IS NULL`,
-      ),
-  ],
-);
+export const image = pgTable("Image", generatedImageColumns(), (table) => [
+  shortcodeUnique("Image", table.shortcode),
+  uniqueIndex("Image_key_key")
+    .on(table.key)
+    .where(sql`${table.deletedAt} IS NULL`),
+  index("Image_createdAt_idx").on(table.createdAt),
+  index("Image_status_idx").on(table.status),
+  uniqueIndex("Image_attachment_idempotency_key")
+    .on(table.targetType, table.targetId, table.idempotencyKey)
+    .where(
+      sql`${table.idempotencyKey} IS NOT NULL AND ${table.deletedAt} IS NULL`,
+    ),
+]);
 
 export const productImage = pgTable(
   "ProductImage",
@@ -1188,39 +907,7 @@ export const recipeImage = pgTable(
 
 export const project = pgTable(
   "Project",
-  {
-    id: pkUuid<ProjectId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    status: text("status", { enum: projectStatusValues })
-      .notNull()
-      .default("planning"),
-    kind: text("kind", { enum: projectKindValues }),
-    locations: text("locations")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    // double precision (not `real`): this is a dollar ledger — float4 loses
-    // cents above ~$16k, which the import reconciliation actually caught.
-    costEstimate: doublePrecision("costEstimate"),
-    // Arbitrary-depth sub-projects (WBS) — a sub-project's own `costEstimate`
-    // is its budget envelope; expenses/tasks attribute to it via their
-    // existing `projectId`, not a new relation. Cycle/self-parent guards live
-    // in repo/project/crud.ts (schema self-FK alone can't express "no cycle").
-    parentProjectId: uuid("parentProjectId")
-      .$type<ProjectId>()
-      .references((): AnyPgColumn => project.id),
-    startDate: date("startDate", { mode: "string" }),
-    endDate: date("endDate", { mode: "string" }),
-    icon: text("icon"),
-    notes: text("notes"),
-    googleDriveFolderUrl: text("googleDriveFolderUrl"),
-    notionPageUrl: text("notionPageUrl"),
-    // Source Notion page id (dashed uuid) — the import script's idempotency key.
-    notionPageId: text("notionPageId"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedProjectColumns({ project: (): AnyPgColumn => project.id }),
   (table) => [
     shortcodeUnique("Project", table.shortcode),
     uniqueIndex("Project_notionPageId_key")
@@ -1291,23 +978,11 @@ export const projectToolUsage = pgTable(
   ],
 );
 
-export const wish = pgTable(
-  "Wish",
-  {
-    id: pkUuid<WishId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    notes: text("notes"),
-    acquiredAt: timestamp("acquiredAt", { mode: "date" }),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    shortcodeUnique("Wish", table.shortcode),
-    index("Wish_createdAt_idx").on(table.createdAt),
-    index("Wish_acquiredAt_idx").on(table.acquiredAt),
-  ],
-);
+export const wish = pgTable("Wish", generatedWishColumns(), (table) => [
+  shortcodeUnique("Wish", table.shortcode),
+  index("Wish_createdAt_idx").on(table.createdAt),
+  index("Wish_acquiredAt_idx").on(table.acquiredAt),
+]);
 
 export const wishCandidate = pgTable(
   "WishCandidate",
@@ -1335,38 +1010,11 @@ export const wishCandidate = pgTable(
 
 export const task = pgTable(
   "Task",
-  {
-    id: pkUuid<TaskId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    status: text("status", { enum: taskStatusValues })
-      .notNull()
-      .default("not_started"),
-    projectId: uuid("projectId")
-      .$type<ProjectId>()
-      .references(() => project.id),
-    subjectProductId: uuid("subjectProductId")
-      .$type<ProductId>()
-      .references(() => product.id),
-    // One level of checklist subtasks — a subtask's own parentTaskId must be
-    // null (enforced in repo/task/crud.ts, not the schema). Parent status
-    // stays fully manual; an all-done checklist never auto-completes it.
-    parentTaskId: uuid("parentTaskId")
-      .$type<TaskId>()
-      .references((): AnyPgColumn => task.id),
-    dueDate: date("dueDate", { mode: "string" }),
-    dueEndDate: date("dueEndDate", { mode: "string" }),
-    trade: text("trade", { enum: tradeValues }).notNull(),
-    // Board-only manual priority within a cell (drag-to-prioritize). Nullable:
-    // ranked cards form a sparse "manual prefix", unranked cards keep the
-    // derived (dueDate/name) order below them. Sparse doubles so an insert
-    // between two ranks is a midpoint write (see board-model.ts computeRank);
-    // NOT a table sort field. Double precision like cost/costEstimate.
-    sortOrder: doublePrecision("sortOrder"),
-    notionPageId: text("notionPageId"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedTaskColumns({
+    project: (): AnyPgColumn => project.id,
+    product: (): AnyPgColumn => product.id,
+    task: (): AnyPgColumn => task.id,
+  }),
   (table) => [
     shortcodeUnique("Task", table.shortcode),
     uniqueIndex("Task_notionPageId_key")
@@ -1415,28 +1063,7 @@ export const taskDependency = pgTable(
  */
 export const vendor = pgTable(
   "Vendor",
-  {
-    id: pkUuid<VendorId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    website: text("website"),
-    logoImageId: uuid("logoImageId").references(() => image.id),
-    /**
-     * URL pattern for this vendor's own order-details page, with `{orderId}`
-     * standing in for `Purchase.orderId` — e.g.
-     * `https://www.amazon.com/gp/your-account/order-details?orderID={orderId}`.
-     *
-     * The per-purchase link is DERIVED from this at read time
-     * (`purchaseOrderUrl`) rather than stored on every Purchase, the same way
-     * an Amazon product link is derived from its ASIN rather than duplicated
-     * into a column (`canonicalExternalIdUrl`). Vendor identity can't be
-     * recovered from the name string, so this hangs off the vendor row.
-     */
-    orderUrlTemplate: text("orderUrlTemplate"),
-    notes: text("notes"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedVendorColumns({ image: (): AnyPgColumn => image.id }),
   (table) => [
     shortcodeUnique("Vendor", table.shortcode),
     uniqueIndex("Vendor_name_key")
@@ -1449,15 +1076,7 @@ export const vendor = pgTable(
 /** A durable economic participant in the household ledger. */
 export const ledgerParty = pgTable(
   "LedgerParty",
-  {
-    id: pkUuid<LedgerPartyId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    kind: text("kind").notNull().$type<LedgerPartyKind>(),
-    notes: text("notes"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedLedgerPartyColumns(),
   (table) => [
     shortcodeUnique("LedgerParty", table.shortcode),
     index("LedgerParty_kind_idx").on(table.kind),
@@ -1473,23 +1092,9 @@ export const ledgerParty = pgTable(
 
 export const financialAccount = pgTable(
   "FinancialAccount",
-  {
-    id: pkUuid<FinancialAccountId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    identity: jsonb("identity").notNull().$type<FinancialAccountIdentity>(),
-    provisional: boolean("provisional").notNull().default(false),
-    sourceAliases: jsonb("sourceAliases")
-      .notNull()
-      .$type<FinancialAccountSourceAlias[]>()
-      .default([]),
-    ledgerPartyId: uuid("ledgerPartyId")
-      .$type<LedgerPartyId>()
-      .references(() => ledgerParty.id),
-    notes: text("notes"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedFinancialAccountColumns({
+    ledgerParty: (): AnyPgColumn => ledgerParty.id,
+  }),
   (table) => [
     shortcodeUnique("FinancialAccount", table.shortcode),
     index("FinancialAccount_name_idx").on(table.name),
@@ -1506,35 +1111,7 @@ export const financialAccount = pgTable(
  */
 export const purchase = pgTable(
   "Purchase",
-  {
-    id: pkUuid<PurchaseId>(),
-    shortcode: shortcodeColumn(),
-    vendorId: uuid("vendorId")
-      .notNull()
-      .$type<VendorId>()
-      .references(() => vendor.id),
-    // The vendor's own order/receipt identifier. Free text — every retailer
-    // formats these differently. Null on the ~40% of events where the vendor never
-    // issued one for (a contractor's progress payment, a farmers-market run).
-    orderId: text("orderId"),
-    // Human-entered context from the original ledger, kept separate from the
-    // vendor's immutable identity and rendered parenthetically in the title.
-    displayLabel: text("displayLabel"),
-    // The vendor order/receipt date. Distinct from `expense.date`, which stays the LEDGER date
-    // driving monthly buckets and project date windows — an invoice dated the
-    // 3rd can clear on the 8th.
-    date: date("date", { mode: "string" }).notNull(),
-    // The literal vendor-printed total. NEVER summed into spend and never
-    // rewritten to match settlement; FinancialTransaction owns charges/refunds.
-    statedTotal: doublePrecision("statedTotal"),
-    notes: text("notes"),
-    dataExceptions: jsonb("dataExceptions")
-      .notNull()
-      .$type<DataException[]>()
-      .default([]),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedPurchaseColumns({ vendor: (): AnyPgColumn => vendor.id }),
   (table) => [
     shortcodeUnique("Purchase", table.shortcode),
     // One order = one purchase. PARTIAL on `orderId IS NOT NULL`, which is what
@@ -1669,32 +1246,10 @@ export const productComponent = pgTable(
  */
 export const financialTransaction = pgTable(
   "FinancialTransaction",
-  {
-    id: pkUuid<FinancialTransactionId>(),
-    shortcode: shortcodeColumn(),
-    accountId: uuid("accountId")
-      .notNull()
-      .$type<FinancialAccountId>()
-      .references(() => financialAccount.id),
-    ledgerTransferId: uuid("ledgerTransferId")
-      .$type<LedgerTransferId>()
-      .references(() => ledgerTransfer.id),
-    kind: text("kind").notNull(),
-    status: text("status").notNull(),
-    amount: doublePrecision("amount").notNull(),
-    transactionDate: date("transactionDate", { mode: "string" }),
-    postedDate: date("postedDate", { mode: "string" }),
-    merchant: text("merchant"),
-    rawDescription: text("rawDescription"),
-    sourceCategory: text("sourceCategory"),
-    sourceRefs: jsonb("sourceRefs")
-      .notNull()
-      .$type<FinancialTransactionSourceRef[]>()
-      .default([]),
-    notes: text("notes"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedFinancialTransactionColumns({
+    financialAccount: (): AnyPgColumn => financialAccount.id,
+    ledgerTransfer: (): AnyPgColumn => ledgerTransfer.id,
+  }),
   (table) => [
     shortcodeUnique("FinancialTransaction", table.shortcode),
     index("FinancialTransaction_accountId_idx").on(table.accountId),
@@ -1782,23 +1337,9 @@ export const financialTransactionAllocation = pgTable(
 /** A durable movement between ledger parties; it is never spend. */
 export const ledgerTransfer = pgTable(
   "LedgerTransfer",
-  {
-    id: pkUuid<LedgerTransferId>(),
-    shortcode: shortcodeColumn(),
-    fromPartyId: uuid("fromPartyId")
-      .notNull()
-      .$type<LedgerPartyId>()
-      .references(() => ledgerParty.id),
-    toPartyId: uuid("toPartyId")
-      .notNull()
-      .$type<LedgerPartyId>()
-      .references(() => ledgerParty.id),
-    amount: doublePrecision("amount").notNull(),
-    date: date("date", { mode: "string" }).notNull(),
-    notes: text("notes"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedLedgerTransferColumns({
+    ledgerParty: (): AnyPgColumn => ledgerParty.id,
+  }),
   (table) => [
     shortcodeUnique("LedgerTransfer", table.shortcode),
     index("LedgerTransfer_fromPartyId_idx").on(table.fromPartyId),
@@ -1983,59 +1524,11 @@ export const statementRow = pgTable(
 
 export const expense = pgTable(
   "Expense",
-  {
-    id: pkUuid<ExpenseId>(),
-    shortcode: shortcodeColumn(),
-    name: text("name").notNull(),
-    // See project.costEstimate — dollars need double precision, not float4.
-    cost: doublePrecision("cost"),
-    date: date("date", { mode: "string" }).notNull(),
-    lineKind: text("lineKind", { enum: expenseLineKindValues })
-      .notNull()
-      .default("principal"),
-    // Is this row a line item, or a slice of a total that was never itemized?
-    // `allocation` marks money cut by payment schedule (a deposit and a balance
-    // on one order) or by an estimated materials/labor split of a lump-sum
-    // contract. Such a row cannot carry a productId — the money doesn't
-    // decompose per item — so it is correctly absent from the goods-without-a-
-    // product worklists, and its costType may be an estimate rather than a
-    // vendor-stated fact. See expenseLineBasisValues for the full contract.
-    lineBasis: text("lineBasis", { enum: expenseLineBasisValues })
-      .notNull()
-      .default("item_line"),
-    costType: text("costType", { enum: costTypeValues }).notNull(),
-    trade: text("trade", { enum: tradeValues }).notNull(),
-    url: text("url"),
-    notes: text("notes"),
-    // Planned/not-yet-made expense (kept out of spend rollups' "actuals" views).
-    future: boolean("future").notNull().default(false),
-    projectId: uuid("projectId")
-      .$type<ProjectId>()
-      .references(() => project.id),
-    // Optional link to the thing this expense bought. Sparse by design: most
-    // material runs stay unlinked, and only inventoried goods (tools, mainly)
-    // get a product. A *negative* expense carrying the same productId is how
-    // an exit is recorded — sale at sale price, return at full price, and a
-    // broken/gifted item as cost 0 (never null: `cost IS NULL` is already the
-    // Unclassified predicate) carrying a *negative* `productQuantity`. Net
-    // cost, ownership window and owned/sold status are derived from these rows
-    // plus inventory; nothing is stored.
-    productId: uuid("productId")
-      .$type<ProductId>()
-      .references(() => product.id),
-    // Optional signed product quantity: unknown is never guessed; settlement exits are represented as negative units.
-    productQuantity: doublePrecision("productQuantity"),
-    // The charge this line belongs to. Nullable: the 193 rows with no vendor
-    // recorded have nothing to attach to, and forcing a synthetic charge on them
-    // would invent a transaction that never happened. `vendor` and `orderId`
-    // resolve THROUGH this join now — see `dbExpenseToAPI`.
-    purchaseId: uuid("purchaseId")
-      .$type<PurchaseId>()
-      .references(() => purchase.id),
-    notionPageId: text("notionPageId"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
+  generatedExpenseColumns({
+    project: (): AnyPgColumn => project.id,
+    product: (): AnyPgColumn => product.id,
+    purchase: (): AnyPgColumn => purchase.id,
+  }),
   (table) => [
     shortcodeUnique("Expense", table.shortcode),
     uniqueIndex("Expense_notionPageId_key")

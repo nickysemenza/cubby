@@ -1,7 +1,7 @@
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { amount, positiveAmount } from "./codec";
-import { productShortcode } from "./identifiers";
+import { productShortcode } from "./identifier-fields";
 
 const sourceMetadata = z.discriminatedUnion("type", [
   z.object({

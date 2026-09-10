@@ -165,7 +165,7 @@ MCP / jobs      ───────────────↗
 JSONL routes    →  cancellable workflow streams
 ```
 
-- Restricted literal specs in `scripts/entity-literals/entities/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm entity:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
+- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm entity:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
 - `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. Explicit Start functions adapt workflows, while typed JSONL routes carry cancellable progress streams.
 - Services own workflows and external enrichment such as USDA data. Repositories retain transaction ownership, invariants, and entity-specific SQL.
 - `Database` is a request-scoped handle: routers and services pass it through, while repository helpers are the sanctioned place to resolve its Drizzle client. This keeps the layered architecture by convention and API locality.

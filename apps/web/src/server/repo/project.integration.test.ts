@@ -1,4 +1,5 @@
 import {
+  createProjectFromTasksInput,
   expenseCreateInput,
   projectCreateInput,
   taskCreateInput,
@@ -7,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { projectDependency } from "~/server/db/schema";
+import { projectCreateFromTasksWorkflow } from "~/server/workflows/project.server";
 
 import { insertAndReturn } from "./database-helpers";
 import { createExpense } from "./expense";
@@ -18,10 +20,30 @@ import {
   projectTreePage,
   updateProject,
 } from "./project";
-import { createTask, updateTask } from "./task";
+import { createTask, getTaskByShortcode, updateTask } from "./task";
 
 describe("project repository", () => {
   const ctx = withTestDb();
+
+  it("promotes tasks through the registered workflow and returns committed project membership", async () => {
+    const task = await createTask(
+      ctx.db,
+      taskCreateInput.parse({ name: "Prepare test room", trade: "other" }),
+      ctx.actor,
+    );
+    const result = await projectCreateFromTasksWorkflow(
+      ctx.db,
+      createProjectFromTasksInput.parse({
+        taskIds: [task.output.id],
+        project: { name: "Workflow promotion project" },
+      }),
+      ctx.actor,
+    );
+    expect(result.project.name).toBe("Workflow promotion project");
+    expect(result.tasks.map(({ id }) => id)).toEqual([task.output.id]);
+    const saved = await getTaskByShortcode(ctx.db, task.output.id);
+    expect(saved?.projectId).toBe(result.project.id);
+  });
 
   it("rolls up spend (including future expenses) and task counts", async () => {
     const { output: project, entityId: projectEntityId } = await createProject(

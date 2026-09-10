@@ -32,3 +32,6 @@ export const sanitizeSectionName = (
   const trimmed = name?.trim();
   return trimmed && trimmed.length >= 2 ? trimmed : null;
 };
+
+export const baseKind = z.enum(["weight", "volume", "money", "calories"]);
+export type BaseKind = z.infer<typeof baseKind>;

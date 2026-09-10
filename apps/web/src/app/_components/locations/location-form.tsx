@@ -30,6 +30,7 @@ import {
 } from "~/app/_components/form-fields";
 import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Card, CardContent } from "~/components/ui/card";
+import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
 import { useImageState } from "~/hooks/useImageState";
 
 import {
@@ -40,7 +41,6 @@ import {
   FormWrapper,
   getSubmitButtonText,
   SideBySideFields,
-  UnifiedTextField,
 } from "../form-utils";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
 import { PendingImageUpload } from "../PendingImageUpload";
@@ -217,12 +217,11 @@ export const LocationForm: FC<LocationFormProps> = (props) => {
       <Card className="overflow-visible">
         <CardContent className="space-y-2 px-4 py-1">
           <SideBySideFields>
-            <UnifiedTextField
-              form={form}
-              name="name"
-              label="Name"
-              placeholder="Enter location name"
-              nullable={false}
+            <EntityPrimitiveFields
+              entity="location"
+              mode={mode}
+              section="main"
+              options={{ name: { placeholder: "Enter location name" } }}
             />
 
             {!linkedProduct && (

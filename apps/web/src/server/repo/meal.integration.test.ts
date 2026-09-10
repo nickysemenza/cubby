@@ -4,6 +4,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { inventoryEntry, recipe } from "~/server/db/schema";
+import {
+  getMealPreparationsWorkflow,
+  saveMealRecipePreparationWorkflow,
+} from "~/server/workflows/meal.server";
 
 import { getDb } from "./database-helpers";
 import { createLedgerParty } from "./ledger-party";
@@ -88,7 +92,7 @@ describe("meal recipe preparations", () => {
     const occurrence = source.recipes[0];
     if (!occurrence || !eater.output) throw new Error("fixture setup failed");
 
-    await saveMealRecipePreparation(
+    await saveMealRecipePreparationWorkflow(
       ctx.db,
       {
         mealRecipeId: occurrence.id,
@@ -115,8 +119,8 @@ describe("meal recipe preparations", () => {
     );
 
     const [sourceRead, targetRead, inventoryAfter] = await Promise.all([
-      getMealPreparations(ctx.db, { mealId: source.id }),
-      getMealPreparations(ctx.db, { mealId: target.id }),
+      getMealPreparationsWorkflow(ctx.db, { mealId: source.id }),
+      getMealPreparationsWorkflow(ctx.db, { mealId: target.id }),
       getDb(ctx.db).query.inventoryEntry.findFirst({
         where: eq(inventoryEntry.id, inventoryBefore.id),
       }),

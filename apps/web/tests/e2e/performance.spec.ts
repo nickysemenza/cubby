@@ -6,7 +6,9 @@ test("intent-preloaded navigation does not flash the route skeleton", async ({
 }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await waitForAppHydration(page);
-  const locations = page.getByRole("link", { name: "Locations", exact: true });
+  const locations = page
+    .getByRole("region", { name: "Pantry", exact: true })
+    .getByRole("link", { name: "Locations", exact: true });
   await locations.hover();
   await page.waitForTimeout(75);
   await locations.click();

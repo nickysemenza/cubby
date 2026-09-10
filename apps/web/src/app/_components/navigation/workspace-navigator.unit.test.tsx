@@ -15,25 +15,35 @@ afterEach(() => {
   harness.dispose();
 });
 
-describe("WorkspaceNavigator interactions", () => {
-  it("searches all tiers, transitions views, marks active routes, and closes on navigation", () => {
-    const openChanges: boolean[] = [];
-    render(
-      <WorkspaceNavigator
-        open
-        onOpenChange={(open) => openChanges.push(open)}
-        initialView="household"
-        activeTo="/projects"
-      />,
-      { wrapper: harness.wrapper },
-    );
+function renderNavigator() {
+  const openChanges: boolean[] = [];
+  render(
+    <WorkspaceNavigator
+      open
+      onOpenChange={(open) => openChanges.push(open)}
+      initialView="household"
+      activeTo="/projects"
+    />,
+    { wrapper: harness.wrapper },
+  );
+  return openChanges;
+}
 
+describe("WorkspaceNavigator interactions", () => {
+  it("marks active destinations and closes on navigation", () => {
+    const openChanges = renderNavigator();
     expect(
       screen
         .getAllByRole("link", { name: "Projects" })
         .every((link) => link.getAttribute("aria-current") === "page"),
     ).toBe(true);
+    expect(screen.getByRole("link", { name: "Records" })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("link", { name: "Locations" })[0]);
+    expect(openChanges).toContain(false);
+  });
 
+  it("searches across household and utility tiers", () => {
+    renderNavigator();
     const search = screen.getByRole("textbox", {
       name: "Find a workspace destination",
     });
@@ -42,17 +52,22 @@ describe("WorkspaceNavigator interactions", () => {
       screen.getByRole("link", { name: /Background jobs/ }),
     ).toBeInTheDocument();
     expect(screen.getByText("Dev")).toBeInTheDocument();
-
     fireEvent.change(search, { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Tools & data" }));
     expect(
-      screen.getByRole("button", { name: "Back to household" }),
+      screen.getByRole("button", { name: "Tools & data" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Data" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Dev" })).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Back to household" }));
-    fireEvent.click(screen.getAllByRole("link", { name: "Locations" })[0]);
-    expect(openChanges).toContain(false);
+  it("moves between household and utility views", () => {
+    renderNavigator();
+    fireEvent.click(screen.getByRole("button", { name: "Tools & data" }));
+    const back = screen.getByRole("button", { name: "Back to household" });
+    expect(back).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "More" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Dev" })).toBeInTheDocument();
+    fireEvent.click(back);
+    expect(
+      screen.getByRole("button", { name: "Tools & data" }),
+    ).toBeInTheDocument();
   });
 });

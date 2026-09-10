@@ -2,30 +2,18 @@ import {
   type EnqueueEmbeddingBackfillOut,
   entityEmbeddingBackfillCoordinatorPayloadSchema,
 } from "@cubby/schemas/background-jobs";
-import type {
-  RequestEmbeddingRefreshInput,
-  RequestEmbeddingRefreshOut,
-  SearchableEntity,
-  SearchHit,
-  SimilarEntitiesInput,
-  SimilarEntitiesOut,
-} from "@cubby/schemas/search";
-import { searchableEntities, similarEntityPairs } from "@cubby/schemas/search";
+import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
+import { searchableEntities } from "@cubby/schemas/search";
 import type { z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
-import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import {
   continueWorkflow,
   startOrReuseWorkflow,
 } from "~/server/background-workflow";
 import type { Database } from "~/server/db";
-import {
-  findSemanticEntityCandidates,
-  findSimilarEntities,
-} from "~/server/repo/entity-embedding";
+import { findSemanticEntityCandidates } from "~/server/repo/entity-embedding";
 import { getStaleSearchDocumentEmbeddingTextPage } from "~/server/repo/search-document";
-import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
 import {
@@ -34,8 +22,6 @@ import {
 } from "~/server/semantic/embeddings";
 import { hydrateSearchHitRefs } from "~/server/services/search.service";
 import { TraceNames, withTrace } from "~/server/tracing";
-
-import { getEmbeddingReadiness } from "./embedding-readiness.service";
 
 const ALL_SEARCHABLE_ENTITIES: SearchableEntity[] = [...searchableEntities];
 
@@ -186,70 +172,6 @@ export async function continueEntityEmbeddingBackfillWorkflow(
       : null,
   });
   return "succeeded";
-}
-
-/** Queue one resolved entity, rather than sampling the global stale worklist. */
-export async function requestEmbeddingRefresh(
-  db: Database,
-  input: RequestEmbeddingRefreshInput,
-): Promise<RequestEmbeddingRefreshOut> {
-  const entityId = await resolveOrThrow(db, input.entityType, input.entityId);
-  const dispatched = await dispatchBackgroundJobs(db, {
-    kind: "entity-embedding.refresh",
-    source: "ui",
-    metadata: { source: "relatedness.indexNow", entityType: input.entityType },
-    jobs: [
-      {
-        kind: "entity-embedding.refresh" as const,
-        dedupeKey: `entity-embedding.refresh:${input.entityType}:${entityId}`,
-        payload: { entityType: input.entityType, entityId },
-      },
-    ],
-  });
-  return { batchId: dispatched.batchId, totalJobs: dispatched.jobIds.length };
-}
-
-/** Entity-to-entity similarity remains an explicit semantic interaction. */
-export async function findSimilarEntitiesForPair(
-  db: Database,
-  input: SimilarEntitiesInput,
-): Promise<SimilarEntitiesOut> {
-  const pair = similarEntityPairs[input.pair];
-  if (!pair) {
-    throw new Error(`Unsupported relatedness pair: ${input.pair}`);
-  }
-  const { source, target } = pair;
-  const sourceEntityId = await resolveOrThrow(db, source, input.sourceId);
-  const sourceRef = { entityType: source, entityId: sourceEntityId };
-  const publicSource = { entityType: source, entityId: input.sourceId };
-  const status = await getEmbeddingReadiness(db, sourceRef);
-  const empty: SimilarEntitiesOut = {
-    source: publicSource,
-    status,
-    results: [],
-  };
-  if (status !== "ready") return empty;
-
-  const candidates = await findSimilarEntities(
-    db,
-    sourceRef,
-    getSemanticEmbeddingConfig(),
-    { targetType: target, limit: input.limit },
-  );
-  const hits = await hydrateSearchHitRefs(db, candidates);
-  const hitByRef = new Map(
-    hits.map((hit) => [`${hit.entityType}:${hit.entityId}`, hit] as const),
-  );
-  return {
-    source: publicSource,
-    status,
-    results: candidates.flatMap((candidate) => {
-      const hit = hitByRef.get(`${candidate.entityType}:${candidate.entityId}`);
-      if (!hit) return [];
-      const { entityId: _privateEntityId, ...entity } = hit;
-      return [{ similarity: candidate.similarity, entity }];
-    }),
-  };
 }
 
 /** Internal semantic fallback for product matching; never used by global UX. */

@@ -21,6 +21,7 @@ import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 /**
  * Transport-neutral attach/detach preview dispatch. Each planner shares the mutation's
@@ -34,81 +35,119 @@ type Planned = {
 
 const EMPTY_PLAN: Planned = { blockers: [], changes: [] };
 
-const planRelation = async (
-  db: Database,
-  input: GeneratedEntityRelationCommand,
-): Promise<{
+type PreviewPlan = {
   planned: Planned;
   publicIdByEntityId: Map<string, string>;
   unresolved?: string[];
-}> => {
-  const targetEntity = generatedEntityRelationTarget(input);
-  const targetShortcodes = generatedEntityRelationItemIds(input);
-  const [parentIds, productIds] = await Promise.all([
-    resolveLiveShortcodes(db, [input.id], input.entity),
-    resolveLiveShortcodes(db, targetShortcodes, targetEntity),
-  ]);
-  const unresolved = [
-    ...(parentIds.has(input.id) ? [] : [input.id]),
-    ...targetShortcodes.filter((code) => !productIds.has(code)),
-  ];
-  if (unresolved.length > 0) {
-    return { planned: EMPTY_PLAN, publicIdByEntityId: new Map(), unresolved };
-  }
+};
 
-  const parentId = parentIds.get(input.id)!;
-  const targets = targetShortcodes.map((code) => productIds.get(code)!);
-  const planned = await previewGeneratedRelationMutation(
-    db,
-    input,
-    parentId,
-    targets,
-  );
+type PreviewInput = { command: GeneratedEntityRelationCommand; now: Date };
 
-  const codes = await lookupShortcodes(db, [
-    parseEntityRef(input.entity, parentId),
-    ...targets.map((id) => parseEntityRef(targetEntity, id)),
-  ]);
-  const publicIdByEntityId = new Map(
-    [
-      [input.entity, parentId] as const,
-      ...targets.map((id) => [targetEntity, id] as const),
-    ].flatMap(([entity, id]) => {
-      const code = codes.get(entityRefKey(entity, id));
-      return code ? [[id, code] as const] : [];
+export const previewOperation = bindWorkflow(
+  workflow<Database, PreviewInput>("entityIntegrity.previewOperation")
+    .parallel("ids", 2, {
+      parent: async ({ context }, { input }) =>
+        resolveLiveShortcodes(
+          context,
+          [input.command.id],
+          input.command.entity,
+        ),
+      targets: async ({ context }, { input }) =>
+        resolveLiveShortcodes(
+          context,
+          generatedEntityRelationItemIds(input.command),
+          generatedEntityRelationTarget(input.command),
+        ),
+    })
+    .call("resolved", async (_, { input: { command }, ids }) => {
+      const codes = generatedEntityRelationItemIds(command);
+      return {
+        targetEntity: generatedEntityRelationTarget(command),
+        parentId: ids.parent.get(command.id),
+        targets: codes.flatMap((code) => {
+          const id = ids.targets.get(code);
+          return id ? [id] : [];
+        }),
+        unresolved: [
+          ...(ids.parent.has(command.id) ? [] : [command.id]),
+          ...codes.filter((code) => !ids.targets.has(code)),
+        ],
+      };
+    })
+    .branch("plan", {
+      when: async (_, { resolved }) => resolved.unresolved.length === 0,
+      whenTrue: (branch) =>
+        branch
+          .call(
+            "planned",
+            async ({ context }, { input: { input, resolved } }) =>
+              previewGeneratedRelationMutation(
+                context,
+                input.command,
+                // All requested shortcodes resolved before entering this branch.
+                resolved.parentId!,
+                resolved.targets,
+              ),
+          )
+          .call(
+            "publicIds",
+            async ({ context }, { input: { input, resolved } }) => {
+              const refs = [
+                parseEntityRef(input.command.entity, resolved.parentId!),
+                ...resolved.targets.map((id) =>
+                  parseEntityRef(resolved.targetEntity, id),
+                ),
+              ];
+              const codes = await lookupShortcodes(context, refs);
+              return new Map(
+                refs.flatMap(({ entity, id }) => {
+                  const code = codes.get(entityRefKey(entity, id));
+                  return code ? [[id, code] as const] : [];
+                }),
+              );
+            },
+          )
+          .output(({ planned, publicIds }): PreviewPlan => ({
+            planned,
+            publicIdByEntityId: publicIds,
+          })),
+      whenFalse: (branch) =>
+        branch.output(({ input: { resolved } }): PreviewPlan => ({
+          planned: EMPTY_PLAN,
+          publicIdByEntityId: new Map(),
+          unresolved: resolved.unresolved,
+        })),
+    })
+    .output(({ input: { command, now }, plan }): PreviewOperation => {
+      const { planned, publicIdByEntityId, unresolved } = plan;
+      return previewOperationSchema.parse({
+        operation: command.action,
+        entity: command.entity,
+        relation: command.relation,
+        targetCount: command.items.length,
+        canProceed: planned.blockers.length === 0 && !unresolved,
+        blockers: [
+          ...planned.blockers.map((item) =>
+            publicImpact(item, publicIdByEntityId),
+          ),
+          ...(unresolved
+            ? [unresolvedBlocker(command.relation, unresolved)]
+            : []),
+        ],
+        changes: planned.changes.map((item) =>
+          publicImpact(item, publicIdByEntityId),
+        ),
+        sideEffects: (planned.sideEffects ?? []).map((item) =>
+          publicImpact(item, publicIdByEntityId),
+        ),
+        generatedAt: now.toISOString(),
+      });
     }),
-  );
-  return { planned, publicIdByEntityId };
-};
-
-export const previewOperation = async (
-  db: Database,
-  input: GeneratedEntityRelationCommand,
-  now: Date,
-): Promise<PreviewOperation> => {
-  const { planned, publicIdByEntityId, unresolved } = await planRelation(
-    db,
-    input,
-  );
-  return previewOperationSchema.parse({
-    operation: input.action,
-    entity: input.entity,
-    relation: input.relation,
-    targetCount: input.items.length,
-    canProceed: planned.blockers.length === 0 && !unresolved,
-    blockers: [
-      ...planned.blockers.map((item) => publicImpact(item, publicIdByEntityId)),
-      ...(unresolved ? [unresolvedBlocker(input.relation, unresolved)] : []),
-    ],
-    changes: planned.changes.map((item) =>
-      publicImpact(item, publicIdByEntityId),
-    ),
-    sideEffects: (planned.sideEffects ?? []).map((item) =>
-      publicImpact(item, publicIdByEntityId),
-    ),
-    generatedAt: now.toISOString(),
-  });
-};
+  (db: Database, command: GeneratedEntityRelationCommand, now: Date) => ({
+    context: db,
+    input: { command, now },
+  }),
+);
 
 const unresolvedBlocker = (entity: string, codes: string[]): ImpactItem => ({
   code: "block-unresolved-target",

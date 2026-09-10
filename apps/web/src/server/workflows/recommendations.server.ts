@@ -1,4 +1,4 @@
-import type { productShortcode } from "@cubby/schemas/identifiers";
+import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type {
   dismissDuplicateProductRecommendationInput,
   dismissProductRecommendationInput,
@@ -19,115 +19,186 @@ import {
   getActiveSuggestionDismissalKeys,
   suggestionCandidateKey,
 } from "~/server/repo/suggestion-dismissal";
-import { getPlacementRecommendation } from "~/server/services/placement-recommendation.service";
+import {
+  placementRecommendationWorkflowDefinition,
+  productionPlacementRecommendationPorts,
+} from "~/server/services/placement-recommendation.service";
 import {
   getProductRelatedness,
+  productRelatednessWorkflowDefinition,
+  productTagPropagationWorkflowDefinition,
+  productionRelatednessDependencies,
   getProductTagPropagation,
 } from "~/server/services/relatedness.service";
-export const getProductRelatednessWorkflow = (
-  db: Database,
-  sourceId: z.output<typeof productShortcode>,
-) => getProductRelatedness(db, sourceId);
-export const getPlacementRecommendationWorkflow = (
-  db: Database,
-  input: z.output<typeof placementRecommendationInput>,
-) => getPlacementRecommendation(db, input.inventoryId);
-export const getProductRecommendationWorkflow = (
-  db: Database,
-  input: z.output<typeof recommendationWorkbenchInput>,
-) => getProductRelatedness(db, input.sourceId);
-export const getDuplicateProductRecommendationWorkflow = async (
-  db: Database,
-  input: z.output<typeof duplicateProductRecommendationInput>,
-) => {
-  const candidates = await findDuplicateProductIdentities(db);
-  const candidate =
-    candidates.find((item) =>
-      item.products.some((product) => product.id === input.sourceId),
-    ) ?? null;
-  if (!candidate) return null;
-  const sourceEntityId = await resolveOrThrow(db, "product", input.sourceId);
-  const dismissals = await getActiveSuggestionDismissalKeys(db, {
-    sourceEntityType: "product",
-    sourceEntityId,
-    suggestionKind: "product.duplicate",
-  });
-  const candidateKey = await suggestionCandidateKey(
-    "product.duplicate",
-    candidate.products.map((product) => product.id).sort(),
-  );
-  return dismissals.has(candidateKey) ? null : candidate;
-};
-export const dismissDuplicateProductRecommendationWorkflow = async (
-  db: Database,
-  input: z.output<typeof dismissDuplicateProductRecommendationInput>,
-) => {
-  const [sourceEntityId, candidates] = await Promise.all([
-    resolveOrThrow(db, "product", input.sourceId),
-    findDuplicateProductIdentities(db),
-  ]);
-  const candidate = candidates.find((item) =>
-    item.products.some((product) => product.id === input.sourceId),
-  );
-  if (!candidate)
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      "Duplicate recommendation is no longer current",
-    );
-  await dismissSuggestion(db, {
-    sourceEntityType: "product",
-    sourceEntityId,
-    suggestionKind: "product.duplicate",
-    candidateKey: await suggestionCandidateKey(
-      "product.duplicate",
-      candidate.products.map((product) => product.id).sort(),
-    ),
-  });
-  return { ok: true as const };
-};
-export const getTagPropagationRecommendationWorkflow = (
-  db: Database,
-  input: z.output<typeof tagPropagationRecommendationInput>,
-) => getProductTagPropagation(db, input.sourceId);
-export const dismissTagPropagationWorkflow = async (
-  db: Database,
-  input: z.output<typeof dismissTagPropagationInput>,
-) => {
-  const sourceEntityId = await resolveOrThrow(db, "product", input.sourceId);
-  const current = await getProductTagPropagation(db, input.sourceId);
-  if (!current.proposals.some((proposal) => proposal.tag === input.tag))
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      "Tag recommendation is no longer current",
-    );
-  await dismissSuggestion(db, {
-    sourceEntityType: "product",
-    sourceEntityId,
-    suggestionKind: "product.tag-propagation",
-    candidateKey: await suggestionCandidateKey("product.tag-propagation", [
-      input.tag,
-    ]),
-  });
-  return { ok: true as const };
-};
-export const dismissProductRecommendationWorkflow = async (
-  db: Database,
-  input: z.output<typeof dismissProductRecommendationInput>,
-) => {
-  const sourceEntityId = await resolveOrThrow(db, "product", input.sourceId);
-  const current = await getProductRelatedness(db, input.sourceId);
-  if (!current.items.some((item) => item.shortcode === input.targetId))
-    throw createAppError(
-      "PRODUCT_NOT_FOUND",
-      "Recommendation is no longer current",
-    );
-  await dismissSuggestion(db, {
-    sourceEntityType: "product",
-    sourceEntityId,
-    suggestionKind: "product.related",
-    candidateKey: await suggestionCandidateKey("product.related", [
-      input.targetId,
-    ]),
-  });
-  return { ok: true as const };
-};
+import { bindWorkflow, workflow } from "~/server/workflow-runtime";
+
+export const getProductRelatednessWorkflow = bindWorkflow(
+  productRelatednessWorkflowDefinition,
+  (db: Database, input: ProductShortcode) => ({
+    context: { db, dependencies: productionRelatednessDependencies },
+    input,
+  }),
+);
+export const getPlacementRecommendationWorkflow = bindWorkflow(
+  placementRecommendationWorkflowDefinition,
+  (db: Database, input: z.output<typeof placementRecommendationInput>) => ({
+    context: { db, ports: productionPlacementRecommendationPorts },
+    input,
+  }),
+);
+export const getProductRecommendationWorkflow = bindWorkflow(
+  { ...productRelatednessWorkflowDefinition, name: "recommendations.product" },
+  (db: Database, input: z.output<typeof recommendationWorkbenchInput>) => ({
+    context: { db, dependencies: productionRelatednessDependencies },
+    input: input.sourceId,
+  }),
+);
+export const getDuplicateProductRecommendationWorkflow = bindWorkflow(
+  workflow<Database, z.output<typeof duplicateProductRecommendationInput>>(
+    "recommendations.duplicate",
+  )
+    .call("find", async ({ context }) =>
+      findDuplicateProductIdentities(context),
+    )
+    .call("resolve", async ({ context }, { input, find }) => {
+      const candidate = find.find((item) =>
+        item.products.some((product) => product.id === input.sourceId),
+      );
+      if (!candidate) return null;
+      const sourceEntityId = await resolveOrThrow(
+        context,
+        "product",
+        input.sourceId,
+      );
+      const dismissals = await getActiveSuggestionDismissalKeys(context, {
+        sourceEntityType: "product",
+        sourceEntityId,
+        suggestionKind: "product.duplicate",
+      });
+      const candidateKey = await suggestionCandidateKey(
+        "product.duplicate",
+        candidate.products.map((product) => product.id).sort(),
+      );
+      return dismissals.has(candidateKey) ? null : candidate;
+    })
+    .output(({ resolve }) => resolve),
+  (
+    db: Database,
+    input: z.output<typeof duplicateProductRecommendationInput>,
+  ) => ({ context: db, input }),
+);
+type DuplicateDismissInput = z.output<
+  typeof dismissDuplicateProductRecommendationInput
+>;
+export const dismissDuplicateProductRecommendationWorkflow = bindWorkflow(
+  workflow<Database, DuplicateDismissInput>("recommendations.duplicate.dismiss")
+    .parallel("load", 2, {
+      source: async ({ context }, { input }) =>
+        resolveOrThrow(context, "product", input.sourceId),
+      candidates: async ({ context }) =>
+        findDuplicateProductIdentities(context),
+    })
+    .call("validate", async (_, { input, load }) => {
+      const { source: sourceEntityId, candidates } = load;
+      const candidate = candidates.find((item) =>
+        item.products.some((product) => product.id === input.sourceId),
+      );
+      if (!candidate)
+        throw createAppError(
+          "PRODUCT_NOT_FOUND",
+          "Duplicate recommendation is no longer current",
+        );
+      return {
+        sourceEntityType: "product",
+        sourceEntityId,
+        suggestionKind: "product.duplicate",
+        candidateKey: await suggestionCandidateKey(
+          "product.duplicate",
+          candidate.products.map((product) => product.id).sort(),
+        ),
+      };
+    })
+    .commit("dismiss", async ({ context }, { validate }) => {
+      await dismissSuggestion(context, {
+        ...validate,
+        sourceEntityType: "product",
+      });
+      return { ok: true as const };
+    })
+    .output(({ dismiss }) => dismiss),
+  (db: Database, input: DuplicateDismissInput) => ({ context: db, input }),
+);
+export const getTagPropagationRecommendationWorkflow = bindWorkflow(
+  productTagPropagationWorkflowDefinition,
+  (
+    db: Database,
+    input: z.output<typeof tagPropagationRecommendationInput>,
+  ) => ({
+    context: { db, dependencies: productionRelatednessDependencies },
+    input: input.sourceId,
+  }),
+);
+export const dismissTagPropagationWorkflow = bindWorkflow(
+  workflow<Database, z.output<typeof dismissTagPropagationInput>>(
+    "recommendations.tagPropagation.dismiss",
+  )
+    .call("read", async ({ context }, { input }) => ({
+      sourceEntityId: await resolveOrThrow(context, "product", input.sourceId),
+      current: await getProductTagPropagation(context, input.sourceId),
+      input,
+    }))
+    .commit("dismiss", async ({ context }, { read }) => {
+      const { sourceEntityId, current, input } = read;
+      if (!current.proposals.some((proposal) => proposal.tag === input.tag))
+        throw createAppError(
+          "PRODUCT_NOT_FOUND",
+          "Tag recommendation is no longer current",
+        );
+      await dismissSuggestion(context, {
+        sourceEntityType: "product",
+        sourceEntityId,
+        suggestionKind: "product.tag-propagation",
+        candidateKey: await suggestionCandidateKey("product.tag-propagation", [
+          input.tag,
+        ]),
+      });
+      return { ok: true as const };
+    })
+    .output(({ dismiss }) => dismiss),
+  (db: Database, input: z.output<typeof dismissTagPropagationInput>) => ({
+    context: db,
+    input,
+  }),
+);
+export const dismissProductRecommendationWorkflow = bindWorkflow(
+  workflow<Database, z.output<typeof dismissProductRecommendationInput>>(
+    "recommendations.product.dismiss",
+  )
+    .call("read", async ({ context }, { input }) => ({
+      sourceEntityId: await resolveOrThrow(context, "product", input.sourceId),
+      current: await getProductRelatedness(context, input.sourceId),
+      input,
+    }))
+    .commit("dismiss", async ({ context }, { read }) => {
+      const { sourceEntityId, current, input } = read;
+      if (!current.items.some((item) => item.shortcode === input.targetId))
+        throw createAppError(
+          "PRODUCT_NOT_FOUND",
+          "Recommendation is no longer current",
+        );
+      await dismissSuggestion(context, {
+        sourceEntityType: "product",
+        sourceEntityId,
+        suggestionKind: "product.related",
+        candidateKey: await suggestionCandidateKey("product.related", [
+          input.targetId,
+        ]),
+      });
+      return { ok: true as const };
+    })
+    .output(({ dismiss }) => dismiss),
+  (
+    db: Database,
+    input: z.output<typeof dismissProductRecommendationInput>,
+  ) => ({ context: db, input }),
+);

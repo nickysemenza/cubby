@@ -5,6 +5,23 @@ import { compileEntityListInput, entityListFor } from "./entity-list.functions";
 import type { FilterPatch } from "./filters";
 import type { ListEntity } from "./generated/entity-lists.gen";
 
+type EntityListLoaderArgs = {
+  context: { queryClient: QueryClient };
+  deps: FilterPatch;
+  abortController: AbortController;
+};
+
+/** Bind the standard eager list loader while leaving route options literal. */
+export function entityListLoader<E extends ListEntity>(entity: E) {
+  return ({ context, deps, abortController }: EntityListLoaderArgs) =>
+    ensureEntityListSsr({
+      queryClient: context.queryClient,
+      entity,
+      search: deps,
+      signal: abortController.signal,
+    });
+}
+
 /**
  * Hydrate exactly the first generic-list page when its route-primary renderer
  * is active. Embedded tables intentionally do not call this helper.

@@ -1,6 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { PanelRight } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -192,6 +192,7 @@ export function useEntityPreview(
   const renderInspector = options?.renderInspector ?? renderDefaultInspector;
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const router = useRouter();
   const productionBrowserOperations = useMemo<EntityPreviewBrowserOperations>(
     () => ({
       navigateToDetail: (entity, id) => {
@@ -203,14 +204,18 @@ export function useEntityPreview(
       },
       prefetchDetail: (entity, id) =>
         prefetchEntityPreview(queryClient, entity, id),
-      cancelPrefetch: (queryKey) =>
-        queryClient.cancelQueries({
+      cancelPrefetch: (queryKey) => {
+        // Route loaders share this query before mounting an observer, so an
+        // inactive query can already belong to an in-progress navigation.
+        if (router.state.status === "pending") return;
+        return queryClient.cancelQueries({
           queryKey,
           exact: true,
           type: "inactive",
-        }),
+        });
+      },
     }),
-    [navigate, queryClient],
+    [navigate, queryClient, router],
   );
   const browserOperations =
     options?.browserOperations ?? productionBrowserOperations;
