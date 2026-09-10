@@ -17,7 +17,7 @@ test("long-press moves a task in the responsive agenda and persists it", async (
     `/tasks?view=board&q=${encodeURIComponent(name)}`,
     source,
   );
-  const committed = waitForDndMutation(page, "task.update");
+  const committed = waitForDndMutation(page, "task");
   await dragByTouch(page, source, destination);
   await expect(destination).toContainText(name);
 

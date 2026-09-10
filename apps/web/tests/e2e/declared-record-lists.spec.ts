@@ -1,4 +1,5 @@
 import { seedRecordListDisplayPrerequisite } from "./e2e-fixtures";
+import { waitForAppHydration } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
 
 for (const viewport of [
@@ -58,7 +59,11 @@ for (const viewport of [
     // The parent relationship is visible in both table rows and mobile cards;
     // Children remains hidden by default in the existing display preferences.
     await page.goto(`/locations?name=${encodeURIComponent(`${name} shelf`)}`);
+    await waitForAppHydration(page);
     await page.getByRole("button", { name: "Table view", exact: true }).click();
+    await expect(
+      page.getByRole("button", { name: "Table view", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
     if (viewport.name === "desktop") {
       await expect(
         page.getByRole("columnheader").filter({

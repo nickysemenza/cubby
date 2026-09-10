@@ -17,7 +17,7 @@ test("phone agenda events edit in a bottom sheet", async ({
   const editor = page.getByRole("dialog", { name });
   await expect(editor).toHaveAttribute("data-side", "bottom");
   await editor.getByLabel("Name").fill(updatedName);
-  const committed = waitForDndMutation(page, "task.update");
+  const committed = waitForDndMutation(page, "task");
   await editor.getByRole("button", { name: "Save" }).click();
   await committed;
   await expect(page.getByRole("dialog")).toHaveCount(0);

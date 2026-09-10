@@ -22,7 +22,7 @@ test("moves a task between statuses with the keyboard and persists it", async ({
     `/tasks?view=board&q=${encodeURIComponent(name)}`,
     source,
   );
-  const committed = waitForDndMutation(page, "task.update");
+  const committed = waitForDndMutation(page, "task");
   await dragByKeyboard(source, ["ArrowRight"]);
   await committed;
   await reloadAuthenticatedPage(page, taskDropTarget(page, "Later"));
