@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
 
 use super::consumption::PlanTrio;
-use crate::{WAmount, WConversionStep, WIngredientUsage, WProductInput};
+use crate::{
+    WAmount, WConversionStep, WIngredientUsage, WNamedEstimate, WNutritionTotals, WProductInput,
+};
 
 /// Row kind (the zod `kind: "ingredient" | "recipe"`).
 #[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -231,6 +233,8 @@ pub struct WRowResult {
     pub price: WMeasureResult,
     pub gram: WMeasureResult,
     pub nutrients: WNutrientsResult,
+    /// One canonical estimate for every requested nutrient target.
+    pub nutrition: Vec<WNamedEstimate>,
     /// Completeness flags for totals coverage. This is stricter than the
     /// measure result: a sub-recipe can resolve to a numeric partial total while
     /// still being missing price/weight/nutrients internally.
@@ -290,6 +294,8 @@ pub struct WRecipeCosting {
     /// coverage from an absent nutrient total.
     pub nutrient_coverage: Vec<WNutrientCoverage>,
     pub total_ingredients: u32,
+    /// Canonical cost and per-target nutrition estimates.
+    pub estimates: WNutritionTotals,
     pub missing_by_type: WMissingByType,
     /// Per-row trace + resolved measures, in input order.
     pub rows: Vec<WRowResult>,

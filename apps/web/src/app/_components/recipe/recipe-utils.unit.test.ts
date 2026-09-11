@@ -5,6 +5,7 @@ import { expect, it } from "vitest";
 import {
   formatYield,
   getIngredientName,
+  getRecipeNutritionBasis,
   getServingBasis,
 } from "./recipe-utils";
 
@@ -73,6 +74,39 @@ it("recipe utils", () => {
   expect(si).toBeDefined();
   if (!si) return;
   expect(getIngredientName(si)).toEqual("flour-r");
+});
+
+it("nutrition basis requires a serving count and preserves one serving", () => {
+  expect(
+    getRecipeNutritionBasis({ yield: { value: 300, unit: "g" } }, "serving"),
+  ).toMatchObject({ basis: "whole", factor: 1, hasServing: false });
+  expect(
+    getRecipeNutritionBasis(
+      { servings: 1, yield: { value: 300, unit: "g" } },
+      "serving",
+    ),
+  ).toMatchObject({ basis: "serving", factor: 1, label: "per serving" });
+  expect(
+    getRecipeNutritionBasis(
+      { yield: { value: 4, unit: "servings" } },
+      "serving",
+    ),
+  ).toMatchObject({ basis: "serving", factor: 0.25 });
+  expect(getRecipeNutritionBasis({ servings: 4 }, "whole")).toMatchObject({
+    basis: "whole",
+    factor: 1,
+  });
+});
+
+it("keeps per-serving nutrition independent of fractional display rounding", () => {
+  const recipeScale = 0.3333;
+  const basis = getRecipeNutritionBasis(
+    { servings: 2 },
+    "serving",
+    recipeScale,
+  );
+  expect(150 * recipeScale * basis.factor).toBeCloseTo(75);
+  expect(250 * recipeScale * basis.factor).toBeCloseTo(125);
 });
 
 /**

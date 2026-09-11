@@ -4,9 +4,11 @@ import {
   MEAL_SLOT_DURATION_MINUTES,
   MEAL_TYPE_START_MINUTES,
 } from "@cubby/schemas/meal-classification";
+import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import ICAL from "ical.js";
 
 import { householdDateTime } from "~/lib/household-date";
+import { formatEstimate } from "~/lib/nutrition-format";
 
 /**
  * RFC 5545 serializer for the published calendar feed.
@@ -185,9 +187,19 @@ const KIND_SPECS = {
         parts.push(MEAL_KIND_LABELS[item.mealKind]);
       }
       const stats: string[] = [];
-      if (item.calories > 0) stats.push(`${Math.round(item.calories)} kcal`);
-      if (item.cost > 0) stats.push(`$${item.cost.toFixed(2)}`);
-      if (item.nutritionPending) stats.push("nutrition pending");
+      const kcal = item.mealTotals.nutrition.kcal;
+      if (hasKnownEstimate(kcal))
+        stats.push(
+          formatEstimate(kcal, (value) => `${Math.round(value)} kcal`),
+        );
+      if (hasKnownEstimate(item.mealTotals.cost))
+        stats.push(
+          formatEstimate(
+            item.mealTotals.cost,
+            (value) => `$${value.toFixed(2)}`,
+          ),
+        );
+      if (kcal.status === "pending") stats.push("nutrition pending");
       if (stats.length > 0) parts.push(stats.join(" · "));
       return parts.length > 0 ? parts.join("\n") : null;
     },

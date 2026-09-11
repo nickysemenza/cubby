@@ -1,3 +1,4 @@
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import {
   recipeGraphOut,
   recipeListItemOut,
@@ -177,7 +178,13 @@ describe("recipe repository helpers", () => {
         servings: null,
         tags: null,
         notes: null,
-        totals: null,
+        totals: {
+          cost: { status: "pending", reason: "totals_missing" },
+          nutrition: buildNutrition(() => ({
+            status: "pending",
+            reason: "totals_missing",
+          })),
+        },
         meta: {
           url: "https://example.com/recipe",
           times: {

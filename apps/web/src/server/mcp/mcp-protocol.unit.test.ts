@@ -1,5 +1,6 @@
 import { mcpToolName } from "@cubby/schemas/entity-manifest";
 import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
+import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -112,8 +113,25 @@ describe("MCP protocol smoke", () => {
   });
 
   it("projects storage-only child ids out of generic entity results", async () => {
-    const mealRecipe = mock(mealRecipeOut);
-    const meal = { ...mock(mealOut), recipes: [mealRecipe] };
+    const totals: NutritionTotals = {
+      cost: { status: "unavailable", reason: "no_data" },
+      nutrition: buildNutrition((key) =>
+        key === "sodium"
+          ? {
+              status: "complete",
+              lower: 0,
+              upper: null,
+              coverage: { covered: 1, total: 1 },
+            }
+          : { status: "pending", reason: "totals_missing" },
+      ),
+    };
+    const mealRecipe = mock(mealRecipeOut, {
+      overrides: { scaledTotals: totals },
+    });
+    const meal = mock(mealOut, {
+      overrides: { recipes: [mealRecipe], totals },
+    });
     const runEntity: ExecuteEntity = async () => ({
       action: "list",
       entity: "meal",
@@ -144,5 +162,17 @@ describe("MCP protocol smoke", () => {
     expect(result.isError).not.toBe(true);
     expect(serialized).not.toContain(mealRecipe.id);
     expect(serialized).toContain(mealRecipe.recipeId);
+    expect(result.structuredContent).toMatchObject({
+      items: [
+        {
+          totals: {
+            nutrition: {
+              sodium: { status: "complete", lower: 0 },
+              protein: { status: "pending" },
+            },
+          },
+        },
+      ],
+    });
   });
 });

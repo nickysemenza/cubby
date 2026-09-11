@@ -1,17 +1,13 @@
 import { z } from "zod";
 import { timestampedFields } from "./base-entity";
-import { money } from "./money";
 import {
   mealRecipeId,
   mealShortcode,
   recipeShortcode,
 } from "./identifier-fields";
 import { mealScale, mealYieldGrams } from "./meal-shared";
-import {
-  costCalorieTotals,
-  recipeTotals,
-  recipeYieldSchema,
-} from "./recipe-shared";
+import { nutritionTotals } from "./nutrition";
+import { recipeTotals, recipeYieldSchema } from "./recipe-shared";
 
 export const mealRecipeInput = z.object({
   recipeId: recipeShortcode.describe("Recipe ID to plan into the meal"),
@@ -25,7 +21,7 @@ export const mealRecipeInput = z.object({
 });
 export type MealRecipeInput = z.infer<typeof mealRecipeInput>;
 
-export const scaledTotals = costCalorieTotals;
+export const scaledTotals = nutritionTotals;
 export type ScaledTotals = z.infer<typeof scaledTotals>;
 
 /** A recipe as summarized inside a meal (no ingredient graph). */
@@ -46,17 +42,11 @@ export const mealRecipeOut = z.object({
   sortOrder: z.number().int().nullable(),
   estimatedYieldGrams: mealYieldGrams.nullable(),
   actualYieldGrams: mealYieldGrams.nullable(),
-  /** recipe.totals x scale, or null when totals are absent/stale. */
-  scaledTotals: scaledTotals.nullable(),
+  /** Current recipe totals scaled to this occurrence. */
+  scaledTotals,
   ...timestampedFields,
 });
 export type MealRecipeOut = z.infer<typeof mealRecipeOut>;
 
-export const mealTotals = z.object({
-  costTotal: money,
-  costTotalUpper: money.optional(),
-  caloriesTotal: z.number(),
-  caloriesTotalUpper: z.number().optional(),
-  pending: z.boolean(),
-});
+export const mealTotals = nutritionTotals;
 export type MealTotals = z.infer<typeof mealTotals>;

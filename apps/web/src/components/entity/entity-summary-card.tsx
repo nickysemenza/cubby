@@ -1,48 +1,27 @@
+import {
+  hasKnownEstimate,
+  measureEstimate,
+  nutritionEstimate,
+  nutritionTotals,
+  type MeasureEstimate,
+} from "@cubby/schemas/nutrition";
 import * as React from "react";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
-import {
-  perServingRange,
-  perUnitSuffix,
-  recipeHeadlineTotals,
-} from "~/app/_components/recipe/recipe-utils";
 import type { SummaryItem } from "~/app/_components/SummaryCard";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { StatGrid, StatTile } from "~/components/ui/stat-tile";
-import { formatNumberRange } from "~/lib/format-range";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";
 
 // Zod schemas for summary data types
-const recipeSummaryDataSchema = z.object({
-  price: z.number(),
-  priceUpper: z.number().optional(),
-  weight: z.number(),
-  weightUpper: z.number().optional(),
-  nutrients: z.record(z.string(), z.number()),
-  /** Parallel upper-bound record (only ranged codes), for min–max display. */
-  nutrientsUpper: z.record(z.string(), z.number()).optional(),
-  totalIngredients: z.number(),
-  missingByType: z.object({
-    price: z.array(z.string()),
-    weight: z.array(z.string()),
-    nutrients: z.array(z.string()),
-  }),
-  /** Per-portion basis; when present each metric gains a "/ {noun}" sub-line. */
-  perServing: z
-    .object({ divisor: z.number(), noun: z.string() })
-    .nullable()
-    .optional(),
+const recipeSummaryDataSchema = nutritionTotals.extend({
+  /** Weight is outside NutritionTotals but useful for a recipe summary. */
+  weight: measureEstimate.optional(),
 });
 
-const nutritionSummaryDataSchema = z.object({
-  calories: z.number(),
-  protein: z.number(),
-  carbs: z.number(),
-  fat: z.number(),
-  fiber: z.number().optional(),
-  sugar: z.number().optional(),
-});
+const nutritionSummaryDataSchema = nutritionEstimate;
 
 const inventorySummaryDataSchema = z.object({
   totalValue: z.number(),
@@ -69,7 +48,7 @@ export const entitySummaryDataSchema = z.discriminatedUnion("type", [
 ]);
 
 // Derived types from Zod schemas
-export type RecipeSummaryData = z.infer<typeof recipeSummaryDataSchema>;
+type RecipeSummaryData = z.infer<typeof recipeSummaryDataSchema>;
 type NutritionSummaryData = z.infer<typeof nutritionSummaryDataSchema>;
 type InventorySummaryData = z.infer<typeof inventorySummaryDataSchema>;
 
@@ -94,135 +73,62 @@ interface EntitySummaryCardProps {
 }
 
 const formatRecipeSummary = (data: RecipeSummaryData): SummaryItem[] => {
-  // Builds one metric: a clean value plus an optional small coverage caption.
-  // Keeping coverage out of the value prevents the big number from wrapping into
-  // adjacent grid columns.
-  const format = (n: number, unit: string, prefix: string) =>
-    `${prefix}${n.toFixed(n < 10 ? 2 : 0)}${unit}`;
-
   const buildMetric = (
     label: string,
-    value: number,
-    missingNames: string[],
-    total: number,
-    unit: string,
-    prefix = "",
-    upper?: number,
-  ): SummaryItem => {
-    const missingCount = missingNames.length;
-    const successCount = total - missingCount;
-    if (successCount === 0) {
-      return { label, value: "No data available" };
-    }
-    const fmt = (n: number) => format(n, unit, prefix);
-    const basis = data.perServing;
-    const per = basis && perServingRange(value, upper, basis.divisor);
-    const complete = successCount === total;
-    return {
-      label,
-      value: formatNumberRange(value, upper, fmt),
-      caption: complete ? undefined : `${successCount}/${total} ingredients`,
-      // Surface *which* ingredients are missing this measure on hover — the
-      // deep-linkable fixes live in the adjacent coverage popover.
-      captionTitle: complete
-        ? undefined
-        : `Missing: ${missingNames.join(", ")}`,
-      subValue:
-        basis && per
-          ? `${formatNumberRange(per.value, per.upper, fmt)} ${perUnitSuffix(basis.noun)}`
-          : undefined,
-    };
-  };
+    estimate: MeasureEstimate,
+    formatNumber: (value: number) => string,
+  ): SummaryItem => ({
+    label,
+    value: formatEstimate(estimate, formatNumber),
+    caption:
+      hasKnownEstimate(estimate) && estimate.status === "partial"
+        ? `${estimate.coverage.covered}/${estimate.coverage.total} ingredients`
+        : undefined,
+  });
 
-  // The four headline figures, defined once in recipeHeadlineTotals so the table,
-  // charts, and magazine kicker agree on which numbers they are.
-  const head = recipeHeadlineTotals(data);
-  const nutrientsMissing = data.missingByType.nutrients;
   return [
-    buildMetric(
-      "Total Cost",
-      head.cost,
-      data.missingByType.price,
-      data.totalIngredients,
-      "",
-      "$",
-      head.costUpper,
-    ),
-    buildMetric(
-      "Total Weight",
-      head.weight,
-      data.missingByType.weight,
-      data.totalIngredients,
-      "g",
-      "",
-      head.weightUpper,
-    ),
+    buildMetric("Total Cost", data.cost, formatCurrency),
+    ...(data.weight
+      ? [
+          buildMetric(
+            "Total Weight",
+            data.weight,
+            (value) => `${Math.round(value)}g`,
+          ),
+        ]
+      : []),
     buildMetric(
       "Total Calories",
-      head.calories,
-      nutrientsMissing,
-      data.totalIngredients,
-      " kcal",
-      "",
-      head.caloriesUpper,
+      data.nutrition.kcal,
+      (value) => `${Math.round(value)} kcal`,
     ),
     buildMetric(
       "Total Protein",
-      head.protein,
-      nutrientsMissing,
-      data.totalIngredients,
-      "g",
-      "",
-      head.proteinUpper,
+      data.nutrition.protein,
+      (value) => `${value.toFixed(1)}g`,
     ),
   ];
 };
 
-// The per-ingredient "missing data" breakdown moved into the recipe view's
-// "N block totals" coverage popover (RecipeCostingCoverage), which carries the
-// same names plus the highest-leverage fix + a deep-link — so the summary card
-// stays a clean four-stat grid.
+const formatNutritionSummary = (data: NutritionSummaryData): SummaryItem[] => {
+  const metric = (
+    label: string,
+    estimate: MeasureEstimate,
+    formatNumber: (value: number) => string,
+  ): SummaryItem => ({
+    label,
+    value: formatEstimate(estimate, formatNumber),
+  });
 
-const formatNutritionSummary = (data: NutritionSummaryData): SummaryItem[] => [
-  {
-    label: "Calories",
-    value: data.calories,
-    formatter: (value) => `${Number(value).toFixed(0)} kcal`,
-  },
-  {
-    label: "Protein",
-    value: data.protein,
-    formatter: (value) => `${Number(value).toFixed(1)}g`,
-  },
-  {
-    label: "Carbs",
-    value: data.carbs,
-    formatter: (value) => `${Number(value).toFixed(1)}g`,
-  },
-  {
-    label: "Fat",
-    value: data.fat,
-    formatter: (value) => `${Number(value).toFixed(1)}g`,
-  },
-  ...(data.fiber !== undefined
-    ? [
-        {
-          label: "Fiber",
-          value: data.fiber,
-          formatter: (value: string | number) => `${Number(value).toFixed(1)}g`,
-        },
-      ]
-    : []),
-  ...(data.sugar !== undefined
-    ? [
-        {
-          label: "Sugar",
-          value: data.sugar,
-          formatter: (value: string | number) => `${Number(value).toFixed(1)}g`,
-        },
-      ]
-    : []),
-];
+  return [
+    metric("Calories", data.kcal, (value) => `${Math.round(value)} kcal`),
+    metric("Protein", data.protein, (value) => `${value.toFixed(1)}g`),
+    metric("Carbs", data.carbs, (value) => `${value.toFixed(1)}g`),
+    metric("Fat", data.fat, (value) => `${value.toFixed(1)}g`),
+    metric("Fiber", data.fiber, (value) => `${value.toFixed(1)}g`),
+    metric("Sodium", data.sodium, (value) => `${value.toFixed(1)} mg`),
+  ];
+};
 
 const formatInventorySummary = (data: InventorySummaryData): SummaryItem[] => [
   {

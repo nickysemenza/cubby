@@ -9,8 +9,8 @@
 
 use recipebridge::{
     ComponentSource, WAmount, WCostingIngredient, WCostingInput, WCostingRecipe, WCostingRow,
-    WMeasureResult, WNutrientTarget, WNutrientsResult, WProductInput, WRecipeCosting, WRowKind,
-    WSourceMetadata, WUnitMapping, cost_recipes_impl,
+    WMeasureEstimate, WMeasureResult, WNutrientTarget, WNutrientsResult, WProductInput,
+    WRecipeCosting, WRowKind, WSourceMetadata, WUnitMapping, cost_recipes_impl,
 };
 
 // ─── Fixture builders (mirror the TS test builders) ─────────────────────────
@@ -154,6 +154,15 @@ fn nutrient(r: &WRecipeCosting, code: &str) -> f64 {
         .find(|n| n.code == code)
         .map(|n| n.value)
         .unwrap_or(0.0)
+}
+
+fn nutrient_estimate<'a>(r: &'a WRecipeCosting, code: &str) -> &'a WMeasureEstimate {
+    &r.estimates
+        .nutrition
+        .iter()
+        .find(|entry| entry.code == code)
+        .unwrap_or_else(|| panic!("missing estimate for nutrient {code}"))
+        .estimate
 }
 
 fn assert_close(actual: f64, expected: f64, tol: f64, what: &str) {
@@ -1525,6 +1534,22 @@ fn partial_sub_recipe_nutrient_coverage_propagates_to_parent() {
     // The parent can carry a numeric protein partial from the sub-recipe, but
     // its one recipe row is not fully protein-covered.
     assert_eq!(nutrient_coverage(&r, "203"), 0);
+    match nutrient_estimate(&r, "203") {
+        WMeasureEstimate::Partial {
+            lower, coverage, ..
+        } => {
+            assert_close(*lower, 5.0, 1e-9, "known protein subtotal");
+            assert_eq!(coverage.covered, 0);
+            assert_eq!(coverage.total, 1);
+        }
+        estimate => panic!("expected partial protein estimate, got {estimate:?}"),
+    }
+    match &r.rows[0].nutrition[0].estimate {
+        WMeasureEstimate::Partial { lower, .. } => {
+            assert_close(*lower, 5.0, 1e-9, "row protein subtotal");
+        }
+        estimate => panic!("expected partial row protein estimate, got {estimate:?}"),
+    }
 }
 
 #[test]
@@ -1564,6 +1589,18 @@ fn ranged_amount_yields_ranged_totals() {
         0.5,
         "protein upper",
     );
+    match &r.estimates.cost {
+        WMeasureEstimate::Complete { lower, upper, .. } => {
+            assert_close(*lower, 2.0, 0.005, "estimate cost lower");
+            assert_close(
+                upper.expect("estimate ranged"),
+                3.0,
+                0.005,
+                "estimate cost upper",
+            );
+        }
+        estimate => panic!("expected complete ranged cost, got {estimate:?}"),
+    }
 }
 
 #[test]
@@ -1669,6 +1706,14 @@ fn legitimately_zero_sub_recipe_totals_are_reported_not_missing() {
         r.missing_by_type.nutrients.is_empty(),
         "0 kcal is a value, not a gap"
     );
+    assert!(matches!(
+        &r.estimates.cost,
+        WMeasureEstimate::Complete { lower, .. } if *lower == 0.0
+    ));
+    assert!(matches!(
+        nutrient_estimate(&r, "208"),
+        WMeasureEstimate::Complete { lower, .. } if *lower == 0.0
+    ));
 }
 
 /// A zero WEIGHT total is the one that must not become an edge. Nothing weighs

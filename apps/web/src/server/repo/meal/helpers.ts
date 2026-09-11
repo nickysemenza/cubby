@@ -7,77 +7,35 @@ import type {
   MealKind,
   MealOut,
   MealRecipeOut,
-  MealTotals,
   MealType,
 } from "@cubby/schemas/meal";
+import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 
-/**
- * Scale a recipe's persisted totals by a meal-recipe multiplier. Totals are
- * linear in scale, so this is a plain multiply — no costing recompute. Returns
- * null when the recipe has no totals yet (caller shows "pending", never 0).
- */
-const scaleTotals = (
-  totals: RecipeTotals | null | undefined,
-  scale: number,
-): MealRecipeOut["scaledTotals"] => {
-  if (!totals) return null;
-  const scaled: NonNullable<MealRecipeOut["scaledTotals"]> = {
-    costTotal: totals.costTotal * scale,
-    caloriesTotal: totals.caloriesTotal * scale,
-  };
-  if (totals.costTotalUpper != null)
-    scaled.costTotalUpper = totals.costTotalUpper * scale;
-  if (totals.caloriesTotalUpper != null)
-    scaled.caloriesTotalUpper = totals.caloriesTotalUpper * scale;
-  return scaled;
+import { aggregateTotals, scaleTotals } from "~/lib/nutrition-estimates";
+
+const pendingTotals = (
+  reason: "totals_missing" | "totals_stale",
+): NutritionTotals => {
+  const estimate = { status: "pending" as const, reason };
+  return { cost: estimate, nutrition: buildNutrition(() => estimate) };
 };
 
-/**
- * Roll up a meal's recipes into a single cost/calorie total. `pending` is true
- * when any recipe lacks totals, so the UI can show the rollup as provisional
- * rather than silently undercounting. Upper bounds fall back to the point value
- * for recipes without a range, and are only surfaced when at least one recipe
- * actually has an upper bound.
- */
-const rollupMealTotals = (recipes: MealRecipeOut[]): MealTotals => {
-  let costTotal = 0;
-  let caloriesTotal = 0;
-  let costUpper = 0;
-  let caloriesUpper = 0;
-  let anyCostUpper = false;
-  let anyCaloriesUpper = false;
-  let pending = false;
-
-  for (const r of recipes) {
-    const t = r.scaledTotals;
-    if (!t) {
-      pending = true;
-      continue;
-    }
-    costTotal += t.costTotal;
-    caloriesTotal += t.caloriesTotal;
-    costUpper += t.costTotalUpper ?? t.costTotal;
-    caloriesUpper += t.caloriesTotalUpper ?? t.caloriesTotal;
-    if (t.costTotalUpper != null) anyCostUpper = true;
-    if (t.caloriesTotalUpper != null) anyCaloriesUpper = true;
-  }
-
-  const totals: MealTotals = {
-    costTotal,
-    caloriesTotal,
-    pending,
-  };
-  if (anyCostUpper) totals.costTotalUpper = costUpper;
-  if (anyCaloriesUpper) totals.caloriesTotalUpper = caloriesUpper;
-  return totals;
+const scaledRecipeTotals = (
+  totals: RecipeTotals | null,
+  totalsComputedAt: Date | null,
+  scale: number,
+): NutritionTotals => {
+  if (!totals) return pendingTotals("totals_missing");
+  if (!totalsComputedAt) return pendingTotals("totals_stale");
+  return scaleTotals(totals, scale);
 };
 
 /** Shape of a meal row loaded with `relations.meal.full`. */
 type MealRow = {
   id: MealId;
   shortcode: string;
-  date: string; // "YYYY-MM-DD" (date column, mode:"string")
+  date: string;
   name: string | null;
   sortOrder: number | null;
   mealType: MealType | null;
@@ -102,6 +60,7 @@ type MealRow = {
       servings: number | null;
       yield: MealRecipeOut["recipe"]["yield"];
       totals: RecipeTotals | null;
+      totalsComputedAt: Date | null;
       deletedAt: Date | null;
     };
   }>;
@@ -109,15 +68,8 @@ type MealRow = {
 
 export const dbMealToAPI = (row: MealRow): MealOut => {
   const recipes: MealRecipeOut[] = row.recipes
-    // Drizzle can't filter soft-deleted rows inside `with`; do it here.
-    //
-    // Both deletedAts are load-bearing and mean different things: the LINK's
-    // says the recipe was unplanned from this meal, the RECIPE's says it no
-    // longer exists at all. deleteRecipes now cascades the link, so the second
-    // check is defense-in-depth for rows written before that — but it's the one
-    // that was missing, and it let a deleted recipe keep rendering in the meal
-    // and keep summing its stale persisted totals into rollupMealTotals with
-    // pending:false, i.e. a wrong number that reads as trustworthy.
+    // Drizzle can't filter soft-deleted rows inside `with`; both the occurrence
+    // and its recipe must still be live before contributing to the meal.
     .filter((mr) => mr.deletedAt === null && mr.recipe.deletedAt === null)
     .map((mr) => ({
       id: mr.id,
@@ -134,7 +86,11 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
       },
       scale: mr.scale,
       sortOrder: mr.sortOrder,
-      scaledTotals: scaleTotals(mr.recipe.totals, mr.scale),
+      scaledTotals: scaledRecipeTotals(
+        mr.recipe.totals,
+        mr.recipe.totalsComputedAt,
+        mr.scale,
+      ),
       createdAt: mr.createdAt,
       updatedAt: mr.updatedAt,
     }));
@@ -147,7 +103,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     mealType: row.mealType,
     mealKind: row.mealKind,
     recipes,
-    totals: rollupMealTotals(recipes),
+    totals: aggregateTotals(recipes.map((recipe) => recipe.scaledTotals)),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

@@ -39,6 +39,7 @@ import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import { getErrorMessage } from "~/lib/error-utils";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { formatCurrency } from "~/lib/utils";
 
@@ -584,7 +585,10 @@ function CalendarDaySheet({
           <SummaryValue label="Tasks" value={String(summary.taskCount)} />
           <SummaryValue
             label="Calories"
-            value={`${Math.round(summary.calories).toLocaleString()}${summary.nutritionPending ? "+" : ""}`}
+            value={formatEstimate(
+              summary.mealTotals.nutrition.kcal,
+              (value) => `${Math.round(value).toLocaleString()} kcal`,
+            )}
           />
         </div>
 

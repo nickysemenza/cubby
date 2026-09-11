@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { mealCreateInput } from "@cubby/schemas/meal";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import {
   type ExpenseCreateInput,
   expenseCreateInput,
@@ -210,11 +211,16 @@ describe("problems — understated meal cost", () => {
         .update(recipe)
         .set({
           totals: {
-            costTotal: 4,
-            caloriesTotal: 100,
-            ingredientCount: 3,
-            costCovered: 2,
-            caloriesCovered: 3,
+            cost: {
+              status: "partial",
+              lower: 4,
+              upper: null,
+              coverage: { covered: 2, total: 3 },
+            },
+            nutrition: buildNutrition(() => ({
+              status: "unavailable",
+              reason: "no_data",
+            })),
           },
           totalsComputedAt: new Date(),
         })
@@ -223,11 +229,16 @@ describe("problems — understated meal cost", () => {
         .update(recipe)
         .set({
           totals: {
-            costTotal: 6,
-            caloriesTotal: 200,
-            ingredientCount: 2,
-            costCovered: 2,
-            caloriesCovered: 2,
+            cost: {
+              status: "complete",
+              lower: 6,
+              upper: null,
+              coverage: { covered: 2, total: 2 },
+            },
+            nutrition: buildNutrition(() => ({
+              status: "unavailable",
+              reason: "no_data",
+            })),
           },
           totalsComputedAt: new Date(),
         })

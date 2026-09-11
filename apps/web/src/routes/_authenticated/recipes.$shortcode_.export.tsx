@@ -24,6 +24,7 @@ import {
 } from "~/app/_components/recipe/IngredientQuantities";
 import { recipeTreeToMarkdown } from "~/app/_components/recipe/recipe-export-markdown";
 import { scaleRecipe } from "~/app/_components/recipe/recipe-scaling";
+import { getRecipeNutritionBasis } from "~/app/_components/recipe/recipe-utils";
 import { RecipeFlowView } from "~/app/_components/recipe/RecipeFlowView";
 import { RecipeIngredientMatrixView } from "~/app/_components/recipe/RecipeIngredientMatrixView";
 import { RecipeMagazineView } from "~/app/_components/recipe/RecipeMagazineView";
@@ -43,6 +44,7 @@ import {
 } from "~/components/ui/view-switcher";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
+import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { pageTitle } from "~/lib/page-title";
 
 import { recipeExportSearchSchema } from "./-recipe-export-search";
@@ -57,7 +59,11 @@ const FORMAT_OPTIONS: ViewSwitcherOption<ExportFormat>[] = [
   { value: "flow", label: "Flow", icon: GitBranch },
 ];
 
-const searchDefaults = { format: undefined, scale: undefined } as const;
+const searchDefaults = {
+  format: undefined,
+  scale: undefined,
+  nutritionBasis: undefined,
+} as const;
 
 export const Route = createFileRoute(
   "/_authenticated/recipes/$shortcode_/export",
@@ -90,7 +96,7 @@ function RecipeExportPage() {
 
 function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
   const { shortcode } = Route.useParams();
-  const { format: rawFormat, scale } = Route.useSearch();
+  const { format: rawFormat, scale, nutritionBasis } = Route.useSearch();
   const navigate = useNavigate();
   const [flowReady, setFlowReady] = useState(false);
   const handleFlowReadyChange = useCallback((ready: boolean) => {
@@ -116,6 +122,7 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
   );
   const rootCosting = costingById?.get(recipe.id) ?? null;
   const totals = rootCosting?.totals ?? null;
+  const nutritionView = getRecipeNutritionBasis(recipe, nutritionBasis, factor);
 
   const setFormat = (next: ExportFormat) =>
     navigate({
@@ -189,6 +196,16 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
             recipe={scaledRecipe}
             totals={totals}
             costing={rootCosting}
+            nutrition={
+              totals
+                ? scaleNutrition(
+                    totals.estimates.nutrition,
+                    nutritionView.factor,
+                  )
+                : null
+            }
+            nutritionBasisLabel={nutritionView.label}
+            nutritionFactor={nutritionView.factor}
           />
         ) : format === "flow" ? (
           <RecipeFlowView

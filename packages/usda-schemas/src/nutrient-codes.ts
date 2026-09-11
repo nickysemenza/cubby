@@ -107,14 +107,14 @@ export function createEmptyNutrients(): NutrientsPer100 {
 export function getNutrientValue(
   nutrients: NutrientsPer100,
   code: string,
-): number {
-  return nutrients[code] ?? 0;
+): number | undefined {
+  return nutrients[code];
 }
 
 export function getNutrientValueByKey(
   nutrients: NutrientsPer100,
   key: NutrientKey,
-): number {
+): number | undefined {
   const code = TIER1_NUTRIENTS[key].code;
   return getNutrientValue(nutrients, code);
 }
@@ -122,16 +122,14 @@ export function getNutrientValueByKey(
 /**
  * Build a nutrients record from human-readable keys — the inverse of
  * {@link getNutrientValueByKey}. e.g. `{ protein: 7.2, fat: 3.1 }` →
- * `{ "203": 7.2, "204": 3.1 }`. Entries with a falsy value (0 / undefined) are
- * dropped, so callers never have to hand-write USDA code strings or filter
- * empties themselves.
+ * `{ "203": 7.2, "204": 3.1 }`. Only absent values are omitted; an explicit zero is measured data.
  */
 export function buildNutrients(
   values: Partial<Record<NutrientKey, number | undefined>>,
 ): NutrientsPer100 {
   const out: NutrientsPer100 = {};
   for (const [key, value] of Object.entries(values)) {
-    if (value && isNutrientKey(key)) {
+    if (value != null && isNutrientKey(key)) {
       out[TIER1_NUTRIENTS[key].code] = value;
     }
   }

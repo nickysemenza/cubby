@@ -84,12 +84,14 @@ test.describe("Create Recipe - Full Flow", () => {
     await expect(ingredientLink).toBeVisible();
     await expect(ingredientLink).toHaveAttribute("href", /\/ingredients\//);
 
-    // $5.00 now appears twice — the summary card (rendered first) and the
-    // ingredient table's Totals footer row — so scope to the first (the card).
-    await expect(page.getByText("Total Cost", { exact: true })).toBeVisible();
-    await expect(page.getByText("$5.00").first()).toBeVisible();
-
-    await expect(page.getByText("Total Weight", { exact: true })).toBeVisible();
-    await expect(page.getByText("333g")).toBeVisible();
+    const summary = page.locator('[data-slot="card"]').filter({
+      has: page.getByText("Recipe summary", { exact: true }),
+    });
+    await expect(
+      summary.getByText("Cost: $5.00", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      summary.getByText("Weight: 333 g", { exact: true }),
+    ).toBeVisible();
   });
 });

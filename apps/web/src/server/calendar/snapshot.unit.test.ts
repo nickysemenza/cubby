@@ -1,4 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
@@ -25,9 +26,24 @@ const meal = (title = "Dinner"): CalendarItem => ({
   mealKind: "cooked",
   recipeNames: ["Soup"],
   coverImageUrl: null,
-  cost: 5,
-  calories: 400,
-  nutritionPending: false,
+  mealTotals: {
+    cost: {
+      status: "complete",
+      lower: 5,
+      upper: null,
+      coverage: { covered: 1, total: 1 },
+    },
+    nutrition: buildNutrition((key) =>
+      key === "kcal"
+        ? {
+            status: "complete",
+            lower: 400,
+            upper: null,
+            coverage: { covered: 1, total: 1 },
+          }
+        : { status: "unavailable", reason: "no_data" },
+    ),
+  },
 });
 
 const task = (): CalendarItem => ({

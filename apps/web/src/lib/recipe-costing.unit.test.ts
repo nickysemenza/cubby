@@ -240,6 +240,14 @@ describe("calculateTotals", () => {
     expect(result.weight).toBe(0);
     expect(result.nutrients["203"] ?? 0).toBe(0);
     expect(result.nutrients["208"] ?? 0).toBe(0);
+    expect(result.estimates.cost).toEqual({
+      status: "unavailable",
+      reason: "no_data",
+    });
+    expect(result.estimates.nutrition.protein).toEqual({
+      status: "unavailable",
+      reason: "no_data",
+    });
     expect(result.missingByType).toEqual({
       price: ["unknown ingredient"],
       weight: ["unknown ingredient"],
@@ -395,6 +403,15 @@ describe("calculateTotals with sub-recipes", () => {
       weight: false,
       nutrients: false,
     });
+    expect(costing.totals.estimates.cost).toEqual({
+      status: "unavailable",
+      reason: "no_data",
+    });
+    expect(costing.totals.estimates.nutrition.kcal).toMatchObject({
+      status: "complete",
+      lower: 100,
+      coverage: { covered: 1, total: 1 },
+    });
     expect(costing.totals.diagnostics[0]?.missing).toEqual({
       price: true,
       weight: false,
@@ -486,6 +503,11 @@ describe("calculateTotals with the consumption model", () => {
     expect(r.price).toBeCloseTo(1.075, 1);
     expect(r.missingByType).toEqual({ price: [], weight: [], nutrients: [] });
     expect(r.totalIngredients).toBe(2);
+    expect(r.estimates.nutrition.kcal).toMatchObject({
+      status: "complete",
+      lower: 496.6,
+      coverage: { covered: 2, total: 2 },
+    });
   });
 
   it("control: same recipe without the frying medium is unchanged", () => {
@@ -675,10 +697,37 @@ describe("calculateTotals with the consumption model", () => {
       oilRow?.priceInfo?.nutrient.isOk() &&
         oilRow.priceInfo.nutrient.value["208"],
     ).toBeCloseTo(132.6, 0);
+    expect(oilRow?.nutrition.kcal).toMatchObject({
+      status: "complete",
+      lower: 132.6,
+    });
     const flourRow = costing.rows.find((r) => r.id === "flour");
     expect(
       flourRow?.priceInfo?.gram.isOk() && flourRow.priceInfo.gram.value.value,
     ).toBeCloseTo(100, 0);
+  });
+
+  it("preserves explicit zero nutrients as covered estimates", () => {
+    const zeroSodium = ingredientFromMappings(
+      "zero",
+      "zero sodium food",
+      [{ a: { value: 1, unit: "cup" }, b: { value: 100, unit: "g" } }],
+      { "307": 0 },
+    );
+    const costing = costRecipe(
+      [makeEntry("zero", "zero sodium food", [{ value: 1, unit: "cup" }])],
+      { zero: zeroSodium },
+    );
+
+    expect(costing.rows[0]?.nutrition.sodium).toEqual({
+      status: "complete",
+      lower: 0,
+      upper: null,
+      coverage: { covered: 1, total: 1 },
+    });
+    expect(costing.totals.estimates.nutrition.sodium).toEqual(
+      costing.rows[0]?.nutrition.sodium,
+    );
   });
 
   it("a MEASURED fry row displays est weight but own cost", () => {

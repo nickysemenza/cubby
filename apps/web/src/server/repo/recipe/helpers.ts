@@ -1,5 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import type {
   RecipeGraphOut,
   RecipeListItem,
@@ -8,6 +9,7 @@ import type {
   RecipeTopLevel,
   SectionIngredient,
 } from "@cubby/schemas/recipe";
+import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 
 import type {
   recipe,
@@ -205,11 +207,22 @@ type RecipeShallowOut = Omit<
   "mealCount" | "sectionCount" | "images"
 >;
 
+const recipeTotalsForRead = (
+  totals: RecipeTotals | null,
+  totalsComputedAt: Date | null,
+): RecipeTotals => {
+  if (totals != null && totalsComputedAt != null) return totals;
+
+  const reason = totals == null ? "totals_missing" : "totals_stale";
+  const estimate: RecipeTotals["cost"] = { status: "pending", reason };
+  return { cost: estimate, nutrition: buildNutrition(() => estimate) };
+};
+
 export const dbRecipeToAPIShallow: (
   recipeParam: RecipeSelect,
 ) => RecipeShallowOut = (recipeData) => ({
   ...dbRecipeToTopLevel(recipeData),
-  totals: recipeData.totals,
+  totals: recipeTotalsForRead(recipeData.totals, recipeData.totalsComputedAt),
 });
 
 export type RecipeListDB = RecipeSelect & {

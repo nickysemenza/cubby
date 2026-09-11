@@ -1,11 +1,9 @@
+import type { NutritionBasis } from "@cubby/schemas/nutrition";
 import type { RecipeOut, RecipeTimes } from "@cubby/schemas/recipe";
-import {
-  getNutrientValueByKey,
-  type NutrientsPer100,
-} from "@cubby/usda-schemas";
 import { match } from "ts-pattern";
 
-import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
+import { scaleTotals } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
 import type { CalculateTotalsResult } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
 import { wasm } from "~/lib/wasm";
@@ -33,50 +31,10 @@ export const formatMakes = (
   return batchWeightGrams != null ? gramText(batchWeightGrams) : null;
 };
 
-/** The four headline figures every recipe-summary surface shows (table, charts,
- * magazine kicker), pulled from a costing result in one place so all three agree
- * on which numbers they are — and on how calories/protein come out of the
- * nutrient map (by key, not by raw code). Accepts anything totals-shaped, so the
- * table card's RecipeSummaryData works as well as a CalculateTotalsResult. */
-export type RecipeHeadlineTotals = {
-  cost: number;
-  costUpper?: number;
-  weight: number;
-  weightUpper?: number;
-  calories: number;
-  caloriesUpper?: number;
-  protein: number;
-  proteinUpper?: number;
-};
-
-// Range upper bound for a nutrient, or undefined when not ranged (a 0 from an
-// absent code is meaningless, so collapse it).
-const upperNutrient = (
-  rec: NutrientsPer100 | undefined,
-  key: Parameters<typeof getNutrientValueByKey>[1],
-): number | undefined =>
-  rec ? getNutrientValueByKey(rec, key) || undefined : undefined;
-
-export const recipeHeadlineTotals = (t: {
-  price: number;
-  priceUpper?: number;
-  weight: number;
-  weightUpper?: number;
-  nutrients: NutrientsPer100;
-  nutrientsUpper?: NutrientsPer100;
-}): RecipeHeadlineTotals => ({
-  cost: t.price,
-  costUpper: t.priceUpper,
-  weight: t.weight,
-  weightUpper: t.weightUpper,
-  calories: getNutrientValueByKey(t.nutrients, "kcal"),
-  caloriesUpper: upperNutrient(t.nutrientsUpper, "kcal"),
-  protein: getNutrientValueByKey(t.nutrients, "protein"),
-  proteinUpper: upperNutrient(t.nutrientsUpper, "protein"),
-});
-
 /** Effective servings: explicit servings, or the yield value when its unit is "servings". */
-export const getEffectiveServings = (recipe: RecipeOut): number | null => {
+export const getEffectiveServings = (
+  recipe: Pick<RecipeOut, "servings" | "yield">,
+): number | null => {
   if (recipe.servings) return recipe.servings;
   if (recipe.yield?.unit === "servings") return recipe.yield.value;
   return null;
@@ -117,52 +75,26 @@ export const perUnitSuffix = (
   opts?: { short?: boolean },
 ): string => (noun === "each" ? (opts?.short ? "ea" : "each") : `/ ${noun}`);
 
-/** Divide a total and its optional range upper by a per-serving divisor.
- * Per-portion division is linear, so both bounds divide by the same number; an
- * absent upper stays absent (renders one number). Shared by the recipe list
- * columns and the entity summary card so the per-portion math lives in one place. */
-export const perServingRange = (
-  total: number,
-  upper: number | undefined,
-  divisor: number,
-): ServingRange => ({
-  value: total / divisor,
-  upper: upper != null ? upper / divisor : undefined,
-});
-
-interface ServingRange {
-  value: number;
-  upper: number | undefined;
-}
-
-/** Divide every value in a nutrients record by a per-serving divisor — the
- * same linear per-portion math as {@link perServingRange}, applied to a whole
- * `NutrientsPer100` record instead of one figure. Used to feed a whole-recipe
- * totals record into a per-serving `NutritionLabel`. */
-export const divideNutrients = (
-  nutrients: NutrientsPer100,
-  divisor: number,
-): NutrientsPer100 =>
-  Object.fromEntries(
-    Object.entries(nutrients).map(([code, value]) => [code, value / divisor]),
-  );
-
-/** Coverage of a computed total (cost/calories) by the ingredients that had the
- * underlying data. `complete` drives dimming / caption suppression (unknown
- * coverage counts as complete); `fraction` is the bare "9/13" label shown when
- * partial. Shared by the recipe list cell and the preview card so the predicate
- * and the label can't disagree. */
-export const coverageLabel = (
-  covered: number | undefined,
-  total: number,
-): CoverageLabel => ({
-  complete: covered == null || covered >= total,
-  fraction: `${covered ?? total}/${total}`,
-});
-
-interface CoverageLabel {
-  complete: boolean;
-  fraction: string;
+/** Shared display basis, independent from the recipe's authored/scaled amounts. */
+export function getRecipeNutritionBasis(
+  recipe: Pick<RecipeOut, "servings" | "yield">,
+  requested: NutritionBasis = "whole",
+  recipeScale = 1,
+) {
+  const servings = getEffectiveServings(recipe);
+  if (requested === "serving" && servings && servings > 0)
+    return {
+      basis: "serving" as const,
+      factor: 1 / (servings * recipeScale),
+      label: "per serving",
+      hasServing: true,
+    };
+  return {
+    basis: "whole" as const,
+    factor: 1,
+    label: "whole scaled recipe",
+    hasServing: servings != null && servings > 0,
+  };
 }
 
 /**
@@ -189,29 +121,15 @@ export function buildRecipeKicker(
   ];
 
   if (opts) {
-    const head = recipeHeadlineTotals(opts.totals);
     const { basis } = opts;
-    // Per-portion division is linear, so divide both range bounds by the same
-    // divisor (an absent upper stays absent → renders one number).
-    const per = (n: number) => (basis ? n / basis.divisor : n);
-    const perUpper = (u: number | undefined) =>
-      u != null ? per(u) : undefined;
-    const round = (n: number) => `${Math.round(n)}`;
+    const estimates = scaleTotals(
+      opts.totals.estimates,
+      basis ? 1 / basis.divisor : 1,
+    );
     parts.push(
-      head.cost && basis
-        ? `${formatCurrencyRange(per(head.cost), perUpper(head.costUpper))} ${perUnitSuffix(basis.noun)}`
-        : head.cost
-          ? `${formatCurrencyRange(head.cost, head.costUpper)} total`
-          : null,
-      head.calories && basis
-        ? `${formatNumberRange(per(head.calories), perUpper(head.caloriesUpper), round)} kcal ${perUnitSuffix(basis.noun)}`
-        : null,
-      head.protein && basis
-        ? `${formatNumberRange(per(head.protein), perUpper(head.proteinUpper), round)}g protein ${perUnitSuffix(basis.noun)}`
-        : null,
-      head.weight && basis
-        ? `${formatNumberRange(per(head.weight), perUpper(head.weightUpper), round)}g ${perUnitSuffix(basis.noun)}`
-        : null,
+      `${formatEstimate(estimates.cost, (n) => `$${n.toFixed(2)}`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : " total"}`,
+      `${formatEstimate(estimates.nutrition.kcal, (n) => `${Math.round(n)} kcal`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
+      `${formatEstimate(estimates.nutrition.protein, (n) => `${Number(n.toFixed(1))} g protein`)}${basis ? ` ${perUnitSuffix(basis.noun)}` : ""}`,
     );
   }
 
@@ -223,40 +141,41 @@ export function buildRecipeKicker(
  * the Prep component headers — `["$0.42", "740 kcal", "9g P", "5g F", "6g C"]`.
  * Values are divided by `basis` when one is given (per-serving) and shown as
  * totals otherwise; `basisLabel` ("per serving" / "total") is the single label a
- * caller prepends, so the per-unit noun isn't repeated on every segment. Pulls
- * fat & carbs (which the four-figure {@link recipeHeadlineTotals} omits) so the
- * reader view shows a full macro split. Cost/calories carry their range upper;
- * the gram macros render a single rounded value. */
+ * caller prepends. Each segment retains its known range and completeness. */
 export function recipeMacroSegments(
-  totals: {
-    price: number;
-    priceUpper?: number;
-    weight: number;
-    weightUpper?: number;
-    nutrients: NutrientsPer100;
-    nutrientsUpper?: NutrientsPer100;
-  },
+  totals: CalculateTotalsResult,
   basis: ServingBasis | null,
   opts?: { includeCost?: boolean },
 ): RecipeMacroSegmentList {
-  const head = recipeHeadlineTotals(totals);
-  const fat = getNutrientValueByKey(totals.nutrients, "fat") || undefined;
-  const carbs = getNutrientValueByKey(totals.nutrients, "carbs") || undefined;
-  const div = basis ? basis.divisor : 1;
-  const per = (n: number) => n / div;
-  const perUpper = (u: number | undefined) => (u != null ? per(u) : undefined);
-  const round = (n: number) => `${Math.round(n)}`;
+  const estimates = scaleTotals(
+    totals.estimates,
+    basis ? 1 / basis.divisor : 1,
+  );
 
   const parts: string[] = [];
-  if (head.cost && opts?.includeCost !== false)
-    parts.push(formatCurrencyRange(per(head.cost), perUpper(head.costUpper)));
-  if (head.calories)
-    parts.push(
-      `${formatNumberRange(per(head.calories), perUpper(head.caloriesUpper), round)} kcal`,
-    );
-  if (head.protein) parts.push(`${round(per(head.protein))}g P`);
-  if (fat) parts.push(`${round(per(fat))}g F`);
-  if (carbs) parts.push(`${round(per(carbs))}g C`);
+  if (opts?.includeCost !== false)
+    parts.push(formatEstimate(estimates.cost, (n) => `$${n.toFixed(2)}`));
+  parts.push(
+    formatEstimate(estimates.nutrition.kcal, (n) => `${Math.round(n)} kcal`),
+  );
+  parts.push(
+    formatEstimate(
+      estimates.nutrition.protein,
+      (n) => `${Number(n.toFixed(1))} g P`,
+    ),
+  );
+  parts.push(
+    formatEstimate(
+      estimates.nutrition.fat,
+      (n) => `${Number(n.toFixed(1))} g F`,
+    ),
+  );
+  parts.push(
+    formatEstimate(
+      estimates.nutrition.carbs,
+      (n) => `${Number(n.toFixed(1))} g C`,
+    ),
+  );
 
   return { basisLabel: basis ? `per ${basis.noun}` : "total", parts };
 }
@@ -264,36 +183,6 @@ export function recipeMacroSegments(
 interface RecipeMacroSegmentList {
   basisLabel: string;
   parts: string[];
-}
-
-/** Structured cost + macro numbers (per-serving when a basis is given, else
- * total) for the Read view's vitals card — same figures as
- * {@link recipeMacroSegments} but as raw numbers, so the card can draw a macro
- * proportion bar. Zero/absent values come back null so the card omits them. */
-export type RecipeMacroStats = {
-  basisLabel: string;
-  cost: number | null;
-  kcal: number | null;
-  protein: number | null;
-  fat: number | null;
-  carbs: number | null;
-};
-
-export function recipeMacroStats(
-  totals: { price: number; nutrients: NutrientsPer100 },
-  basis: ServingBasis | null,
-): RecipeMacroStats {
-  const div = basis ? basis.divisor : 1;
-  const per = (n: number) => n / div;
-  const nz = (n: number): number | null => (n > 0 ? per(n) : null);
-  return {
-    basisLabel: basis ? `per ${basis.noun}` : "total",
-    cost: totals.price > 0 ? per(totals.price) : null,
-    kcal: nz(getNutrientValueByKey(totals.nutrients, "kcal")),
-    protein: nz(getNutrientValueByKey(totals.nutrients, "protein")),
-    fat: nz(getNutrientValueByKey(totals.nutrients, "fat")),
-    carbs: nz(getNutrientValueByKey(totals.nutrients, "carbs")),
-  };
 }
 
 export const getIngredientName = getRecipeIngredientName;

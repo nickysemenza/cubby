@@ -37,9 +37,9 @@ const comparedRecipe: ComparedRecipe = {
     sections: [],
     totals: null,
   },
-  headline: null,
   effectiveServings: null,
   costing: null,
+  estimates: null,
 };
 
 describe("RecipeCompareGrid", () => {

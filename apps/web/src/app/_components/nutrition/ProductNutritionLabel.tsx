@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { Stack } from "~/components/layout";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
+import { sourceNutritionEstimate } from "~/lib/nutrition-format";
 import { safeConvertAmount } from "~/lib/recipe-costing";
 
 import { NutritionLabel } from "./NutritionLabel";
@@ -48,7 +49,7 @@ const trimGrams = (v: number) => Number(v.toFixed(1)).toString();
  * Product-detail nutrition label with a per-100g / per-serving toggle. The
  * per-serving view is linear scaling of the USDA per-100g record by the
  * resolved basis grams — the same arithmetic the serving-alias preview and
- * `divideNutrients` do; the basis grams themselves come from the WASM graph.
+ * `scaleNutrition` do; the basis grams themselves come from the WASM graph.
  */
 export function ProductNutritionLabel({
   nutrients,
@@ -89,7 +90,9 @@ export function ProductNutritionLabel({
         />
       )}
       <NutritionLabel
-        nutrients={showServing && basis ? scaled : nutrients}
+        estimates={sourceNutritionEstimate(
+          showServing && basis ? scaled : nutrients,
+        )}
         servingLabel={
           showServing && basis
             ? `per ${basis.label} (${trimGrams(basis.grams)} g)`

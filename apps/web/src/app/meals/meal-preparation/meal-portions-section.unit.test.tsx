@@ -1,4 +1,5 @@
 import { getMealPreparationsOut } from "@cubby/schemas/meal";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +7,20 @@ import { describe, expect, it, vi } from "vitest";
 import { MealPortionsSection } from "./meal-portions-section";
 import type { MealPreparationsView } from "./types";
 
-const complete = { status: "complete" as const, lower: 600, upper: 600 };
+const complete = {
+  status: "complete" as const,
+  lower: 600,
+  upper: 600,
+  coverage: { covered: 1, total: 1 },
+};
+const nutritionTotals = {
+  cost: complete,
+  nutrition: buildNutrition((key) =>
+    key === "kcal" || key === "protein"
+      ? complete
+      : { status: "unavailable", reason: "no_data" },
+  ),
+};
 const mealToday = testShortcode("meal", "MEL-4K7M");
 const recipePasta = testShortcode("recipe", "RCP-4K7M");
 const recipeSalad = testShortcode("recipe", "RCP-9Q2X");
@@ -28,9 +42,7 @@ function viewWithPortions(): MealPreparationsView {
         estimatedYieldGrams: 500,
         actualYieldGrams: 500,
         yieldBasis: { kind: "actual", lowerGrams: 500, upperGrams: null },
-        batchCalories: complete,
-        batchCost: complete,
-        batchProtein: complete,
+        totals: nutritionTotals,
         sourceSummary: {
           assignedGrams: 200,
           confirmedGrams: 0,
@@ -48,9 +60,7 @@ function viewWithPortions(): MealPreparationsView {
             grams: 200,
             confirmedAt: null,
             servedHere: true,
-            calories: complete,
-            cost: complete,
-            protein: complete,
+            totals: nutritionTotals,
           },
         ],
       },
@@ -63,9 +73,7 @@ function viewWithPortions(): MealPreparationsView {
         estimatedYieldGrams: 300,
         actualYieldGrams: 300,
         yieldBasis: { kind: "actual", lowerGrams: 300, upperGrams: null },
-        batchCalories: complete,
-        batchCost: complete,
-        batchProtein: complete,
+        totals: nutritionTotals,
         sourceSummary: {
           assignedGrams: 150,
           confirmedGrams: 150,
@@ -83,9 +91,7 @@ function viewWithPortions(): MealPreparationsView {
             grams: 150,
             confirmedAt: new Date("2026-08-31T19:00:00Z"),
             servedHere: true,
-            calories: complete,
-            cost: complete,
-            protein: complete,
+            totals: nutritionTotals,
           },
         ],
       },
@@ -93,15 +99,11 @@ function viewWithPortions(): MealPreparationsView {
     totals: {
       confirmed: {
         portionCount: 1,
-        calories: complete,
-        cost: complete,
-        protein: complete,
+        totals: nutritionTotals,
       },
       projected: {
         portionCount: 2,
-        calories: complete,
-        cost: complete,
-        protein: complete,
+        totals: nutritionTotals,
       },
     },
   });
@@ -152,15 +154,23 @@ describe("MealPortionsSection", () => {
           totals: {
             confirmed: {
               portionCount: 0,
-              calories: { status: "pending", reason: "totals_missing" },
-              cost: { status: "pending", reason: "totals_missing" },
-              protein: { status: "pending", reason: "totals_missing" },
+              totals: {
+                cost: { status: "unavailable", reason: "empty" },
+                nutrition: buildNutrition(() => ({
+                  status: "unavailable",
+                  reason: "empty",
+                })),
+              },
             },
             projected: {
               portionCount: 0,
-              calories: { status: "pending", reason: "totals_missing" },
-              cost: { status: "pending", reason: "totals_missing" },
-              protein: { status: "pending", reason: "totals_missing" },
+              totals: {
+                cost: { status: "unavailable", reason: "empty" },
+                nutrition: buildNutrition(() => ({
+                  status: "unavailable",
+                  reason: "empty",
+                })),
+              },
             },
           },
         })}

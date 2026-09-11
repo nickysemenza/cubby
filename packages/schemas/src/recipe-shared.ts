@@ -1,9 +1,9 @@
 import { timestampedFields } from "./base-entity";
-import { fdcId, type NutrientKey } from "@cubby/usda-schemas";
+import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
 import { positiveAmount } from "./codec";
 import { cookbookShortcode, recipeShortcode } from "./identifier-fields";
-import { money } from "./money";
+import { nutritionTotals, nutrientKey } from "./nutrition";
 
 // Recipe source values - single source of truth for both Zod and Drizzle
 export const recipeSourceValues = [
@@ -21,69 +21,8 @@ export const recipeSourceValues = [
 export const recipeYieldSchema = positiveAmount;
 export type RecipeYield = z.infer<typeof recipeYieldSchema>;
 
-export const recipeTotalsFields = {
-  costTotal: money,
-  // Upper bound of the cost/calorie totals when the recipe has ranged amounts
-  // ("2–3 cups"); absent for recipes with only point amounts. Additive/optional
-  // so existing persisted rows validate unchanged.
-  costTotalUpper: money.optional(),
-  caloriesTotal: z.number(),
-  caloriesTotalUpper: z.number().optional(),
-  // The macro upper bounds and coverage counts are optional on reads so JSONB
-  // totals written before this contract still validate; fresh recomputations
-  // always emit them and the totals freshness predicate queues legacy rows.
-  proteinTotal: z.number().optional(),
-  proteinTotalUpper: z.number().optional(),
-  proteinCovered: z.number().int().optional(),
-  fatTotal: z.number().optional(),
-  fatTotalUpper: z.number().optional(),
-  fatCovered: z.number().int().optional(),
-  carbsTotal: z.number().optional(),
-  carbsTotalUpper: z.number().optional(),
-  carbsCovered: z.number().int().optional(),
-  fiberTotal: z.number().optional(),
-  fiberTotalUpper: z.number().optional(),
-  fiberCovered: z.number().int().optional(),
-  sodiumTotal: z.number().optional(),
-  sodiumTotalUpper: z.number().optional(),
-  sodiumCovered: z.number().int().optional(),
-  ingredientCount: z.number().int(),
-  costCovered: z.number().int(),
-  caloriesCovered: z.number().int(),
-};
-
-export const recipeTotals = z.object(recipeTotalsFields);
+export const recipeTotals = nutritionTotals;
 export type RecipeTotals = z.infer<typeof recipeTotals>;
-export const recipeTotalsFieldNames = Object.keys(recipeTotalsFields).filter(
-  (key): key is keyof RecipeTotals => key in recipeTotalsFields,
-);
-
-// The cost/calorie head of recipeTotals — the subset meal scaling carries. One
-// source so the meal schemas can't drift from recipeTotals' field names or the
-// optional upper-bound convention.
-export const costCalorieTotals = z.object({
-  costTotal: money,
-  costTotalUpper: money.optional(),
-  caloriesTotal: z.number(),
-  caloriesTotalUpper: z.number().optional(),
-});
-
-// The five whole-recipe macros carried on RecipeTotals as flat `${key}Total`
-// columns (proteinTotal, fatTotal, …). One roster so the costing service (write)
-// and the preview card (read) drive the same set — add a macro here only, and
-// the `${key}Total` convention keeps the column names in lockstep with the keys.
-export const RECIPE_MACRO_KEYS = [
-  "protein",
-  "fat",
-  "carbs",
-  "fiber",
-  "sodium",
-] as const satisfies readonly NutrientKey[];
-export type RecipeMacroColumn = `${(typeof RECIPE_MACRO_KEYS)[number]}Total`;
-export type RecipeMacroUpperColumn =
-  `${(typeof RECIPE_MACRO_KEYS)[number]}TotalUpper`;
-export type RecipeMacroCoverageColumn =
-  `${(typeof RECIPE_MACRO_KEYS)[number]}Covered`;
 
 // Costing explain payload (recipe.explainCosting + the MCP explain tool).
 // Mirrors the diagnostics calculateTotals produces (lib/recipe-costing.ts) —
@@ -193,7 +132,10 @@ export const recipeCostingExplain = z.object({
       }),
     ),
   }),
-  drift: z.object({ cost: z.boolean(), calories: z.boolean() }),
+  drift: z.object({
+    cost: z.boolean(),
+    nutrition: z.record(nutrientKey, z.boolean()),
+  }),
 });
 export type RecipeCostingExplain = z.infer<typeof recipeCostingExplain>;
 

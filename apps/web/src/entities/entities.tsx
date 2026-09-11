@@ -326,8 +326,8 @@ const entityDefinitions = withEntityNames({
       ...newRouteExtensions.recipe,
     },
     detail: { commonSections: ["images", "history"] },
-    // costTotal/caloriesTotal live in the `totals` jsonb (not real columns);
-    // recipeList sorts them via a jsonb expression. `source` (SourceType+SourceData)
+    // Cost/calorie column IDs sort the canonical estimates' known lower amount
+    // via jsonb expressions. `source` (SourceType+SourceData)
     // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
     sortableFields: [
       "createdAt",

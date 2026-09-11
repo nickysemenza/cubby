@@ -1,19 +1,23 @@
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import { hasKnownEstimate, nutrientKey } from "@cubby/schemas/nutrition";
+import {
+  TIER1_NUTRIENT_KEYS,
+  TIER1_NUTRIENTS,
+  KEY_NUTRIENT_KEYS,
+  type NutrientKey,
+} from "@cubby/usda-schemas";
+import { Link } from "@tanstack/react-router";
 import { mapValues } from "es-toolkit";
 import { useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
-import { KEY_NUTRIENTS } from "~/app/_components/units/NutrientsSummary";
-import {
-  EntitySummaryCard,
-  type RecipeSummaryData,
-} from "~/components/entity/entity-summary-card";
 import { Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { NoneValue } from "~/components/ui/none-value";
-import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
+import { formatNumberRange } from "~/lib/format-range";
+import { scaleNutrition } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
 import type {
-  CalculateTotalsResult,
   CostingRow,
   IngredientDataItem,
   IngredientUsage,
@@ -21,8 +25,7 @@ import type {
 } from "~/lib/recipe-costing";
 import type { RecipeTotalsGap } from "~/lib/recipe-totals-gaps";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
-import { cn } from "~/lib/utils";
-import { renderValueOrMissing } from "~/misc/result";
+import { cn, formatCurrency } from "~/lib/utils";
 
 import { createActionsColumnBase } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
@@ -43,7 +46,7 @@ import {
   formatScalingPct,
   pickDefaultBaseRowId,
 } from "./recipe-scaling-pct";
-import { getIngredientName, type ServingBasis } from "./recipe-utils";
+import { getIngredientName } from "./recipe-utils";
 import { MissingMeasureCell } from "./RecipeCostingCoverage";
 
 // What an unmeasured estimated row shows in its Amounts cell, per usage.
@@ -61,6 +64,14 @@ const ESTIMATE_AMOUNT_LABELS = {
 
 // Stable empties for the loading state (referenced by cell renderers).
 const EMPTY_ESTIMATED = new Map<string, IngredientUsage>();
+const DEFAULT_NUTRIENT_KEYS = new Set([
+  "kcal",
+  "protein",
+  "fat",
+  "carbs",
+  "fiber",
+  "sodium",
+]);
 
 // The row data with the re-anchorable scaling % + base flag baked in. RTable
 // memoizes rows and only re-renders them when `row.original` changes, so a cell
@@ -85,27 +96,25 @@ export const RecipeIngredientList: React.FC<{
    * Baker % is own-gram based, so the (unmeasured) oil row stays at "—".
    */
   costing: RecipeCosting | null;
-  /** Per-portion basis (from the scaled recipe); drives the per-serving sub-lines. */
-  perServing?: ServingBasis | null;
-  /** Suppress the built-in Recipe Summary card (the Data view renders it once,
-   * above the stacked charts, so the table shouldn't repeat it). */
-  hideSummary?: boolean;
   /** The prioritized totals gaps (same source as the coverage popover) — makes
    * each missing Cost/Weight cell a deep-link to its fix. */
   gaps?: RecipeTotalsGap[];
   /** Current recipe's public id, for routing a sub-recipe's "set amount" fix. */
   recipeShortcode?: string;
+  /** Nutrition-only basis projection; recipe amounts/cost stay at recipe scale. */
+  nutritionFactor?: number;
 }> = ({
   ingredients,
   ingMap,
   costing,
-  perServing,
-  hideSummary,
   gaps,
   recipeShortcode,
+  nutritionFactor = 1,
 }) => {
   const totals = costing?.totals;
   const estimatedRows = costing?.estimatedRows ?? EMPTY_ESTIMATED;
+  const [focusedNutrient, setFocusedNutrient] =
+    useState<(typeof TIER1_NUTRIENT_KEYS)[number]>("kcal");
 
   // Index gaps for O(1) per-cell lookup: ingredient rows key on ingredientId,
   // sub-recipe rows key on the section-ingredient rowId (row.id).
@@ -121,6 +130,38 @@ export const RecipeIngredientList: React.FC<{
       .with({ type: "ingredient" }, (r) => gapByKey.get(r.ingredient.id))
       .with({ type: "recipe" }, (r) => gapByKey.get(r.id))
       .exhaustive();
+  const renderNutrient = (row: ScalingRow, key: NutrientKey) => {
+    const estimate = row.nutrition[key];
+    const nutrient = TIER1_NUTRIENTS[key];
+    if (estimate.status !== "unavailable")
+      return formatEstimate(
+        estimate,
+        (value) => `${Number(value.toFixed(1))} ${nutrient.unit.toLowerCase()}`,
+      );
+    const label = `Repair ${nutrient.displayName.toLowerCase()} data for ${getIngredientName(row)}`;
+    return row.type === "ingredient" ? (
+      <Link
+        to="/ingredients/workbench"
+        search={{ focus: row.ingredient.id }}
+        aria-label={label}
+        title={label}
+        className="text-warning-ink underline decoration-dotted underline-offset-2"
+      >
+        —
+      </Link>
+    ) : (
+      <Link
+        to="/recipes/$shortcode"
+        params={{ shortcode: row.recipe.id }}
+        search={{ view: "data" }}
+        aria-label={label}
+        title={label}
+        className="text-warning-ink underline decoration-dotted underline-offset-2"
+      >
+        —
+      </Link>
+    );
+  };
 
   // Scaling % (Modernist Cuisine's column): baker's percentage with a
   // re-anchorable 100% base instead of flour-only — the same single scaling
@@ -148,10 +189,18 @@ export const RecipeIngredientList: React.FC<{
     () =>
       (costing?.rows ?? []).map((r) => ({
         ...r,
+        nutrition: scaleNutrition(r.nutrition, nutritionFactor),
         scalingPct: scalingPct.get(r.id) ?? null,
         isScalingBase: r.id === baseId,
       })),
-    [costing, scalingPct, baseId],
+    [costing, scalingPct, baseId, nutritionFactor],
+  );
+  const displayedNutrition = useMemo(
+    () =>
+      totals
+        ? scaleNutrition(totals.estimates.nutrition, nutritionFactor)
+        : null,
+    [totals, nutritionFactor],
   );
 
   // Load unit mappings
@@ -170,12 +219,8 @@ export const RecipeIngredientList: React.FC<{
         id: "ing name",
         header: "Ingredient",
         enableSorting: false,
-        // Fixed width (like the sibling numeric columns, which use w-*) so the
-        // primary column doesn't collapse to "jala…"; the inner divs truncate
-        // long names. `min-w-*` alone isn't honored by this table's layout.
-        // Kept at w-48 (the overflow trim came from the numeric/pill columns,
-        // which had slack — not from the name column, which is truncation-prone).
-        meta: { className: "w-48" },
+        minSize: 224,
+        meta: { className: "w-60", mobile: { slot: "title" } },
         footer: () => <span className="font-semibold">Totals</span>,
         cell: (info) => {
           const row = info.row.original;
@@ -233,7 +278,11 @@ export const RecipeIngredientList: React.FC<{
       columnHelper.accessor("amounts", {
         header: "Amounts",
         enableSorting: false,
-        meta: { numeric: true, className: "w-28" },
+        meta: {
+          numeric: true,
+          className: "w-28",
+          mobile: { slot: "subtitle" },
+        },
         cell: (info) => {
           // The shared column array erases heterogeneous TValue to keep every
           // column interoperable; this accessor's value is still ScalingRow's
@@ -285,7 +334,7 @@ export const RecipeIngredientList: React.FC<{
           footer: () =>
             totals ? (
               <div className="text-right font-mono tabular-nums">
-                {formatCurrencyRange(totals.price, totals.priceUpper)}
+                {formatEstimate(totals.estimates.cost, formatCurrency)}
               </div>
             ) : null,
           cell: (info) => {
@@ -295,7 +344,10 @@ export const RecipeIngredientList: React.FC<{
             return (
               <span>
                 {measure.isOk() ? (
-                  tryFormatAmount(measure.value)
+                  <>
+                    {tryFormatAmount(measure.value)}
+                    {row.totalsMissing.price ? " known · partial" : null}
+                  </>
                 ) : (
                   <MissingMeasureCell
                     gap={gapForRow(row)}
@@ -386,63 +438,38 @@ export const RecipeIngredientList: React.FC<{
         },
       }),
     );
-    // One mini-column per key nutrient — the table has room and per-nutrient
-    // columns let you scan a single value (e.g. Protein) down the list.
-    for (const n of KEY_NUTRIENTS) {
+    for (const key of [
+      ...KEY_NUTRIENT_KEYS,
+      ...TIER1_NUTRIENT_KEYS.filter((key) => !DEFAULT_NUTRIENT_KEYS.has(key)),
+    ]) {
+      const nutrient = TIER1_NUTRIENTS[key];
       add(
         columnHelper.accessor(
           (row) => {
-            const res = row.priceInfo?.nutrient;
-            if (!res || res.isErr()) return undefined;
-            const value = res.value[n.code];
-            return value != null && value > 0 ? value : undefined;
+            const estimate = row.nutrition[key];
+            return hasKnownEstimate(estimate) ? estimate.lower : undefined;
           },
           {
-            id: `nutrient-${n.code}`,
-            header: () => (
-              <div className="flex flex-col leading-tight">
-                <span>{n.label}</span>
-                <span className="text-2xs font-normal text-muted-foreground lowercase">
-                  {n.unit}
-                </span>
-              </div>
-            ),
-            meta: { numeric: true, className: "w-14" },
+            id: `nutrient-${nutrient.code}`,
+            header: `${nutrient.displayName} (${nutrient.unit.toLowerCase()})`,
+            minSize: 144,
+            meta: { numeric: true, className: "w-40" },
             sortUndefined: "last",
-            footer: () => {
-              if (!totals) return null;
-              const value = totals.nutrients[n.code];
-              if (value == null || value <= 0) {
-                return (
-                  <div className="text-right text-muted-foreground/40">·</div>
-                );
-              }
-              const fmt = (v: number) =>
-                n.unit === "g" ? v.toFixed(1) : Math.round(v).toString();
-              return (
-                <div className="text-right font-mono tabular-nums">
-                  {formatNumberRange(
-                    value,
-                    totals.nutrientsUpper?.[n.code],
-                    fmt,
+            footer: () =>
+              displayedNutrition ? (
+                <div className="text-right font-mono text-xs whitespace-normal tabular-nums">
+                  {formatEstimate(
+                    displayedNutrition[key],
+                    (value) =>
+                      `${Number(value.toFixed(1))} ${nutrient.unit.toLowerCase()}`,
                   )}
                 </div>
-              );
-            },
-            cell: (info) => {
-              const nutrientResult = info.row.original.priceInfo?.nutrient;
-              if (!nutrientResult) return null;
-              return renderValueOrMissing(nutrientResult, (nutrients) => {
-                const value = nutrients[n.code];
-                if (value == null || value <= 0) {
-                  return <span className="text-muted-foreground/40">·</span>;
-                }
-                // Whole numbers for kcal/mg; one decimal for grams.
-                return n.unit === "g"
-                  ? value.toFixed(1)
-                  : Math.round(value).toString();
-              });
-            },
+              ) : null,
+            cell: (info) => (
+              <span className="text-xs whitespace-normal">
+                {renderNutrient(info.row.original, key)}
+              </span>
+            ),
           },
         ),
       );
@@ -451,7 +478,10 @@ export const RecipeIngredientList: React.FC<{
       columnHelper.display({
         id: "mappings",
         header: "Unit Mappings",
-        meta: { className: "w-36" },
+        meta: {
+          className: "w-36",
+          mobile: { slot: "meta", interactive: true },
+        },
         cell: (props) => {
           if (ingMap === undefined) {
             return "loading";
@@ -495,6 +525,17 @@ export const RecipeIngredientList: React.FC<{
     key: "recipe:ingredients",
     columns,
     legacySizingKey: "recipe:ingredients",
+    initialColumnVisibility: {
+      grams: false,
+      scalingPct: false,
+      mappings: false,
+      ...Object.fromEntries(
+        TIER1_NUTRIENT_KEYS.map((key) => [
+          `nutrient-${TIER1_NUTRIENTS[key].code}`,
+          DEFAULT_NUTRIENT_KEYS.has(key),
+        ]),
+      ),
+    },
   });
   const table = useCubbyTable({
     data: displayData,
@@ -512,35 +553,81 @@ export const RecipeIngredientList: React.FC<{
     },
   });
 
-  // Convert totals to RecipeSummaryData format
-  const getRecipeSummaryData = (
-    t: CalculateTotalsResult,
-  ): RecipeSummaryData => {
-    const summary: RecipeSummaryData = {
-      price: t.price,
-      weight: t.weight,
-      nutrients: t.nutrients,
-      totalIngredients: t.totalIngredients,
-      missingByType: t.missingByType,
-      perServing,
-    };
-    if (t.priceUpper != null) summary.priceUpper = t.priceUpper;
-    if (t.weightUpper != null) summary.weightUpper = t.weightUpper;
-    if (t.nutrientsUpper) summary.nutrientsUpper = t.nutrientsUpper;
-    return summary;
+  const selectNutrient = (key: (typeof TIER1_NUTRIENT_KEYS)[number]) => {
+    setFocusedNutrient(key);
+    const id = `nutrient-${TIER1_NUTRIENTS[key].code}`;
+    layout.atoms.columnVisibility.set({
+      ...layout.atoms.columnVisibility.get(),
+      [id]: true,
+    });
   };
 
   return (
     <div>
-      {!hideSummary && totals && (
-        <EntitySummaryCard
-          title="Recipe Summary"
-          summaryData={{
-            type: "recipe",
-            data: getRecipeSummaryData(totals),
-          }}
-        />
-      )}
+      <section
+        className="mb-4 border border-border p-3"
+        aria-label="Nutrition contributions"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold">Nutrition contributions</h3>
+            <p className="text-xs text-muted-foreground">
+              Select a nutrient to reveal its column and ingredient
+              contributions.
+            </p>
+          </div>
+          <label className="text-xs font-medium">
+            Focused nutrient{" "}
+            <select
+              aria-label="Focused nutrient"
+              value={focusedNutrient}
+              onChange={(event) =>
+                selectNutrient(nutrientKey.parse(event.target.value))
+              }
+              className="ml-2 h-11 border border-border bg-background px-2 md:h-8"
+            >
+              {TIER1_NUTRIENT_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {TIER1_NUTRIENTS[key].displayName}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div
+          className="mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2"
+          data-testid="nutrition-contributions"
+        >
+          {displayData.map((row) => {
+            const name = getIngredientName(row);
+            return (
+              <div
+                key={row.id}
+                className="flex items-center justify-between gap-3 border-t border-border/60 py-2"
+              >
+                <span className="min-w-0 truncate" title={name}>
+                  {name}
+                </span>
+                <span className="shrink-0 font-mono text-xs tabular-nums">
+                  {renderNutrient(row, focusedNutrient)}
+                </span>
+              </div>
+            );
+          })}
+          {displayedNutrition ? (
+            <div className="col-span-full flex justify-between gap-3 border-t border-foreground pt-2 font-semibold">
+              <span>Known subtotal</span>
+              <span className="font-mono text-xs">
+                {formatEstimate(
+                  displayedNutrition[focusedNutrient],
+                  (value) =>
+                    `${Number(value.toFixed(1))} ${TIER1_NUTRIENTS[focusedNutrient].unit.toLowerCase()}`,
+                )}
+              </span>
+            </div>
+          ) : null}
+        </div>
+      </section>
       <RTable
         table={table}
         isLoading={displayData.length === 0}
@@ -548,6 +635,7 @@ export const RecipeIngredientList: React.FC<{
         ariaLabel="Recipe Ingredients Table"
         verticalAlign="top"
         embedded
+        showColumnMenu
         getRowClassName={(row) =>
           // Wash estimated rows in a soft honey tint so usage-adjusted numbers
           // read as approximate at a glance, not just via the "est." markers.

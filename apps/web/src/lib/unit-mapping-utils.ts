@@ -37,7 +37,7 @@ export const toWFoodInput = (food: FoodSummary): WFoodInput => ({
   nutrients_per_100: Object.entries(
     food.nutritionInfo?.nutrientsPer100 ?? {},
   ).flatMap(([code, amount]) =>
-    amount > 0 && isTier1Nutrient(code)
+    amount >= 0 && Number.isFinite(amount) && isTier1Nutrient(code)
       ? [
           {
             unit: getNutrientUnitString(getNutrientKey(code)),

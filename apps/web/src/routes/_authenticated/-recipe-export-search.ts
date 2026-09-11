@@ -1,3 +1,4 @@
+import { nutritionBasis } from "@cubby/schemas/nutrition";
 import { z } from "zod";
 
 export const recipeExportSearchSchema = z.object({
@@ -6,4 +7,5 @@ export const recipeExportSearchSchema = z.object({
     .optional()
     .catch(undefined),
   scale: z.number().positive().optional().catch(undefined),
+  nutritionBasis: nutritionBasis.optional(),
 });

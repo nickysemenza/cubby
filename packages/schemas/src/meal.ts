@@ -17,6 +17,7 @@ import {
 import { ledgerPartyKind } from "./ledger-party";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import { mealDate, mealScale, mealYieldGrams } from "./meal-shared";
+import { nutritionTotals } from "./nutrition";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import { mealRecipeOut, mealTotals } from "./meal-fields";
 import {
@@ -58,8 +59,8 @@ export {
  * `mealType` sorts by SLOT, not alphabetically — the repo resolves it through
  * `mealTypeValues`' declaration order, because a raw text sort would put
  * dessert before dinner. Cost is deliberately absent: it's a read-time rollup
- * of `recipe.totals x scale` with a `pending` flag, so any SQL ordering would
- * rank a pending meal by a number the page never shows.
+ * of current `recipe.totals x scale`; estimate status cannot be represented by
+ * a useful SQL sort key.
  */
 export const mealSortableFields = [
   "date",
@@ -125,39 +126,6 @@ export const mealFilterFields = {
 
 export const mealFiltersSchema = z.object(mealFilterFields);
 export type MealFilters = z.infer<typeof mealFiltersSchema>;
-
-/**
- * A per-batch or per-portion estimate.  The state describes how much of a
- * measure's recipe input graph was covered; callers supply the measure label
- * instead of baking calories into the transport contract.
- */
-export const mealPreparationEstimate = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("pending"),
-    reason: z.enum(["totals_missing", "totals_stale"]),
-  }),
-  z.object({
-    status: z.literal("unavailable"),
-    reason: z.enum([
-      "yield_missing",
-      "cost_uncovered",
-      "calories_uncovered",
-      "protein_uncovered",
-    ]),
-  }),
-  z.object({
-    status: z.literal("partial"),
-    lower: z.number().nonnegative(),
-  }),
-  z.object({
-    status: z.literal("complete"),
-    lower: z.number().nonnegative(),
-    upper: z.number().nonnegative().nullable(),
-  }),
-]);
-export type MealPreparationEstimate = z.infer<typeof mealPreparationEstimate>;
-
-export type MealPreparationCalorieEstimate = MealPreparationEstimate;
 
 export const mealPreparationYieldBasis = z.discriminatedUnion("kind", [
   z.object({
@@ -242,9 +210,7 @@ export const mealRecipePreparationPortionOut = z.object({
   grams: mealYieldGrams,
   confirmedAt: z.date().nullable(),
   servedHere: z.boolean(),
-  calories: mealPreparationEstimate,
-  cost: mealPreparationEstimate,
-  protein: mealPreparationEstimate,
+  totals: nutritionTotals,
 });
 export type MealRecipePreparationPortionOut = z.infer<
   typeof mealRecipePreparationPortionOut
@@ -267,9 +233,7 @@ export const mealRecipePreparationOut = z
     estimatedYieldGrams: mealYieldGrams.nullable(),
     actualYieldGrams: mealYieldGrams.nullable(),
     yieldBasis: mealPreparationYieldBasis,
-    batchCalories: mealPreparationEstimate,
-    batchCost: mealPreparationEstimate,
-    batchProtein: mealPreparationEstimate,
+    totals: nutritionTotals,
     sourceSummary: mealRecipePreparationSourceSummaryOut.nullable(),
     portions: z.array(mealRecipePreparationPortionOut),
   })
@@ -282,9 +246,7 @@ export type MealRecipePreparationOut = z.infer<typeof mealRecipePreparationOut>;
 
 const mealPreparationTotalsPartOut = z.object({
   portionCount: z.number().int().nonnegative(),
-  calories: mealPreparationEstimate,
-  cost: mealPreparationEstimate,
-  protein: mealPreparationEstimate,
+  totals: nutritionTotals,
 });
 
 export const getMealPreparationsOut = z.object({

@@ -1,4 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
@@ -18,9 +19,13 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   mealKind: "eating_out",
   recipeNames: [],
   coverImageUrl: null,
-  cost: 0,
-  calories: 0,
-  nutritionPending: false,
+  mealTotals: {
+    cost: { status: "unavailable", reason: "empty" },
+    nutrition: buildNutrition(() => ({
+      status: "unavailable",
+      reason: "empty",
+    })),
+  },
 };
 
 const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {

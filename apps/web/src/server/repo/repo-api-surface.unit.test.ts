@@ -18,8 +18,8 @@ import {
   updateMeal,
 } from "~/server/repo/meal";
 import {
-  aggregateMealPreparationCalories,
-  batchCaloriesFor,
+  batchTotalsFor,
+  portionTotalsFor,
   yieldBasisFor,
 } from "~/server/repo/meal/portions";
 import { findEntitiesMissingEmbeddings } from "~/server/repo/problems";
@@ -55,8 +55,8 @@ describe("retained repository API surface", () => {
       deleteMeals,
       getMealByID,
       updateMeal,
-      aggregateMealPreparationCalories,
-      batchCaloriesFor,
+      batchTotalsFor,
+      portionTotalsFor,
       yieldBasisFor,
       findEntitiesMissingEmbeddings,
       setProductsStockTracked,

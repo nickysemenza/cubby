@@ -10,8 +10,8 @@ import {
   tryFormatAmount,
   tryFormatAmountShopper,
 } from "~/app/_components/inventory/format-amount";
-import { formatCurrency } from "~/lib/utils";
 
+import { formatCostEstimate } from "./meal-nutrition";
 import type { ShoppingRow } from "./shopping-model";
 
 /**
@@ -71,11 +71,9 @@ export const mealListLabel = (meal: {
   (meal.mealType ? MEAL_TYPE_LABELS[meal.mealType] : "") ||
   mealDateLabel(meal);
 
-/** Meal/day cost rollup as a short string; "—" when no recipe has totals. */
+/** Meal/day cost rollup with range and confidence language intact. */
 export const formatMealCost = (totals: MealTotals): string => {
-  if (totals.pending && totals.costTotal === 0) return "—";
-  const base = formatCurrency(totals.costTotal);
-  return totals.pending ? `${base}+` : base;
+  return formatCostEstimate(totals);
 };
 
 /** Text-color class per availability status (warm semantic tokens). */

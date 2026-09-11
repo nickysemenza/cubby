@@ -1,4 +1,10 @@
 import { type MealCreateInput, mealCreateInput } from "@cubby/schemas/meal";
+import {
+  buildNutrition,
+  hasKnownEstimate,
+  type NutritionEstimate,
+} from "@cubby/schemas/nutrition";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -23,8 +29,55 @@ import {
   seedIngredientWithStock,
 } from "./repo.fixtures";
 
+type MealPreparationsResult = Awaited<ReturnType<typeof getMealPreparations>>;
+
+const requirePortionForMeal = (
+  result: MealPreparationsResult,
+  targetMealId: string,
+) => {
+  const portion = result.preparations
+    .flatMap((preparation) => preparation.portions)
+    .find((candidate) => candidate.targetMeal.id === targetMealId);
+  if (!portion) throw new Error("expected portion for target meal");
+  return portion;
+};
+
+const expectNutritionScaled = (
+  before: NutritionEstimate,
+  after: NutritionEstimate,
+  multiplier: number,
+) => {
+  for (const key of TIER1_NUTRIENT_KEYS) {
+    const beforeEstimate = before[key];
+    const afterEstimate = after[key];
+    if (!hasKnownEstimate(beforeEstimate) || !hasKnownEstimate(afterEstimate)) {
+      throw new Error(`expected known ${key} estimate`);
+    }
+    expect(afterEstimate.lower).toBeCloseTo(beforeEstimate.lower * multiplier);
+  }
+};
+
 describe("meal recipe preparations", () => {
   const ctx = withTestDb();
+  const recipeTotals = (multiplier = 1) => ({
+    cost: {
+      status: "complete" as const,
+      lower: 10 * multiplier,
+      upper: null,
+      coverage: { covered: 1, total: 1 },
+    },
+    nutrition: buildNutrition((key) => ({
+      status: "complete",
+      lower:
+        (key === "kcal"
+          ? 800
+          : key === "protein"
+            ? 80
+            : TIER1_NUTRIENT_KEYS.indexOf(key) + 1) * multiplier,
+      upper: null,
+      coverage: { covered: 1, total: 1 },
+    })),
+  });
   const createTestMeal = async (data: MealCreateInput) =>
     (await createMealWithEntityId(ctx.db, data, ctx.actor)).output;
 
@@ -55,15 +108,7 @@ describe("meal recipe preparations", () => {
       .update(recipe)
       .set({
         yield: { value: 400, unit: "g" },
-        totals: {
-          costTotal: 0,
-          caloriesTotal: 800,
-          proteinTotal: 80,
-          ingredientCount: 1,
-          costCovered: 1,
-          caloriesCovered: 1,
-          proteinCovered: 1,
-        },
+        totals: recipeTotals(),
         totalsComputedAt: new Date(),
       })
       .where(eq(recipe.id, recipeFixture.entityId));
@@ -134,18 +179,85 @@ describe("meal recipe preparations", () => {
     });
     expect(sourceRead.totals.confirmed).toMatchObject({
       portionCount: 1,
-      calories: { status: "complete", lower: 160, upper: null },
-      cost: { status: "complete", lower: 0, upper: null },
-      protein: { status: "complete", lower: 16, upper: null },
+      totals: {
+        cost: { status: "complete", lower: 2, upper: null },
+        nutrition: {
+          kcal: { status: "complete", lower: 160, upper: null },
+          protein: { status: "complete", lower: 16, upper: null },
+        },
+      },
     });
     expect(targetRead.totals.confirmed).toMatchObject({
       portionCount: 1,
-      calories: { status: "complete", lower: 240, upper: null },
-      cost: { status: "complete", lower: 0, upper: null },
-      protein: { status: "complete", lower: 24, upper: null },
+      totals: {
+        cost: { status: "complete", lower: 3, upper: null },
+        nutrition: {
+          kcal: { status: "complete", lower: 240, upper: null },
+          protein: { status: "complete", lower: 24, upper: null },
+        },
+      },
     });
     expect(inventoryAfter?.amount).toEqual(inventoryBefore.amount);
     expect(inventoryAfter?.deletedAt).toBeNull();
+
+    const recorded = requirePortionForMeal(sourceRead, source.id);
+    const recordedFacts = {
+      grams: recorded.grams,
+      targetDate: recorded.targetMeal.date,
+      confirmedAt: recorded.confirmedAt,
+    };
+
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ totals: recipeTotals(2), totalsComputedAt: new Date() })
+      .where(eq(recipe.id, recipeFixture.entityId));
+    const corrected = await getMealPreparations(ctx.db, {
+      mealId: source.id,
+    });
+    const correctedPortion = requirePortionForMeal(corrected, source.id);
+    expect({
+      grams: correctedPortion.grams,
+      targetDate: correctedPortion.targetMeal.date,
+      confirmedAt: correctedPortion.confirmedAt,
+    }).toEqual(recordedFacts);
+    expectNutritionScaled(
+      recorded.totals.nutrition,
+      correctedPortion.totals.nutrition,
+      2,
+    );
+
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ totals: null, totalsComputedAt: null })
+      .where(eq(recipe.id, recipeFixture.entityId));
+    const pending = await getMealPreparations(ctx.db, { mealId: source.id });
+    const pendingPortion = requirePortionForMeal(pending, source.id);
+    expect(pendingPortion.totals.cost).toEqual({
+      status: "pending",
+      reason: "totals_missing",
+    });
+    expect(pendingPortion.totals.nutrition.kcal).toEqual({
+      status: "pending",
+      reason: "totals_missing",
+    });
+
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ totals: recipeTotals(3), totalsComputedAt: new Date() })
+      .where(eq(recipe.id, recipeFixture.entityId));
+    const regenerated = await getMealPreparations(ctx.db, {
+      mealId: source.id,
+    });
+    const regeneratedPortion = requirePortionForMeal(regenerated, source.id);
+    expect(regeneratedPortion.totals.nutrition.kcal).toMatchObject({
+      status: "complete",
+      lower: 480,
+    });
+    expect({
+      grams: regeneratedPortion.grams,
+      targetDate: regeneratedPortion.targetMeal.date,
+      confirmedAt: regeneratedPortion.confirmedAt,
+    }).toEqual(recordedFacts);
   });
 
   it("rejects invalid portions without committing a partial preparation", async () => {

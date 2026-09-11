@@ -1,6 +1,5 @@
-/** Problems service composes detector repos and cross-entity services without direct database access. */
-
 import type { ActorContext } from "@cubby/schemas/context";
+/** Problems service composes detector repos and cross-entity services without direct database access. */
 import {
   type IngredientId,
   parseEntityId,
@@ -9,6 +8,7 @@ import {
   type RecipeId,
 } from "@cubby/schemas/identifiers";
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
+import { measureEstimate, hasKnownEstimate } from "@cubby/schemas/nutrition";
 import {
   type AllProblems,
   allProblemsSchema,
@@ -664,8 +664,7 @@ const exactProblemPresentationRowSchema = z.object({
             name: z.string(),
             totals: z
               .object({
-                costCovered: z.number().optional(),
-                ingredientCount: z.number().optional(),
+                cost: measureEstimate,
               })
               .nullish(),
           })
@@ -800,8 +799,11 @@ const fastExactPresenters = {
   understatedCostMeals: (row) => {
     const affectedRecipes = (row.recipes ?? []).flatMap((entry) => {
       const recipe = entry.recipe;
-      const costCovered = recipe?.totals?.costCovered;
-      const ingredientCount = recipe?.totals?.ingredientCount;
+      const cost = recipe?.totals?.cost;
+      const costCovered =
+        cost && hasKnownEstimate(cost) ? cost.coverage.covered : undefined;
+      const ingredientCount =
+        cost && hasKnownEstimate(cost) ? cost.coverage.total : undefined;
       return recipe &&
         costCovered != null &&
         ingredientCount != null &&

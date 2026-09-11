@@ -1,12 +1,15 @@
 import {
+  hasKnownEstimate,
+  type NutritionEstimate,
+} from "@cubby/schemas/nutrition";
+import {
   dailyValuePct,
-  getNutrientValueByKey,
   isNutrientKey,
   type NutrientKey,
-  type NutrientsPer100,
   TIER1_NUTRIENTS,
 } from "@cubby/usda-schemas";
 
+import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
 
 /**
@@ -45,19 +48,53 @@ const SUB_NUTRIENTS: ReadonlySet<NutrientKey> = new Set([
 // NutrientsSummary's amount formatting so figures read consistently app-wide.
 const trimAmount = (v: number) => Number(v.toFixed(1)).toString();
 
+const formatAmount = (
+  estimate: NutritionEstimate[NutrientKey],
+  unit: string,
+): string =>
+  formatEstimate(estimate, (value) => `${trimAmount(value)} ${unit}`);
+
+const formatDailyValue = (
+  nutrientKey: NutrientKey,
+  estimate: NutritionEstimate[NutrientKey],
+) => {
+  if (!hasKnownEstimate(estimate)) {
+    return { label: "—", title: estimateStatusText(estimate) ?? undefined };
+  }
+  if (estimate.status === "partial") {
+    return {
+      label: "—",
+      title: "Daily Value omitted because the nutrient estimate is partial",
+    };
+  }
+
+  const lower = Math.round(dailyValuePct(nutrientKey, estimate.lower));
+  const upper =
+    estimate.upper == null
+      ? null
+      : Math.round(dailyValuePct(nutrientKey, estimate.upper));
+  return {
+    label:
+      upper == null || upper === lower ? `${lower}%` : `${lower}–${upper}%`,
+  };
+};
+
 function NutrientRow({
   nutrientKey,
-  value,
+  estimate,
 }: {
   nutrientKey: NutrientKey;
-  value: number;
+  estimate: NutritionEstimate[NutrientKey];
 }) {
   const info = TIER1_NUTRIENTS[nutrientKey];
   const indented = SUB_NUTRIENTS.has(nutrientKey);
-  const pct = Math.round(dailyValuePct(nutrientKey, value));
+  const amount = formatAmount(estimate, info.unit.toLowerCase());
+  const status = estimateStatusText(estimate);
+  const dailyValue = formatDailyValue(nutrientKey, estimate);
 
   return (
-    <div
+    <section
+      aria-label={info.displayName}
       className={cn(
         "flex items-baseline justify-between gap-2 border-t border-border py-1 text-sm",
         indented && "pl-4",
@@ -65,39 +102,44 @@ function NutrientRow({
     >
       <span className={indented ? "text-muted-foreground" : "font-medium"}>
         {info.displayName}{" "}
-        <span className="font-mono text-xs text-muted-foreground tabular-nums">
-          {trimAmount(value)}
-          {info.unit.toLowerCase()}
+        <span
+          className="font-mono text-xs text-muted-foreground tabular-nums"
+          title={status ?? undefined}
+        >
+          {amount}
         </span>
       </span>
-      <span className="font-mono font-semibold tabular-nums">{pct}%</span>
-    </div>
+      <span
+        className="font-mono font-semibold tabular-nums"
+        title={dailyValue.title}
+      >
+        {dailyValue.label}
+      </span>
+    </section>
   );
 }
 
 /**
  * A classic FDA-style Nutrition Facts label, driven entirely by the WASM-costed
- * nutrient totals — no re-derivation of %DV or unit formatting in TS beyond the
- * `dailyValuePct` helper. Renders only the tier-1 codes present in `nutrients`
- * with a positive value (Calories always shows if present), ordered macros
- * first (FDA order) then micronutrients, with saturated fat / fiber indented
- * under their parent macro.
+ * nutrient totals. The core FDA rows stay visible when values are missing so
+ * absence cannot look like zero; micronutrients appear when they have a value
+ * or a pending calculation. Complete ranges retain ranged %DV, while partial
+ * estimates omit %DV because the known subtotal is not a bound on missing data.
  */
 export function NutritionLabel({
-  nutrients,
+  estimates,
   servingLabel,
   note,
 }: {
-  nutrients: NutrientsPer100;
+  estimates: NutritionEstimate;
   servingLabel: string;
   note?: string;
 }) {
-  const kcal = getNutrientValueByKey(nutrients, "kcal");
+  const kcalEstimate = estimates.kcal;
   const rows = ROW_ORDER.filter(
-    (key) => getNutrientValueByKey(nutrients, key) > 0,
+    (key) =>
+      MACRO_ORDER.includes(key) || estimates[key].status !== "unavailable",
   );
-
-  if (kcal <= 0 && rows.length === 0) return null;
 
   return (
     <div className="max-w-sm border-4 border-foreground bg-background p-4 font-mono text-foreground">
@@ -108,25 +150,21 @@ export function NutritionLabel({
         <p className="text-xs text-muted-foreground">{servingLabel}</p>
       </div>
 
-      {kcal > 0 && (
-        <div className="flex items-baseline justify-between border-b-4 border-foreground py-1">
-          <span className="text-lg font-bold">Calories</span>
-          <span className="text-2xl font-bold tabular-nums">
-            {Math.round(kcal)}
+      <div className="flex items-baseline justify-between border-b-4 border-foreground py-1">
+        <span className="text-lg font-bold">Calories</span>
+        <span className="text-2xl font-bold tabular-nums">
+          <span title={estimateStatusText(kcalEstimate) ?? undefined}>
+            {formatEstimate(kcalEstimate, (value) => `${Math.round(value)}`)}
           </span>
-        </div>
-      )}
+        </span>
+      </div>
 
       <div className="flex justify-end border-b border-border py-1 text-2xs tracking-wider text-muted-foreground uppercase">
         % Daily Value*
       </div>
 
       {rows.map((key) => (
-        <NutrientRow
-          key={key}
-          nutrientKey={key}
-          value={getNutrientValueByKey(nutrients, key)}
-        />
+        <NutrientRow key={key} nutrientKey={key} estimate={estimates[key]} />
       ))}
 
       <p className="border-t-4 border-foreground pt-1 text-2xs text-muted-foreground">

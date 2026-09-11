@@ -1,3 +1,4 @@
+import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import {
   type RecipeOut,
   recipeOut,
@@ -6,6 +7,14 @@ import {
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { ok } from "neverthrow";
 import { describe, expect, it } from "vitest";
+const unavailableNutrition = buildNutrition(() => ({
+  status: "unavailable" as const,
+  reason: "no_data" as const,
+}));
+const unavailableTotals: NutritionTotals = {
+  cost: { status: "unavailable", reason: "no_data" },
+  nutrition: unavailableNutrition,
+};
 
 import type { IngredientDataItem, RecipeCosting } from "~/lib/recipe-costing";
 
@@ -53,6 +62,7 @@ const mkRow = (id: string, grams: number): IngredientDataItem => ({
     nutrient: ok({}),
   },
   totalsMissing: { price: false, weight: false, nutrients: false },
+  nutrition: unavailableNutrition,
 });
 
 const mkCosting = (
@@ -70,6 +80,7 @@ const mkCosting = (
     totalIngredients: Object.keys(rowGrams).length,
     missingByType: { price: [], weight: [], nutrients: [] },
     diagnostics: [],
+    estimates: unavailableTotals,
   },
   estimatedRows: new Map(),
   bakerPct: new Map(),
