@@ -56174,6 +56174,10 @@
         "in": "header",
         "name": "x-api-key"
       },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      },
       "sessionCookie": {
         "type": "apiKey",
         "in": "cookie",
@@ -106707,6 +106711,9 @@
   "security": [
     {
       "apiKey": []
+    },
+    {
+      "bearerAuth": []
     },
     {
       "sessionCookie": []

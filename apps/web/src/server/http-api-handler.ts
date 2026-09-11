@@ -118,6 +118,14 @@ async function readInput(
   };
   return id ? { ...input, id } : input;
 }
+/**
+ * Explicit credentials (an API key or a bearer token) are attached by the
+ * caller per request; only ambient cookies can be sent cross-site by a browser,
+ * so the same-origin gate below applies to cookie sessions alone.
+ */
+const hasExplicitCredential = (request: Request) =>
+  request.headers.has("x-api-key") ||
+  /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
 async function authenticate(request: Request, authApi: HttpApiPorts["auth"]) {
   if (request.headers.has("x-api-key")) {
     const key = request.headers.get("x-api-key");
@@ -209,9 +217,12 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
     try {
       const actor = await authenticate(request, ports.auth);
       if (!actor)
-        return failure("UNAUTHORIZED", "Valid API key or session required");
+        return failure(
+          "UNAUTHORIZED",
+          "Valid API key, bearer token, or session required",
+        );
       if (
-        !request.headers.has("x-api-key") &&
+        !hasExplicitCredential(request) &&
         request.method !== "GET" &&
         request.headers.get("origin") !== new URL(request.url).origin
       )

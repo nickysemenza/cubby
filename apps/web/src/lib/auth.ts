@@ -3,7 +3,7 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth, type BetterAuthAdvancedOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { jwt, openAPI } from "better-auth/plugins";
+import { bearer, jwt, openAPI } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 
 import { env } from "~/env";
@@ -147,6 +147,16 @@ export const auth = betterAuth({
     // Scalar reference for the auth surface. Dev-only UI: the JSON schema
     // endpoint (/api/auth/open-api/generate-schema) stays available in both.
     openAPI(isDev ? {} : { disableDefaultReference: true }),
+    // Native clients (the Swift app) cannot hold ambient cookies. After a
+    // sign-in the plugin echoes the session cookie's value in a
+    // `set-auth-token` response header; the client then sends it back as
+    // `Authorization: Bearer <token>` and the plugin injects it as the session
+    // cookie before any `getSession` runs, so every existing call site accepts
+    // it unchanged. `requireSignature` accepts only the signed `token.sig` form
+    // the server itself hands out, so a raw session token from the DB cannot be
+    // replayed as a bearer credential. Only the session-token cookie is
+    // injected, never the cookie cache, so bearer reads always hit the DB.
+    bearer({ requireSignature: true }),
     tanstackStartCookies(), // Must be last
   ],
   advanced: advancedOptions,

@@ -38,7 +38,11 @@ describe("generated HTTP contract", () => {
         ),
       ].sort(),
     );
-    expect(document.security).toEqual([{ apiKey: [] }, { sessionCookie: [] }]);
+    expect(document.security).toEqual([
+      { apiKey: [] },
+      { bearerAuth: [] },
+      { sessionCookie: [] },
+    ]);
   });
 
   it("matches every documented method and rejects route collisions", () => {

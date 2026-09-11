@@ -1,3 +1,4 @@
+import { request as apiRequest } from "@playwright/test";
 import { z } from "zod";
 import { Pool } from "pg";
 import { createCubbyClient } from "~/lib/http-api/client";
@@ -304,4 +305,87 @@ test("Scalar renders generated operations and account settings expose API keys",
       }).dashboard.counts({ body: {} })
     ).status,
   ).toBe(401);
+});
+
+test("bearer tokens authenticate a cookie-less native client", async ({
+  baseURL,
+}) => {
+  // Fresh API contexts with no storage state, which is what a native app looks
+  // like to the server. Auth endpoints reject untrusted Origins, so the app
+  // identifies itself by its URL scheme (the `cubby-mobile://` entry in
+  // trustedOrigins), as Better Auth's own native clients do. The HTTP API
+  // itself needs no Origin for bearer requests.
+  //
+  // The test runner applies this project's `storageState` to new request
+  // contexts, so the fixture cookies are cleared explicitly. Contexts also keep
+  // a cookie jar, so the sign-in response would leave `login` holding a session
+  // cookie; every bearer assertion runs from `native`, which never sees that
+  // cookie, so only the header can authenticate it.
+  const cookieless = { baseURL, storageState: { cookies: [], origins: [] } };
+  const login = await apiRequest.newContext(cookieless);
+  const native = await apiRequest.newContext(cookieless);
+  const appOrigin = { Origin: "cubby-mobile://" };
+  try {
+    const signedIn = await login.post("/api/auth/sign-in/email", {
+      headers: appOrigin,
+      data: {
+        email: process.env.E2E_TEST_USER_EMAIL,
+        password: process.env.E2E_TEST_USER_PASSWORD,
+      },
+    });
+    expect(signedIn.status(), await signedIn.text()).toBe(200);
+    const token = signedIn.headers()["set-auth-token"];
+    expect(token).toMatch(/^\S+\.\S+$/u);
+    await login.dispose();
+    const bearer = { Authorization: `Bearer ${token}` };
+
+    expect((await native.get("/api/v1/recipes")).status()).toBe(401);
+    const read = await native.get("/api/v1/recipes", {
+      headers: bearer,
+      params: { page: "1", pageSize: "1" },
+    });
+    expect(read.status(), await read.text()).toBe(200);
+    expect(await read.json()).toMatchObject({ ok: true });
+
+    const created = await native.post("/api/v1/recipes", {
+      headers: bearer,
+      data: {
+        name: `Bearer acceptance ${Date.now()}`,
+        meta: null,
+        sections: [],
+      },
+    });
+    expect(created.status(), await created.text()).toBe(201);
+    const id = entityCreated.parse(await created.json()).data.item.id;
+    expect(
+      (
+        await native.delete(`/api/v1/recipes/${id}`, { headers: bearer })
+      ).status(),
+    ).toBe(200);
+
+    expect(
+      (
+        await native.get("/api/v1/recipes", {
+          headers: { Authorization: "Bearer invalid.token" },
+        })
+      ).status(),
+    ).toBe(401);
+
+    // Sign-out revokes the session; the boundary reads sessions from the
+    // database on every request, so the old token stops working at once.
+    expect(
+      (
+        await native.post("/api/auth/sign-out", {
+          headers: { ...bearer, ...appOrigin },
+          data: {},
+        })
+      ).status(),
+    ).toBe(200);
+    expect(
+      (await native.get("/api/v1/recipes", { headers: bearer })).status(),
+    ).toBe(401);
+  } finally {
+    await login.dispose();
+    await native.dispose();
+  }
 });

@@ -483,6 +483,15 @@ cache. An explicit `x-api-key` takes precedence, including when invalid. Cookie
 writes require the same request Origin; key-authenticated scripts need no Origin.
 All responses use authoritative reads and `Cache-Control: no-store`.
 
+Native clients that cannot hold cookies sign in once at
+`/api/auth/sign-in/email`, identifying themselves with `Origin: cubby-mobile://`
+(the app's URL scheme, a trusted origin), read the signed session token from the
+`set-auth-token` response header, and send it back as
+`Authorization: Bearer <token>`. Bearer requests resolve to the same session a
+cookie would, are verified against the database on every request, need no
+Origin on `/api/v1` routes, and stop working the moment the session is signed
+out.
+
 Entity declarations generate capability-dependent resource methods: GET collection,
 GET `/{id}`, POST collection, PATCH `/{id}`, and DELETE `/{id}`. POST and PATCH
 bodies contain entity fields directly; DELETE needs no body. Create returns 201
