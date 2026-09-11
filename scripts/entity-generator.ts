@@ -1848,6 +1848,41 @@ export const renderEntityArtifacts = (
         : [`  ${JSON.stringify(key)}: ${filterSchema.export},`],
     )
     .join("\n");
+  const httpResources = kernelEntities
+    .flatMap((entity) => {
+      if (!entity.route || !entity.contract) return [];
+      const key = JSON.stringify(entity.key);
+      const path = `/api/v1/${entity.route.basePath}`;
+      const binding = `ENTITY_SCHEMA_BINDINGS[${key}]`;
+      const metadata = (mode: string, operation = "entity.mutate") =>
+        JSON.stringify({ entity: entity.key, operation, mode });
+      const routes: string[] = [];
+      const listIndex = browserCrudEntitySpecs.findIndex(
+        (candidate) => candidate.key === entity.key,
+      );
+      if (listIndex >= 0)
+        routes.push(
+          `list: httpGet(${JSON.stringify(path)}, entityListInputSchema.options[${listIndex}].omit({entity:true}).partial({filters:true}), getEntityListOutputSchema(${key}), ${metadata("list", "entity.list")})`,
+        );
+      if (detailEntities.some((candidate) => candidate.key === entity.key))
+        routes.push(
+          `get: httpItem(httpGet(${JSON.stringify(path + "/:id")}, z.strictObject({}), getEntityDetailOutputSchema(${key}), ${metadata("detail", "entity.detail")}), ${binding}.id)`,
+        );
+      if (entity.contract.create)
+        routes.push(
+          `create: httpCreate( ${JSON.stringify(path)}, ${binding}.createInput, generatedEntityMutationCreateResultSchema.options[${entities.filter((candidate) => candidate.contract?.create).findIndex((candidate) => candidate.key === entity.key)}], ${metadata("create")})`,
+        );
+      if (entity.contract.update)
+        routes.push(
+          `update: httpItem(httpWrite("PATCH", ${JSON.stringify(path + "/:id")}, ${binding}.updateInput, generatedEntityMutationUpdateResultSchema.options[${entities.filter((candidate) => candidate.contract?.update).findIndex((candidate) => candidate.key === entity.key)} ], ${metadata("update")}), ${binding}.id)`,
+        );
+      if (entity.operationOwners.delete === "kernel")
+        routes.push(
+          `delete: httpItem(httpDelete(${JSON.stringify(path + "/:id")}, entityDeleteResultSchema, ${metadata("delete")}), ${binding}.id)`,
+        );
+      return [`${key}: {${routes.join(",\n")}}`];
+    })
+    .join(",\n");
   const lifecycleFor = (entity: CompiledEntity) => entity.lifecycle;
   const kernelActionsFor = (entity: CompiledEntity) => {
     const lifecycle = lifecycleFor(entity);
@@ -2390,6 +2425,18 @@ export const renderEntityArtifacts = (
         `${filterFieldImportSource}\n\n` +
         "// Generated filter field assembly stays one entity per line.\n// oxfmt-ignore\n" +
         `export const entityFilterFieldMaps = {\n${filterFieldBindings}\n} satisfies Partial<Record<Entity, Record<string, z.ZodType>>>;\n`,
+    },
+    {
+      relativePath: "apps/web/src/lib/generated/http-resources.gen.ts",
+      source:
+        generatedHeader +
+        'import { z } from "zod";\n' +
+        'import { ENTITY_SCHEMA_BINDINGS, generatedEntityMutationCreateResultSchema, generatedEntityMutationUpdateResultSchema } from "~/server/generated/entity-bindings.gen";\n' +
+        'import { entityDeleteResultSchema } from "~/server/entity-kernel/contracts";\n' +
+        'import { entityListInputSchema, getEntityListOutputSchema } from "~/entities/generated/entity-lists.gen";\n' +
+        'import { getEntityDetailOutputSchema } from "~/entities/generated/entity-details.gen";\n' +
+        'import { httpGet, httpWrite, httpItem, httpDelete, httpCreate } from "~/lib/http-api/contract";\n' +
+        `export const httpResources = {${httpResources}} as const;\n`,
     },
     {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",

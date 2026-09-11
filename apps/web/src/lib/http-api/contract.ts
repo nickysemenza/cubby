@@ -1,3 +1,4 @@
+import { ContractNoBody } from "@ts-rest/core";
 import { z } from "zod";
 
 import {
@@ -16,7 +17,7 @@ import {
 } from "~/server/entity-kernel/contracts";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 
-type Json<T> = T extends string | number | boolean | null | undefined
+export type Json<T> = T extends string | number | boolean | null | undefined
   ? T
   : T extends Date
     ? string
@@ -47,8 +48,8 @@ export function httpOperation<I extends z.ZodType, O extends z.ZodType>(
     input instanceof z.ZodUndefined
       ? z.strictObject({})
       : z.strictObject({ input });
-  const response = z.object({ ok: z.literal(true), data: output });
   return {
+    metadata: { http: { operation: id, mode: "legacy" } },
     method: "POST" as const,
     path: `/api/v1/${id.replace(".", "/")}`,
     body: wireSchema<
@@ -56,19 +57,7 @@ export function httpOperation<I extends z.ZodType, O extends z.ZodType>(
         ? { input?: Json<z.input<I>> }
         : { input: Json<z.input<I>> }
     >(body, "input"),
-    responses: {
-      200: wireSchema<{ ok: true; data: Json<z.output<O>> }>(
-        response,
-        "output",
-      ),
-      400: failure,
-      401: failure,
-      403: failure,
-      404: failure,
-      409: failure,
-      412: failure,
-      500: failure,
-    },
+    responses: httpResponses(output),
   };
 }
 export const entityHttpSchemas = {
@@ -85,3 +74,135 @@ export const entityHttpSchemas = {
     output: entityBrowserMutationResultSchema,
   },
 };
+
+function httpResponses<O extends z.ZodType>(output: O) {
+  return {
+    200: wireSchema<{ ok: true; data: Json<z.output<O>> }>(
+      z.object({ ok: z.literal(true), data: output }),
+      "output",
+    ),
+    400: failure,
+    401: failure,
+    403: failure,
+    404: failure,
+    409: failure,
+    412: failure,
+    500: failure,
+  };
+}
+export const httpMetadataSchema = z.object({
+  operation: z.string(),
+  mode: z.enum([
+    "legacy",
+    "object",
+    "wrapped",
+    "undefined",
+    "null",
+    "list",
+    "detail",
+    "create",
+    "update",
+    "delete",
+  ]),
+  entity: z.string().optional(),
+});
+export type HttpMetadata = z.output<typeof httpMetadataSchema>;
+
+export function httpGet<I extends z.ZodType, O extends z.ZodType>(
+  path: string,
+  input: I,
+  output: O,
+  metadata: HttpMetadata,
+) {
+  return {
+    method: "GET" as const,
+    path,
+    query: wireSchema<Json<z.input<I>>>(input, "input"),
+    responses: httpResponses(output),
+    metadata: { http: metadata },
+  };
+}
+export function httpWrite<
+  const M extends "POST" | "PATCH",
+  I extends z.ZodType,
+  O extends z.ZodType,
+>(method: M, path: string, input: I, output: O, metadata: HttpMetadata) {
+  return {
+    method,
+    path,
+    body: wireSchema<Json<z.input<I>>>(input, "input"),
+    responses: httpResponses(output),
+    metadata: { http: metadata },
+  };
+}
+export function httpItem<R extends { path: string }, I extends z.ZodType>(
+  route: R,
+  id: I,
+) {
+  return {
+    ...route,
+    pathParams: wireSchema<{ id: Json<z.input<I>> }>(z.object({ id }), "input"),
+  };
+}
+export function httpQuery<I extends z.ZodType, O extends z.ZodType>(
+  id: string,
+  input: I,
+  output: O,
+) {
+  const mode =
+    input instanceof z.ZodUndefined
+      ? "undefined"
+      : input instanceof z.ZodNull
+        ? "null"
+        : input instanceof z.ZodObject ||
+            (input instanceof z.ZodUnion &&
+              input.options.every((option) => option instanceof z.ZodObject))
+          ? "object"
+          : "wrapped";
+  const query =
+    mode === "undefined" || mode === "null"
+      ? z.strictObject({})
+      : mode === "object"
+        ? input
+        : z.object({ input });
+  return {
+    ...httpGet(`/api/v1/${id.replace(".", "/")}`, query, output, {
+      operation: id,
+      mode,
+    }),
+    query: wireSchema<
+      z.input<I> extends undefined | null
+        ? Record<string, never>
+        : z.input<I> extends readonly unknown[]
+          ? { input: Json<z.input<I>> }
+          : z.input<I> extends object
+            ? Json<z.input<I>>
+            : { input: Json<z.input<I>> }
+    >(query, "input"),
+  };
+}
+
+export function httpDelete<O extends z.ZodType>(
+  path: string,
+  output: O,
+  metadata: HttpMetadata,
+) {
+  return {
+    method: "DELETE" as const,
+    path,
+    body: ContractNoBody,
+    responses: httpResponses(output),
+    metadata: { http: metadata },
+  } as const;
+}
+
+export function httpCreate<I extends z.ZodType, O extends z.ZodType>(
+  path: string,
+  input: I,
+  output: O,
+  metadata: HttpMetadata,
+) {
+  const route = httpWrite("POST", path, input, output, metadata);
+  const { 200: created, ...errors } = route.responses;
+  return { ...route, responses: { 201: created, ...errors } };
+}

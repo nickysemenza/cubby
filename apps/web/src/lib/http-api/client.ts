@@ -7,10 +7,12 @@ export function createCubbyClient({
   apiKey,
 }: {
   baseUrl: string;
-  apiKey: string;
+  apiKey?: string;
 }) {
   return initClient(httpContract, {
     baseUrl,
-    baseHeaders: { "x-api-key": apiKey },
+    baseHeaders: apiKey === undefined ? {} : { "x-api-key": apiKey },
+    credentials: "same-origin",
+    jsonQuery: true,
   });
 }

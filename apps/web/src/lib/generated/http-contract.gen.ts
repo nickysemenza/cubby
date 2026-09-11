@@ -262,7 +262,11 @@ import { vendorOut as schema259 } from "@cubby/schemas/vendor";
 import { mergeVendorsInput as schema260 } from "@cubby/schemas/vendor";
 import { mergeVendorsOut as schema261 } from "@cubby/schemas/vendor";
 import { vendorOptionsOut as schema262 } from "@cubby/schemas/vendor";
-import { httpOperation, entityHttpSchemas } from "~/lib/http-api/contract";
+import {
+  httpOperation,
+  httpQuery,
+  entityHttpSchemas,
+} from "~/lib/http-api/contract";
 export const httpContract = {
   agent: {
     ask: httpOperation("agent.ask", schema0, schema1),
@@ -1221,4 +1225,623 @@ export const httpContract = {
     merge: httpOperation("vendor.merge", schema260, schema261),
     options: httpOperation("vendor.options", schema4.null(), schema262),
   },
+  queries: {
+    ai: {
+      suggestCategory: httpQuery("ai.suggestCategory", schema13, schema14),
+      suggestLocation: httpQuery("ai.suggestLocation", schema17, schema18),
+      suggestLocationType: httpQuery(
+        "ai.suggestLocationType",
+        schema19,
+        schema20,
+      ),
+      usageRecent: httpQuery("ai.usageRecent", schema25, schema26),
+      usageSummary: httpQuery("ai.usageSummary", schema27, schema28),
+    },
+    auditLog: { list: httpQuery("auditLog.list", schema29, schema30) },
+    "background-batch": {
+      jobs: httpQuery("background-batch.jobs", schema33, schema34),
+      list: httpQuery("background-batch.list", schema35, schema36),
+      summary: httpQuery("background-batch.summary", schema31, schema37),
+    },
+    "background-job": {
+      strandedCount: httpQuery(
+        "background-job.strandedCount",
+        schema43,
+        schema44,
+      ),
+    },
+    calendar: {
+      getCredential: httpQuery(
+        "calendar.getCredential",
+        schema4.undefined(),
+        schema46,
+      ),
+      getFeed: httpQuery("calendar.getFeed", schema4.undefined(), schema47),
+      inspectFeed: httpQuery(
+        "calendar.inspectFeed",
+        schema4.undefined(),
+        schema48,
+      ),
+      range: httpQuery("calendar.range", schema49, schema50),
+    },
+    collection: {
+      detail: httpQuery("collection.detail", schema56, schema57),
+      list: httpQuery(
+        "collection.list",
+        schema4.null(),
+        schema4.array(schema55),
+      ),
+      matrix: httpQuery("collection.matrix", schema58, schema59),
+      smartDetail: httpQuery("collection.smartDetail", schema62, schema63),
+      smartList: httpQuery(
+        "collection.smartList",
+        schema64,
+        schema4.array(schema65),
+      ),
+    },
+    cookbook: {
+      detail: httpQuery(
+        "cookbook.detail",
+        schema4.object({ shortcode: schema66 }),
+        schema67.nullable(),
+      ),
+      list: httpQuery("cookbook.list", schema4.null(), schema68),
+    },
+    dashboard: {
+      counts: httpQuery("dashboard.counts", schema4.undefined(), schema69),
+    },
+    entity: {
+      detail: httpQuery(
+        "entity.detail",
+        entityHttpSchemas["entity.detail"].input,
+        entityHttpSchemas["entity.detail"].output,
+      ),
+      filterOptions: httpQuery("entity.filterOptions", schema70, schema71),
+      graph: httpQuery("entity.graph", schema72, schema73),
+      graphPaths: httpQuery("entity.graphPaths", schema74, schema75),
+      inspectorHealth: httpQuery(
+        "entity.inspectorHealth",
+        schema4.null(),
+        schema4.object({
+          counts: schema4.record(
+            schema4.string(),
+            schema4.number().int().nonnegative(),
+          ),
+          search: schema4.record(
+            schema4.string(),
+            schema4.object({
+              documents: schema4.number().int().nonnegative(),
+              embeddings: schema4.number().int().nonnegative(),
+            }),
+          ),
+        }),
+      ),
+      list: httpQuery(
+        "entity.list",
+        entityHttpSchemas["entity.list"].input,
+        entityHttpSchemas["entity.list"].output,
+      ),
+    },
+    entityIntegrity: {
+      catalog: httpQuery("entityIntegrity.catalog", schema4.null(), schema76),
+    },
+    expense: {
+      analytics: httpQuery(
+        "expense.analytics",
+        schema77.expenseFiltersSchema,
+        schema77.expenseAnalyticsOut,
+      ),
+      analyze: httpQuery(
+        "expense.analyze",
+        schema77.expenseAnalyzeInput,
+        schema77.expenseAnalyzeOut,
+      ),
+      chargeContext: httpQuery(
+        "expense.chargeContext",
+        schema78,
+        schema77.expenseChargeContextOut,
+      ),
+      chartData: httpQuery(
+        "expense.chartData",
+        schema77.expenseFiltersSchema,
+        schema4.array(schema77.expenseOut),
+      ),
+      facetCounts: httpQuery(
+        "expense.facetCounts",
+        schema77.expenseFacetCountsInput,
+        schema77.expenseFacetCountsOut,
+      ),
+      monthlySummary: httpQuery(
+        "expense.monthlySummary",
+        schema77.expenseFiltersSchema,
+        schema77.expenseMonthlySummaryOut,
+      ),
+      tradeAffinity: httpQuery(
+        "expense.tradeAffinity",
+        schema4.undefined(),
+        schema4.array(schema77.expenseTradeAffinityOut),
+      ),
+    },
+    financialAccount: {
+      options: httpQuery("financialAccount.options", schema4.null(), schema79),
+    },
+    financialTransaction: {
+      sourceOptions: httpQuery(
+        "financialTransaction.sourceOptions",
+        schema4.null(),
+        schema80,
+      ),
+      vendorInference: httpQuery(
+        "financialTransaction.vendorInference",
+        schema81,
+        schema82,
+      ),
+    },
+    householdContribution: {
+      ledger: httpQuery("householdContribution.ledger", schema83, schema84),
+      project: httpQuery("householdContribution.project", schema85, schema86),
+    },
+    image: {
+      detail: httpQuery(
+        "image.detail",
+        schema4.object({ id: schema4.string() }),
+        schema91.nullable(),
+      ),
+      list: httpQuery("image.list", schema94, schema95),
+      projectSummaries: httpQuery("image.projectSummaries", schema97, schema98),
+    },
+    ingredient: {
+      enrichmentWorkbench: httpQuery(
+        "ingredient.enrichmentWorkbench",
+        schema103.enrichmentWorkbenchInput,
+        schema103.enrichmentRowsOut,
+      ),
+      getByName: httpQuery(
+        "ingredient.getByName",
+        schema103.ingredientNameFilterInput,
+        schema103.ingredientWithFoodOut.nullable(),
+      ),
+      getManyByIDs: httpQuery(
+        "ingredient.getManyByIDs",
+        schema103.ingredientIdsInput,
+        schema103.ingredientWithFoodLeanListOut,
+      ),
+      matchNames: httpQuery(
+        "ingredient.matchNames",
+        schema103.ingredientNamesInput,
+        schema103.ingredientMatchesOut,
+      ),
+      recipeUsages: httpQuery(
+        "ingredient.recipeUsages",
+        schema103.ingredientIdInput,
+        schema103.ingredientRecipeUsagesOut,
+      ),
+    },
+    inventory: {
+      findDuplicates: httpQuery(
+        "inventory.findDuplicates",
+        schema112,
+        schema113,
+      ),
+      getByLocationIds: httpQuery(
+        "inventory.getByLocationIds",
+        schema114,
+        schema115,
+      ),
+    },
+    ledgerParty: {
+      options: httpQuery("ledgerParty.options", schema4.null(), schema122),
+    },
+    location: {
+      getByShortcodes: httpQuery(
+        "location.getByShortcodes",
+        schema126,
+        schema127,
+      ),
+      inventoryBreakdown: httpQuery(
+        "location.inventoryBreakdown",
+        schema4.object({ shortcode: schema4.string() }),
+        schema128.nullable(),
+      ),
+      makeTree: httpQuery("location.makeTree", schema4.undefined(), schema129),
+      parentOptions: httpQuery(
+        "location.parentOptions",
+        schema4.undefined(),
+        schema4.array(schema130),
+      ),
+      search: httpQuery(
+        "location.search",
+        schema4.object({
+          filters: schema131,
+          sort: schema4.object({
+            orderBy: schema4.string(),
+            direction: schema4.enum(["asc", "desc"]),
+          }),
+          pagination: schema4.object({
+            pageIndex: schema4.number(),
+            pageSize: schema4.number(),
+          }),
+        }),
+        schema4.object({
+          data: schema4.array(schema132),
+          count: schema4.number(),
+        }),
+      ),
+      subtree: httpQuery(
+        "location.subtree",
+        schema4.object({ shortcode: schema4.string() }),
+        schema129,
+      ),
+      valuationSummary: httpQuery(
+        "location.valuationSummary",
+        schema4.undefined(),
+        schema133,
+      ),
+    },
+    mcp: {
+      listTools: httpQuery("mcp.listTools", schema4.null(), schema134),
+      usageActivity: httpQuery("mcp.usageActivity", schema135, schema136),
+      usageDashboard: httpQuery("mcp.usageDashboard", schema137, schema138),
+    },
+    meal: {
+      getByDateRange: httpQuery(
+        "meal.getByDateRange",
+        schema139.mealDateRange,
+        schema139.mealListOut,
+      ),
+      getPreparations: httpQuery(
+        "meal.getPreparations",
+        schema139.getMealPreparationsInput,
+        schema139.getMealPreparationsOut,
+      ),
+      getShoppingList: httpQuery(
+        "meal.getShoppingList",
+        schema139.shoppingListInput,
+        schema139.shoppingListOut,
+      ),
+      upcomingSummary: httpQuery(
+        "meal.upcomingSummary",
+        schema139.mealDateRange,
+        schema139.upcomingMealSummaryOut,
+      ),
+    },
+    oauth: {
+      countOrphanedClients: httpQuery(
+        "oauth.countOrphanedClients",
+        schema4.null(),
+        schema140,
+      ),
+      listConnectedApps: httpQuery(
+        "oauth.listConnectedApps",
+        schema4.null(),
+        schema141,
+      ),
+    },
+    problems: {
+      dryRunPruneAliases: httpQuery(
+        "problems.dryRunPruneAliases",
+        schema4.undefined(),
+        schema149,
+      ),
+      dryRunReparse: httpQuery(
+        "problems.dryRunReparse",
+        schema4.undefined(),
+        schema150,
+      ),
+      getByType: httpQuery(
+        "problems.getByType",
+        schema4.object({
+          key: schema4.literal("referentialLivenessViolations"),
+        }),
+        schema4.object({
+          type: schema4.literal("referentialLivenessViolations"),
+          items: schema4.array(schema151),
+          total: schema4.number().int().nonnegative(),
+        }),
+      ),
+      getCounts: httpQuery(
+        "problems.getCounts",
+        schema4.undefined(),
+        schema152,
+      ),
+      getCoverage: httpQuery(
+        "problems.getCoverage",
+        schema4.undefined(),
+        schema153,
+      ),
+      getCoverageTotals: httpQuery(
+        "problems.getCoverageTotals",
+        schema4.undefined(),
+        schema154,
+      ),
+      getFast: httpQuery("problems.getFast", schema4.undefined(), schema155),
+      getMaintenanceCounts: httpQuery(
+        "problems.getMaintenanceCounts",
+        schema4.undefined(),
+        schema156,
+      ),
+      getTracker: httpQuery(
+        "problems.getTracker",
+        schema4.undefined(),
+        schema157,
+      ),
+      getUpc: httpQuery("problems.getUpc", schema4.undefined(), schema158),
+      getViews: httpQuery("problems.getViews", schema4.undefined(), schema159),
+      recipeUsageByProduct: httpQuery(
+        "problems.recipeUsageByProduct",
+        schema160,
+        schema161,
+      ),
+    },
+    product: {
+      categoryDistribution: httpQuery(
+        "product.categoryDistribution",
+        { ...schema162.categoryDistribution }.input,
+        { ...schema162.categoryDistribution }.output,
+      ),
+      components: httpQuery(
+        "product.components",
+        { ...schema162.components }.input,
+        { ...schema162.components }.output,
+      ),
+      externalIdSourceOptions: httpQuery(
+        "product.externalIdSourceOptions",
+        { ...schema162.externalIdSourceOptions }.input,
+        { ...schema162.externalIdSourceOptions }.output,
+      ),
+      getByShortcodes: httpQuery(
+        "product.getByShortcodes",
+        { ...schema162.getByShortcodes }.input,
+        { ...schema162.getByShortcodes }.output,
+      ),
+      inventoryEntriesByIds: httpQuery(
+        "product.inventoryEntriesByIds",
+        { ...schema162.inventoryEntriesByIds }.input,
+        { ...schema162.inventoryEntriesByIds }.output,
+      ),
+      kitComponentRows: httpQuery(
+        "product.kitComponentRows",
+        { ...schema162.kitComponentRows }.input,
+        { ...schema162.kitComponentRows }.output,
+      ),
+      kitMembership: httpQuery(
+        "product.kitMembership",
+        { ...schema162.kitMembership }.input,
+        { ...schema162.kitMembership }.output,
+      ),
+      manufacturerOptions: httpQuery(
+        "product.manufacturerOptions",
+        { ...schema162.manufacturerOptions }.input,
+        { ...schema162.manufacturerOptions }.output,
+      ),
+      movementTimeline: httpQuery(
+        "product.movementTimeline",
+        { ...schema162.movementTimeline }.input,
+        { ...schema162.movementTimeline }.output,
+      ),
+      projectUses: httpQuery(
+        "product.projectUses",
+        { ...schema162.projectUses }.input,
+        { ...schema162.projectUses }.output,
+      ),
+      purchases: httpQuery(
+        "product.purchases",
+        { ...schema162.purchases }.input,
+        { ...schema162.purchases }.output,
+      ),
+      quantitySummaries: httpQuery(
+        "product.quantitySummaries",
+        { ...schema162.quantitySummaries }.input,
+        { ...schema162.quantitySummaries }.output,
+      ),
+      search: httpQuery(
+        "product.search",
+        { ...schema162.search }.input,
+        { ...schema162.search }.output,
+      ),
+      summaries: httpQuery(
+        "product.summaries",
+        { ...schema162.summaries }.input,
+        { ...schema162.summaries }.output,
+      ),
+      tagOptions: httpQuery(
+        "product.tagOptions",
+        { ...schema162.tagOptions }.input,
+        { ...schema162.tagOptions }.output,
+      ),
+    },
+    project: {
+      dashboardSummary: httpQuery(
+        "project.dashboardSummary",
+        schema77.projectDashboardFiltersSchema,
+        schema77.projectDashboardSummaryOut,
+      ),
+      getDependencyGraph: httpQuery(
+        "project.getDependencyGraph",
+        schema77.projectDependencyGraphInput,
+        schema77.projectDependencyGraphSchema,
+      ),
+      options: httpQuery(
+        "project.options",
+        schema4.undefined(),
+        schema4.array(schema77.projectOptionsOut),
+      ),
+      portfolioAnalytics: httpQuery(
+        "project.portfolioAnalytics",
+        schema77.projectDashboardFiltersSchema,
+        schema77.projectPortfolioAnalyticsOut,
+      ),
+      resources: httpQuery(
+        "project.resources",
+        schema77.projectResourceProjectInput,
+        schema77.projectResourcesOut,
+      ),
+      toolGallery: httpQuery(
+        "project.toolGallery",
+        schema77.toolGalleryInput,
+        schema77.toolGalleryOut,
+      ),
+      toolMatrix: httpQuery(
+        "project.toolMatrix",
+        schema77.projectToolMatrixInput,
+        schema77.projectToolMatrixOut,
+      ),
+      toolSuggestions: httpQuery(
+        "project.toolSuggestions",
+        schema77.projectResourceProjectInput,
+        schema77.projectToolSuggestionsOut,
+      ),
+      tree: httpQuery(
+        "project.tree",
+        schema77.projectTreeInput,
+        schema77.projectTreeOut,
+      ),
+    },
+    purchase: {
+      products: httpQuery("purchase.products", schema169, schema170),
+    },
+    recipe: {
+      dryRunRecomputeTotals: httpQuery(
+        "recipe.dryRunRecomputeTotals",
+        schema4.undefined(),
+        schema177,
+      ),
+      explainCosting: httpQuery("recipe.explainCosting", schema178, schema180),
+      getAllTags: httpQuery(
+        "recipe.getAllTags",
+        schema4.undefined(),
+        schema185,
+      ),
+      getCookbookDiff: httpQuery(
+        "recipe.getCookbookDiff",
+        schema186,
+        schema187,
+      ),
+      getCookbookSource: httpQuery(
+        "recipe.getCookbookSource",
+        schema175,
+        schema188,
+      ),
+      getDependencyGraph: httpQuery(
+        "recipe.getDependencyGraph",
+        schema189,
+        schema190,
+      ),
+      getFlow: httpQuery("recipe.getFlow", schema191, schema192),
+      getIngredientCooccurrence: httpQuery(
+        "recipe.getIngredientCooccurrence",
+        schema193,
+        schema194,
+      ),
+      getIngredientUsage: httpQuery(
+        "recipe.getIngredientUsage",
+        schema189,
+        schema195,
+      ),
+      getManyByIDs: httpQuery("recipe.getManyByIDs", schema196, schema197),
+      harvestEquivalences: httpQuery(
+        "recipe.harvestEquivalences",
+        schema4.undefined(),
+        schema198,
+      ),
+      previewNotionSync: httpQuery(
+        "recipe.previewNotionSync",
+        schema4.undefined(),
+        schema201,
+      ),
+    },
+    recommendations: {
+      duplicateProduct: httpQuery(
+        "recommendations.duplicateProduct",
+        schema211,
+        schema212,
+      ),
+      placement: httpQuery("recommendations.placement", schema213, schema214),
+      product: httpQuery("recommendations.product", schema215, schema216),
+      tagPropagation: httpQuery(
+        "recommendations.tagPropagation",
+        schema217,
+        schema218,
+      ),
+    },
+    relatedData: {
+      branch: httpQuery("relatedData.branch", schema219, schema220),
+      options: httpQuery("relatedData.options", schema221, schema222),
+      previews: httpQuery("relatedData.previews", schema223, schema224),
+      summary: httpQuery("relatedData.summary", schema225, schema226),
+    },
+    relatedness: {
+      product: httpQuery("relatedness.product", schema227, schema228),
+    },
+    search: {
+      debug: httpQuery("search.debug", schema229, schema230),
+      documentHealth: httpQuery(
+        "search.documentHealth",
+        schema4.undefined(),
+        schema231,
+      ),
+      find: httpQuery("search.find", schema229, schema234),
+      grouped: httpQuery("search.grouped", schema229, schema235),
+      related: httpQuery("search.related", schema229, schema236),
+      relatedGrouped: httpQuery("search.relatedGrouped", schema229, schema237),
+    },
+    statementRow: {
+      imports: httpQuery("statementRow.imports", schema241, schema242),
+      list: httpQuery("statementRow.list", schema243, schema244),
+      summary: httpQuery("statementRow.summary", schema245, schema246),
+    },
+    suggestions: {
+      getMakeable: httpQuery("suggestions.getMakeable", schema247, schema248),
+      getRecipeAvailability: httpQuery(
+        "suggestions.getRecipeAvailability",
+        schema249,
+        schema250,
+      ),
+    },
+    task: {
+      board: httpQuery(
+        "task.board",
+        schema77.taskFiltersSchema,
+        schema77.taskBoardOut,
+      ),
+      chartData: httpQuery(
+        "task.chartData",
+        schema77.taskFiltersSchema,
+        schema4.array(schema77.taskOut),
+      ),
+      listActionable: httpQuery(
+        "task.listActionable",
+        schema77.taskFiltersSchema.optional(),
+        schema77.actionableTasksOut,
+      ),
+      summary: httpQuery(
+        "task.summary",
+        schema4.undefined(),
+        schema77.taskSummaryOut,
+      ),
+      timeline: httpQuery(
+        "task.timeline",
+        schema77.taskFiltersSchema,
+        schema77.taskTimelineOut,
+      ),
+      todayBriefing: httpQuery(
+        "task.todayBriefing",
+        schema4.undefined(),
+        schema77.taskTodayBriefingOut,
+      ),
+    },
+    upc: { lookup: httpQuery("upc.lookup", schema251, schema252.nullable()) },
+    "usda-food": {
+      alternateId: httpQuery(
+        "usda-food.alternateId",
+        schema253,
+        schema254.nullable(),
+      ),
+      detail: httpQuery("usda-food.detail", schema255, schema254.nullable()),
+      list: httpQuery("usda-food.list", schema256, schema257),
+    },
+    vendor: { options: httpQuery("vendor.options", schema4.null(), schema262) },
+  },
+  resources: httpResources,
 } as const;
+import { httpResources } from "~/lib/generated/http-resources.gen";

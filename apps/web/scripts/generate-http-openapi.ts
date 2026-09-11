@@ -1,46 +1,130 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { generateOpenApi } from "@ts-rest/open-api";
+import { ContractNoBody } from "@ts-rest/core";
+import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
+import { getCookies } from "better-auth/cookies";
+import { checkHttpRoutes } from "../src/lib/http-api/routes";
 import { httpContract } from "../src/lib/generated/http-contract.gen";
-import { httpSchemaSources } from "../src/lib/http-api/contract";
+import {
+  httpSchemaSources,
+  httpMetadataSchema,
+} from "../src/lib/http-api/contract";
 
 const registries = {
   input: z.registry<{ id: string }>(),
   output: z.registry<{ id: string }>(),
 };
-const document = generateOpenApi(
-  httpContract,
-  {
-    info: { title: "Cubby API", version: "1.0.0" },
-    servers: [{ url: "/" }],
-    components: {
-      securitySchemes: {
-        apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+checkHttpRoutes(httpContract);
+const components: Record<string, z.core.JSONSchema.JSONSchema> = {};
+const makeDocument = () =>
+  generateOpenApi(
+    httpContract,
+    {
+      info: { title: "Cubby API", version: "1.0.0" },
+      servers: [{ url: "/" }],
+      components: {
+        securitySchemes: {
+          apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+          sessionCookie: {
+            type: "apiKey",
+            in: "cookie",
+            name: getCookies({}).sessionToken.name,
+          },
+        },
+      },
+      security: [{ apiKey: [] }, { sessionCookie: [] }],
+    },
+    {
+      setOperationId: "concatenated-path",
+      jsonQuery: true,
+      operationMapper: (operation, route) => {
+        const metadata = z
+          .object({ http: httpMetadataSchema })
+          .parse(route.metadata).http;
+        operation.tags = [metadata.entity ?? metadata.operation.split(".")[0]!];
+        if (metadata.mode === "list")
+          operation.description =
+            'Nested query fields use JSON: pagination={"pageIndex":0,"pageSize":20}. Omitted filters default to {}. Resource methods depend on entity capabilities.';
+        if (metadata.mode === "create") {
+          const response = operation.responses[201];
+          if (response && !("$ref" in response))
+            response.headers = {
+              Location: {
+                schema: { type: "string" },
+                description: "Created resource URL",
+              },
+            };
+        }
+        return operation;
+      },
+      schemaTransformer: ({ schema, concatenatedPath, type }) => {
+        if (
+          schema === undefined ||
+          schema === null ||
+          schema === ContractNoBody
+        )
+          return null;
+        if (!(schema instanceof z.ZodType))
+          throw new Error("HTTP contracts require runtime Zod schemas");
+        const source = httpSchemaSources.get(schema) ?? {
+          schema,
+          io: "output" as const,
+        };
+        const registry = registries[source.io];
+        const id =
+          registry.get(source.schema)?.id ??
+          `${source.io}_${concatenatedPath}_${type}`;
+        if (!registry.has(source.schema)) registry.add(source.schema, { id });
+        if (type === "query" || type === "path") {
+          const root = components[id];
+          if (!root) return { type: "object", properties: {} };
+          const resolve = (
+            value: z.core.JSONSchema.JSONSchema,
+          ): z.core.JSONSchema.JSONSchema => {
+            if (!value.$ref) return value;
+            const key = value.$ref
+              .replace("#/components/schemas/", "")
+              .replace(/(input|output)___shared#\/definitions\//u, "$1_");
+            const resolved = components[key];
+            if (!resolved) throw new Error(`Missing parameter schema ${key}`);
+            return resolve(resolved);
+          };
+          const resolved = resolve(root);
+          const variants = (resolved.oneOf ?? resolved.anyOf ?? [resolved]).map(
+            resolve,
+          );
+          if (variants.some((variant) => variant.type !== "object"))
+            throw new Error(`Parameters must be objects: ${id}`);
+          const names = new Set(
+            variants.flatMap((variant) =>
+              Object.keys(variant.properties ?? {}),
+            ),
+          );
+          // SAFETY: Zod emits OpenAPI 3.0 schemas; its broader JSON Schema type also permits booleans.
+          return {
+            type: "object",
+            required: [...names].filter((name) =>
+              variants.every((variant) => variant.required?.includes(name)),
+            ),
+            properties: Object.fromEntries(
+              [...names].map((name) => {
+                const schemas = variants.flatMap((variant) =>
+                  variant.properties?.[name] ? [variant.properties[name]] : [],
+                );
+                return [
+                  name,
+                  schemas.length === 1 ? schemas[0] : { anyOf: schemas },
+                ];
+              }),
+            ),
+          } as NonNullable<ReturnType<SchemaTransformerSync>>;
+        }
+        return { $ref: `#/components/schemas/${id}` };
       },
     },
-    security: [{ apiKey: [] }],
-  },
-  {
-    setOperationId: "concatenated-path",
-    schemaTransformer: ({ schema, concatenatedPath, type }) => {
-      if (schema === undefined || schema === null) return null;
-      if (!(schema instanceof z.ZodType))
-        throw new Error("HTTP contracts require runtime Zod schemas");
-      const source = httpSchemaSources.get(schema) ?? {
-        schema,
-        io: "output" as const,
-      };
-      const registry = registries[source.io];
-      const id =
-        registry.get(source.schema)?.id ??
-        `${source.io}_${concatenatedPath}_${type}`;
-      if (!registry.has(source.schema)) registry.add(source.schema, { id });
-      return { $ref: `#/components/schemas/${id}` };
-    },
-  },
-);
-const components: Record<string, z.core.JSONSchema.JSONSchema> = {};
+  );
+makeDocument();
 for (const io of ["input", "output"] as const) {
   const { schemas } = z.toJSONSchema(registries[io], {
     target: "openapi-3.0",
@@ -105,6 +189,30 @@ for (const io of ["input", "output"] as const) {
     } else components[id] = schema;
   }
 }
+const document = makeDocument();
+// Parameter roots are inlined by OpenAPI; retain only components reachable from the document.
+const references = (
+  value: ReturnType<typeof generateOpenApi> | z.core.JSONSchema.JSONSchema,
+) =>
+  [
+    ...JSON.stringify(value).matchAll(
+      /"\$ref":"#\/components\/schemas\/([^" ]+)"/gu,
+    ),
+  ].map((match) =>
+    match[1]!.replace(/(input|output)___shared#\/definitions\//u, "$1_"),
+  );
+const reachable = new Set<string>();
+const pending = references(document);
+for (const name of pending) {
+  if (reachable.has(name)) continue;
+  reachable.add(name);
+  const schema = components[name];
+  if (!schema) throw new Error(`Unresolved HTTP component ${name}`);
+  pending.push(...references(schema));
+}
+for (const name of Object.keys(components))
+  if (!reachable.has(name)) delete components[name];
+
 const serialized = `${JSON.stringify(
   { ...document, components: { ...document.components, schemas: components } },
   (key, value) => {

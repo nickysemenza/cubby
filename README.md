@@ -477,23 +477,60 @@ full access, support optional expiration, and use the `http-api` configuration.
 They are stored hashed, have no per-key quota or rate limit, and do not create
 browser sessions. Revocation takes effect on the next request.
 
-All ordinary operation declarations generate a `POST /api/v1/{resource}/{operation}`
-endpoint. Send `x-api-key` and JSON `{ "input": ... }`, or `{}` for no input.
-Responses retain `{ok, data}` / `{ok, error}` with HTTP error statuses; timestamps
-use ISO strings. Streams are excluded. Scalar is at `/api/v1/docs` and the
-OpenAPI 3.0.2 document is at `/api/v1/openapi.json`. Scalar forgets keys on reload.
+A signed-in browser can open `/api/v1/recipes` directly. The API verifies the
+Better Auth session against the database on every request, bypassing the cookie
+cache. An explicit `x-api-key` takes precedence, including when invalid. Cookie
+writes require the same request Origin; key-authenticated scripts need no Origin.
+All responses use authoritative reads and `Cache-Control: no-store`.
 
-The tiny `createCubbyClient({ baseUrl, apiKey })` factory in
-`apps/web/src/lib/http-api/client.ts` provides typed fetch calls such as
-`client.dashboard.counts({ body: {} })` for tests and future scripts. Run TS
-scripts with the web tsconfig so its schema import aliases resolve.
+Entity declarations generate capability-dependent resource methods: GET collection,
+GET `/{id}`, POST collection, PATCH `/{id}`, and DELETE `/{id}`. POST and PATCH
+bodies contain entity fields directly; DELETE needs no body. Create returns 201
+and a `Location` header. Other successful methods return 200, and missing details
+return 404. Existing deletion guards and cascades apply. For example:
 
-After changing operation declarations or schemas, run `pnpm start-operations:generate`
-and `pnpm --filter @cubby/web generate:http-api`. `pnpm check` checks freshness
-and validates OpenAPI. The declarations remain the endpoint catalog; new ordinary
-operations require no HTTP-specific edits. Output transforms must end in concrete
-schemas, and timestamp inputs must accept ISO strings. Generation rejects unsupported
-JSON representations instead of publishing unconstrained substitute schemas.
+```js
+await fetch('/api/v1/recipes', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ name: 'Soup', meta: null, sections: [] }),
+});
+const query = new URLSearchParams({
+  filters: JSON.stringify({ nameFilter: 'Soup' }),
+  pagination: JSON.stringify({ pageIndex: 0, pageSize: 20 }),
+  sort: JSON.stringify([{ orderBy: 'name', direction: 'asc' }]),
+});
+await fetch(`/api/v1/recipes?${query}`);
+```
+
+Nested query inputs use ts-rest's `jsonQuery` encoding; omitted list filters become
+`{}`. Safe query operations also have GET variants at their operation paths.
+Object inputs become query fields; scalar/array inputs use one `input` parameter.
+No-input operations need no parameters. Query declarations must remain free of
+domain mutations; computation, external lookups, and usage logging are allowed.
+
+All original `POST /api/v1/{resource}/{operation}` endpoints remain available with
+JSON `{ "input": ... }`, or `{}` for no input. Responses retain `{ok, data}` /
+`{ok, error}`, mutation metadata, HTTP error statuses, and ISO timestamps.
+Specialized workflows and bulk actions remain operation-shaped; streams are excluded.
+Scalar at `/api/v1/docs` uses the current browser session and supports explicit
+keys, which it forgets on reload. `/api/v1/openapi.json` describes both auth methods.
+
+The tiny `createCubbyClient({ baseUrl, apiKey? })` factory in
+`apps/web/src/lib/http-api/client.ts` uses same-origin browser credentials. Existing
+calls such as `client.dashboard.counts({ body: {} })` are unchanged. New calls include
+`client.queries.dashboard.counts({ query: {} })`,
+`client.resources.recipe.list({ query: { pagination: { pageIndex: 0, pageSize: 20 } } })`,
+and `client.resources.recipe.update({ params: { id }, body: { notes: 'Updated' } })`.
+Run TS scripts with the web tsconfig so schema import aliases resolve.
+
+After changing declarations or schemas, run `pnpm entity:generate`,
+`pnpm start-operations:generate`, and `pnpm --filter @cubby/web generate:http-api`.
+`pnpm check:all` checks freshness, route collisions, and OpenAPI validity. Existing
+operation declarations, entity capabilities, and runtime schemas remain authoritative;
+new ordinary operations require no HTTP-specific edits. Output transforms must end
+in concrete schemas, and timestamp inputs must accept ISO strings. Generation rejects
+unsupported JSON representations.
 
 ### Connecting to the MCP server
 
