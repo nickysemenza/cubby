@@ -19,6 +19,8 @@ const STATIC_TRACE_ROUTES = new Set([
   "/ai-usage",
   "/api/debug/timing",
   "/api/mcp",
+  "/api/v1/docs",
+  "/api/v1/openapi.json",
   "/ask",
   "/background-jobs",
   "/calendar",
@@ -107,6 +109,10 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   {
     pattern: /^\/api\/calendar\/[^/]+\/[^/]+$/u,
     template: "/api/calendar/:token/:feed",
+  },
+  {
+    pattern: /^\/api\/v1\/[^/]+\/[^/]+$/u,
+    template: "/api/v1/:resource/:operation",
   },
   { pattern: /^\/api\/auth(?:\/.*)?$/u, template: "/api/auth/:splat" },
   // One route for every workflow stream since the 13 bespoke stream routes

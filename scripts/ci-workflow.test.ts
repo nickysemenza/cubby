@@ -169,6 +169,7 @@ test("local checks retain every required gate and keep stateful verification liv
   const fast = [
     "entity",
     "start-ops",
+    "http-api",
     "types",
     "lint",
     "format",
@@ -180,6 +181,8 @@ test("local checks retain every required gate and keep stateful verification liv
   const commands = {
     entity: "tsx scripts/entity-generator.ts --check",
     "start-ops": "node scripts/start-operation-registry-generator.ts --check",
+    "http-api":
+      "pnpm --filter @cubby/web generate:http-api:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
     types: "pnpm typecheck",
     lint: "oxlint .",
     format: "oxfmt --check .",

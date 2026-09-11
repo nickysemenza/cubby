@@ -93,10 +93,7 @@ export const passkey = pgTable(
   ],
 );
 
-// DEAD: the api-key plugin was removed when /api/mcp moved to OAuth 2.1 (no
-// caller reads or writes this table anymore). The definition is retained only so
-// `db:push` stays additive — dropping it is a destructive prod migration and
-// belongs in its own deliberate pass.
+// User-owned Better Auth keys for the http-api configuration.
 export const apikey = pgTable("apikey", {
   id: text("id").primaryKey(),
   name: text("name"),

@@ -470,6 +470,31 @@ Better-Auth via `better-auth/tanstack-start`. Routed UI by `@daveyplate/better-a
 
 Visit <http://localhost:3000/api/auth/session> while running the app to inspect the current session, and <http://localhost:3000/api/auth/reference> (dev only) for the Scalar reference of every auth endpoint.
 
+### HTTP API
+
+Create a user-owned `cubby_` key at `/account/api-keys`. Keys grant the owner's
+full access, support optional expiration, and use the `http-api` configuration.
+They are stored hashed, have no per-key quota or rate limit, and do not create
+browser sessions. Revocation takes effect on the next request.
+
+All ordinary operation declarations generate a `POST /api/v1/{resource}/{operation}`
+endpoint. Send `x-api-key` and JSON `{ "input": ... }`, or `{}` for no input.
+Responses retain `{ok, data}` / `{ok, error}` with HTTP error statuses; timestamps
+use ISO strings. Streams are excluded. Scalar is at `/api/v1/docs` and the
+OpenAPI 3.0.2 document is at `/api/v1/openapi.json`. Scalar forgets keys on reload.
+
+The tiny `createCubbyClient({ baseUrl, apiKey })` factory in
+`apps/web/src/lib/http-api/client.ts` provides typed fetch calls such as
+`client.dashboard.counts({ body: {} })` for tests and future scripts. Run TS
+scripts with the web tsconfig so its schema import aliases resolve.
+
+After changing operation declarations or schemas, run `pnpm start-operations:generate`
+and `pnpm --filter @cubby/web generate:http-api`. `pnpm check` checks freshness
+and validates OpenAPI. The declarations remain the endpoint catalog; new ordinary
+operations require no HTTP-specific edits. Output transforms must end in concrete
+schemas, and timestamp inputs must accept ISO strings. Generation rejects unsupported
+JSON representations instead of publishing unconstrained substitute schemas.
+
 ### Connecting to the MCP server
 
 `/api/mcp` is an **OAuth 2.1 resource server** — cubby is its own authorization

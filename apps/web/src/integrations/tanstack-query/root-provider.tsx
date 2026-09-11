@@ -156,6 +156,7 @@ export function Provider({
         replace={(href) => navigate({ to: href, replace: true })}
         Link={Link}
         passkey
+        apiKey={{ prefix: "cubby_" }}
         signUp={false}
         toast={({ variant, message }) => {
           const text = message ?? "Something went wrong.";

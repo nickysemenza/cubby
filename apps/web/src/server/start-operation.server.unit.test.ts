@@ -74,6 +74,28 @@ describe("runStartOperation", () => {
     authenticate.mockResolvedValue(context);
   });
 
+  it("uses a trusted API context once and overrides browser stale-read policy", async () => {
+    const result = await runStartOperation({
+      operation: "dashboard.counts",
+      type: "query",
+      input: undefined,
+      inputSchema: z.undefined(),
+      outputSchema: z.literal(true),
+      request: {
+        ...request(),
+        apiContext: { ...context, requestOrigin: "api" },
+      },
+      readPolicy: "context",
+      run: async (actor) => {
+        expect(actor.auth.userId).toBe(context.auth.userId);
+        expect(actor.readDb).toBe(database);
+        return true as const;
+      },
+    });
+    expect(result).toEqual({ ok: true, data: true });
+    expect(authenticate).not.toHaveBeenCalled();
+  });
+
   it("propagates a request id only through the structured failure", () => {
     expect(
       normalizeStartOperationError(

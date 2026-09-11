@@ -40,10 +40,13 @@
     "gen:pwa-icons": "magick -background none public/favicon.svg -resize 192x192 -depth 8 -strip public/icon-192.png && magick -background none public/favicon.svg -resize 512x512 -depth 8 -strip public/icon-512.png && magick -size 512x512 xc:'#f7f9fc' \\( public/icon-512.png -resize 360x360 \\) -gravity center -composite -depth 8 -strip public/icon-512-maskable.png",
     "gen:pwa-splash": "mkdir -p public/splash && for size in 750x1334:192 1125x2436:256 828x1792:256 1170x2532:256 1284x2778:256 1179x2556:256 1290x2796:256 1206x2622:256 1320x2868:256 1620x2160:300 1668x2388:300 2048x2732:360; do dim=${size%%:*}; icon=${size##*:}; magick -size $dim xc:'#f7f9fc' \\( public/icon-512.png -resize ${icon}x${icon} \\) -gravity center -composite -depth 8 -strip public/splash/apple-splash-${dim}.png; done",
     "gen:pwa-assets": "pnpm run gen:apple-icon && pnpm run gen:pwa-icons && pnpm run gen:pwa-splash",
-    "test:calendar": "vitest run --config vitest.calendar.config.ts"
+    "test:calendar": "vitest run --config vitest.calendar.config.ts",
+    "generate:http-api": "tsx --tsconfig tsconfig.json scripts/generate-http-openapi.ts",
+    "generate:http-api:check": "tsx --tsconfig tsconfig.json scripts/generate-http-openapi.ts --check"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@better-auth/api-key": "1.6.25",
     "@better-auth/oauth-provider": "^1.6.25",
     "@better-auth/passkey": "^1.6.25",
     "@cfworker/json-schema": "^4.1.1",
@@ -101,6 +104,7 @@
     "@tanstack/react-virtual": "^3.14.6",
     "@tanstack/store": "^0.11.1",
     "@ts-rest/core": "3.53.0-rc.1",
+    "@ts-rest/open-api": "3.53.0-rc.1",
     "@viz-js/viz": "^3.30.0",
     "@xmldom/xmldom": "^0.9.12",
     "aws4fetch": "^1.0.20",
@@ -117,6 +121,7 @@
     "drizzle-orm": "^0.45.2",
     "es-toolkit": "^1.49.0",
     "flat": "^6.0.1",
+    "http-status-codes": "^2.3.0",
     "ical.js": "^2.2.1",
     "idb-keyval": "^6.3.0",
     "image-dimensions": "^2.5.1",

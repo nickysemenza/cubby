@@ -92,11 +92,16 @@ export const recipeImageSourceSchema = z.discriminatedUnion("kind", [
 
 // Normalize upstream scraper/EPUB output and persisted cookbook JSON once at
 // ingress. All consumers receive an explicit source; archive paths are not URLs.
-const importedImageSource = z.union([
-  recipeImageSourceSchema,
-  publicRecipeImageUrl.transform((url) => ({ kind: "url" as const, url })),
-  archiveImageRefSchema.transform((ref) => ({ kind: "epub" as const, ...ref })),
-]);
+const importedImageSource = z
+  .union([
+    recipeImageSourceSchema,
+    publicRecipeImageUrl.transform((url) => ({ kind: "url" as const, url })),
+    archiveImageRefSchema.transform((ref) => ({
+      kind: "epub" as const,
+      ...ref,
+    })),
+  ])
+  .pipe(recipeImageSourceSchema);
 
 export const importRecipeSchema = z.object({
   meta: importRecipeMeta,

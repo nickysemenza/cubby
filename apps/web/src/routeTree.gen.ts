@@ -105,6 +105,8 @@ import { Route as AuthenticatedWishesIndexRouteImport } from './routes/_authenti
 import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_authenticated/wishes.$shortcode'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
+import { Route as ApiV1DocsRouteImport } from './routes/api/v1/docs'
+import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
 import { Route as ApiWorkflowStreamOperationRouteImport } from './routes/api/workflow-stream/$operation'
 import { Route as DotwellKnownOauthAuthorizationServerApiAuthRouteImport } from './routes/[.]well-known.oauth-authorization-server.api.auth'
 import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
@@ -113,6 +115,7 @@ import { Route as AuthenticatedRecipesShortcodeExportRouteImport } from './route
 import { Route as AuthenticatedUsdaNdbCodeRouteImport } from './routes/_authenticated/usda.ndb.$code'
 import { Route as AuthenticatedUsdaUpcCodeRouteImport } from './routes/_authenticated/usda.upc.$code'
 import { Route as ApiCalendarTokenFeedRouteImport } from './routes/api/calendar.$token.$feed'
+import { Route as ApiV1ResourceOperationRouteImport } from './routes/api/v1/$resource/$operation'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -658,6 +661,16 @@ const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
   path: '/api/debug/timing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1DocsRoute = ApiV1DocsRouteImport.update({
+  id: '/api/v1/docs',
+  path: '/api/v1/docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1OpenapiDotjsonRoute = ApiV1OpenapiDotjsonRouteImport.update({
+  id: '/api/v1/openapi.json',
+  path: '/api/v1/openapi.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiWorkflowStreamOperationRoute =
   ApiWorkflowStreamOperationRouteImport.update({
     id: '/api/workflow-stream/$operation',
@@ -703,6 +716,11 @@ const AuthenticatedUsdaUpcCodeRoute =
 const ApiCalendarTokenFeedRoute = ApiCalendarTokenFeedRouteImport.update({
   id: '/api/calendar/$token/$feed',
   path: '/api/calendar/$token/$feed',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiV1ResourceOperationRoute = ApiV1ResourceOperationRouteImport.update({
+  id: '/api/v1/$resource/$operation',
+  path: '/api/v1/$resource/$operation',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -780,6 +798,8 @@ export interface FileRoutesByFullPath {
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/v1/docs': typeof ApiV1DocsRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
@@ -810,6 +830,7 @@ export interface FileRoutesByFullPath {
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
+  '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -884,6 +905,8 @@ export interface FileRoutesByTo {
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/v1/docs': typeof ApiV1DocsRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/collections': typeof AuthenticatedCollectionsIndexRoute
   '/cookbooks': typeof AuthenticatedCookbooksIndexRoute
@@ -914,6 +937,7 @@ export interface FileRoutesByTo {
   '/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
+  '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -991,6 +1015,8 @@ export interface FileRoutesById {
   '/_authenticated/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/v1/docs': typeof ApiV1DocsRoute
+  '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
   '/_authenticated/collections/': typeof AuthenticatedCollectionsIndexRoute
   '/_authenticated/cookbooks/': typeof AuthenticatedCookbooksIndexRoute
@@ -1021,6 +1047,7 @@ export interface FileRoutesById {
   '/_authenticated/usda/ndb/$code': typeof AuthenticatedUsdaNdbCodeRoute
   '/_authenticated/usda/upc/$code': typeof AuthenticatedUsdaUpcCodeRoute
   '/api/calendar/$token/$feed': typeof ApiCalendarTokenFeedRoute
+  '/api/v1/$resource/$operation': typeof ApiV1ResourceOperationRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -1098,6 +1125,8 @@ export interface FileRouteTypes {
     | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/v1/docs'
+    | '/api/v1/openapi.json'
     | '/api/workflow-stream/$operation'
     | '/collections/'
     | '/cookbooks/'
@@ -1128,6 +1157,7 @@ export interface FileRouteTypes {
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
     | '/api/calendar/$token/$feed'
+    | '/api/v1/$resource/$operation'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -1202,6 +1232,8 @@ export interface FileRouteTypes {
     | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/v1/docs'
+    | '/api/v1/openapi.json'
     | '/api/workflow-stream/$operation'
     | '/collections'
     | '/cookbooks'
@@ -1232,6 +1264,7 @@ export interface FileRouteTypes {
     | '/usda/ndb/$code'
     | '/usda/upc/$code'
     | '/api/calendar/$token/$feed'
+    | '/api/v1/$resource/$operation'
   id:
     | '__root__'
     | '/'
@@ -1308,6 +1341,8 @@ export interface FileRouteTypes {
     | '/_authenticated/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/v1/docs'
+    | '/api/v1/openapi.json'
     | '/api/workflow-stream/$operation'
     | '/_authenticated/collections/'
     | '/_authenticated/cookbooks/'
@@ -1338,6 +1373,7 @@ export interface FileRouteTypes {
     | '/_authenticated/usda/ndb/$code'
     | '/_authenticated/usda/upc/$code'
     | '/api/calendar/$token/$feed'
+    | '/api/v1/$resource/$operation'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1352,8 +1388,11 @@ export interface RootRouteChildren {
   OauthConsentRoute: typeof OauthConsentRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
+  ApiV1DocsRoute: typeof ApiV1DocsRoute
+  ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
   ApiWorkflowStreamOperationRoute: typeof ApiWorkflowStreamOperationRoute
   ApiCalendarTokenFeedRoute: typeof ApiCalendarTokenFeedRoute
+  ApiV1ResourceOperationRoute: typeof ApiV1ResourceOperationRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -2030,6 +2069,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDebugTimingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/docs': {
+      id: '/api/v1/docs'
+      path: '/api/v1/docs'
+      fullPath: '/api/v1/docs'
+      preLoaderRoute: typeof ApiV1DocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/openapi.json': {
+      id: '/api/v1/openapi.json'
+      path: '/api/v1/openapi.json'
+      fullPath: '/api/v1/openapi.json'
+      preLoaderRoute: typeof ApiV1OpenapiDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/workflow-stream/$operation': {
       id: '/api/workflow-stream/$operation'
       path: '/api/workflow-stream/$operation'
@@ -2084,6 +2137,13 @@ declare module '@tanstack/react-router' {
       path: '/api/calendar/$token/$feed'
       fullPath: '/api/calendar/$token/$feed'
       preLoaderRoute: typeof ApiCalendarTokenFeedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/v1/$resource/$operation': {
+      id: '/api/v1/$resource/$operation'
+      path: '/api/v1/$resource/$operation'
+      fullPath: '/api/v1/$resource/$operation'
+      preLoaderRoute: typeof ApiV1ResourceOperationRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -2346,8 +2406,11 @@ const rootRouteChildren: RootRouteChildren = {
   OauthConsentRoute: OauthConsentRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
+  ApiV1DocsRoute: ApiV1DocsRoute,
+  ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,
   ApiWorkflowStreamOperationRoute: ApiWorkflowStreamOperationRoute,
   ApiCalendarTokenFeedRoute: ApiCalendarTokenFeedRoute,
+  ApiV1ResourceOperationRoute: ApiV1ResourceOperationRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

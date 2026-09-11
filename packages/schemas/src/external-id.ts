@@ -72,6 +72,7 @@ export const gtin = z
   .trim()
   .regex(/^\d{8,14}$/, "a barcode is 8-14 digits")
   .transform((value) => value.padStart(14, "0"))
+  .pipe(z.string().regex(/^\d{14}$/))
   .describe("Barcode (UPC/EAN/GTIN); stored canonically as GTIN-14");
 
 export const canonicalExternalIdUrl = (value: {
