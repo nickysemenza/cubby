@@ -20,15 +20,19 @@
 import { type AnyColumn, and, asc, sql } from "drizzle-orm";
 
 import {
+  expenseAttribution,
   inventoryEntry,
+  ledgerSourceClaim,
   location,
   locationImage,
+  mealRecipe,
   product,
   productExternalId,
   productImage,
   productUnitMappings,
   cookbook,
   recipe,
+  recipeImage,
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
@@ -130,6 +134,7 @@ const withProjectAndProductNameOnly = {
       },
     },
     attributions: {
+      where: notDeleted(expenseAttribution),
       columns: {
         role: true,
         ledgerPartyId: true,
@@ -139,6 +144,7 @@ const withProjectAndProductNameOnly = {
       with: { ledgerParty: { columns: { shortcode: true, deletedAt: true } } },
     },
     sourceClaims: {
+      where: notDeleted(ledgerSourceClaim),
       columns: {
         source: true,
         sourceKey: true,
@@ -194,6 +200,7 @@ const linkOrder = (t: { createdAt: AnyColumn; id: AnyColumn }) => [
 const locationIdentityProduct = {
   with: {
     images: {
+      where: notDeleted(productImage),
       orderBy: imageOrder,
       with: {
         image: true,
@@ -209,9 +216,10 @@ export const relations = {
         product: {
           where: notDeleted(product),
           with: {
-            unitMappings: true,
-            externalIds: true,
+            unitMappings: { where: notDeleted(productUnitMappings) },
+            externalIds: { where: notDeleted(productExternalId) },
             images: {
+              where: notDeleted(productImage),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -264,12 +272,12 @@ export const relations = {
     full: {
       with: {
         ingredient: true,
-        unitMappings: true,
-        externalIds: true,
+        unitMappings: { where: notDeleted(productUnitMappings) },
+        externalIds: { where: notDeleted(productExternalId) },
         // Locations that ARE this product — a bin in service, as opposed to
         // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
         // the detail table renders a name, a type and a link.
-        locations: true,
+        locations: { where: notDeleted(location) },
         // A product may be the physical copy for many cookbooks. Filter both
         // sides at the query boundary so the detail projection cannot expose a
         // deleted book or count deleted recipes.
@@ -284,10 +292,12 @@ export const relations = {
           },
         },
         inventoryEntry: {
+          where: notDeleted(inventoryEntry),
           with: {
             location: {
               with: {
                 images: {
+                  where: notDeleted(locationImage),
                   orderBy: imageOrder,
                   with: {
                     image: true,
@@ -298,6 +308,7 @@ export const relations = {
           },
         },
         images: {
+          where: notDeleted(productImage),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -379,6 +390,7 @@ export const relations = {
           },
         },
         images: {
+          where: notDeleted(recipeImage),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -437,7 +449,9 @@ export const relations = {
           with: {
             // See the `inventory.list` note below: the embedded product's
             // barcode is derived from its primary `gtin` identifier row.
-            product: { with: { externalIds: true } },
+            product: {
+              with: { externalIds: { where: notDeleted(productExternalId) } },
+            },
           },
         },
         images: {
@@ -457,12 +471,14 @@ export const relations = {
         parent: true,
         product: locationIdentityProduct,
         children: {
+          where: notDeleted(location),
           with: {
             // Children carry their identity SKU too — the Contents table shows
             // one row per child bin, and without this every product-linked
             // child renders an empty type with no name to fall back on.
             product: locationIdentityProduct,
             images: {
+              where: notDeleted(locationImage),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -474,11 +490,15 @@ export const relations = {
         // identity surface, not a browse/count one — a fixture wired into this
         // room must stay listed as held here.
         inventoryEntries: {
+          where: notDeleted(inventoryEntry),
           with: {
-            product: { with: { externalIds: true } },
+            product: {
+              with: { externalIds: { where: notDeleted(productExternalId) } },
+            },
           },
         },
         images: {
+          where: notDeleted(locationImage),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -490,6 +510,7 @@ export const relations = {
       with: {
         product: locationIdentityProduct,
         images: {
+          where: notDeleted(locationImage),
           orderBy: imageOrder,
           with: {
             image: true,
@@ -504,7 +525,9 @@ export const relations = {
         // `externalIds` is loaded for the LIST too, not only for `full`: a
         // row's barcode is derived from its primary `gtin` identifier now, so
         // without it every inventory row would report itself barcode-less.
-        product: { with: { externalIds: true } },
+        product: {
+          with: { externalIds: { where: notDeleted(productExternalId) } },
+        },
         location: true,
       },
     },
@@ -512,9 +535,10 @@ export const relations = {
       with: {
         product: {
           with: {
-            unitMappings: true,
-            externalIds: true,
+            unitMappings: { where: notDeleted(productUnitMappings) },
+            externalIds: { where: notDeleted(productExternalId) },
             images: {
+              where: notDeleted(productImage),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -526,6 +550,7 @@ export const relations = {
           with: {
             product: locationIdentityProduct,
             images: {
+              where: notDeleted(locationImage),
               orderBy: imageOrder,
               with: {
                 image: true,
@@ -559,6 +584,7 @@ export const relations = {
     full: {
       with: {
         recipes: {
+          where: notDeleted(mealRecipe),
           orderBy: sectionOrder,
           with: {
             // Only the fields dbMealToAPI reads — the full recipe body per planned recipe was pure over-fetch (the list shows name + scaled totals).

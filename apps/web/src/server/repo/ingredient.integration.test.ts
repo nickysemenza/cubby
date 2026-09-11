@@ -107,6 +107,85 @@ describe("ingredient", () => {
     expect(gaps.find((row) => row.id === item.id)?.product).toEqual([]);
   });
 
+  it("updates and merges ingredients that own a soft-deleted product", async () => {
+    // The reader-side regression above did not cover the two operations that
+    // actually broke in production: `updateIngredient` threw and rolled the write
+    // back (it serializes the response INSIDE its transaction), while
+    // `mergeIngredients` committed and then threw (it serializes after commit),
+    // so a merge appeared to fail while having applied. Both went through
+    // `enrichProductRowsWithDataQuality`, which only holds entries for live
+    // products.
+    const keeper = await createIngredient(
+      ctx.db,
+      { name: "Keeper with dead product" },
+      ctx.actor,
+    );
+    const keeperId = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, keeper.id, "ingredient"))!,
+    );
+    const live = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Live linked", ingredientId: keeper.id }),
+      ctx.actor,
+    );
+    const dead = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Dead linked", ingredientId: keeper.id }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, dead.entityId));
+
+    // Update must succeed AND persist — a throw here discards the write.
+    const updated = await updateIngredient(
+      ctx.db,
+      keeperId,
+      { aliases: ["dead product alias"] },
+      ctx.actor,
+    );
+    expect(updated.product.map((linked) => linked.id)).toEqual([live.id]);
+    expect(updated.aliases).toEqual(["dead product alias"]);
+    expect((await getIngredientByID(ctx.db, keeperId))?.aliases).toEqual([
+      "dead product alias",
+    ]);
+
+    // Merge repoints DEAD products onto the survivor on purpose
+    // (`liveOnly: false` in merge.ts), so this is the real production repro:
+    // the survivor ends up owning a soft-deleted product and must still
+    // serialize.
+    const absorbed = await createIngredient(
+      ctx.db,
+      { name: "Absorbed with dead product" },
+      ctx.actor,
+    );
+    const absorbedDead = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Dead linked on absorbed",
+        ingredientId: absorbed.id,
+      }),
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, absorbedDead.entityId));
+
+    await mergeIngredients(
+      ctx.db,
+      // `createIngredient` returns the public shortcode as `id`; merge takes
+      // shortcodes.
+      { keepId: keeper.id, mergeIds: [absorbed.id] },
+      ctx.actor,
+    );
+    const merged = await getIngredientByID(ctx.db, keeperId);
+    expect(merged?.product.map((linked) => linked.id)).toEqual([live.id]);
+    expect(merged?.aliases).toContain("Absorbed with dead product");
+  });
+
   it("streams declared enrichment windows with public ids and skips unresolved subjects", async () => {
     const items = [];
     for (let index = 0; index < 7; index++) {

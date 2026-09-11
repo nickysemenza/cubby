@@ -120,6 +120,25 @@ history is the archive. Permanent product constraints live in the
   hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
 - **Measured table-virtualizer investigation** — Revisit `directDomUpdates`
   only during a measured desktop table-virtualizer investigation.
+- **Split compound ingredient lines** — Promote when `ingredient-parser` can emit
+  two ingredients from one line. Blocked upstream, not locally: `parse_ingredient`
+  is singular and upstream deliberately keeps "Salt and pepper" whole (`usage.rs`
+  pins it as one `Seasoning` ingredient). Splitting stored rows first does not
+  hold — every affected row carries a `rawLine`, so the split reads as parse
+  drift and "Re-parse all" reverts it, and `ReparsedStaleLineWrite` is
+  one-row-in-one-row-out by contract. Scope when unblocked: 14 ingredients over
+  212 rows in 204 recipes, all with empty `amounts` — that emptiness is the
+  discriminator against single ingredients whose name merely contains "and"
+  (`cilantro leaves and stems`), which all carry amounts. Choose each split
+  target from the row's `rawLine`, not the ingredient name: the largest compound
+  absorbed several raw variants as aliases and they do not all name the same
+  salt. Route writes through `handleSectionUpdates` via the entity adapter so
+  `sortOrder` renumbering, totals staleness and embedding refresh come free, and
+  send each touched section's complete ingredient array — omitted lines are
+  hard-deleted. Repoint the existing row to the first child and insert only the
+  second, to limit `lineId` churn. MCP cannot drive it: the read projection
+  strips section and line ids, so an update omitting section `id` replaces every
+  section.
 - **Entity relation runtime dispatch** — Promote when attach/detach genericization
   resumes. Generate dispatch only for declared runtime ports and make unsupported
   semantic edges fail explicitly; catalog relationships must not imply executable
