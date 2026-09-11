@@ -164,8 +164,14 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   const loadLocationImages = () =>
     locationIds.length > 0
       ? getDb(db).query.locationImage.findMany({
-          where: inArray(locationImage.locationId, locationIds),
+          // Spread first, then override `where`: the preset carries its own
+          // `notDeleted` filter, which would otherwise clobber the id predicate
+          // and fetch every location's images.
           ...relations.location.withImages.with.images,
+          where: and(
+            inArray(locationImage.locationId, locationIds),
+            notDeleted(locationImage),
+          ),
         })
       : Promise.resolve([]);
   const allLocationImages = await loadLocationImages();
