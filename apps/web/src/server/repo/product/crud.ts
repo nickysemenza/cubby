@@ -384,12 +384,16 @@ const productReader = createEntityReader({
   entity: "product",
   fetchById: fetchProductById,
   fromDB: async (db, row: ProductDeepDB) => {
-    const qualities = await observeOperationPhase(
-      PRODUCT_DETAIL_OPERATION,
-      "quality",
-      () => loadProductDataQualities(db, [row.id]),
+    const [qualities, coverImageUrls] = await Promise.all([
+      observeOperationPhase(PRODUCT_DETAIL_OPERATION, "quality", () =>
+        loadProductDataQualities(db, [row.id]),
+      ),
+      getProductCoverImageUrlsByProductIds(db, [row.id]),
+    ]);
+    return dbProductToAPI(
+      { ...row, coverImageUrl: coverImageUrls.get(row.id) ?? null },
+      qualities.get(row.id)!,
     );
-    return dbProductToAPI(row, qualities.get(row.id)!);
   },
 });
 
@@ -467,16 +471,27 @@ export const getProductsByShortcodes = async (
     where: and(inArray(product.shortcode, uppercased), notDeleted(product)),
     ...relations.product.full,
   });
-  const qualities = await loadProductDataQualities(
-    db,
-    results.map((row) => row.id),
-  );
+  const [qualities, coverImageUrls] = await Promise.all([
+    loadProductDataQualities(
+      db,
+      results.map((row) => row.id),
+    ),
+    getProductCoverImageUrlsByProductIds(
+      db,
+      results.map((row) => row.id),
+    ),
+  ]);
   const priced = await enrichProductRowsWithPricing(db, results);
   const ledgered = await hydrateProductLocationBreadcrumbs(
     db,
     await enrichProductRowsWithQuantityLedger(db, priced),
   );
-  return ledgered.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
+  return ledgered.map((row) =>
+    dbProductToAPI(
+      { ...row, coverImageUrl: coverImageUrls.get(row.id) ?? null },
+      qualities.get(row.id)!,
+    ),
+  );
 };
 
 /**

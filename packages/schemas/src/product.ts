@@ -749,6 +749,9 @@ export type ProductQuantitySummariesOut = z.infer<
 
 export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ...productTopLevelFields,
+  // Same derived cover rule as `productTopLevelOut`/the picker (see
+  // `getProductCoverImageUrlsByProductIds`) — not a stored field.
+  coverImageUrl: z.url().nullable(),
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
@@ -821,6 +824,9 @@ export const productListItemMcpEntityOut = productListItemOut.extend({
 
 export const productWithFoodOut = z.object({
   ...productTopLevelFields,
+  // Same derived cover rule as `productTopLevelOut`/the picker (see
+  // `getProductCoverImageUrlsByProductIds`) — not a stored field.
+  coverImageUrl: z.url().nullable(),
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
@@ -857,6 +863,11 @@ export const productTopLevelMcpEntityOut = productTopLevelOut.extend({
 
 export const productWithFoodAndSideEffectsOut = z.object({
   ...productTopLevelFields,
+  // Same derived cover rule as `productTopLevelOut`/the picker (see
+  // `getProductCoverImageUrlsByProductIds`) — not a stored field. Required so
+  // this shape stays assignable to `productTopLevelOut` for the generic
+  // entity kernel's create/update output typing.
+  coverImageUrl: z.url().nullable(),
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),

@@ -81,6 +81,7 @@ const dummyProducts = (count: number): ProductTopLevelOut[] =>
       expectedQuantity: null,
       category: null,
       images: [],
+      coverImageUrl: null,
       externalIds: [],
       price: null,
       pricing: {

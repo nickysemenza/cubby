@@ -56,6 +56,10 @@ type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
   externalIds?: MappableProductExternalId[] | null;
   dataQuality: ProductTopLevelOut["dataQuality"];
   pricing?: ProductPricing;
+  // Batch-resolved by the caller via `getProductCoverImageUrlsByProductIds`
+  // (same rule the picker uses). Optional: callers that never asked for it
+  // (e.g. ingredient-relation reads) fall back to `null` below.
+  coverImageUrl?: string | null;
 };
 
 /**
@@ -140,6 +144,10 @@ export const mapDbProductToTopLevel = (
   stockTracked: productData.stockTracked,
   dataQuality: productData.dataQuality,
   images: mapImages(productData.images),
+  // Same derived cover rule as the picker (see
+  // `getProductCoverImageUrlsByProductIds`); `null` when the caller didn't
+  // batch-resolve it for this read.
+  coverImageUrl: productData.coverImageUrl ?? null,
   externalIds: mapProductExternalIds(productData.externalIds),
   createdAt: productData.createdAt,
   updatedAt: productData.updatedAt,
@@ -449,6 +457,10 @@ export const dbProductToAPI = (
     ),
     externalIds: mapProductExternalIds(productData.externalIds),
     images: mapImages(images),
+    // Same derived cover rule as the picker (see
+    // `getProductCoverImageUrlsByProductIds`); `null` when the caller didn't
+    // batch-resolve it for this read.
+    coverImageUrl: productData.coverImageUrl ?? null,
     inventoryEntry: mappedInventoryEntry,
     // The bins in service, beside the stock held somewhere. `mapRelation`
     // drops soft-deleted rows, matching `quantityLedger.locationCount`, which
