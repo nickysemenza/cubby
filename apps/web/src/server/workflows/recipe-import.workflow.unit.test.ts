@@ -102,13 +102,17 @@ describe("recipe import workflow graphs", () => {
   it("retains committed recipes when event projection fails", async () => {
     await expect(
       projectCookbookImportEvent(
-        4,
+        "001.0004",
         receipt,
         Promise.reject(new Error("Image state unavailable")),
       ),
     ).resolves.toEqual({
       recipeId: receipt.id,
-      event: { index: 4, ok: false, error: "Image state unavailable" },
+      event: {
+        sourceRecipeId: "001.0004",
+        ok: false,
+        error: "Image state unavailable",
+      },
     });
     expect(projectNotionImportEvent("page-4", true, receipt)).toEqual({
       recipeId: receipt.id,
@@ -128,7 +132,7 @@ describe("recipe import workflow graphs", () => {
     });
     let finished = false;
     const pending = projectCookbookImportEvent(
-      0,
+      "001.0000",
       { ...receipt, shortcode: "invalid" },
       read,
     ).then((result) => {
@@ -140,7 +144,7 @@ describe("recipe import workflow graphs", () => {
     rejectRead(new Error("Image read failed"));
     expect(await pending).toMatchObject({
       recipeId: receipt.id,
-      event: { index: 0, ok: false },
+      event: { sourceRecipeId: "001.0000", ok: false },
     });
   });
 });

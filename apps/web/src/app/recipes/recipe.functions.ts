@@ -3,8 +3,6 @@ import { equivalenceReportSchema } from "@cubby/schemas/equivalences";
 import {
   attachCookbookRecipePhotoInput,
   attachCookbookRecipePhotoOut,
-  chunkRequestInput,
-  chunkResponseOut,
   cookbookDiffInput,
   cookbookDiffOut,
   cookbookIdInput,
@@ -13,6 +11,8 @@ import {
   cookbookReprocessEventSchema,
   cookbookSourceOut,
   deleteCookbookOut,
+  gatewayForwardInput,
+  gatewayForwardOut,
   importCookbookStreamInput,
   importNotionSyncInput,
   importRecipeSchema,
@@ -166,9 +166,11 @@ export const recipe = defineOperationDomain("recipe", {
     output: deleteCookbookOut,
     invalidates: ripple.recipeCookbook,
   }),
-  extractCookbookChunk: mutation({
-    input: chunkRequestInput,
-    output: chunkResponseOut,
+  // One gateway call of an in-browser cookbook extraction: the Rust driver
+  // builds the request, the server signs and forwards it.
+  forwardGatewayRequest: mutation({
+    input: gatewayForwardInput,
+    output: gatewayForwardOut,
     invalidates: ripple.none,
   }),
   attachCookbookRecipePhoto: mutation({

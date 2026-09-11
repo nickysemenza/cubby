@@ -25,6 +25,7 @@ import {
 import {
   getCookbookByName,
   getCookbookRecipePhotoSource,
+  getCookbookSource,
   listCookbooks,
   setCookbookProduct,
   upsertCookbook,
@@ -35,8 +36,10 @@ import { createPendingImageRecord } from "./image";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
 import { deleteProducts } from "./product";
 import {
-  cookbookRecipe,
   createProductFixture,
+  makeCookbookExtraction,
+  makeCookbookImportContext,
+  makeCookbookRecipe,
   makeProductInput,
 } from "./repo.fixtures";
 
@@ -49,7 +52,9 @@ describe("cookbook repository", () => {
     );
 
   it("upsertCookbook creates then updates by name (no duplicate)", async () => {
-    const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
+    const raw = makeCookbookExtraction([
+      makeCookbookRecipe("Pancakes", ["2 cups flour"]),
+    ]);
     const first = await upsertCookbook(
       ctx.db,
       { name: "Book A", rawJson: raw, author: ["Ada"], sourceLabel: "a.epub" },
@@ -71,7 +76,8 @@ describe("cookbook repository", () => {
     expect(cb?.id).toBe(first.entityId);
     expect(cb?.author).toEqual(["Ada", "Bob"]);
     expect(cb?.subjects).toEqual(["Baking"]);
-    expect(cb?.rawJson).toHaveLength(1);
+    expect(cb?.rawJson.chapters[0]?.items).toHaveLength(1);
+    expect(cb?.sourceRecipeCount).toBe(1);
   });
 
   it("returns no diff for a missing book and recipes for an existing book", async () => {
@@ -86,14 +92,18 @@ describe("cookbook repository", () => {
       ctx.db,
       {
         name: "Diff Book",
-        rawJson: [cookbookRecipe("Diff Pancakes", ["1 cup flour"])],
+        rawJson: makeCookbookExtraction([
+          makeCookbookRecipe("Diff Pancakes", ["1 cup flour"], {
+            id: "001.0001",
+          }),
+        ]),
         sourceLabel: "diff.epub",
       },
       ctx.actor,
     );
     for await (const _event of importCookbookWorkflow(workflowContext(), {
       cookbookId: book.output.id,
-      indices: [0],
+      recipeIds: ["001.0001"],
     })) {
       // Drain the stream so the recipe commit and finalization complete.
     }
@@ -109,7 +119,11 @@ describe("cookbook repository", () => {
   });
 
   it("streams cookbook row failures without discarding earlier committed recipes", async () => {
-    const raw = [cookbookRecipe("Streamed Pancakes", ["2 cups flour"])];
+    const raw = makeCookbookExtraction([
+      makeCookbookRecipe("Streamed Pancakes", ["2 cups flour"], {
+        id: "001.0001",
+      }),
+    ]);
     const book = await upsertCookbook(
       ctx.db,
       { name: "Streamed Book", rawJson: raw, sourceLabel: "streamed.epub" },
@@ -118,7 +132,7 @@ describe("cookbook repository", () => {
     const events = [];
     for await (const event of importCookbookWorkflow(workflowContext(), {
       cookbookId: book.output.id,
-      indices: [0, 7],
+      recipeIds: ["001.0001", "009.0007"],
     }))
       events.push(event);
 
@@ -128,13 +142,13 @@ describe("cookbook repository", () => {
         type: "progress",
         done: 1,
         total: 2,
-        item: { index: 0, ok: true },
+        item: { sourceRecipeId: "001.0001", ok: true },
       },
       {
         type: "progress",
         done: 2,
         total: 2,
-        item: { index: 7, ok: false },
+        item: { sourceRecipeId: "009.0007", ok: false },
       },
       { type: "done", result: { succeeded: 1, failed: 1 } },
     ]);
@@ -146,7 +160,9 @@ describe("cookbook repository", () => {
   });
 
   it("reprocesses no recipes without inventing a progress item and returns extras", async () => {
-    const raw = [cookbookRecipe("Deferred Recipe", ["1 pinch salt"])];
+    const raw = makeCookbookExtraction([
+      makeCookbookRecipe("Deferred Recipe", ["1 pinch salt"]),
+    ]);
     const book = await upsertCookbook(
       ctx.db,
       { name: "Deferred Book", rawJson: raw, sourceLabel: "deferred.epub" },
@@ -166,10 +182,10 @@ describe("cookbook repository", () => {
   });
 
   it("finalizes the first committed cookbook import on close without starting the next row", async () => {
-    const raw = [
-      cookbookRecipe("Close First", ["1 cup flour"]),
-      cookbookRecipe("Close Second", ["1 cup water"]),
-    ];
+    const raw = makeCookbookExtraction([
+      makeCookbookRecipe("Close First", ["1 cup flour"], { id: "001.0001" }),
+      makeCookbookRecipe("Close Second", ["1 cup water"], { id: "001.0020" }),
+    ]);
     const book = await upsertCookbook(
       ctx.db,
       { name: "Closing Book", rawJson: raw, sourceLabel: "closing.epub" },
@@ -177,7 +193,7 @@ describe("cookbook repository", () => {
     );
     const stream = importCookbookWorkflow(workflowContext(), {
       cookbookId: book.output.id,
-      indices: [0, 1],
+      recipeIds: ["001.0001", "001.0020"],
     });
     await stream.next();
     await stream.next();
@@ -207,7 +223,7 @@ describe("cookbook repository", () => {
       ctx.db,
       {
         name: "Covered Book",
-        rawJson: [],
+        rawJson: makeCookbookExtraction(),
         sourceLabel: "covered.epub",
         coverImageId: firstCover.id,
       },
@@ -217,7 +233,7 @@ describe("cookbook repository", () => {
       ctx.db,
       {
         name: "Covered Book",
-        rawJson: [],
+        rawJson: makeCookbookExtraction(),
         sourceLabel: "covered-again.epub",
         coverImageId: redundantCover.id,
       },
@@ -242,32 +258,31 @@ describe("cookbook repository", () => {
     );
   });
 
-  it("authorizes an EPUB photo by live cookbook, source index, recipe membership, and title", async () => {
-    const raw = [
-      cookbookRecipe("Pancakes", ["2 cups flour"], {
-        image: {
-          kind: "epub",
-          path: "OEBPS/images/pancakes.jpg",
-          mime: "image/jpeg",
-          alt: "Pancakes",
-        },
-      }),
-    ];
+  it("authorizes an EPUB photo by live cookbook, source recipe id, recipe membership, and name", async () => {
+    const pancakes = makeCookbookRecipe("Pancakes", ["2 cups flour"], {
+      id: "001.0001",
+      photos: [
+        { path: "OEBPS/images/pancakes.jpg", mime: "image/jpeg", alt: "Pancakes" },
+      ],
+    });
+    const raw = makeCookbookExtraction([pancakes]);
     const { entityId: cookbookId } = await upsertCookbook(
       ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
       ctx.actor,
     );
     const imported = await upsertCookbookRecipeFromCookbook(
-      raw[0]!,
+      pancakes,
+      "Recipes",
       { id: cookbookId, name: "Book A" },
       ctx.db,
       ctx.actor,
+      makeCookbookImportContext(raw),
     );
 
     await expect(
-      getCookbookRecipePhotoSource(ctx.db, cookbookId, imported.id, 0),
-    ).resolves.toEqual(raw[0]!.image);
+      getCookbookRecipePhotoSource(ctx.db, cookbookId, imported.id, "001.0001"),
+    ).resolves.toEqual({ path: "OEBPS/images/pancakes.jpg", mime: "image/jpeg" });
 
     const other = await upsertCookbook(
       ctx.db,
@@ -275,10 +290,32 @@ describe("cookbook repository", () => {
       ctx.actor,
     );
     await expect(
-      getCookbookRecipePhotoSource(ctx.db, other.entityId, imported.id, 0),
+      getCookbookRecipePhotoSource(
+        ctx.db,
+        other.entityId,
+        imported.id,
+        "001.0001",
+      ),
     ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
     await expect(
-      getCookbookRecipePhotoSource(ctx.db, cookbookId, imported.id, 1),
+      getCookbookRecipePhotoSource(ctx.db, cookbookId, imported.id, "001.0999"),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+  });
+
+  it("refuses to import from a cookbook stored in the retired flat format", async () => {
+    const legacy = await upsertCookbook(
+      ctx.db,
+      { name: "Legacy Book", rawJson: makeCookbookExtraction(), sourceLabel: "old.epub" },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(cookbook)
+      .set({ rawJson: [] as unknown as ReturnType<typeof makeCookbookExtraction> })
+      .where(eq(cookbook.id, legacy.entityId));
+    const summaries = await listCookbooks(ctx.db);
+    expect(summaries.find((s) => s.book === "Legacy Book")?.needsReextract).toBe(true);
+    await expect(
+      getCookbookSource(ctx.db, legacy.entityId),
     ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
   });
 
@@ -292,7 +329,8 @@ describe("cookbook repository", () => {
   // which only asserts the Cookbook row's own embedding — this exercises the
   // recipe cascade underneath it too).
   it("deleteCookbook soft-deletes the book, its recipes, sections, ingredients, and leaves no embedding orphans", async () => {
-    const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
+    const pancakes = makeCookbookRecipe("Pancakes", ["2 cups flour"]);
+    const raw = makeCookbookExtraction([pancakes]);
     const { entityId: cookbookId, output: book } = await upsertCookbook(
       ctx.db,
       { name: "Book A", rawJson: raw, sourceLabel: "a.epub" },
@@ -300,10 +338,12 @@ describe("cookbook repository", () => {
     );
     const ref = { id: cookbookId, name: "Book A" };
     const { id: recipeId } = await upsertCookbookRecipeFromCookbook(
-      raw[0]!,
+      pancakes,
+      "Recipes",
       ref,
       ctx.db,
       ctx.actor,
+      makeCookbookImportContext(raw),
     );
 
     const sectionsBefore = await getDb(ctx.db).query.recipeSection.findMany({
@@ -392,7 +432,9 @@ describe("cookbook repository", () => {
 
   describe("physical copy link", () => {
     const linkedBook = async () => {
-      const raw = [cookbookRecipe("Pancakes", ["2 cups flour"])];
+      const raw = makeCookbookExtraction([
+        makeCookbookRecipe("Pancakes", ["2 cups flour"]),
+      ]);
       const cb = await upsertCookbook(
         ctx.db,
         { name: "Six Seasons", rawJson: raw, sourceLabel: "six.epub" },

@@ -123,7 +123,6 @@ export function notionPageToImportRecipe(
       ingredients: s.ingredients,
       instructions: s.instructions,
     })),
-    references: [],
     servings: row.servings ?? undefined,
   };
 }

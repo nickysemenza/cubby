@@ -4,6 +4,7 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
+import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -100,7 +101,7 @@ const mkCookbook = (db: Database) =>
     author: [],
     subjects: [],
     sourceLabel: "test",
-    rawJson: [],
+    rawJson: makeCookbookExtraction(),
   });
 
 const mkRecipe = (db: Database) =>
@@ -335,7 +336,7 @@ const SOURCE_FACTORIES = {
       author: [],
       subjects: [],
       sourceLabel: "test",
-      rawJson: [],
+      rawJson: makeCookbookExtraction(),
       coverImageId: targetId,
     }),
 
@@ -565,7 +566,7 @@ const SOURCE_FACTORIES = {
       author: [],
       subjects: [],
       sourceLabel: "test",
-      rawJson: [],
+      rawJson: makeCookbookExtraction(),
       productId: parseEntityId("product", targetId),
     }),
 

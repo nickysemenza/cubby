@@ -7,6 +7,8 @@ import { getDb } from "~/server/repo/database-helpers";
 
 /**
  * Live cookbooks with more extracted source recipes than live linked recipes.
+ * `sourceRecipeCount` is stored at upsert (the recipe items in the extracted
+ * book tree), so this never walks the JSON.
  *
  * The left join makes a never-imported cookbook visible. Keeping the recipe
  * liveness predicate in the join (rather than WHERE) preserves that zero-row
@@ -19,16 +21,16 @@ export const findPartiallyImportedCookbooks = async (
     SELECT
       ${cookbook.shortcode} AS id,
       ${cookbook.name} AS name,
-      coalesce(jsonb_array_length(${cookbook.rawJson}), 0)::int AS "sourceRecipeCount",
+      ${cookbook.sourceRecipeCount}::int AS "sourceRecipeCount",
       count(${recipe.id})::int AS "recipeCount",
-      (coalesce(jsonb_array_length(${cookbook.rawJson}), 0) - count(${recipe.id}))::int AS "missingRecipeCount"
+      (${cookbook.sourceRecipeCount} - count(${recipe.id}))::int AS "missingRecipeCount"
     FROM ${cookbook}
     LEFT JOIN ${recipe}
       ON ${recipe.cookbookId} = ${cookbook.id}
       AND ${recipe.deletedAt} IS NULL
     WHERE ${cookbook.deletedAt} IS NULL
     GROUP BY ${cookbook.id}
-    HAVING coalesce(jsonb_array_length(${cookbook.rawJson}), 0) > count(${recipe.id})
+    HAVING ${cookbook.sourceRecipeCount} > count(${recipe.id})
     ORDER BY ${cookbook.name}
   `);
   return result.rows;

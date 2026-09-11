@@ -51,6 +51,10 @@ export const aiUsageTelemetrySchema = z.strictObject({
   entityType: z.string().min(1).nullable(),
   entityId: z.uuid().nullable(),
   batchId: z.uuid().nullable(),
+  // The caller's own cost figure (the cookbook crate prices every model it
+  // calls); absent on messages minted before this field existed and for
+  // callers that leave pricing to the app-side registry.
+  estimatedCost: z.number().nonnegative().nullable().optional(),
 });
 export type AiUsageTelemetry = z.infer<typeof aiUsageTelemetrySchema>;
 

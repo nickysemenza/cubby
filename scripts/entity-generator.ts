@@ -1110,7 +1110,8 @@ const identifierTypeNames = {
 } as const satisfies Readonly<Record<string, string>>;
 
 const storageJsonTypes = {
-  "cookbook.rawJson": "ImportRecipe[]",
+  "cookbook.rawJson": "CookbookExtraction",
+  "cookbook.report": "CookbookRunReport | null",
   "financialAccount.identity": "FinancialAccountIdentity",
   "financialAccount.sourceAliases": "FinancialAccountSourceAlias[]",
   "financialTransaction.sourceRefs": "FinancialTransactionSourceRef[]",
@@ -1267,7 +1268,7 @@ const renderEntityColumnsArtifact = (
     'import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";\n' +
     `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
     'import { imageStatusValues } from "@cubby/schemas/image";\n' +
-    'import type { ImportRecipe } from "@cubby/schemas/import-recipe";\n' +
+    'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
     'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
     'import type { LocationValuation } from "@cubby/schemas/location";\n' +
     'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +

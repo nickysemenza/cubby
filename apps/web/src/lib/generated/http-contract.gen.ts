@@ -180,8 +180,8 @@ import { recipeDryRunRecomputeTotalsOut as schema177 } from "@cubby/schemas/reci
 import { recipeIdInput as schema178 } from "@cubby/schemas/recipe";
 import { recipeWithSideEffectsOut as schema179 } from "@cubby/schemas/recipe";
 import { recipeCostingExplain as schema180 } from "@cubby/schemas/recipe-shared";
-import { chunkRequestInput as schema181 } from "@cubby/schemas/import-recipe";
-import { chunkResponseOut as schema182 } from "@cubby/schemas/import-recipe";
+import { gatewayForwardInput as schema181 } from "@cubby/schemas/import-recipe";
+import { gatewayForwardOut as schema182 } from "@cubby/schemas/import-recipe";
 import { recipeFlowGenerateInputSchema as schema183 } from "@cubby/schemas/recipe-flow";
 import { recipeFlowArtifactSchema as schema184 } from "@cubby/schemas/recipe-flow";
 import { recipeTagsOut as schema185 } from "@cubby/schemas/recipe";
@@ -1027,8 +1027,8 @@ export const httpContract = {
       schema178,
       schema180,
     ),
-    extractCookbookChunk: httpOperation(
-      "recipe.extractCookbookChunk",
+    forwardGatewayRequest: httpOperation(
+      "recipe.forwardGatewayRequest",
       schema181,
       schema182,
     ),

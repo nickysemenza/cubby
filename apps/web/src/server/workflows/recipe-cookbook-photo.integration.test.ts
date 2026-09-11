@@ -7,7 +7,11 @@ import { image, recipeImage } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/repo/cookbook";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { upsertCookbookRecipeFromCookbook } from "~/server/repo/import-recipe-convert";
-import { cookbookRecipe } from "~/server/repo/repo.fixtures";
+import {
+  makeCookbookExtraction,
+  makeCookbookImportContext,
+  makeCookbookRecipe,
+} from "~/server/repo/repo.fixtures";
 import {
   createImageStorageService,
   productionImageStoragePorts,
@@ -22,39 +26,42 @@ describe("cookbook recipe photo workflow", () => {
   const ctx = withTestDb("epub_import");
 
   const setup = async () => {
-    const sourceRecipes = ["Pancakes", "Waffles", "Biscuits"].map((title) =>
-      cookbookRecipe(title, ["2 cups flour"], {
-        image: {
-          kind: "epub",
-          path: "OEBPS/images/shared.png",
-          mime: "image/png",
-        },
+    const sourceRecipes = ["Pancakes", "Waffles", "Biscuits"].map((title, i) =>
+      makeCookbookRecipe(title, ["2 cups flour"], {
+        id: `001.${String(10 + i).padStart(4, "0")}`,
+        photos: [{ path: "OEBPS/images/shared.png", mime: "image/png" }],
       }),
     );
+    const tree = makeCookbookExtraction(sourceRecipes);
     const cookbook = await upsertCookbook(
       ctx.db,
       {
         name: "Book A",
-        rawJson: sourceRecipes,
+        rawJson: tree,
         sourceLabel: "book-a.epub",
       },
       ctx.actor,
     );
-    const imported = await Promise.all(
-      sourceRecipes.map((sourceRecipe) =>
-        upsertCookbookRecipeFromCookbook(
+    const importCtx = makeCookbookImportContext(tree);
+    const imported = [];
+    for (const sourceRecipe of sourceRecipes) {
+      imported.push(
+        await upsertCookbookRecipeFromCookbook(
           sourceRecipe,
+          "Recipes",
           { id: cookbook.entityId, name: "Book A" },
           ctx.db,
           ctx.actor,
+          importCtx,
         ),
-      ),
-    );
+      );
+    }
     return {
       cookbookId: cookbook.output.id,
-      recipes: imported.map((row) => ({
+      recipes: imported.map((row, i) => ({
         entityId: row.id,
         recipeId: parseShortcodeFor("recipe", row.shortcode),
+        sourceRecipeId: sourceRecipes[i]!.id,
       })),
     };
   };
@@ -91,7 +98,7 @@ describe("cookbook recipe photo workflow", () => {
         {
           cookbookId: ids.cookbookId,
           recipeId: first.recipeId,
-          sourceIndex: 0,
+          sourceRecipeId: first.sourceRecipeId,
           data: PNG_BASE64,
         },
         ports,
@@ -103,7 +110,7 @@ describe("cookbook recipe photo workflow", () => {
         {
           cookbookId: ids.cookbookId,
           recipeId: second.recipeId,
-          sourceIndex: 1,
+          sourceRecipeId: second.sourceRecipeId,
           data: PNG_BASE64,
         },
         ports,
@@ -115,7 +122,7 @@ describe("cookbook recipe photo workflow", () => {
         {
           cookbookId: ids.cookbookId,
           recipeId: first.recipeId,
-          sourceIndex: 0,
+          sourceRecipeId: first.sourceRecipeId,
           data: PNG_BASE64,
         },
         ports,
@@ -137,7 +144,7 @@ describe("cookbook recipe photo workflow", () => {
         {
           cookbookId: ids.cookbookId,
           recipeId: existing.recipeId,
-          sourceIndex: 2,
+          sourceRecipeId: existing.sourceRecipeId,
           data: PNG_BASE64,
         },
         ports,

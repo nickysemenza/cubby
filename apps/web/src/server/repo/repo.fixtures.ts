@@ -8,6 +8,10 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import type {
+  CookbookExtraction,
+  CookbookRecipe,
+} from "@cubby/schemas/cookbook";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import {
@@ -21,11 +25,13 @@ import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import { eq, sql } from "drizzle-orm";
 
 import { mock } from "~/lib/test/mock-schema";
+import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { type image, product, recipe } from "~/server/db/schema";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { getDb } from "./database-helpers";
+import type { CookbookImportContext } from "./import-recipe-convert";
 import { createIngredient, findOrCreateIngredient } from "./ingredient";
 import { createInventoryEntry } from "./inventory";
 import { createLocation } from "./location";
@@ -310,20 +316,141 @@ export const makeImportRecipe = (
 ): ImportRecipe => ({
   meta: { title: "Test Recipe" },
   sections: [{ instructions: [], ingredients: [] }],
-  references: [],
   ...overrides,
 });
 
-export const cookbookRecipe = (
-  title: string,
-  ingredients: string[],
-  overrides: Partial<ImportRecipe> = {},
-): ImportRecipe =>
-  makeImportRecipe({
-    meta: { title },
-    sections: [{ ingredients, instructions: [] }],
-    ...overrides,
-  });
+/**
+ * A recipe item as the `cookbook` crate emits it: every ingredient line
+ * already parsed (through the same wasm parser), an optional `ref` to another
+ * item by id, photos as archive paths. Ids follow the crate's
+ * `{doc:03}.{line:04}` form; callers pick them so edges can point at them.
+ */
+export const makeCookbookRecipe = (
+  name: string,
+  ingredients: readonly (string | { line: string; ref: string })[],
+  overrides: {
+    id?: string;
+    steps?: readonly string[];
+    photos?: readonly { path: string; mime: string; alt?: string }[];
+    description?: readonly string[];
+    recipeYield?: string;
+    variantOf?: string;
+    section?: string;
+  } = {},
+): CookbookRecipe => {
+  const id = overrides.id ?? `001.${String(nextCookbookLine++).padStart(4, "0")}`;
+  const lines = ingredients.map((entry) =>
+    typeof entry === "string" ? { line: entry, ref: undefined } : entry,
+  );
+  const parsed = wasm.parse_ingredient_lines(lines.map((l) => l.line));
+  return {
+    kind: "recipe",
+    id,
+    title: name,
+    name,
+    meta: {
+      description: [...(overrides.description ?? [])],
+      recipe_yield: overrides.recipeYield ?? null,
+      times: null,
+      equipment: [],
+      category: null,
+      page: null,
+    },
+    sections: [
+      {
+        name: overrides.section ?? null,
+        ingredients: lines.map((entry, i) => ({
+          raw: entry.line,
+          line: i,
+          parsed: {
+            name: parsed[i]!.name,
+            amounts: parsed[i]!.amounts.map((a) => ({
+              unit: a.unit,
+              value: a.value,
+              upper_value: a.upper_value ?? null,
+            })),
+            modifier: parsed[i]!.modifier ?? null,
+            optional: parsed[i]!.optional ?? false,
+          },
+          confidence: "high",
+          ref: entry.ref
+            ? {
+                target_id: entry.ref,
+                text: entry.line,
+                kind: "ingredient",
+                method: "title",
+              }
+            : null,
+        })),
+        steps: (overrides.steps ?? []).map((text, i) => ({
+          text,
+          line: 100 + i,
+          refs: [],
+        })),
+      },
+    ],
+    photos: (overrides.photos ?? []).map((photo) => ({
+      path: photo.path,
+      mime: photo.mime,
+      alt: photo.alt ?? null,
+      caption: null,
+      line: null,
+    })),
+    notes: [],
+    variant_of: overrides.variantOf ?? null,
+    span: { start: 0, end: 1, doc_path: "OEBPS/c01.xhtml", page: null },
+  };
+};
+let nextCookbookLine = 1;
+
+/** A stored book tree with one chapter holding `recipes`, plus ingredient edges. */
+export const makeCookbookExtraction = (
+  recipes: readonly CookbookRecipe[] = [],
+  overrides: { title?: string; chapter?: string | null } = {},
+): CookbookExtraction => ({
+  contract: "cookbook-indexed-v1",
+  source: {
+    label: `${overrides.title ?? "Test Book"}.epub`,
+    sha256: "0".repeat(64),
+    title: overrides.title ?? "Test Book",
+    authors: [],
+    identifiers: [],
+    subjects: [],
+  },
+  cover: null,
+  chapters: [
+    {
+      id: "ch01",
+      title: overrides.chapter === undefined ? "Recipes" : overrides.chapter,
+      items: [...recipes],
+    },
+  ],
+  edges: recipes.flatMap((r) =>
+    r.sections.flatMap((s) =>
+      s.ingredients.flatMap((line) =>
+        line.ref
+          ? [
+              {
+                from: r.id,
+                to: line.ref.target_id,
+                kind: line.ref.kind,
+                method: line.ref.method,
+              },
+            ]
+          : [],
+      ),
+    ),
+  ),
+});
+
+/** The context the import loop threads through `upsertCookbookRecipeFromCookbook`. */
+export const makeCookbookImportContext = (
+  extraction: CookbookExtraction,
+): CookbookImportContext => ({
+  titleToId: new Map(),
+  extraction,
+  ingredientIdByName: new Map(),
+});
 
 export const createIngredients = (
   db: Database,

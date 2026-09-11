@@ -7,7 +7,7 @@
 //! - [`food_mappings`] — USDA food/product → unit-mapping synthesis
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
 //! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
-//! - [`epub`] — EPUB cookbook extraction (client-side pipeline)
+//! - [`epub`] — EPUB cookbook extraction (re-exported from upstream `cookbook::wasm`)
 //!
 //! Boundary types: `#[derive(Tsify)]` generates the `.d.ts` from the Rust
 //! structs (no hand-written `typescript_custom_section` except `AmountKind`),

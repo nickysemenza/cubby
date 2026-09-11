@@ -2,10 +2,15 @@
  * Cookbook repository.
  *
  * A `Cookbook` is a first-class recipe source: the book a set of EPUB-extracted
- * recipes came from. It stores the full assembled `ImportRecipe[]` (`rawJson`)
- * so recipes can be re-derived without re-running the LLM, plus OPF metadata.
- * Recipes link to it via `recipe.cookbookId`; cookbook-scoped recipe queries live
- * in the recipe repo (`./recipe`).
+ * recipes came from. It stores the extracted book tree (`rawJson`, the
+ * `cookbook` crate's `Cookbook`) so recipes can be re-derived without
+ * re-running the models, the run report (`report`) with every call and cost,
+ * and OPF metadata. Recipes link to it via `recipe.cookbookId`;
+ * cookbook-scoped recipe queries live in the recipe repo (`./recipe`).
+ *
+ * Rows written before the tree format hold an `ImportRecipe[]` in `rawJson`;
+ * they are flagged `needsReextract` and cannot be imported from until the
+ * EPUB is extracted again.
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
@@ -18,9 +23,13 @@ import {
   type RecipeId,
 } from "@cubby/schemas/identifiers";
 import {
-  type ImportRecipe,
-  importRecipesSchema,
-} from "@cubby/schemas/import-recipe";
+  type CookbookExtraction,
+  type CookbookRecipe,
+  type CookbookRunReport,
+  cookbookExtractionSchema,
+  flattenCookbookRecipes,
+  isLegacyCookbookRawJson,
+} from "@cubby/schemas/cookbook";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -64,7 +73,8 @@ export const COOKBOOK_DELETE_EDGE_POLICY = {
 // to empty (the power-user JSON path has no EPUB to read metadata from).
 type CookbookUpsertInput = {
   name: string;
-  rawJson: ImportRecipe[];
+  rawJson: CookbookExtraction;
+  report?: CookbookRunReport | null;
   author?: string[];
   subjects?: string[];
   sourceLabel: string;
@@ -87,6 +97,8 @@ export const upsertCookbook = async (
   const values: Omit<typeof cookbook.$inferInsert, "shortcode"> = {
     name: input.name,
     rawJson: input.rawJson,
+    report: input.report ?? null,
+    sourceRecipeCount: flattenCookbookRecipes(input.rawJson).length,
     author: input.author ?? [],
     subjects: input.subjects ?? [],
     sourceLabel: input.sourceLabel,
@@ -215,7 +227,9 @@ const readCookbookSummaries = async (
       subjects: cookbook.subjects,
       recipeCount: sql<number>`count(${recipe.id})::int`,
       coverKey: image.key,
-      sourceRecipeCount: sql<number>`coalesce(jsonb_array_length(${cookbook.rawJson}), 0)::int`,
+      sourceRecipeCount: cookbook.sourceRecipeCount,
+      // Rows from before the book-tree format hold a flat array.
+      needsReextract: sql<boolean>`jsonb_typeof(${cookbook.rawJson}) = 'array'`,
       productId: cookbook.productId,
       productShortcode: product.shortcode,
       productName: product.name,
@@ -319,43 +333,89 @@ export const setCookbookProduct = async (
 };
 
 /**
- * The cookbook's stored extraction (`rawJson`) + identity, so the importer can
- * re-open it for selective re-import. No recipe writes here — importing reuses
- * the `importCookbookStream` path with these recipes.
+ * The stored book tree, parsed. A legacy flat array (pre-tree rows) is a
+ * `COOKBOOK_SOURCE_STALE` error: those books must be re-extracted from the
+ * EPUB before anything can be imported from them.
+ */
+const parseStoredExtraction = (
+  id: CookbookId,
+  rawJson: unknown,
+): CookbookExtraction => {
+  if (isLegacyCookbookRawJson(rawJson)) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Cookbook ${id} was extracted with a retired format; re-extract it from the EPUB`,
+    );
+  }
+  return cookbookExtractionSchema.parse(rawJson);
+};
+
+/**
+ * The cookbook's stored extraction (`rawJson`) + report + identity, so the
+ * importer can re-open it for selective re-import. No recipe writes here —
+ * importing reuses the `importCookbookStream` path with these recipe ids.
  */
 export const getCookbookSource = async (
   db: Database,
   id: CookbookId,
-): Promise<{ id: CookbookId; name: string; recipes: ImportRecipe[] }> => {
+): Promise<{
+  id: CookbookId;
+  name: string;
+  cookbook: CookbookExtraction;
+  report: CookbookRunReport | null;
+}> => {
   const cb = await getCookbookById(db, id);
   if (!cb) {
     throw createAppError("COOKBOOK_NOT_FOUND", `Cookbook ${id} not found`);
   }
-  return { id, name: cb.name, recipes: importRecipesSchema.parse(cb.rawJson) };
+  return {
+    id,
+    name: cb.name,
+    cookbook: parseStoredExtraction(id, cb.rawJson),
+    report: cb.report ?? null,
+  };
 };
 
-/** Resolve an EPUB image only when it still belongs to the requested live recipe. */
+/** `Recipe.id` → recipe item, for every recipe in the tree. */
+export const cookbookRecipesById = (
+  extraction: CookbookExtraction,
+): Map<string, { recipe: CookbookRecipe; chapter: string | null }> =>
+  new Map(
+    flattenCookbookRecipes(extraction).map((entry) => [
+      entry.recipe.id,
+      entry,
+    ]),
+  );
+
+/**
+ * Resolve a source recipe's photo only when it still belongs to the requested
+ * live recipe (matched by the item's unique `name`, which the import stamps
+ * as the recipe name). Returns the first photo's archive reference.
+ */
 export const getCookbookRecipePhotoSource = async (
   db: Database,
   cookbookId: CookbookId,
   recipeId: RecipeId,
-  sourceIndex: number,
+  sourceRecipeId: string,
 ) => {
   const cb = await getCookbookById(db, cookbookId);
   if (!cb) {
     throw createAppError("COOKBOOK_NOT_FOUND", "Cookbook not found");
   }
-  const sourceRecipe = importRecipesSchema.parse(cb.rawJson)[sourceIndex];
-  if (!sourceRecipe) {
+  const source = cookbookRecipesById(
+    parseStoredExtraction(cookbookId, cb.rawJson),
+  ).get(sourceRecipeId);
+  if (!source) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      `Recipe index ${sourceIndex} is out of range for this cookbook`,
+      `Recipe ${sourceRecipeId} is not in this cookbook's extraction`,
     );
   }
-  if (sourceRecipe.image?.kind !== "epub") {
+  const photo = source.recipe.photos[0];
+  if (!photo) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "The selected cookbook recipe has no EPUB image",
+      "The selected cookbook recipe has no photo in the EPUB",
     );
   }
 
@@ -363,7 +423,7 @@ export const getCookbookRecipePhotoSource = async (
     where: and(
       eq(recipe.id, recipeId),
       eq(recipe.cookbookId, cookbookId),
-      eq(recipe.name, sourceRecipe.meta.title),
+      eq(recipe.name, source.recipe.name),
       notDeleted(recipe),
     ),
     columns: { id: true },
@@ -375,7 +435,7 @@ export const getCookbookRecipePhotoSource = async (
     );
   }
 
-  return sourceRecipe.image;
+  return { path: photo.path, mime: photo.mime };
 };
 
 /**
@@ -422,7 +482,10 @@ export const deleteCookbook = async (
 };
 
 export type CookbookReprocessSelection = {
-  readonly recipes: readonly ImportRecipe[];
+  readonly recipes: readonly {
+    readonly recipe: CookbookRecipe;
+    readonly chapter: string | null;
+  }[];
   readonly cookbook: { readonly id: CookbookId; readonly name: string };
   readonly importContext: CookbookImportContext;
   readonly importableExtras: readonly string[];
@@ -451,20 +514,23 @@ export const prepareCookbookReprocessing = async (
     (await getCookbookRecipeTitles(db, id)).map((t) => t.trim().toLowerCase()),
   );
   const cookbook = { id, name: cb.name };
-  const matched = (cr: ImportRecipe) =>
-    existing.has(cr.meta.title.trim().toLowerCase());
+  const extraction = parseStoredExtraction(id, cb.rawJson);
+  const all = flattenCookbookRecipes(extraction);
+  const matched = (entry: (typeof all)[number]) =>
+    existing.has(entry.recipe.name.trim().toLowerCase());
 
   // Already-imported recipes get re-derived; the rest are reported as extras.
-  const toReprocess = cb.rawJson.filter(matched);
-  const importableExtras = cb.rawJson
-    .filter((cr) => !matched(cr))
-    .map((cr) => cr.meta.title);
+  const toReprocess = all.filter(matched);
+  const importableExtras = all
+    .filter((entry) => !matched(entry))
+    .map((entry) => entry.recipe.name);
 
-  // Shared context for the loop: running title map (forward refs in-memory) +
-  // ingredient id cache (resolve a repeated ingredient once). See the import
-  // path in routers/recipe.ts.
+  // Shared context for the loop: running title map (forward refs in-memory),
+  // the tree (item id → name, for sub-recipe links) and an ingredient id
+  // cache (resolve a repeated ingredient once).
   const importCtx: CookbookImportContext = {
     titleToId: await getCookbookRecipeIdsByTitle(db, id),
+    extraction,
     ingredientIdByName: new Map(),
   };
   return {
@@ -479,12 +545,13 @@ export const prepareCookbookReprocessing = async (
 export const reprocessCookbookRecipe = async (
   db: Database,
   selection: CookbookReprocessSelection,
-  recipe: ImportRecipe,
+  entry: CookbookReprocessSelection["recipes"][number],
   actor: ActorContext,
 ): Promise<RecipeId> =>
   (
     await upsertCookbookRecipeFromCookbook(
-      recipe,
+      entry.recipe,
+      entry.chapter,
       selection.cookbook,
       db,
       actor,

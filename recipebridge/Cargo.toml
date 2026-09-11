@@ -11,9 +11,6 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wasm-bindgen = "0.2"
 js-sys = "0.3"
-# Await JS Promises (the cookbook chunk-extraction proxy callback) + drive the
-# per-chunk proxy calls from Rust.
-wasm-bindgen-futures = "0.4"
 # Generates the boundary .d.ts from the Rust structs below (replacing the old
 # hand-written typescript_custom_section). "js" routes the wasm ABI through
 # serde-wasm-bindgen, matching how this crate already crosses the boundary.
@@ -30,9 +27,11 @@ tsify-next = { version = "0.5", features = ["js"] }
 # global ~/.cargo/config.toml patch (above) can still override to a working copy.
 ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786" }
 recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786" }
-# EPUB cookbook extraction — the pure subset only (no reqwest/fs). `chunk_epub`
-# + `assemble_recipes` run client-side; the LLM call is proxied through Cubby.
-recipe-epub = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786", default-features = false }
+# EPUB cookbook extraction: the whole pipeline (open, chunk, model calls through
+# a JavaScript transport, validation, assembly, references) lives upstream in
+# `cookbook::wasm`; this crate only re-exports it. No native features (reqwest,
+# fs) reach the wasm build.
+cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786", default-features = false, features = ["wasm"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde-wasm-bindgen = "0.6"

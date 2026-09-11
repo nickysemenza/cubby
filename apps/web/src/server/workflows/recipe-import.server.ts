@@ -3,11 +3,12 @@ import {
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
+import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import type {
   attachCookbookRecipePhotoInput,
-  chunkRequestInput,
   cookbookDiffInput,
   cookbookIdInput,
+  gatewayForwardInput,
   importCookbookStreamInput,
   importNotionSyncInput,
   importRecipeSchema,
@@ -25,7 +26,9 @@ import {
   recipeOutSignature,
 } from "~/lib/recipe-signature";
 import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
+import { topoOrder } from "~/lib/cookbook-graph";
 import {
+  cookbookRecipesById,
   deleteCookbook,
   getCookbookByName,
   getCookbookRecipePhotoSource,
@@ -66,7 +69,7 @@ import {
 } from "~/server/services/mutation-side-effects";
 import { findOrCreateByUPC } from "~/server/services/product-orchestration.service";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
-import { extractCookbookChunk } from "~/server/utils/cookbook-llm";
+import { forwardGatewayRequest } from "~/server/utils/gateway-forward";
 import {
   lintImportRecipe,
   notionPageToImportRecipe,
@@ -258,7 +261,7 @@ export const attachCookbookRecipePhotoWorkflow = bindWorkflow(
         context.db,
         cookbookId,
         recipeId,
-        input.sourceIndex,
+        input.sourceRecipeId,
       ),
     )
     .call("hasImages", ({ context }, { recipeId }) =>
@@ -335,8 +338,10 @@ export const attachCookbookRecipePhotoWorkflow = bindWorkflow(
 
 type ImportSummary = { succeeded: number; failed: number };
 type CookbookImportItem = {
-  readonly index: number;
-  readonly recipe: z.output<typeof importRecipeSchema> | undefined;
+  readonly sourceRecipeId: string;
+  readonly recipe:
+    | { readonly recipe: CookbookRecipe; readonly chapter: string | null }
+    | undefined;
   readonly cookbook: { readonly id: CookbookId; readonly name: string };
   readonly importContext: CookbookImportContext;
 };
@@ -353,18 +358,24 @@ const cookbookImportDefinition = defineBulkWorkflow({
     .call("source", ({ context }, { cookbookId }) =>
       getCookbookSource(context.db, cookbookId),
     )
-    .call("importContext", async ({ context }, { cookbookId }) => ({
+    .call("importContext", async ({ context }, { cookbookId, source }) => ({
       titleToId: await getCookbookRecipeIdsByTitle(context.db, cookbookId),
+      extraction: source.cookbook,
       ingredientIdByName: new Map(),
     }))
-    .output(({ input, cookbookId, source, importContext }) =>
-      input.indices.map((index): CookbookImportItem => ({
-        index,
-        recipe: source.recipes[index],
-        cookbook: { id: cookbookId, name: source.name },
-        importContext,
-      })),
-    ),
+    // Dependency order: a sub-recipe imports before the recipe that uses it,
+    // so the reference links on its first insert.
+    .output(({ input, cookbookId, source, importContext }) => {
+      const byId = cookbookRecipesById(source.cookbook);
+      return topoOrder(source.cookbook, input.recipeIds).map(
+        (sourceRecipeId): CookbookImportItem => ({
+          sourceRecipeId,
+          recipe: byId.get(sourceRecipeId),
+          cookbook: { id: cookbookId, name: source.name },
+          importContext,
+        }),
+      );
+    }),
   item: workflow<AuthenticatedStartOperationContext, CookbookImportItem>(
     "recipe.importCookbookStream.item",
   )
@@ -372,12 +383,13 @@ const cookbookImportDefinition = defineBulkWorkflow({
       if (input.recipe) return input.recipe;
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        `Recipe index ${input.index} is out of range for this cookbook`,
+        `Recipe ${input.sourceRecipeId} is not in this cookbook's extraction`,
       );
     })
     .commit("imported", ({ context }, { input, recipe }) =>
       upsertCookbookRecipeFromCookbook(
-        recipe,
+        recipe.recipe,
+        recipe.chapter,
         input.cookbook,
         context.db,
         { ...context.actorContext, source: "epub_import" },
@@ -386,7 +398,7 @@ const cookbookImportDefinition = defineBulkWorkflow({
     )
     .effect("event", ({ context }, { input, imported }) =>
       projectCookbookImportEvent(
-        input.index,
+        input.sourceRecipeId,
         imported,
         recipeHasImages(context.db, imported.id),
       ),
@@ -426,7 +438,7 @@ const cookbookImportDefinition = defineBulkWorkflow({
   onItemError: "continue",
   progress: (result) => result.event,
   errorProgress: (error, item) => ({
-    index: item.index,
+    sourceRecipeId: item.sourceRecipeId,
     ok: false as const,
     error: getErrorMessage(error),
   }),
@@ -747,7 +759,9 @@ type ReprocessPreparedContext = {
   readonly selection: Awaited<ReturnType<typeof prepareCookbookReprocessing>>;
 };
 type ReprocessPreparedInput = {
-  readonly recipes: readonly z.output<typeof importRecipeSchema>[];
+  readonly recipes: Awaited<
+    ReturnType<typeof prepareCookbookReprocessing>
+  >["recipes"];
 };
 const reprocessCookbookPreparation = workflow<
   AuthenticatedStartOperationContext,
@@ -825,18 +839,12 @@ export const reprocessCookbookWorkflow = Object.assign(
   },
   { definition: reprocessCookbookDefinition },
 );
-type ChunkRequestInput = z.output<typeof chunkRequestInput>;
-export const extractCookbookChunkWorkflow = defineWorkflowOperation(
-  "recipe.extractCookbookChunk",
-  (context: AuthenticatedStartOperationContext, input: ChunkRequestInput) =>
-    extractCookbookChunk(
-      {
-        system: input.system,
-        user: input.user,
-        toolName: input.toolName,
-        toolSchema: input.toolSchema,
-        escalate: input.escalate ?? false,
-      },
-      { db: context.db },
-    ),
+type GatewayForwardInput = z.output<typeof gatewayForwardInput>;
+export const forwardGatewayRequestWorkflow = defineWorkflowOperation(
+  "recipe.forwardGatewayRequest",
+  (context: AuthenticatedStartOperationContext, input: GatewayForwardInput) =>
+    forwardGatewayRequest(input, {
+      db: context.db,
+      feature: "cookbook-epub-parsing",
+    }),
 );

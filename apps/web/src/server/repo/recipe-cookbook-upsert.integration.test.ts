@@ -20,8 +20,10 @@ import {
   upsertCookbookRecipe,
 } from "./recipe";
 import {
-  cookbookRecipe,
   ingredientRef,
+  makeCookbookExtraction,
+  makeCookbookImportContext,
+  makeCookbookRecipe,
   makeRecipeInput,
 } from "./repo.fixtures";
 
@@ -39,7 +41,7 @@ describe("upsertCookbookRecipe", () => {
   const mkCookbook = async (name: string): Promise<CookbookRef> => {
     const { entityId: id } = await upsertCookbook(
       db,
-      { name, rawJson: [], sourceLabel: name },
+      { name, rawJson: makeCookbookExtraction(), sourceLabel: name },
       actor,
     );
     return { id, name };
@@ -127,84 +129,92 @@ describe("upsertCookbookRecipe", () => {
     expect(all.map((r) => r.SourceData).sort()).toEqual(["Book A", "Book B"]);
   });
 
-  const piecrustRef = {
-    title: "The Only Piecrust",
-    line: "1 recipe The Only Piecrust",
-    confidence: "title_match" as const,
-  };
+  // The tree: a piecrust, and a galette whose first line references it by
+  // item id (the crate resolved the reference; the importer only links).
+  const piecrust = makeCookbookRecipe("The Only Piecrust", ["2 cups flour"], {
+    id: "001.0001",
+  });
+  const galette = makeCookbookRecipe(
+    "Apple Galette",
+    [
+      { line: "1 recipe The Only Piecrust", ref: "001.0001" },
+      "3 apples",
+    ],
+    { id: "001.0040" },
+  );
+  const tree = makeCookbookExtraction([piecrust, galette]);
 
   it("links a cross-recipe reference as a sub-recipe (two-pass)", async () => {
-    // Pass 1: both recipes imported flat (no references resolved yet).
-    const piecrust = await upsertCookbookRecipeFromCookbook(
-      cookbookRecipe("The Only Piecrust", ["2 cups flour"]),
+    // Pass 1: the galette first — its reference target is not imported yet,
+    // so the line stays a plain ingredient.
+    const first = await upsertCookbookRecipeFromCookbook(
+      galette,
+      "Recipes",
       bookA,
       db,
       actor,
+      makeCookbookImportContext(tree),
     );
-    await upsertCookbookRecipeFromCookbook(
-      cookbookRecipe("Apple Galette", [
-        "1 recipe The Only Piecrust",
-        "3 apples",
-      ]),
+    const flat = await getRecipeByID(db, first.id);
+    expect(
+      flat!.sections.flatMap((s) => s.ingredients).every((ing) => ing.type === "ingredient"),
+    ).toBe(true);
+
+    const crust = await upsertCookbookRecipeFromCookbook(
+      piecrust,
+      "Recipes",
       bookA,
       db,
       actor,
+      makeCookbookImportContext(tree),
     );
 
-    // Pass 2: re-import the galette with its reference → links to the piecrust.
-    const galette = await upsertCookbookRecipeFromCookbook(
-      cookbookRecipe(
-        "Apple Galette",
-        ["1 recipe The Only Piecrust", "3 apples"],
-        { references: [piecrustRef] },
-      ),
+    // Pass 2: re-import the galette with a context that knows the piecrust.
+    const ctx = makeCookbookImportContext(tree);
+    ctx.titleToId.set("the only piecrust", crust.id);
+    const linked = await upsertCookbookRecipeFromCookbook(
+      galette,
+      "Recipes",
       bookA,
       db,
       actor,
+      ctx,
     );
 
-    const full = await getRecipeByID(db, galette.id);
+    const full = await getRecipeByID(db, linked.id);
     const ingredients = full!.sections.flatMap((s) => s.ingredients);
-    const linked = ingredients.find((ing) => ing.type === "recipe");
-    expect(linked).toBeDefined();
-    expect(linked?.recipe?.id).toBe(piecrust.shortcode);
+    const link = ingredients.find((ing) => ing.type === "recipe");
+    expect(link).toBeDefined();
+    expect(link?.recipe?.id).toBe(crust.shortcode);
     // The non-reference line ("3 apples") stays a flat ingredient.
     expect(ingredients.some((ing) => ing.type === "ingredient")).toBe(true);
-  });
-
-  // A fresh per-import context, as the importCookbookStream / reprocess loops
-  // build it for an empty/new book.
-  const newImportCtx = (): CookbookImportContext => ({
-    titleToId: new Map(),
-    ingredientIdByName: new Map(),
+    expect(full!.tags).toEqual(["Recipes"]);
   });
 
   it("links a forward reference in one pass via the import context (topo order)", async () => {
-    const ctx = newImportCtx();
+    const ctx: CookbookImportContext = makeCookbookImportContext(tree);
     // Topo order: the referenced sub-recipe commits first; the context's running
     // titleToId then lets its referrer link on the same pass (no re-import).
-    const piecrust = await upsertCookbookRecipeFromCookbook(
-      cookbookRecipe("The Only Piecrust", ["2 cups flour"]),
+    const crust = await upsertCookbookRecipeFromCookbook(
+      piecrust,
+      "Recipes",
       bookA,
       db,
       actor,
       ctx,
     );
-    const galette = await upsertCookbookRecipeFromCookbook(
-      cookbookRecipe(
-        "Apple Galette",
-        ["1 recipe The Only Piecrust", "3 apples"],
-        { references: [piecrustRef] },
-      ),
+    const linked = await upsertCookbookRecipeFromCookbook(
+      galette,
+      "Recipes",
       bookA,
       db,
       actor,
       ctx,
     );
 
-    const full = await getRecipeByID(db, galette.id);
+    const full = await getRecipeByID(db, linked.id);
     const ingredients = full!.sections.flatMap((s) => s.ingredients);
-    const linked = ingredients.find((ing) => ing.type === "recipe");
-    expect(linked?.recipe?.id).toBe(piecrust.shortcode);
+    const link = ingredients.find((ing) => ing.type === "recipe");
+    expect(link?.recipe?.id).toBe(crust.shortcode);
   });
 });

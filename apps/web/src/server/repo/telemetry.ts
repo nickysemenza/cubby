@@ -64,10 +64,14 @@ export async function persistTelemetryMessages(
             operation: event.operation,
             inputTokens: event.inputTokens,
             outputTokens: event.outputTokens,
-            estimatedCost: estimateAiUsageCostUsd(event.provider, event.model, {
-              inputTokens: event.inputTokens,
-              outputTokens: event.outputTokens,
-            }),
+            // The event's own figure wins (the cookbook extractor prices
+            // every model it calls); the registry prices the rest.
+            estimatedCost:
+              event.estimatedCost ??
+              estimateAiUsageCostUsd(event.provider, event.model, {
+                inputTokens: event.inputTokens,
+                outputTokens: event.outputTokens,
+              }),
             durationMs: event.durationMs,
             cacheStatus: event.cacheStatus,
             entityType: event.entityType,

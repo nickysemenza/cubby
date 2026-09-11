@@ -9,12 +9,16 @@ import type { UpsertedRecipe } from "~/server/repo/recipe/crud";
 
 type CookbookImportEvent =
   | {
-      readonly index: number;
+      readonly sourceRecipeId: string;
       readonly ok: true;
       readonly id: RecipeShortcode;
       readonly hasImage: boolean;
     }
-  | { readonly index: number; readonly ok: false; readonly error: string };
+  | {
+      readonly sourceRecipeId: string;
+      readonly ok: false;
+      readonly error: string;
+    };
 export type CookbookImportProjection = {
   readonly recipeId: RecipeId;
   readonly event: CookbookImportEvent;
@@ -23,7 +27,7 @@ export type CookbookImportProjection = {
 /** A committed recipe remains part of final batch effects when presentation
  * data cannot be read. */
 export const projectCookbookImportEvent = async (
-  index: number,
+  sourceRecipeId: string,
   imported: UpsertedRecipe,
   hasImage: Promise<boolean>,
 ): Promise<CookbookImportProjection> => {
@@ -36,7 +40,7 @@ export const projectCookbookImportEvent = async (
     return {
       recipeId: imported.id,
       event: {
-        index,
+        sourceRecipeId,
         ok: true,
         id,
         hasImage: image.value,
@@ -45,7 +49,7 @@ export const projectCookbookImportEvent = async (
   } catch (error) {
     return {
       recipeId: imported.id,
-      event: { index, ok: false, error: getErrorMessage(error) },
+      event: { sourceRecipeId, ok: false, error: getErrorMessage(error) },
     };
   }
 };

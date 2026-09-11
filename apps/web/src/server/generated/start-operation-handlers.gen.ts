@@ -554,9 +554,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "recipe.explainCosting": async () =>
     (await import("~/server/recipe-browser.server")).recipeHandlers.operations
       .explainCosting,
-  "recipe.extractCookbookChunk": async () =>
+  "recipe.forwardGatewayRequest": async () =>
     (await import("~/server/recipe-browser.server")).recipeHandlers.operations
-      .extractCookbookChunk,
+      .forwardGatewayRequest,
   "recipe.generateFlow": async () =>
     (await import("~/server/recipe-browser.server")).recipeHandlers.operations
       .generateFlow,
