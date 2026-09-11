@@ -1,49 +1,27 @@
-import {
-  imageBrowserDeleteInput,
-  imageBrowserDeleteOut,
-  imageBrowserListInput,
-  imageBrowserListOut,
-  imageBrowserUpdateInput,
-  imageWithEntitySchema,
-  projectImageSummariesInput,
-  projectImageSummariesOut,
-} from "@cubby/schemas/image";
+import { projectImageSummariesOut } from "@cubby/schemas/image";
 import { z } from "zod";
 
+import { imageContract } from "~/contracts/image.contract";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  defineOperationDomain,
-  mutation,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-export const image = defineOperationDomain("image", {
-  list: query({
-    input: imageBrowserListInput,
-    output: imageBrowserListOut,
+export const image = defineOperationDomain(imageContract, {
+  list: {
     tags: [["image"]],
-  }),
-  detail: query({
-    input: z.object({ id: z.string() }),
-    output: imageWithEntitySchema.nullable(),
+  },
+  detail: {
     tags: [["image"]],
-  }),
-  update: mutation({
-    input: imageBrowserUpdateInput,
-    output: imageWithEntitySchema,
+  },
+  update: {
     invalidates: ripple.image,
-  }),
-  delete: mutation({
-    input: imageBrowserDeleteInput,
-    output: imageBrowserDeleteOut,
+  },
+  delete: {
     invalidates: ripple.image,
-  }),
-  projectSummaries: query({
-    input: projectImageSummariesInput,
-    output: projectImageSummariesOut,
+  },
+  projectSummaries: {
     tags: [["image", "projectSummaries"]],
     cache: "stable",
-  }),
+  },
 });
 
 export type ProjectImageSummaries = z.output<typeof projectImageSummariesOut>;

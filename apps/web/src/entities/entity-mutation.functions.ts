@@ -2,15 +2,13 @@ import type { MutationSideEffects } from "@cubby/schemas/background-jobs";
 import { hasFdcLink } from "@cubby/schemas/product";
 import { z } from "zod";
 
+import { entityMutationContract } from "~/contracts/entity-mutation.contract";
 import {
   entityRipple,
   ripple,
   type InvalidationTagSet,
 } from "~/integrations/tanstack-query/cache-tags";
-import {
-  defineOperationDomain,
-  mutation,
-} from "~/integrations/tanstack-query/operation-catalog";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 import type {
   EntityBrowserMutationInput,
   EntityBrowserMutationResult,
@@ -18,10 +16,7 @@ import type {
 
 import type { EntityEditResultFor } from "./editing/intent-types";
 import type { EditableEntity } from "./editing/types";
-import {
-  entityMutationOutputEntities,
-  parseEntityMutationOutput,
-} from "./generated/entity-mutation-results.gen";
+import { parseEntityMutationOutput } from "./generated/entity-mutation-results.gen";
 
 const entityMutationResultInputSchema = z.unknown();
 type EntityMutationResultInput = z.input<
@@ -57,18 +52,8 @@ function productWriteTags(
 }
 
 /** @lintignore Discovered by the operation registry generator. */
-export const entityMutation = defineOperationDomain("entity", {
-  mutate: mutation({
-    input: z.custom<EntityBrowserMutationInput>(),
-    output: z.custom<EntityBrowserMutationResult>(),
-    observability: {
-      entities: [
-        ...entityMutationOutputEntities,
-        "ledgerParty",
-        "ledgerTransfer",
-        "image",
-      ],
-    },
+export const entityMutation = defineOperationDomain(entityMutationContract, {
+  mutate: {
     /**
      * Keyed on `entity` alone. `["entity"]` must NEVER appear here: `entity.list`
      * is tagged `[["entity","list"]]` and `entity.detail` `[["entity","detail"]]`,
@@ -90,7 +75,7 @@ export const entityMutation = defineOperationDomain("entity", {
           input.entity === "location" && input.action === "bulkUpdate"
           ? ripple.locationReparent
           : entityRipple(input.entity),
-  }),
+  },
 });
 
 /** Recover the entity-specific output through the same schema that backs the kernel. */

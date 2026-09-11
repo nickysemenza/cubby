@@ -1,31 +1,8 @@
-import {
-  listStatementImportsInput,
-  listStatementRowsInput,
-  statementImportListOut,
-  statementRowListOut,
-  statementRowSummaryInput,
-  statementRowSummaryOut,
-} from "@cubby/schemas/statement-row";
+import { statementRowContract } from "~/contracts/statement-row.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
-
-export const statementRow = defineOperationDomain("statementRow", {
-  list: query({
-    input: listStatementRowsInput,
-    output: statementRowListOut,
-    tags: [["statementRow", "list"]],
-  }),
-  summary: query({
-    input: statementRowSummaryInput,
-    output: statementRowSummaryOut,
-    tags: [["statementRow", "summary"]],
-  }),
-  imports: query({
-    input: listStatementImportsInput,
-    output: statementImportListOut,
-    tags: [["statementRow", "imports"]],
-  }),
+export const statementRow = defineOperationDomain(statementRowContract, {
+  list: { tags: [["statementRow", "list"]] },
+  summary: { tags: [["statementRow", "summary"]] },
+  imports: { tags: [["statementRow", "imports"]] },
 });

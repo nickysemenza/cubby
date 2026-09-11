@@ -2,13 +2,13 @@ import { searchableEntitySchema } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
 import { z } from "zod";
 
-import { entityDetail } from "~/entities/entity-detail.functions";
-import { entityFilterOptions } from "~/entities/entity-filter-options.functions";
-import { entityGraph } from "~/entities/entity-graph.functions";
-import { entityInspectorHealth } from "~/entities/entity-inspector-health.functions";
-import { entityIntegrity } from "~/entities/entity-integrity.functions";
-import { entityList } from "~/entities/entity-list.functions";
-import { entityMutation } from "~/entities/entity-mutation.functions";
+import { entityDetailContract } from "~/contracts/entity-detail.contract";
+import { entityFilterOptionsContract } from "~/contracts/entity-filter-options.contract";
+import { entityGraphContract } from "~/contracts/entity-graph.contract";
+import { entityInspectorHealthContract } from "~/contracts/entity-inspector-health.contract";
+import { entityIntegrityContract } from "~/contracts/entity-integrity.contract";
+import { entityListContract } from "~/contracts/entity-list.contract";
+import { entityMutationContract } from "~/contracts/entity-mutation.contract";
 import {
   entityDetailInputSchema,
   getEntityDetailOutputSchema,
@@ -42,7 +42,7 @@ const searchDocumentCountRowSchema = z.object({
  * operations; the server owns runtime validation via `input`/`output`
  * overrides, and the output schema depends on the parsed input's entity.
  */
-export const entityListHandlers = implementOperationDomain(entityList, {
+export const entityListHandlers = implementOperationDomain(entityListContract, {
   list: {
     input: entityListInputSchema,
     output: (input) => getEntityListOutputSchema(input.entity),
@@ -62,56 +62,65 @@ export const entityListHandlers = implementOperationDomain(entityList, {
   },
 });
 
-export const entityDetailHandlers = implementOperationDomain(entityDetail, {
-  detail: {
-    // Query-default "context" policy: browser detail reads may ride the
-    // bounded-stale handle; other contexts stay authoritative.
-    input: entityDetailInputSchema,
-    output: (input) => getEntityDetailOutputSchema(input.entity).nullable(),
-    run: async (context, input) => {
-      const result = await executeEntity(context, {
-        action: "get",
-        entity: input.entity,
-        id: input.shortcode,
-        missing: "null",
-      });
-      if (result.action !== "get") {
-        throw new Error("Entity kernel returned the wrong action");
-      }
-      return result.item === null
-        ? null
-        : getEntityDetailOutputSchema(input.entity).parse(result.item);
+export const entityDetailHandlers = implementOperationDomain(
+  entityDetailContract,
+  {
+    detail: {
+      // Query-default "context" policy: browser detail reads may ride the
+      // bounded-stale handle; other contexts stay authoritative.
+      input: entityDetailInputSchema,
+      output: (input) => getEntityDetailOutputSchema(input.entity).nullable(),
+      run: async (context, input) => {
+        const result = await executeEntity(context, {
+          action: "get",
+          entity: input.entity,
+          id: input.shortcode,
+          missing: "null",
+        });
+        if (result.action !== "get") {
+          throw new Error("Entity kernel returned the wrong action");
+        }
+        return result.item === null
+          ? null
+          : getEntityDetailOutputSchema(input.entity).parse(result.item);
+      },
     },
   },
-});
+);
 
 export const entityFilterOptionsHandlers = implementOperationDomain(
-  entityFilterOptions,
+  entityFilterOptionsContract,
   {
     filterOptions: (context, input) => getFilterOptions(context.readDb, input),
   },
 );
 
-export const entityGraphHandlers = implementOperationDomain(entityGraph, {
-  graph: (context, input) => getEntityGraph(context.readDb, input),
-  graphPaths: (context, input) => getEntityGraphPaths(context.readDb, input),
-});
+export const entityGraphHandlers = implementOperationDomain(
+  entityGraphContract,
+  {
+    graph: (context, input) => getEntityGraph(context.readDb, input),
+    graphPaths: (context, input) => getEntityGraphPaths(context.readDb, input),
+  },
+);
 
-export const entityMutationHandlers = implementOperationDomain(entityMutation, {
-  mutate: {
-    input: entityBrowserMutationCommandSchema,
-    output: entityBrowserMutationResultSchema,
-    run: async (context, input) => {
-      const command = entityBrowserMutationCommandSchema.parse(input);
-      return entityBrowserMutationResultSchema.parse(
-        await executeEntity(context, command),
-      );
+export const entityMutationHandlers = implementOperationDomain(
+  entityMutationContract,
+  {
+    mutate: {
+      input: entityBrowserMutationCommandSchema,
+      output: entityBrowserMutationResultSchema,
+      run: async (context, input) => {
+        const command = entityBrowserMutationCommandSchema.parse(input);
+        return entityBrowserMutationResultSchema.parse(
+          await executeEntity(context, command),
+        );
+      },
     },
   },
-});
+);
 
 export const entityInspectorHealthHandlers = implementOperationDomain(
-  entityInspectorHealth,
+  entityInspectorHealthContract,
   {
     inspectorHealth: {
       run: async (context) => {
@@ -151,7 +160,7 @@ export const entityInspectorHealthHandlers = implementOperationDomain(
 );
 
 export const entityIntegrityHandlers = implementOperationDomain(
-  entityIntegrity,
+  entityIntegrityContract,
   {
     catalog: async () => buildIntegrityCatalog(),
   },

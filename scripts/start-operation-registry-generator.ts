@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import {
   type Expression,
   parseSync,
-  Visitor,
   type Program,
   type PropertyKey,
   type StringLiteral,
@@ -13,6 +13,7 @@ import {
 const ROOT = new URL("..", import.meta.url).pathname;
 const SOURCE_ROOT = join(ROOT, "apps/web/src");
 const SERVER_ROOT = join(SOURCE_ROOT, "server");
+const CONTRACTS_ROOT = join(SOURCE_ROOT, "contracts");
 const OUTPUT = join(
   SOURCE_ROOT,
   "lib/generated/start-operation-registry.gen.ts",
@@ -21,8 +22,14 @@ const HANDLER_OUTPUT = join(
   SOURCE_ROOT,
   "server/generated/start-operation-handlers.gen.ts",
 );
+const HTTP_OUTPUT = join(SOURCE_ROOT, "lib/generated/http-contract.gen.ts");
 
 type Kind = "query" | "mutation" | "subscription";
+const KINDS = new Set<string>(["query", "mutation", "subscription"]);
+type OperationObservability = {
+  entities: readonly string[];
+  productPhases: readonly string[];
+};
 type HandlerDefinition = {
   module: string;
   exportName: string;
@@ -33,6 +40,24 @@ type HandlerDefinition = {
    */
   member: string;
 };
+
+/** The runtime shape of a `defineContract(...)` value, as the generator reads it. */
+type ContractMember = {
+  kind: Kind;
+  observability?: {
+    entities?: readonly string[];
+    productPhases?: readonly string[];
+  };
+};
+type Contract = { domain: string; ops: Record<string, ContractMember> };
+type LoadedContract = { exportName: string; contract: Contract };
+type DeclaredOperation = {
+  kind: Kind;
+  observability: OperationObservability;
+  exportName: string;
+  member: string;
+};
+
 const sourceFiles = (directory: string): string[] =>
   readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
@@ -96,297 +121,6 @@ const topLevelVariableDeclarators = (
   return declarators;
 };
 
-type OperationObservability = {
-  entities: readonly string[];
-  productPhases: readonly string[];
-};
-type DomainMember = {
-  operation: string;
-  kind: Kind;
-  observability: OperationObservability;
-};
-type DomainDeclaration = {
-  path: string;
-  domain: string;
-  members: Map<string, DomainMember>;
-};
-type DomainDeclarations = {
-  byOperation: Map<
-    string,
-    {
-      kind: Kind;
-      path: string;
-      exportName: string;
-      observability: OperationObservability;
-    }
-  >;
-  byBinding: Map<string, DomainDeclaration>;
-};
-
-let cachedDomainDeclarations: DomainDeclarations | undefined;
-
-/**
- * `defineOperationDomain` modules are loaded by the browser bundle, so a
- * runtime dependency on server-only code (or node builtins) would either crash
- * the client build or silently pull server modules into it. Type-only imports
- * are erased and stay legal. `import { type X } from "~/server/…"` is still
- * rejected: under verbatimModuleSyntax it emits a runtime `import {}` for its
- * side effects.
- */
-const assertClientSafeImports = (path: string, body: Program["body"]): void => {
-  for (const statement of body) {
-    if (statement.type !== "ImportDeclaration") continue;
-    if (statement.importKind === "type") continue;
-    const source = statement.source.value;
-    if (/^~\/server(?:\/|$)/u.test(source) || source.startsWith("node:")) {
-      throw new Error(
-        `${relative(ROOT, path)} declares a Start operation domain but has a runtime import of ${JSON.stringify(source)}. Domain modules load in the browser; use \`import type\`, or move the runtime dependency into the domain's implementOperationDomain module.`,
-      );
-    }
-  }
-};
-
-/**
- * Client `defineOperationDomain` declarations are the single authority for
- * which browser operations exist. Every server handler must map onto exactly
- * one of them: a handler member without a declaration and a second declaration
- * of the same operation id are both fail-fast errors, because either would
- * otherwise mint a registry entry (or merge two schemas) silently while
- * `pnpm check` stays green.
- */
-export const collectDomainDeclarations = (): DomainDeclarations => {
-  if (cachedDomainDeclarations) return cachedDomainDeclarations;
-  const byOperation: DomainDeclarations["byOperation"] = new Map();
-  const byBinding: DomainDeclarations["byBinding"] = new Map();
-  const auditedModules = new Set<string>();
-  for (const path of sourceFiles(SOURCE_ROOT)) {
-    const program = parseFile(path);
-    collectDomainsFromProgram(
-      path,
-      program,
-      auditedModules,
-      byOperation,
-      byBinding,
-    );
-  }
-  cachedDomainDeclarations = { byOperation, byBinding };
-  return cachedDomainDeclarations;
-};
-
-function collectDomainsFromProgram(
-  path: string,
-  program: Program,
-  auditedModules: Set<string>,
-  byOperation: DomainDeclarations["byOperation"],
-  byBinding: DomainDeclarations["byBinding"],
-): void {
-  for (const declarator of topLevelVariableDeclarators(program)) {
-    const domain = declaredDomain(declarator.init);
-    if (domain === null) continue;
-    if (!auditedModules.has(path)) {
-      auditedModules.add(path);
-      assertClientSafeImports(path, program.body);
-    }
-    const members = collectDomainMembers(
-      path,
-      program,
-      declarator.exportName,
-      domain.name,
-      domain.definitions,
-      byOperation,
-    );
-    if (members.size > 0)
-      byBinding.set(`${path}#${declarator.exportName}`, {
-        path,
-        domain: domain.name,
-        members,
-      });
-  }
-}
-
-function declaredDomain(expression: Expression): {
-  name: string;
-  definitions: Extract<Expression, { type: "ObjectExpression" }>;
-} | null {
-  if (
-    expression.type !== "CallExpression" ||
-    calledName(expression.callee) !== "defineOperationDomain"
-  ) {
-    return null;
-  }
-  const [name, definitions] = expression.arguments;
-  return name !== undefined &&
-    name.type !== "SpreadElement" &&
-    isStringLiteral(name) &&
-    definitions?.type === "ObjectExpression"
-    ? { name: name.value, definitions }
-    : null;
-}
-
-function collectDomainMembers(
-  path: string,
-  program: Program,
-  exportName: string,
-  domain: string,
-  definitions: Extract<Expression, { type: "ObjectExpression" }>,
-  byOperation: DomainDeclarations["byOperation"],
-): Map<string, DomainMember> {
-  const members = new Map<string, DomainMember>();
-  for (const property of definitions.properties) {
-    const member = declaredDomainMember(path, program, property);
-    if (member === null) continue;
-    const operation = `${domain}.${member.name}`;
-    const existing = byOperation.get(operation);
-    if (existing) {
-      throw new Error(
-        `${operation} is declared more than once: ${relative(ROOT, existing.path)} and ${relative(ROOT, path)}. Each Start operation id may have exactly one client declaration; whichever schema the single handler used would win silently.`,
-      );
-    }
-    byOperation.set(operation, {
-      kind: member.kind,
-      path,
-      exportName,
-      observability: member.observability,
-    });
-    members.set(member.name, {
-      operation,
-      kind: member.kind,
-      observability: member.observability,
-    });
-  }
-  return members;
-}
-
-const unwrapExpression = (expression: Expression): Expression =>
-  expression.type === "TSAsExpression" ||
-  expression.type === "TSSatisfiesExpression"
-    ? unwrapExpression(expression.expression)
-    : expression;
-
-const sourcePath = (path: string, source: string): string | undefined => {
-  const base = source.startsWith("~/")
-    ? join(SOURCE_ROOT, source.slice(2))
-    : source.startsWith(".")
-      ? join(path, "..", source)
-      : undefined;
-  return base
-    ? [".ts", ".tsx", "/index.ts", "/index.tsx"]
-        .map((extension) => `${base}${extension}`)
-        .find((candidate) => existsSync(candidate))
-    : undefined;
-};
-
-const staticStringArray = (
-  path: string,
-  program: Program,
-  rawExpression: Expression,
-  seen = new Set<string>(),
-): readonly string[] => {
-  const expression = unwrapExpression(rawExpression);
-  if (expression.type === "ArrayExpression") {
-    return expression.elements.flatMap((element) => {
-      if (element === null) return [];
-      if (element.type === "SpreadElement")
-        return staticStringArray(path, program, element.argument, seen);
-      const value = unwrapExpression(element);
-      if (isStringLiteral(value)) return [value.value];
-      throw new Error(
-        `${relative(ROOT, path)} observability arrays may contain only strings or static string-array spreads.`,
-      );
-    });
-  }
-  if (expression.type !== "Identifier") {
-    throw new Error(
-      `${relative(ROOT, path)} observability metadata must be a static string array.`,
-    );
-  }
-  const key = `${path}#${expression.name}`;
-  if (seen.has(key)) throw new Error(`Circular static array reference: ${key}`);
-  seen.add(key);
-  const local = topLevelVariableDeclarators(program).find(
-    ({ exportName }) => exportName === expression.name,
-  );
-  if (local) return staticStringArray(path, program, local.init, seen);
-  const binding = importBindings(program.body).get(expression.name);
-  const target = binding ? sourcePath(path, binding.source) : undefined;
-  if (!binding || !target) {
-    throw new Error(
-      `${relative(ROOT, path)} observability metadata references unresolved array ${expression.name}.`,
-    );
-  }
-  const targetProgram = parseFile(target);
-  const exported = topLevelVariableDeclarators(targetProgram).find(
-    ({ exportName }) => exportName === binding.imported,
-  );
-  if (!exported) {
-    throw new Error(
-      `${relative(ROOT, target)} does not export static array ${binding.imported}.`,
-    );
-  }
-  return staticStringArray(target, targetProgram, exported.init, seen);
-};
-
-const observabilityMetadata = (
-  path: string,
-  program: Program,
-  definition: Expression | undefined,
-): OperationObservability => {
-  const value = definition ? unwrapExpression(definition) : undefined;
-  if (value?.type !== "ObjectExpression")
-    return { entities: [], productPhases: [] };
-  const observability = value.properties.find(
-    (property) =>
-      property.type === "Property" &&
-      propertyName(property.key) === "observability",
-  );
-  if (observability?.type !== "Property")
-    return { entities: [], productPhases: [] };
-  const metadata = unwrapExpression(observability.value);
-  if (metadata.type !== "ObjectExpression") {
-    throw new Error(
-      `${relative(ROOT, path)} observability metadata must be an inline object.`,
-    );
-  }
-  const array = (name: keyof OperationObservability) => {
-    const property = metadata.properties.find(
-      (candidate) =>
-        candidate.type === "Property" && propertyName(candidate.key) === name,
-    );
-    return property?.type === "Property"
-      ? staticStringArray(path, program, property.value, new Set())
-      : [];
-  };
-  return { entities: array("entities"), productPhases: array("productPhases") };
-};
-
-function declaredDomainMember(
-  path: string,
-  program: Program,
-  property: Extract<
-    Expression,
-    { type: "ObjectExpression" }
-  >["properties"][number],
-): { name: string; kind: Kind; observability: OperationObservability } | null {
-  if (property.type !== "Property" || property.value.type !== "CallExpression")
-    return null;
-  const name = propertyName(property.key);
-  const kind = calledName(property.value.callee);
-  return name !== undefined &&
-    (kind === "query" || kind === "mutation" || kind === "subscription")
-    ? {
-        name,
-        kind,
-        observability: observabilityMetadata(
-          path,
-          program,
-          property.value.arguments[0]?.type === "SpreadElement"
-            ? undefined
-            : property.value.arguments[0],
-        ),
-      }
-    : null;
-}
-
 /** Named-import bindings of a module: local name -> imported name + source. */
 const importBindings = (
   body: Program["body"],
@@ -404,32 +138,185 @@ const importBindings = (
   return bindings;
 };
 
-/** Resolve an `implement*Domain` argument to its client declaration. */
-const resolveDomainBinding = (
+const runtimeImportSources = (body: Program["body"]): string[] =>
+  body.flatMap((statement) =>
+    statement.type === "ImportDeclaration" && statement.importKind !== "type"
+      ? [statement.source.value]
+      : [],
+  );
+
+/**
+ * Contract modules are imported by the browser catalog, the server
+ * implementers, the ts-rest router, and this generator, so they may depend
+ * only on schema code. A runtime import outside this list would either drag
+ * server code into the client bundle or make the generator's import fail.
+ */
+const CONTRACT_IMPORT_ALLOWLIST = [
+  /^zod$/u,
+  /^@cubby\//u,
+  /^~\/contracts\//u,
+  /^~\/entities\/generated\//u,
+  /^\.\/[^/]+$/u,
+];
+
+const assertContractPurity = (path: string): void => {
+  for (const source of runtimeImportSources(parseFile(path).body)) {
+    if (CONTRACT_IMPORT_ALLOWLIST.some((pattern) => pattern.test(source)))
+      continue;
+    throw new Error(
+      `${relative(ROOT, path)} has a runtime import of ${JSON.stringify(source)}. Contract modules may import only zod, @cubby/* packages, other contracts, and generated entity artifacts; use \`import type\` for anything else.`,
+    );
+  }
+};
+
+/**
+ * `defineOperationDomain` modules are loaded by the browser bundle, so a
+ * runtime dependency on server-only code (or node builtins) would either crash
+ * the client build or silently pull server modules into it. Type-only imports
+ * are erased and stay legal. `import { type X } from "~/server/…"` is still
+ * rejected: under verbatimModuleSyntax it emits a runtime `import {}` for its
+ * side effects.
+ */
+const assertClientSafeImports = (path: string): void => {
+  const program = parseFile(path);
+  const declaresDomain = topLevelVariableDeclarators(program).some(
+    ({ init }) =>
+      init.type === "CallExpression" &&
+      calledName(init.callee) === "defineOperationDomain",
+  );
+  if (!declaresDomain) return;
+  for (const source of runtimeImportSources(program.body)) {
+    if (/^~\/server(?:\/|$)/u.test(source) || source.startsWith("node:")) {
+      throw new Error(
+        `${relative(ROOT, path)} declares a Start operation domain but has a runtime import of ${JSON.stringify(source)}. Domain modules load in the browser; use \`import type\`, or move the runtime dependency into the domain's implementOperationDomain module.`,
+      );
+    }
+  }
+};
+
+const isContractMember = (value: unknown): value is ContractMember =>
+  typeof value === "object" &&
+  value !== null &&
+  "kind" in value &&
+  typeof value.kind === "string" &&
+  KINDS.has(value.kind);
+
+const isContract = (value: unknown): value is Contract =>
+  typeof value === "object" &&
+  value !== null &&
+  "domain" in value &&
+  typeof value.domain === "string" &&
+  "ops" in value &&
+  typeof value.ops === "object" &&
+  value.ops !== null &&
+  Object.values(value.ops).every(isContractMember);
+
+let cachedContracts: Promise<LoadedContract[]> | undefined;
+
+/**
+ * Contracts are the single authority for which operations exist. They are
+ * imported at build time rather than parsed: the schemas are real values, so
+ * the HTTP contract can reference them by name instead of copying source.
+ * Every `*.contract.ts` file must be re-exported from the index barrel, and
+ * every export of the barrel must be a contract.
+ */
+export const loadContracts = (): Promise<LoadedContract[]> => {
+  cachedContracts ??= (async () => {
+    const indexPath = join(CONTRACTS_ROOT, "index.ts");
+    const files = readdirSync(CONTRACTS_ROOT)
+      .filter((name) => name.endsWith(".contract.ts"))
+      .sort();
+    const reexported = new Set(
+      parseFile(indexPath).body.flatMap((statement) =>
+        statement.type === "ExportNamedDeclaration" && statement.source
+          ? [statement.source.value.replace(/^\.\//u, "")]
+          : [],
+      ),
+    );
+    for (const file of files) {
+      assertContractPurity(join(CONTRACTS_ROOT, file));
+      if (!reexported.has(file.replace(/\.ts$/u, "")))
+        throw new Error(
+          `apps/web/src/contracts/${file} is not exported from apps/web/src/contracts/index.ts.`,
+        );
+    }
+    const index: object = await import(pathToFileURL(indexPath).href);
+    const loaded: LoadedContract[] = [];
+    for (const [exportName, value] of Object.entries(index)) {
+      if (!isContract(value))
+        throw new Error(
+          `apps/web/src/contracts/index.ts export ${exportName} is not a defineContract() value.`,
+        );
+      loaded.push({ exportName, contract: value });
+    }
+    return loaded.sort((a, b) => a.exportName.localeCompare(b.exportName));
+  })();
+  return cachedContracts;
+};
+
+let cachedOperations: Promise<Map<string, DeclaredOperation>> | undefined;
+
+/**
+ * Every declared operation id with its kind. A second declaration of the same
+ * id is a fail-fast error: whichever schema the single handler used would win
+ * silently otherwise.
+ */
+export const collectDeclaredOperations = (): Promise<
+  Map<string, DeclaredOperation>
+> => {
+  cachedOperations ??= (async () => {
+    const byOperation = new Map<string, DeclaredOperation>();
+    for (const { exportName, contract } of await loadContracts()) {
+      for (const [member, definition] of Object.entries(contract.ops)) {
+        const operation = `${contract.domain}.${member}`;
+        const existing = byOperation.get(operation);
+        if (existing)
+          throw new Error(
+            `${operation} is declared more than once: ${existing.exportName} and ${exportName}. Each Start operation id may have exactly one contract member.`,
+          );
+        byOperation.set(operation, {
+          kind: definition.kind,
+          observability: {
+            entities: [...(definition.observability?.entities ?? [])],
+            productPhases: [...(definition.observability?.productPhases ?? [])],
+          },
+          exportName,
+          member,
+        });
+      }
+    }
+    return byOperation;
+  })();
+  return cachedOperations;
+};
+
+/** Resolve an `implement*Domain` argument to its contract. */
+const resolveContractBinding = async (
   path: string,
   implementer: string,
   bindings: Map<string, { source: string; imported: string }>,
   identifier: string,
-): DomainDeclaration => {
+): Promise<LoadedContract> => {
   const binding = bindings.get(identifier);
-  if (!binding || !binding.source.startsWith("~/")) {
+  if (!binding || !binding.source.startsWith("~/contracts/")) {
     throw new Error(
-      `${relative(ROOT, path)} passes ${identifier} to ${implementer}, but it is not a named import from a "~/" module.`,
+      `${relative(ROOT, path)} passes ${identifier} to ${implementer}, but it is not a named import from a "~/contracts/" module.`,
     );
   }
-  const base = join(SOURCE_ROOT, binding.source.slice(2));
-  const target = [".ts", ".tsx"]
-    .map((extension) => `${base}${extension}`)
-    .find((candidate) => existsSync(candidate));
-  const declaration = target
-    ? collectDomainDeclarations().byBinding.get(`${target}#${binding.imported}`)
-    : undefined;
-  if (!declaration) {
+  const target = `${join(SOURCE_ROOT, binding.source.slice(2))}.ts`;
+  if (!existsSync(target))
     throw new Error(
-      `${relative(ROOT, path)} implements ${identifier}, but ${binding.source} does not export a defineOperationDomain declaration named ${binding.imported}.`,
+      `${relative(ROOT, path)} imports ${binding.source}, which does not exist.`,
+    );
+  const loaded = (await loadContracts()).find(
+    (candidate) => candidate.exportName === binding.imported,
+  );
+  if (!loaded) {
+    throw new Error(
+      `${relative(ROOT, path)} implements ${identifier}, but ${binding.source} does not export a contract named ${binding.imported} through apps/web/src/contracts/index.ts.`,
     );
   }
-  return declaration;
+  return loaded;
 };
 
 /**
@@ -461,28 +348,37 @@ export type CollectedHandlers = {
   subscriptions: Map<string, HandlerDefinition>;
 };
 
-let cachedHandlers: CollectedHandlers | undefined;
+let cachedHandlers: Promise<CollectedHandlers> | undefined;
 
 /**
  * Handlers are exported `implementOperationDomain` / `implementSubscriptionDomain`
- * tables under `apps/web/src/server` — a typed bijection with the client
- * declarations, so discovery needs no filename convention and no string
- * heuristics: compile the tables into lazy adapters rather than maintaining a
- * second handwritten dispatcher registry.
+ * tables under `apps/web/src/server` — a typed bijection with the contracts,
+ * so discovery needs no filename convention and no string heuristics: compile
+ * the tables into lazy adapters rather than maintaining a second handwritten
+ * dispatcher registry.
  */
-export const collectStartOperationHandlers = (): CollectedHandlers => {
-  if (cachedHandlers) return cachedHandlers;
-  const collected: CollectedHandlers = {
-    operations: new Map(),
-    subscriptions: new Map(),
-  };
-  for (const path of sourceFiles(SERVER_ROOT)) {
-    const program = parseFile(path);
-    const bindings = importBindings(program.body);
-    collectHandlersFromProgram(path, program, bindings, collected);
-  }
-  cachedHandlers = collected;
-  return collected;
+export const collectStartOperationHandlers = (): Promise<CollectedHandlers> => {
+  cachedHandlers ??= (async () => {
+    const collected: CollectedHandlers = {
+      operations: new Map(),
+      subscriptions: new Map(),
+    };
+    for (const path of sourceFiles(SERVER_ROOT)) {
+      const program = parseFile(path);
+      const bindings = importBindings(program.body);
+      for (const statement of program.body) {
+        const declaration =
+          statement.type === "ExportNamedDeclaration"
+            ? statement.declaration
+            : undefined;
+        if (declaration?.type !== "VariableDeclaration") continue;
+        for (const variable of declaration.declarations)
+          await collectHandlerVariable(path, variable, bindings, collected);
+      }
+    }
+    return collected;
+  })();
+  return cachedHandlers;
 };
 
 function registerHandler(
@@ -503,24 +399,7 @@ function registerHandler(
   handlers.set(operation, definition);
 }
 
-function collectHandlersFromProgram(
-  path: string,
-  program: Program,
-  bindings: Map<string, { source: string; imported: string }>,
-  collected: CollectedHandlers,
-): void {
-  for (const statement of program.body) {
-    const declaration =
-      statement.type === "ExportNamedDeclaration"
-        ? statement.declaration
-        : undefined;
-    if (declaration?.type !== "VariableDeclaration") continue;
-    for (const variable of declaration.declarations)
-      collectHandlerVariable(path, variable, bindings, collected);
-  }
-}
-
-function collectHandlerVariable(
+async function collectHandlerVariable(
   path: string,
   variable: Extract<
     Program["body"][number],
@@ -528,110 +407,87 @@ function collectHandlerVariable(
   >["declarations"][number],
   bindings: Map<string, { source: string; imported: string }>,
   collected: CollectedHandlers,
-): void {
+): Promise<void> {
   const id = variable.id;
   const implementation = variable.init;
   if (id.type !== "Identifier" || implementation?.type !== "CallExpression")
     return;
   const implementer = calledName(implementation.callee);
   if (!isImplementer(implementer)) return;
-  const [domainArg, tableArg] = implementation.arguments;
-  if (domainArg?.type !== "Identifier" || tableArg?.type !== "ObjectExpression")
+  const [contractArg, tableArg] = implementation.arguments;
+  if (
+    contractArg?.type !== "Identifier" ||
+    tableArg?.type !== "ObjectExpression"
+  )
     throw new Error(
-      `Unable to compile ${relative(ROOT, path)}:${id.name} — ${implementer} takes an imported domain identifier and an inline handler table.`,
+      `Unable to compile ${relative(ROOT, path)}:${id.name} — ${implementer} takes an imported contract identifier and an inline handler table.`,
     );
-  const domain = resolveDomainBinding(
+  const { contract } = await resolveContractBinding(
     path,
     implementer,
     bindings,
-    domainArg.name,
+    contractArg.name,
   );
-  for (const property of tableArg.properties)
-    collectHandlerProperty(
-      path,
-      id.name,
-      implementer,
-      domain,
-      property,
+  for (const property of tableArg.properties) {
+    if (property.type !== "Property") continue;
+    const memberName = propertyName(property.key);
+    if (memberName === undefined) continue;
+    const member = contract.ops[memberName];
+    if (!member)
+      throw new Error(
+        `${relative(ROOT, path)}:${id.name} implements ${contract.domain}.${memberName}, which ${contractArg.name} does not declare.`,
+      );
+    if (implementerForKind(member.kind) !== implementer)
+      throw new Error(
+        `${relative(ROOT, path)}:${id.name} implements ${contract.domain}.${memberName} with ${implementer}, but its contract declares it as a ${member.kind}.`,
+      );
+    registerHandler(
       collected,
+      member.kind,
+      `${contract.domain}.${memberName}`,
+      {
+        module: moduleSpecifier(path),
+        exportName: id.name,
+        member: memberName,
+      },
     );
-}
-
-function collectHandlerProperty(
-  path: string,
-  exportName: string,
-  implementer: ImplementerName,
-  domain: DomainDeclaration,
-  property: Extract<
-    Expression,
-    { type: "ObjectExpression" }
-  >["properties"][number],
-  collected: CollectedHandlers,
-): void {
-  if (property.type !== "Property") return;
-  const memberName = propertyName(property.key);
-  if (memberName === undefined) return;
-  const member = domain.members.get(memberName);
-  if (!member)
-    throw new Error(
-      `${relative(ROOT, path)}:${exportName} implements ${domain.domain}.${memberName}, which is not declared in ${relative(ROOT, domain.path)}.`,
-    );
-  if (implementerForKind(member.kind) !== implementer)
-    throw new Error(
-      `${relative(ROOT, path)}:${exportName} implements ${member.operation} with ${implementer}, but ${relative(ROOT, domain.path)} declares it as a ${member.kind}.`,
-    );
-  registerHandler(collected, member.kind, member.operation, {
-    module: moduleSpecifier(path),
-    exportName,
-    member: memberName,
-  });
+  }
 }
 
 /**
- * The registry: every client-declared operation, with the kind its declaration
- * gave it. `defineOperationDomain` is now the ONLY source — the heuristic
- * call-site harvest that used to mint the subscription rows is gone, along with
- * the class of bug where a hand-written stream wrapper's operation string was
- * the registry entry.
+ * The registry: every declared operation, with the kind its contract gave it.
+ * A declared operation nobody implements is a broken client call, not a type
+ * puzzle, so it fails here, earlier and more clearly than the generated
+ * loader's `satisfies` exhaustiveness failure (which stays as belt-and-braces).
  */
-export const collectStartOperations = (): Map<
-  string,
-  { kind: Kind; observability: OperationObservability }
+export const collectStartOperations = async (): Promise<
+  Map<string, { kind: Kind; observability: OperationObservability }>
 > => {
-  const declarations = collectDomainDeclarations();
-
-  // Fires earlier and more clearly than the generated loader's `satisfies`
-  // exhaustiveness failure (which stays as belt-and-braces): a declared
-  // operation nobody implements is a broken client call, not a type puzzle.
-  const handlers = collectStartOperationHandlers();
-  for (const [operation, declared] of declarations.byOperation) {
-    const implementer =
-      declared.kind === "subscription"
-        ? "implementSubscriptionDomain"
-        : "implementOperationDomain";
+  const declarations = await collectDeclaredOperations();
+  const handlers = await collectStartOperationHandlers();
+  for (const [operation, declared] of declarations) {
+    const implementer = implementerForKind(declared.kind);
     const table =
       declared.kind === "subscription"
         ? handlers.subscriptions
         : handlers.operations;
     if (!table.has(operation)) {
       throw new Error(
-        `${operation} is declared by ${declared.exportName} in ${relative(ROOT, declared.path)} but has no ${implementer} handler under apps/web/src/server. Implement the member there, or delete the declaration.`,
+        `${operation} is declared by ${declared.exportName} in apps/web/src/contracts but has no ${implementer} handler under apps/web/src/server. Implement the member there, or delete the declaration.`,
       );
     }
   }
+  for (const path of sourceFiles(SOURCE_ROOT)) assertClientSafeImports(path);
   return new Map(
-    [...declarations.byOperation].map(([operation, declared]) => [
+    [...declarations].map(([operation, declared]) => [
       operation,
-      {
-        kind: declared.kind,
-        observability: declared.observability,
-      },
+      { kind: declared.kind, observability: declared.observability },
     ]),
   );
 };
 
-export const renderStartOperationRegistry = (): string => {
-  const operations = [...collectStartOperations()].sort(([a], [b]) =>
+export const renderStartOperationRegistry = async (): Promise<string> => {
+  const operations = [...(await collectStartOperations())].sort(([a], [b]) =>
     a.localeCompare(b),
   );
   return (
@@ -658,8 +514,8 @@ export const renderStartOperationRegistry = (): string => {
   );
 };
 
-export const renderStartOperationHandlers = (): string => {
-  const { operations, subscriptions } = collectStartOperationHandlers();
+export const renderStartOperationHandlers = async (): Promise<string> => {
+  const { operations, subscriptions } = await collectStartOperationHandlers();
   const sorted = (handlers: Map<string, HandlerDefinition>) =>
     [...handlers].sort(([a], [b]) => a.localeCompare(b));
   const loaders = (
@@ -692,149 +548,54 @@ export const renderStartOperationHandlers = (): string => {
   );
 };
 
-/** Emit only schema expressions and their dependencies, never browser modules. */
-export const renderHttpContract = (): string => {
-  const imports = new Map<string, string>();
-  const bind = (source: string, name: string) => {
-    const key = `${source}#${name}`;
-    const existing = imports.get(key);
-    if (existing) return existing;
-    const alias = `schema${imports.size}`;
-    imports.set(key, alias);
-    return alias;
-  };
-  const expression = (
-    path: string,
-    node: Expression,
-    seen = new Set<string>(),
-  ): string => {
-    const text = readFileSync(path, "utf8");
-    const bindings = importBindings(parseFile(path).body);
-    for (const statement of parseFile(path).body) {
-      if (statement.type === "ImportDeclaration")
-        for (const specifier of statement.specifiers) {
-          if (specifier.type === "ImportNamespaceSpecifier")
-            bindings.set(specifier.local.name, {
-              source: statement.source.value,
-              imported: "*",
-            });
-        }
-    }
-    const locals = topLevelVariableDeclarators(parseFile(path));
-    const edits: { start: number; end: number; value: string }[] = [];
-    const ignored = new Set<number>();
-    new Visitor({
-      MemberExpression(item) {
-        if (!item.computed) ignored.add(item.property.start);
-      },
-      Property(item) {
-        ignored.add(item.key.start);
-      },
-      Identifier(item) {
-        if (
-          item.start < node.start ||
-          item.end > node.end ||
-          ignored.has(item.start)
-        )
-          return;
-        const imported = bindings.get(item.name);
-        const local = locals.find((entry) => entry.exportName === item.name);
-        let replacement: string | undefined;
-        if (imported) {
-          const resolved = sourcePath(path, imported.source);
-          replacement = bind(
-            resolved ? moduleSpecifier(resolved) : imported.source,
-            imported.imported,
-          );
-        } else if (local) {
-          if (seen.has(item.name))
-            throw new Error(`Circular HTTP schema: ${path} ${item.name}`);
-          replacement = `(${expression(path, local.init, new Set([...seen, item.name]))})`;
-        }
-        if (replacement)
-          edits.push({ start: item.start, end: item.end, value: replacement });
-      },
-    }).visit(parseFile(path));
-    let result = text.slice(node.start, node.end);
-    for (const edit of edits.sort((a, b) => b.start - a.start))
-      result =
-        result.slice(0, edit.start - node.start) +
-        edit.value +
-        result.slice(edit.end - node.start);
-    return result;
-  };
+/**
+ * The HTTP contract references contract members by name. Entity operations
+ * keep their explicit wire schemas because their contract members are
+ * type-only carriers.
+ */
+export const renderHttpContract = async (): Promise<string> => {
+  const declarations = [...(await collectDeclaredOperations())].sort(
+    ([a], [b]) => a.localeCompare(b),
+  );
   const domains = new Map<string, string[]>();
   const queries = new Map<string, string[]>();
-  for (const [id, declaration] of [
-    ...collectDomainDeclarations().byOperation,
-  ].sort(([a], [b]) => a.localeCompare(b))) {
+  for (const [id, declaration] of declarations) {
     if (declaration.kind === "subscription") continue;
-    const domain = declaredDomain(
-      topLevelVariableDeclarators(parseFile(declaration.path)).find(
-        (entry) => entry.exportName === declaration.exportName,
-      )!.init,
-    )!;
-    const member = domain.definitions.properties.find(
-      (entry) =>
-        entry.type === "Property" &&
-        `${domain.name}.${propertyName(entry.key)}` === id,
-    );
-    if (member?.type !== "Property" || member.value.type !== "CallExpression")
-      throw new Error(`Missing HTTP definition: ${id}`);
-    const definition = member.value.arguments[0];
-    if (definition?.type !== "ObjectExpression")
-      throw new Error(`HTTP definition must be literal: ${id}`);
-    const field = (name: string) => {
-      const property = definition.properties.find(
-        (entry) =>
-          entry.type === "Property" && propertyName(entry.key) === name,
-      );
-      if (property?.type !== "Property") {
-        const spreads = definition.properties.filter(
-          (entry) => entry.type === "SpreadElement",
-        );
-        if (!spreads.length) throw new Error(`Missing ${name}: ${id}`);
-        return `({${spreads.map((entry) => `...${expression(declaration.path, entry.argument)}`).join(",")}}).${name}`;
-      }
-      return expression(declaration.path, property.value);
-    };
+    const domain = id.slice(0, id.length - declaration.member.length - 1);
+    if (["queries", "resources"].includes(domain))
+      throw new Error(`Reserved HTTP client namespace: ${domain}`);
+    const member = `contracts.${declaration.exportName}.ops[${JSON.stringify(declaration.member)}]`;
     const schemas = ["entity.list", "entity.detail", "entity.mutate"].includes(
       id,
     )
       ? `entityHttpSchemas[${JSON.stringify(id)}].input, entityHttpSchemas[${JSON.stringify(id)}].output`
-      : `${field("input")}, ${field("output")}`;
-    if (["queries", "resources"].includes(domain.name))
-      throw new Error(`Reserved HTTP client namespace: ${domain.name}`);
-    const members = domains.get(domain.name) ?? [];
+      : `${member}.input, ${member}.output`;
+    const members = domains.get(domain) ?? [];
     members.push(
-      `${JSON.stringify(id.slice(domain.name.length + 1))}: httpOperation(${JSON.stringify(id)}, ${schemas}),`,
+      `${JSON.stringify(declaration.member)}: httpOperation(${JSON.stringify(id)}, ${schemas}),`,
     );
-    domains.set(domain.name, members);
+    domains.set(domain, members);
     if (declaration.kind === "query") {
-      const reads = queries.get(domain.name) ?? [];
+      const reads = queries.get(domain) ?? [];
       reads.push(
-        `${JSON.stringify(id.slice(domain.name.length + 1))}: httpQuery(${JSON.stringify(id)}, ${schemas}),`,
+        `${JSON.stringify(declaration.member)}: httpQuery(${JSON.stringify(id)}, ${schemas}),`,
       );
-      queries.set(domain.name, reads);
+      queries.set(domain, reads);
     }
   }
   return (
     `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
-    [...imports]
-      .map(([key, alias]) => {
-        const split = key.lastIndexOf("#");
-        return `import ${key.slice(split + 1) === "*" ? `* as ${alias}` : `{ ${key.slice(split + 1)} as ${alias} }`} from ${JSON.stringify(key.slice(0, split))};`;
-      })
-      .join("\n") +
-    `\nimport { httpOperation, httpQuery, entityHttpSchemas } from "~/lib/http-api/contract";\nexport const httpContract = {\n` +
+    `import * as contracts from "~/contracts/index";\n` +
+    `import { httpOperation, httpQuery, entityHttpSchemas } from "~/lib/http-api/contract";\n` +
+    `import { httpResources } from "~/lib/generated/http-resources.gen";\n` +
+    `export const httpContract = {\n` +
     [...domains]
       .map(
         ([name, members]) =>
           `${JSON.stringify(name)}: {\n${members.join("\n")}\n},`,
       )
       .join("\n") +
-    `\nqueries: {${[...queries].map(([name, members]) => `${JSON.stringify(name)}: {${members.join("\n")}}`).join(",\n")}},\nresources: httpResources,\n} as const;\n` +
-    `import { httpResources } from "~/lib/generated/http-resources.gen";\n`
+    `\nqueries: {${[...queries].map(([name, members]) => `${JSON.stringify(name)}: {${members.join("\n")}}`).join(",\n")}},\nresources: httpResources,\n} as const;\n`
   );
 };
 
@@ -853,12 +614,9 @@ const format = (path: string, source: string): string => {
 };
 
 const outputs = [
-  [OUTPUT, renderStartOperationRegistry()],
-  [HANDLER_OUTPUT, renderStartOperationHandlers()],
-  [
-    join(SOURCE_ROOT, "lib/generated/http-contract.gen.ts"),
-    renderHttpContract(),
-  ],
+  [OUTPUT, await renderStartOperationRegistry()],
+  [HANDLER_OUTPUT, await renderStartOperationHandlers()],
+  [HTTP_OUTPUT, await renderHttpContract()],
 ] as const;
 for (const [path, source] of outputs) {
   const rendered = format(path, source);

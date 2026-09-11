@@ -1,4 +1,7 @@
-import { agent, agentStreams } from "~/lib/agent.functions";
+import {
+  agentContract,
+  agentStreamsContract,
+} from "~/contracts/agent.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
@@ -6,10 +9,13 @@ import {
   askAgentWorkflow,
 } from "~/server/workflows/agent.server";
 
-export const agentHandlers = implementOperationDomain(agent, {
+export const agentHandlers = implementOperationDomain(agentContract, {
   ask: askAgentWorkflow,
 });
 
-export const agentStreamHandlers = implementSubscriptionDomain(agentStreams, {
-  askStream: askAgentStreamWorkflow,
-});
+export const agentStreamHandlers = implementSubscriptionDomain(
+  agentStreamsContract,
+  {
+    askStream: askAgentStreamWorkflow,
+  },
+);

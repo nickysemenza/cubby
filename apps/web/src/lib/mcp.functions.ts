@@ -1,31 +1,8 @@
-import {
-  mcpToolCatalogOut,
-  mcpUsageActivityInput,
-  mcpUsageActivityOut,
-  mcpUsageDashboardBrowserOut,
-  mcpUsageDashboardInput,
-} from "@cubby/schemas/telemetry";
-import { z } from "zod";
+import { mcpContract } from "~/contracts/mcp.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
-
-export const mcp = defineOperationDomain("mcp", {
-  listTools: query({
-    input: z.null(),
-    output: mcpToolCatalogOut,
-    tags: [["mcp", "listTools"]],
-  }),
-  usageDashboard: query({
-    input: mcpUsageDashboardInput,
-    output: mcpUsageDashboardBrowserOut,
-    tags: [["mcp", "usageDashboard"]],
-  }),
-  usageActivity: query({
-    input: mcpUsageActivityInput,
-    output: mcpUsageActivityOut,
-    tags: [["mcp", "usageActivity"]],
-  }),
+export const mcp = defineOperationDomain(mcpContract, {
+  listTools: { tags: [["mcp", "listTools"]] },
+  usageDashboard: { tags: [["mcp", "usageDashboard"]] },
+  usageActivity: { tags: [["mcp", "usageActivity"]] },
 });

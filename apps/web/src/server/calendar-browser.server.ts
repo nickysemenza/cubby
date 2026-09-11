@@ -1,4 +1,4 @@
-import { calendar } from "~/app/calendar/calendar.functions";
+import { calendarContract } from "~/contracts/calendar.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   clearCalendarUncertainWriteWorkflow,
@@ -11,7 +11,7 @@ import {
   rotateCalendarFeedWorkflow,
 } from "~/server/workflows/calendar.server";
 
-export const calendarHandlers = implementOperationDomain(calendar, {
+export const calendarHandlers = implementOperationDomain(calendarContract, {
   range: (context, input) => getCalendarRangeWorkflow(context.db, input),
   getFeed: (context) =>
     getCalendarFeedWorkflow(calendarOrigin(context.headers)),

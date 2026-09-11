@@ -1,4 +1,7 @@
-import { recommendations, relatedness } from "~/lib/recommendations.functions";
+import {
+  recommendationsContract,
+  relatednessContract,
+} from "~/contracts/recommendations.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   dismissDuplicateProductRecommendationWorkflow,
@@ -11,14 +14,17 @@ import {
   getTagPropagationRecommendationWorkflow,
 } from "~/server/workflows/recommendations.server";
 
-export const relatednessHandlers = implementOperationDomain(relatedness, {
-  product: {
-    run: (context, input) => getProductRelatednessWorkflow(context.db, input),
+export const relatednessHandlers = implementOperationDomain(
+  relatednessContract,
+  {
+    product: {
+      run: (context, input) => getProductRelatednessWorkflow(context.db, input),
+    },
   },
-});
+);
 
 export const recommendationsHandlers = implementOperationDomain(
-  recommendations,
+  recommendationsContract,
   {
     placement: {
       run: (context, input) =>

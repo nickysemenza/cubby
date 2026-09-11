@@ -1,4 +1,4 @@
-import { task } from "~/app/tasks/task.functions";
+import { taskContract } from "~/contracts/task.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   taskBoardWorkflow,
@@ -10,7 +10,7 @@ import {
   taskTodayBriefingWorkflow,
 } from "~/server/workflows/task.server";
 
-export const taskHandlers = implementOperationDomain(task, {
+export const taskHandlers = implementOperationDomain(taskContract, {
   listActionable: (context, input) =>
     taskListActionableWorkflow(context.db, input),
   chartData: (context, input) => taskChartDataWorkflow(context.db, input),

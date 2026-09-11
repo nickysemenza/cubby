@@ -1,17 +1,11 @@
-import {
-  filterOptionsInput,
-  filterOptionsOut,
-} from "@cubby/schemas/filter-options";
+import { entityFilterOptionsContract } from "~/contracts/entity-filter-options.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
-
-export const entityFilterOptions = defineOperationDomain("entity", {
-  filterOptions: query({
-    input: filterOptionsInput,
-    output: filterOptionsOut,
-    tags: [["entity", "filterOptions"]],
-  }),
-});
+export const entityFilterOptions = defineOperationDomain(
+  entityFilterOptionsContract,
+  {
+    filterOptions: {
+      tags: [["entity", "filterOptions"]],
+    },
+  },
+);

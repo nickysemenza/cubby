@@ -1,18 +1,12 @@
-import { auditLogListInput, auditLogListOut } from "@cubby/schemas/audit";
+import type { auditLogListInput, auditLogListOut } from "@cubby/schemas/audit";
 import { z } from "zod";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
+import { auditLogContract } from "~/contracts/audit-log.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 /** @lintignore Discovered by the operation registry generator. */
-export const auditLog = defineOperationDomain("auditLog", {
-  list: query({
-    input: auditLogListInput,
-    output: auditLogListOut,
-    tags: [["auditLog", "list"]],
-  }),
+export const auditLog = defineOperationDomain(auditLogContract, {
+  list: { tags: [["auditLog", "list"]] },
 });
 
 type AuditLogListInput = z.input<typeof auditLogListInput>;

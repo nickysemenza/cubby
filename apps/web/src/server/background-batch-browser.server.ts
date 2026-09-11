@@ -5,9 +5,9 @@ import {
 } from "@cubby/schemas/background-jobs";
 
 import {
-  backgroundBatch,
-  backgroundJob,
-} from "~/lib/background-batch.functions";
+  backgroundBatchContract,
+  backgroundJobContract,
+} from "~/contracts/background-batch.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   cancelBackgroundBatchWorkflow,
@@ -22,7 +22,7 @@ import {
 } from "~/server/workflows/background-jobs.server";
 
 export const backgroundBatchHandlers = implementOperationDomain(
-  backgroundBatch,
+  backgroundBatchContract,
   {
     list: {
       run: async (context, input) =>
@@ -48,12 +48,15 @@ export const backgroundBatchHandlers = implementOperationDomain(
   },
 );
 
-export const backgroundJobHandlers = implementOperationDomain(backgroundJob, {
-  retry: (context, input) => retryBackgroundJobWorkflow(context.db, input),
-  drain: (context, input) => drainBackgroundJobsWorkflow(context.db, input),
-  strandedCount: {
-    run: (context) => countStrandedBackgroundJobsWorkflow(context.db),
+export const backgroundJobHandlers = implementOperationDomain(
+  backgroundJobContract,
+  {
+    retry: (context, input) => retryBackgroundJobWorkflow(context.db, input),
+    drain: (context, input) => drainBackgroundJobsWorkflow(context.db, input),
+    strandedCount: {
+      run: (context) => countStrandedBackgroundJobsWorkflow(context.db),
+    },
+    clearStranded: (context, input) =>
+      clearStrandedBackgroundJobsWorkflow(context.db, input),
   },
-  clearStranded: (context, input) =>
-    clearStrandedBackgroundJobsWorkflow(context.db, input),
-});
+);

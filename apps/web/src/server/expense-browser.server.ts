@@ -1,4 +1,4 @@
-import { expense } from "~/app/expenses/expense.functions";
+import { expenseContract } from "~/contracts/expense.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   expenseAnalyticsWorkflow,
@@ -10,7 +10,7 @@ import {
   expenseTradeAffinityWorkflow,
 } from "~/server/workflows/expense.server";
 
-export const expenseHandlers = implementOperationDomain(expense, {
+export const expenseHandlers = implementOperationDomain(expenseContract, {
   chartData: (context, input) => expenseChartDataWorkflow(context.db, input),
   analytics: (context, input) => expenseAnalyticsWorkflow(context.db, input),
   monthlySummary: (context, input) =>

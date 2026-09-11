@@ -2,6 +2,7 @@ import { testUserId } from "@cubby/schemas/testing";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { defineContract, mutation, query } from "~/contracts/define";
 import type { BrowserReadPolicy } from "~/server/browser-read-policy";
 import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
 import { createRequestContext, requireActor } from "~/server/request-context";
@@ -24,20 +25,10 @@ const request: StartOperationRequest = {
 const rangeInput = z.object({ start: z.string() });
 const rangeOutput = z.object({ days: z.number() });
 
-const domain = {
-  range: {
-    id: "calendar.range",
-    definition: { kind: "query", input: rangeInput, output: rangeOutput },
-  },
-  rotateFeed: {
-    id: "calendar.rotateFeed",
-    definition: {
-      kind: "mutation",
-      input: z.undefined(),
-      output: z.string(),
-    },
-  },
-} as const;
+const domain = defineContract("calendar", {
+  range: query({ input: rangeInput, output: rangeOutput }),
+  rotateFeed: mutation({ input: z.undefined(), output: z.string() }),
+});
 
 interface ExecutionObservation {
   operation: string;
@@ -163,16 +154,9 @@ describe("implementOperationDomain", () => {
   });
 
   it("derives registered strong-query consistency centrally", async () => {
-    const credentialDomain = {
-      getFeed: {
-        id: "calendar.getFeed",
-        definition: {
-          kind: "query",
-          input: z.undefined(),
-          output: z.string(),
-        },
-      },
-    } as const;
+    const credentialDomain = defineContract("calendar", {
+      getFeed: query({ input: z.undefined(), output: z.string() }),
+    });
     const handlers = implementOperationDomain(
       credentialDomain,
       { getFeed: async () => "feed-token" },

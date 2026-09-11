@@ -1,5 +1,8 @@
-import { integrityProblems } from "~/entities/entity-integrity.functions";
-import { problems, problemsStreams } from "~/lib/problems.functions";
+import { integrityProblemsContract } from "~/contracts/entity-integrity.contract";
+import {
+  problemsContract,
+  problemsStreamsContract,
+} from "~/contracts/problems.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
@@ -22,7 +25,7 @@ import {
 } from "~/server/workflows/problems.server";
 
 /** Problem reads are authoritative so fixes disappear on the next fetch. */
-export const problemsHandlers = implementOperationDomain(problems, {
+export const problemsHandlers = implementOperationDomain(problemsContract, {
   getFast: {
     run: (context) => findFastProblemsWorkflow(context),
   },
@@ -63,11 +66,11 @@ export const problemsHandlers = implementOperationDomain(problems, {
 });
 
 export const integrityProblemsHandlers = implementOperationDomain(
-  integrityProblems,
+  integrityProblemsContract,
   {
     getByType: {
       run: async (context, input) =>
-        integrityProblems.getByType.definition.output.parse(
+        integrityProblemsContract.ops.getByType.output.parse(
           await findProblemByTypeWorkflow(context, input),
         ),
     },
@@ -75,7 +78,7 @@ export const integrityProblemsHandlers = implementOperationDomain(
 );
 
 export const problemsStreamHandlers = implementSubscriptionDomain(
-  problemsStreams,
+  problemsStreamsContract,
   {
     reparseStale: (context, _input, signal) =>
       reparseStaleWorkflow(context, undefined, signal),

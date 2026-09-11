@@ -1,4 +1,4 @@
-import { inventory } from "~/app/inventory/inventory.functions";
+import { inventoryContract } from "~/contracts/inventory.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   bulkAddInventoryWorkflow,
@@ -13,7 +13,7 @@ import {
   scanInventoryAtLocationWorkflow,
 } from "~/server/workflows/inventory.server";
 
-export const inventoryHandlers = implementOperationDomain(inventory, {
+export const inventoryHandlers = implementOperationDomain(inventoryContract, {
   bulkProcess: (context, input) =>
     bulkProcessInventoryWorkflow(context.db, context.actorContext, input),
   bulkAdd: (context, input) =>

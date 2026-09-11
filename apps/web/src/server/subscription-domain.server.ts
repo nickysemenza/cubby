@@ -1,6 +1,11 @@
 import type { z } from "zod";
 
+import type {
+  OperationContract,
+  SubscriptionMemberName,
+} from "~/contracts/define";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
+import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
 import { workflowStreamResponse } from "~/server/workflow-stream.server";
 import type { Workload } from "~/server/workload";
@@ -65,10 +70,23 @@ const productionStreamExecutionAdapter = {
   },
 } satisfies WorkflowStreamExecutionAdapter;
 
-type SubscriptionImplementationMap<
-  Domain extends Record<string, SubscriptionDomainDescriptor>,
+type SubscriptionDescriptorOf<
+  Contract extends OperationContract,
+  Member extends keyof Contract["ops"],
 > = {
-  streams: { readonly [Member in keyof Domain]: WorkflowStreamHandler };
+  readonly id: StartOperationIdOfKind<"subscription">;
+  readonly definition: Extract<
+    Contract["ops"][Member],
+    { kind: "subscription" }
+  >;
+};
+
+type SubscriptionImplementationMap<Contract extends OperationContract> = {
+  streams: {
+    readonly [
+      Member in SubscriptionMemberName<Contract["ops"]>
+    ]: WorkflowStreamHandler;
+  };
 };
 
 function declaredInputSchema<Descriptor extends SubscriptionDomainDescriptor>(
@@ -102,29 +120,39 @@ function streamHandlerFor<Descriptor extends SubscriptionDomainDescriptor>(
     });
 }
 
-export function implementSubscriptionDomain<
-  Domain extends Record<string, SubscriptionDomainDescriptor>,
->(
-  domain: Domain,
+function isSubscriptionOperationId(
+  id: string,
+): id is StartOperationIdOfKind<"subscription"> {
+  return startOperationDefinitionFor(id)?.kind === "subscription";
+}
+
+/**
+ * Implement the `subscription` members of a contract; query/mutation members
+ * of the same contract belong to `implementOperationDomain`.
+ */
+export function implementSubscriptionDomain<Contract extends OperationContract>(
+  contract: Contract,
   handlers: {
-    [Member in keyof Domain]: SubscriptionRun<Domain[Member]>;
+    [Member in SubscriptionMemberName<Contract["ops"]>]: SubscriptionRun<
+      SubscriptionDescriptorOf<Contract, Member>
+    >;
   },
   adapter?: WorkflowStreamExecutionAdapter,
-): SubscriptionImplementationMap<Domain>;
-export function implementSubscriptionDomain<
-  Domain extends Record<string, SubscriptionDomainDescriptor>,
->(
-  domain: Domain,
-  handlers: { [Member in keyof Domain]: SubscriptionRun<Domain[Member]> },
+): SubscriptionImplementationMap<Contract>;
+export function implementSubscriptionDomain(
+  contract: OperationContract,
+  handlers: Record<string, SubscriptionRun<SubscriptionDomainDescriptor>>,
   adapter: WorkflowStreamExecutionAdapter = productionStreamExecutionAdapter,
 ) {
   const streams: Record<string, WorkflowStreamHandler> = {};
-  for (const member in domain) {
-    const descriptor = domain[member];
+  for (const [member, definition] of Object.entries(contract.ops)) {
+    if (definition.kind !== "subscription") continue;
+    const id = `${contract.domain}.${member}`;
+    if (!isSubscriptionOperationId(id))
+      throw new Error(`${id} is not registered as a subscription`);
     const run = handlers[member];
-    if (!descriptor) throw new Error(`Missing descriptor for ${member}`);
-    if (!run) throw new Error(`Missing handler for ${descriptor.id}`);
-    streams[member] = streamHandlerFor(descriptor, run, adapter);
+    if (!run) throw new Error(`Missing handler for ${id}`);
+    streams[member] = streamHandlerFor({ id, definition }, run, adapter);
   }
   return { streams };
 }

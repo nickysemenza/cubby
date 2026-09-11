@@ -1,4 +1,4 @@
-import { project } from "~/app/projects/project.functions";
+import { projectContract } from "~/contracts/project.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   projectAttachResourcesWorkflow,
@@ -16,7 +16,7 @@ import {
   projectTreeWorkflow,
 } from "~/server/workflows/project.server";
 
-export const projectHandlers = implementOperationDomain(project, {
+export const projectHandlers = implementOperationDomain(projectContract, {
   getDependencyGraph: (context, input) =>
     projectDependencyGraphWorkflow(context.db, input),
   tree: (context, input) => projectTreeWorkflow(context.db, input),

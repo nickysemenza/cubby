@@ -1,4 +1,4 @@
-import { oauth } from "~/app/account/connected-apps.functions";
+import { oauthContract } from "~/contracts/connected-apps.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   countOrphanedOAuthClientsWorkflow,
@@ -7,7 +7,7 @@ import {
   revokeConnectedAppWorkflow,
 } from "~/server/workflows/oauth.server";
 
-export const oauthHandlers = implementOperationDomain(oauth, {
+export const oauthHandlers = implementOperationDomain(oauthContract, {
   listConnectedApps: (context) =>
     listConnectedAppsWorkflow(context.db, context.actorContext.userId),
   revokeConnectedApp: (context, input) =>

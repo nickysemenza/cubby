@@ -1,4 +1,4 @@
-import { mcp } from "~/lib/mcp.functions";
+import { mcpContract } from "~/contracts/mcp.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   getMcpUsageDashboardWorkflow,
@@ -6,7 +6,7 @@ import {
   listMcpUsageActivityWorkflow,
 } from "~/server/workflows/mcp-browser.server";
 
-export const mcpHandlers = implementOperationDomain(mcp, {
+export const mcpHandlers = implementOperationDomain(mcpContract, {
   listTools: {
     run: () => listMcpCatalogWorkflow(),
   },

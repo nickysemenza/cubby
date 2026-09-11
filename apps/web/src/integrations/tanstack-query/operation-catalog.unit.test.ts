@@ -2,27 +2,30 @@ import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { defineContract, mutation, query } from "~/contracts/define";
+
 import { calendarHouseholdRipple } from "./cache-tags";
 import { invalidateOperationTags } from "./operation-cache";
 import {
   defineOperationDomain,
   isOperationQueryKey,
-  mutation,
-  query,
 } from "./operation-catalog";
 
-const calendar = defineOperationDomain("calendar", {
+const calendarContract = defineContract("calendar", {
   range: query({
     input: z.object({ start: z.string() }),
     output: z.object({ items: z.array(z.string()) }),
-    tags: [["calendar", "range"]],
-    cache: "browse",
   }),
   rotateFeed: mutation({
     input: z.object({ household: z.string() }),
     output: z.object({ token: z.string() }),
-    invalidates: (input) => calendarHouseholdRipple(input.household),
   }),
+});
+const calendar = defineOperationDomain(calendarContract, {
+  range: { tags: [["calendar", "range"]], cache: "browse" },
+  rotateFeed: {
+    invalidates: (input) => calendarHouseholdRipple(input.household),
+  },
 });
 
 describe("operation catalog", () => {
@@ -49,12 +52,14 @@ describe("operation catalog", () => {
       { input: { start: "2026-08-25" } },
     ]);
 
-    const entityDetail = defineOperationDomain("entity", {
-      detail: query({
-        input: z.object({ entity: z.string(), id: z.string() }),
-        output: z.object({ id: z.string() }),
+    const entityDetail = defineOperationDomain(
+      defineContract("entity", {
+        detail: query({
+          input: z.object({ entity: z.string(), id: z.string() }),
+          output: z.object({ id: z.string() }),
+        }),
       }),
-    }).detail.forEntity("product");
+    ).detail.forEntity("product");
     expect(entityDetail.queryKey({ entity: "product", id: "P1" })).toEqual([
       "operation",
       "entity.detail",

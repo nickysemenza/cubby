@@ -1,149 +1,66 @@
-import {
+import type {
   productCreateManyInput,
   productMarkUsdaUnavailableManyInput,
 } from "@cubby/schemas/product";
-import {
-  productBackfillUpcImagesEvent,
-  productCreateManyEvent,
-  productMarkUsdaUnavailableEvent,
-  productWorkflowSchemas,
-} from "@cubby/schemas/product-workflow";
-import { z } from "zod";
+import type { z } from "zod";
 
+import {
+  productContract,
+  productStreamsContract,
+} from "~/contracts/product.contract";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  defineOperationDomain,
-  mutation,
-  query,
-  subscription,
-} from "~/integrations/tanstack-query/operation-catalog";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-export const product = defineOperationDomain("product", {
-  search: query({
-    ...productWorkflowSchemas.search,
-    tags: [["product", "search"]],
-  }),
-  summaries: query({
-    ...productWorkflowSchemas.summaries,
-    tags: [["product", "summaries"]],
-    cache: "derived-summary",
-  }),
-  quantitySummaries: query({
-    ...productWorkflowSchemas.quantitySummaries,
-    tags: [["product", "quantitySummaries"]],
-  }),
-  inventoryEntriesByIds: query({
-    ...productWorkflowSchemas.inventoryEntriesByIds,
-    tags: [["product", "inventoryEntriesByIds"]],
-  }),
-  quickCreate: mutation({
-    ...productWorkflowSchemas.quickCreate,
-    invalidates: ripple.product,
-  }),
-  applyUpcData: mutation({
-    ...productWorkflowSchemas.applyUpcData,
-    invalidates: ripple.productRecipe,
-  }),
-  findOrCreateByUPC: mutation({
-    ...productWorkflowSchemas.findOrCreateByUPC,
-    invalidates: ripple.productLookup,
-  }),
-  findOrCreateByCode: mutation({
-    ...productWorkflowSchemas.findOrCreateByCode,
-    invalidates: ripple.productLookup,
-  }),
-  tagOptions: query({
-    ...productWorkflowSchemas.tagOptions,
-    tags: [["product", "tagOptions"]],
-  }),
-  categoryDistribution: query({
-    ...productWorkflowSchemas.categoryDistribution,
-    tags: [["product", "categoryDistribution"]],
-  }),
-  manufacturerOptions: query({
-    ...productWorkflowSchemas.manufacturerOptions,
-    tags: [["product", "manufacturerOptions"]],
-  }),
-  externalIdSourceOptions: query({
-    ...productWorkflowSchemas.externalIdSourceOptions,
+export const product = defineOperationDomain(productContract, {
+  search: { tags: [["product", "search"]] },
+  summaries: { tags: [["product", "summaries"]], cache: "derived-summary" },
+  quantitySummaries: { tags: [["product", "quantitySummaries"]] },
+  inventoryEntriesByIds: { tags: [["product", "inventoryEntriesByIds"]] },
+  quickCreate: { invalidates: ripple.product },
+  applyUpcData: { invalidates: ripple.productRecipe },
+  findOrCreateByUPC: { invalidates: ripple.productLookup },
+  findOrCreateByCode: { invalidates: ripple.productLookup },
+  tagOptions: { tags: [["product", "tagOptions"]] },
+  categoryDistribution: { tags: [["product", "categoryDistribution"]] },
+  manufacturerOptions: { tags: [["product", "manufacturerOptions"]] },
+  externalIdSourceOptions: {
     tags: [["product", "externalIdSourceOptions"]],
-  }),
-  movementTimeline: query({
-    ...productWorkflowSchemas.movementTimeline,
-    tags: [["product", "movementTimeline"]],
-  }),
-  getByShortcodes: query({
-    ...productWorkflowSchemas.getByShortcodes,
-    tags: [["product", "getByShortcodes"]],
-  }),
-  merge: mutation({
-    ...productWorkflowSchemas.merge,
-    invalidates: ripple.productMerge,
-  }),
-  projectUses: query({
-    ...productWorkflowSchemas.projectUses,
+  },
+  movementTimeline: { tags: [["product", "movementTimeline"]] },
+  getByShortcodes: { tags: [["product", "getByShortcodes"]] },
+  merge: { invalidates: ripple.productMerge },
+  projectUses: {
     tags: [
       ["product", "projectUses"],
       ["project", "resource"],
     ],
-  }),
-  purchases: query({
-    ...productWorkflowSchemas.purchases,
-    tags: [["product", "purchases"]],
-  }),
-  components: query({
-    ...productWorkflowSchemas.components,
+  },
+  purchases: { tags: [["product", "purchases"]] },
+  components: {
     tags: [
       ["product", "components"],
       ["product", "component"],
     ],
-  }),
-  kitComponentRows: query({
-    ...productWorkflowSchemas.kitComponentRows,
+  },
+  kitComponentRows: {
     tags: [
       ["product", "kitComponentRows"],
       ["product", "component"],
     ],
-  }),
-  kitMembership: query({
-    ...productWorkflowSchemas.kitMembership,
+  },
+  kitMembership: {
     tags: [
       ["product", "kitMembership"],
       ["product", "component"],
     ],
-  }),
-  attachComponents: mutation({
-    ...productWorkflowSchemas.attachComponents,
-    invalidates: ripple.productComponent,
-  }),
-  detachComponents: mutation({
-    ...productWorkflowSchemas.detachComponents,
-    invalidates: ripple.productComponent,
-  }),
-  setProjectUses: mutation({
-    ...productWorkflowSchemas.setProjectUses,
-    invalidates: ripple.projectResource,
-  }),
-  discard: mutation({
-    ...productWorkflowSchemas.discard,
-    invalidates: ripple.expense,
-  }),
+  },
+  attachComponents: { invalidates: ripple.productComponent },
+  detachComponents: { invalidates: ripple.productComponent },
+  setProjectUses: { invalidates: ripple.projectResource },
+  discard: { invalidates: ripple.expense },
 });
 
-export const productStreams = defineOperationDomain("product", {
-  createMany: subscription({
-    input: productCreateManyInput,
-    event: productCreateManyEvent,
-  }),
-  markUsdaUnavailableMany: subscription({
-    input: productMarkUsdaUnavailableManyInput,
-    event: productMarkUsdaUnavailableEvent,
-  }),
-  backfillUPCImages: subscription({
-    input: z.undefined(),
-    event: productBackfillUpcImagesEvent,
-  }),
-});
+export const productStreams = defineOperationDomain(productStreamsContract);
 
 export const createManyProductsStream = (
   input: z.input<typeof productCreateManyInput>,

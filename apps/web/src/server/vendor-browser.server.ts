@@ -1,4 +1,4 @@
-import { vendor } from "~/app/vendors/vendor.functions";
+import { vendorContract } from "~/contracts/vendor.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   fetchVendorLogoWorkflow,
@@ -6,7 +6,7 @@ import {
   vendorOptionsWorkflow,
 } from "~/server/workflows/vendor.server";
 
-export const vendorHandlers = implementOperationDomain(vendor, {
+export const vendorHandlers = implementOperationDomain(vendorContract, {
   options: (context) => vendorOptionsWorkflow(context),
   merge: (context, input) => mergeVendorsWorkflow(context, input),
   fetchLogo: (context, input) => fetchVendorLogoWorkflow(context, input),

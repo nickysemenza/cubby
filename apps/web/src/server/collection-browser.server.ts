@@ -1,4 +1,4 @@
-import { collection } from "~/app/collections/collection.functions";
+import { collectionContract } from "~/contracts/collection.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   getSmartCollectionDetail,
@@ -12,7 +12,7 @@ import {
   setCollectionMembership,
 } from "~/server/workflows/collection";
 
-export const collectionHandlers = implementOperationDomain(collection, {
+export const collectionHandlers = implementOperationDomain(collectionContract, {
   smartList: (context, input) =>
     listSmartCollections(context.db, input.definitions),
   smartDetail: (context, input) =>

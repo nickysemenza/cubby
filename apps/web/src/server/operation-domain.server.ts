@@ -1,6 +1,13 @@
 import type { z } from "zod";
 
-import type { StartOperationId } from "~/lib/start-operation-observability";
+import type {
+  OperationContract,
+  OperationMemberName,
+} from "~/contracts/define";
+import {
+  type StartOperationId,
+  startOperationDefinitionFor,
+} from "~/lib/start-operation-observability";
 import {
   type BrowserReadPolicy,
   browserReadPolicyFor,
@@ -103,12 +110,23 @@ const startOperationExecutionAdapter = {
   execute: runStartOperation,
 } satisfies OperationExecutionAdapter;
 
-type OperationImplementationMap<
-  Domain extends Record<string, OperationDomainDescriptor>,
+type OperationDescriptorOf<
+  Contract extends OperationContract,
+  Member extends keyof Contract["ops"],
 > = {
+  readonly id: StartOperationId;
+  readonly definition: Extract<
+    Contract["ops"][Member],
+    { kind: OperationKind }
+  >;
+};
+
+type OperationImplementationMap<Contract extends OperationContract> = {
   operations: {
-    readonly [Member in keyof Domain]: StartOperationHandler<
-      DeclaredOutput<Domain[Member]>
+    readonly [
+      Member in OperationMemberName<Contract["ops"]>
+    ]: StartOperationHandler<
+      DeclaredOutput<OperationDescriptorOf<Contract, Member>>
     >;
   };
 };
@@ -158,34 +176,46 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
   };
 }
 
-export function implementOperationDomain<
-  Domain extends Record<string, OperationDomainDescriptor>,
->(
-  domain: Domain,
+/**
+ * Implement the `query` / `mutation` members of a contract. Subscription
+ * members of the same contract belong to `implementSubscriptionDomain`; the
+ * generated registry checks that every declared member has exactly one
+ * implementer of the matching kind.
+ */
+export function implementOperationDomain<Contract extends OperationContract>(
+  contract: Contract,
   handlers: {
-    [Member in keyof Domain]: OperationHandlerEntry<Domain[Member]>;
+    [Member in OperationMemberName<Contract["ops"]>]: OperationHandlerEntry<
+      OperationDescriptorOf<Contract, Member>
+    >;
   },
   adapter?: OperationExecutionAdapter,
-): OperationImplementationMap<Domain>;
-export function implementOperationDomain<
-  Domain extends Record<string, OperationDomainDescriptor>,
->(
-  domain: Domain,
-  handlers: {
-    [Member in keyof Domain]: OperationHandlerEntry<Domain[Member]>;
-  },
+): OperationImplementationMap<Contract>;
+export function implementOperationDomain(
+  contract: OperationContract,
+  handlers: Record<string, OperationHandlerEntry<OperationDomainDescriptor>>,
   adapter: OperationExecutionAdapter = startOperationExecutionAdapter,
 ) {
   const operations: Record<
     string,
     StartOperationHandler<z.output<z.ZodUnknown>>
   > = {};
-  for (const member in domain) {
-    const descriptor = domain[member];
+  for (const [member, definition] of Object.entries(contract.ops)) {
+    if (definition.kind === "subscription") continue;
+    const operation = startOperationDefinitionFor(
+      `${contract.domain}.${member}`,
+    );
+    if (!operation)
+      throw new Error(
+        `${contract.domain}.${member} is missing from the generated registry`,
+      );
     const entry = handlers[member];
-    if (!descriptor) throw new Error(`Missing descriptor for ${member}`);
-    if (!entry) throw new Error(`Missing handler for ${descriptor.id}`);
-    operations[member] = operationHandlerFor(descriptor, entry, adapter);
+    if (!entry) throw new Error(`Missing handler for ${operation.id}`);
+    operations[member] = operationHandlerFor(
+      { id: operation.id, definition },
+      entry,
+      adapter,
+    );
   }
   return { operations };
 }

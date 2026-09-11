@@ -1,8 +1,8 @@
-import { ingredient } from "~/app/ingredients/ingredient.functions";
+import { ingredientContract } from "~/contracts/ingredient.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import * as workflow from "~/server/workflows/ingredient.server";
 
-export const ingredientHandlers = implementOperationDomain(ingredient, {
+export const ingredientHandlers = implementOperationDomain(ingredientContract, {
   getByName: (context, input) =>
     workflow.getByNameWorkflow(context.db, context.usdaClient, input),
   matchNames: (context, input) =>

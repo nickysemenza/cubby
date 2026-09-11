@@ -9,6 +9,13 @@ import {
 } from "@tanstack/react-query";
 import type { z } from "zod";
 
+import type {
+  MutationContract,
+  OperationContract,
+  OperationContractMember,
+  QueryContract,
+  SubscriptionContract,
+} from "~/contracts/define";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import {
   startOperationDefinitionFor,
@@ -40,16 +47,7 @@ type OperationTransport<Input, Output> = (request: {
   signal?: AbortSignal;
 }) => Promise<Output>;
 
-type SharedDefinition<
-  Input extends z.ZodTypeAny,
-  Output extends z.ZodTypeAny,
-> = {
-  input: Input;
-  output: Output;
-  observability?: {
-    entities?: readonly string[];
-    productPhases?: readonly string[];
-  };
+type SharedPolicy<Input extends z.ZodTypeAny, Output extends z.ZodTypeAny> = {
   parse?: {
     bivarianceHack(
       data: RawOperationValue,
@@ -58,11 +56,10 @@ type SharedDefinition<
   }["bivarianceHack"];
 };
 
-export type QueryDefinition<
+export type QueryPolicy<
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
-> = SharedDefinition<Input, Output> & {
-  kind: "query";
+> = SharedPolicy<Input, Output> & {
   tags?: readonly OperationCacheTag[];
   cache?:
     | OperationCacheProfile
@@ -73,11 +70,10 @@ export type QueryDefinition<
       }["bivarianceHack"];
 };
 
-export type MutationDefinition<
+export type MutationPolicy<
   Input extends z.ZodTypeAny,
   Output extends z.ZodTypeAny,
-> = SharedDefinition<Input, Output> & {
-  kind: "mutation";
+> = SharedPolicy<Input, Output> & {
   invalidates?:
     | InvalidationTagSet
     | {
@@ -85,25 +81,26 @@ export type MutationDefinition<
       }["bivarianceHack"];
 };
 
+/** A contract member plus the browser-only policy layered onto it. */
+export type QueryDefinition<
+  Input extends z.ZodTypeAny,
+  Output extends z.ZodTypeAny,
+> = QueryContract<Input, Output> & QueryPolicy<Input, Output>;
+
+export type MutationDefinition<
+  Input extends z.ZodTypeAny,
+  Output extends z.ZodTypeAny,
+> = MutationContract<Input, Output> & MutationPolicy<Input, Output>;
+
 /**
- * A server-pushed NDJSON workflow stream: one request, many events, no cache
- * entry. The event schema is keyed `event` rather than `output` ON PURPOSE —
- * that is what keeps a subscription structurally outside
- * `implementOperationDomain`'s `OperationDomainDescriptor` (which requires
- * `definition.output` and a `"query" | "mutation"` kind), so the two server
- * tables stay separate without either one having to widen its wall.
- *
- * There is no `invalidates`: a stream's writes land progressively, so the call
+ * Subscriptions carry no browser policy: there is no cache entry and no
+ * `invalidates`, because a stream's writes land progressively and the call
  * site decides when the run is far enough along to re-read (usually `onDone`).
  */
 export type SubscriptionDefinition<
   Input extends z.ZodTypeAny,
   Event extends z.ZodTypeAny,
-> = {
-  kind: "subscription";
-  input: Input;
-  event: Event;
-};
+> = SubscriptionContract<Input, Event>;
 
 type AnyOperationDefinition =
   | QueryDefinition<z.ZodTypeAny, z.ZodTypeAny>
@@ -112,26 +109,21 @@ type AnyDefinition =
   | AnyOperationDefinition
   | SubscriptionDefinition<z.ZodTypeAny, z.ZodTypeAny>;
 
-export const query = <Input extends z.ZodTypeAny, Output extends z.ZodTypeAny>(
-  definition: Omit<QueryDefinition<Input, Output>, "kind">,
-): QueryDefinition<Input, Output> => ({ ...definition, kind: "query" });
+type PolicyFor<Member extends OperationContractMember> =
+  Member extends QueryContract<infer Input, infer Output>
+    ? QueryPolicy<Input, Output>
+    : Member extends MutationContract<infer Input, infer Output>
+      ? MutationPolicy<Input, Output>
+      : never;
 
-export const mutation = <
-  Input extends z.ZodTypeAny,
-  Output extends z.ZodTypeAny,
->(
-  definition: Omit<MutationDefinition<Input, Output>, "kind">,
-): MutationDefinition<Input, Output> => ({ ...definition, kind: "mutation" });
-
-export const subscription = <
-  Input extends z.ZodTypeAny,
-  Event extends z.ZodTypeAny,
->(
-  definition: Omit<SubscriptionDefinition<Input, Event>, "kind">,
-): SubscriptionDefinition<Input, Event> => ({
-  ...definition,
-  kind: "subscription",
-});
+/** Per-member browser policy; subscription members accept none. */
+export type OperationPolicies<
+  Ops extends Record<string, OperationContractMember>,
+> = {
+  readonly [
+    Name in keyof Ops as PolicyFor<Ops[Name]> extends never ? never : Name
+  ]?: PolicyFor<Ops[Name]>;
+};
 
 type InputArguments<Input> = undefined extends Input
   ? [input?: Input]
@@ -614,27 +606,46 @@ function buildDescriptor(options: {
   return buildQueryDescriptor({ id, definition });
 }
 
-export function defineOperationDomain<
-  const Domain extends string,
-  const Definitions extends Record<string, AnyDefinition>,
->(domain: Domain, definitions: Definitions) {
-  // SAFETY: every entry is produced from the same `definitions` key and its
+/**
+ * Bind a transport-neutral contract to the browser transport, layering the
+ * cache/invalidation/parse policy each member needs. The contract is the only
+ * source of ids, kinds, and schemas; a policy for a member the contract does
+ * not declare is a type error.
+ */
+export function defineOperationDomain<const Contract extends OperationContract>(
+  contract: Contract,
+  policies: OperationPolicies<Contract["ops"]> = {},
+) {
+  const policyByMember = new Map<string, object>(
+    Object.entries(policies).flatMap(([name, policy]) =>
+      policy ? [[name, policy] as const] : [],
+    ),
+  );
+  // SAFETY: every entry is produced from the same contract member key and its
   // corresponding descriptor; Object.fromEntries alone erases that key/value
   // correlation from TypeScript's standard-library return type.
   return Object.fromEntries(
-    Object.entries(definitions).map(([name, definition]) => {
-      const operation = startOperationDefinitionFor(`${domain}.${name}`);
+    Object.entries(contract.ops).map(([name, member]) => {
+      const operation = startOperationDefinitionFor(
+        `${contract.domain}.${name}`,
+      );
       if (!operation) {
         throw new Error(
-          `${domain}.${name} is missing from the generated registry`,
+          `${contract.domain}.${name} is missing from the generated registry`,
         );
       }
-      const id = operation.id;
-      return [name, buildDescriptor({ id, definition })];
+      // SAFETY: `OperationPolicies` typed this member's policy against its
+      // kind, so merging it onto the contract member yields that kind's
+      // browser definition.
+      const definition = {
+        ...member,
+        ...policyByMember.get(name),
+      } as AnyDefinition;
+      return [name, buildDescriptor({ id: operation.id, definition })];
     }),
   ) as {
-    readonly [Name in keyof Definitions]: OperationDescriptorFor<
-      Definitions[Name]
+    readonly [Name in keyof Contract["ops"]]: OperationDescriptorFor<
+      Contract["ops"][Name]
     >;
   };
 }

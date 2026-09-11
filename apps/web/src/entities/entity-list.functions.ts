@@ -1,12 +1,11 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import { z } from "zod";
 
 import { defaultPagination } from "~/app/_components/data-table/tableUtils";
+import { entityListContract } from "~/contracts/entity-list.contract";
 import {
   defineOperationDomain,
   infiniteOperationQueryKey,
   type OperationQueryKey,
-  query,
 } from "~/integrations/tanstack-query/operation-catalog";
 
 import { getEntityFilters } from "./filter-manifest";
@@ -24,7 +23,6 @@ import {
   entityListParamsFromParsed,
   entityListInputFor,
   getEntityListOutputSchema,
-  listEntities,
   type ListEntity,
   parseEntityListInput,
 } from "./generated/entity-lists.gen";
@@ -36,17 +34,14 @@ const stableIndexEntities = new Set<ListEntity>([
   "ingredient",
 ]);
 /** @lintignore Discovered by the operation registry generator. */
-export const entityList = defineOperationDomain("entity", {
-  list: query({
-    input: z.custom<EntityListInputByEntity[ListEntity]>(),
-    output: z.custom<EntityListResultByEntity[ListEntity]>(),
-    observability: { entities: listEntities },
+export const entityList = defineOperationDomain(entityListContract, {
+  list: {
     parse: (result, input) =>
       getEntityListOutputSchema(input.entity).parse(result),
     tags: [["entity", "list"]],
     cache: (input) =>
       stableIndexEntities.has(input.entity) ? "browse" : undefined,
-  }),
+  },
 });
 
 export type EntityListParams<E extends ListEntity> =

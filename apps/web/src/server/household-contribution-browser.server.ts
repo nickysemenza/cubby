@@ -1,4 +1,4 @@
-import { householdContribution } from "~/app/finance/household-contribution.functions";
+import { householdContributionContract } from "~/contracts/household-contribution.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   householdContributionLedgerWorkflow,
@@ -6,7 +6,7 @@ import {
 } from "~/server/workflows/household-contribution.server";
 
 export const householdContributionHandlers = implementOperationDomain(
-  householdContribution,
+  householdContributionContract,
   {
     ledger: (context, input) =>
       householdContributionLedgerWorkflow(context.readDb, input),
