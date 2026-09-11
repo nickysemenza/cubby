@@ -120,6 +120,29 @@ describe("forwardGatewayRequest", () => {
     ]);
   });
 
+  it("books an answer the gateway served from its cache as free, and passes the verdict on", async () => {
+    const { port, recorded } = fakePort(
+      () =>
+        new Response('{"usage":{"input_tokens":10,"output_tokens":5}}', {
+          status: 200,
+          headers: { "cf-aig-cache-status": "HIT" },
+        }),
+    );
+    const out = await forwardGatewayRequest(
+      request,
+      { db, feature: "cookbook-epub-parsing" },
+      port,
+    );
+    expect(out.headers).toContainEqual(["cf-aig-cache-status", "HIT"]);
+    expect(recorded).toEqual([
+      expect.objectContaining({
+        inputTokens: 10,
+        outputTokens: 5,
+        estimatedCost: 0,
+        cacheStatus: "hit",
+      }),
+    ]);
+  });
   it("returns provider errors as-is without recording usage", async () => {
     const { port, recorded } = fakePort(
       () =>

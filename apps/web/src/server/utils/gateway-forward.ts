@@ -27,8 +27,15 @@ const STRIPPED_REQUEST_HEADERS = new Set([
   "x-api-key",
 ]);
 
-/** Response headers worth returning: request ids and rate-limit hints. */
+/** The gateway's cache verdict; `HIT` means the answer was not billed. */
+const GATEWAY_CACHE_STATUS = "cf-aig-cache-status";
+
+/**
+ * Response headers worth returning: request ids, rate-limit hints, and the
+ * cache verdict (the crate books a gateway hit as a free, cached call).
+ */
 const RETURNED_RESPONSE_HEADERS = new Set([
+  GATEWAY_CACHE_STATUS,
   "cf-aig-log-id",
   "cf-ray",
   "content-type",
@@ -170,16 +177,22 @@ async function sendWithTimeout(
   }
 }
 
-/** One AiUsage row for a successful call, priced by the crate. */
+/**
+ * One AiUsage row for a successful call, priced by the crate. An answer the
+ * gateway served from its own cache repeats the provider's usage figures but
+ * cost nothing.
+ */
 function usageRecord(
   feature: string,
   model: string,
   purpose: string | undefined,
   usage: GatewayCallUsage,
   durationMs: number,
+  gatewayHit: boolean,
 ): AiUsageRecord {
-  const cacheStatus =
-    usage.usage.cache_read_input_tokens > 0
+  const cacheStatus = gatewayHit
+    ? "hit"
+    : usage.usage.cache_read_input_tokens > 0
       ? "hit"
       : usage.usage.cache_creation_input_tokens > 0
         ? "miss"
@@ -191,7 +204,7 @@ function usageRecord(
     operation: purpose ? `cookbook.${purpose}` : "cookbook.extract",
     inputTokens: usage.usage.input_tokens,
     outputTokens: usage.usage.output_tokens,
-    estimatedCost: usage.cost_usd,
+    estimatedCost: gatewayHit ? 0 : usage.cost_usd,
     durationMs,
     cacheStatus,
   };
@@ -213,7 +226,7 @@ export async function forwardGatewayRequest(
   const config = port.config();
   if (!config) {
     throw new Error(
-      "Cookbook extraction needs AI_GATEWAY_API_KEY: the gateway binding cannot forward arbitrary provider routes.",
+      "Cookbook extraction needs AI_GATEWAY_API_KEY: the forwarder calls the gateway's REST endpoint.",
     );
   }
   const metadata = metadataWithFeature(request.headers, opts.feature);
@@ -230,10 +243,12 @@ export async function forwardGatewayRequest(
 
   const usage =
     opts.db && response.ok && model ? port.callUsage(model, body) : null;
+  const gatewayHit =
+    response.headers.get(GATEWAY_CACHE_STATUS)?.toUpperCase() === "HIT";
   if (opts.db && model && usage) {
     await port.recordUsage(
       opts.db,
-      usageRecord(opts.feature, model, purpose, usage, durationMs),
+      usageRecord(opts.feature, model, purpose, usage, durationMs, gatewayHit),
     );
   }
 
