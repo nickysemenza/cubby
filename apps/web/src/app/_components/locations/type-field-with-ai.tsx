@@ -7,6 +7,7 @@ import type {
 
 import { ai } from "~/lib/ai.functions";
 
+import { ProposedValue } from "../ai/ai-proposal-card";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { SelectField } from "../form-utils";
 import { locationTypeOptionsWithTheme } from "./location-icons";
@@ -45,7 +46,7 @@ export function TypeFieldWithAI<
       }
       enabled={enabled}
       disabledReason="Enter location name first"
-      suggestLabel="Use AI to suggest type"
+      object="type"
       basisKey={locationName}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
@@ -55,6 +56,17 @@ export function TypeFieldWithAI<
         // Form cannot carry that value constraint through its generic setter.
         form.setValue(name, r.type as TFieldValues[typeof name]);
       }}
-    />
+    >
+      {(r) => (
+        <ProposedValue
+          label="Type"
+          value={
+            locationTypeOptionsWithTheme.find(
+              (option) => option.value === r.type,
+            )?.label ?? r.type
+          }
+        />
+      )}
+    </FieldWithAISuggest>
   );
 }

@@ -46,6 +46,12 @@ export const aiUsageTelemetrySchema = z.strictObject({
   operation: z.string().min(1),
   inputTokens: z.number().int().nonnegative().nullable(),
   outputTokens: z.number().int().nonnegative().nullable(),
+  // Prompt-cache token counts, when the provider reports them. They are
+  // priced (the crate catalog carries cache read/write rates) but not stored:
+  // `AiUsage` has no column for them, and the cost they imply lands in
+  // `estimatedCost`.
+  cacheReadTokens: z.number().int().nonnegative().nullable().optional(),
+  cacheWriteTokens: z.number().int().nonnegative().nullable().optional(),
   durationMs: z.number().int().nonnegative(),
   cacheStatus: z.enum(["hit", "miss", "none"]).nullable(),
   entityType: z.string().min(1).nullable(),

@@ -18,6 +18,19 @@ export const confidence = z.enum(confidenceValues);
 
 export type Confidence = z.infer<typeof confidence>;
 
+// One shared result shape for the generic "AI selection" helper
+// (`server/ai/selection.ts`): given a subject and a rendered shortlist, the
+// model names the chosen candidate's id (or null when none fits) plus its
+// confidence and reasoning. Every `runAiSelection` consumer (location
+// suggestion, USDA match, ingredient merge) shares this one schema instead of
+// each declaring its own near-identical shape.
+export const aiSelectionResultSchema = z.object({
+  selectedId: z.string().nullable(),
+  confidence: confidence,
+  reasoning: z.string(),
+});
+export type AiSelectionResult = z.infer<typeof aiSelectionResultSchema>;
+
 export const categorySuggestionSchema = z.object({
   category: productCategory,
   confidence: confidence,
@@ -52,19 +65,6 @@ export const aiLocationIdInput = z.object({
 export const locationSuggestionInput = z.object({
   productId: productShortcode,
 });
-
-// Model-owned shape: where should this product be put away. The id is a plain
-// string on purpose — it is whatever the model copied out of the candidate
-// roster, and only becomes a `locationShortcode` after the service has matched
-// it back against a real live location.
-export const locationSuggestionAiResultSchema = z.object({
-  locationId: z.string(),
-  confidence: confidence,
-  reasoning: z.string(),
-});
-export type LocationSuggestionAiResult = z.infer<
-  typeof locationSuggestionAiResultSchema
->;
 
 export const locationSuggestionSchema = z.object({
   location: z.object({
@@ -303,17 +303,6 @@ export const aiEnrichmentProposalEventSchema = z.discriminatedUnion("type", [
     result: z.object({ processed: z.number().int().nonnegative() }),
   }),
 ]);
-
-export const parseSearchInput = z.object({
-  query: z.string().min(1),
-});
-
-export const parsedSearchSchema = z.object({
-  productName: z.string().nullable(),
-  locationName: z.string().nullable(),
-  interpretation: z.string(),
-});
-export type ParsedSearch = z.infer<typeof parsedSearchSchema>;
 
 export const categoryAuditSchema = z.object({
   suggestions: z.array(

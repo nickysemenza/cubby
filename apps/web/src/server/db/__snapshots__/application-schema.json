@@ -10602,6 +10602,7 @@
       "values": [
         "recipe-totals.recompute",
         "entity-embedding.refresh",
+        "entity-embedding.refresh-batch",
         "entity-embedding.backfill.coordinator",
         "search-document.repair.coordinator",
         "location-ai.description.refresh",

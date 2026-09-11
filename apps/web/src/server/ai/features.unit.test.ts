@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AGENT_ASK_FEATURE,
+  AI_FEATURES,
   buildLocationAnalysisFingerprint,
   LOCATION_INVENTORY_DETECTION_FEATURE,
+  MODEL_FOR_TIER,
 } from "./features";
 import {
   evaluateInventoryDetection,
   INVENTORY_DETECTION_EVALS,
 } from "./inventory-detection-evals";
+import { getAiModelCatalog, getChatModelConfig } from "./models";
 
 describe("AI feature fingerprints", () => {
   it("is stable across image ordering", () => {
@@ -60,6 +64,52 @@ describe("AI feature fingerprints", () => {
     );
 
     expect(second).not.toEqual(first);
+  });
+});
+
+describe("the AI feature table", () => {
+  it("derives every record's model from its tier", () => {
+    for (const feature of AI_FEATURES) {
+      expect(feature.model).toBe(MODEL_FOR_TIER[feature.tier]);
+    }
+  });
+
+  it("assigns every record to a registered, enabled chat model", () => {
+    const catalog = getAiModelCatalog();
+    for (const feature of AI_FEATURES) {
+      expect(getChatModelConfig(feature.model).role).toBe("chat");
+      // `enabled: false` is the crate's "never route production here" flag.
+      expect(
+        catalog.get(feature.model)?.enabled,
+        `${feature.feature} runs on a disabled model`,
+      ).toBe(true);
+    }
+  });
+
+  it("declares an output schema for every cacheable feature", () => {
+    // The gateway's response cache keys on the exact request body, which is
+    // only deterministic for a structured, single-turn call. Anything
+    // cacheable must therefore be one.
+    for (const feature of AI_FEATURES) {
+      if (!feature.cache) continue;
+      expect("schema" in feature).toBe(true);
+    }
+  });
+
+  it("leaves the streaming, tool-calling agent uncacheable", () => {
+    expect(AGENT_ASK_FEATURE.cache).toBe(false);
+    expect("schema" in AGENT_ASK_FEATURE).toBe(false);
+  });
+
+  it("gives every feature a unique label", () => {
+    const labels = AI_FEATURES.map((feature) => feature.feature);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("caps every feature's output", () => {
+    for (const feature of AI_FEATURES) {
+      expect(feature.maxTokens).toBeGreaterThan(0);
+    }
   });
 });
 

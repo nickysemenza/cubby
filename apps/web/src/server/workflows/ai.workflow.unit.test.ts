@@ -8,7 +8,6 @@ import {
   backfillLocationDescriptionsWorkflow,
   describeLocationWorkflow,
   detectInventoryItemsWorkflow,
-  parseSearchWorkflow,
   precomputeEnrichmentProposalsWorkflow,
   suggestIngredientMergeBatchWorkflow,
   suggestLocationWorkflow,
@@ -53,11 +52,6 @@ describe("AI workflow graphs", () => {
     ).toEqual(["call", "call"]);
     expect(
       inspectWorkflow(suggestIngredientMergeBatchWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["call", "call"]);
-    expect(
-      inspectWorkflow(parseSearchWorkflow.definition).steps.map(
         (step) => step.type,
       ),
     ).toEqual(["call", "call"]);

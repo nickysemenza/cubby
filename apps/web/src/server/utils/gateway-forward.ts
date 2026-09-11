@@ -7,11 +7,14 @@ import { z } from "zod";
 import { getErrorMessage } from "~/lib/error-utils";
 import { wasm } from "~/lib/wasm";
 import { recordAiUsage } from "~/server/ai-usage";
-import { gatewayAdapterConfig } from "~/server/clients/gateway-config";
+import {
+  gatewayBaseURL,
+  gatewayFetch,
+  gatewayProviderSchema,
+} from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
 
 const REQUEST_TIMEOUT_MS = 120_000;
-const GATEWAY_BASE = "https://gateway.ai.cloudflare.com/v1";
 
 type GatewayForwardRequest = z.output<typeof gatewayForwardInput>;
 type GatewayForwardResponse = z.output<typeof gatewayForwardOut>;
@@ -66,14 +69,6 @@ const gatewayMetadataKeys = z.object({
   purpose: z.string().optional(),
 });
 
-/** The REST gateway coordinates and token, or why they are missing. */
-const gatewayRestConfigSchema = z.object({
-  accountId: z.string().min(1),
-  gatewayId: z.string().min(1),
-  cfApiKey: z.string().min(1),
-});
-type GatewayRestConfig = z.output<typeof gatewayRestConfigSchema>;
-
 /** What a call cost, as the crate prices it. */
 const gatewayCallUsageSchema = z.object({
   provider: z.string().min(1),
@@ -91,20 +86,15 @@ type AiUsageRecord = Parameters<typeof recordAiUsage>[1];
 
 /** Everything the forwarder reaches outside itself, so tests can stand it in. */
 export interface GatewayForwardPort {
-  fetch: typeof fetch;
-  /** The REST config, or `null` when only the binding is available. */
-  config: () => GatewayRestConfig | null;
+  /** The shared AI Gateway transport: binding in prod, REST in dev. */
+  transport: typeof gatewayFetch;
   /** Usage and cost from a raw provider body, or `null` when unknown. */
   callUsage: (model: string, body: string) => GatewayCallUsage | null;
   recordUsage: (db: Database, input: AiUsageRecord) => Promise<void>;
 }
 
 const productionGatewayForwardPort: GatewayForwardPort = {
-  fetch: (input, init) => fetch(input, init),
-  config: () => {
-    const parsed = gatewayRestConfigSchema.safeParse(gatewayAdapterConfig());
-    return parsed.success ? parsed.data : null;
-  },
+  transport: gatewayFetch,
   callUsage: (model, body) => {
     const parsed = gatewayCallUsageSchema.safeParse(
       wasm.gateway_call_usage(model, body),
@@ -133,25 +123,33 @@ function metadataWithFeature(
   >;
 }
 
-/** The outgoing headers: the request's own minus credentials, plus ours. */
-function forwardHeaders(
-  request: GatewayForwardRequest,
-  metadata: z.input<typeof gatewayMetadataSchema>,
-  token: string,
-): Headers {
+/** The outgoing headers: the request's own minus credentials. */
+function forwardHeaders(request: GatewayForwardRequest): Headers {
   const headers = new Headers();
   for (const [name, value] of request.headers) {
     if (STRIPPED_REQUEST_HEADERS.has(name.toLowerCase())) continue;
     headers.set(name, value);
   }
   headers.set("content-type", "application/json");
-  headers.set("cf-aig-metadata", JSON.stringify(metadata));
-  headers.set("cf-aig-authorization", `Bearer ${token}`);
   return headers;
 }
 
+/**
+ * The crate builds a full provider route (`/anthropic/v1/messages`); the shim
+ * addresses the gateway as `{provider, endpoint}`, so split on the first
+ * segment. An unrecognized provider is rejected here rather than sent on.
+ */
+function splitProviderRoute(path: string) {
+  const [, segment = "", ...rest] = path.split("/");
+  const provider = gatewayProviderSchema.safeParse(segment);
+  if (!provider.success) {
+    throw new Error(`Unsupported gateway provider route: ${path}`);
+  }
+  return { provider: provider.data, endpoint: rest.join("/") };
+}
+
 async function sendWithTimeout(
-  port: GatewayForwardPort,
+  send: typeof fetch,
   url: string,
   headers: Headers,
   body: string,
@@ -159,7 +157,7 @@ async function sendWithTimeout(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await port.fetch(url, {
+    return await send(url, {
       method: "POST",
       headers,
       body,
@@ -213,7 +211,8 @@ function usageRecord(
 /**
  * Forward one gateway request built by the `cookbook` crate in the browser.
  * The body and provider path pass through untouched; the server strips any
- * client-supplied credentials, adds the gateway token, pins the metadata
+ * client-supplied credentials, authenticates through the shared gateway
+ * transport (Worker binding in prod, REST in dev), pins the metadata
  * `feature`, and records usage and cost for the AI-usage ledger. Non-2xx
  * responses are returned as-is so the Rust ladder can react (retry, step
  * down, mark a model exhausted); only a transport failure throws.
@@ -223,19 +222,15 @@ export async function forwardGatewayRequest(
   opts: { db?: Database; feature: string },
   port: GatewayForwardPort = productionGatewayForwardPort,
 ): Promise<GatewayForwardResponse> {
-  const config = port.config();
-  if (!config) {
-    throw new Error(
-      "Cookbook extraction needs AI_GATEWAY_API_KEY: the forwarder calls the gateway's REST endpoint.",
-    );
-  }
   const metadata = metadataWithFeature(request.headers, opts.feature);
   const { model, purpose } = gatewayMetadataKeys.parse(metadata);
+  const { provider, endpoint } = splitProviderRoute(request.path);
   const startedAt = performance.now();
   const response = await sendWithTimeout(
-    port,
-    `${GATEWAY_BASE}/${config.accountId}/${config.gatewayId}${request.path}`,
-    forwardHeaders(request, metadata, config.cfApiKey),
+    // The crate decides its own caching; only the app-side adapters skip it.
+    port.transport(provider, { metadata }),
+    `${gatewayBaseURL(provider)}/${endpoint}`,
+    forwardHeaders(request),
     JSON.stringify(request.body),
   );
   const body = await response.text();

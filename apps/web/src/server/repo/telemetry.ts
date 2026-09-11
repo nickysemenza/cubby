@@ -65,12 +65,16 @@ export async function persistTelemetryMessages(
             inputTokens: event.inputTokens,
             outputTokens: event.outputTokens,
             // The event's own figure wins (the cookbook extractor prices
-            // every model it calls); the registry prices the rest.
+            // every model it calls); the registry prices the rest. Cache
+            // token counts have no column of their own — they only reach the
+            // ledger through this estimate.
             estimatedCost:
               event.estimatedCost ??
               estimateAiUsageCostUsd(event.provider, event.model, {
                 inputTokens: event.inputTokens,
                 outputTokens: event.outputTokens,
+                cacheReadTokens: event.cacheReadTokens,
+                cacheWriteTokens: event.cacheWriteTokens,
               }),
             durationMs: event.durationMs,
             cacheStatus: event.cacheStatus,

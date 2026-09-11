@@ -12,12 +12,9 @@ import {
 } from "@cubby/schemas/recipe-flow";
 
 import { recordAiUsage } from "~/server/ai-usage";
-import {
-  RECIPE_FLOW_FALLBACK_FEATURE,
-  RECIPE_FLOW_PRIMARY_FEATURE,
-} from "~/server/ai/features";
-import type { SupportedChatModel } from "~/server/ai/models";
-import { getAnthropicClient } from "~/server/clients/anthropic";
+import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/features";
+import { providerFor, type SupportedChatModel } from "~/server/ai/models";
+import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -29,10 +26,7 @@ import { getRecipeByID } from "~/server/repo/recipe";
 
 import { validateRecipeFlowPlan } from "./validation";
 
-const FLOW_FEATURES = [
-  RECIPE_FLOW_PRIMARY_FEATURE,
-  RECIPE_FLOW_FALLBACK_FEATURE,
-] as const;
+const FLOW_FEATURES = [RECIPE_FLOW_PRIMARY_FEATURE] as const;
 const FLOW_MODELS: ReadonlySet<string> = new Set<SupportedChatModel>(
   FLOW_FEATURES.map((feature) => feature.model),
 );
@@ -62,7 +56,7 @@ export interface RecipeFlowPorts {
   ) => Promise<RecipeFlowArtifact>;
   readonly recordAiUsage: typeof recordAiUsage;
   readonly generateRecipeFlow: ReturnType<
-    typeof getAnthropicClient
+    typeof getAiClient
   >["generateRecipeFlow"];
 }
 
@@ -100,8 +94,7 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
     );
   },
   recordAiUsage,
-  generateRecipeFlow: (...args) =>
-    getAnthropicClient().generateRecipeFlow(...args),
+  generateRecipeFlow: (...args) => getAiClient().generateRecipeFlow(...args),
 };
 
 // The public router accepts a recipe shortcode, then resolves it at its
@@ -142,7 +135,7 @@ type RecipeFlowCandidateAssessment =
       issues: string[];
     };
 
-function assessRecipeFlowCandidate(
+export function assessRecipeFlowCandidate(
   recipe: RecipeOut,
   candidate: RecipeFlowAiPlan,
 ): RecipeFlowCandidateAssessment {
@@ -174,7 +167,7 @@ function assessRecipeFlowCandidate(
     : validation;
 }
 
-function flowPromptInput(recipe: RecipeOut): RecipeFlowPromptInput {
+export function flowPromptInput(recipe: RecipeOut): RecipeFlowPromptInput {
   return {
     title: recipe.name,
     sections: recipe.sections.map((section) => ({
@@ -286,7 +279,7 @@ async function recordFlowCacheHit(
   if (!feature) return;
   await ports.recordAiUsage(db, {
     feature: feature.feature,
-    provider: "anthropic",
+    provider: providerFor(feature.model),
     model: feature.model,
     operation: "generateRecipeFlow",
     durationMs: 0,
@@ -330,66 +323,46 @@ export async function generateRecipeFlow(
     return current.result;
   }
 
-  const primaryCandidate = await ports.generateRecipeFlow(
+  const candidate = await ports.generateRecipeFlow(
     JSON.stringify(promptInput, null, 2),
     guidance,
-    undefined,
     {
       db,
-      feature: RECIPE_FLOW_PRIMARY_FEATURE.feature,
-      model: RECIPE_FLOW_PRIMARY_FEATURE.model,
       operation: "generateRecipeFlow",
       cacheStatus: "miss",
       entity: { entityType: "recipe", entityId: input.id },
+      // A forced regenerate must also skip the AI Gateway's response cache:
+      // the request body is unchanged, so an unforced call would be served
+      // the very flow the user asked to replace.
+      force: input.force,
+      // The runner's own repair pass now owns rejecting an invalid
+      // candidate (one retry, then throw) — this used to be a second call
+      // this service placed by hand. `assessRecipeFlowCandidate` below is
+      // no longer a second validation gate; it re-derives the normalized
+      // `plan`/`warnings` this service needs to persist, from a candidate
+      // the runner has already validated with this exact function.
+      validate: (plan) => assessRecipeFlowCandidate(recipe, plan),
     },
   );
-  const primaryAssessment = assessRecipeFlowCandidate(recipe, primaryCandidate);
-  if (primaryAssessment.ok) {
-    return await persistFlowArtifact(
-      db,
-      input.id,
-      {
-        feature: RECIPE_FLOW_PRIMARY_FEATURE,
-        fingerprint,
-        guidance,
-        plan: primaryAssessment.plan,
-        warnings: primaryAssessment.warnings,
-      },
-      ports,
-    );
-  }
-
-  const fallbackCandidate = await ports.generateRecipeFlow(
-    JSON.stringify(promptInput, null, 2),
-    guidance,
-    { candidate: primaryCandidate, issues: primaryAssessment.issues },
-    {
-      db,
-      feature: RECIPE_FLOW_FALLBACK_FEATURE.feature,
-      model: RECIPE_FLOW_FALLBACK_FEATURE.model,
-      operation: "generateRecipeFlowRepair",
-      cacheStatus: "miss",
-      entity: { entityType: "recipe", entityId: input.id },
-    },
-  );
-  const fallbackAssessment = assessRecipeFlowCandidate(
-    recipe,
-    fallbackCandidate,
-  );
-  if (!fallbackAssessment.ok) {
+  const assessment = assessRecipeFlowCandidate(recipe, candidate);
+  if (!assessment.ok) {
+    // Unreachable in practice — `validate` above is the same pure function
+    // applied to the same candidate, so the runner would already have
+    // thrown. Kept so a future change to this extraction can't silently
+    // persist something `assessRecipeFlowCandidate` disagrees with.
     throw new Error(
-      `Recipe flow remained invalid after repair: ${fallbackAssessment.issues.join("; ")}`,
+      `Generated recipe flow is invalid: ${assessment.issues.join("; ")}`,
     );
   }
   return await persistFlowArtifact(
     db,
     input.id,
     {
-      feature: RECIPE_FLOW_FALLBACK_FEATURE,
+      feature: RECIPE_FLOW_PRIMARY_FEATURE,
       fingerprint,
       guidance,
-      plan: fallbackAssessment.plan,
-      warnings: fallbackAssessment.warnings,
+      plan: assessment.plan,
+      warnings: assessment.warnings,
     },
     ports,
   );

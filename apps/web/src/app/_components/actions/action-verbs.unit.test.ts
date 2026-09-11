@@ -15,12 +15,16 @@ describe("action verb registry", () => {
     expect(new Set(actionVerbLabels).size).toBe(actionVerbLabels.length);
   });
 
+  // Sentence case capitalises proper nouns like any other sentence; the
+  // product's own name is the only one the registry uses.
+  const PROPER_NOUNS = new Set(["Cubby"]);
+
   it("uses sentence case", () => {
     for (const [id, { label }] of entries) {
       const offenders = label
         .split(" ")
         .slice(1)
-        .filter((word) => /^[A-Z]/.test(word));
+        .filter((word) => /^[A-Z]/.test(word) && !PROPER_NOUNS.has(word));
       expect(offenders, `${id} → "${label}"`).toEqual([]);
     }
   });

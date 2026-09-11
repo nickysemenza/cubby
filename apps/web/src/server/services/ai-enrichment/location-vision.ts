@@ -1,7 +1,7 @@
 /**
  * Service for AI-powered enrichment of locations and inventory.
  *
- * Handles multi-step orchestration: fetching images, calling Anthropic, persisting results.
+ * Handles multi-step orchestration: fetching images, calling the AI client, persisting results.
  */
 
 import type {
@@ -32,12 +32,13 @@ import {
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "~/server/ai/features";
+import { providerFor } from "~/server/ai/models";
 import { dispatchBackgroundJobs } from "~/server/background-dispatch";
-import { getAnthropicClient } from "~/server/clients/anthropic";
+import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
-  getCachedAiAnalysis,
+  getCachedAiAnalysisRecord,
   upsertAiAnalysis,
 } from "~/server/repo/ai-analysis";
 import {
@@ -68,16 +69,14 @@ const SEMANTIC_PRODUCT_MATCH_THRESHOLD = 0.86;
 const LOCATION_NO_IMAGES_MESSAGE = "Location has no images to analyze";
 
 export interface LocationVisionAiPort {
-  describeLocation: ReturnType<typeof getAnthropicClient>["describeLocation"];
-  detectInventoryItems: ReturnType<
-    typeof getAnthropicClient
-  >["detectInventoryItems"];
+  describeLocation: ReturnType<typeof getAiClient>["describeLocation"];
+  detectInventoryItems: ReturnType<typeof getAiClient>["detectInventoryItems"];
 }
 
 const productionLocationVisionAiPort: LocationVisionAiPort = {
-  describeLocation: (...args) => getAnthropicClient().describeLocation(...args),
+  describeLocation: (...args) => getAiClient().describeLocation(...args),
   detectInventoryItems: (...args) =>
-    getAnthropicClient().detectInventoryItems(...args),
+    getAiClient().detectInventoryItems(...args),
 };
 
 class LocationHasNoImagesToAnalyzeError extends Error {
@@ -205,7 +204,7 @@ async function recordLocationAiUsage(
 ): Promise<void> {
   await recordAiUsage(db, {
     feature: input.feature.feature,
-    provider: "anthropic",
+    provider: providerFor(input.feature.model),
     model: input.feature.model,
     operation: input.operation,
     inputTokens: null,
@@ -218,6 +217,18 @@ async function recordLocationAiUsage(
 }
 
 /**
+ * The description plus where it came from. The provenance travels with the
+ * answer because the UI labels it: which model read the shelf, when it read
+ * it, and whether this call re-read it or replayed a stored analysis. A cache
+ * hit can be months old, so `analyzedAt` is the stored row's timestamp rather
+ * than the time of this request.
+ */
+export interface LocationDescriptionResult extends LocationDescription {
+  cache: ReturnType<typeof cacheMetadata>;
+  analyzedAt: Date;
+}
+
+/**
  * Analyze location photos and generate a description of contents.
  * Persists the description to the location record.
  */
@@ -226,7 +237,7 @@ export async function describeLocation(
   locationId: LocationId,
   opts: { batchId?: string } = {},
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
-): Promise<LocationDescription> {
+): Promise<LocationDescriptionResult> {
   const location = await getLocationById(db, locationId);
 
   const images = (location.images ?? []).slice(0, MAX_ANALYSIS_IMAGES);
@@ -244,15 +255,24 @@ export async function describeLocation(
     feature: LOCATION_DESCRIPTION_FEATURE,
     inputFingerprint,
   };
-  const cached = await getCachedAiAnalysis(db, analysisKey);
+  const cached = await getCachedAiAnalysisRecord(db, analysisKey);
   if (cached) {
+    const hitMetadata = cacheMetadata(
+      "hit",
+      LOCATION_DESCRIPTION_FEATURE,
+      inputFingerprint,
+    );
     console.info("ai.analysis", {
-      ...cacheMetadata("hit", LOCATION_DESCRIPTION_FEATURE, inputFingerprint),
+      ...hitMetadata,
       entityType: "location",
       entityId: locationId,
     });
-    if (location.aiDescription !== cached.description) {
-      await updateLocationAiDescription(db, locationId, cached.description);
+    if (location.aiDescription !== cached.result.description) {
+      await updateLocationAiDescription(
+        db,
+        locationId,
+        cached.result.description,
+      );
       await runMutationSideEffects(db, {
         action: "updated",
         entity: { entity: "location", id: locationId },
@@ -267,7 +287,11 @@ export async function describeLocation(
       locationId,
       batchId: opts.batchId,
     });
-    return cached;
+    return {
+      ...cached.result,
+      cache: hitMetadata,
+      analyzedAt: cached.analyzedAt,
+    };
   }
 
   const result = await ai.describeLocation(
@@ -275,8 +299,6 @@ export async function describeLocation(
     location.name,
     {
       db,
-      feature: LOCATION_DESCRIPTION_FEATURE.feature,
-      model: LOCATION_DESCRIPTION_FEATURE.model,
       operation: "locationDescription",
       cacheStatus: "miss",
       entity: { entityType: "location", entityId: locationId },
@@ -284,8 +306,13 @@ export async function describeLocation(
     },
   );
   await upsertAiAnalysis(db, analysisKey, result);
+  const missMetadata = cacheMetadata(
+    "miss",
+    LOCATION_DESCRIPTION_FEATURE,
+    inputFingerprint,
+  );
   console.info("ai.analysis", {
-    ...cacheMetadata("miss", LOCATION_DESCRIPTION_FEATURE, inputFingerprint),
+    ...missMetadata,
     entityType: "location",
     entityId: locationId,
   });
@@ -297,7 +324,7 @@ export async function describeLocation(
     source: "location-ai.description",
   });
 
-  return result;
+  return { ...result, cache: missMetadata, analyzedAt: new Date() };
 }
 
 async function matchDetectedItems(
@@ -433,6 +460,16 @@ async function semanticProductCandidatesBestEffort(
 }
 
 /**
+ * The detection plus when the shelf was actually read — see
+ * {@link LocationDescriptionResult}. `cache` already named the model and the
+ * hit/miss; the timestamp is what makes a hit readable as "read in March"
+ * rather than "read now".
+ */
+export interface DetectedInventoryResult extends DetectedInventory {
+  analyzedAt: Date;
+}
+
+/**
  * Detect inventory items from location photos.
  * Returns detected items for user review — does not persist anything.
  */
@@ -441,7 +478,7 @@ export async function detectInventoryItems(
   locationId: LocationId,
   opts: { batchId?: string } = {},
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
-): Promise<DetectedInventory> {
+): Promise<DetectedInventoryResult> {
   const location = await getLocationById(db, locationId);
 
   const images = (location.images ?? []).slice(0, MAX_ANALYSIS_IMAGES);
@@ -459,12 +496,14 @@ export async function detectInventoryItems(
     feature: LOCATION_INVENTORY_DETECTION_FEATURE,
     inputFingerprint,
   };
-  const cached = await getCachedAiAnalysis(db, analysisKey);
+  const cached = await getCachedAiAnalysisRecord(db, analysisKey);
   const cacheStatus = cached ? "hit" : "miss";
   let raw: DetectedInventoryAiResult;
+  let analyzedAt = new Date();
 
   if (cached) {
-    raw = cached;
+    raw = cached.result;
+    analyzedAt = cached.analyzedAt;
     await recordLocationAiUsage(db, {
       feature: LOCATION_INVENTORY_DETECTION_FEATURE,
       operation: "locationInventoryDetection",
@@ -479,8 +518,6 @@ export async function detectInventoryItems(
       location.name,
       {
         db,
-        feature: LOCATION_INVENTORY_DETECTION_FEATURE.feature,
-        model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
         operation: "locationInventoryDetection",
         cacheStatus: "miss",
         entity: { entityType: "location", entityId: locationId },
@@ -501,6 +538,7 @@ export async function detectInventoryItems(
     ...raw,
     items: await matchDetectedItems(db, locationId, raw.items),
     cache,
+    analyzedAt,
   };
 }
 

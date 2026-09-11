@@ -335,7 +335,7 @@ const handler = {
 
           if (batch.queue === "cubby-background") {
             // Imported here, not at module scope: the consumer pulls
-            // @tanstack/ai + @cloudflare/tanstack-ai + @anthropic-ai/sdk
+            // @tanstack/ai + its provider adapters + @anthropic-ai/sdk
             // (~553 KiB, plus a second copy of zod) and only queue deliveries
             // need it. A static import puts all of that on the module-init
             // path of every fetch invocation too.

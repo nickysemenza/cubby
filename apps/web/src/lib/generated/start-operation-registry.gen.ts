@@ -8,7 +8,6 @@ export const START_OPERATIONS = {
   "ai.describeLocation": { kind: "mutation" },
   "ai.detectInventoryItems": { kind: "mutation" },
   "ai.identifyProduct": { kind: "mutation" },
-  "ai.parseSearch": { kind: "mutation" },
   "ai.precomputeEnrichmentProposals": { kind: "subscription" },
   "ai.suggestCategory": { kind: "query" },
   "ai.suggestIngredientMergeBatch": { kind: "mutation" },

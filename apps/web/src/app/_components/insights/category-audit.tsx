@@ -1,10 +1,11 @@
-import type { CategoryAudit as CategoryAuditResult } from "@cubby/schemas/ai";
-import { Sparkles } from "lucide-react";
+import { useState } from "react";
 
+import { VerbButton } from "~/app/_components/actions/action-verb-ui";
+import { verbDef } from "~/app/_components/actions/action-verbs";
+import { AiProvenance } from "~/app/_components/ai/ai-proposal-card";
+import { AiProposalList } from "~/app/_components/ai/ai-proposal-list";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,43 +14,57 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
-import { Spinner } from "~/components/ui/spinner";
 import { ai } from "~/lib/ai.functions";
 
+/**
+ * Where the product category list is failing the catalog.
+ *
+ * The audit is advisory by construction: product categories are a fixed enum
+ * in `@cubby/shared` (`productCategoryValues`), so there is no "create
+ * category" the app can run — adding one is a schema change plus a colour
+ * token. What the surface owes instead is a way to *clear* a suggestion you
+ * have read and decided against, which it had none of: every run redisplayed
+ * the same twelve observations with no way to work through them. Dismiss is
+ * session-local, matching the audit itself, which is re-run on demand rather
+ * than stored.
+ */
 export function CategoryAudit() {
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+  const [ranAt, setRanAt] = useState<Date | null>(null);
+
   const auditMutation = useActionMutation({
     mutationFn: ai.auditCategories.mutationOptions,
+    onSuccess: () => {
+      setDismissed(new Set());
+      setRanAt(new Date());
+    },
   });
 
   const result = auditMutation.data;
+  const suggestions = (result?.suggestions ?? []).filter(
+    (suggestion) => !dismissed.has(suggestion.categoryName),
+  );
 
   return (
     <Card>
       <CardHeader>
-        <Row align="center" justify="between">
+        <Row align="center" justify="between" gap="sm" wrap>
           <Stack gap="xs">
-            <CardTitle icon={Sparkles}>Category Audit</CardTitle>
+            <CardTitle icon={verbDef("analyze").icon}>Category audit</CardTitle>
             <CardDescription>
-              Use AI to identify gaps in your category system based on your
-              current product catalog.
+              Gaps in the category system, read from the current product
+              catalog.
             </CardDescription>
           </Stack>
-          <Button
+          <VerbButton
+            verb="analyze"
+            object="categories"
+            variant="default"
+            size="default"
+            pending={auditMutation.isPending}
+            className="min-h-9 max-sm:min-h-11"
             onClick={() => auditMutation.mutate(undefined)}
-            disabled={auditMutation.isPending}
-          >
-            {auditMutation.isPending ? (
-              <>
-                <Spinner className="mr-2" />
-                Auditing...
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 size-4" />
-                Run Audit
-              </>
-            )}
-          </Button>
+          />
         </Row>
       </CardHeader>
 
@@ -58,47 +73,37 @@ export function CategoryAudit() {
           <Stack>
             <Description>{result.summary}</Description>
 
-            {result.suggestions.length > 0 && (
-              <div className="divide-y divide-border/60">
-                {result.suggestions.map((suggestion) => (
-                  <SuggestionRow
-                    key={suggestion.categoryName}
-                    suggestion={suggestion}
-                  />
-                ))}
-              </div>
-            )}
+            <AiProposalList
+              heading="Suggested categories"
+              provenance={<AiProvenance analyzedAt={ranAt} />}
+              rows={suggestions.map((suggestion) => ({
+                id: suggestion.categoryName,
+                title: suggestion.categoryName,
+                meta: suggestion.description,
+                reasoning: [
+                  suggestion.reasoning,
+                  suggestion.productNames.length > 0
+                    ? `Products: ${suggestion.productNames.join(", ")}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+              }))}
+              rejectLabel="Dismiss"
+              rejectAllLabel="Dismiss all"
+              onReject={(id) => setDismissed((prev) => new Set(prev).add(id))}
+              footer={
+                <Description size="2xs">
+                  Categories are a fixed list in the product schema
+                  (`productCategoryValues` in `@cubby/shared`); adding one is a
+                  code change, so these are observations to act on there rather
+                  than records to create here.
+                </Description>
+              }
+            />
           </Stack>
         </CardContent>
       )}
     </Card>
-  );
-}
-
-function SuggestionRow({
-  suggestion,
-}: {
-  suggestion: CategoryAuditResult["suggestions"][number];
-}) {
-  return (
-    <Stack gap="sm" className="py-4">
-      <Badge variant="secondary">{suggestion.categoryName}</Badge>
-      <p className="text-sm">{suggestion.description}</p>
-      <Description size="xs">{suggestion.reasoning}</Description>
-      {suggestion.productNames.length > 0 && (
-        <Row wrap gap="sm" className="pt-1">
-          {suggestion.productNames.map((name) => (
-            <Badge
-              key={name}
-              variant="outline"
-              // Free-form product names — opt out of the mono-uppercase stamp.
-              className="font-sans text-xs tracking-normal normal-case"
-            >
-              {name}
-            </Badge>
-          ))}
-        </Row>
-      )}
-    </Stack>
   );
 }

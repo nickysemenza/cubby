@@ -9,7 +9,6 @@ import {
   detectInventoryItemsWorkflow,
   identifyProductWorkflow,
   listAiUsageRecentWorkflow,
-  parseSearchWorkflow,
   precomputeEnrichmentProposalsWorkflow,
   suggestCategoryWorkflow,
   suggestIngredientMergeBatchWorkflow,
@@ -43,7 +42,6 @@ export const aiHandlers = implementOperationDomain(ai, {
   suggestUsdaFoodBatch: suggestUsdaFoodBatchWorkflow,
   suggestIngredientMergeBatch: (context, input) =>
     suggestIngredientMergeBatchWorkflow(context.db, input),
-  parseSearch: (context, input) => parseSearchWorkflow(context.db, input),
   auditCategories: (context) => auditCategoriesWorkflow(context.db),
   usageRecent: {
     run: (context, input) => listAiUsageRecentWorkflow(context.db, input),

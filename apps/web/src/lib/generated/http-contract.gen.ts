@@ -7,261 +7,260 @@ import { z as schema4 } from "zod";
 import { categoryAuditSchema as schema5 } from "@cubby/schemas/ai";
 import { aiLocationIdInput as schema6 } from "@cubby/schemas/ai";
 import { locationDescriptionSchema as schema7 } from "@cubby/schemas/ai";
-import { detectedInventorySchema as schema8 } from "@cubby/schemas/ai";
-import { productIdentificationInput as schema9 } from "@cubby/schemas/ai";
-import { productIdentificationSchema as schema10 } from "@cubby/schemas/ai";
-import { parseSearchInput as schema11 } from "@cubby/schemas/ai";
-import { parsedSearchSchema as schema12 } from "@cubby/schemas/ai";
-import { categorySuggestionInput as schema13 } from "@cubby/schemas/ai";
-import { categorySuggestionSchema as schema14 } from "@cubby/schemas/ai";
-import { ingredientMergeSuggestionBatchInput as schema15 } from "@cubby/schemas/ai";
-import { ingredientMergeSuggestionBatchOut as schema16 } from "@cubby/schemas/ai";
-import { locationSuggestionInput as schema17 } from "@cubby/schemas/ai";
-import { locationSuggestionSchema as schema18 } from "@cubby/schemas/ai";
-import { locationTypeSuggestionInput as schema19 } from "@cubby/schemas/ai";
-import { locationTypeSuggestionSchema as schema20 } from "@cubby/schemas/ai";
-import { usdaFoodSuggestionInput as schema21 } from "@cubby/schemas/ai";
-import { usdaFoodSuggestionOut as schema22 } from "@cubby/schemas/ai";
-import { usdaFoodSuggestionBatchInput as schema23 } from "@cubby/schemas/ai";
-import { usdaFoodSuggestionBatchOut as schema24 } from "@cubby/schemas/ai";
-import { aiUsageRecentInput as schema25 } from "@cubby/schemas/ai";
-import { aiUsageRecentOut as schema26 } from "@cubby/schemas/ai";
-import { aiUsageSummaryInput as schema27 } from "@cubby/schemas/ai";
-import { aiUsageSummaryOut as schema28 } from "@cubby/schemas/ai";
-import { auditLogListInput as schema29 } from "@cubby/schemas/audit";
-import { auditLogListOut as schema30 } from "@cubby/schemas/audit";
-import { backgroundBatchIdInputSchema as schema31 } from "@cubby/schemas/background-jobs";
-import { backgroundJobActionOutSchema as schema32 } from "@cubby/schemas/background-jobs";
-import { backgroundBatchJobsInputSchema as schema33 } from "@cubby/schemas/background-jobs";
-import { backgroundBatchBrowserJobsOutSchema as schema34 } from "@cubby/schemas/background-jobs";
-import { backgroundBatchListInputSchema as schema35 } from "@cubby/schemas/background-jobs";
-import { backgroundBatchBrowserListOutSchema as schema36 } from "@cubby/schemas/background-jobs";
-import { backgroundBatchBrowserSummarySchema as schema37 } from "@cubby/schemas/background-jobs";
-import { backgroundClearStrandedInputSchema as schema38 } from "@cubby/schemas/background-jobs";
-import { backgroundClearStrandedOutSchema as schema39 } from "@cubby/schemas/background-jobs";
-import { backgroundDrainInputSchema as schema40 } from "@cubby/schemas/background-jobs";
-import { backgroundDrainOutSchema as schema41 } from "@cubby/schemas/background-jobs";
-import { backgroundJobIdInputSchema as schema42 } from "@cubby/schemas/background-jobs";
-import { backgroundStrandedCountInputSchema as schema43 } from "@cubby/schemas/background-jobs";
-import { backgroundStrandedCountOutSchema as schema44 } from "@cubby/schemas/background-jobs";
-import { clearCalendarUncertainWriteInput as schema45 } from "@cubby/schemas/calendar";
-import { calendarCredentialOut as schema46 } from "@cubby/schemas/calendar";
-import { calendarFeedOut as schema47 } from "@cubby/schemas/calendar";
-import { calendarFeedInspectionOut as schema48 } from "@cubby/schemas/calendar";
-import { calendarRangeInput as schema49 } from "@cubby/schemas/calendar";
-import { calendarRangeOut as schema50 } from "@cubby/schemas/calendar";
-import { calendarRevokeCredentialOut as schema51 } from "@cubby/schemas/calendar";
-import { calendarRotateCredentialOut as schema52 } from "@cubby/schemas/calendar";
-import { calendarRotateFeedOut as schema53 } from "@cubby/schemas/calendar";
-import { collectionCreateInput as schema54 } from "@cubby/schemas/collection";
-import { collectionSummaryOut as schema55 } from "@cubby/schemas/collection";
-import { collectionDetailInput as schema56 } from "@cubby/schemas/collection";
-import { collectionDetailOut as schema57 } from "@cubby/schemas/collection";
-import { collectionMatrixInput as schema58 } from "@cubby/schemas/collection";
-import { collectionMatrixOut as schema59 } from "@cubby/schemas/collection";
-import { collectionTagSetInput as schema60 } from "@cubby/schemas/collection";
-import { collectionTagSetOut as schema61 } from "@cubby/schemas/collection";
-import { smartCollectionDetailInput as schema62 } from "@cubby/schemas/collection";
-import { smartCollectionDetailOut as schema63 } from "@cubby/schemas/collection";
-import { smartCollectionListInput as schema64 } from "@cubby/schemas/collection";
-import { smartCollectionSummary as schema65 } from "@cubby/schemas/collection";
-import { cookbookShortcode as schema66 } from "@cubby/schemas/identifiers";
-import { cookbookSummary as schema67 } from "@cubby/schemas/recipe";
-import { cookbookSummariesOut as schema68 } from "@cubby/schemas/import-recipe";
-import { dashboardCountsOut as schema69 } from "@cubby/schemas/dashboard";
-import { filterOptionsInput as schema70 } from "@cubby/schemas/filter-options";
-import { filterOptionsOut as schema71 } from "@cubby/schemas/filter-options";
-import { entityGraphInputSchema as schema72 } from "@cubby/schemas/entity-graph";
-import { entityGraphOutputSchema as schema73 } from "@cubby/schemas/entity-graph";
-import { entityGraphPathsInputSchema as schema74 } from "@cubby/schemas/entity-graph";
-import { entityGraphPathsOutputSchema as schema75 } from "@cubby/schemas/entity-graph";
-import { integrityCatalogSchema as schema76 } from "@cubby/schemas/entity-integrity";
-import * as schema77 from "@cubby/schemas/project";
-import { expenseShortcode as schema78 } from "@cubby/schemas/identifiers";
-import { financialAccountOptionsOut as schema79 } from "@cubby/schemas/financial-account";
-import { financialTransactionSourceOptionsOut as schema80 } from "@cubby/schemas/financial-transaction";
-import { merchantVendorInferenceInput as schema81 } from "@cubby/schemas/financial-transaction";
-import { merchantVendorInference as schema82 } from "@cubby/schemas/financial-transaction";
-import { householdContributionLedgerInput as schema83 } from "@cubby/schemas/household-contribution";
-import { householdContributionLedgerOut as schema84 } from "@cubby/schemas/household-contribution";
-import { projectContributionInput as schema85 } from "@cubby/schemas/household-contribution";
-import { projectContributionOut as schema86 } from "@cubby/schemas/household-contribution";
-import { cullPendingImagesResponseSchema as schema87 } from "@cubby/schemas/image";
-import { cullPendingImagesSchema as schema88 } from "@cubby/schemas/image";
-import { imageBrowserDeleteInput as schema89 } from "@cubby/schemas/image";
-import { imageBrowserDeleteOut as schema90 } from "@cubby/schemas/image";
-import { imageWithEntitySchema as schema91 } from "@cubby/schemas/image";
-import { importImageFromUrlSchema as schema92 } from "@cubby/schemas/image";
-import { importImageFromUrlResponseSchema as schema93 } from "@cubby/schemas/image";
-import { imageBrowserListInput as schema94 } from "@cubby/schemas/image";
-import { imageBrowserListOut as schema95 } from "@cubby/schemas/image";
-import { getImageByIdSchema as schema96 } from "@cubby/schemas/image";
-import { projectImageSummariesInput as schema97 } from "@cubby/schemas/image";
-import { projectImageSummariesOut as schema98 } from "@cubby/schemas/image";
-import { imageBrowserUpdateInput as schema99 } from "@cubby/schemas/image";
-import { initiateDocumentUploadSchema as schema100 } from "@cubby/schemas/image";
-import { initiateUploadWithoutEntityResponseSchema as schema101 } from "@cubby/schemas/image";
-import { initiateUploadWithoutEntitySchema as schema102 } from "@cubby/schemas/image";
-import * as schema103 from "@cubby/schemas/ingredient";
-import { mutationSideEffectsSchema as schema104 } from "@cubby/schemas/background-jobs";
-import { inventoryBulkAddPayload as schema105 } from "@cubby/schemas/inventory";
-import { inventoryBulkAddOut as schema106 } from "@cubby/schemas/inventory";
-import { inventoryBulkDiscardPayload as schema107 } from "@cubby/schemas/inventory";
-import { inventoryBulkDiscardOut as schema108 } from "@cubby/schemas/inventory";
-import { bulkMovePayload as schema109 } from "@cubby/schemas/inventory";
-import { inventoryWithLocationAndProductListAndSideEffectsOut as schema110 } from "@cubby/schemas/inventory";
-import { inventoryBulkOperationPayload as schema111 } from "@cubby/schemas/inventory";
-import { inventoryFindDuplicatesInput as schema112 } from "@cubby/schemas/inventory";
-import { inventoryDuplicateUniqueProductsOut as schema113 } from "@cubby/schemas/inventory";
-import { inventoryLocationIdsInput as schema114 } from "@cubby/schemas/inventory";
-import { inventoryWithLocationAndProductListOut as schema115 } from "@cubby/schemas/inventory";
-import { moveInventoryEntriesPayload as schema116 } from "@cubby/schemas/inventory";
-import { reconcileSessionPayload as schema117 } from "@cubby/schemas/inventory";
-import { resolveScanStraysInput as schema118 } from "@cubby/schemas/scan";
-import { resolveScanStraysOut as schema119 } from "@cubby/schemas/scan";
-import { scanAtLocationInput as schema120 } from "@cubby/schemas/scan";
-import { scanAtLocationOut as schema121 } from "@cubby/schemas/scan";
-import { ledgerPartyOptionsOut as schema122 } from "@cubby/schemas/ledger-party";
-import { locationBulkUpdateParentInput as schema123 } from "@cubby/schemas/location";
-import { locationBulkUpdateParentOut as schema124 } from "@cubby/schemas/location";
-import { infLocation as schema125 } from "@cubby/schemas/location";
-import { locationShortcodesInput as schema126 } from "@cubby/schemas/location";
-import { locationsWithParentNameOut as schema127 } from "@cubby/schemas/location";
-import { locationInventoryBreakdownOut as schema128 } from "@cubby/schemas/location";
-import { infLocationListOut as schema129 } from "@cubby/schemas/location";
-import { locationParentOptionsOut as schema130 } from "@cubby/schemas/location";
-import { locationFiltersSchema as schema131 } from "@cubby/schemas/location";
-import { locationPickerItemOut as schema132 } from "@cubby/schemas/location";
-import { locationValuationSummaryOut as schema133 } from "@cubby/schemas/location";
-import { mcpToolCatalogOut as schema134 } from "@cubby/schemas/telemetry";
-import { mcpUsageActivityInput as schema135 } from "@cubby/schemas/telemetry";
-import { mcpUsageActivityOut as schema136 } from "@cubby/schemas/telemetry";
-import { mcpUsageDashboardInput as schema137 } from "@cubby/schemas/telemetry";
-import { mcpUsageDashboardBrowserOut as schema138 } from "@cubby/schemas/telemetry";
-import * as schema139 from "@cubby/schemas/meal";
-import { orphanedOAuthClientsOut as schema140 } from "@cubby/schemas/oauth";
-import { connectedAppsOut as schema141 } from "@cubby/schemas/oauth";
-import { pruneOrphanedOAuthClientsOut as schema142 } from "@cubby/schemas/oauth";
-import { revokeConnectedAppInput as schema143 } from "@cubby/schemas/oauth";
-import { revokeConnectedAppOut as schema144 } from "@cubby/schemas/oauth";
-import { cleanupOrphanedEntityEmbeddingsInput as schema145 } from "@cubby/schemas/problems";
-import { cleanupOrphanedEntityEmbeddingsOut as schema146 } from "@cubby/schemas/problems";
-import { deleteUnusedIngredientsInput as schema147 } from "@cubby/schemas/problems";
-import { deleteUnusedIngredientsOut as schema148 } from "@cubby/schemas/problems";
-import { dryRunPruneAliasesOut as schema149 } from "@cubby/schemas/problems";
-import { dryRunReparseOut as schema150 } from "@cubby/schemas/problems";
-import { referentialLivenessViolationSchema as schema151 } from "@cubby/schemas/entity-integrity";
-import { problemsCountSchema as schema152 } from "@cubby/schemas/problems";
-import { problemsCoverageSchema as schema153 } from "@cubby/schemas/problems";
-import { coverageTotalsSchema as schema154 } from "@cubby/schemas/problems";
-import { problemsFastSchema as schema155 } from "@cubby/schemas/problems";
-import { maintenanceCountsSchema as schema156 } from "@cubby/schemas/problems";
-import { problemsTrackerSchema as schema157 } from "@cubby/schemas/problems";
-import { problemsUpcSchema as schema158 } from "@cubby/schemas/problems";
-import { problemsViewsSchema as schema159 } from "@cubby/schemas/problems";
-import { recipeUsageByProductInput as schema160 } from "@cubby/schemas/problems";
-import { recipeUsageByProductOut as schema161 } from "@cubby/schemas/problems";
-import { productWorkflowSchemas as schema162 } from "@cubby/schemas/product-workflow";
-import { purchaseProductMutationInput as schema163 } from "@cubby/schemas/purchase";
-import { purchaseProductMutationOut as schema164 } from "@cubby/schemas/purchase";
-import { linkExpensesToPurchaseInput as schema165 } from "@cubby/schemas/purchase";
-import { purchaseOut as schema166 } from "@cubby/schemas/purchase";
-import { mergePurchasesInput as schema167 } from "@cubby/schemas/purchase";
-import { mergePurchasesOut as schema168 } from "@cubby/schemas/purchase";
-import { purchaseProductsInput as schema169 } from "@cubby/schemas/purchase";
-import { purchaseProductsOut as schema170 } from "@cubby/schemas/purchase";
-import { splitExpenseInput as schema171 } from "@cubby/schemas/purchase";
-import { splitExpenseOut as schema172 } from "@cubby/schemas/purchase";
-import { attachCookbookRecipePhotoInput as schema173 } from "@cubby/schemas/import-recipe";
-import { attachCookbookRecipePhotoOut as schema174 } from "@cubby/schemas/import-recipe";
-import { cookbookIdInput as schema175 } from "@cubby/schemas/import-recipe";
-import { deleteCookbookOut as schema176 } from "@cubby/schemas/import-recipe";
-import { recipeDryRunRecomputeTotalsOut as schema177 } from "@cubby/schemas/recipe";
-import { recipeIdInput as schema178 } from "@cubby/schemas/recipe";
-import { recipeWithSideEffectsOut as schema179 } from "@cubby/schemas/recipe";
-import { recipeCostingExplain as schema180 } from "@cubby/schemas/recipe-shared";
-import { gatewayForwardInput as schema181 } from "@cubby/schemas/import-recipe";
-import { gatewayForwardOut as schema182 } from "@cubby/schemas/import-recipe";
-import { recipeFlowGenerateInputSchema as schema183 } from "@cubby/schemas/recipe-flow";
-import { recipeFlowArtifactSchema as schema184 } from "@cubby/schemas/recipe-flow";
-import { recipeTagsOut as schema185 } from "@cubby/schemas/recipe";
-import { cookbookDiffInput as schema186 } from "@cubby/schemas/import-recipe";
-import { cookbookDiffOut as schema187 } from "@cubby/schemas/import-recipe";
-import { cookbookSourceOut as schema188 } from "@cubby/schemas/import-recipe";
-import { recipeCookbookScopeInput as schema189 } from "@cubby/schemas/recipe";
-import { recipeDependencyGraphSchema as schema190 } from "@cubby/schemas/recipe-dependency-graph";
-import { recipeFlowGetInputSchema as schema191 } from "@cubby/schemas/recipe-flow";
-import { recipeFlowStateSchema as schema192 } from "@cubby/schemas/recipe-flow";
-import { recipeCooccurrenceInput as schema193 } from "@cubby/schemas/recipe";
-import { ingredientCooccurrenceSchema as schema194 } from "@cubby/schemas/ingredient-cooccurrence";
-import { ingredientUsageSchema as schema195 } from "@cubby/schemas/ingredient-usage";
-import { recipeIdsInput as schema196 } from "@cubby/schemas/recipe";
-import { recipeGraphListOut as schema197 } from "@cubby/schemas/recipe";
-import { equivalenceReportSchema as schema198 } from "@cubby/schemas/equivalences";
-import { parseRecipeHtmlInput as schema199 } from "@cubby/schemas/import-recipe";
-import { importRecipeSchema as schema200 } from "@cubby/schemas/import-recipe";
-import { notionPreviewOut as schema201 } from "@cubby/schemas/import-recipe";
-import { recipeRecomputeAllOut as schema202 } from "@cubby/schemas/recipe";
-import { scrapeRecipeInput as schema203 } from "@cubby/schemas/import-recipe";
-import { setCookbookProductInput as schema204 } from "@cubby/schemas/import-recipe";
-import { upsertCookbookInput as schema205 } from "@cubby/schemas/import-recipe";
-import { cookbookIdOut as schema206 } from "@cubby/schemas/import-recipe";
-import { dismissDuplicateProductRecommendationInput as schema207 } from "@cubby/schemas/recommendations";
-import { recommendationOkSchema as schema208 } from "@cubby/schemas/recommendations";
-import { dismissProductRecommendationInput as schema209 } from "@cubby/schemas/recommendations";
-import { dismissTagPropagationInput as schema210 } from "@cubby/schemas/recommendations";
-import { duplicateProductRecommendationInput as schema211 } from "@cubby/schemas/recommendations";
-import { duplicateProductRecommendationOut as schema212 } from "@cubby/schemas/recommendations";
-import { placementRecommendationInput as schema213 } from "@cubby/schemas/recommendations";
-import { placementRecommendationOut as schema214 } from "@cubby/schemas/recommendations";
-import { recommendationWorkbenchInput as schema215 } from "@cubby/schemas/recommendations";
-import { recommendationWorkbenchOut as schema216 } from "@cubby/schemas/recommendations";
-import { tagPropagationRecommendationInput as schema217 } from "@cubby/schemas/recommendations";
-import { tagPropagationRecommendationOut as schema218 } from "@cubby/schemas/recommendations";
-import { relatedBranchInput as schema219 } from "@cubby/schemas/related-view";
-import { relatedBranchOutput as schema220 } from "@cubby/schemas/related-view";
-import { relatedOptionsInput as schema221 } from "@cubby/schemas/related-view";
-import { relatedOptionsOutput as schema222 } from "@cubby/schemas/related-view";
-import { relatedPreviewInput as schema223 } from "@cubby/schemas/related-view";
-import { relatedPreviewOutput as schema224 } from "@cubby/schemas/related-view";
-import { relatedSummaryInput as schema225 } from "@cubby/schemas/related-view";
-import { relatedSummaryOutput as schema226 } from "@cubby/schemas/related-view";
-import { productShortcode as schema227 } from "@cubby/schemas/identifiers";
-import { relatednessOutSchema as schema228 } from "@cubby/schemas/relatedness";
-import { searchQueryInputSchema as schema229 } from "@cubby/schemas/search";
-import { searchDebugOutSchema as schema230 } from "@cubby/schemas/search";
-import { searchDocumentMaintenanceSchema as schema231 } from "@cubby/schemas/search";
-import { enqueueEmbeddingBackfillInputSchema as schema232 } from "@cubby/schemas/background-jobs";
-import { enqueueEmbeddingBackfillOutSchema as schema233 } from "@cubby/schemas/background-jobs";
-import { searchHitsOut as schema234 } from "@cubby/schemas/search";
-import { searchResultGroupsOut as schema235 } from "@cubby/schemas/search";
-import { relatedSearchOutSchema as schema236 } from "@cubby/schemas/search";
-import { relatedSearchGroupsOutSchema as schema237 } from "@cubby/schemas/search";
-import { repairSearchDocumentsOutSchema as schema238 } from "@cubby/schemas/search";
-import { requestEmbeddingRefreshInputSchema as schema239 } from "@cubby/schemas/search";
-import { requestEmbeddingRefreshOutSchema as schema240 } from "@cubby/schemas/search";
-import { listStatementImportsInput as schema241 } from "@cubby/schemas/statement-row";
-import { statementImportListOut as schema242 } from "@cubby/schemas/statement-row";
-import { listStatementRowsInput as schema243 } from "@cubby/schemas/statement-row";
-import { statementRowListOut as schema244 } from "@cubby/schemas/statement-row";
-import { statementRowSummaryInput as schema245 } from "@cubby/schemas/statement-row";
-import { statementRowSummaryOut as schema246 } from "@cubby/schemas/statement-row";
-import { makeableRecipesInput as schema247 } from "@cubby/schemas/suggestions";
-import { makeableRecipesOut as schema248 } from "@cubby/schemas/suggestions";
-import { recipeAvailabilityInput as schema249 } from "@cubby/schemas/suggestions";
-import { recipeAvailabilityOut as schema250 } from "@cubby/schemas/availability";
-import { upcLookupInput as schema251 } from "@cubby/upc-contract";
-import { productLookupResponseSchema as schema252 } from "@cubby/upc-contract";
-import { usdaFoodLookupInput as schema253 } from "@cubby/schemas/usda";
-import { foodSummaryWithLinkedProducts as schema254 } from "@cubby/schemas/usda";
-import { usdaFoodIdInput as schema255 } from "@cubby/schemas/usda";
-import { usdaListInput as schema256 } from "@cubby/schemas/usda";
-import { usdaFoodListOut as schema257 } from "@cubby/schemas/usda";
-import { fetchVendorLogoInput as schema258 } from "@cubby/schemas/vendor";
-import { vendorOut as schema259 } from "@cubby/schemas/vendor";
-import { mergeVendorsInput as schema260 } from "@cubby/schemas/vendor";
-import { mergeVendorsOut as schema261 } from "@cubby/schemas/vendor";
-import { vendorOptionsOut as schema262 } from "@cubby/schemas/vendor";
+import { aiCacheMetadataSchema as schema8 } from "@cubby/schemas/ai";
+import { detectedInventorySchema as schema9 } from "@cubby/schemas/ai";
+import { productIdentificationInput as schema10 } from "@cubby/schemas/ai";
+import { productIdentificationSchema as schema11 } from "@cubby/schemas/ai";
+import { categorySuggestionInput as schema12 } from "@cubby/schemas/ai";
+import { categorySuggestionSchema as schema13 } from "@cubby/schemas/ai";
+import { ingredientMergeSuggestionBatchInput as schema14 } from "@cubby/schemas/ai";
+import { ingredientMergeSuggestionBatchOut as schema15 } from "@cubby/schemas/ai";
+import { locationSuggestionInput as schema16 } from "@cubby/schemas/ai";
+import { locationSuggestionSchema as schema17 } from "@cubby/schemas/ai";
+import { locationTypeSuggestionInput as schema18 } from "@cubby/schemas/ai";
+import { locationTypeSuggestionSchema as schema19 } from "@cubby/schemas/ai";
+import { usdaFoodSuggestionInput as schema20 } from "@cubby/schemas/ai";
+import { usdaFoodSuggestionOut as schema21 } from "@cubby/schemas/ai";
+import { usdaFoodSuggestionBatchInput as schema22 } from "@cubby/schemas/ai";
+import { usdaFoodSuggestionBatchOut as schema23 } from "@cubby/schemas/ai";
+import { aiUsageRecentInput as schema24 } from "@cubby/schemas/ai";
+import { aiUsageRecentOut as schema25 } from "@cubby/schemas/ai";
+import { aiUsageSummaryInput as schema26 } from "@cubby/schemas/ai";
+import { aiUsageSummaryOut as schema27 } from "@cubby/schemas/ai";
+import { auditLogListInput as schema28 } from "@cubby/schemas/audit";
+import { auditLogListOut as schema29 } from "@cubby/schemas/audit";
+import { backgroundBatchIdInputSchema as schema30 } from "@cubby/schemas/background-jobs";
+import { backgroundJobActionOutSchema as schema31 } from "@cubby/schemas/background-jobs";
+import { backgroundBatchJobsInputSchema as schema32 } from "@cubby/schemas/background-jobs";
+import { backgroundBatchBrowserJobsOutSchema as schema33 } from "@cubby/schemas/background-jobs";
+import { backgroundBatchListInputSchema as schema34 } from "@cubby/schemas/background-jobs";
+import { backgroundBatchBrowserListOutSchema as schema35 } from "@cubby/schemas/background-jobs";
+import { backgroundBatchBrowserSummarySchema as schema36 } from "@cubby/schemas/background-jobs";
+import { backgroundClearStrandedInputSchema as schema37 } from "@cubby/schemas/background-jobs";
+import { backgroundClearStrandedOutSchema as schema38 } from "@cubby/schemas/background-jobs";
+import { backgroundDrainInputSchema as schema39 } from "@cubby/schemas/background-jobs";
+import { backgroundDrainOutSchema as schema40 } from "@cubby/schemas/background-jobs";
+import { backgroundJobIdInputSchema as schema41 } from "@cubby/schemas/background-jobs";
+import { backgroundStrandedCountInputSchema as schema42 } from "@cubby/schemas/background-jobs";
+import { backgroundStrandedCountOutSchema as schema43 } from "@cubby/schemas/background-jobs";
+import { clearCalendarUncertainWriteInput as schema44 } from "@cubby/schemas/calendar";
+import { calendarCredentialOut as schema45 } from "@cubby/schemas/calendar";
+import { calendarFeedOut as schema46 } from "@cubby/schemas/calendar";
+import { calendarFeedInspectionOut as schema47 } from "@cubby/schemas/calendar";
+import { calendarRangeInput as schema48 } from "@cubby/schemas/calendar";
+import { calendarRangeOut as schema49 } from "@cubby/schemas/calendar";
+import { calendarRevokeCredentialOut as schema50 } from "@cubby/schemas/calendar";
+import { calendarRotateCredentialOut as schema51 } from "@cubby/schemas/calendar";
+import { calendarRotateFeedOut as schema52 } from "@cubby/schemas/calendar";
+import { collectionCreateInput as schema53 } from "@cubby/schemas/collection";
+import { collectionSummaryOut as schema54 } from "@cubby/schemas/collection";
+import { collectionDetailInput as schema55 } from "@cubby/schemas/collection";
+import { collectionDetailOut as schema56 } from "@cubby/schemas/collection";
+import { collectionMatrixInput as schema57 } from "@cubby/schemas/collection";
+import { collectionMatrixOut as schema58 } from "@cubby/schemas/collection";
+import { collectionTagSetInput as schema59 } from "@cubby/schemas/collection";
+import { collectionTagSetOut as schema60 } from "@cubby/schemas/collection";
+import { smartCollectionDetailInput as schema61 } from "@cubby/schemas/collection";
+import { smartCollectionDetailOut as schema62 } from "@cubby/schemas/collection";
+import { smartCollectionListInput as schema63 } from "@cubby/schemas/collection";
+import { smartCollectionSummary as schema64 } from "@cubby/schemas/collection";
+import { cookbookShortcode as schema65 } from "@cubby/schemas/identifiers";
+import { cookbookSummary as schema66 } from "@cubby/schemas/recipe";
+import { cookbookSummariesOut as schema67 } from "@cubby/schemas/import-recipe";
+import { dashboardCountsOut as schema68 } from "@cubby/schemas/dashboard";
+import { filterOptionsInput as schema69 } from "@cubby/schemas/filter-options";
+import { filterOptionsOut as schema70 } from "@cubby/schemas/filter-options";
+import { entityGraphInputSchema as schema71 } from "@cubby/schemas/entity-graph";
+import { entityGraphOutputSchema as schema72 } from "@cubby/schemas/entity-graph";
+import { entityGraphPathsInputSchema as schema73 } from "@cubby/schemas/entity-graph";
+import { entityGraphPathsOutputSchema as schema74 } from "@cubby/schemas/entity-graph";
+import { integrityCatalogSchema as schema75 } from "@cubby/schemas/entity-integrity";
+import * as schema76 from "@cubby/schemas/project";
+import { expenseShortcode as schema77 } from "@cubby/schemas/identifiers";
+import { financialAccountOptionsOut as schema78 } from "@cubby/schemas/financial-account";
+import { financialTransactionSourceOptionsOut as schema79 } from "@cubby/schemas/financial-transaction";
+import { merchantVendorInferenceInput as schema80 } from "@cubby/schemas/financial-transaction";
+import { merchantVendorInference as schema81 } from "@cubby/schemas/financial-transaction";
+import { householdContributionLedgerInput as schema82 } from "@cubby/schemas/household-contribution";
+import { householdContributionLedgerOut as schema83 } from "@cubby/schemas/household-contribution";
+import { projectContributionInput as schema84 } from "@cubby/schemas/household-contribution";
+import { projectContributionOut as schema85 } from "@cubby/schemas/household-contribution";
+import { cullPendingImagesResponseSchema as schema86 } from "@cubby/schemas/image";
+import { cullPendingImagesSchema as schema87 } from "@cubby/schemas/image";
+import { imageBrowserDeleteInput as schema88 } from "@cubby/schemas/image";
+import { imageBrowserDeleteOut as schema89 } from "@cubby/schemas/image";
+import { imageWithEntitySchema as schema90 } from "@cubby/schemas/image";
+import { importImageFromUrlSchema as schema91 } from "@cubby/schemas/image";
+import { importImageFromUrlResponseSchema as schema92 } from "@cubby/schemas/image";
+import { imageBrowserListInput as schema93 } from "@cubby/schemas/image";
+import { imageBrowserListOut as schema94 } from "@cubby/schemas/image";
+import { getImageByIdSchema as schema95 } from "@cubby/schemas/image";
+import { projectImageSummariesInput as schema96 } from "@cubby/schemas/image";
+import { projectImageSummariesOut as schema97 } from "@cubby/schemas/image";
+import { imageBrowserUpdateInput as schema98 } from "@cubby/schemas/image";
+import { initiateDocumentUploadSchema as schema99 } from "@cubby/schemas/image";
+import { initiateUploadWithoutEntityResponseSchema as schema100 } from "@cubby/schemas/image";
+import { initiateUploadWithoutEntitySchema as schema101 } from "@cubby/schemas/image";
+import * as schema102 from "@cubby/schemas/ingredient";
+import { mutationSideEffectsSchema as schema103 } from "@cubby/schemas/background-jobs";
+import { inventoryBulkAddPayload as schema104 } from "@cubby/schemas/inventory";
+import { inventoryBulkAddOut as schema105 } from "@cubby/schemas/inventory";
+import { inventoryBulkDiscardPayload as schema106 } from "@cubby/schemas/inventory";
+import { inventoryBulkDiscardOut as schema107 } from "@cubby/schemas/inventory";
+import { bulkMovePayload as schema108 } from "@cubby/schemas/inventory";
+import { inventoryWithLocationAndProductListAndSideEffectsOut as schema109 } from "@cubby/schemas/inventory";
+import { inventoryBulkOperationPayload as schema110 } from "@cubby/schemas/inventory";
+import { inventoryFindDuplicatesInput as schema111 } from "@cubby/schemas/inventory";
+import { inventoryDuplicateUniqueProductsOut as schema112 } from "@cubby/schemas/inventory";
+import { inventoryLocationIdsInput as schema113 } from "@cubby/schemas/inventory";
+import { inventoryWithLocationAndProductListOut as schema114 } from "@cubby/schemas/inventory";
+import { moveInventoryEntriesPayload as schema115 } from "@cubby/schemas/inventory";
+import { reconcileSessionPayload as schema116 } from "@cubby/schemas/inventory";
+import { resolveScanStraysInput as schema117 } from "@cubby/schemas/scan";
+import { resolveScanStraysOut as schema118 } from "@cubby/schemas/scan";
+import { scanAtLocationInput as schema119 } from "@cubby/schemas/scan";
+import { scanAtLocationOut as schema120 } from "@cubby/schemas/scan";
+import { ledgerPartyOptionsOut as schema121 } from "@cubby/schemas/ledger-party";
+import { locationBulkUpdateParentInput as schema122 } from "@cubby/schemas/location";
+import { locationBulkUpdateParentOut as schema123 } from "@cubby/schemas/location";
+import { infLocation as schema124 } from "@cubby/schemas/location";
+import { locationShortcodesInput as schema125 } from "@cubby/schemas/location";
+import { locationsWithParentNameOut as schema126 } from "@cubby/schemas/location";
+import { locationInventoryBreakdownOut as schema127 } from "@cubby/schemas/location";
+import { infLocationListOut as schema128 } from "@cubby/schemas/location";
+import { locationParentOptionsOut as schema129 } from "@cubby/schemas/location";
+import { locationFiltersSchema as schema130 } from "@cubby/schemas/location";
+import { locationPickerItemOut as schema131 } from "@cubby/schemas/location";
+import { locationValuationSummaryOut as schema132 } from "@cubby/schemas/location";
+import { mcpToolCatalogOut as schema133 } from "@cubby/schemas/telemetry";
+import { mcpUsageActivityInput as schema134 } from "@cubby/schemas/telemetry";
+import { mcpUsageActivityOut as schema135 } from "@cubby/schemas/telemetry";
+import { mcpUsageDashboardInput as schema136 } from "@cubby/schemas/telemetry";
+import { mcpUsageDashboardBrowserOut as schema137 } from "@cubby/schemas/telemetry";
+import * as schema138 from "@cubby/schemas/meal";
+import { orphanedOAuthClientsOut as schema139 } from "@cubby/schemas/oauth";
+import { connectedAppsOut as schema140 } from "@cubby/schemas/oauth";
+import { pruneOrphanedOAuthClientsOut as schema141 } from "@cubby/schemas/oauth";
+import { revokeConnectedAppInput as schema142 } from "@cubby/schemas/oauth";
+import { revokeConnectedAppOut as schema143 } from "@cubby/schemas/oauth";
+import { cleanupOrphanedEntityEmbeddingsInput as schema144 } from "@cubby/schemas/problems";
+import { cleanupOrphanedEntityEmbeddingsOut as schema145 } from "@cubby/schemas/problems";
+import { deleteUnusedIngredientsInput as schema146 } from "@cubby/schemas/problems";
+import { deleteUnusedIngredientsOut as schema147 } from "@cubby/schemas/problems";
+import { dryRunPruneAliasesOut as schema148 } from "@cubby/schemas/problems";
+import { dryRunReparseOut as schema149 } from "@cubby/schemas/problems";
+import { referentialLivenessViolationSchema as schema150 } from "@cubby/schemas/entity-integrity";
+import { problemsCountSchema as schema151 } from "@cubby/schemas/problems";
+import { problemsCoverageSchema as schema152 } from "@cubby/schemas/problems";
+import { coverageTotalsSchema as schema153 } from "@cubby/schemas/problems";
+import { problemsFastSchema as schema154 } from "@cubby/schemas/problems";
+import { maintenanceCountsSchema as schema155 } from "@cubby/schemas/problems";
+import { problemsTrackerSchema as schema156 } from "@cubby/schemas/problems";
+import { problemsUpcSchema as schema157 } from "@cubby/schemas/problems";
+import { problemsViewsSchema as schema158 } from "@cubby/schemas/problems";
+import { recipeUsageByProductInput as schema159 } from "@cubby/schemas/problems";
+import { recipeUsageByProductOut as schema160 } from "@cubby/schemas/problems";
+import { productWorkflowSchemas as schema161 } from "@cubby/schemas/product-workflow";
+import { purchaseProductMutationInput as schema162 } from "@cubby/schemas/purchase";
+import { purchaseProductMutationOut as schema163 } from "@cubby/schemas/purchase";
+import { linkExpensesToPurchaseInput as schema164 } from "@cubby/schemas/purchase";
+import { purchaseOut as schema165 } from "@cubby/schemas/purchase";
+import { mergePurchasesInput as schema166 } from "@cubby/schemas/purchase";
+import { mergePurchasesOut as schema167 } from "@cubby/schemas/purchase";
+import { purchaseProductsInput as schema168 } from "@cubby/schemas/purchase";
+import { purchaseProductsOut as schema169 } from "@cubby/schemas/purchase";
+import { splitExpenseInput as schema170 } from "@cubby/schemas/purchase";
+import { splitExpenseOut as schema171 } from "@cubby/schemas/purchase";
+import { attachCookbookRecipePhotoInput as schema172 } from "@cubby/schemas/import-recipe";
+import { attachCookbookRecipePhotoOut as schema173 } from "@cubby/schemas/import-recipe";
+import { cookbookIdInput as schema174 } from "@cubby/schemas/import-recipe";
+import { deleteCookbookOut as schema175 } from "@cubby/schemas/import-recipe";
+import { recipeDryRunRecomputeTotalsOut as schema176 } from "@cubby/schemas/recipe";
+import { recipeIdInput as schema177 } from "@cubby/schemas/recipe";
+import { recipeWithSideEffectsOut as schema178 } from "@cubby/schemas/recipe";
+import { recipeCostingExplain as schema179 } from "@cubby/schemas/recipe-shared";
+import { gatewayForwardInput as schema180 } from "@cubby/schemas/import-recipe";
+import { gatewayForwardOut as schema181 } from "@cubby/schemas/import-recipe";
+import { recipeFlowGenerateInputSchema as schema182 } from "@cubby/schemas/recipe-flow";
+import { recipeFlowArtifactSchema as schema183 } from "@cubby/schemas/recipe-flow";
+import { recipeTagsOut as schema184 } from "@cubby/schemas/recipe";
+import { cookbookDiffInput as schema185 } from "@cubby/schemas/import-recipe";
+import { cookbookDiffOut as schema186 } from "@cubby/schemas/import-recipe";
+import { cookbookSourceOut as schema187 } from "@cubby/schemas/import-recipe";
+import { recipeCookbookScopeInput as schema188 } from "@cubby/schemas/recipe";
+import { recipeDependencyGraphSchema as schema189 } from "@cubby/schemas/recipe-dependency-graph";
+import { recipeFlowGetInputSchema as schema190 } from "@cubby/schemas/recipe-flow";
+import { recipeFlowStateSchema as schema191 } from "@cubby/schemas/recipe-flow";
+import { recipeCooccurrenceInput as schema192 } from "@cubby/schemas/recipe";
+import { ingredientCooccurrenceSchema as schema193 } from "@cubby/schemas/ingredient-cooccurrence";
+import { ingredientUsageSchema as schema194 } from "@cubby/schemas/ingredient-usage";
+import { recipeIdsInput as schema195 } from "@cubby/schemas/recipe";
+import { recipeGraphListOut as schema196 } from "@cubby/schemas/recipe";
+import { equivalenceReportSchema as schema197 } from "@cubby/schemas/equivalences";
+import { parseRecipeHtmlInput as schema198 } from "@cubby/schemas/import-recipe";
+import { importRecipeSchema as schema199 } from "@cubby/schemas/import-recipe";
+import { notionPreviewOut as schema200 } from "@cubby/schemas/import-recipe";
+import { recipeRecomputeAllOut as schema201 } from "@cubby/schemas/recipe";
+import { scrapeRecipeInput as schema202 } from "@cubby/schemas/import-recipe";
+import { setCookbookProductInput as schema203 } from "@cubby/schemas/import-recipe";
+import { upsertCookbookInput as schema204 } from "@cubby/schemas/import-recipe";
+import { cookbookIdOut as schema205 } from "@cubby/schemas/import-recipe";
+import { dismissDuplicateProductRecommendationInput as schema206 } from "@cubby/schemas/recommendations";
+import { recommendationOkSchema as schema207 } from "@cubby/schemas/recommendations";
+import { dismissProductRecommendationInput as schema208 } from "@cubby/schemas/recommendations";
+import { dismissTagPropagationInput as schema209 } from "@cubby/schemas/recommendations";
+import { duplicateProductRecommendationInput as schema210 } from "@cubby/schemas/recommendations";
+import { duplicateProductRecommendationOut as schema211 } from "@cubby/schemas/recommendations";
+import { placementRecommendationInput as schema212 } from "@cubby/schemas/recommendations";
+import { placementRecommendationOut as schema213 } from "@cubby/schemas/recommendations";
+import { recommendationWorkbenchInput as schema214 } from "@cubby/schemas/recommendations";
+import { recommendationWorkbenchOut as schema215 } from "@cubby/schemas/recommendations";
+import { tagPropagationRecommendationInput as schema216 } from "@cubby/schemas/recommendations";
+import { tagPropagationRecommendationOut as schema217 } from "@cubby/schemas/recommendations";
+import { relatedBranchInput as schema218 } from "@cubby/schemas/related-view";
+import { relatedBranchOutput as schema219 } from "@cubby/schemas/related-view";
+import { relatedOptionsInput as schema220 } from "@cubby/schemas/related-view";
+import { relatedOptionsOutput as schema221 } from "@cubby/schemas/related-view";
+import { relatedPreviewInput as schema222 } from "@cubby/schemas/related-view";
+import { relatedPreviewOutput as schema223 } from "@cubby/schemas/related-view";
+import { relatedSummaryInput as schema224 } from "@cubby/schemas/related-view";
+import { relatedSummaryOutput as schema225 } from "@cubby/schemas/related-view";
+import { productShortcode as schema226 } from "@cubby/schemas/identifiers";
+import { relatednessOutSchema as schema227 } from "@cubby/schemas/relatedness";
+import { searchQueryInputSchema as schema228 } from "@cubby/schemas/search";
+import { searchDebugOutSchema as schema229 } from "@cubby/schemas/search";
+import { searchDocumentMaintenanceSchema as schema230 } from "@cubby/schemas/search";
+import { enqueueEmbeddingBackfillInputSchema as schema231 } from "@cubby/schemas/background-jobs";
+import { enqueueEmbeddingBackfillOutSchema as schema232 } from "@cubby/schemas/background-jobs";
+import { searchHitsOut as schema233 } from "@cubby/schemas/search";
+import { searchResultGroupsOut as schema234 } from "@cubby/schemas/search";
+import { relatedSearchOutSchema as schema235 } from "@cubby/schemas/search";
+import { relatedSearchGroupsOutSchema as schema236 } from "@cubby/schemas/search";
+import { repairSearchDocumentsOutSchema as schema237 } from "@cubby/schemas/search";
+import { requestEmbeddingRefreshInputSchema as schema238 } from "@cubby/schemas/search";
+import { requestEmbeddingRefreshOutSchema as schema239 } from "@cubby/schemas/search";
+import { listStatementImportsInput as schema240 } from "@cubby/schemas/statement-row";
+import { statementImportListOut as schema241 } from "@cubby/schemas/statement-row";
+import { listStatementRowsInput as schema242 } from "@cubby/schemas/statement-row";
+import { statementRowListOut as schema243 } from "@cubby/schemas/statement-row";
+import { statementRowSummaryInput as schema244 } from "@cubby/schemas/statement-row";
+import { statementRowSummaryOut as schema245 } from "@cubby/schemas/statement-row";
+import { makeableRecipesInput as schema246 } from "@cubby/schemas/suggestions";
+import { makeableRecipesOut as schema247 } from "@cubby/schemas/suggestions";
+import { recipeAvailabilityInput as schema248 } from "@cubby/schemas/suggestions";
+import { recipeAvailabilityOut as schema249 } from "@cubby/schemas/availability";
+import { upcLookupInput as schema250 } from "@cubby/upc-contract";
+import { productLookupResponseSchema as schema251 } from "@cubby/upc-contract";
+import { usdaFoodLookupInput as schema252 } from "@cubby/schemas/usda";
+import { foodSummaryWithLinkedProducts as schema253 } from "@cubby/schemas/usda";
+import { usdaFoodIdInput as schema254 } from "@cubby/schemas/usda";
+import { usdaListInput as schema255 } from "@cubby/schemas/usda";
+import { usdaFoodListOut as schema256 } from "@cubby/schemas/usda";
+import { fetchVendorLogoInput as schema257 } from "@cubby/schemas/vendor";
+import { vendorOut as schema258 } from "@cubby/schemas/vendor";
+import { mergeVendorsInput as schema259 } from "@cubby/schemas/vendor";
+import { mergeVendorsOut as schema260 } from "@cubby/schemas/vendor";
+import { vendorOptionsOut as schema261 } from "@cubby/schemas/vendor";
 import {
   httpOperation,
   httpQuery,
@@ -282,120 +281,128 @@ export const httpContract = {
       schema4.undefined(),
       schema5,
     ),
-    describeLocation: httpOperation("ai.describeLocation", schema6, schema7),
+    describeLocation: httpOperation(
+      "ai.describeLocation",
+      schema6,
+      schema7.extend({
+        cache: schema8,
+        analyzedAt: schema4.coerce.date(),
+      }),
+    ),
     detectInventoryItems: httpOperation(
       "ai.detectInventoryItems",
       schema6,
-      schema8,
+      schema9.extend({
+        analyzedAt: schema4.coerce.date(),
+      }),
     ),
-    identifyProduct: httpOperation("ai.identifyProduct", schema9, schema10),
-    parseSearch: httpOperation("ai.parseSearch", schema11, schema12),
-    suggestCategory: httpOperation("ai.suggestCategory", schema13, schema14),
+    identifyProduct: httpOperation("ai.identifyProduct", schema10, schema11),
+    suggestCategory: httpOperation("ai.suggestCategory", schema12, schema13),
     suggestIngredientMergeBatch: httpOperation(
       "ai.suggestIngredientMergeBatch",
+      schema14,
       schema15,
-      schema16,
     ),
-    suggestLocation: httpOperation("ai.suggestLocation", schema17, schema18),
+    suggestLocation: httpOperation("ai.suggestLocation", schema16, schema17),
     suggestLocationType: httpOperation(
       "ai.suggestLocationType",
+      schema18,
       schema19,
-      schema20,
     ),
-    suggestUsdaFood: httpOperation("ai.suggestUsdaFood", schema21, schema22),
+    suggestUsdaFood: httpOperation("ai.suggestUsdaFood", schema20, schema21),
     suggestUsdaFoodBatch: httpOperation(
       "ai.suggestUsdaFoodBatch",
+      schema22,
       schema23,
-      schema24,
     ),
-    usageRecent: httpOperation("ai.usageRecent", schema25, schema26),
-    usageSummary: httpOperation("ai.usageSummary", schema27, schema28),
+    usageRecent: httpOperation("ai.usageRecent", schema24, schema25),
+    usageSummary: httpOperation("ai.usageSummary", schema26, schema27),
   },
   auditLog: {
-    list: httpOperation("auditLog.list", schema29, schema30),
+    list: httpOperation("auditLog.list", schema28, schema29),
   },
   "background-batch": {
-    cancel: httpOperation("background-batch.cancel", schema31, schema32),
-    jobs: httpOperation("background-batch.jobs", schema33, schema34),
-    list: httpOperation("background-batch.list", schema35, schema36),
-    retry: httpOperation("background-batch.retry", schema31, schema32),
-    summary: httpOperation("background-batch.summary", schema31, schema37),
+    cancel: httpOperation("background-batch.cancel", schema30, schema31),
+    jobs: httpOperation("background-batch.jobs", schema32, schema33),
+    list: httpOperation("background-batch.list", schema34, schema35),
+    retry: httpOperation("background-batch.retry", schema30, schema31),
+    summary: httpOperation("background-batch.summary", schema30, schema36),
   },
   "background-job": {
     clearStranded: httpOperation(
       "background-job.clearStranded",
+      schema37,
       schema38,
-      schema39,
     ),
-    drain: httpOperation("background-job.drain", schema40, schema41),
-    retry: httpOperation("background-job.retry", schema42, schema32),
+    drain: httpOperation("background-job.drain", schema39, schema40),
+    retry: httpOperation("background-job.retry", schema41, schema31),
     strandedCount: httpOperation(
       "background-job.strandedCount",
+      schema42,
       schema43,
-      schema44,
     ),
   },
   calendar: {
     clearUncertainWrite: httpOperation(
       "calendar.clearUncertainWrite",
-      schema45,
+      schema44,
       schema4.object({ cleared: schema4.boolean() }),
     ),
     getCredential: httpOperation(
       "calendar.getCredential",
       schema4.undefined(),
-      schema46,
+      schema45,
     ),
-    getFeed: httpOperation("calendar.getFeed", schema4.undefined(), schema47),
+    getFeed: httpOperation("calendar.getFeed", schema4.undefined(), schema46),
     inspectFeed: httpOperation(
       "calendar.inspectFeed",
       schema4.undefined(),
-      schema48,
+      schema47,
     ),
-    range: httpOperation("calendar.range", schema49, schema50),
+    range: httpOperation("calendar.range", schema48, schema49),
     revokeCredential: httpOperation(
       "calendar.revokeCredential",
       schema4.undefined(),
-      schema51,
+      schema50,
     ),
     rotateCredential: httpOperation(
       "calendar.rotateCredential",
       schema4.undefined(),
-      schema52,
+      schema51,
     ),
     rotateFeed: httpOperation(
       "calendar.rotateFeed",
       schema4.undefined(),
-      schema53,
+      schema52,
     ),
   },
   collection: {
-    create: httpOperation("collection.create", schema54, schema55),
-    detail: httpOperation("collection.detail", schema56, schema57),
+    create: httpOperation("collection.create", schema53, schema54),
+    detail: httpOperation("collection.detail", schema55, schema56),
     list: httpOperation(
       "collection.list",
       schema4.null(),
-      schema4.array(schema55),
+      schema4.array(schema54),
     ),
-    matrix: httpOperation("collection.matrix", schema58, schema59),
-    set: httpOperation("collection.set", schema60, schema61),
-    smartDetail: httpOperation("collection.smartDetail", schema62, schema63),
+    matrix: httpOperation("collection.matrix", schema57, schema58),
+    set: httpOperation("collection.set", schema59, schema60),
+    smartDetail: httpOperation("collection.smartDetail", schema61, schema62),
     smartList: httpOperation(
       "collection.smartList",
-      schema64,
-      schema4.array(schema65),
+      schema63,
+      schema4.array(schema64),
     ),
   },
   cookbook: {
     detail: httpOperation(
       "cookbook.detail",
-      schema4.object({ shortcode: schema66 }),
-      schema67.nullable(),
+      schema4.object({ shortcode: schema65 }),
+      schema66.nullable(),
     ),
-    list: httpOperation("cookbook.list", schema4.null(), schema68),
+    list: httpOperation("cookbook.list", schema4.null(), schema67),
   },
   dashboard: {
-    counts: httpOperation("dashboard.counts", schema4.undefined(), schema69),
+    counts: httpOperation("dashboard.counts", schema4.undefined(), schema68),
   },
   entity: {
     detail: httpOperation(
@@ -403,9 +410,9 @@ export const httpContract = {
       entityHttpSchemas["entity.detail"].input,
       entityHttpSchemas["entity.detail"].output,
     ),
-    filterOptions: httpOperation("entity.filterOptions", schema70, schema71),
-    graph: httpOperation("entity.graph", schema72, schema73),
-    graphPaths: httpOperation("entity.graphPaths", schema74, schema75),
+    filterOptions: httpOperation("entity.filterOptions", schema69, schema70),
+    graph: httpOperation("entity.graph", schema71, schema72),
+    graphPaths: httpOperation("entity.graphPaths", schema73, schema74),
     inspectorHealth: httpOperation(
       "entity.inspectorHealth",
       schema4.null(),
@@ -435,203 +442,203 @@ export const httpContract = {
     ),
   },
   entityIntegrity: {
-    catalog: httpOperation("entityIntegrity.catalog", schema4.null(), schema76),
+    catalog: httpOperation("entityIntegrity.catalog", schema4.null(), schema75),
   },
   expense: {
     analytics: httpOperation(
       "expense.analytics",
-      schema77.expenseFiltersSchema,
-      schema77.expenseAnalyticsOut,
+      schema76.expenseFiltersSchema,
+      schema76.expenseAnalyticsOut,
     ),
     analyze: httpOperation(
       "expense.analyze",
-      schema77.expenseAnalyzeInput,
-      schema77.expenseAnalyzeOut,
+      schema76.expenseAnalyzeInput,
+      schema76.expenseAnalyzeOut,
     ),
     chargeContext: httpOperation(
       "expense.chargeContext",
-      schema78,
-      schema77.expenseChargeContextOut,
+      schema77,
+      schema76.expenseChargeContextOut,
     ),
     chartData: httpOperation(
       "expense.chartData",
-      schema77.expenseFiltersSchema,
-      schema4.array(schema77.expenseOut),
+      schema76.expenseFiltersSchema,
+      schema4.array(schema76.expenseOut),
     ),
     facetCounts: httpOperation(
       "expense.facetCounts",
-      schema77.expenseFacetCountsInput,
-      schema77.expenseFacetCountsOut,
+      schema76.expenseFacetCountsInput,
+      schema76.expenseFacetCountsOut,
     ),
     monthlySummary: httpOperation(
       "expense.monthlySummary",
-      schema77.expenseFiltersSchema,
-      schema77.expenseMonthlySummaryOut,
+      schema76.expenseFiltersSchema,
+      schema76.expenseMonthlySummaryOut,
     ),
     tradeAffinity: httpOperation(
       "expense.tradeAffinity",
       schema4.undefined(),
-      schema4.array(schema77.expenseTradeAffinityOut),
+      schema4.array(schema76.expenseTradeAffinityOut),
     ),
   },
   financialAccount: {
     options: httpOperation(
       "financialAccount.options",
       schema4.null(),
-      schema79,
+      schema78,
     ),
   },
   financialTransaction: {
     sourceOptions: httpOperation(
       "financialTransaction.sourceOptions",
       schema4.null(),
-      schema80,
+      schema79,
     ),
     vendorInference: httpOperation(
       "financialTransaction.vendorInference",
+      schema80,
       schema81,
-      schema82,
     ),
   },
   householdContribution: {
-    ledger: httpOperation("householdContribution.ledger", schema83, schema84),
-    project: httpOperation("householdContribution.project", schema85, schema86),
+    ledger: httpOperation("householdContribution.ledger", schema82, schema83),
+    project: httpOperation("householdContribution.project", schema84, schema85),
   },
   image: {
     cleanupUnreferencedImages: httpOperation(
       "image.cleanupUnreferencedImages",
       schema4.undefined(),
-      schema87,
+      schema86,
     ),
     cullPendingImages: httpOperation(
       "image.cullPendingImages",
-      schema88,
       schema87,
+      schema86,
     ),
-    delete: httpOperation("image.delete", schema89, schema90),
+    delete: httpOperation("image.delete", schema88, schema89),
     detail: httpOperation(
       "image.detail",
       schema4.object({ id: schema4.string() }),
-      schema91.nullable(),
+      schema90.nullable(),
     ),
-    importFromUrl: httpOperation("image.importFromUrl", schema92, schema93),
-    list: httpOperation("image.list", schema94, schema95),
-    markUploaded: httpOperation("image.markUploaded", schema96, schema91),
+    importFromUrl: httpOperation("image.importFromUrl", schema91, schema92),
+    list: httpOperation("image.list", schema93, schema94),
+    markUploaded: httpOperation("image.markUploaded", schema95, schema90),
     projectSummaries: httpOperation(
       "image.projectSummaries",
+      schema96,
       schema97,
-      schema98,
     ),
-    update: httpOperation("image.update", schema99, schema91),
-    uploadDocument: httpOperation("image.uploadDocument", schema100, schema101),
-    uploadImage: httpOperation("image.uploadImage", schema102, schema101),
+    update: httpOperation("image.update", schema98, schema90),
+    uploadDocument: httpOperation("image.uploadDocument", schema99, schema100),
+    uploadImage: httpOperation("image.uploadImage", schema101, schema100),
   },
   ingredient: {
     enrichmentWorkbench: httpOperation(
       "ingredient.enrichmentWorkbench",
-      schema103.enrichmentWorkbenchInput,
-      schema103.enrichmentRowsOut,
+      schema102.enrichmentWorkbenchInput,
+      schema102.enrichmentRowsOut,
     ),
     getByName: httpOperation(
       "ingredient.getByName",
-      schema103.ingredientNameFilterInput,
-      schema103.ingredientWithFoodOut.nullable(),
+      schema102.ingredientNameFilterInput,
+      schema102.ingredientWithFoodOut.nullable(),
     ),
     getManyByIDs: httpOperation(
       "ingredient.getManyByIDs",
-      schema103.ingredientIdsInput,
-      schema103.ingredientWithFoodLeanListOut,
+      schema102.ingredientIdsInput,
+      schema102.ingredientWithFoodLeanListOut,
     ),
     matchNames: httpOperation(
       "ingredient.matchNames",
-      schema103.ingredientNamesInput,
-      schema103.ingredientMatchesOut,
+      schema102.ingredientNamesInput,
+      schema102.ingredientMatchesOut,
     ),
     merge: httpOperation(
       "ingredient.merge",
-      schema103.ingredientMergeInput,
+      schema102.ingredientMergeInput,
       schema4.object({
-        ingredient: schema103.ingredientOut,
-        mergeSummary: schema103.ingredientMergeOut.shape.mergeSummary,
-        sideEffects: schema104,
+        ingredient: schema102.ingredientOut,
+        mergeSummary: schema102.ingredientMergeOut.shape.mergeSummary,
+        sideEffects: schema103,
       }),
     ),
     recipeUsages: httpOperation(
       "ingredient.recipeUsages",
-      schema103.ingredientIdInput,
-      schema103.ingredientRecipeUsagesOut,
+      schema102.ingredientIdInput,
+      schema102.ingredientRecipeUsagesOut,
     ),
     resolveOrCreate: httpOperation(
       "ingredient.resolveOrCreate",
-      schema103.ingredientResolvableNamesInput,
-      schema103.ingredientResolveOrCreateOut,
+      schema102.ingredientResolvableNamesInput,
+      schema102.ingredientResolveOrCreateOut,
     ),
   },
   inventory: {
-    bulkAdd: httpOperation("inventory.bulkAdd", schema105, schema106),
-    bulkDiscard: httpOperation("inventory.bulkDiscard", schema107, schema108),
-    bulkMove: httpOperation("inventory.bulkMove", schema109, schema110),
-    bulkProcess: httpOperation("inventory.bulkProcess", schema111, schema110),
+    bulkAdd: httpOperation("inventory.bulkAdd", schema104, schema105),
+    bulkDiscard: httpOperation("inventory.bulkDiscard", schema106, schema107),
+    bulkMove: httpOperation("inventory.bulkMove", schema108, schema109),
+    bulkProcess: httpOperation("inventory.bulkProcess", schema110, schema109),
     findDuplicates: httpOperation(
       "inventory.findDuplicates",
+      schema111,
       schema112,
-      schema113,
     ),
     getByLocationIds: httpOperation(
       "inventory.getByLocationIds",
+      schema113,
       schema114,
-      schema115,
     ),
-    moveEntries: httpOperation("inventory.moveEntries", schema116, schema110),
+    moveEntries: httpOperation("inventory.moveEntries", schema115, schema109),
     reconcileSession: httpOperation(
       "inventory.reconcileSession",
-      schema117,
-      schema110,
+      schema116,
+      schema109,
     ),
     resolveScanStrays: httpOperation(
       "inventory.resolveScanStrays",
+      schema117,
       schema118,
-      schema119,
     ),
     scanAtLocation: httpOperation(
       "inventory.scanAtLocation",
+      schema119,
       schema120,
-      schema121,
     ),
   },
   ledgerParty: {
-    options: httpOperation("ledgerParty.options", schema4.null(), schema122),
+    options: httpOperation("ledgerParty.options", schema4.null(), schema121),
   },
   location: {
     bulkUpdateParent: httpOperation(
       "location.bulkUpdateParent",
+      schema122,
       schema123,
-      schema124,
     ),
     ensureGlobalUnknown: httpOperation(
       "location.ensureGlobalUnknown",
       schema4.undefined(),
-      schema125,
+      schema124,
     ),
     getByShortcodes: httpOperation(
       "location.getByShortcodes",
+      schema125,
       schema126,
-      schema127,
     ),
     inventoryBreakdown: httpOperation(
       "location.inventoryBreakdown",
       schema4.object({ shortcode: schema4.string() }),
-      schema128.nullable(),
+      schema127.nullable(),
     ),
     makeTree: httpOperation(
       "location.makeTree",
       schema4.undefined(),
-      schema129,
+      schema128,
     ),
     parentOptions: httpOperation(
       "location.parentOptions",
       schema4.undefined(),
-      schema4.array(schema130),
+      schema4.array(schema129),
     ),
     recomputeValuations: httpOperation(
       "location.recomputeValuations",
@@ -641,7 +648,7 @@ export const httpContract = {
     search: httpOperation(
       "location.search",
       schema4.object({
-        filters: schema131,
+        filters: schema130,
         sort: schema4.object({
           orderBy: schema4.string(),
           direction: schema4.enum(["asc", "desc"]),
@@ -652,643 +659,643 @@ export const httpContract = {
         }),
       }),
       schema4.object({
-        data: schema4.array(schema132),
+        data: schema4.array(schema131),
         count: schema4.number(),
       }),
     ),
     subtree: httpOperation(
       "location.subtree",
       schema4.object({ shortcode: schema4.string() }),
-      schema129,
+      schema128,
     ),
     valuationSummary: httpOperation(
       "location.valuationSummary",
       schema4.undefined(),
-      schema133,
+      schema132,
     ),
   },
   mcp: {
-    listTools: httpOperation("mcp.listTools", schema4.null(), schema134),
-    usageActivity: httpOperation("mcp.usageActivity", schema135, schema136),
-    usageDashboard: httpOperation("mcp.usageDashboard", schema137, schema138),
+    listTools: httpOperation("mcp.listTools", schema4.null(), schema133),
+    usageActivity: httpOperation("mcp.usageActivity", schema134, schema135),
+    usageDashboard: httpOperation("mcp.usageDashboard", schema136, schema137),
   },
   meal: {
     addRecipe: httpOperation(
       "meal.addRecipe",
-      schema139.mealAddRecipeInput,
-      schema139.mealOut,
+      schema138.mealAddRecipeInput,
+      schema138.mealOut,
     ),
     getByDateRange: httpOperation(
       "meal.getByDateRange",
-      schema139.mealDateRange,
-      schema139.mealListOut,
+      schema138.mealDateRange,
+      schema138.mealListOut,
     ),
     getPreparations: httpOperation(
       "meal.getPreparations",
-      schema139.getMealPreparationsInput,
-      schema139.getMealPreparationsOut,
+      schema138.getMealPreparationsInput,
+      schema138.getMealPreparationsOut,
     ),
     getShoppingList: httpOperation(
       "meal.getShoppingList",
-      schema139.shoppingListInput,
-      schema139.shoppingListOut,
+      schema138.shoppingListInput,
+      schema138.shoppingListOut,
     ),
     removeRecipe: httpOperation(
       "meal.removeRecipe",
-      schema139.mealRecipeIdInput,
-      schema139.mealOut,
+      schema138.mealRecipeIdInput,
+      schema138.mealOut,
     ),
     savePreparation: httpOperation(
       "meal.savePreparation",
-      schema139.saveMealRecipePreparationInput,
-      schema139.saveMealRecipePreparationOut,
+      schema138.saveMealRecipePreparationInput,
+      schema138.saveMealRecipePreparationOut,
     ),
     upcomingSummary: httpOperation(
       "meal.upcomingSummary",
-      schema139.mealDateRange,
-      schema139.upcomingMealSummaryOut,
+      schema138.mealDateRange,
+      schema138.upcomingMealSummaryOut,
     ),
     updateRecipe: httpOperation(
       "meal.updateRecipe",
-      schema139.mealUpdateRecipeInput,
-      schema139.mealOut,
+      schema138.mealUpdateRecipeInput,
+      schema138.mealOut,
     ),
   },
   oauth: {
     countOrphanedClients: httpOperation(
       "oauth.countOrphanedClients",
       schema4.null(),
-      schema140,
+      schema139,
     ),
     listConnectedApps: httpOperation(
       "oauth.listConnectedApps",
       schema4.null(),
-      schema141,
+      schema140,
     ),
     pruneOrphanedClients: httpOperation(
       "oauth.pruneOrphanedClients",
       schema4.null(),
-      schema142,
+      schema141,
     ),
     revokeConnectedApp: httpOperation(
       "oauth.revokeConnectedApp",
+      schema142,
       schema143,
-      schema144,
     ),
   },
   problems: {
     cleanupOrphanedEmbeddings: httpOperation(
       "problems.cleanupOrphanedEmbeddings",
+      schema144,
       schema145,
-      schema146,
     ),
-    deleteUnused: httpOperation("problems.deleteUnused", schema147, schema148),
+    deleteUnused: httpOperation("problems.deleteUnused", schema146, schema147),
     dryRunPruneAliases: httpOperation(
       "problems.dryRunPruneAliases",
       schema4.undefined(),
-      schema149,
+      schema148,
     ),
     dryRunReparse: httpOperation(
       "problems.dryRunReparse",
       schema4.undefined(),
-      schema150,
+      schema149,
     ),
     getByType: httpOperation(
       "problems.getByType",
       schema4.object({ key: schema4.literal("referentialLivenessViolations") }),
       schema4.object({
         type: schema4.literal("referentialLivenessViolations"),
-        items: schema4.array(schema151),
+        items: schema4.array(schema150),
         total: schema4.number().int().nonnegative(),
       }),
     ),
     getCounts: httpOperation(
       "problems.getCounts",
       schema4.undefined(),
-      schema152,
+      schema151,
     ),
     getCoverage: httpOperation(
       "problems.getCoverage",
       schema4.undefined(),
-      schema153,
+      schema152,
     ),
     getCoverageTotals: httpOperation(
       "problems.getCoverageTotals",
       schema4.undefined(),
-      schema154,
+      schema153,
     ),
-    getFast: httpOperation("problems.getFast", schema4.undefined(), schema155),
+    getFast: httpOperation("problems.getFast", schema4.undefined(), schema154),
     getMaintenanceCounts: httpOperation(
       "problems.getMaintenanceCounts",
       schema4.undefined(),
-      schema156,
+      schema155,
     ),
     getTracker: httpOperation(
       "problems.getTracker",
       schema4.undefined(),
-      schema157,
+      schema156,
     ),
-    getUpc: httpOperation("problems.getUpc", schema4.undefined(), schema158),
+    getUpc: httpOperation("problems.getUpc", schema4.undefined(), schema157),
     getViews: httpOperation(
       "problems.getViews",
       schema4.undefined(),
-      schema159,
+      schema158,
     ),
     recipeUsageByProduct: httpOperation(
       "problems.recipeUsageByProduct",
+      schema159,
       schema160,
-      schema161,
     ),
   },
   product: {
     applyUpcData: httpOperation(
       "product.applyUpcData",
-      { ...schema162.applyUpcData }.input,
-      { ...schema162.applyUpcData }.output,
+      { ...schema161.applyUpcData }.input,
+      { ...schema161.applyUpcData }.output,
     ),
     attachComponents: httpOperation(
       "product.attachComponents",
-      { ...schema162.attachComponents }.input,
-      { ...schema162.attachComponents }.output,
+      { ...schema161.attachComponents }.input,
+      { ...schema161.attachComponents }.output,
     ),
     categoryDistribution: httpOperation(
       "product.categoryDistribution",
-      { ...schema162.categoryDistribution }.input,
-      { ...schema162.categoryDistribution }.output,
+      { ...schema161.categoryDistribution }.input,
+      { ...schema161.categoryDistribution }.output,
     ),
     components: httpOperation(
       "product.components",
-      { ...schema162.components }.input,
-      { ...schema162.components }.output,
+      { ...schema161.components }.input,
+      { ...schema161.components }.output,
     ),
     detachComponents: httpOperation(
       "product.detachComponents",
-      { ...schema162.detachComponents }.input,
-      { ...schema162.detachComponents }.output,
+      { ...schema161.detachComponents }.input,
+      { ...schema161.detachComponents }.output,
     ),
     discard: httpOperation(
       "product.discard",
-      { ...schema162.discard }.input,
-      { ...schema162.discard }.output,
+      { ...schema161.discard }.input,
+      { ...schema161.discard }.output,
     ),
     externalIdSourceOptions: httpOperation(
       "product.externalIdSourceOptions",
-      { ...schema162.externalIdSourceOptions }.input,
-      { ...schema162.externalIdSourceOptions }.output,
+      { ...schema161.externalIdSourceOptions }.input,
+      { ...schema161.externalIdSourceOptions }.output,
     ),
     findOrCreateByCode: httpOperation(
       "product.findOrCreateByCode",
-      { ...schema162.findOrCreateByCode }.input,
-      { ...schema162.findOrCreateByCode }.output,
+      { ...schema161.findOrCreateByCode }.input,
+      { ...schema161.findOrCreateByCode }.output,
     ),
     findOrCreateByUPC: httpOperation(
       "product.findOrCreateByUPC",
-      { ...schema162.findOrCreateByUPC }.input,
-      { ...schema162.findOrCreateByUPC }.output,
+      { ...schema161.findOrCreateByUPC }.input,
+      { ...schema161.findOrCreateByUPC }.output,
     ),
     getByShortcodes: httpOperation(
       "product.getByShortcodes",
-      { ...schema162.getByShortcodes }.input,
-      { ...schema162.getByShortcodes }.output,
+      { ...schema161.getByShortcodes }.input,
+      { ...schema161.getByShortcodes }.output,
     ),
     inventoryEntriesByIds: httpOperation(
       "product.inventoryEntriesByIds",
-      { ...schema162.inventoryEntriesByIds }.input,
-      { ...schema162.inventoryEntriesByIds }.output,
+      { ...schema161.inventoryEntriesByIds }.input,
+      { ...schema161.inventoryEntriesByIds }.output,
     ),
     kitComponentRows: httpOperation(
       "product.kitComponentRows",
-      { ...schema162.kitComponentRows }.input,
-      { ...schema162.kitComponentRows }.output,
+      { ...schema161.kitComponentRows }.input,
+      { ...schema161.kitComponentRows }.output,
     ),
     kitMembership: httpOperation(
       "product.kitMembership",
-      { ...schema162.kitMembership }.input,
-      { ...schema162.kitMembership }.output,
+      { ...schema161.kitMembership }.input,
+      { ...schema161.kitMembership }.output,
     ),
     manufacturerOptions: httpOperation(
       "product.manufacturerOptions",
-      { ...schema162.manufacturerOptions }.input,
-      { ...schema162.manufacturerOptions }.output,
+      { ...schema161.manufacturerOptions }.input,
+      { ...schema161.manufacturerOptions }.output,
     ),
     merge: httpOperation(
       "product.merge",
-      { ...schema162.merge }.input,
-      { ...schema162.merge }.output,
+      { ...schema161.merge }.input,
+      { ...schema161.merge }.output,
     ),
     movementTimeline: httpOperation(
       "product.movementTimeline",
-      { ...schema162.movementTimeline }.input,
-      { ...schema162.movementTimeline }.output,
+      { ...schema161.movementTimeline }.input,
+      { ...schema161.movementTimeline }.output,
     ),
     projectUses: httpOperation(
       "product.projectUses",
-      { ...schema162.projectUses }.input,
-      { ...schema162.projectUses }.output,
+      { ...schema161.projectUses }.input,
+      { ...schema161.projectUses }.output,
     ),
     purchases: httpOperation(
       "product.purchases",
-      { ...schema162.purchases }.input,
-      { ...schema162.purchases }.output,
+      { ...schema161.purchases }.input,
+      { ...schema161.purchases }.output,
     ),
     quantitySummaries: httpOperation(
       "product.quantitySummaries",
-      { ...schema162.quantitySummaries }.input,
-      { ...schema162.quantitySummaries }.output,
+      { ...schema161.quantitySummaries }.input,
+      { ...schema161.quantitySummaries }.output,
     ),
     quickCreate: httpOperation(
       "product.quickCreate",
-      { ...schema162.quickCreate }.input,
-      { ...schema162.quickCreate }.output,
+      { ...schema161.quickCreate }.input,
+      { ...schema161.quickCreate }.output,
     ),
     search: httpOperation(
       "product.search",
-      { ...schema162.search }.input,
-      { ...schema162.search }.output,
+      { ...schema161.search }.input,
+      { ...schema161.search }.output,
     ),
     setProjectUses: httpOperation(
       "product.setProjectUses",
-      { ...schema162.setProjectUses }.input,
-      { ...schema162.setProjectUses }.output,
+      { ...schema161.setProjectUses }.input,
+      { ...schema161.setProjectUses }.output,
     ),
     summaries: httpOperation(
       "product.summaries",
-      { ...schema162.summaries }.input,
-      { ...schema162.summaries }.output,
+      { ...schema161.summaries }.input,
+      { ...schema161.summaries }.output,
     ),
     tagOptions: httpOperation(
       "product.tagOptions",
-      { ...schema162.tagOptions }.input,
-      { ...schema162.tagOptions }.output,
+      { ...schema161.tagOptions }.input,
+      { ...schema161.tagOptions }.output,
     ),
   },
   project: {
     attachResources: httpOperation(
       "project.attachResources",
-      schema77.projectResourceMutationInput,
-      schema77.projectResourceMutationOut,
+      schema76.projectResourceMutationInput,
+      schema76.projectResourceMutationOut,
     ),
     createFromTasks: httpOperation(
       "project.createFromTasks",
-      schema77.createProjectFromTasksInput,
-      schema77.createProjectFromTasksOut,
+      schema76.createProjectFromTasksInput,
+      schema76.createProjectFromTasksOut,
     ),
     dashboardSummary: httpOperation(
       "project.dashboardSummary",
-      schema77.projectDashboardFiltersSchema,
-      schema77.projectDashboardSummaryOut,
+      schema76.projectDashboardFiltersSchema,
+      schema76.projectDashboardSummaryOut,
     ),
     detachResources: httpOperation(
       "project.detachResources",
-      schema77.projectResourceMutationInput,
-      schema77.projectResourceMutationOut,
+      schema76.projectResourceMutationInput,
+      schema76.projectResourceMutationOut,
     ),
     getDependencyGraph: httpOperation(
       "project.getDependencyGraph",
-      schema77.projectDependencyGraphInput,
-      schema77.projectDependencyGraphSchema,
+      schema76.projectDependencyGraphInput,
+      schema76.projectDependencyGraphSchema,
     ),
     options: httpOperation(
       "project.options",
       schema4.undefined(),
-      schema4.array(schema77.projectOptionsOut),
+      schema4.array(schema76.projectOptionsOut),
     ),
     portfolioAnalytics: httpOperation(
       "project.portfolioAnalytics",
-      schema77.projectDashboardFiltersSchema,
-      schema77.projectPortfolioAnalyticsOut,
+      schema76.projectDashboardFiltersSchema,
+      schema76.projectPortfolioAnalyticsOut,
     ),
     resources: httpOperation(
       "project.resources",
-      schema77.projectResourceProjectInput,
-      schema77.projectResourcesOut,
+      schema76.projectResourceProjectInput,
+      schema76.projectResourcesOut,
     ),
     setToolUsage: httpOperation(
       "project.setToolUsage",
-      schema77.projectToolUsageSetInput,
-      schema77.projectToolUsageSetOut,
+      schema76.projectToolUsageSetInput,
+      schema76.projectToolUsageSetOut,
     ),
     toolGallery: httpOperation(
       "project.toolGallery",
-      schema77.toolGalleryInput,
-      schema77.toolGalleryOut,
+      schema76.toolGalleryInput,
+      schema76.toolGalleryOut,
     ),
     toolMatrix: httpOperation(
       "project.toolMatrix",
-      schema77.projectToolMatrixInput,
-      schema77.projectToolMatrixOut,
+      schema76.projectToolMatrixInput,
+      schema76.projectToolMatrixOut,
     ),
     toolSuggestions: httpOperation(
       "project.toolSuggestions",
-      schema77.projectResourceProjectInput,
-      schema77.projectToolSuggestionsOut,
+      schema76.projectResourceProjectInput,
+      schema76.projectToolSuggestionsOut,
     ),
     tree: httpOperation(
       "project.tree",
-      schema77.projectTreeInput,
-      schema77.projectTreeOut,
+      schema76.projectTreeInput,
+      schema76.projectTreeOut,
     ),
   },
   purchase: {
     attachProducts: httpOperation(
       "purchase.attachProducts",
+      schema162,
       schema163,
-      schema164,
     ),
     detachProducts: httpOperation(
       "purchase.detachProducts",
+      schema162,
       schema163,
-      schema164,
     ),
-    link: httpOperation("purchase.link", schema165, schema166),
-    merge: httpOperation("purchase.merge", schema167, schema168),
-    products: httpOperation("purchase.products", schema169, schema170),
-    split: httpOperation("purchase.split", schema171, schema172),
+    link: httpOperation("purchase.link", schema164, schema165),
+    merge: httpOperation("purchase.merge", schema166, schema167),
+    products: httpOperation("purchase.products", schema168, schema169),
+    split: httpOperation("purchase.split", schema170, schema171),
   },
   recipe: {
     attachCookbookRecipePhoto: httpOperation(
       "recipe.attachCookbookRecipePhoto",
+      schema172,
       schema173,
-      schema174,
     ),
     deleteCookbook: httpOperation(
       "recipe.deleteCookbook",
+      schema174,
       schema175,
-      schema176,
     ),
     dryRunRecomputeTotals: httpOperation(
       "recipe.dryRunRecomputeTotals",
       schema4.undefined(),
-      schema177,
+      schema176,
     ),
-    duplicate: httpOperation("recipe.duplicate", schema178, schema179),
+    duplicate: httpOperation("recipe.duplicate", schema177, schema178),
     explainCosting: httpOperation(
       "recipe.explainCosting",
-      schema178,
-      schema180,
+      schema177,
+      schema179,
     ),
     forwardGatewayRequest: httpOperation(
       "recipe.forwardGatewayRequest",
+      schema180,
       schema181,
-      schema182,
     ),
-    generateFlow: httpOperation("recipe.generateFlow", schema183, schema184),
+    generateFlow: httpOperation("recipe.generateFlow", schema182, schema183),
     getAllTags: httpOperation(
       "recipe.getAllTags",
       schema4.undefined(),
-      schema185,
+      schema184,
     ),
     getCookbookDiff: httpOperation(
       "recipe.getCookbookDiff",
+      schema185,
       schema186,
-      schema187,
     ),
     getCookbookSource: httpOperation(
       "recipe.getCookbookSource",
-      schema175,
-      schema188,
+      schema174,
+      schema187,
     ),
     getDependencyGraph: httpOperation(
       "recipe.getDependencyGraph",
+      schema188,
       schema189,
-      schema190,
     ),
-    getFlow: httpOperation("recipe.getFlow", schema191, schema192),
+    getFlow: httpOperation("recipe.getFlow", schema190, schema191),
     getIngredientCooccurrence: httpOperation(
       "recipe.getIngredientCooccurrence",
+      schema192,
       schema193,
-      schema194,
     ),
     getIngredientUsage: httpOperation(
       "recipe.getIngredientUsage",
-      schema189,
-      schema195,
+      schema188,
+      schema194,
     ),
-    getManyByIDs: httpOperation("recipe.getManyByIDs", schema196, schema197),
+    getManyByIDs: httpOperation("recipe.getManyByIDs", schema195, schema196),
     harvestEquivalences: httpOperation(
       "recipe.harvestEquivalences",
       schema4.undefined(),
-      schema198,
+      schema197,
     ),
-    parseHtml: httpOperation("recipe.parseHtml", schema199, schema200),
+    parseHtml: httpOperation("recipe.parseHtml", schema198, schema199),
     previewNotionSync: httpOperation(
       "recipe.previewNotionSync",
       schema4.undefined(),
-      schema201,
+      schema200,
     ),
-    recomputeOne: httpOperation("recipe.recomputeOne", schema178, schema202),
-    scrape: httpOperation("recipe.scrape", schema203, schema200),
+    recomputeOne: httpOperation("recipe.recomputeOne", schema177, schema201),
+    scrape: httpOperation("recipe.scrape", schema202, schema199),
     setCookbookProduct: httpOperation(
       "recipe.setCookbookProduct",
-      schema204,
-      schema67,
+      schema203,
+      schema66,
     ),
     upsertCookbook: httpOperation(
       "recipe.upsertCookbook",
+      schema204,
       schema205,
-      schema206,
     ),
   },
   recommendations: {
     dismissDuplicateProduct: httpOperation(
       "recommendations.dismissDuplicateProduct",
+      schema206,
       schema207,
-      schema208,
     ),
     dismissProduct: httpOperation(
       "recommendations.dismissProduct",
-      schema209,
       schema208,
+      schema207,
     ),
     dismissTagPropagation: httpOperation(
       "recommendations.dismissTagPropagation",
-      schema210,
-      schema208,
+      schema209,
+      schema207,
     ),
     duplicateProduct: httpOperation(
       "recommendations.duplicateProduct",
+      schema210,
       schema211,
-      schema212,
     ),
-    placement: httpOperation("recommendations.placement", schema213, schema214),
-    product: httpOperation("recommendations.product", schema215, schema216),
+    placement: httpOperation("recommendations.placement", schema212, schema213),
+    product: httpOperation("recommendations.product", schema214, schema215),
     tagPropagation: httpOperation(
       "recommendations.tagPropagation",
+      schema216,
       schema217,
-      schema218,
     ),
   },
   relatedData: {
-    branch: httpOperation("relatedData.branch", schema219, schema220),
-    options: httpOperation("relatedData.options", schema221, schema222),
-    previews: httpOperation("relatedData.previews", schema223, schema224),
-    summary: httpOperation("relatedData.summary", schema225, schema226),
+    branch: httpOperation("relatedData.branch", schema218, schema219),
+    options: httpOperation("relatedData.options", schema220, schema221),
+    previews: httpOperation("relatedData.previews", schema222, schema223),
+    summary: httpOperation("relatedData.summary", schema224, schema225),
   },
   relatedness: {
-    product: httpOperation("relatedness.product", schema227, schema228),
+    product: httpOperation("relatedness.product", schema226, schema227),
   },
   search: {
-    debug: httpOperation("search.debug", schema229, schema230),
+    debug: httpOperation("search.debug", schema228, schema229),
     documentHealth: httpOperation(
       "search.documentHealth",
       schema4.undefined(),
-      schema231,
+      schema230,
     ),
     enqueueEmbeddingBackfill: httpOperation(
       "search.enqueueEmbeddingBackfill",
+      schema231,
       schema232,
-      schema233,
     ),
-    find: httpOperation("search.find", schema229, schema234),
-    grouped: httpOperation("search.grouped", schema229, schema235),
-    related: httpOperation("search.related", schema229, schema236),
+    find: httpOperation("search.find", schema228, schema233),
+    grouped: httpOperation("search.grouped", schema228, schema234),
+    related: httpOperation("search.related", schema228, schema235),
     relatedGrouped: httpOperation(
       "search.relatedGrouped",
-      schema229,
-      schema237,
+      schema228,
+      schema236,
     ),
     repairDocuments: httpOperation(
       "search.repairDocuments",
       schema4.undefined(),
-      schema238,
+      schema237,
     ),
     requestEmbeddingRefresh: httpOperation(
       "search.requestEmbeddingRefresh",
+      schema238,
       schema239,
-      schema240,
     ),
   },
   statementRow: {
-    imports: httpOperation("statementRow.imports", schema241, schema242),
-    list: httpOperation("statementRow.list", schema243, schema244),
-    summary: httpOperation("statementRow.summary", schema245, schema246),
+    imports: httpOperation("statementRow.imports", schema240, schema241),
+    list: httpOperation("statementRow.list", schema242, schema243),
+    summary: httpOperation("statementRow.summary", schema244, schema245),
   },
   suggestions: {
-    getMakeable: httpOperation("suggestions.getMakeable", schema247, schema248),
+    getMakeable: httpOperation("suggestions.getMakeable", schema246, schema247),
     getRecipeAvailability: httpOperation(
       "suggestions.getRecipeAvailability",
+      schema248,
       schema249,
-      schema250,
     ),
   },
   task: {
     board: httpOperation(
       "task.board",
-      schema77.taskFiltersSchema,
-      schema77.taskBoardOut,
+      schema76.taskFiltersSchema,
+      schema76.taskBoardOut,
     ),
     bulkReorder: httpOperation(
       "task.bulkReorder",
-      schema77.taskBulkReorderInput,
-      schema77.taskBulkMutationOut,
+      schema76.taskBulkReorderInput,
+      schema76.taskBulkMutationOut,
     ),
     chartData: httpOperation(
       "task.chartData",
-      schema77.taskFiltersSchema,
-      schema4.array(schema77.taskOut),
+      schema76.taskFiltersSchema,
+      schema4.array(schema76.taskOut),
     ),
     listActionable: httpOperation(
       "task.listActionable",
-      schema77.taskFiltersSchema.optional(),
-      schema77.actionableTasksOut,
+      schema76.taskFiltersSchema.optional(),
+      schema76.actionableTasksOut,
     ),
     summary: httpOperation(
       "task.summary",
       schema4.undefined(),
-      schema77.taskSummaryOut,
+      schema76.taskSummaryOut,
     ),
     timeline: httpOperation(
       "task.timeline",
-      schema77.taskFiltersSchema,
-      schema77.taskTimelineOut,
+      schema76.taskFiltersSchema,
+      schema76.taskTimelineOut,
     ),
     todayBriefing: httpOperation(
       "task.todayBriefing",
       schema4.undefined(),
-      schema77.taskTodayBriefingOut,
+      schema76.taskTodayBriefingOut,
     ),
   },
   upc: {
-    lookup: httpOperation("upc.lookup", schema251, schema252.nullable()),
+    lookup: httpOperation("upc.lookup", schema250, schema251.nullable()),
   },
   "usda-food": {
     alternateId: httpOperation(
       "usda-food.alternateId",
-      schema253,
-      schema254.nullable(),
+      schema252,
+      schema253.nullable(),
     ),
-    detail: httpOperation("usda-food.detail", schema255, schema254.nullable()),
-    list: httpOperation("usda-food.list", schema256, schema257),
+    detail: httpOperation("usda-food.detail", schema254, schema253.nullable()),
+    list: httpOperation("usda-food.list", schema255, schema256),
   },
   vendor: {
-    fetchLogo: httpOperation("vendor.fetchLogo", schema258, schema259),
-    merge: httpOperation("vendor.merge", schema260, schema261),
-    options: httpOperation("vendor.options", schema4.null(), schema262),
+    fetchLogo: httpOperation("vendor.fetchLogo", schema257, schema258),
+    merge: httpOperation("vendor.merge", schema259, schema260),
+    options: httpOperation("vendor.options", schema4.null(), schema261),
   },
   queries: {
     ai: {
-      suggestCategory: httpQuery("ai.suggestCategory", schema13, schema14),
-      suggestLocation: httpQuery("ai.suggestLocation", schema17, schema18),
+      suggestCategory: httpQuery("ai.suggestCategory", schema12, schema13),
+      suggestLocation: httpQuery("ai.suggestLocation", schema16, schema17),
       suggestLocationType: httpQuery(
         "ai.suggestLocationType",
+        schema18,
         schema19,
-        schema20,
       ),
-      usageRecent: httpQuery("ai.usageRecent", schema25, schema26),
-      usageSummary: httpQuery("ai.usageSummary", schema27, schema28),
+      usageRecent: httpQuery("ai.usageRecent", schema24, schema25),
+      usageSummary: httpQuery("ai.usageSummary", schema26, schema27),
     },
-    auditLog: { list: httpQuery("auditLog.list", schema29, schema30) },
+    auditLog: { list: httpQuery("auditLog.list", schema28, schema29) },
     "background-batch": {
-      jobs: httpQuery("background-batch.jobs", schema33, schema34),
-      list: httpQuery("background-batch.list", schema35, schema36),
-      summary: httpQuery("background-batch.summary", schema31, schema37),
+      jobs: httpQuery("background-batch.jobs", schema32, schema33),
+      list: httpQuery("background-batch.list", schema34, schema35),
+      summary: httpQuery("background-batch.summary", schema30, schema36),
     },
     "background-job": {
       strandedCount: httpQuery(
         "background-job.strandedCount",
+        schema42,
         schema43,
-        schema44,
       ),
     },
     calendar: {
       getCredential: httpQuery(
         "calendar.getCredential",
         schema4.undefined(),
-        schema46,
+        schema45,
       ),
-      getFeed: httpQuery("calendar.getFeed", schema4.undefined(), schema47),
+      getFeed: httpQuery("calendar.getFeed", schema4.undefined(), schema46),
       inspectFeed: httpQuery(
         "calendar.inspectFeed",
         schema4.undefined(),
-        schema48,
+        schema47,
       ),
-      range: httpQuery("calendar.range", schema49, schema50),
+      range: httpQuery("calendar.range", schema48, schema49),
     },
     collection: {
-      detail: httpQuery("collection.detail", schema56, schema57),
+      detail: httpQuery("collection.detail", schema55, schema56),
       list: httpQuery(
         "collection.list",
         schema4.null(),
-        schema4.array(schema55),
+        schema4.array(schema54),
       ),
-      matrix: httpQuery("collection.matrix", schema58, schema59),
-      smartDetail: httpQuery("collection.smartDetail", schema62, schema63),
+      matrix: httpQuery("collection.matrix", schema57, schema58),
+      smartDetail: httpQuery("collection.smartDetail", schema61, schema62),
       smartList: httpQuery(
         "collection.smartList",
-        schema64,
-        schema4.array(schema65),
+        schema63,
+        schema4.array(schema64),
       ),
     },
     cookbook: {
       detail: httpQuery(
         "cookbook.detail",
-        schema4.object({ shortcode: schema66 }),
-        schema67.nullable(),
+        schema4.object({ shortcode: schema65 }),
+        schema66.nullable(),
       ),
-      list: httpQuery("cookbook.list", schema4.null(), schema68),
+      list: httpQuery("cookbook.list", schema4.null(), schema67),
     },
     dashboard: {
-      counts: httpQuery("dashboard.counts", schema4.undefined(), schema69),
+      counts: httpQuery("dashboard.counts", schema4.undefined(), schema68),
     },
     entity: {
       detail: httpQuery(
@@ -1296,9 +1303,9 @@ export const httpContract = {
         entityHttpSchemas["entity.detail"].input,
         entityHttpSchemas["entity.detail"].output,
       ),
-      filterOptions: httpQuery("entity.filterOptions", schema70, schema71),
-      graph: httpQuery("entity.graph", schema72, schema73),
-      graphPaths: httpQuery("entity.graphPaths", schema74, schema75),
+      filterOptions: httpQuery("entity.filterOptions", schema69, schema70),
+      graph: httpQuery("entity.graph", schema71, schema72),
+      graphPaths: httpQuery("entity.graphPaths", schema73, schema74),
       inspectorHealth: httpQuery(
         "entity.inspectorHealth",
         schema4.null(),
@@ -1323,136 +1330,136 @@ export const httpContract = {
       ),
     },
     entityIntegrity: {
-      catalog: httpQuery("entityIntegrity.catalog", schema4.null(), schema76),
+      catalog: httpQuery("entityIntegrity.catalog", schema4.null(), schema75),
     },
     expense: {
       analytics: httpQuery(
         "expense.analytics",
-        schema77.expenseFiltersSchema,
-        schema77.expenseAnalyticsOut,
+        schema76.expenseFiltersSchema,
+        schema76.expenseAnalyticsOut,
       ),
       analyze: httpQuery(
         "expense.analyze",
-        schema77.expenseAnalyzeInput,
-        schema77.expenseAnalyzeOut,
+        schema76.expenseAnalyzeInput,
+        schema76.expenseAnalyzeOut,
       ),
       chargeContext: httpQuery(
         "expense.chargeContext",
-        schema78,
-        schema77.expenseChargeContextOut,
+        schema77,
+        schema76.expenseChargeContextOut,
       ),
       chartData: httpQuery(
         "expense.chartData",
-        schema77.expenseFiltersSchema,
-        schema4.array(schema77.expenseOut),
+        schema76.expenseFiltersSchema,
+        schema4.array(schema76.expenseOut),
       ),
       facetCounts: httpQuery(
         "expense.facetCounts",
-        schema77.expenseFacetCountsInput,
-        schema77.expenseFacetCountsOut,
+        schema76.expenseFacetCountsInput,
+        schema76.expenseFacetCountsOut,
       ),
       monthlySummary: httpQuery(
         "expense.monthlySummary",
-        schema77.expenseFiltersSchema,
-        schema77.expenseMonthlySummaryOut,
+        schema76.expenseFiltersSchema,
+        schema76.expenseMonthlySummaryOut,
       ),
       tradeAffinity: httpQuery(
         "expense.tradeAffinity",
         schema4.undefined(),
-        schema4.array(schema77.expenseTradeAffinityOut),
+        schema4.array(schema76.expenseTradeAffinityOut),
       ),
     },
     financialAccount: {
-      options: httpQuery("financialAccount.options", schema4.null(), schema79),
+      options: httpQuery("financialAccount.options", schema4.null(), schema78),
     },
     financialTransaction: {
       sourceOptions: httpQuery(
         "financialTransaction.sourceOptions",
         schema4.null(),
-        schema80,
+        schema79,
       ),
       vendorInference: httpQuery(
         "financialTransaction.vendorInference",
+        schema80,
         schema81,
-        schema82,
       ),
     },
     householdContribution: {
-      ledger: httpQuery("householdContribution.ledger", schema83, schema84),
-      project: httpQuery("householdContribution.project", schema85, schema86),
+      ledger: httpQuery("householdContribution.ledger", schema82, schema83),
+      project: httpQuery("householdContribution.project", schema84, schema85),
     },
     image: {
       detail: httpQuery(
         "image.detail",
         schema4.object({ id: schema4.string() }),
-        schema91.nullable(),
+        schema90.nullable(),
       ),
-      list: httpQuery("image.list", schema94, schema95),
-      projectSummaries: httpQuery("image.projectSummaries", schema97, schema98),
+      list: httpQuery("image.list", schema93, schema94),
+      projectSummaries: httpQuery("image.projectSummaries", schema96, schema97),
     },
     ingredient: {
       enrichmentWorkbench: httpQuery(
         "ingredient.enrichmentWorkbench",
-        schema103.enrichmentWorkbenchInput,
-        schema103.enrichmentRowsOut,
+        schema102.enrichmentWorkbenchInput,
+        schema102.enrichmentRowsOut,
       ),
       getByName: httpQuery(
         "ingredient.getByName",
-        schema103.ingredientNameFilterInput,
-        schema103.ingredientWithFoodOut.nullable(),
+        schema102.ingredientNameFilterInput,
+        schema102.ingredientWithFoodOut.nullable(),
       ),
       getManyByIDs: httpQuery(
         "ingredient.getManyByIDs",
-        schema103.ingredientIdsInput,
-        schema103.ingredientWithFoodLeanListOut,
+        schema102.ingredientIdsInput,
+        schema102.ingredientWithFoodLeanListOut,
       ),
       matchNames: httpQuery(
         "ingredient.matchNames",
-        schema103.ingredientNamesInput,
-        schema103.ingredientMatchesOut,
+        schema102.ingredientNamesInput,
+        schema102.ingredientMatchesOut,
       ),
       recipeUsages: httpQuery(
         "ingredient.recipeUsages",
-        schema103.ingredientIdInput,
-        schema103.ingredientRecipeUsagesOut,
+        schema102.ingredientIdInput,
+        schema102.ingredientRecipeUsagesOut,
       ),
     },
     inventory: {
       findDuplicates: httpQuery(
         "inventory.findDuplicates",
+        schema111,
         schema112,
-        schema113,
       ),
       getByLocationIds: httpQuery(
         "inventory.getByLocationIds",
+        schema113,
         schema114,
-        schema115,
       ),
     },
     ledgerParty: {
-      options: httpQuery("ledgerParty.options", schema4.null(), schema122),
+      options: httpQuery("ledgerParty.options", schema4.null(), schema121),
     },
     location: {
       getByShortcodes: httpQuery(
         "location.getByShortcodes",
+        schema125,
         schema126,
-        schema127,
       ),
       inventoryBreakdown: httpQuery(
         "location.inventoryBreakdown",
         schema4.object({ shortcode: schema4.string() }),
-        schema128.nullable(),
+        schema127.nullable(),
       ),
-      makeTree: httpQuery("location.makeTree", schema4.undefined(), schema129),
+      makeTree: httpQuery("location.makeTree", schema4.undefined(), schema128),
       parentOptions: httpQuery(
         "location.parentOptions",
         schema4.undefined(),
-        schema4.array(schema130),
+        schema4.array(schema129),
       ),
       search: httpQuery(
         "location.search",
         schema4.object({
-          filters: schema131,
+          filters: schema130,
           sort: schema4.object({
             orderBy: schema4.string(),
             direction: schema4.enum(["asc", "desc"]),
@@ -1463,70 +1470,70 @@ export const httpContract = {
           }),
         }),
         schema4.object({
-          data: schema4.array(schema132),
+          data: schema4.array(schema131),
           count: schema4.number(),
         }),
       ),
       subtree: httpQuery(
         "location.subtree",
         schema4.object({ shortcode: schema4.string() }),
-        schema129,
+        schema128,
       ),
       valuationSummary: httpQuery(
         "location.valuationSummary",
         schema4.undefined(),
-        schema133,
+        schema132,
       ),
     },
     mcp: {
-      listTools: httpQuery("mcp.listTools", schema4.null(), schema134),
-      usageActivity: httpQuery("mcp.usageActivity", schema135, schema136),
-      usageDashboard: httpQuery("mcp.usageDashboard", schema137, schema138),
+      listTools: httpQuery("mcp.listTools", schema4.null(), schema133),
+      usageActivity: httpQuery("mcp.usageActivity", schema134, schema135),
+      usageDashboard: httpQuery("mcp.usageDashboard", schema136, schema137),
     },
     meal: {
       getByDateRange: httpQuery(
         "meal.getByDateRange",
-        schema139.mealDateRange,
-        schema139.mealListOut,
+        schema138.mealDateRange,
+        schema138.mealListOut,
       ),
       getPreparations: httpQuery(
         "meal.getPreparations",
-        schema139.getMealPreparationsInput,
-        schema139.getMealPreparationsOut,
+        schema138.getMealPreparationsInput,
+        schema138.getMealPreparationsOut,
       ),
       getShoppingList: httpQuery(
         "meal.getShoppingList",
-        schema139.shoppingListInput,
-        schema139.shoppingListOut,
+        schema138.shoppingListInput,
+        schema138.shoppingListOut,
       ),
       upcomingSummary: httpQuery(
         "meal.upcomingSummary",
-        schema139.mealDateRange,
-        schema139.upcomingMealSummaryOut,
+        schema138.mealDateRange,
+        schema138.upcomingMealSummaryOut,
       ),
     },
     oauth: {
       countOrphanedClients: httpQuery(
         "oauth.countOrphanedClients",
         schema4.null(),
-        schema140,
+        schema139,
       ),
       listConnectedApps: httpQuery(
         "oauth.listConnectedApps",
         schema4.null(),
-        schema141,
+        schema140,
       ),
     },
     problems: {
       dryRunPruneAliases: httpQuery(
         "problems.dryRunPruneAliases",
         schema4.undefined(),
-        schema149,
+        schema148,
       ),
       dryRunReparse: httpQuery(
         "problems.dryRunReparse",
         schema4.undefined(),
-        schema150,
+        schema149,
       ),
       getByType: httpQuery(
         "problems.getByType",
@@ -1535,312 +1542,312 @@ export const httpContract = {
         }),
         schema4.object({
           type: schema4.literal("referentialLivenessViolations"),
-          items: schema4.array(schema151),
+          items: schema4.array(schema150),
           total: schema4.number().int().nonnegative(),
         }),
       ),
       getCounts: httpQuery(
         "problems.getCounts",
         schema4.undefined(),
-        schema152,
+        schema151,
       ),
       getCoverage: httpQuery(
         "problems.getCoverage",
         schema4.undefined(),
-        schema153,
+        schema152,
       ),
       getCoverageTotals: httpQuery(
         "problems.getCoverageTotals",
         schema4.undefined(),
-        schema154,
+        schema153,
       ),
-      getFast: httpQuery("problems.getFast", schema4.undefined(), schema155),
+      getFast: httpQuery("problems.getFast", schema4.undefined(), schema154),
       getMaintenanceCounts: httpQuery(
         "problems.getMaintenanceCounts",
         schema4.undefined(),
-        schema156,
+        schema155,
       ),
       getTracker: httpQuery(
         "problems.getTracker",
         schema4.undefined(),
-        schema157,
+        schema156,
       ),
-      getUpc: httpQuery("problems.getUpc", schema4.undefined(), schema158),
-      getViews: httpQuery("problems.getViews", schema4.undefined(), schema159),
+      getUpc: httpQuery("problems.getUpc", schema4.undefined(), schema157),
+      getViews: httpQuery("problems.getViews", schema4.undefined(), schema158),
       recipeUsageByProduct: httpQuery(
         "problems.recipeUsageByProduct",
+        schema159,
         schema160,
-        schema161,
       ),
     },
     product: {
       categoryDistribution: httpQuery(
         "product.categoryDistribution",
-        { ...schema162.categoryDistribution }.input,
-        { ...schema162.categoryDistribution }.output,
+        { ...schema161.categoryDistribution }.input,
+        { ...schema161.categoryDistribution }.output,
       ),
       components: httpQuery(
         "product.components",
-        { ...schema162.components }.input,
-        { ...schema162.components }.output,
+        { ...schema161.components }.input,
+        { ...schema161.components }.output,
       ),
       externalIdSourceOptions: httpQuery(
         "product.externalIdSourceOptions",
-        { ...schema162.externalIdSourceOptions }.input,
-        { ...schema162.externalIdSourceOptions }.output,
+        { ...schema161.externalIdSourceOptions }.input,
+        { ...schema161.externalIdSourceOptions }.output,
       ),
       getByShortcodes: httpQuery(
         "product.getByShortcodes",
-        { ...schema162.getByShortcodes }.input,
-        { ...schema162.getByShortcodes }.output,
+        { ...schema161.getByShortcodes }.input,
+        { ...schema161.getByShortcodes }.output,
       ),
       inventoryEntriesByIds: httpQuery(
         "product.inventoryEntriesByIds",
-        { ...schema162.inventoryEntriesByIds }.input,
-        { ...schema162.inventoryEntriesByIds }.output,
+        { ...schema161.inventoryEntriesByIds }.input,
+        { ...schema161.inventoryEntriesByIds }.output,
       ),
       kitComponentRows: httpQuery(
         "product.kitComponentRows",
-        { ...schema162.kitComponentRows }.input,
-        { ...schema162.kitComponentRows }.output,
+        { ...schema161.kitComponentRows }.input,
+        { ...schema161.kitComponentRows }.output,
       ),
       kitMembership: httpQuery(
         "product.kitMembership",
-        { ...schema162.kitMembership }.input,
-        { ...schema162.kitMembership }.output,
+        { ...schema161.kitMembership }.input,
+        { ...schema161.kitMembership }.output,
       ),
       manufacturerOptions: httpQuery(
         "product.manufacturerOptions",
-        { ...schema162.manufacturerOptions }.input,
-        { ...schema162.manufacturerOptions }.output,
+        { ...schema161.manufacturerOptions }.input,
+        { ...schema161.manufacturerOptions }.output,
       ),
       movementTimeline: httpQuery(
         "product.movementTimeline",
-        { ...schema162.movementTimeline }.input,
-        { ...schema162.movementTimeline }.output,
+        { ...schema161.movementTimeline }.input,
+        { ...schema161.movementTimeline }.output,
       ),
       projectUses: httpQuery(
         "product.projectUses",
-        { ...schema162.projectUses }.input,
-        { ...schema162.projectUses }.output,
+        { ...schema161.projectUses }.input,
+        { ...schema161.projectUses }.output,
       ),
       purchases: httpQuery(
         "product.purchases",
-        { ...schema162.purchases }.input,
-        { ...schema162.purchases }.output,
+        { ...schema161.purchases }.input,
+        { ...schema161.purchases }.output,
       ),
       quantitySummaries: httpQuery(
         "product.quantitySummaries",
-        { ...schema162.quantitySummaries }.input,
-        { ...schema162.quantitySummaries }.output,
+        { ...schema161.quantitySummaries }.input,
+        { ...schema161.quantitySummaries }.output,
       ),
       search: httpQuery(
         "product.search",
-        { ...schema162.search }.input,
-        { ...schema162.search }.output,
+        { ...schema161.search }.input,
+        { ...schema161.search }.output,
       ),
       summaries: httpQuery(
         "product.summaries",
-        { ...schema162.summaries }.input,
-        { ...schema162.summaries }.output,
+        { ...schema161.summaries }.input,
+        { ...schema161.summaries }.output,
       ),
       tagOptions: httpQuery(
         "product.tagOptions",
-        { ...schema162.tagOptions }.input,
-        { ...schema162.tagOptions }.output,
+        { ...schema161.tagOptions }.input,
+        { ...schema161.tagOptions }.output,
       ),
     },
     project: {
       dashboardSummary: httpQuery(
         "project.dashboardSummary",
-        schema77.projectDashboardFiltersSchema,
-        schema77.projectDashboardSummaryOut,
+        schema76.projectDashboardFiltersSchema,
+        schema76.projectDashboardSummaryOut,
       ),
       getDependencyGraph: httpQuery(
         "project.getDependencyGraph",
-        schema77.projectDependencyGraphInput,
-        schema77.projectDependencyGraphSchema,
+        schema76.projectDependencyGraphInput,
+        schema76.projectDependencyGraphSchema,
       ),
       options: httpQuery(
         "project.options",
         schema4.undefined(),
-        schema4.array(schema77.projectOptionsOut),
+        schema4.array(schema76.projectOptionsOut),
       ),
       portfolioAnalytics: httpQuery(
         "project.portfolioAnalytics",
-        schema77.projectDashboardFiltersSchema,
-        schema77.projectPortfolioAnalyticsOut,
+        schema76.projectDashboardFiltersSchema,
+        schema76.projectPortfolioAnalyticsOut,
       ),
       resources: httpQuery(
         "project.resources",
-        schema77.projectResourceProjectInput,
-        schema77.projectResourcesOut,
+        schema76.projectResourceProjectInput,
+        schema76.projectResourcesOut,
       ),
       toolGallery: httpQuery(
         "project.toolGallery",
-        schema77.toolGalleryInput,
-        schema77.toolGalleryOut,
+        schema76.toolGalleryInput,
+        schema76.toolGalleryOut,
       ),
       toolMatrix: httpQuery(
         "project.toolMatrix",
-        schema77.projectToolMatrixInput,
-        schema77.projectToolMatrixOut,
+        schema76.projectToolMatrixInput,
+        schema76.projectToolMatrixOut,
       ),
       toolSuggestions: httpQuery(
         "project.toolSuggestions",
-        schema77.projectResourceProjectInput,
-        schema77.projectToolSuggestionsOut,
+        schema76.projectResourceProjectInput,
+        schema76.projectToolSuggestionsOut,
       ),
       tree: httpQuery(
         "project.tree",
-        schema77.projectTreeInput,
-        schema77.projectTreeOut,
+        schema76.projectTreeInput,
+        schema76.projectTreeOut,
       ),
     },
     purchase: {
-      products: httpQuery("purchase.products", schema169, schema170),
+      products: httpQuery("purchase.products", schema168, schema169),
     },
     recipe: {
       dryRunRecomputeTotals: httpQuery(
         "recipe.dryRunRecomputeTotals",
         schema4.undefined(),
-        schema177,
+        schema176,
       ),
-      explainCosting: httpQuery("recipe.explainCosting", schema178, schema180),
+      explainCosting: httpQuery("recipe.explainCosting", schema177, schema179),
       getAllTags: httpQuery(
         "recipe.getAllTags",
         schema4.undefined(),
-        schema185,
+        schema184,
       ),
       getCookbookDiff: httpQuery(
         "recipe.getCookbookDiff",
+        schema185,
         schema186,
-        schema187,
       ),
       getCookbookSource: httpQuery(
         "recipe.getCookbookSource",
-        schema175,
-        schema188,
+        schema174,
+        schema187,
       ),
       getDependencyGraph: httpQuery(
         "recipe.getDependencyGraph",
+        schema188,
         schema189,
-        schema190,
       ),
-      getFlow: httpQuery("recipe.getFlow", schema191, schema192),
+      getFlow: httpQuery("recipe.getFlow", schema190, schema191),
       getIngredientCooccurrence: httpQuery(
         "recipe.getIngredientCooccurrence",
+        schema192,
         schema193,
-        schema194,
       ),
       getIngredientUsage: httpQuery(
         "recipe.getIngredientUsage",
-        schema189,
-        schema195,
+        schema188,
+        schema194,
       ),
-      getManyByIDs: httpQuery("recipe.getManyByIDs", schema196, schema197),
+      getManyByIDs: httpQuery("recipe.getManyByIDs", schema195, schema196),
       harvestEquivalences: httpQuery(
         "recipe.harvestEquivalences",
         schema4.undefined(),
-        schema198,
+        schema197,
       ),
       previewNotionSync: httpQuery(
         "recipe.previewNotionSync",
         schema4.undefined(),
-        schema201,
+        schema200,
       ),
     },
     recommendations: {
       duplicateProduct: httpQuery(
         "recommendations.duplicateProduct",
+        schema210,
         schema211,
-        schema212,
       ),
-      placement: httpQuery("recommendations.placement", schema213, schema214),
-      product: httpQuery("recommendations.product", schema215, schema216),
+      placement: httpQuery("recommendations.placement", schema212, schema213),
+      product: httpQuery("recommendations.product", schema214, schema215),
       tagPropagation: httpQuery(
         "recommendations.tagPropagation",
+        schema216,
         schema217,
-        schema218,
       ),
     },
     relatedData: {
-      branch: httpQuery("relatedData.branch", schema219, schema220),
-      options: httpQuery("relatedData.options", schema221, schema222),
-      previews: httpQuery("relatedData.previews", schema223, schema224),
-      summary: httpQuery("relatedData.summary", schema225, schema226),
+      branch: httpQuery("relatedData.branch", schema218, schema219),
+      options: httpQuery("relatedData.options", schema220, schema221),
+      previews: httpQuery("relatedData.previews", schema222, schema223),
+      summary: httpQuery("relatedData.summary", schema224, schema225),
     },
     relatedness: {
-      product: httpQuery("relatedness.product", schema227, schema228),
+      product: httpQuery("relatedness.product", schema226, schema227),
     },
     search: {
-      debug: httpQuery("search.debug", schema229, schema230),
+      debug: httpQuery("search.debug", schema228, schema229),
       documentHealth: httpQuery(
         "search.documentHealth",
         schema4.undefined(),
-        schema231,
+        schema230,
       ),
-      find: httpQuery("search.find", schema229, schema234),
-      grouped: httpQuery("search.grouped", schema229, schema235),
-      related: httpQuery("search.related", schema229, schema236),
-      relatedGrouped: httpQuery("search.relatedGrouped", schema229, schema237),
+      find: httpQuery("search.find", schema228, schema233),
+      grouped: httpQuery("search.grouped", schema228, schema234),
+      related: httpQuery("search.related", schema228, schema235),
+      relatedGrouped: httpQuery("search.relatedGrouped", schema228, schema236),
     },
     statementRow: {
-      imports: httpQuery("statementRow.imports", schema241, schema242),
-      list: httpQuery("statementRow.list", schema243, schema244),
-      summary: httpQuery("statementRow.summary", schema245, schema246),
+      imports: httpQuery("statementRow.imports", schema240, schema241),
+      list: httpQuery("statementRow.list", schema242, schema243),
+      summary: httpQuery("statementRow.summary", schema244, schema245),
     },
     suggestions: {
-      getMakeable: httpQuery("suggestions.getMakeable", schema247, schema248),
+      getMakeable: httpQuery("suggestions.getMakeable", schema246, schema247),
       getRecipeAvailability: httpQuery(
         "suggestions.getRecipeAvailability",
+        schema248,
         schema249,
-        schema250,
       ),
     },
     task: {
       board: httpQuery(
         "task.board",
-        schema77.taskFiltersSchema,
-        schema77.taskBoardOut,
+        schema76.taskFiltersSchema,
+        schema76.taskBoardOut,
       ),
       chartData: httpQuery(
         "task.chartData",
-        schema77.taskFiltersSchema,
-        schema4.array(schema77.taskOut),
+        schema76.taskFiltersSchema,
+        schema4.array(schema76.taskOut),
       ),
       listActionable: httpQuery(
         "task.listActionable",
-        schema77.taskFiltersSchema.optional(),
-        schema77.actionableTasksOut,
+        schema76.taskFiltersSchema.optional(),
+        schema76.actionableTasksOut,
       ),
       summary: httpQuery(
         "task.summary",
         schema4.undefined(),
-        schema77.taskSummaryOut,
+        schema76.taskSummaryOut,
       ),
       timeline: httpQuery(
         "task.timeline",
-        schema77.taskFiltersSchema,
-        schema77.taskTimelineOut,
+        schema76.taskFiltersSchema,
+        schema76.taskTimelineOut,
       ),
       todayBriefing: httpQuery(
         "task.todayBriefing",
         schema4.undefined(),
-        schema77.taskTodayBriefingOut,
+        schema76.taskTodayBriefingOut,
       ),
     },
-    upc: { lookup: httpQuery("upc.lookup", schema251, schema252.nullable()) },
+    upc: { lookup: httpQuery("upc.lookup", schema250, schema251.nullable()) },
     "usda-food": {
       alternateId: httpQuery(
         "usda-food.alternateId",
-        schema253,
-        schema254.nullable(),
+        schema252,
+        schema253.nullable(),
       ),
-      detail: httpQuery("usda-food.detail", schema255, schema254.nullable()),
-      list: httpQuery("usda-food.list", schema256, schema257),
+      detail: httpQuery("usda-food.detail", schema254, schema253.nullable()),
+      list: httpQuery("usda-food.list", schema255, schema256),
     },
-    vendor: { options: httpQuery("vendor.options", schema4.null(), schema262) },
+    vendor: { options: httpQuery("vendor.options", schema4.null(), schema261) },
   },
   resources: httpResources,
 } as const;

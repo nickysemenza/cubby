@@ -22,6 +22,7 @@ import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
+import type { SearchableEntity } from "@cubby/schemas/search";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -163,6 +164,31 @@ export const updateProductNameFixtureRaw = async (
     .update(product)
     .set({ name })
     .where(eq(product.id, parseEntityId("product", productId)));
+};
+
+/**
+ * Seed N live `SearchDocument` rows with no backing entity.
+ *
+ * The embedding backfill coordinator's contract is over document PAGES, so a
+ * test about how one page is divided needs documents, not entities — building
+ * 250 real products to assert an arithmetic split would cost minutes.
+ */
+export const seedSearchDocumentsFixtureRaw = async (
+  db: Database,
+  entityType: SearchableEntity,
+  count: number,
+): Promise<void> => {
+  await getDb(db).execute(sql`
+    INSERT INTO "SearchDocument" (
+      "entityType", "entityId", "shortcode", title, body,
+      "semanticText", "normalizedText", "searchVector", "sourceHash"
+    )
+    SELECT ${entityType}, gen_random_uuid(), 'SEED-' || i,
+      'Seed fixture ' || i, 'Seed fixture body ' || i,
+      'Seed fixture body ' || i, 'seed fixture body ' || i,
+      to_tsvector('simple', 'seed fixture ' || i), 'seed-fixture-' || i
+    FROM generate_series(1, ${count}) AS i
+  `);
 };
 
 /** Model the coordinated cache cutover without invoking authored-row update hooks. */

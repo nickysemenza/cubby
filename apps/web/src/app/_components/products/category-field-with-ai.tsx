@@ -7,6 +7,7 @@ import type {
 
 import { ai } from "~/lib/ai.functions";
 
+import { ProposedValue } from "../ai/ai-proposal-card";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { SelectField } from "../form-utils";
 import { productCategoryOptionsWithTheme } from "./product-category-icons";
@@ -54,7 +55,7 @@ export function CategoryFieldWithAI<
           ? "Enter product name first"
           : "Enter manufacturer first"
       }
-      suggestLabel="Use AI to suggest category"
+      object="category"
       basisKey={`${productName}\u0000${manufacturer}`}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
@@ -64,6 +65,17 @@ export function CategoryFieldWithAI<
         // Form cannot carry that value constraint through its generic setter.
         form.setValue(name, r.category as TFieldValues[typeof name]);
       }}
-    />
+    >
+      {(r) => (
+        <ProposedValue
+          label="Category"
+          value={
+            productCategoryOptionsWithTheme.find(
+              (option) => option.value === r.category,
+            )?.label ?? r.category
+          }
+        />
+      )}
+    </FieldWithAISuggest>
   );
 }

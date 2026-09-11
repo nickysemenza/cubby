@@ -2,26 +2,24 @@ import type { Confidence } from "@cubby/schemas/ai";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import type { DataType } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { VerbButton } from "~/app/_components/actions/action-verb-ui";
+import {
+  AiProposalCard,
+  AiProvenance,
+} from "~/app/_components/ai/ai-proposal-card";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Spinner } from "~/components/ui/spinner";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
+import { Description } from "~/components/ui/description";
 import { usdaFood } from "~/entities/usda.functions";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 import { parseUsdaFoodRef } from "~/lib/parse-usda-food-ref";
 import { type DedupedFood, dedupeUsdaFoodsByUpc } from "~/lib/usda-food-stats";
 
-import { confidenceColor } from "../ai/ai-suggest";
 import { UsdaFoodResultRow } from "../usda/usda-food-result-row";
 import type { ComboboxItem } from "./combobox-types";
 import { EntityPicker } from "./entity-picker";
@@ -56,8 +54,12 @@ const SCOPES: SearchScope[] = ["all", "generic", "branded"];
  * food is an action (the parent sets ndb_number / upc / name from it). This is
  * the one USDA capability missing elsewhere: name-based food discovery.
  *
- * Also offers "Suggest with AI": gpt-4o-mini searches USDA itself (handling
- * wording mismatch + branded noise) and picks the best generic match.
+ * Also offers "Suggest USDA food": the fast tier searches USDA itself
+ * (handling wording mismatch + branded noise) and picks the best generic
+ * match. The pick is a **proposal** — it is shown with its reasoning and only
+ * written to the field on Accept. It used to apply itself and explain
+ * afterwards, which meant the confidence and the reasoning arrived after the
+ * only decision they could have informed.
  */
 export function UsdaFoodSearchField({
   initialQuery,
@@ -69,8 +71,10 @@ export function UsdaFoodSearchField({
   const [value, setValue] = useState<ComboboxItem | null>(null);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<{
+    food: FoodSummaryWithLinkedProducts;
     confidence: Confidence;
     reasoning: string;
+    at: Date;
   } | null>(null);
 
   // A pasted USDA food URL / bare fdc_id jumps straight to that one food — name
@@ -152,10 +156,11 @@ export function UsdaFoodSearchField({
         ingredientName: name,
       });
       if (result.food) {
-        applyFood(result.food);
         setSuggestion({
+          food: result.food,
           confidence: result.confidence,
           reasoning: result.reasoning,
+          at: new Date(),
         });
       } else {
         setSuggestion(null);
@@ -168,7 +173,7 @@ export function UsdaFoodSearchField({
     } finally {
       setIsSuggesting(false);
     }
-  }, [initialQuery, applyFood]);
+  }, [initialQuery]);
 
   const canSuggest = !!initialQuery?.trim();
 
@@ -219,40 +224,39 @@ export function UsdaFoodSearchField({
             }}
           />
         </div>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleSuggest}
-                disabled={!canSuggest || isSuggesting}
-              />
-            }
-          >
-            {isSuggesting ? <Spinner /> : <Sparkles className="size-4" />}
-            <span className="ml-1 hidden sm:inline">Suggest with AI</span>
-          </TooltipTrigger>
-          <TooltipContent>
-            {!initialQuery?.trim()
-              ? "Enter a name first"
-              : "Let AI pick the best USDA food"}
-          </TooltipContent>
-        </Tooltip>
+        <VerbButton
+          verb="suggest"
+          object="USDA food"
+          phoneIconOnly
+          pending={isSuggesting}
+          disabledReason={canSuggest ? undefined : "Enter a name first"}
+          className="min-h-9 max-sm:min-h-11"
+          onClick={() => void handleSuggest()}
+        />
       </Row>
 
+      {!canSuggest && (
+        <Description size="xs">
+          Enter a name first — AI needs something to look up.
+        </Description>
+      )}
+
       {suggestion && (
-        <div className="rounded-md bg-muted/50 p-2 text-sm">
-          <Row align="center" gap="sm">
-            <Sparkles className="size-3 text-muted-foreground" />
-            <span className="font-medium">AI match:</span>
-            <span className={confidenceColor[suggestion.confidence]}>
-              {suggestion.confidence} confidence
-            </span>
-          </Row>
-          <p className="mt-1 text-muted-foreground">{suggestion.reasoning}</p>
-        </div>
+        <AiProposalCard
+          label="Suggested USDA food"
+          confidence={suggestion.confidence}
+          reasoning={suggestion.reasoning}
+          provenance={<AiProvenance analyzedAt={suggestion.at} />}
+          onAccept={() => {
+            applyFood(suggestion.food);
+            setSuggestion(null);
+          }}
+          onDismiss={() => setSuggestion(null)}
+        >
+          <div className="border border-border bg-background p-2">
+            <UsdaFoodResultRow food={suggestion.food} />
+          </div>
+        </AiProposalCard>
       )}
     </FormFieldGroup>
   );

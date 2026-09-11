@@ -13,7 +13,7 @@ import { match } from "ts-pattern";
 import type { z } from "zod";
 
 import { verbDef } from "~/app/_components/actions/action-verbs";
-import { confidenceColor } from "~/app/_components/ai/ai-suggest";
+import { confidenceColor } from "~/app/_components/ai/ai-proposal-card";
 import type { BulkActionsConfig } from "~/app/_components/data-table/bulk-actions.types";
 import { createNameColumn } from "~/app/_components/data-table/columnHelpers";
 import { ListWorkbench } from "~/app/_components/data-table/ListWorkbench";

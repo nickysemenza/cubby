@@ -3,6 +3,7 @@ import type { ComponentProps, ReactElement } from "react";
 
 import { Button } from "~/components/ui/button";
 import { DropdownMenuItem } from "~/components/ui/dropdown-menu";
+import { Spinner } from "~/components/ui/spinner";
 
 import type { BulkAction } from "../data-table/bulk-actions.types";
 import { type ActionVerbId, verbDef } from "./action-verbs";
@@ -133,42 +134,82 @@ export function verbBulkAction<TData extends RowData>(
  * nativeButton={false}`, and a raw `<Link className={buttonVariants(...)}>`),
  * which is how the same destination ended up with three spellings and two icon
  * sizes. Pass `render` a typed `<Link>` and this handles the rest.
+ *
+ * ## `object`, `phoneIconOnly` and `pending`
+ *
+ * The AI verbs added three shapes that every AI surface had been hand-rolling,
+ * each slightly differently: an object noun for the one multi-object verb
+ * (`suggest`), an icon-only phone rendering, and a spinner swapped in for the
+ * icon while the request is in flight. Collapsing them here is what makes the
+ * treatment uniform — six surfaces previously disagreed on whether the label
+ * survived below `sm`, and two kept the icon while the request ran.
+ *
+ * The accessible name always carries the full "verb object" text, so hiding
+ * the label below `sm` never costs a screen-reader user the object.
+ *
+ * `disabledReason` reaches the accessible name and the native `title`. Native
+ * titles do open on a disabled button (unlike the JS `Tooltip` this replaced,
+ * which never received the hover at all) — but only on a pointer device. A
+ * surface whose primary device is a phone must ALSO render the reason as
+ * visible text; every AI trigger in this codebase does.
  */
 export function VerbButton({
   verb,
+  object,
   render,
   onClick,
   variant = "outline",
   size = "sm",
   disabled,
   disabledReason,
+  pending,
+  phoneIconOnly,
   className,
 }: {
   verb: ActionVerbId;
+  /**
+   * Names what this invocation acts on, for a verb whose registry label is the
+   * bare verb: `suggest` + "category" reads "Suggest category".
+   */
+  object?: string;
   render?: ReactElement;
   onClick?: () => void;
   variant?: ComponentProps<typeof Button>["variant"];
   size?: ComponentProps<typeof Button>["size"];
   disabled?: boolean;
   disabledReason?: string;
+  /** In flight: a spinner replaces the icon and the button stops accepting clicks. */
+  pending?: boolean;
+  /** Below `sm`, render the icon alone — the label stays in the accessible name. */
+  phoneIconOnly?: boolean;
   className?: string;
 }) {
   const { label, icon: Icon, tone } = verbDef(verb);
-  const isDisabled = disabled === true || disabledReason != null;
+  const text = object ? `${label} ${object}` : label;
+  const isDisabled =
+    disabled === true || pending === true || disabledReason != null;
+  const accessibleName = disabledReason
+    ? `${text}, ${disabledReason}`
+    : phoneIconOnly
+      ? text
+      : undefined;
   return (
     <Button
       variant={tone === "destructive" ? "destructive" : variant}
       size={size}
       disabled={isDisabled}
       title={disabledReason}
-      aria-label={disabledReason ? `${label}, ${disabledReason}` : undefined}
+      aria-label={accessibleName}
+      aria-busy={pending ? true : undefined}
       className={className}
       onClick={onClick}
       render={render && !isDisabled ? render : undefined}
       nativeButton={render && !isDisabled ? false : undefined}
     >
-      <Icon />
-      {label}
+      {pending ? <Spinner /> : <Icon />}
+      <span className={phoneIconOnly ? "hidden sm:inline" : undefined}>
+        {text}
+      </span>
     </Button>
   );
 }

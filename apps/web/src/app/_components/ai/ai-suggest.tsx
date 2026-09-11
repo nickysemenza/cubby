@@ -1,55 +1,23 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import { Sparkles } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { VerbButton } from "~/app/_components/actions/action-verb-ui";
 import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
-import { Spinner } from "~/components/ui/spinner";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
 import { getErrorMessage } from "~/lib/error-utils";
 
-/** Confidence → text color. One map (semantic text-warning-ink for medium, not a
- * raw text-yellow-600) shared by every AI-suggestion surface. */
-export const confidenceColor = {
-  high: "text-positive",
-  medium: "text-warning-ink",
-  low: "text-destructive",
-} satisfies Record<Confidence, string>;
-
-/** The AI result card: a Sparkles header with a confidence chip, then reasoning. */
-export function ConfidenceReasoningCard({
-  confidence,
-  reasoning,
-  label = "AI Suggestion",
-}: {
-  confidence: Confidence;
-  reasoning: string;
-  label?: string;
-}) {
-  return (
-    <div className="border border-border bg-muted/30 p-2 text-sm">
-      <Row align="center" gap="sm">
-        <Sparkles className="size-3 text-muted-foreground" />
-        <span className="font-medium">{label}:</span>
-        <span className={confidenceColor[confidence]}>
-          {confidence} confidence
-        </span>
-      </Row>
-      <Description className="mt-1">{reasoning}</Description>
-    </div>
-  );
-}
+import { AiProposalCard, AiProvenance } from "./ai-proposal-card";
 
 /**
- * A SelectField paired with an "AI Suggest" button. Owns the ai-availability
- * gate, request-basis snapshots, stale-response rejection, and explicit
- * acceptance. Domain adapters keep their typed field patches local.
+ * A field paired with a "Suggest" button. Owns the ai-availability gate,
+ * request-basis snapshots, stale-response rejection, and explicit acceptance.
+ * Domain adapters keep their typed field patches local.
+ *
+ * The button is the registry's `suggest` verb, so the icon, the label and the
+ * phone treatment are the same on every field that offers one; `object` names
+ * what this field suggests ("category", "type", "a location") and stays in the
+ * accessible name after the text is hidden below `sm`.
  */
 export function FieldWithAISuggest<
   TResult extends { confidence: Confidence; reasoning: string },
@@ -57,21 +25,22 @@ export function FieldWithAISuggest<
   field,
   enabled,
   disabledReason,
-  suggestLabel,
+  object,
   basisKey,
   currentValue,
   fieldDirty,
   runSuggest,
   onAccept,
   onDismiss,
+  children,
 }: {
   field: ReactNode;
   /** Inputs sufficient to suggest (caller-computed; e.g. name && manufacturer). */
   enabled: boolean;
-  /** Tooltip shown when AI is available but the inputs are incomplete. */
+  /** Why the button is unavailable, e.g. "Enter product name first". */
   disabledReason: string;
-  /** Tooltip shown when ready, e.g. "Use AI to suggest category". */
-  suggestLabel: string;
+  /** What this field suggests: "category", "type", "a location". */
+  object: string;
   /** Stable serialization of the values the model will inspect. */
   basisKey: string;
   /** The field value when a proposal was requested; manual changes invalidate it. */
@@ -81,11 +50,17 @@ export function FieldWithAISuggest<
   runSuggest: () => Promise<TResult>;
   onAccept: (result: TResult) => void;
   onDismiss?: (result: TResult) => void;
+  /**
+   * The value being proposed, named. Without it the card explains a choice it
+   * never states — the reasoning has to be read as a riddle for the answer.
+   */
+  children?: (result: TResult) => ReactNode;
 }) {
   const [suggestion, setSuggestion] = useState<{
     result: TResult;
     basisKey: string;
     currentValue: unknown;
+    at: Date;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const basisRef = useRef(basisKey);
@@ -101,8 +76,6 @@ export function FieldWithAISuggest<
     }
   }, [basisKey, currentValue, fieldDirty, suggestion]);
 
-  const canSuggest = enabled;
-
   const handleSuggest = async () => {
     if (!enabled) return;
     const requestBasis = basisKey;
@@ -116,6 +89,7 @@ export function FieldWithAISuggest<
         result,
         basisKey: requestBasis,
         currentValue: requestValue,
+        at: new Date(),
       });
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -128,57 +102,41 @@ export function FieldWithAISuggest<
     <Stack gap="sm">
       <Row align="end" gap="sm">
         <div className="flex-1">{field}</div>
-
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleSuggest}
-                disabled={!canSuggest || isLoading}
-              />
-            }
-          >
-            {isLoading ? <Spinner /> : <Sparkles className="size-4" />}
-            <span className="ml-1 hidden sm:inline">Suggest</span>
-          </TooltipTrigger>
-          <TooltipContent>
-            {!enabled ? disabledReason : suggestLabel}
-          </TooltipContent>
-        </Tooltip>
+        <VerbButton
+          verb="suggest"
+          object={object}
+          phoneIconOnly
+          pending={isLoading}
+          disabledReason={enabled ? undefined : disabledReason}
+          className="min-h-9 max-sm:min-h-11"
+          onClick={() => void handleSuggest()}
+        />
       </Row>
 
+      {/* Visible, not only a `title`: the button's own tooltip cannot open on
+          a touch device, which is where half this form is filled in. */}
+      {!enabled && <Description size="xs">{disabledReason}</Description>}
+
       {suggestion && (
-        <Stack gap="xs" className="border-t border-border pt-2">
-          <ConfidenceReasoningCard
-            confidence={suggestion.result.confidence}
-            reasoning={suggestion.result.reasoning}
-          />
-          <Row gap="xs">
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => {
-                onAccept(suggestion.result);
-                setSuggestion(null);
-              }}
-            >
-              Accept
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                onDismiss?.(suggestion.result);
-                setSuggestion(null);
-              }}
-            >
-              Dismiss
-            </Button>
-          </Row>
-        </Stack>
+        <AiProposalCard
+          label={`Suggested ${object}`}
+          confidence={suggestion.result.confidence}
+          reasoning={suggestion.result.reasoning}
+          // The suggest endpoints answer with the value alone: no model, no
+          // analysis timestamp. Until `packages/schemas/src/ai.ts` carries
+          // them, the honest provenance is when it was asked.
+          provenance={<AiProvenance analyzedAt={suggestion.at} />}
+          onAccept={() => {
+            onAccept(suggestion.result);
+            setSuggestion(null);
+          }}
+          onDismiss={() => {
+            onDismiss?.(suggestion.result);
+            setSuggestion(null);
+          }}
+        >
+          {children?.(suggestion.result)}
+        </AiProposalCard>
       )}
     </Stack>
   );

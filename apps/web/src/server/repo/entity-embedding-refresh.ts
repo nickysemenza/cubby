@@ -1,7 +1,8 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -102,6 +103,116 @@ export async function getStoredEmbeddingHash(
     columns: { embeddingHash: true },
   });
   return existing?.embeddingHash ?? null;
+}
+
+/**
+ * {@link getStoredEmbeddingHash} for a whole wave, keyed by `entityRefKey`.
+ *
+ * One query for up to a batch's worth of refs. The pair `(entityType,
+ * entityId)` is filtered as two independent `IN` lists rather than as a pair:
+ * a row whose id belongs to a different requested type can come back, but no
+ * caller can see it, because lookups are by the exact composite key.
+ */
+export async function getStoredEmbeddingHashes(
+  db: Database,
+  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+  config: SemanticEmbeddingConfig,
+): Promise<Map<string, string>> {
+  if (refs.length === 0) return new Map();
+  const rows = await getDb(db).query.entityEmbedding.findMany({
+    where: and(
+      inArray(entityEmbedding.entityType, [
+        ...new Set(refs.map((ref) => ref.entityType)),
+      ]),
+      inArray(entityEmbedding.entityId, [
+        ...new Set(refs.map((ref) => ref.entityId)),
+      ]),
+      eq(entityEmbedding.provider, config.provider),
+      eq(entityEmbedding.model, config.model),
+      eq(entityEmbedding.dimensions, config.dimensions),
+      notDeleted(entityEmbedding),
+    ),
+    columns: { entityType: true, entityId: true, embeddingHash: true },
+  });
+  return new Map(
+    rows.map((row) => [
+      entityRefKey(row.entityType, row.entityId),
+      row.embeddingHash,
+    ]),
+  );
+}
+
+export interface EntityEmbeddingUpsert extends SearchableEntityText {
+  /**
+   * The hash the caller already compared against the stored one. Passed in
+   * rather than recomputed so the value that decided to pay for the vector is
+   * the value stored beside it.
+   */
+  embeddingHash: string;
+  config: SemanticEmbeddingConfig;
+  embedding: number[];
+}
+
+/** One bound `'[…]'::vector` parameter, never an inlined literal. */
+const vectorParam = (embedding: number[]): SQL => {
+  if (
+    embedding.length === 0 ||
+    embedding.some((value) => !Number.isFinite(value))
+  ) {
+    throw new Error("Invalid embedding vector");
+  }
+  return sql`${`[${embedding.join(",")}]`}::vector`;
+};
+
+// A batch write of 1536-float vectors is the largest statement this codebase
+// sends; 32 rows keeps it around 0.6 MB of bound parameters.
+const EMBEDDING_UPSERT_CHUNK = 32;
+
+/**
+ * {@link upsertEntityEmbedding} for a whole wave: one statement per 32 rows.
+ *
+ * Deliberately NOT `updateAndReturn`/`insertAndReturn`, and no `RETURNING` at
+ * all: that would ship every 1536-float vector back over the wire and re-parse
+ * it into a JS array via `pgVector.fromDriver` (~30 KB per write) for a
+ * function that returns void. Writes here are already the hot path — each one
+ * rewrites a 258 MB HNSW entry. The driver-level `traceQuery` span in db.ts
+ * still covers these, so no observability is lost.
+ */
+export async function upsertEntityEmbeddings(
+  db: Database,
+  rows: ReadonlyArray<EntityEmbeddingUpsert>,
+): Promise<void> {
+  for (let index = 0; index < rows.length; index += EMBEDDING_UPSERT_CHUNK) {
+    const chunk = rows.slice(index, index + EMBEDDING_UPSERT_CHUNK);
+    const values = chunk.map(
+      (row) => sql`(
+        ${row.entityType}::text, ${row.entityId}::uuid,
+        ${row.embeddingText}::text, ${row.embeddingHash}::text,
+        ${row.config.provider}::text, ${row.config.model}::text,
+        ${row.config.dimensions}::integer, ${vectorParam(row.embedding)}
+      )`,
+    );
+    await getDb(db).execute(sql`
+      INSERT INTO "EntityEmbedding" (
+        "entityType", "entityId", "embeddingText", "embeddingHash",
+        provider, model, dimensions, embedding, "updatedAt"
+      )
+      SELECT input."entityType", input."entityId", input."embeddingText",
+        input."embeddingHash", input.provider, input.model, input.dimensions,
+        input.embedding, now()
+      FROM (VALUES ${sql.join(values, sql`, `)}) AS input(
+        "entityType", "entityId", "embeddingText", "embeddingHash",
+        provider, model, dimensions, embedding
+      )
+      ON CONFLICT ("entityType", "entityId", provider, model, dimensions)
+        WHERE "deletedAt" IS NULL
+      DO UPDATE SET
+        "embeddingText" = EXCLUDED."embeddingText",
+        "embeddingHash" = EXCLUDED."embeddingHash",
+        embedding = EXCLUDED.embedding,
+        "updatedAt" = now()
+    `);
+  }
 }
 
 export async function upsertEntityEmbedding(

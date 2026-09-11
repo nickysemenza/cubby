@@ -130,6 +130,50 @@ export const searchIngredientsForMerge = async (
 };
 
 /**
+ * Fetch specific ingredients by id for the AI merge suggester's semantic
+ * shortlist leg — semantic search returns entity ids (not a name to search
+ * on), so this is a by-id counterpart to {@link searchIngredientsForMerge}
+ * with the same lean projection and productCount subquery.
+ */
+export const getIngredientMergeCandidatesByIds = async (
+  db: Database,
+  ids: IngredientId[],
+  excludeId: IngredientId,
+): Promise<
+  {
+    id: IngredientId;
+    shortcode: string;
+    name: string;
+    productCount: number;
+  }[]
+> => {
+  if (ids.length === 0) return [];
+  const rows = await getDb(db)
+    .select({
+      id: ingredient.id,
+      shortcode: ingredient.shortcode,
+      name: ingredient.name,
+      // ⚠️ `"Ingredient"."id"` hand-qualified verbatim from
+      // `searchIngredientsForMerge` above — see its comment for why an
+      // interpolated `${ingredient.id}` silently self-joins instead.
+      productCount: sql<number>`(
+        SELECT count(*) FROM "Product" p
+        WHERE p."ingredientId" = "Ingredient"."id" AND p."deletedAt" IS NULL
+      )`,
+    })
+    .from(ingredient)
+    .where(
+      and(
+        inArray(ingredient.id, ids),
+        isNull(ingredient.recipeId),
+        ne(ingredient.id, excludeId),
+        notDeleted(ingredient),
+      ),
+    );
+  return rows.map((r) => ({ ...r, productCount: Number(r.productCount) }));
+};
+
+/**
  * Merge preview: for each candidate ingredient, how much of the "worth keeping"
  * signal it carries — distinct recipe usages, non-deleted linked products, alias
  * count, and whether any linked product has a USDA-resolvable reference

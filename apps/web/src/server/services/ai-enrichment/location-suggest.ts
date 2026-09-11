@@ -1,11 +1,13 @@
-import type {
-  LocationSuggestion,
-  LocationSuggestionAiResult,
-} from "@cubby/schemas/ai";
+import type { LocationSuggestion } from "@cubby/schemas/ai";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 
-import { getAnthropicClient } from "~/server/clients/anthropic";
+import { LOCATION_SUGGESTION_FEATURE } from "~/server/ai/features";
+import {
+  type AiSelectionOutcome,
+  type AiSelectionSpec,
+  runAiSelection,
+} from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -18,35 +20,47 @@ import { getProductByID } from "~/server/repo/product";
 const MAX_LOCATION_CANDIDATES = 400;
 
 export interface LocationSuggestionAiPort {
-  suggestLocation: ReturnType<typeof getAnthropicClient>["suggestLocation"];
+  select: typeof runAiSelection<LocationPutAwayCandidate>;
 }
 
 const productionLocationSuggestionAiPort: LocationSuggestionAiPort = {
-  suggestLocation: (...args) => getAnthropicClient().suggestLocation(...args),
+  select: runAiSelection,
 };
 
 /** `Garage > Shelving Unit > Shelf 3`, or just the name at top level. */
 const candidatePath = (candidate: LocationPutAwayCandidate): string =>
   [...candidate.ancestors.map((a) => a.name), candidate.name].join(" > ");
 
+/** One roster line, with whichever hints have evidence. */
+const renderLocationCandidate = (
+  candidate: LocationPutAwayCandidate,
+): string => {
+  const hints: string[] = [];
+  if (candidate.holdsProduct) hints.push("already stocked here");
+  if (candidate.tagSiblings > 0)
+    hints.push(`${candidate.tagSiblings} share tags`);
+  if (candidate.manufacturerSiblings > 0)
+    hints.push(`${candidate.manufacturerSiblings} same manufacturer`);
+  if (candidate.categorySiblings > 0)
+    hints.push(`${candidate.categorySiblings} same category`);
+
+  const type = candidate.type ? ` (${candidate.type})` : "";
+  const head = `${candidate.id} | ${candidatePath(candidate)}${type} - ${candidate.itemCount} items`;
+  return hints.length > 0 ? `${head}; ${hints.join(", ")}` : head;
+};
+
+/**
+ * Render the full roster as text, capped at {@link MAX_LOCATION_CANDIDATES}
+ * with a disclosure line when locations were omitted. Kept as a standalone,
+ * independently-tested formatter (used by its own unit tests); the live
+ * `suggestLocationForProduct` call renders through `locationSuggestionSpec`
+ * instead, whose per-candidate line is the same `renderLocationCandidate`.
+ */
 export const formatLocationCandidates = (
   candidates: readonly LocationPutAwayCandidate[],
 ): string => {
   const shown = candidates.slice(0, MAX_LOCATION_CANDIDATES);
-  const lines = shown.map((candidate) => {
-    const hints: string[] = [];
-    if (candidate.holdsProduct) hints.push("already stocked here");
-    if (candidate.tagSiblings > 0)
-      hints.push(`${candidate.tagSiblings} share tags`);
-    if (candidate.manufacturerSiblings > 0)
-      hints.push(`${candidate.manufacturerSiblings} same manufacturer`);
-    if (candidate.categorySiblings > 0)
-      hints.push(`${candidate.categorySiblings} same category`);
-
-    const type = candidate.type ? ` (${candidate.type})` : "";
-    const head = `${candidate.id} | ${candidatePath(candidate)}${type} - ${candidate.itemCount} items`;
-    return hints.length > 0 ? `${head}; ${hints.join(", ")}` : head;
-  });
+  const lines = shown.map(renderLocationCandidate);
 
   const omitted = candidates.length - shown.length;
   if (omitted > 0) {
@@ -55,35 +69,58 @@ export const formatLocationCandidates = (
   return lines.join("\n");
 };
 
+const LOCATION_SUGGESTION_RULES = `You are a put-away assistant for a household inventory system. Given a product and the full roster of storage locations, choose the ONE location where the product should be stocked.
+
+Each candidate is one line:
+CODE | Room > Area > Shelf (type) - N items[; hints]
+
+Rules:
+1. Return the location's CODE exactly as it appears. Never invent a code, and never return one that is not in the roster.
+2. The location NAMES and their parent chain are the primary signal. A product belongs with the system it is part of ("PACKOUT" plates on the "PACKOUT Wall", pantry goods in a pantry, fasteners in a hardware bin).
+3. The hints ("3 share tags", "5 same manufacturer", "12 same category") are corroboration, not a ranking. A weakly-named location with a high count is a worse answer than a well-named one with none — a category is spread over dozens of locations.
+4. "already stocked here" means the product is there now. Prefer it unless the product is one that gets deliberately split across places.
+5. Prefer the most specific location that fits: a named shelf or bin over the room that contains it.
+6. Confidence: "high" when the name is a direct match for what this product is, "medium" when the category or family fits but the exact home is a guess, "low" when you are picking the least-bad room.
+7. Keep the reasoning to one sentence naming the actual evidence you used.`;
+
+export const locationSuggestionSpec: AiSelectionSpec<LocationPutAwayCandidate> =
+  {
+    feature: LOCATION_SUGGESTION_FEATURE,
+    rules: LOCATION_SUGGESTION_RULES,
+    idOf: (candidate) => candidate.id,
+    renderLine: renderLocationCandidate,
+    maxCandidates: MAX_LOCATION_CANDIDATES,
+  };
+
 /**
- * Match the model's answer back to a real location.
- *
- * Comparison is case- and whitespace-insensitive because the model is copying
- * a token out of prose; anything beyond that (a prefix match, a nearest name)
- * would be guessing on the model's behalf, which is the failure this function
- * exists to prevent.
+ * Shape a resolved `runAiSelection` outcome into the public
+ * {@link LocationSuggestion}, or throw when the model named no usable
+ * location — an invented code, or `null` returned outright. The old
+ * `resolveSuggestedLocation` did its own case/whitespace-insensitive id
+ * matching against the roster; `runAiSelection`'s guard does that now, so
+ * this half is just shaping the already-resolved candidate and rejecting a
+ * miss.
  */
-export const resolveSuggestedLocation = (
-  candidates: readonly LocationPutAwayCandidate[],
-  result: LocationSuggestionAiResult,
+export const resolveLocationSuggestion = (
+  outcome: AiSelectionOutcome<LocationPutAwayCandidate>,
+  candidateCount: number,
 ): LocationSuggestion => {
-  const wanted = result.locationId.trim().toUpperCase();
-  const match = candidates.find((c) => c.id.toUpperCase() === wanted);
-  if (!match) {
+  const { selected, confidence, reasoning } = outcome;
+  if (!selected) {
     throw createAppError(
       "AI_SUGGESTION_UNUSABLE",
-      `The location suggestion named "${result.locationId}", which is not one of the ${candidates.length} locations it was offered.`,
+      `The location suggestion did not name one of the ${candidateCount} locations it was offered.`,
     );
   }
   return {
     location: {
-      id: match.id,
-      name: match.name,
-      type: match.type,
-      ancestors: match.ancestors,
+      id: selected.id,
+      name: selected.name,
+      type: selected.type,
+      ancestors: selected.ancestors,
     },
-    confidence: result.confidence,
-    reasoning: result.reasoning,
+    confidence,
+    reasoning,
   };
 };
 
@@ -115,16 +152,11 @@ export const suggestLocationForProduct = async (
     product.tags.length > 0 ? `Tags: ${product.tags.join(", ")}` : null,
   ].filter((line): line is string => line !== null);
 
-  const result = await ai.suggestLocation(
-    facts.join("\n"),
-    formatLocationCandidates(candidates),
-    {
-      db,
-      feature: "location-suggestion",
-      operation: "suggestLocation",
-      cacheStatus: "none",
-    },
-  );
+  const outcome = await ai.select(locationSuggestionSpec, {
+    subject: facts.join("\n"),
+    candidates,
+    usage: { db, operation: "suggestLocation", cacheStatus: "none" },
+  });
 
-  return resolveSuggestedLocation(candidates, result);
+  return resolveLocationSuggestion(outcome, candidates.length);
 };

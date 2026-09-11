@@ -42,6 +42,25 @@ export function useAgentStream() {
     setState(EMPTY);
   }, []);
 
+  /**
+   * Stop the run but keep what has arrived. The abort already existed — it was
+   * reachable only by unmounting or asking something else, so a long answer
+   * heading the wrong way had no stop button at all. Partial text is kept
+   * deliberately: an agent that has already named the shelf has answered the
+   * question, and discarding it to reach a clean state would throw that away.
+   */
+  const cancel = useCallback(() => {
+    if (!abortRef.current) return;
+    abortRef.current.abort();
+    abortRef.current = null;
+    runIdRef.current++;
+    setState((s) => ({
+      ...s,
+      isStreaming: false,
+      toolStatus: null,
+    }));
+  }, []);
+
   const ask = useCallback(async (query: string) => {
     const trimmed = query.trim();
     if (trimmed.length === 0) return;
@@ -91,5 +110,5 @@ export function useAgentStream() {
     }
   }, []);
 
-  return { ...state, ask, reset };
+  return { ...state, ask, cancel, reset };
 }

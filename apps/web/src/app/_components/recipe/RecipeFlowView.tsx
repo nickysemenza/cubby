@@ -15,16 +15,18 @@ import {
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { VerbButton } from "~/app/_components/actions/action-verb-ui";
 import { recipe as recipeOperations } from "~/app/recipes/recipe.functions";
+import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
@@ -177,6 +179,8 @@ function FlowPlan({
   generating,
   stale,
   generationError,
+  guidance,
+  onGuidanceChange,
   onRegenerate,
 }: {
   artifact: RecipeFlowArtifact;
@@ -188,7 +192,9 @@ function FlowPlan({
   generating: boolean;
   stale: boolean;
   generationError: string | null;
-  onRegenerate: () => void;
+  guidance: string;
+  onGuidanceChange: (guidance: string) => void;
+  onRegenerate: (event: FormEvent) => void;
 }) {
   const outputCount = artifact.plan.outputOperationIds.length;
 
@@ -219,18 +225,52 @@ function FlowPlan({
               label="Copy JSON"
               toastLabel="Copied recipe flow JSON"
             />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onRegenerate}
-              disabled={generating}
-            >
-              <Sparkles />
-              Regenerate
-            </Button>
           </div>
         </div>
+
+        {/*
+          Guidance inline rather than behind a dialog. It was a modal around a
+          single textarea and a submit — interruption with nothing to protect,
+          and it hid the guidance already in force behind a click, so the
+          persisted instruction that shaped the flow on screen was invisible
+          while reading it.
+        */}
+        <Row
+          as="form"
+          align="end"
+          gap="sm"
+          wrap
+          onSubmit={onRegenerate}
+          className="mt-2 print:hidden"
+        >
+          <Stack gap="tight" className="min-w-56 flex-1">
+            <label
+              htmlFor="recipe-flow-guidance"
+              className="eyebrow text-muted-foreground"
+            >
+              Guidance
+            </label>
+            <Textarea
+              id="recipe-flow-guidance"
+              value={guidance}
+              onChange={(event) => onGuidanceChange(event.target.value)}
+              maxLength={1000}
+              rows={2}
+              placeholder="For example: keep the sauce as a separate branch until plating."
+              aria-describedby="recipe-flow-guidance-help"
+            />
+            <Description size="2xs" id="recipe-flow-guidance-help">
+              Persists for this recipe and is reused after future ingredient or
+              instruction edits. Clear it to drop the current guidance.
+            </Description>
+          </Stack>
+          <VerbButton
+            verb="regenerate"
+            pending={generating}
+            phoneIconOnly
+            className="min-h-9 max-sm:min-h-11"
+          />
+        </Row>
       </header>
 
       <FlowStatus
@@ -409,52 +449,6 @@ function SelectedOperationDialog({
   );
 }
 
-function GuidanceDialog({
-  open,
-  onOpenChange,
-  guidance,
-  onGuidanceChange,
-  generating,
-  onSubmit,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  guidance: string;
-  onGuidanceChange: (guidance: string) => void;
-  generating: boolean;
-  onSubmit: (event: FormEvent) => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="md">
-        <form onSubmit={onSubmit}>
-          <DialogHeader>
-            <DialogTitle>Regenerate recipe flow</DialogTitle>
-            <DialogDescription>
-              Guidance persists for this recipe and is reused after future
-              ingredient or instruction edits. Leave it blank to clear the
-              current guidance.
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            value={guidance}
-            onChange={(event) => onGuidanceChange(event.target.value)}
-            maxLength={1000}
-            placeholder="For example: keep the sauce as a separate branch until plating."
-            className="mt-2"
-          />
-          <DialogFooter className="mt-4">
-            <Button type="submit" disabled={generating}>
-              {generating && <RefreshCw className="animate-spin" />}
-              Regenerate
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export function RecipeFlowView({
   recipe,
   scaledRecipe,
@@ -475,8 +469,8 @@ export function RecipeFlowView({
   const [selectedOperationId, setSelectedOperationId] = useState<string | null>(
     null,
   );
-  const [guidanceOpen, setGuidanceOpen] = useState(false);
   const [guidance, setGuidance] = useState("");
+  const [guidanceSource, setGuidanceSource] = useState<string | null>(null);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const autoStartedFingerprint = useRef<string | null>(null);
 
@@ -495,7 +489,6 @@ export function RecipeFlowView({
     recipeOperations.generateFlow.mutationOptions({
       onSuccess: (_data, variables) => {
         setGenerationError(null);
-        setGuidanceOpen(false);
         if (variables.force) toast.success("Recipe flow regenerated");
       },
       onError: (error) => {
@@ -525,10 +518,15 @@ export function RecipeFlowView({
     );
   }, [artifact, flowState?.status, generation.isPending, onReadyChange]);
 
-  const openGuidance = () => {
-    setGuidance(artifact?.guidance ?? "");
-    setGuidanceOpen(true);
-  };
+  // Seed the box from the artifact's persisted guidance once per artifact, so
+  // what shaped the flow on screen is what the field shows — without
+  // clobbering an edit in progress when the query refetches.
+  const persistedGuidance = artifact?.guidance ?? "";
+  if (guidanceSource !== persistedGuidance) {
+    setGuidanceSource(persistedGuidance);
+    setGuidance(persistedGuidance);
+  }
+
   const submitGuidance = (event: FormEvent) => {
     event.preventDefault();
     generation.mutate({
@@ -562,21 +560,15 @@ export function RecipeFlowView({
         generating={generation.isPending}
         stale={flowState?.status === "stale"}
         generationError={generationError}
-        onRegenerate={openGuidance}
+        guidance={guidance}
+        onGuidanceChange={setGuidance}
+        onRegenerate={submitGuidance}
       />
       <SelectedOperationDialog
         recipe={recipe}
         artifact={artifact}
         selectedOperationId={selectedOperationId}
         onSelectOperation={setSelectedOperationId}
-      />
-      <GuidanceDialog
-        open={guidanceOpen}
-        onOpenChange={setGuidanceOpen}
-        guidance={guidance}
-        onGuidanceChange={setGuidance}
-        generating={generation.isPending}
-        onSubmit={submitGuidance}
       />
     </div>
   );

@@ -164,7 +164,12 @@ export function SearchResultMedia({
   );
 }
 
-const matchKindLabel = {
+/**
+ * How a hit was found, in the user's words. Exported because the pickers label
+ * their semantic-fallback group with the same word the search results use —
+ * "Related" meaning the same thing in both places is the whole point.
+ */
+export const matchKindLabel = {
   exact: "Exact match",
   prefix: "Starts with",
   text: "Text match",

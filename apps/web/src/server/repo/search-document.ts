@@ -562,6 +562,45 @@ export async function getSearchDocumentEmbeddingText(
   return result.rows[0] ?? null;
 }
 
+/**
+ * The embedding bodies for a whole wave of refs in one round trip.
+ *
+ * Shaped like `hydrateSearchHitRefs`: a VALUES-joined ref table rather than an
+ * `IN` list, so the pair `(entityType, entityId)` is matched as a pair and the
+ * result comes back in the caller's own order. Refs with no live document are
+ * simply absent — the batch embedding path treats that as nothing to embed,
+ * exactly as the single-ref loader's `null` does.
+ */
+export async function getSearchDocumentEmbeddingTexts(
+  db: Database,
+  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+): Promise<SearchableEntityText[]> {
+  if (refs.length === 0) return [];
+  const values = sql.join(
+    refs.map(
+      (ref, index) =>
+        sql`(${ref.entityType}::text, ${ref.entityId}::uuid, ${index}::integer)`,
+    ),
+    sql`, `,
+  );
+  const result = await getDb(db).execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+    embeddingText: string;
+  }>(sql`
+    WITH refs("entityType", "entityId", ordinal) AS (VALUES ${values})
+    SELECT sd."entityType", sd."entityId"::text AS "entityId",
+      sd."semanticText" AS "embeddingText"
+    FROM refs
+    JOIN "SearchDocument" sd
+      ON sd."entityType" = refs."entityType"
+      AND sd."entityId" = refs."entityId"
+      AND sd."deletedAt" IS NULL
+    ORDER BY refs.ordinal
+  `);
+  return result.rows;
+}
+
 const SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE = 250;
 
 export type SearchDocumentCursor = {

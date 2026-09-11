@@ -1,9 +1,11 @@
 import {
+  ENTITY_EMBEDDING_BATCH_SIZE,
   type EnqueueEmbeddingBackfillOut,
   entityEmbeddingBackfillCoordinatorPayloadSchema,
 } from "@cubby/schemas/background-jobs";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
+import { chunk } from "es-toolkit";
 import type { z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
@@ -154,15 +156,23 @@ export async function continueEntityEmbeddingBackfillWorkflow(
     batchId,
     batchKind: "entity-embedding.backfill.coordinator",
     metadata: nextMetadata,
-    children: page.rows.map((row) => ({
-      kind: "entity-embedding.refresh",
-      dedupeKey: `entity-embedding.refresh:${row.entityType}:${row.entityId}:${row.expectedEmbeddingHash}`,
-      payload: {
-        entityType: row.entityType,
-        entityId: row.entityId,
-        expectedEmbeddingHash: row.expectedEmbeddingHash,
-      },
-    })),
+    // One child per chunk, not per row: the page is a backfill wave, and the
+    // embedding endpoint takes the whole array in one request. `jobsQueued`
+    // keeps counting ROWS — it is the backfill's progress measure, and rebasing
+    // it on job count would silently change what the debug page reports.
+    children: chunk(page.rows, ENTITY_EMBEDDING_BATCH_SIZE).map(
+      (rows, chunkIndex) => ({
+        kind: "entity-embedding.refresh-batch",
+        dedupeKey: `entity-embedding.refresh-batch:${batchId}:${metadata.workflow.pagesCompleted}:${chunkIndex}`,
+        payload: {
+          refs: rows.map((row) => ({
+            entityType: row.entityType,
+            entityId: row.entityId,
+            expectedEmbeddingHash: row.expectedEmbeddingHash,
+          })),
+        },
+      }),
+    ),
     continuation: page.nextCursor
       ? {
           kind: "entity-embedding.backfill.coordinator",

@@ -8,7 +8,6 @@ import type {
   ingredientMergeSuggestionBatchInput,
   locationSuggestionInput,
   locationTypeSuggestionInput,
-  parseSearchInput,
   productIdentificationInput,
   usdaFoodSuggestionBatchInput,
   usdaFoodSuggestionInput,
@@ -20,13 +19,9 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
-import {
-  CATEGORY_DESCRIPTIONS,
-  getAnthropicClient,
-} from "~/server/clients/anthropic";
+import { CATEGORY_DESCRIPTIONS, getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
-import { getLocationNames } from "~/server/repo/location/crud";
 import { getProductSummaryForAudit } from "~/server/repo/product";
 import {
   resolveAllOrThrow,
@@ -64,23 +59,17 @@ import {
 export const suggestCategoryWorkflow = defineWorkflowOperation(
   "ai.suggestCategory",
   async (db: Database, input: z.output<typeof categorySuggestionInput>) =>
-    getAnthropicClient().suggestCategory(
-      input.productName,
-      input.manufacturer,
-      {
-        db,
-        feature: "product-category-suggestion",
-        operation: "suggestCategory",
-        cacheStatus: "none",
-      },
-    ),
+    getAiClient().suggestCategory(input.productName, input.manufacturer, {
+      db,
+      operation: "suggestCategory",
+      cacheStatus: "none",
+    }),
 );
 export const suggestLocationTypeWorkflow = defineWorkflowOperation(
   "ai.suggestLocationType",
   async (db: Database, input: z.output<typeof locationTypeSuggestionInput>) =>
-    getAnthropicClient().suggestLocationType(input.locationName, {
+    getAiClient().suggestLocationType(input.locationName, {
       db,
-      feature: "location-type-suggestion",
       operation: "suggestLocationType",
       cacheStatus: "none",
     }),
@@ -147,9 +136,8 @@ export const approveDetectedInventoryItemWorkflow = bindWorkflow(
 export const identifyProductWorkflow = defineWorkflowOperation(
   "ai.identifyProduct",
   async (db: Database, input: z.output<typeof productIdentificationInput>) =>
-    getAnthropicClient().identifyProduct(input.imageUrls, {
+    getAiClient().identifyProduct(input.imageUrls, {
       db,
-      feature: "product-identification",
       operation: "identifyProduct",
       cacheStatus: "none",
     }),
@@ -341,29 +329,12 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
     signal,
   }),
 );
-type ParseSearchInput = z.output<typeof parseSearchInput>;
-export const parseSearchWorkflow = bindWorkflow(
-  workflow<Database, ParseSearchInput>("ai.parseSearch")
-    .call("locations", ({ context }) => getLocationNames(context))
-    .call("parsed", ({ context }, { input, locations }) =>
-      getAnthropicClient().parseSearchQuery(input.query, locations, {
-        db: context,
-        feature: "search-query-parse",
-        operation: "parseSearchQuery",
-        cacheStatus: "none",
-      }),
-    )
-    .output(({ parsed }) => parsed),
-  (db: Database, input: ParseSearchInput) => ({ context: db, input }),
-);
-
 export const auditCategoriesWorkflow = bindWorkflow(
   workflow<Database, undefined>("ai.auditCategories")
     .call("products", ({ context }) => getProductSummaryForAudit(context))
     .call("audit", ({ context }, { products }) =>
-      getAnthropicClient().auditCategories(products, CATEGORY_DESCRIPTIONS, {
+      getAiClient().auditCategories(products, CATEGORY_DESCRIPTIONS, {
         db: context,
-        feature: "category-audit",
         operation: "auditCategories",
         cacheStatus: "none",
       }),

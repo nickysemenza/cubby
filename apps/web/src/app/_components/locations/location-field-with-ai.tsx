@@ -11,6 +11,7 @@ import type {
 
 import { ai } from "~/lib/ai.functions";
 
+import { ProposedValue } from "../ai/ai-proposal-card";
 import { FieldWithAISuggest } from "../ai/ai-suggest";
 import { buildLocationComboboxItem } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
@@ -71,7 +72,7 @@ export function LocationFieldWithAI<
       }
       enabled
       disabledReason=""
-      suggestLabel="Use AI to suggest a location"
+      object="a location"
       basisKey={productId}
       currentValue={form.watch(name)}
       fieldDirty={form.getFieldState(name).isDirty}
@@ -79,6 +80,10 @@ export function LocationFieldWithAI<
       onAccept={(result) =>
         acceptLocation(buildLocationComboboxItem(result.location))
       }
-    />
+    >
+      {(result) => (
+        <ProposedValue label="Location" value={result.location.name} />
+      )}
+    </FieldWithAISuggest>
   );
 }
