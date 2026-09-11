@@ -55,6 +55,7 @@ export default defineEntity({
       },
       { key: "sourceLabel", kind: "text", readKey: null },
       { key: "rawJson", kind: "json", readKey: null },
+      { key: "report", kind: "json", nullable: true, readKey: null },
       {
         key: "coverImageId",
         kind: "identifier",
@@ -110,6 +111,17 @@ export default defineEntity({
         },
       },
       {
+        key: "needsReextract",
+        kind: "boolean",
+        label: "Needs re-extraction",
+        display: { detail: true },
+        validation: {
+          read: z.boolean(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "product",
         kind: "json",
         nullable: true,
@@ -145,6 +157,10 @@ export default defineEntity({
       },
       "sourceLabel",
       { key: "rawJson", specialized: "json:rawJson" },
+      { key: "report", specialized: "json:report" },
+      // Stored at upsert (recipe items in the tree), so browse and problem
+      // detection never walk the JSON.
+      { key: "sourceRecipeCount", default: "literal", defaultValue: 0 },
       { key: "coverImageId", reference: "image" },
       { key: "productId", reference: "product" },
       { key: "importedAt", default: "now" },
@@ -164,6 +180,7 @@ export default defineEntity({
       "recipeCount",
       "coverUrl",
       "sourceRecipeCount",
+      "needsReextract",
       "product",
     ],
   },

@@ -7,7 +7,7 @@
 //! - [`food_mappings`] — USDA food/product → unit-mapping synthesis
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
 //! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
-//! - [`epub`] — EPUB cookbook extraction (client-side pipeline)
+//! - [`epub`] — EPUB cookbook extraction (re-exported from upstream `cookbook::wasm`)
 //!
 //! Boundary types: `#[derive(Tsify)]` generates the `.d.ts` from the Rust
 //! structs (no hand-written `typescript_custom_section` except `AmountKind`),
@@ -30,6 +30,9 @@ mod macros;
 mod availability;
 mod conversion;
 mod costing;
+// Upstream compiles `cookbook::wasm` only for wasm32, so the native
+// `cargo test` build of this crate has no EPUB module to re-export.
+#[cfg(target_arch = "wasm32")]
 mod epub;
 mod estimates;
 mod food_mappings;
@@ -40,6 +43,7 @@ mod reconcile;
 pub use availability::*;
 pub use conversion::*;
 pub use costing::*;
+#[cfg(target_arch = "wasm32")]
 pub use epub::*;
 pub use estimates::*;
 pub use food_mappings::*;

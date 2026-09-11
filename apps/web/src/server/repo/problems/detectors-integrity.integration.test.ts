@@ -35,6 +35,7 @@ import {
   wishCandidate,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
+import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
@@ -100,7 +101,7 @@ const mkCookbook = (db: Database) =>
     author: [],
     subjects: [],
     sourceLabel: "test",
-    rawJson: [],
+    rawJson: makeCookbookExtraction(),
   });
 
 const mkRecipe = (db: Database) =>
@@ -335,7 +336,7 @@ const SOURCE_FACTORIES = {
       author: [],
       subjects: [],
       sourceLabel: "test",
-      rawJson: [],
+      rawJson: makeCookbookExtraction(),
       coverImageId: targetId,
     }),
 
@@ -565,7 +566,7 @@ const SOURCE_FACTORIES = {
       author: [],
       subjects: [],
       sourceLabel: "test",
-      rawJson: [],
+      rawJson: makeCookbookExtraction(),
       productId: parseEntityId("product", targetId),
     }),
 

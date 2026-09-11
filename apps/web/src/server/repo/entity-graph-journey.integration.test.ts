@@ -17,7 +17,8 @@ import {
   createProductFixture as createProduct,
   ingredientRef,
   makeExpenseInput,
-  makeImportRecipe,
+  makeCookbookExtraction,
+  makeCookbookRecipe,
   makeLocationInput,
   makeProductInput,
   makeRecipeInput,
@@ -61,7 +62,9 @@ describe("entity graph cross-entity journey", () => {
       {
         name: cookbookName,
         sourceLabel: "journey.epub",
-        rawJson: [makeImportRecipe()],
+        rawJson: makeCookbookExtraction([
+          makeCookbookRecipe("Journey source", ["1 cup flour"]),
+        ]),
       },
       ctx.actor,
     );

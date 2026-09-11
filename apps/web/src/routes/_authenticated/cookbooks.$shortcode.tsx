@@ -1,8 +1,13 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
-import { BookOpen, Link2, Plus, RefreshCw } from "lucide-react";
+import {
+  createFileRoute,
+  Link,
+  notFound,
+  useNavigate,
+} from "@tanstack/react-router";
+import { AlertTriangle, BookOpen, Link2, Plus, RefreshCw } from "lucide-react";
 import { z } from "zod";
 
 import {
@@ -14,6 +19,7 @@ import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { notFoundPage } from "~/app/_components/routing/entity-routes";
 import { CookbookPhysicalCopy } from "~/app/cookbooks/cookbook-physical-copy";
+import { CookbookRunReportPanel } from "~/app/cookbooks/cookbook-run-report";
 import { recipeStreams } from "~/app/recipes/recipe.functions";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Row } from "~/components/layout";
@@ -23,6 +29,7 @@ import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { cookbook as cookbookOperations } from "~/entities/cookbook.functions";
@@ -33,7 +40,29 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { shortcodeHead } from "~/lib/page-title";
 
-const tabSchema = z.enum(["recipes", "ingredients"]);
+const tabSchema = z.enum(["recipes", "ingredients", "report"]);
+type CookbookTab = z.infer<typeof tabSchema>;
+
+/**
+ * The tabs this cookbook offers.
+ *
+ * A book stored in the retired format has no readable run report — the server
+ * refuses to hand back its tree at all, and the only useful thing to say about
+ * it is "re-extract from the EPUB" — so it is offered no report tab to open
+ * onto an error.
+ */
+export const cookbookTabs = (cookbook: {
+  needsReextract: boolean;
+}): CookbookTab[] =>
+  cookbook.needsReextract
+    ? ["recipes", "ingredients"]
+    : ["recipes", "ingredients", "report"];
+
+const TAB_LABELS = {
+  recipes: "Recipes",
+  ingredients: "Ingredients",
+  report: "Extraction",
+} satisfies Record<CookbookTab, string>;
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
   tab: tabSchema.optional().catch(undefined),
@@ -94,7 +123,12 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
   const { tab } = Route.useSearch();
   const navigate = useNavigate();
 
-  const tabs = useTabParam(tab, "recipes", tabSchema, (next) =>
+  const availableTabs = cookbookTabs(cookbook);
+  // A deep link to a tab this book does not offer (a report on a retired-format
+  // book) falls back to the recipes list rather than rendering an empty panel.
+  const requestedTab =
+    tab && availableTabs.includes(tab) ? tab : ("recipes" as const);
+  const tabs = useTabParam(requestedTab, "recipes", tabSchema, (next) =>
     navigate({ to: ".", search: (prev) => ({ ...prev, tab: next }) }),
   );
 
@@ -176,6 +210,7 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
       surface: "plain",
       content: (
         <div className="space-y-2">
+          {cookbook.needsReextract && <ReextractNotice />}
           {reprocess.running && (
             <BulkProgressBar
               verb="Reprocessing"
@@ -184,8 +219,11 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
           )}
           <Tabs value={tabs.value} onValueChange={tabs.onValueChange}>
             <TabsList variant="line">
-              <TabsTrigger value="recipes">Recipes</TabsTrigger>
-              <TabsTrigger value="ingredients">Ingredients</TabsTrigger>
+              {availableTabs.map((value) => (
+                <TabsTrigger key={value} value={value}>
+                  {TAB_LABELS[value]}
+                </TabsTrigger>
+              ))}
             </TabsList>
             <TabsContent value="recipes">
               {/* cookbookIdFilter pins this table to one cookbook via
@@ -198,6 +236,13 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
             </TabsContent>
             <TabsContent value="ingredients">
               <IngredientUsagePanel cookbookId={cookbookId} />
+            </TabsContent>
+            <TabsContent value="report">
+              {/* Mounted only while selected: the run report ships the whole
+                  stored book tree with it, which the other tabs never need. */}
+              {tabs.value === "report" && (
+                <CookbookRunReportPanel cookbookId={cookbookId} />
+              )}
             </TabsContent>
           </Tabs>
         </div>
@@ -264,5 +309,36 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
     >
       <DetailSections sections={sections} rawData={cookbook} />
     </Page>
+  );
+}
+
+/**
+ * A book stored in the retired extraction format.
+ *
+ * Nothing reads it any more: the stored JSON predates the `cookbook` crate's
+ * book tree, so re-importing from source, the run report, and sub-recipe links
+ * all refuse it. The recipes already imported are untouched and still work —
+ * only the source behind them is unreadable — so this is a notice, not an
+ * error, and it points at the one action that fixes it.
+ */
+function ReextractNotice() {
+  return (
+    <Row
+      align="center"
+      gap="sm"
+      className="border border-warning/40 bg-warning/5 p-2"
+    >
+      <AlertTriangle className="size-4 shrink-0 text-warning" />
+      <Description as="span" size="xs" className="text-warning-ink">
+        Extracted with a retired format — re-extract from the EPUB to restore
+        the source, its run report, and sub-recipe links.
+      </Description>
+      <Link
+        to="/recipes/import"
+        className="text-xs font-medium text-primary hover:underline"
+      >
+        Go to import
+      </Link>
+    </Row>
   );
 }

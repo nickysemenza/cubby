@@ -6,6 +6,7 @@ import {
   productShortcode,
   recipeShortcode,
 } from "./identifier-fields";
+import { cookbookExtractionSchema, cookbookRunReportSchema } from "./cookbook";
 import { cookbookSummary } from "./recipe";
 
 // Times arrive twice over: the prose string is verbatim what the source printed,
@@ -65,19 +66,6 @@ const importRecipeSection = z.object({
   instructions: z.array(z.string()).default([]),
 });
 
-export const recipeRefSchema = z.object({
-  title: z.string(),
-  line: z.string(),
-  confidence: z.enum(["linked", "title_match"]),
-});
-export type RecipeRef = z.infer<typeof recipeRefSchema>;
-
-export const archiveImageRefSchema = z.object({
-  path: z.string().min(1),
-  mime: z.string().min(1),
-  alt: z.string().optional(),
-});
-
 const publicRecipeImageUrl = z
   .url()
   .refine(
@@ -85,32 +73,25 @@ const publicRecipeImageUrl = z
     "Recipe image URL must use HTTP or HTTPS",
   );
 
+// A scraped or Notion recipe's image is always a public URL. Cookbook photos
+// live in the EPUB archive and are attached by source recipe id instead.
 export const recipeImageSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("url"), url: publicRecipeImageUrl }),
-  archiveImageRefSchema.extend({ kind: z.literal("epub") }),
 ]);
 
-// Normalize upstream scraper/EPUB output and persisted cookbook JSON once at
-// ingress. All consumers receive an explicit source; archive paths are not URLs.
 const importedImageSource = z
   .union([
     recipeImageSourceSchema,
     publicRecipeImageUrl.transform((url) => ({ kind: "url" as const, url })),
-    archiveImageRefSchema.transform((ref) => ({
-      kind: "epub" as const,
-      ...ref,
-    })),
   ])
   .pipe(recipeImageSourceSchema);
 
 export const importRecipeSchema = z.object({
   meta: importRecipeMeta,
   sections: z.array(importRecipeSection),
-  // The book label (food-cli passes the .epub path); provenance only.
+  // Provenance label (a Notion database, a site); never a cookbook now.
   source: z.string().optional(),
-  // Synthetic `source#doc_path`, not a real URL; provenance only.
   url: z.string().optional(),
-  references: z.array(recipeRefSchema).default([]),
   servings: z.number().optional(),
   image: importedImageSource.optional(),
 });
@@ -131,7 +112,10 @@ export const recipeImportIdOut = z.object({
 
 export const upsertCookbookInput = z.object({
   name: z.string().min(1),
-  rawJson: importRecipesSchema,
+  // The whole extracted book tree, verbatim from the `cookbook` crate.
+  rawJson: cookbookExtractionSchema,
+  // The run's diagnostics: every call, chunk, cost. Absent for the JSON path.
+  report: cookbookRunReportSchema.nullable().optional(),
   author: z.array(z.string()).optional(),
   subjects: z.array(z.string()).optional(),
   sourceLabel: z.string(),
@@ -183,12 +167,15 @@ export const setCookbookProductInput = z.object({
 export const cookbookSourceOut = z.object({
   id: cookbookShortcode,
   name: z.string(),
-  recipes: importRecipesSchema,
+  cookbook: cookbookExtractionSchema,
+  report: cookbookRunReportSchema.nullable(),
 });
 
+// Recipes are addressed by the tree's stable item ids (`Recipe.id`), never by
+// array position: the tree is nested and re-extraction keeps ids stable.
 export const importCookbookStreamInput = z.object({
   cookbookId: cookbookShortcode,
-  indices: z.array(z.number().int().nonnegative()).min(1),
+  recipeIds: z.array(z.string().min(1)).min(1),
 });
 
 export const cookbookImportEventSchema = z.discriminatedUnion("type", [
@@ -199,13 +186,13 @@ export const cookbookImportEventSchema = z.discriminatedUnion("type", [
     item: z
       .union([
         z.object({
-          index: z.number().int().nonnegative(),
+          sourceRecipeId: z.string(),
           ok: z.literal(true),
           id: z.string(),
           hasImage: z.boolean(),
         }),
         z.object({
-          index: z.number().int().nonnegative(),
+          sourceRecipeId: z.string(),
           ok: z.literal(false),
           error: z.string(),
         }),
@@ -289,7 +276,8 @@ export const deleteCookbookOut = z.object({
 export const attachCookbookRecipePhotoInput = z.object({
   cookbookId: cookbookShortcode,
   recipeId: recipeShortcode,
-  sourceIndex: z.number().int().nonnegative(),
+  /** The tree item id of the source recipe whose first photo this is. */
+  sourceRecipeId: z.string().min(1),
   data: z.string().min(1),
 });
 
@@ -298,40 +286,28 @@ export const attachCookbookRecipePhotoOut = z.object({
   cleanupWarning: z.string().optional(),
 });
 
-// Input for `recipe.extractCookbookChunk` (camelCased WASM request). Exported
-// so the client carrier type derives from it via `z.infer` instead of being
-// maintained in two places.
-export const chunkRequestInput = z.object({
-  system: z.string(),
-  user: z.string(),
-  toolName: z.string(),
-  toolSchema: z.record(z.string(), z.json()),
-  // Escalate this chunk to the stronger fallback model. The browser sets
-  // this only after the default model fails to return parseable output. The
-  // model itself stays server-owned (a bool, not a model id) so a client
-  // can't pick an arbitrary expensive model.
-  escalate: z.boolean().optional(),
+// Input for `recipe.forwardGatewayRequest`: a complete Cloudflare AI Gateway
+// request built in Rust (`cookbook::wasm`), minus authorization. The server
+// adds the gateway token and forwards it verbatim; it never chooses a model or
+// rewrites a body, so the browser cannot pick an arbitrary provider path either
+// — only the gateway's provider routes are accepted.
+export const gatewayForwardInput = z.object({
+  path: z
+    .string()
+    .min(1)
+    .max(300)
+    .regex(
+      /^\/[a-z0-9-]+\/[A-Za-z0-9._/-]+$/u,
+      "path must be a gateway provider route such as /anthropic/v1/messages",
+    ),
+  headers: z.array(z.tuple([z.string().min(1), z.string()])).max(32),
+  body: z.json(),
 });
 
-export const cookbookLlmUsageSchema = z.object({
-  input_tokens: z.number().int().nonnegative(),
-  output_tokens: z.number().int().nonnegative(),
-  cache_creation_input_tokens: z.number().int().nonnegative(),
-  cache_read_input_tokens: z.number().int().nonnegative(),
-});
-
-export const chunkResponseOut = z.object({
-  input: z.json().nullable(),
-  usage: cookbookLlmUsageSchema,
-  truncated: z.boolean(),
-  error: z
-    .object({
-      message: z.string(),
-      // Transport failures are retried by the authenticated TypeScript hop;
-      // payload failures are passed to upstream retry and escalation policy.
-      kind: z.enum(["payload", "transport"]),
-    })
-    .optional(),
+export const gatewayForwardOut = z.object({
+  status: z.number().int().min(100).max(599),
+  headers: z.array(z.tuple([z.string(), z.string()])),
+  body: z.string(),
 });
 
 export const mcpRecipeCreateFromTextSection = z.object({

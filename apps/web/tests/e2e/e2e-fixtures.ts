@@ -1,5 +1,8 @@
-import { importRecipesSchema } from "@cubby/schemas/import-recipe";
 import { upsertCookbook } from "~/server/repo/cookbook";
+import {
+  makeCookbookExtraction,
+  makeCookbookRecipe,
+} from "~/server/repo/repo.fixtures";
 import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
@@ -219,35 +222,17 @@ export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
     {
       name,
       sourceLabel: "photo-fixture.epub",
-      rawJson: importRecipesSchema.parse([
-        {
-          meta: { title: `${name} carrots` },
-          sections: [
-            {
-              ingredients: ["2 carrots"],
-              instructions: ["Roast the carrots."],
-            },
-          ],
-          image: {
-            kind: "epub",
-            path: "OEBPS/images/hero.png",
-            mime: "image/png",
-          },
-        },
-        {
-          meta: { title: `${name} potatoes` },
-          sections: [
-            {
-              ingredients: ["2 potatoes"],
-              instructions: ["Roast the potatoes."],
-            },
-          ],
-          image: {
-            kind: "epub",
-            path: "OEBPS/images/hero.png",
-            mime: "image/png",
-          },
-        },
+      rawJson: makeCookbookExtraction([
+        makeCookbookRecipe(`${name} carrots`, ["2 carrots"], {
+          id: "001.0001",
+          steps: ["Roast the carrots."],
+          photos: [{ path: "OEBPS/images/hero.png", mime: "image/png" }],
+        }),
+        makeCookbookRecipe(`${name} potatoes`, ["2 potatoes"], {
+          id: "001.0020",
+          steps: ["Roast the potatoes."],
+          photos: [{ path: "OEBPS/images/hero.png", mime: "image/png" }],
+        }),
       ]),
     },
     context.actorContext,

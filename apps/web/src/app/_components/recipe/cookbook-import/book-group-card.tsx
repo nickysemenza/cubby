@@ -1,37 +1,97 @@
+import type {
+  CookbookExtraction,
+  CookbookIngredientLine,
+  CookbookRecipe,
+} from "@cubby/schemas/cookbook";
 import { useQueries } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import {
-  AlertCircle,
-  ChevronDown,
-  ChevronRight,
-  Import,
-  RotateCcw,
-  X,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, Import, X } from "lucide-react";
 import { useCallback, useId, useMemo, useRef } from "react";
 
 import { recipe } from "~/app/recipes/recipe.functions";
 import { Row } from "~/components/layout/row";
+import { Stack } from "~/components/layout/stack";
 import { BulkProgressBar } from "~/components/ui/bulk-progress-bar";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
+import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
-import { Spinner } from "~/components/ui/spinner";
-import { importRecipeSignature } from "~/lib/recipe-signature";
+import { flattenRecipes } from "~/lib/cookbook-graph";
+import { cookbookRecipeSignature } from "~/lib/recipe-signature";
 
+import type { SubRecipeLink } from "../parsed-ingredient-table";
 import {
   RecipeImportCard,
   type RecipeImportStatus,
 } from "../recipe-import-card";
-import { failureMessage } from "./extraction";
-import { normalize } from "./import-order";
+import { EstimatePanel } from "./estimate-panel";
+import { ExtractProgressPanel, ExtractStatusLine } from "./extract-status";
+import { normalize } from "./import-helpers";
+import { parsedLinesFor, toRecipeCardView } from "./recipe-card-view";
+import { FailuresPanel, RunReportPanel } from "./run-report-panel";
 import type { Book, BookHandlers } from "./types";
 
-// Stable empty set so memoized RecipeCards see a referentially-stable
-// `linkableTitles` during streaming (references only resolve once ready anyway).
-const EMPTY_TITLES: ReadonlySet<string> = new Set();
+type ExistingRecipe = { id: string; sig: string; hasImage: boolean };
+
+/**
+ * One row of the book's tree.
+ *
+ * Techniques and essays ride on their chapter row rather than getting rows of
+ * their own: they are not importable, but hiding them entirely would suggest
+ * the extractor skipped that part of the book. Collapsed context says the whole
+ * book was read and this piece of it simply is not a recipe.
+ */
+type TreeRow =
+  | {
+      kind: "chapter";
+      key: string;
+      title: string;
+      context: { id: string; title: string; kind: "technique" | "essay" }[];
+    }
+  | {
+      kind: "recipe";
+      key: string;
+      item: CookbookRecipe;
+      chapter: string | null;
+    };
+
+const buildRows = (extraction: CookbookExtraction): TreeRow[] =>
+  extraction.chapters.flatMap((chapter) => {
+    const context = chapter.items.flatMap((item) =>
+      item.kind === "recipe"
+        ? []
+        : [{ id: item.id, title: item.title, kind: item.kind }],
+    );
+    const recipes = chapter.items.flatMap<TreeRow>((item) =>
+      item.kind === "recipe"
+        ? [
+            {
+              kind: "recipe",
+              key: item.id,
+              item,
+              chapter: chapter.title ?? null,
+            },
+          ]
+        : [],
+    );
+    if (recipes.length === 0 && context.length === 0) return [];
+    return [
+      {
+        kind: "chapter" as const,
+        key: `chapter:${chapter.id}`,
+        title: chapter.title ?? "(front matter)",
+        context,
+      },
+      ...recipes,
+    ];
+  });
 
 export function BookGroupCard({
   book,
@@ -43,52 +103,40 @@ export function BookGroupCard({
   importing: boolean;
 }) {
   const name = book.name.trim();
-  const ready = book.extract.status === "ready";
+  const extraction = book.extraction;
+  const ready = book.extract.status === "ready" && extraction !== undefined;
 
-  // Recipes already imported from this book, by normalized title → { id, sig }.
+  const flat = useMemo(
+    () => (extraction ? flattenRecipes(extraction) : []),
+    [extraction],
+  );
+
+  // Recipes already imported from this book, by normalized name → { id, sig }.
   // The id links to the existing Cubby recipe; the content signature lets each
-  // card show "no changes" vs "will update". Also lets a cross-recipe reference
-  // link to a recipe that already exists.
+  // card show "no changes" vs "will update". It also decides whether a
+  // sub-recipe reference can link to something that is already there.
   const existingQueries =
     ready && name.length > 0
       ? [recipe.getCookbookDiff.queryOptions({ book: name })]
       : [];
   const [existingQuery] = useQueries({ queries: existingQueries });
-  const existingRecipes = existingQuery?.data;
-  const existingByTitle = useMemo(
+  const existingByName = useMemo(
     () =>
-      new Map(
-        (existingRecipes ?? []).map((r) => [
-          normalize(r.title),
-          { id: r.id, sig: r.sig, hasImage: r.hasImage },
+      new Map<string, ExistingRecipe>(
+        (existingQuery?.data ?? []).map((row) => [
+          normalize(row.title),
+          { id: row.id, sig: row.sig, hasImage: row.hasImage },
         ]),
       ),
-    [existingRecipes],
-  );
-  const existingTitleSet = useMemo(
-    () => new Set(existingByTitle.keys()),
-    [existingByTitle],
+    [existingQuery?.data],
   );
 
-  // A reference links only if its target will exist after import: selected in
-  // this book, or already in the book. Only meaningful once extraction is done;
-  // during streaming we keep a stable empty set so memoized cards don't churn.
-  const linkableTitles = useMemo<ReadonlySet<string>>(() => {
-    if (!ready) return EMPTY_TITLES;
-    const titles = new Set<string>(existingTitleSet);
-    for (const i of book.selected) {
-      titles.add(normalize(book.recipes[i]!.meta.title));
-    }
-    return titles;
-  }, [ready, book.recipes, book.selected, existingTitleSet]);
-
-  const allSelected =
-    book.recipes.length > 0 && book.selected.size === book.recipes.length;
+  const allSelected = flat.length > 0 && book.selected.size === flat.length;
 
   return (
     <Card size="sm">
       <CardHeader className="flex-row items-center gap-2 space-y-0">
-        {ready && book.recipes.length > 0 ? (
+        {ready && flat.length > 0 ? (
           <Checkbox
             aria-label="Select all in book"
             checked={allSelected}
@@ -115,8 +163,8 @@ export function BookGroupCard({
           aria-label="Book name"
         />
         <Row align="center" justify="end" gap="sm" className="flex-1 text-sm">
-          <ExtractStatus book={book} />
-          {ready && book.recipes.length > 0 && (
+          <ExtractStatusLine book={book} recipeCount={flat.length} />
+          {ready && flat.length > 0 && (
             <Button
               type="button"
               size="sm"
@@ -140,94 +188,168 @@ export function BookGroupCard({
         </Row>
       </CardHeader>
 
-      <BookDetails
-        book={book}
-        handlers={handlers}
-        ready={ready}
-        name={name}
-        existingByTitle={existingByTitle}
-        linkableTitles={linkableTitles}
-      />
+      {book.expanded && (
+        <BookDetails
+          book={book}
+          handlers={handlers}
+          ready={ready}
+          name={name}
+          recipeCount={flat.length}
+          existingByName={existingByName}
+        />
+      )}
     </Card>
   );
 }
-
-type ExistingRecipe = { id: string; sig: string; hasImage: boolean };
 
 function BookDetails({
   book,
   handlers,
   ready,
   name,
-  existingByTitle,
-  linkableTitles,
+  recipeCount,
+  existingByName,
 }: {
   book: Book;
   handlers: BookHandlers;
   ready: boolean;
   name: string;
-  existingByTitle: Map<string, ExistingRecipe>;
-  linkableTitles: ReadonlySet<string>;
+  recipeCount: number;
+  existingByName: Map<string, ExistingRecipe>;
 }) {
-  if (!book.expanded || (book.recipes.length === 0 && !ready)) return null;
-  const doneCount = [...book.results.values()].filter(
-    (result) => result.status === "done",
-  ).length;
-
+  const extraction = book.extraction;
   return (
     <CardContent className="space-y-2">
+      <BookIdentity book={book} />
+
       {ready && name.length === 0 && (
         <p className="text-xs text-warning-ink">
           Set a book name before importing.
         </p>
       )}
-      <FailedChunksPanel
-        book={book}
-        onRetry={() => handlers.retryExtraction(book.source)}
-      />
+
+      {book.extract.status === "opened" && book.estimate && (
+        <EstimatePanel
+          estimate={book.estimate}
+          onExtract={() => handlers.extract(book.source)}
+        />
+      )}
+
+      {book.extract.status === "extracting" && (
+        <ExtractProgressPanel
+          progress={book.extract.progress}
+          onCancel={() => handlers.cancel(book.source)}
+        />
+      )}
+
+      {book.report && (
+        <>
+          <FailuresPanel
+            report={book.report}
+            // Retrying needs the EPUB (a book loaded from stored source or JSON
+            // has only the tree), and a run already in flight is the retry.
+            canRetry={
+              book.hasArchiveBytes === true &&
+              book.extract.status !== "extracting"
+            }
+            onRetry={() => handlers.retryExtraction(book.source)}
+          />
+          <RunReportPanel report={book.report} />
+        </>
+      )}
+
       <PhotoImportControls
         book={book}
         handlers={handlers}
-        existingByTitle={existingByTitle}
+        existingByName={existingByName}
       />
-      {!ready && book.recipes.length > 0 && (
-        <Description size="xs">
-          Streaming recipes as the book extracts…
-        </Description>
+
+      <ImportProgress book={book} total={recipeCount} />
+
+      {ready && extraction && (
+        <BookTree
+          book={book}
+          extraction={extraction}
+          handlers={handlers}
+          existingByName={existingByName}
+        />
       )}
-      {book.importProgress ? (
-        <BulkProgressBar verb="Importing" progress={book.importProgress} />
-      ) : doneCount > 0 ? (
-        <Description size="xs">
-          {doneCount} of {book.recipes.length} imported
-        </Description>
-      ) : null}
-      <RecipeList
-        book={book}
-        toggleRecipe={handlers.toggleRecipe}
-        retryPhoto={handlers.retryPhoto}
-        existingByTitle={existingByTitle}
-        linkableTitles={linkableTitles}
-      />
     </CardContent>
+  );
+}
+
+/** Cover, title, authors — what the outline says before anything is extracted. */
+function BookIdentity({ book }: { book: Book }) {
+  const outline = book.outline;
+  if (!outline && !book.coverPreviewUrl) return null;
+  return (
+    <Row align="start" gap="sm">
+      {book.coverPreviewUrl && (
+        <Image
+          src={book.coverPreviewUrl}
+          alt=""
+          displayWidth={64}
+          className="h-20 w-auto rounded object-contain"
+        />
+      )}
+      {outline && (
+        <Stack gap="xs">
+          <span className="text-sm font-medium">{outline.title}</span>
+          {outline.authors.length > 0 && (
+            <Description size="xs">{outline.authors.join(", ")}</Description>
+          )}
+          <Description size="xs">
+            {outline.chapters} chapter{outline.chapters === 1 ? "" : "s"} ·{" "}
+            {outline.navRecipeTitles} recipe
+            {outline.navRecipeTitles === 1 ? "" : "s"} in contents ·{" "}
+            {outline.lines} lines
+          </Description>
+        </Stack>
+      )}
+    </Row>
+  );
+}
+
+function ImportProgress({ book, total }: { book: Book; total: number }) {
+  const doneCount = [...book.results.values()].filter(
+    (result) => result.status === "done",
+  ).length;
+  if (book.importProgress) {
+    return <BulkProgressBar verb="Importing" progress={book.importProgress} />;
+  }
+  if (doneCount === 0) return null;
+  return (
+    <Description size="xs">
+      {doneCount} of {total} imported
+    </Description>
   );
 }
 
 function PhotoImportControls({
   book,
   handlers,
-  existingByTitle,
+  existingByName,
 }: {
   book: Book;
   handlers: BookHandlers;
-  existingByTitle: Map<string, ExistingRecipe>;
+  existingByName: Map<string, ExistingRecipe>;
 }) {
   const originalEpubInputId = useId();
-  const needsOriginalEpub = [...book.selected].some((index) => {
-    const imported = book.recipes[index];
+  const recipesById = useMemo(
+    () =>
+      new Map(
+        (book.extraction ? flattenRecipes(book.extraction) : []).map(
+          (entry) => [entry.recipe.id, entry.recipe] as const,
+        ),
+      ),
+    [book.extraction],
+  );
+  const needsOriginalEpub = [...book.selected].some((id) => {
+    const item = recipesById.get(id);
     return (
-      imported?.image?.kind === "epub" &&
-      !existingByTitle.get(normalize(imported.meta.title))?.hasImage
+      item !== undefined &&
+      item.photos.length > 0 &&
+      !existingByName.get(normalize(item.name))?.hasImage
     );
   });
   const photoWarningCount = [...book.photos.values()].filter(
@@ -236,7 +358,7 @@ function PhotoImportControls({
 
   return (
     <>
-      {book.cookbookId && needsOriginalEpub && !book.hasArchiveBytes && (
+      {needsOriginalEpub && !book.hasArchiveBytes && (
         <Row
           align="center"
           gap="sm"
@@ -277,65 +399,112 @@ function PhotoImportControls({
   );
 }
 
-// Virtualized recipe list: a 100+ recipe book is far too much to render at once
-// (and re-render every streaming pass). Only the cards in/near the viewport
-// mount — so each streaming update re-renders ~10 cards, not all of them, and
-// `matchNames` fires only for visible recipes.
-function RecipeList({
+/**
+ * The book, virtualized.
+ *
+ * A 200-recipe book is far too much to render at once, and every card runs a
+ * batched ingredient-match query when it mounts, so only the rows in or near
+ * the viewport exist. That is also what makes "jump to the sub-recipe" work:
+ * scrolling to a row index brings an unmounted card into being.
+ */
+function BookTree({
   book,
-  toggleRecipe,
-  retryPhoto,
-  existingByTitle,
-  linkableTitles,
+  extraction,
+  handlers,
+  existingByName,
 }: {
   book: Book;
-  toggleRecipe: BookHandlers["toggleRecipe"];
-  retryPhoto: BookHandlers["retryPhoto"];
-  existingByTitle: Map<string, ExistingRecipe>;
-  linkableTitles: ReadonlySet<string>;
+  extraction: CookbookExtraction;
+  handlers: BookHandlers;
+  existingByName: Map<string, ExistingRecipe>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const rows = useMemo(() => buildRows(extraction), [extraction]);
   const virtualizer = useVirtualizer({
-    count: book.recipes.length,
+    count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 360,
     overscan: 4,
   });
-  const items = virtualizer.getVirtualItems();
 
-  // Map a recipe title to its index in this book, so a reference badge can scroll
-  // to its target. First-wins on duplicate titles. `previewTitles` is the
-  // clickability test (only references to a recipe shown here can be scrolled to).
-  const titleToIndex = useMemo(() => {
-    const m = new Map<string, number>();
-    book.recipes.forEach((r, i) => {
-      const key = normalize(r.meta.title);
-      if (!m.has(key)) m.set(key, i);
+  const rowIndexById = useMemo(() => {
+    const map = new Map<string, number>();
+    rows.forEach((row, index) => {
+      if (row.kind === "recipe") map.set(row.item.id, index);
     });
-    return m;
-  }, [book.recipes]);
-  const previewTitles = useMemo<ReadonlySet<string>>(
-    () => new Set(titleToIndex.keys()),
-    [titleToIndex],
-  );
+    return map;
+  }, [rows]);
 
-  // Read the latest map through a ref so `scrollToTitle` stays referentially
-  // stable (deps: just the stable virtualizer instance) — otherwise the memoized
-  // RecipeCards would churn every streaming pass.
-  const titleIndexRef = useRef(titleToIndex);
-  titleIndexRef.current = titleToIndex;
-  const scrollToTitle = useCallback(
-    (title: string) => {
-      const idx = titleIndexRef.current.get(normalize(title));
-      if (idx != null) virtualizer.scrollToIndex(idx, { align: "start" });
+  // Read the row index through a ref so `scrollToId` stays referentially
+  // stable, and the memoized cards don't churn when the map is rebuilt.
+  const rowIndexRef = useRef(rowIndexById);
+  rowIndexRef.current = rowIndexById;
+  const scrollToId = useCallback(
+    (id: string) => {
+      const index = rowIndexRef.current.get(id);
+      if (index != null) virtualizer.scrollToIndex(index, { align: "start" });
     },
     [virtualizer],
   );
 
-  // Stable reference-linking config so the memoized cards don't churn.
-  const refConfig = useMemo(
-    () => ({ linkableTitles, previewTitles, scrollToTitle }),
-    [linkableTitles, previewTitles, scrollToTitle],
+  const namesById = useMemo(
+    () =>
+      new Map(
+        flattenRecipes(extraction).map(
+          (entry) => [entry.recipe.id, entry.recipe.name] as const,
+        ),
+      ),
+    [extraction],
+  );
+
+  // A reference links only if its target will exist once this import finishes:
+  // selected here, or already imported from this book. Anything else stays a
+  // plain ingredient line, and the chip says so rather than promising a link.
+  const linkFor = useCallback(
+    (line: CookbookIngredientLine): SubRecipeLink | undefined => {
+      const ref = line.ref;
+      // Only an ingredient-position reference becomes a recipe link on import;
+      // a mention in a step or a note is prose, not a dependency.
+      if (!ref || ref.kind !== "ingredient") return undefined;
+      const targetId = ref.target_id;
+      const targetName = namesById.get(targetId);
+      if (!targetName) return undefined;
+      const linkable =
+        book.selected.has(targetId) ||
+        existingByName.has(normalize(targetName));
+      // A target outside the rendered list (there is none today, but a filtered
+      // view would have some) gets a chip without a jump rather than a jump
+      // that scrolls nowhere.
+      const listed = rowIndexById.has(targetId);
+      const link: SubRecipeLink = { targetId, label: targetName, linkable };
+      if (listed) link.onJump = () => scrollToId(targetId);
+      return link;
+    },
+    [book.selected, existingByName, namesById, rowIndexById, scrollToId],
+  );
+
+  // Card views and parsed lines are built for the whole book rather than per
+  // visible row: they are plain array mapping (no WASM, no queries), and
+  // building them here keeps each card's props referentially stable so the
+  // memoized card actually skips work between renders.
+  const cardViews = useMemo(
+    () =>
+      new Map(
+        flattenRecipes(extraction).map(
+          (entry) => [entry.recipe.id, toRecipeCardView(entry.recipe)] as const,
+        ),
+      ),
+    [extraction],
+  );
+  const parsedLines = useMemo(
+    () =>
+      new Map(
+        flattenRecipes(extraction).map(
+          (entry) =>
+            [entry.recipe.id, parsedLinesFor(entry.recipe, linkFor)] as const,
+        ),
+      ),
+    [extraction, linkFor],
   );
 
   return (
@@ -344,37 +513,29 @@ function RecipeList({
         className="relative w-full"
         style={{ height: `${virtualizer.getTotalSize()}px` }}
       >
-        {items.map((vi) => {
-          const recipe = book.recipes[vi.index];
-          if (!recipe) return null;
-          const existing = existingByTitle.get(normalize(recipe.meta.title));
-          // Imported recipes compare their would-be signature to the stored one
-          // → "no changes" vs "will update"; un-imported ones are "new".
-          const status: RecipeImportStatus = !existing
-            ? "new"
-            : importRecipeSignature(recipe) !== existing.sig
-              ? "will-update"
-              : "unchanged";
+        {virtualizer.getVirtualItems().map((vi) => {
+          const row = rows[vi.index];
+          if (!row) return null;
           return (
             <div
-              key={vi.index}
+              key={row.key}
               data-index={vi.index}
               ref={virtualizer.measureElement}
               className="absolute top-0 left-0 w-full pb-2"
               style={{ transform: `translateY(${vi.start}px)` }}
             >
-              <RecipeImportCard
-                recipe={recipe}
-                status={status}
-                existingId={existing?.id}
-                selected={book.selected.has(vi.index)}
-                onToggle={() => toggleRecipe(book.source, vi.index)}
-                result={book.results.get(vi.index)}
-                photo={book.photos.get(vi.index)}
-                photoPreviewUrl={book.photoPreviewUrls.get(vi.index)}
-                onRetryPhoto={() => retryPhoto(book.source, vi.index)}
-                references={refConfig}
-              />
+              {row.kind === "chapter" ? (
+                <ChapterRow title={row.title} context={row.context} />
+              ) : (
+                <RecipeRow
+                  book={book}
+                  row={row}
+                  handlers={handlers}
+                  existingByName={existingByName}
+                  cardView={cardViews.get(row.item.id)}
+                  parsedLines={parsedLines.get(row.item.id)}
+                />
+              )}
             </div>
           );
         })}
@@ -383,105 +544,78 @@ function RecipeList({
   );
 }
 
-function ExtractStatus({ book }: { book: Book }) {
-  const e = book.extract;
-  if (e.status === "pending") {
-    return (
-      <Description as="span" size="xs">
-        Queued…
-      </Description>
-    );
-  }
-  if (e.status === "extracting") {
-    return (
-      <Row
-        as="span"
-        align="center"
-        gap="xs"
-        className="text-xs text-muted-foreground"
-      >
-        <Spinner className="size-3" /> Extracting {e.done}/{e.total}
-      </Row>
-    );
-  }
-  if (e.status === "error") {
-    return (
-      <Row
-        as="span"
-        align="center"
-        gap="xs"
-        className="text-xs text-destructive"
-      >
-        <AlertCircle className="size-3" /> {e.message}
-      </Row>
-    );
-  }
-  // ready
-  const failed = e.failedChunks.length;
+function ChapterRow({
+  title,
+  context,
+}: {
+  title: string;
+  context: { id: string; title: string; kind: "technique" | "essay" }[];
+}) {
   return (
-    <Description as="span" size="xs">
-      {book.recipes.length} recipe{book.recipes.length === 1 ? "" : "s"}
-      {failed > 0 && (
-        <span className="text-warning-ink">
-          {" · "}
-          {failed} chunk{failed === 1 ? "" : "s"} failed
-        </span>
+    <Stack gap="xs" className="pt-2">
+      <div className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {title}
+      </div>
+      {context.length > 0 && (
+        <Collapsible>
+          <CollapsibleTrigger className="flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground">
+            <ChevronDown className="size-3" />
+            {context.length} technique{context.length === 1 ? "" : "s"} / essay
+            {context.length === 1 ? "" : "s"} — read, not importable
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <ul className="mt-1 space-y-0.5 pl-4 text-2xs text-muted-foreground">
+              {context.map((item) => (
+                <li key={item.id}>
+                  {item.title}
+                  <span className="opacity-60"> · {item.kind}</span>
+                </li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
       )}
-      {e.report && e.report.truncations.length > 0 && (
-        <span className="text-warning-ink">
-          {" · "}
-          {e.report.truncations.length} token-limit response
-          {e.report.truncations.length === 1 ? "" : "s"}
-        </span>
-      )}
-    </Description>
+    </Stack>
   );
 }
 
-// Lists the chunks that failed extraction (both models produced unparseable
-// output, so their recipes were lost) — which source doc + why — instead of an
-// opaque count, with one action to re-run extraction and recover them. Only shown
-// on a ready book that has failures.
-function FailedChunksPanel({
+function RecipeRow({
   book,
-  onRetry,
+  row,
+  handlers,
+  existingByName,
+  cardView,
+  parsedLines,
 }: {
   book: Book;
-  onRetry: () => void;
+  row: Extract<TreeRow, { kind: "recipe" }>;
+  handlers: BookHandlers;
+  existingByName: Map<string, ExistingRecipe>;
+  cardView: ReturnType<typeof toRecipeCardView> | undefined;
+  parsedLines: ReturnType<typeof parsedLinesFor> | undefined;
 }) {
-  if (book.extract.status !== "ready" || book.extract.failedChunks.length === 0)
-    return null;
-  const failed = book.extract.failedChunks;
+  const item = row.item;
+  const existing = existingByName.get(normalize(item.name));
+  // An imported recipe compares its would-be signature to the stored one →
+  // "no changes" vs "will update"; anything not yet imported is "new".
+  const status: RecipeImportStatus = !existing
+    ? "new"
+    : cookbookRecipeSignature(item, row.chapter) !== existing.sig
+      ? "will-update"
+      : "unchanged";
+  if (!cardView) return null;
   return (
-    <div className="border border-warning/40 bg-warning/5 p-2">
-      <Row align="center" justify="between" gap="sm">
-        <Row
-          as="span"
-          align="center"
-          gap="xs"
-          className="text-xs text-warning-ink"
-        >
-          <AlertCircle className="size-3" />
-          {failed.length} chunk{failed.length === 1 ? "" : "s"} failed to
-          extract — recipes in {failed.length === 1 ? "it" : "them"} were lost
-        </Row>
-        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          <RotateCcw className="mr-1 size-3" />
-          Retry extraction
-        </Button>
-      </Row>
-      <ul className="mt-2 space-y-1">
-        {failed.map((chunk) => (
-          <li
-            key={chunk.index}
-            className="font-mono text-2xs text-muted-foreground"
-            title={failureMessage(chunk)}
-          >
-            #{chunk.index}
-            {chunk.doc_path ? ` · ${chunk.doc_path}` : ""}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <RecipeImportCard
+      recipe={cardView}
+      status={status}
+      existingId={existing?.id}
+      selected={book.selected.has(item.id)}
+      onToggle={() => handlers.toggleRecipe(book.source, item.id)}
+      result={book.results.get(item.id)}
+      photo={book.photos.get(item.id)}
+      photoPreviewUrl={book.photoPreviewUrls.get(item.id)}
+      onRetryPhoto={() => handlers.retryPhoto(book.source, item.id)}
+      parsedLines={parsedLines}
+    />
   );
 }

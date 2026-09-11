@@ -18,7 +18,6 @@ const baseRecipe = (recipe: Partial<ImportRecipe> = {}): ImportRecipe => ({
       instructions: ["Mix"],
     },
   ],
-  references: [],
   ...recipe,
 });
 

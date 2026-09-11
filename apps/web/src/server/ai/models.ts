@@ -44,8 +44,6 @@ type SupportedAiModel = z.infer<typeof supportedAiModel>;
 
 export const DEFAULT_CHAT_MODEL =
   "claude-haiku-4-5" satisfies SupportedChatModel;
-export const COOKBOOK_ESCALATION_MODEL =
-  "claude-sonnet-4-6" satisfies SupportedChatModel;
 export const DEFAULT_EMBEDDING_MODEL =
   "text-embedding-3-small" satisfies SupportedEmbeddingModel;
 

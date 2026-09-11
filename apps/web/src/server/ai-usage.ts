@@ -1,5 +1,4 @@
 import { getErrorMessage } from "~/lib/error-utils";
-import type { SupportedAiModelRef } from "~/server/ai/models";
 import type { Database } from "~/server/db";
 import { emitTelemetry } from "~/server/telemetry";
 
@@ -9,7 +8,13 @@ export interface AiUsagePort {
 
 const productionAiUsagePort: AiUsagePort = { emit: emitTelemetry };
 
-export type RecordAiUsageInput = SupportedAiModelRef & {
+// `provider`/`model` are open strings: the cookbook extractor walks a model
+// ladder priced by its own catalog and reports the cost per call
+// (`estimatedCost`); the app-side registry prices the models it calls itself.
+export type RecordAiUsageInput = {
+  provider: string;
+  model: string;
+  estimatedCost?: number | null;
   feature: string;
   operation: string;
   inputTokens?: number | null;
@@ -45,6 +50,7 @@ export async function recordAiUsage(
       entityType: input.entity?.entityType ?? null,
       entityId: input.entity?.entityId ?? null,
       batchId: input.batchId ?? null,
+      estimatedCost: input.estimatedCost ?? null,
     });
   } catch (error) {
     console.error("[ai-usage] failed to record usage", {

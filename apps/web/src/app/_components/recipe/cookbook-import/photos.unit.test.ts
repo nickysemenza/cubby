@@ -1,28 +1,44 @@
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import type { CookbookRecipe } from "@cubby/schemas/cookbook";
 import { describe, expect, it } from "vitest";
 
-import { bytesToBase64, selectedArchivePhotoIndices } from "./photos";
+import { bytesToBase64, heroPhoto, selectedPhotoItemIds } from "./photos";
 
-const recipe = (image?: ImportRecipe["image"]): ImportRecipe => ({
-  meta: { title: "Recipe" },
+const recipe = (
+  id: string,
+  photos: { path: string; mime: string }[] = [],
+): CookbookRecipe => ({
+  kind: "recipe",
+  id,
+  title: id,
+  name: id,
+  meta: { description: [], equipment: [] },
   sections: [],
-  references: [],
-  image,
+  photos,
+  notes: [],
+  span: { start: 0, end: 1, doc_path: "text/ch1.xhtml" },
 });
 
 describe("cookbook archive photos", () => {
-  it("reads only selected EPUB archive images", () => {
-    expect(
-      selectedArchivePhotoIndices(
-        [
-          recipe({ kind: "epub", path: "images/a.jpg", mime: "image/jpeg" }),
-          recipe({ kind: "url", url: "https://example.com/b.jpg" }),
-          recipe(),
-          recipe({ kind: "epub", path: "images/d.jpg", mime: "image/jpeg" }),
-        ],
-        [0, 1, 2],
-      ),
-    ).toEqual([0]);
+  it("reads only the selected items that carry an archive image", () => {
+    const recipesById = new Map<string, CookbookRecipe>([
+      ["r1", recipe("r1", [{ path: "images/a.jpg", mime: "image/jpeg" }])],
+      ["r2", recipe("r2")],
+      ["r3", recipe("r3", [{ path: "images/c.jpg", mime: "image/jpeg" }])],
+    ]);
+
+    expect(selectedPhotoItemIds(recipesById, ["r1", "r2"])).toEqual(["r1"]);
+    // An id no longer in the tree (a stale selection) is skipped, not thrown on.
+    expect(selectedPhotoItemIds(recipesById, ["r3", "gone"])).toEqual(["r3"]);
+  });
+
+  it("imports the hero photo, which is the first one", () => {
+    const item = recipe("r1", [
+      { path: "images/hero.jpg", mime: "image/jpeg" },
+      { path: "images/step.jpg", mime: "image/jpeg" },
+    ]);
+    expect(heroPhoto(item)?.path).toBe("images/hero.jpg");
+    expect(heroPhoto(recipe("r2"))).toBeUndefined();
+    expect(heroPhoto(undefined)).toBeUndefined();
   });
 
   it("encodes photo bytes without an argument-limit overflow", () => {

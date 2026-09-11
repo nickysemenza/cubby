@@ -19,8 +19,11 @@ import { build } from "esbuild";
 const CLIENT_DIR = path.resolve("dist/client");
 const SW_ENTRY = path.resolve("src/sw.ts");
 const SW_OUT = path.join(CLIENT_DIR, "sw.js");
-const WASM_GZIP_BUDGET = 1.1 * 1024 * 1024;
-const PRECACHE_GZIP_BUDGET = 1.35 * 1024 * 1024;
+// recipebridge carries the whole cookbook extraction pipeline (EPUB reader,
+// chunker, contract schema, validation, assembly, references) since the
+// `cookbook` crate replaced recipe-epub: 1.21 MiB gzipped on 2026-09-11.
+const WASM_GZIP_BUDGET = 1.35 * 1024 * 1024;
+const PRECACHE_GZIP_BUDGET = 1.6 * 1024 * 1024;
 const SERVER_ONLY_MARKERS = ["drizzle-orm", "HYPERDRIVE"];
 
 // Runtime JS chunks stay on normal HTTP/runtime caching; only stable app-shell

@@ -41,8 +41,12 @@ const instance: WasmType = await import("@cubby/recipebridge");
  * per page as React re-renders during query streaming — profiling showed ~23×
  * redundancy on a recipe page. Only the genuinely expensive methods are listed;
  * trivially cheap ones (is_valid_unit ~0.1µs, amount_kind ~0.5µs) cost less than
- * the cache key itself. Byte-array / driver methods (chunk_epub/extract_cookbook)
- * are excluded — huge keys, called once, and the driver isn't pure (callbacks).
+ * the cache key itself.
+ *
+ * `open_book` is excluded and must stay excluded: its key would be a whole
+ * EPUB, and the `Book` it returns owns wasm memory with a lifecycle (`free`,
+ * `cancel`, an extraction that runs once) that a shared cached instance would
+ * corrupt. Its methods live on the instance, so they never reach this proxy.
  */
 const CACHEABLE_METHODS = [
   "parse_ingredient",

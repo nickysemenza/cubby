@@ -7,6 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { cookbook, image, projectImage, vendor } from "~/server/db/schema";
+import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
 
 import { deleteCookbook, upsertCookbook } from "./cookbook";
@@ -78,7 +79,7 @@ describe("image repository", () => {
       ctx.db,
       {
         name: "FK Clear Book",
-        rawJson: [],
+        rawJson: makeCookbookExtraction(),
         author: [],
         sourceLabel: "FK Clear Book.epub",
       },
@@ -321,7 +322,11 @@ describe("image repository — purchase (charge) documents", () => {
       });
       const { entityId: cookbookId } = await upsertCookbook(
         ctx.db,
-        { name: "Sweep Book", rawJson: [], sourceLabel: "Sweep Book" },
+        {
+          name: "Sweep Book",
+          rawJson: makeCookbookExtraction(),
+          sourceLabel: "Sweep Book",
+        },
         ctx.actor,
       );
       await getDb(ctx.db)

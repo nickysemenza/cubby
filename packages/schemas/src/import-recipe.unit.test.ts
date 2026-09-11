@@ -1,60 +1,54 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  chunkResponseOut,
   cookbookReprocessEventSchema,
+  gatewayForwardInput,
+  gatewayForwardOut,
 } from "./import-recipe";
 
-describe("chunkResponseOut", () => {
-  it("accepts the detailed response envelope", () => {
-    expect(
-      chunkResponseOut.parse({
-        input: { recipes: [{ name: "Weeknight soup" }] },
-        usage: {
-          input_tokens: 42,
-          output_tokens: 12,
-          cache_creation_input_tokens: 30,
-          cache_read_input_tokens: 0,
-        },
-        truncated: false,
-      }),
-    ).toEqual({
-      input: { recipes: [{ name: "Weeknight soup" }] },
-      usage: {
-        input_tokens: 42,
-        output_tokens: 12,
-        cache_creation_input_tokens: 30,
-        cache_read_input_tokens: 0,
-      },
-      truncated: false,
-    });
-  });
+describe("gatewayForwardInput", () => {
+  const request = {
+    path: "/anthropic/v1/messages",
+    headers: [["content-type", "application/json"]],
+    body: { model: "claude-haiku-4-5", messages: [] },
+  };
 
-  it("requires explicit failure classification and JSON input", () => {
+  it("accepts a complete gateway request built in Rust", () => {
+    expect(gatewayForwardInput.parse(request)).toEqual(request);
     expect(
-      chunkResponseOut.safeParse({
-        input: null,
-        usage: {
-          input_tokens: 0,
-          output_tokens: 0,
-          cache_creation_input_tokens: 0,
-          cache_read_input_tokens: 0,
-        },
-        truncated: true,
-        error: { message: "cut off", kind: "payload" },
+      gatewayForwardInput.safeParse({
+        ...request,
+        path: "/compat/chat/completions",
       }).success,
     ).toBe(true);
+  });
+
+  it("rejects paths that are not a gateway provider route", () => {
+    for (const path of [
+      "anthropic/v1/messages",
+      "/anthropic",
+      "/../accounts",
+      "https://evil.example/anthropic/v1/messages",
+      "/anthropic/v1/messages?x=1",
+      "",
+    ]) {
+      expect(gatewayForwardInput.safeParse({ ...request, path }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  it("returns the provider response verbatim", () => {
     expect(
-      chunkResponseOut.safeParse({
-        input: new Date(),
-        usage: {
-          input_tokens: 0,
-          output_tokens: 0,
-          cache_creation_input_tokens: 0,
-          cache_read_input_tokens: 0,
-        },
-        truncated: false,
-      }).success,
+      gatewayForwardOut.parse({
+        status: 429,
+        headers: [["retry-after", "7"]],
+        body: '{"error":"Wholesale Rate limited"}',
+      }).status,
+    ).toBe(429);
+    expect(
+      gatewayForwardOut.safeParse({ status: 42, headers: [], body: "" })
+        .success,
     ).toBe(false);
   });
 });

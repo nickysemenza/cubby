@@ -260,7 +260,7 @@ export const START_OPERATIONS = {
   "recipe.dryRunRecomputeTotals": { kind: "query" },
   "recipe.duplicate": { kind: "mutation" },
   "recipe.explainCosting": { kind: "query" },
-  "recipe.extractCookbookChunk": { kind: "mutation" },
+  "recipe.forwardGatewayRequest": { kind: "mutation" },
   "recipe.generateFlow": { kind: "mutation" },
   "recipe.getAllTags": { kind: "query" },
   "recipe.getCookbookDiff": { kind: "query" },

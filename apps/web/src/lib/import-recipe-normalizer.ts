@@ -52,7 +52,7 @@ const normalizeImportMeta = (
   };
 };
 
-const normalizeImportTimes = (
+export const normalizeImportTimes = (
   times: ImportRecipe["meta"]["times"],
 ): NonNullable<RecipeCreateInput["meta"]>["times"] => ({
   active: times?.active ?? null,
@@ -65,7 +65,7 @@ const normalizeImportTimes = (
   cookMinutes: times?.cook_minutes ?? null,
 });
 
-const normalizeImportYield = (
+export const normalizeImportYield = (
   recipeYield: ImportRecipe["meta"]["recipe_yield"],
 ): Omit<NormalizedImportYield, "servings"> => {
   const stringYield = z.string().safeParse(recipeYield);

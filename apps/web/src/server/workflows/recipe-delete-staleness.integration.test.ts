@@ -19,6 +19,7 @@ import {
   upsertCookbookRecipe,
 } from "~/server/repo/recipe";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
+import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import {
   ingredientRef,
   makeProductInput,
@@ -135,7 +136,11 @@ describe("recipe deletion cost-staleness workflows", () => {
     const bookName = "Doomed Book";
     const { output: cookbook, entityId: cookbookId } = await upsertCookbook(
       ctx.db,
-      { name: bookName, rawJson: [], sourceLabel: bookName },
+      {
+        name: bookName,
+        rawJson: makeCookbookExtraction(),
+        sourceLabel: bookName,
+      },
       ctx.actor,
     );
     const ingredient = await findOrCreateIngredient(ctx.db, "book flour");

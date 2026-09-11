@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
+import { makeCookbookExtraction } from "../repo.fixtures";
 import {
   dbProductToAPI,
   dbProductToListAPI,
@@ -355,7 +356,9 @@ describe("product mappers", () => {
           author: [],
           subjects: [],
           sourceLabel: "first.epub",
-          rawJson: [],
+          rawJson: makeCookbookExtraction(),
+          report: null,
+          sourceRecipeCount: 0,
           coverImageId: null,
           productId: PRODUCT_ID,
           importedAt: CREATED_AT,
@@ -371,7 +374,9 @@ describe("product mappers", () => {
           author: [],
           subjects: [],
           sourceLabel: "deleted.epub",
-          rawJson: [],
+          rawJson: makeCookbookExtraction(),
+          report: null,
+          sourceRecipeCount: 0,
           coverImageId: null,
           productId: PRODUCT_ID,
           importedAt: CREATED_AT,
@@ -387,7 +392,9 @@ describe("product mappers", () => {
           author: [],
           subjects: [],
           sourceLabel: "second.epub",
-          rawJson: [],
+          rawJson: makeCookbookExtraction(),
+          report: null,
+          sourceRecipeCount: 0,
           coverImageId: null,
           productId: PRODUCT_ID,
           importedAt: CREATED_AT,

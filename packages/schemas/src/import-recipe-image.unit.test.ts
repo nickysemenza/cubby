@@ -4,29 +4,32 @@ import { importRecipeSchema } from "./import-recipe";
 const recipe = { meta: { title: "Roast carrots" }, sections: [] };
 
 describe("recipe image source ingress", () => {
-  it("normalizes persisted public URLs and upstream archive references", () => {
+  it("normalizes persisted public URLs", () => {
     expect(
       importRecipeSchema.parse({
         ...recipe,
         image: "https://example.com/carrot.jpg",
       }).image,
     ).toEqual({ kind: "url", url: "https://example.com/carrot.jpg" });
+  });
+  it("does not accept an archive reference: cookbook photos attach by source recipe id", () => {
     expect(
-      importRecipeSchema.parse({
+      importRecipeSchema.safeParse({
         ...recipe,
         image: { path: "Images/carrot.jpg", mime: "image/jpeg" },
-      }).image,
-    ).toEqual({ kind: "epub", path: "Images/carrot.jpg", mime: "image/jpeg" });
+      }).success,
+    ).toBe(false);
+    expect(
+      importRecipeSchema.safeParse({
+        ...recipe,
+        image: { kind: "epub", path: "Images/carrot.jpg", mime: "image/jpeg" },
+      }).success,
+    ).toBe(false);
   });
   it("round trips normalized images without changing provenance", () => {
     const parsed = importRecipeSchema.parse({
       ...recipe,
-      image: {
-        kind: "epub",
-        path: "Images/carrot.jpg",
-        mime: "image/jpeg",
-        alt: "Carrots",
-      },
+      image: { kind: "url", url: "https://example.com/carrot.jpg" },
     });
     expect(importRecipeSchema.parse(parsed)).toEqual(parsed);
   });

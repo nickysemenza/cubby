@@ -9,7 +9,7 @@ import { memo, useMemo } from "react";
 
 import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
-import { Badge, badgeVariants } from "~/components/ui/badge";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -21,11 +21,13 @@ import { cn } from "~/lib/utils";
 import { wasm } from "~/lib/wasm";
 
 import { EntityInlineLink } from "../EntityInlineLink";
-import { normalize } from "./cookbook-import/import-order";
 import type { ImportResult, PhotoResult } from "./cookbook-import/types";
 import { CopyImportRecipeParseButton } from "./copy-corpus-button";
 import { CopyJsonButton } from "./copy-debug-button";
-import { ParsedIngredientTable } from "./parsed-ingredient-table";
+import {
+  ParsedIngredientTable,
+  type ParsedLineRow,
+} from "./parsed-ingredient-table";
 import { formatRichText } from "./richtext";
 import { useIngredientMatches } from "./use-ingredient-matches";
 
@@ -39,13 +41,6 @@ export type RecipeImportStatus =
 
 const isRecipeYieldText = (value: unknown): value is string =>
   typeof value === "string";
-
-/** Cross-recipe reference linking — cookbook-only; Notion v1 has no references. */
-type ReferenceLinking = {
-  linkableTitles: ReadonlySet<string>;
-  previewTitles: ReadonlySet<string>;
-  scrollToTitle: (title: string) => void;
-};
 
 type RecipeImportCardProps = {
   /** The recipe to preview, in the cookbook shape (both importers map to this). */
@@ -62,7 +57,14 @@ type RecipeImportCardProps = {
   photo?: PhotoResult;
   photoPreviewUrl?: string;
   onRetryPhoto?: () => void;
-  references?: ReferenceLinking;
+  /**
+   * One entry per section, in section order: a parse the caller already holds.
+   * The cookbook importer passes the `cookbook` crate's own reading, which the
+   * import persists verbatim (along with any sub-recipe link it resolved), so
+   * the preview shows what will be stored rather than a second opinion. Absent
+   * for the Notion / scrape path, whose lines are parsed here.
+   */
+  parsedLines?: readonly (readonly ParsedLineRow[])[];
   /** External source link (e.g. the Notion page); shown as a ↗ in the header. */
   externalUrl?: string;
 };
@@ -75,7 +77,7 @@ function recipeMemoKey(r: ImportRecipe): string {
     ings += s.ingredients.length;
     ins += s.instructions.length;
   }
-  return `${r.meta.title}|${r.sections.length}|${ings}|${ins}|${r.references.length}|${r.meta.recipe_yield ?? ""}|${r.meta.description?.length ?? 0}|${r.meta.notes?.length ?? 0}`;
+  return `${r.meta.title}|${r.sections.length}|${ings}|${ins}|${r.meta.recipe_yield ?? ""}|${r.meta.description?.length ?? 0}|${r.meta.notes?.length ?? 0}`;
 }
 
 const STATUS_BADGE = {
@@ -101,7 +103,7 @@ export const RecipeImportCard = memo(
     a.result === b.result &&
     a.photo === b.photo &&
     a.photoPreviewUrl === b.photoPreviewUrl &&
-    a.references === b.references &&
+    a.parsedLines === b.parsedLines &&
     a.externalUrl === b.externalUrl &&
     (a.reasons ?? []).join("|") === (b.reasons ?? []).join("|") &&
     // onToggle is intentionally not compared: its only state-dependent capture
@@ -122,20 +124,26 @@ function RecipeImportCardImpl({
   photo,
   photoPreviewUrl,
   onRetryPhoto,
-  references,
+  parsedLines,
   externalUrl,
 }: RecipeImportCardProps) {
-  // One parse of this recipe's ingredient names — used both to match against the
-  // DB and to highlight ingredients in the instructions.
+  // This recipe's ingredient names — used both to match against the DB and to
+  // highlight ingredients in the instructions. When the caller supplied a parse
+  // (the cookbook path), read the names off it rather than parsing again: a
+  // second, disagreeing reading would highlight words the import never links.
   const ingredientNames = useMemo(
     () =>
       uniq(
-        wasm
-          .parse_ingredient_lines(recipe.sections.flatMap((s) => s.ingredients))
-          .map((parsed) => parsed.name)
-          .filter((n) => n.length > 0),
+        (parsedLines
+          ? parsedLines.flat().map((line) => line.parsed.name)
+          : wasm
+              .parse_ingredient_lines(
+                recipe.sections.flatMap((s) => s.ingredients),
+              )
+              .map((parsed) => parsed.name)
+        ).filter((n) => n.length > 0),
       ),
-    [recipe],
+    [recipe, parsedLines],
   );
 
   const { matchMap } = useIngredientMatches(ingredientNames);
@@ -257,61 +265,6 @@ function RecipeImportCardImpl({
           </MarkdownText>
         )}
 
-        {references && recipe.references.length > 0 && (
-          <Row wrap align="center" gap="xs" className="mt-2 text-xs">
-            <span className="text-muted-foreground">Uses:</span>
-            {recipe.references.map((ref) => {
-              const linkable = references.linkableTitles.has(
-                normalize(ref.title),
-              );
-              const inPreview = references.previewTitles.has(
-                normalize(ref.title),
-              );
-              // Reuse badge styling so reference pills match the rest of the UI:
-              // filled (secondary) = will link, hollow (outline) = stays an ingredient.
-              const className = badgeVariants({
-                variant: linkable ? "secondary" : "outline",
-              });
-              const label = (
-                <>
-                  → {ref.title}
-                  {!linkable && " (not imported)"}
-                </>
-              );
-              return inPreview ? (
-                <button
-                  key={ref.title}
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    references.scrollToTitle(ref.title);
-                  }}
-                  title={
-                    linkable
-                      ? `Will link (${ref.confidence}) — click to jump`
-                      : "In this book — click to jump"
-                  }
-                  className={cn(className, "cursor-pointer hover:underline")}
-                >
-                  {label}
-                </button>
-              ) : (
-                <span
-                  key={ref.title}
-                  title={
-                    linkable
-                      ? `Will link (${ref.confidence})`
-                      : "Target recipe not in this import — stays an ingredient"
-                  }
-                  className={className}
-                >
-                  {label}
-                </span>
-              );
-            })}
-          </Row>
-        )}
-
         <div className="mt-2 grid gap-x-4 gap-y-2 md:grid-cols-2">
           <Stack gap="sm">
             {recipe.sections.map((section, sectionIndex) => (
@@ -326,7 +279,9 @@ function RecipeImportCardImpl({
                   </div>
                 )}
                 <ParsedIngredientTable
-                  lines={section.ingredients}
+                  {...(parsedLines
+                    ? { rows: parsedLines[sectionIndex] ?? [] }
+                    : { lines: section.ingredients })}
                   matchMap={matchMap}
                   matchReady={matchReady}
                 />

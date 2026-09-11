@@ -51,8 +51,8 @@ export const recipeHandlers = implementOperationDomain(recipeDomain, {
     imports.setCookbookProductWorkflow(context, input),
   deleteCookbook: (context, input) =>
     imports.deleteCookbookWorkflow(context, input),
-  extractCookbookChunk: (context, input) =>
-    imports.extractCookbookChunkWorkflow(context, input),
+  forwardGatewayRequest: (context, input) =>
+    imports.forwardGatewayRequestWorkflow(context, input),
   attachCookbookRecipePhoto: (context, input) =>
     imports.attachCookbookRecipePhotoWorkflow(context, input),
 });

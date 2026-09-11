@@ -1,13 +1,25 @@
 import type { WAmount } from "@cubby/recipebridge";
-import type { Amount } from "@cubby/schemas/codec";
+import { type Amount, sanitizeSectionName } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import {
+  type CookbookExtraction,
+  type CookbookRecipe,
+  flattenCookbookRecipes,
+} from "@cubby/schemas/cookbook";
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { IngredientShortcode, RecipeId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
+import {
+  composeNotesMarkdown,
+  type ImportRecipe,
+} from "@cubby/schemas/import-recipe";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 
-import { normalizeImportRecipe } from "~/lib/import-recipe-normalizer";
+import {
+  normalizeImportRecipe,
+  normalizeImportTimes,
+  normalizeImportYield,
+} from "~/lib/import-recipe-normalizer";
 import { wasm } from "~/lib/wasm";
 
 import type { Database, DrizzleTransaction } from "../db";
@@ -15,7 +27,6 @@ import { withTransaction } from "./database-helpers";
 import { findOrCreateIngredient } from "./ingredient/crud";
 import {
   type CookbookRef,
-  getCookbookRecipeIdsByTitle,
   normalizeTitle,
   upsertCookbookRecipe,
   upsertNotionRecipe,
@@ -44,6 +55,9 @@ export type CookbookImportContext = {
   // normalizeTitle(name) → recipe id. Seeded from the cookbook once, appended
   // after each upsert so forward cross-recipe references still link.
   titleToId: Map<string, RecipeId>;
+  // The stored book tree: a sub-recipe reference names its target by item id,
+  // which resolves to a recipe through the target item's unique name.
+  extraction: CookbookExtraction;
   // name.trim().toLowerCase() → committed ingredient id. Fills lazily: the first
   // recipe to use an ingredient pays the find-or-create round trip; the rest of
   // the book reuses it for free.
@@ -90,42 +104,21 @@ const makeIngredientResolvers = (
 };
 
 /**
- * The one converter from a raw `ImportRecipe` (scraper / EPUB / Notion) into a
- * `RecipeCreateInput`: parses ingredient lines and the yield via WASM,
- * find-or-creates ingredients (memoized), and — only when importing into a
- * cookbook (`cookbookRef`) — links cross-recipe references (an ingredient `line`
- * matching one of the recipe's `references` whose target title already exists in
- * the book becomes a recipe-linked ingredient instead of a flat one).
+ * The converter from a raw `ImportRecipe` (scraper / Notion) into a
+ * `RecipeCreateInput`: parses ingredient lines and the yield via WASM and
+ * find-or-creates ingredients (memoized). Cookbook recipes take the other
+ * path below; their lines arrive already parsed.
  */
 const importRecipeToRecipeInput = async (
   cr: ImportRecipe,
   db: Database,
-  cookbookRef?: CookbookRef,
-  importCtx?: CookbookImportContext,
 ): Promise<RecipeCreateInput> => {
-  // Cross-recipe linking is cookbook-only; scraper/Notion resolve everything flat.
-  const lineToTitle = cookbookRef
-    ? new Map(
-        cr.references.map((r) => [r.line.trim(), r.title.trim().toLowerCase()]),
-      )
-    : new Map<string, string>();
-  // Prefer the import context's running title map (seeded + appended per commit);
-  // fall back to a one-shot read for the single-cookbook-recipe path.
-  const titleToId = importCtx
-    ? importCtx.titleToId
-    : cookbookRef
-      ? await getCookbookRecipeIdsByTitle(db, cookbookRef.id)
-      : new Map<string, RecipeId>();
-
   const normalized = normalizeImportRecipe(cr);
 
   const build = async (
     exec: Database | DrizzleTransaction,
   ): Promise<RecipeCreateInput> => {
-    const { resolvePlain } = makeIngredientResolvers(
-      exec,
-      importCtx?.ingredientIdByName,
-    );
+    const { resolvePlain } = makeIngredientResolvers(exec);
     return {
       name: normalized.name,
       meta: normalized.meta,
@@ -144,32 +137,6 @@ const importRecipeToRecipeInput = async (
             ingredients: await Promise.all(
               section.ingredients.map(async (line, i) => {
                 const parsed = parsedLines[i]!;
-                const refTitle = lineToTitle.get(line.trim());
-                const targetRecipeId = refTitle
-                  ? titleToId.get(refTitle)
-                  : undefined;
-                // A reference whose target recipe exists in the book → link it.
-                if (targetRecipeId) {
-                  const codes = await lookupShortcodes(exec, [
-                    { entity: "recipe", id: targetRecipeId },
-                  ]);
-                  const recipeId = codes.get(
-                    entityRefKey("recipe", targetRecipeId),
-                  );
-                  if (!recipeId) {
-                    throw new Error(
-                      `Recipe ${targetRecipeId} could not be resolved`,
-                    );
-                  }
-                  return {
-                    type: "recipe" as const,
-                    ingredientId: null,
-                    recipeId: parseShortcodeFor("recipe", recipeId),
-                    amounts: parsed.amounts.map(parsedAmountToInput),
-                    rawLine: line,
-                    modifier: parsed.modifier ?? null,
-                  };
-                }
                 const ingredientId = await resolvePlain(parsed.name);
                 return {
                   type: "ingredient" as const,
@@ -190,10 +157,129 @@ const importRecipeToRecipeInput = async (
     };
   };
 
-  // Cookbook import: resolve against bare `db` so each ingredient/link commits
-  // autonomously (no per-recipe BEGIN/COMMIT; cached ids stay valid across the
-  // loop). Single-recipe callers keep the wrapping transaction.
-  return importCtx ? await build(db) : await withTransaction(db, build);
+  return withTransaction(db, build);
+};
+
+/** The tree's `RecipeTimes` (snake_case, nullable) as the normalizer reads them. */
+const cookbookTimes = (
+  times: CookbookRecipe["meta"]["times"],
+): ImportRecipe["meta"]["times"] =>
+  times
+    ? {
+        active: times.active ?? undefined,
+        total: times.total ?? undefined,
+        prep: times.prep ?? undefined,
+        cook: times.cook ?? undefined,
+        active_minutes: times.active_minutes ?? undefined,
+        total_minutes: times.total_minutes ?? undefined,
+        prep_minutes: times.prep_minutes ?? undefined,
+        cook_minutes: times.cook_minutes ?? undefined,
+      }
+    : undefined;
+
+/** The notes markdown for a cookbook recipe: headnote, then labelled notes. */
+const cookbookRecipeNotes = (item: CookbookRecipe): string | null =>
+  composeNotesMarkdown(
+    item.meta.description.join("\n\n"),
+    item.notes.map((note) =>
+      note.label ? `**${note.label}** ${note.text}` : note.text,
+    ),
+  );
+
+/**
+ * A recipe item from the extracted book tree → `RecipeCreateInput`. The
+ * crate already parsed every ingredient line (`line.parsed`, the same
+ * `WIngredient` shape the wasm parser returns) and resolved cross-recipe
+ * references (`line.ref`, by item id); this converter only resolves
+ * ingredient and recipe ids. A reference to a recipe not yet imported stays a
+ * plain ingredient line, which is why callers import in dependency order.
+ */
+const cookbookRecipeToRecipeInput = async (
+  item: CookbookRecipe,
+  chapter: string | null,
+  db: Database,
+  importCtx: CookbookImportContext,
+): Promise<RecipeCreateInput> => {
+  const parsedYield = normalizeImportYield(item.meta.recipe_yield ?? undefined);
+  const nameById = new Map(
+    flattenCookbookRecipes(importCtx.extraction).map((entry) => [
+      entry.recipe.id,
+      entry.recipe.name,
+    ]),
+  );
+  const targetRecipeIdFor = (targetId: string): RecipeId | undefined => {
+    const name = nameById.get(targetId);
+    return name ? importCtx.titleToId.get(normalizeTitle(name)) : undefined;
+  };
+  const equipment = item.meta.equipment.filter((line) => line.trim() !== "");
+  const { resolvePlain } = makeIngredientResolvers(
+    db,
+    importCtx.ingredientIdByName,
+  );
+  return {
+    name: item.name,
+    meta: {
+      url: null,
+      times: normalizeImportTimes(cookbookTimes(item.meta.times)),
+      equipment: equipment.length > 0 ? equipment : null,
+      page: item.meta.page ?? null,
+    },
+    yield: parsedYield.yield,
+    servings: parsedYield.servingsFromYield,
+    notes: cookbookRecipeNotes(item),
+    tags: chapter ? [chapter] : null,
+    sections: await Promise.all(
+      item.sections.map(async (section) => ({
+        name: sanitizeSectionName(section.name),
+        instructions: section.steps.map((step) => ({ instruction: step.text })),
+        ingredients: await Promise.all(
+          section.ingredients.map(async (line) => {
+            const amounts = line.parsed.amounts.map((amount) =>
+              parsedAmountToInput({
+                unit: amount.unit,
+                value: amount.value,
+                upper_value: amount.upper_value ?? undefined,
+              }),
+            );
+            const targetRecipeId =
+              line.ref?.kind === "ingredient"
+                ? targetRecipeIdFor(line.ref.target_id)
+                : undefined;
+            if (targetRecipeId) {
+              const codes = await lookupShortcodes(db, [
+                { entity: "recipe", id: targetRecipeId },
+              ]);
+              const recipeId = codes.get(
+                entityRefKey("recipe", targetRecipeId),
+              );
+              if (!recipeId) {
+                throw new Error(
+                  `Recipe ${targetRecipeId} could not be resolved`,
+                );
+              }
+              return {
+                type: "recipe" as const,
+                ingredientId: null,
+                recipeId: parseShortcodeFor("recipe", recipeId),
+                amounts,
+                rawLine: line.raw,
+                modifier: line.parsed.modifier ?? null,
+              };
+            }
+            const ingredientId = await resolvePlain(line.parsed.name);
+            return {
+              type: "ingredient" as const,
+              ingredientId,
+              recipeId: null,
+              amounts,
+              rawLine: line.raw,
+              modifier: line.parsed.modifier ?? null,
+            };
+          }),
+        ),
+      })),
+    ),
+  };
 };
 
 /** Upsert a scraped/imported recipe, keyed on name (the URL-scrape path). */
@@ -227,26 +313,26 @@ export const upsertNotionRecipeFromImport = async (
 };
 
 /**
- * Upsert a recipe extracted from an EPUB cookbook, scoped to its book so
- * re-imports upsert by (book, title). See {@link upsertCookbookRecipe}.
+ * Upsert a recipe item from an extracted cookbook, scoped to its book so
+ * re-imports upsert by (book, name). See {@link upsertCookbookRecipe}.
  *
- * The recipe's own `references` (recipe-epub's `resolve_references`) drive
- * sub-recipe linking: an ingredient line matching a reference whose target
- * recipe already exists in the book becomes a sub-recipe link instead of a flat
- * ingredient. Re-import after all the book's recipes exist to resolve forward
- * references.
+ * Sub-recipe links come from the crate's resolved references: an ingredient
+ * line whose `ref` targets a recipe already imported from this book becomes
+ * a recipe-linked line. Import in dependency order (`topoOrder`) so forward
+ * references resolve on the first pass.
  */
 export const upsertCookbookRecipeFromCookbook = async (
-  cr: ImportRecipe,
+  item: CookbookRecipe,
+  chapter: string | null,
   cookbookRef: CookbookRef,
   db: Database,
   actor: ActorContext,
-  importCtx?: CookbookImportContext,
+  importCtx: CookbookImportContext,
 ) => {
-  const recipeInput = await importRecipeToRecipeInput(
-    cr,
+  const recipeInput = await cookbookRecipeToRecipeInput(
+    item,
+    chapter,
     db,
-    cookbookRef,
     importCtx,
   );
 
@@ -262,7 +348,7 @@ export const upsertCookbookRecipeFromCookbook = async (
   // this one resolves against the running map instead of a fresh DB read. Keyed
   // exactly like getCookbookRecipeIdsByTitle (normalizeTitle of the stored name,
   // which normalizeImportRecipe sets to meta.title).
-  importCtx?.titleToId.set(normalizeTitle(recipeInput.name), result.id);
+  importCtx.titleToId.set(normalizeTitle(recipeInput.name), result.id);
 
   return result;
 };

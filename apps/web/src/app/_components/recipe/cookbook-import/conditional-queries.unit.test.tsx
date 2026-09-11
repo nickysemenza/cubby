@@ -1,3 +1,4 @@
+import type { CookbookExtraction } from "@cubby/schemas/cookbook";
 import { testShortcode } from "@cubby/schemas/testing";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,7 +30,23 @@ const handlers: BookHandlers = {
   import: vi.fn(),
   retryPhoto: vi.fn(),
   bindOriginalEpub: vi.fn(),
+  extract: vi.fn(),
+  cancel: vi.fn(),
   retryExtraction: vi.fn(),
+};
+
+const emptyExtraction: CookbookExtraction = {
+  contract: "cookbook/1",
+  source: {
+    label: "example.epub",
+    sha256: "0".repeat(64),
+    title: "Example cookbook",
+    authors: [],
+    identifiers: [],
+    subjects: [],
+  },
+  chapters: [],
+  edges: [],
 };
 
 describe("cookbook import conditional queries", () => {
@@ -47,7 +64,7 @@ describe("cookbook import conditional queries", () => {
     });
     harness.queryClient.setQueryData(
       recipe.getCookbookSource.queryKey({ cookbookId }),
-      { id: cookbookId, name, recipes: [] },
+      { id: cookbookId, name, cookbook: emptyExtraction, report: null },
     );
     harness.queryClient.setQueryData(
       recipe.getCookbookDiff.queryKey({ book: name }),
@@ -71,12 +88,12 @@ describe("cookbook import conditional queries", () => {
       const book: Book = {
         source: "example.epub",
         name,
-        recipes: [],
+        extraction: emptyExtraction,
         selected: new Set(),
         results: new Map(),
         photos: new Map(),
         photoPreviewUrls: new Map(),
-        extract: { status: "ready", failedChunks: [] },
+        extract: { status: "ready" },
         expanded: false,
       };
       render(
