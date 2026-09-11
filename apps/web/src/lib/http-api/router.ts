@@ -119,10 +119,14 @@ type RpcInput<I extends z.ZodTypeAny> =
       ? Json<z.input<I>>
       : { input: Json<z.input<I>> };
 
-const isObjectLike = (wire: z.ZodType): boolean =>
+/**
+ * Objects and unions of objects (recursively — the entity mutation command is
+ * a union of per-entity unions) are carried as fields; anything else is
+ * wrapped in `{ input }`.
+ */
+const isObjectLike = (wire: z.core.$ZodType): boolean =>
   wire instanceof z.ZodObject ||
-  (wire instanceof z.ZodUnion &&
-    wire.options.every((option) => option instanceof z.ZodObject));
+  (wire instanceof z.ZodUnion && wire.options.every(isObjectLike));
 
 /**
  * How an RPC route carries its input, decided on the WIRE schema so that a

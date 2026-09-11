@@ -155,16 +155,24 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
       data: {},
     });
     expect(wrongMethod.status()).toBe(405);
+    // Auth ordering on a mutation route: a cookie session without a matching
+    // Origin is rejected before the body is looked at, and an invalid key is
+    // an authentication failure rather than a validation one.
+    const mutateBody = {
+      action: "create",
+      entity: "vendor",
+      data: { name: "Never created" },
+    };
     expect(
       (
-        await page.request.post("/api/v1/dashboard/counts", { data: {} })
+        await page.request.post("/api/v1/entity/mutate", { data: mutateBody })
       ).status(),
     ).toBe(403);
     expect(
       (
-        await page.request.post("/api/v1/dashboard/counts", {
+        await page.request.post("/api/v1/entity/mutate", {
           headers: { "x-api-key": "invalid" },
-          data: {},
+          data: mutateBody,
         })
       ).status(),
     ).toBe(401);
@@ -241,10 +249,10 @@ test("Scalar renders generated operations and account settings expose API keys",
   await expect(
     page.getByText("Scalar acceptance", { exact: true }),
   ).toBeVisible();
-  await page.goto("/api/v1/docs#tag/dashboard/POST/api/v1/dashboard/counts");
+  await page.goto("/api/v1/docs#tag/dashboard/GET/api/v1/dashboard/counts");
   await page
     .getByRole("button", {
-      name: "Test Request (post /api/v1/dashboard/counts)",
+      name: "Test Request (get /api/v1/dashboard/counts)",
       exact: true,
     })
     .click();
@@ -263,14 +271,14 @@ test("Scalar renders generated operations and account settings expose API keys",
   const sent = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/v1/dashboard/counts") &&
-      response.request().method() === "POST",
+      response.request().method() === "GET",
   );
-  await page.getByRole("button", { name: /^Send post request/ }).click();
+  await page.getByRole("button", { name: /^Send get request/ }).click();
   expect((await sent).status()).toBe(200);
   await page.reload();
   await page
     .getByRole("button", {
-      name: "Test Request (post /api/v1/dashboard/counts)",
+      name: "Test Request (get /api/v1/dashboard/counts)",
       exact: true,
     })
     .click();

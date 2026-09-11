@@ -65,6 +65,21 @@ describe("HTTP contract", () => {
     );
     expect(carriers.get("dashboard.counts")).toBe("none");
     expect(carriers.get("entity.detail")).toBe("object");
+    // A union of per-entity unions is still an object carrier (regression:
+    // the e2e mutate body was rejected as `{ input }`-wrapped).
+    expect(carriers.get("entity.mutate")).toBe("object");
+    const mutate = rpc.find(
+      (route) => metadataOf(route).operation === "entity.mutate",
+    );
+    expect(
+      mutate && "body" in mutate && mutate.body instanceof z.ZodType
+        ? mutate.body.safeParse({
+            action: "create",
+            entity: "vendor",
+            data: { name: "Fixture" },
+          }).success
+        : "no body",
+    ).toBe(true);
     const wrapped = rpcMutation("demo", "wrapped", {
       kind: "mutation",
       input: z.array(z.string()),

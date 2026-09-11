@@ -319,12 +319,7 @@ test("revoked sessions cannot use a still-valid cookie cache", async ({
     await pool.query("DELETE FROM session WHERE id = $1", [session.session.id]);
     expect((await context.request.get("/api/v1/recipes")).status()).toBe(401);
     expect(
-      (
-        await context.request.post("/api/v1/dashboard/counts", {
-          headers: { Origin: baseURL! },
-          data: {},
-        })
-      ).status(),
+      (await context.request.get("/api/v1/dashboard/counts")).status(),
     ).toBe(401);
     await context.request.post("/api/auth/sign-in/email", {
       headers: { Origin: baseURL! },

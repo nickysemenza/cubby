@@ -54643,946 +54643,939 @@
         "additionalProperties": false
       },
       "input_entity.mutate_body": {
-        "type": "object",
-        "properties": {
-          "input": {
+        "anyOf": [
+          {
             "anyOf": [
               {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["product"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.product.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["recipe"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.recipe.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
+                  "entity": {
+                    "type": "string",
+                    "enum": ["product"]
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["ingredient"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.ingredient.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["location"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.location.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["inventory"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.inventory.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["meal"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.meal.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["ledgerParty"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.ledgerParty.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["ledgerTransfer"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.ledgerTransfer.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["project"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.project.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["task"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.task.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["vendor"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.vendor.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["purchase"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.purchase.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["financialAccount"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.financialAccount.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["financialTransaction"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.financialTransaction.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["wish"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.wish.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["create"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["expense"]
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.expense.create_body"
-                      }
-                    },
-                    "required": ["action", "entity", "data"]
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.product.create_body"
                   }
-                ]
-              },
-              {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["product"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema2"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.product.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["recipe"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema32"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.recipe.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["ingredient"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema3"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.ingredient.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["location"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema0"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.location.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["inventory"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema87"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.inventory.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["meal"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema88"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.meal.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["ledgerParty"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema50"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.ledgerParty.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["ledgerTransfer"]
-                      },
-                      "id": {
-                        "type": "string",
-                        "pattern": "^LTR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                        "description": "ledgerTransfer shortcode, e.g. LTR-4K7M"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.ledgerTransfer.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["project"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema58"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.project.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["task"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema64"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.task.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["vendor"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema66"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.vendor.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["purchase"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema71"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.purchase.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["financialAccount"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema70"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.financialAccount.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["financialTransaction"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema55"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.financialTransaction.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["wish"]
-                      },
-                      "id": {
-                        "type": "string",
-                        "pattern": "^WSH-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-                        "description": "wish shortcode, e.g. WSH-4K7M"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.wish.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["expense"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema96"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.expense.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["update"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["image"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema22"
-                      },
-                      "data": {
-                        "$ref": "#/components/schemas/input_resources.image.update_body"
-                      }
-                    },
-                    "required": ["action", "entity", "id", "data"]
-                  }
-                ]
+                },
+                "required": ["action", "entity", "data"]
               },
               {
                 "type": "object",
                 "properties": {
                   "action": {
                     "type": "string",
-                    "enum": ["delete"]
+                    "enum": ["create"]
                   },
                   "entity": {
                     "type": "string",
-                    "enum": [
-                      "product",
-                      "recipe",
-                      "ingredient",
-                      "location",
-                      "inventory",
-                      "meal",
-                      "ledgerParty",
-                      "ledgerTransfer",
-                      "project",
-                      "task",
-                      "vendor",
-                      "purchase",
-                      "financialAccount",
-                      "financialTransaction",
-                      "wish",
-                      "expense",
-                      "image"
-                    ]
+                    "enum": ["recipe"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.recipe.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["ingredient"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.ingredient.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["location"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.location.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["inventory"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.inventory.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["meal"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.meal.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["ledgerParty"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.ledgerParty.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["ledgerTransfer"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.ledgerTransfer.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["project"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.project.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["task"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.task.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["vendor"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.vendor.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["purchase"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.purchase.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["financialAccount"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.financialAccount.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["financialTransaction"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.financialTransaction.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["wish"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.wish.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["create"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["expense"]
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.expense.create_body"
+                  }
+                },
+                "required": ["action", "entity", "data"]
+              }
+            ]
+          },
+          {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["product"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema2"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.product.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["recipe"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema32"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.recipe.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["ingredient"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema3"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.ingredient.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["location"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema0"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.location.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["inventory"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema87"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.inventory.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["meal"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema88"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.meal.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["ledgerParty"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema50"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.ledgerParty.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["ledgerTransfer"]
+                  },
+                  "id": {
+                    "type": "string",
+                    "pattern": "^LTR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "ledgerTransfer shortcode, e.g. LTR-4K7M"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.ledgerTransfer.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["project"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema58"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.project.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["task"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema64"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.task.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["vendor"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema66"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.vendor.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["purchase"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema71"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.purchase.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["financialAccount"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema70"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.financialAccount.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["financialTransaction"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema55"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.financialTransaction.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["wish"]
+                  },
+                  "id": {
+                    "type": "string",
+                    "pattern": "^WSH-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                    "description": "wish shortcode, e.g. WSH-4K7M"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.wish.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["expense"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema96"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.expense.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["update"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["image"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema22"
+                  },
+                  "data": {
+                    "$ref": "#/components/schemas/input_resources.image.update_body"
+                  }
+                },
+                "required": ["action", "entity", "id", "data"]
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["delete"]
+              },
+              "entity": {
+                "type": "string",
+                "enum": [
+                  "product",
+                  "recipe",
+                  "ingredient",
+                  "location",
+                  "inventory",
+                  "meal",
+                  "ledgerParty",
+                  "ledgerTransfer",
+                  "project",
+                  "task",
+                  "vendor",
+                  "purchase",
+                  "financialAccount",
+                  "financialTransaction",
+                  "wish",
+                  "expense",
+                  "image"
+                ]
+              },
+              "ids": {
+                "$ref": "#/components/schemas/input_schema100"
+              }
+            },
+            "required": ["action", "entity", "ids"]
+          },
+          {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["bulkUpdate"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["product"]
                   },
                   "ids": {
                     "$ref": "#/components/schemas/input_schema100"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "stockTracked": {
+                        "$ref": "#/components/schemas/input_schema81"
+                      }
+                    },
+                    "additionalProperties": false
                   }
                 },
-                "required": ["action", "entity", "ids"]
+                "required": ["action", "entity", "ids", "data"]
               },
               {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["bulkUpdate"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["product"]
-                      },
-                      "ids": {
-                        "$ref": "#/components/schemas/input_schema100"
-                      },
-                      "data": {
-                        "type": "object",
-                        "properties": {
-                          "stockTracked": {
-                            "$ref": "#/components/schemas/input_schema81"
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": ["action", "entity", "ids", "data"]
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["bulkUpdate"]
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["bulkUpdate"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["ingredient"]
-                      },
-                      "ids": {
-                        "$ref": "#/components/schemas/input_schema100"
-                      },
-                      "data": {
-                        "type": "object",
-                        "properties": {
-                          "usuallyOnHand": {
-                            "$ref": "#/components/schemas/input_schema82"
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": ["action", "entity", "ids", "data"]
+                  "entity": {
+                    "type": "string",
+                    "enum": ["ingredient"]
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["bulkUpdate"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["location"]
-                      },
-                      "ids": {
-                        "$ref": "#/components/schemas/input_schema100"
-                      },
-                      "data": {
-                        "type": "object",
-                        "properties": {
-                          "parentId": {
-                            "$ref": "#/components/schemas/input_schema84"
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": ["action", "entity", "ids", "data"]
+                  "ids": {
+                    "$ref": "#/components/schemas/input_schema100"
                   },
-                  {
+                  "data": {
                     "type": "object",
                     "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["bulkUpdate"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["task"]
-                      },
-                      "ids": {
-                        "$ref": "#/components/schemas/input_schema100"
-                      },
-                      "data": {
-                        "type": "object",
-                        "properties": {
-                          "projectId": {
-                            "$ref": "#/components/schemas/input_schema90"
-                          },
-                          "status": {
-                            "$ref": "#/components/schemas/input_schema89"
-                          },
-                          "trade": {
-                            "$ref": "#/components/schemas/input_schema93"
-                          },
-                          "dueDate": {
-                            "$ref": "#/components/schemas/input_schema91"
-                          },
-                          "dueEndDate": {
-                            "$ref": "#/components/schemas/input_schema92"
-                          }
-                        },
-                        "additionalProperties": false
+                      "usuallyOnHand": {
+                        "$ref": "#/components/schemas/input_schema82"
                       }
                     },
-                    "required": ["action", "entity", "ids", "data"]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["bulkUpdate"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["expense"]
-                      },
-                      "ids": {
-                        "$ref": "#/components/schemas/input_schema100"
-                      },
-                      "data": {
-                        "type": "object",
-                        "properties": {
-                          "projectId": {
-                            "$ref": "#/components/schemas/input_schema99"
-                          },
-                          "trade": {
-                            "$ref": "#/components/schemas/input_schema98"
-                          },
-                          "costType": {
-                            "$ref": "#/components/schemas/input_schema97"
-                          }
-                        },
-                        "additionalProperties": false
-                      }
-                    },
-                    "required": ["action", "entity", "ids", "data"]
+                    "additionalProperties": false
                   }
-                ]
+                },
+                "required": ["action", "entity", "ids", "data"]
               },
               {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["attach", "detach"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["product"]
-                      },
-                      "relation": {
-                        "type": "string",
-                        "enum": ["components"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema2"
-                      },
-                      "items": {
-                        "minItems": 1,
-                        "maxItems": 500,
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "$ref": "#/components/schemas/input_schema2"
-                            },
-                            "quantity": {
-                              "type": "integer",
-                              "minimum": 1,
-                              "maximum": 9999
-                            }
-                          },
-                          "required": ["id"],
-                          "additionalProperties": false
-                        }
-                      }
-                    },
-                    "required": ["action", "entity", "relation", "id", "items"],
-                    "additionalProperties": false
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["bulkUpdate"]
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["attach", "detach"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["project"]
-                      },
-                      "relation": {
-                        "type": "string",
-                        "enum": ["resources"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema58"
-                      },
-                      "items": {
-                        "minItems": 1,
-                        "maxItems": 500,
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "$ref": "#/components/schemas/input_schema2"
-                            }
-                          },
-                          "required": ["id"],
-                          "additionalProperties": false
-                        }
-                      }
-                    },
-                    "required": ["action", "entity", "relation", "id", "items"],
-                    "additionalProperties": false
+                  "entity": {
+                    "type": "string",
+                    "enum": ["location"]
                   },
-                  {
+                  "ids": {
+                    "$ref": "#/components/schemas/input_schema100"
+                  },
+                  "data": {
                     "type": "object",
                     "properties": {
-                      "action": {
-                        "type": "string",
-                        "enum": ["attach", "detach"]
-                      },
-                      "entity": {
-                        "type": "string",
-                        "enum": ["purchase"]
-                      },
-                      "relation": {
-                        "type": "string",
-                        "enum": ["products"]
-                      },
-                      "id": {
-                        "$ref": "#/components/schemas/input_schema71"
-                      },
-                      "items": {
-                        "minItems": 1,
-                        "maxItems": 500,
-                        "type": "array",
-                        "items": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "$ref": "#/components/schemas/input_schema2"
-                            }
-                          },
-                          "required": ["id"],
-                          "additionalProperties": false
-                        }
+                      "parentId": {
+                        "$ref": "#/components/schemas/input_schema84"
                       }
                     },
-                    "required": ["action", "entity", "relation", "id", "items"],
                     "additionalProperties": false
                   }
-                ]
+                },
+                "required": ["action", "entity", "ids", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["bulkUpdate"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["task"]
+                  },
+                  "ids": {
+                    "$ref": "#/components/schemas/input_schema100"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "projectId": {
+                        "$ref": "#/components/schemas/input_schema90"
+                      },
+                      "status": {
+                        "$ref": "#/components/schemas/input_schema89"
+                      },
+                      "trade": {
+                        "$ref": "#/components/schemas/input_schema93"
+                      },
+                      "dueDate": {
+                        "$ref": "#/components/schemas/input_schema91"
+                      },
+                      "dueEndDate": {
+                        "$ref": "#/components/schemas/input_schema92"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["action", "entity", "ids", "data"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["bulkUpdate"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["expense"]
+                  },
+                  "ids": {
+                    "$ref": "#/components/schemas/input_schema100"
+                  },
+                  "data": {
+                    "type": "object",
+                    "properties": {
+                      "projectId": {
+                        "$ref": "#/components/schemas/input_schema99"
+                      },
+                      "trade": {
+                        "$ref": "#/components/schemas/input_schema98"
+                      },
+                      "costType": {
+                        "$ref": "#/components/schemas/input_schema97"
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["action", "entity", "ids", "data"]
+              }
+            ]
+          },
+          {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["attach", "detach"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["product"]
+                  },
+                  "relation": {
+                    "type": "string",
+                    "enum": ["components"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema2"
+                  },
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/components/schemas/input_schema2"
+                        },
+                        "quantity": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9999
+                        }
+                      },
+                      "required": ["id"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["action", "entity", "relation", "id", "items"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["attach", "detach"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["project"]
+                  },
+                  "relation": {
+                    "type": "string",
+                    "enum": ["resources"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema58"
+                  },
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/components/schemas/input_schema2"
+                        }
+                      },
+                      "required": ["id"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["action", "entity", "relation", "id", "items"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": ["attach", "detach"]
+                  },
+                  "entity": {
+                    "type": "string",
+                    "enum": ["purchase"]
+                  },
+                  "relation": {
+                    "type": "string",
+                    "enum": ["products"]
+                  },
+                  "id": {
+                    "$ref": "#/components/schemas/input_schema71"
+                  },
+                  "items": {
+                    "minItems": 1,
+                    "maxItems": 500,
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "$ref": "#/components/schemas/input_schema2"
+                        }
+                      },
+                      "required": ["id"],
+                      "additionalProperties": false
+                    }
+                  }
+                },
+                "required": ["action", "entity", "relation", "id", "items"],
+                "additionalProperties": false
               }
             ]
           }
-        },
-        "required": ["input"],
-        "additionalProperties": false
+        ]
       },
       "input_image.cleanupUnreferencedImages_body": {
         "type": "object",
