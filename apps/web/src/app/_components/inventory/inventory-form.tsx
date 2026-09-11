@@ -1,18 +1,9 @@
-import {
-  type LocationShortcode,
-  locationShortcode,
-  type ProductShortcode,
-  productShortcode,
-} from "@cubby/schemas/identifiers";
 import type {
   InventoryUpdateInput,
   inventoryCreatePayloadData,
-  inventoryUpdatePayloadData,
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
-import { zodResolver } from "@hookform/resolvers/zod";
 import type { FC } from "react";
-import { useForm } from "react-hook-form";
 import type { z } from "zod";
 
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
@@ -22,51 +13,47 @@ import {
   inventoryItemWithLocationFields,
 } from "~/app/_components/form-fields";
 import { Card, CardContent } from "~/components/ui/card";
+import { useEntityFormController } from "~/entities/editing/use-entity-form-controller";
 
 import {
-  type CreateModeProps,
-  detectComboboxIdChange,
-  type EditModeProps,
+  type EntityFormProps,
   FormWrapper,
-  getSubmitButtonText,
   SideBySideFields,
-  submitOrCancel,
 } from "../form-utils";
 import { ComboboxFieldWithSearch } from "../form-utils/combobox-field-with-search";
 import { AmountFieldGroup, DEFAULT_AMOUNT_UNIT } from "./amount-field-group";
 
-// Form schema using shared field schemas
-const formSchema = inventoryItemWithLocationFields;
+// Module-level so `useEntityFormController`'s resolver memoization sees a
+// stable reference across renders (never a fresh inline array). "placement"
+// (also on the generated model) has no UI here, so it's left out of the
+// roster entirely rather than defaulting to the `full` edit intent.
+const INVENTORY_FORM_FIELDS = ["productId", "locationId", "amount"] as const;
 
-type InventoryFormValues = z.input<typeof formSchema>;
+// TYPE-ONLY reuse of the shared field schemas — `inventoryItemWithLocationFields`
+// (`~/app/_components/form-fields`) still describes this form's shape for RHF's
+// generics; the actual resolver now comes from `useEntityFormController`.
+type InventoryFormValues = z.input<typeof inventoryItemWithLocationFields>;
 
-// Props for create mode
-interface CreateInventoryFormProps extends CreateModeProps<
-  z.infer<typeof inventoryCreatePayloadData>
-> {
-  inventoryItem?: never;
-}
-
-// Props for edit mode
-interface EditInventoryFormProps extends EditModeProps<
+type InventoryFormProps = EntityFormProps<
+  z.infer<typeof inventoryCreatePayloadData>,
   InventoryUpdateInput,
   z.infer<typeof inventoryWithLocationAndProductOut>
-> {
-  entity: z.infer<typeof inventoryWithLocationAndProductOut>;
-}
-
-// Combined props type using discriminated union
-type InventoryFormProps = CreateInventoryFormProps | EditInventoryFormProps;
+> & { inventoryItem?: never };
 
 export const InventoryForm: FC<InventoryFormProps> = (props) => {
-  const { mode, isPending, error, onCancel } = props;
+  const { mode, onCancel } = props;
 
   // Get the inventory item in edit mode
   const inventoryItem = mode === "edit" ? props.entity : undefined;
 
-  // Initialize form with default values or existing inventory item data
-  const form = useForm<InventoryFormValues>({
-    resolver: zodResolver(formSchema),
+  const controller = useEntityFormController<
+    "inventory",
+    InventoryFormValues,
+    z.infer<typeof inventoryWithLocationAndProductOut>,
+    z.infer<typeof inventoryCreatePayloadData>,
+    InventoryUpdateInput
+  >("inventory", props, {
+    fields: INVENTORY_FORM_FIELDS,
     defaultValues: {
       product: inventoryItem
         ? {
@@ -81,51 +68,16 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
         ? inventoryItem.amount
         : { value: 1, unit: DEFAULT_AMOUNT_UNIT },
     },
-  });
-
-  const handleSubmit = (values: InventoryFormValues) => {
-    const amount = values.amount;
-    if (mode === "create") {
-      const createData: z.infer<typeof inventoryCreatePayloadData> = {
+    transform: {
+      create: (values) => ({
         productId: getProductShortcode(values.product),
         locationId: getLocationId(values.location),
-        amount,
-      };
-      props.onCreate(createData);
-    } else if (mode === "edit" && inventoryItem) {
-      const updates: z.infer<typeof inventoryUpdatePayloadData> = {};
-      if (
-        values.amount.value !== inventoryItem.amount.value ||
-        values.amount.unit !== inventoryItem.amount.unit
-      ) {
-        updates.amount = amount;
-      }
-      const productIdChange = detectComboboxIdChange<ProductShortcode>(
-        inventoryItem.product.id,
-        values.product,
-        productShortcode.parse,
-      );
-      if (productIdChange) {
-        updates.productId = productIdChange;
-      }
-      const locationIdChange = detectComboboxIdChange<LocationShortcode>(
-        inventoryItem.location.id,
-        values.location,
-        locationShortcode.parse,
-      );
-      if (locationIdChange) {
-        updates.locationId = locationIdChange;
-      }
-      submitOrCancel(
-        updates,
-        () => ({ id: inventoryItem.id, data: updates }),
-        props.onEdit,
-        onCancel,
-      );
-    }
-  };
-
-  const buttonText = getSubmitButtonText(mode);
+        amount: values.amount,
+      }),
+      edit: (updates) => ({ id: inventoryItem!.id, data: updates }),
+    },
+  });
+  const { form, handleSubmit, isPending, error, submitButtonText } = controller;
 
   return (
     <FormWrapper
@@ -134,7 +86,7 @@ export const InventoryForm: FC<InventoryFormProps> = (props) => {
       error={error}
       isPending={isPending}
       onCancel={onCancel}
-      submitButtonText={buttonText}
+      submitButtonText={submitButtonText}
     >
       <Card>
         <CardContent className="space-y-2 px-4 py-1">

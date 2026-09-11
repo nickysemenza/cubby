@@ -1,8 +1,4 @@
-import { displayGtin, externalIdInput } from "@cubby/schemas/external-id";
-import {
-  type IngredientShortcode,
-  ingredientShortcode,
-} from "@cubby/schemas/identifiers";
+import { displayGtin, type ExternalIdInput } from "@cubby/schemas/external-id";
 import { type ImageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import {
   isbnFromGtin,
@@ -26,19 +22,16 @@ import {
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
 import { fdcId, upc } from "@cubby/usda-schemas";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { type FC, useMemo } from "react";
-import { type Control, useForm, useFormState, useWatch } from "react-hook-form";
+import { type Control, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import {
-  getOptionalIngredientId,
-  optionalIngredientField,
-} from "~/app/_components/form-fields";
+import { getOptionalIngredientId } from "~/app/_components/form-fields";
 import { InfoRow } from "~/components/common/info-row";
 import { filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { InkStamp } from "~/components/ui/ink-stamp";
+import { useEntityFormController } from "~/entities/editing/use-entity-form-controller";
 import { useImageState } from "~/hooks/useImageState";
 import {
   isCanonicalPriceMapping,
@@ -47,64 +40,83 @@ import {
 import { formatCurrency } from "~/lib/utils";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
-import {
-  buildUpdateObject,
-  type CreateModeProps,
-  detectComboboxIdChange,
-  type EditModeProps,
-  FormWrapper,
-  getSubmitButtonText,
-} from "../form-utils";
+import { type EntityFormProps, FormWrapper } from "../form-utils";
 import {
   type ProductFormFieldPaths,
   ProductFormFields,
 } from "./product-form-fields";
 
-// Form schema for product form (simple Zod schema without z.custom)
-const productFormSchema = z
-  .object({
-    name: z.string().min(1, "Name is required"),
-    aliases: z.array(z.string()),
-    tags: z.array(z.string()),
-    collections: z.array(z.string()),
-    manufacturer: z.string().min(1, "Manufacturer is required"),
-    model: z.string().nullable(),
-    notes: z.string().nullable(),
-    category: productCategory.nullable(),
-    upc: upc.nullable(), // Allow empty string and transform to null
-    isbn: isbnSchema.nullable(),
-    fdc_id: fdcId.nullable(), // Explicit USDA link (set via search)
-    expectedQuantity: z.number().int().positive().nullable(),
-    // Price per each ($); own field, not a mapping. 0 is allowed and means
-    // "genuinely free" (bundled accessories) — distinct from null, "unpriced".
-    price: z.number().nonnegative().nullable(),
-    ingredient: optionalIngredientField, // Ingredient association
-    // Per-each price has its own field, so a canonical "1 each = $X" conversion
-    // is forbidden (it would duplicate the price). Per-measure money mappings
-    // like "1 quart = $4" are allowed. Mirrors the server-side invariant so a
-    // duplicate per-each price is caught before submit.
-    unitMappings: z.array(unitMappingInput).superRefine((mappings, ctx) => {
-      mappings.forEach((m, i) => {
-        if (isCanonicalPriceMapping(m)) {
-          const moneySide = isMoneyUnit(m.b.unit) ? "b" : "a";
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message:
-              "Use the Price per Item field for the per-each price, not a conversion.",
-            path: [i, moneySide, "unit"],
-          });
-        }
-      });
-    }),
-    externalIds: z.array(externalIdInput),
-  })
-  .transform((data) => ({
-    ...data,
-    upc: data.upc === "" ? null : data.upc,
-    fdc_id: data.fdc_id === 0 ? null : data.fdc_id,
-  }));
+// Module-level so `useEntityFormController`'s resolver memoization sees a
+// stable reference across renders (never a fresh inline array/object).
+const PRODUCT_FORM_FIELDS = [
+  "name",
+  "aliases",
+  "tags",
+  "manufacturer",
+  "model",
+  "notes",
+  "category",
+  "upc",
+  "isbn",
+  "fdc_id",
+  "expectedQuantity",
+  "price",
+  "ingredientId",
+  "unitMappings",
+  "externalIds",
+] as const;
 
-type ProductFormValues = z.infer<typeof productFormSchema>;
+// Fields the generated create/update schema map doesn't cover the way this
+// form needs:
+// - `collections` is editor-only, folded into `tags` at submit (no server
+//   counterpart of its own).
+// - `upc`/`isbn`/`fdc_id` keep their own friendlier, display-oriented client
+//   schemas rather than the server's canonicalizing ones (the server's `upc`
+//   validator normalizes to a padded GTIN-14, which would fight the raw
+//   digits `ProductLivePreview`/`buildUpdateObject` compare against).
+// - `unitMappings` keeps the cross-field guard against a duplicate per-each
+//   price mapping, which the generated schema doesn't express.
+const PRODUCT_FORM_EXTEND = {
+  collections: z.array(z.string()),
+  upc: upc.nullable(),
+  isbn: isbnSchema.nullable(),
+  fdc_id: fdcId.nullable(),
+  unitMappings: z.array(unitMappingInput).superRefine((mappings, ctx) => {
+    mappings.forEach((m, i) => {
+      if (isCanonicalPriceMapping(m)) {
+        const moneySide = isMoneyUnit(m.b.unit) ? "b" : "a";
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Use the Price per Item field for the per-each price, not a conversion.",
+          path: [i, moneySide, "unit"],
+        });
+      }
+    });
+  }),
+};
+
+interface ProductFormValues {
+  name: string;
+  aliases: string[];
+  tags: string[];
+  // Editor-only: folded into `tags` at submit (see `productTags`).
+  collections: string[];
+  manufacturer: string;
+  model: string | null;
+  notes: string | null;
+  category: z.infer<typeof productCategory> | null;
+  upc: string | null;
+  isbn: string | null;
+  fdc_id: number | null;
+  expectedQuantity: number | null;
+  // Price per each ($); own field, not a mapping. 0 is allowed and means
+  // "genuinely free" (bundled accessories) — distinct from null, "unpriced".
+  price: number | null;
+  ingredient: ComboboxItem | null;
+  unitMappings: UnitMappingInput[];
+  externalIds: ExternalIdInput[];
+}
 
 const productFormFieldPaths = {
   name: "name",
@@ -210,8 +222,21 @@ const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
   );
 };
 
-// Props for create mode
-interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {
+// Define a custom type for product with ingredient and unit mappings
+interface ProductWithIngredient extends Omit<ProductTopLevelOut, "images"> {
+  ingredient?: {
+    id: string;
+    name: string;
+  } | null;
+  unitMappings: UnitMappingInput[];
+  images?: ImageOut[];
+}
+
+type ProductFormProps = EntityFormProps<
+  ProductCreateInput,
+  { id: string; data: Partial<ProductCreateInput> },
+  ProductWithIngredient
+> & {
   product?: never;
   initialName?: string;
   initialExpectedQuantity?: number | null;
@@ -228,33 +253,7 @@ interface CreateProductFormProps extends CreateModeProps<ProductCreateInput> {
   initialFdcId?: number | null;
   /** Rendered inside a modal — use a plain inline footer instead of the page sticky bar. */
   embedded?: boolean;
-}
-
-// Define a custom type for product with ingredient and unit mappings
-interface ProductWithIngredient extends Omit<ProductTopLevelOut, "images"> {
-  ingredient?: {
-    id: string;
-    name: string;
-  } | null;
-  unitMappings: UnitMappingInput[];
-  images?: ImageOut[];
-}
-
-// Props for edit mode
-interface EditProductFormProps extends EditModeProps<
-  {
-    id: string;
-    data: Partial<ProductCreateInput>;
-  },
-  ProductWithIngredient
-> {
-  entity: ProductWithIngredient;
-  /** Rendered inside a modal — use a plain inline footer instead of the page sticky bar. */
-  embedded?: boolean;
-}
-
-// Combined props type using discriminated union
-type ProductFormProps = CreateProductFormProps | EditProductFormProps;
+};
 
 type ProductFormInitialValues = {
   initialName?: string;
@@ -272,7 +271,7 @@ function createProductFormDefaults({
   initialManufacturer,
   initialUpc,
   initialFdcId,
-}: ProductFormInitialValues) {
+}: ProductFormInitialValues): ProductFormValues {
   return {
     name: initialName ?? "",
     aliases: [],
@@ -296,7 +295,7 @@ function createProductFormDefaults({
 function editProductFormDefaults(
   product: ProductWithIngredient,
   productIsbn: ReturnType<typeof isbnFromGtin>,
-) {
+): ProductFormValues {
   return {
     name: product.name,
     aliases: product.aliases,
@@ -332,7 +331,7 @@ function productFormDefaults({
 }: ProductFormInitialValues & {
   product?: ProductWithIngredient;
   productIsbn: ReturnType<typeof isbnFromGtin>;
-}) {
+}): ProductFormValues {
   return product
     ? editProductFormDefaults(product, productIsbn)
     : createProductFormDefaults({
@@ -355,16 +354,32 @@ function productTags(values: ProductFormValues) {
   ];
 }
 
+/**
+ * Normalize raw form values into their submit-ready shape: fold
+ * tags/collections, filter blank aliases, and strip the "" / 0 sentinels the
+ * text/number inputs can produce for a field that's really `null` ("" for a
+ * cleared UPC field, `0` for a `fdc_id` typed then cleared to a bare zero).
+ * Shared by `transform.create` and `transform.diffValues` so create and edit
+ * submits see the same submit-ready values.
+ */
+function normalizeProductValues(values: ProductFormValues): ProductFormValues {
+  return {
+    ...values,
+    aliases: filterAliases(values.aliases),
+    tags: productTags(values),
+    upc: values.upc === "" ? null : values.upc,
+    fdc_id: values.fdc_id === 0 ? null : values.fdc_id,
+  };
+}
+
 function createProductInput(
   values: ProductFormValues,
-  aliases: string[],
-  tags: string[],
   imageData: ReturnType<ReturnType<typeof useImageState>["getImageData"]>,
 ): ProductCreateInput {
   return {
     name: values.name,
-    aliases,
-    tags,
+    aliases: values.aliases,
+    tags: values.tags,
     manufacturer: values.manufacturer,
     model: values.model,
     notes: values.notes,
@@ -382,7 +397,7 @@ function createProductInput(
 }
 
 export const ProductForm: FC<ProductFormProps> = (props) => {
-  const { mode, isPending, error, onCancel, embedded } = props;
+  const { mode, onCancel, embedded } = props;
   const imageState = useImageState();
   const { getImageData, hasImageChanges } = imageState;
 
@@ -410,9 +425,9 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const productIsbn =
     product?.primaryGtin == null ? null : isbnFromGtin(product.primaryGtin);
 
-  // Initialize form with default values or existing product data
-  const form = useForm<ProductFormValues>({
-    resolver: zodResolver(productFormSchema),
+  const controller = useEntityFormController("product", props, {
+    fields: PRODUCT_FORM_FIELDS,
+    extend: PRODUCT_FORM_EXTEND,
     defaultValues: productFormDefaults({
       product,
       initialName,
@@ -423,99 +438,28 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       initialFdcId,
       productIsbn,
     }),
+    hasAdditionalChanges: hasImageChanges,
+    transform: {
+      diffValues: (values) => normalizeProductValues(values),
+      // `upc` is a write-only input; the product carries `primaryGtin`.
+      // Compare in the form's own units so an unchanged barcode isn't
+      // resubmitted as a change on every save.
+      diffRecord: (record) => ({
+        upc:
+          record.primaryGtin && !productIsbn
+            ? displayGtin(record.primaryGtin)
+            : null,
+        isbn: productIsbn?.gtin14 ?? null,
+      }),
+      create: (values) =>
+        createProductInput(normalizeProductValues(values), getImageData(true)),
+      edit: (updates) => ({
+        id: product!.id,
+        data: { ...updates, ...getImageData() },
+      }),
+    },
   });
-
-  const handleSubmit = (values: ProductFormValues) => {
-    const aliases = filterAliases(values.aliases);
-    // Same blank-stripping as aliases — an empty row in the editor is not a tag.
-    const tags = productTags(values);
-
-    if (mode === "create") {
-      // For creation, pass all fields
-      props.onCreate(
-        createProductInput(values, aliases, tags, getImageData(true)),
-      );
-    } else if (mode === "edit" && product) {
-      // In edit mode, determine which fields have changed
-      const updates: Partial<ProductCreateInput> = buildUpdateObject(
-        {
-          ...product,
-          // `upc` is a write-only input; the product carries `primaryGtin`.
-          // Compare in the form's own units so an unchanged barcode isn't
-          // resubmitted as a change on every save.
-          upc:
-            product.primaryGtin && !productIsbn
-              ? displayGtin(product.primaryGtin)
-              : null,
-          isbn: productIsbn?.gtin14 ?? null,
-        },
-        { ...values, aliases, tags },
-        [
-          "name",
-          "aliases",
-          "tags",
-          "manufacturer",
-          "model",
-          "notes",
-          "category",
-          "upc",
-          "isbn",
-          "fdc_id",
-          "expectedQuantity",
-          "price",
-        ],
-      );
-
-      // Check for ingredient changes
-      const ingredientId = detectComboboxIdChange<IngredientShortcode>(
-        product.ingredient ? product.ingredient.id : null,
-        values.ingredient,
-        ingredientShortcode.parse,
-      );
-
-      if (ingredientId !== undefined) {
-        updates.ingredientId = ingredientId;
-      }
-
-      // Check for unit mapping changes (measurement conversions only; price is its own field)
-      if (
-        JSON.stringify(product.unitMappings) !==
-        JSON.stringify(values.unitMappings)
-      ) {
-        updates.unitMappings = values.unitMappings;
-      }
-
-      // Check for external ID changes
-      if (
-        JSON.stringify(product.externalIds) !==
-        JSON.stringify(values.externalIds)
-      ) {
-        updates.externalIds = values.externalIds;
-      }
-
-      // Check if we have any changes (field changes or image changes)
-      const imageChanges = hasImageChanges();
-      const hasFieldChanges = Object.keys(updates).length > 0;
-
-      // Only update if there are changes
-      if (hasFieldChanges || imageChanges) {
-        const updateData = {
-          id: product.id,
-          data: {
-            ...updates,
-            ...getImageData(), // Apply image updates
-          },
-        };
-
-        props.onEdit(updateData);
-      } else if (onCancel) {
-        // If no changes, just run the cancel function
-        onCancel();
-      }
-    }
-  };
-
-  const buttonText = getSubmitButtonText(mode);
+  const { form, handleSubmit, isPending, error, submitButtonText } = controller;
 
   return (
     <FormWrapper
@@ -524,7 +468,7 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
       error={error}
       isPending={isPending}
       onCancel={onCancel}
-      submitButtonText={buttonText}
+      submitButtonText={submitButtonText}
       successMessage={mode === "create" ? "Product created" : "Product saved"}
       stickyFooter={!embedded}
       footerStart={

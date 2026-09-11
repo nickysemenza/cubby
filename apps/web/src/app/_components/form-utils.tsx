@@ -76,7 +76,7 @@ interface BaseFormProps {
 }
 
 // Generic create mode props
-export interface CreateModeProps<TCreateData> extends BaseFormProps {
+interface CreateModeProps<TCreateData> extends BaseFormProps {
   mode: "create";
   onCreate: (data: TCreateData) => void;
   onEdit?: never;
@@ -90,6 +90,20 @@ export interface EditModeProps<TEditData, TEntity> extends BaseFormProps {
   onCreate?: never;
   entity: TEntity;
 }
+
+/**
+ * Shared create/edit prop union for a rich entity form built on
+ * `useEntityFormController` — replaces each form's hand-rolled
+ * `Create*FormProps`/`Edit*FormProps` pair. Keeps `EditModeProps`'s `entity`
+ * field name (rather than e.g. `record`) so these forms stay assignable to
+ * `ComponentType<EditModeProps<TEditData, TEntity>>`, the shape
+ * `editableDetailSection` invokes a detail page's edit form with.
+ */
+export type EntityFormProps<
+  TCreateData,
+  TEditData = TCreateData,
+  TEntity = TCreateData,
+> = CreateModeProps<TCreateData> | EditModeProps<TEditData, TEntity>;
 
 export function getSubmitButtonText(mode: "create" | "edit"): string {
   return mode === "create" ? "Create" : "Save";
@@ -581,20 +595,6 @@ export function ComboboxField<TFieldValues extends FieldValues = FieldValues>({
       )}
     />
   );
-}
-
-// Helper to submit changes or cancel if no changes detected
-export function submitOrCancel<TUpdates extends object, T>(
-  updates: TUpdates,
-  buildPayload: () => T,
-  onEdit: (data: T) => void,
-  onCancel?: () => void,
-) {
-  if (Object.keys(updates).length > 0) {
-    onEdit(buildPayload());
-  } else {
-    onCancel?.();
-  }
 }
 
 // Generic function to build an update object based on changed fields
