@@ -36,7 +36,14 @@ const book: CookbookExtraction = {
       title: "Pies",
       items: [
         recipe("001.0001", "Apple Pie"),
-        { kind: "essay", id: "001.0040", title: "On butter", name: "On butter", photos: [], span: { start: 40, end: 41, doc_path: "c.xhtml" } },
+        {
+          kind: "essay",
+          id: "001.0040",
+          title: "On butter",
+          name: "On butter",
+          photos: [],
+          span: { start: 40, end: 41, doc_path: "c.xhtml" },
+        },
         recipe("001.0050", "Pie Dough"),
       ],
     },
@@ -56,12 +63,14 @@ const book: CookbookExtraction = {
 
 describe("cookbook graph", () => {
   it("flattens recipes with their chapters and keeps only dependency edges", () => {
-    expect(flattenRecipes(book).map((f) => [f.recipe.name, f.chapter])).toEqual([
-      ["Apple Pie", "Pies"],
-      ["Pie Dough", "Pies"],
-      ["Crème Fraîche", "Basics"],
-      ["Stock", "Basics"],
-    ]);
+    expect(flattenRecipes(book).map((f) => [f.recipe.name, f.chapter])).toEqual(
+      [
+        ["Apple Pie", "Pies"],
+        ["Pie Dough", "Pies"],
+        ["Crème Fraîche", "Basics"],
+        ["Stock", "Basics"],
+      ],
+    );
     expect(dependencyEdges(book).map((e) => `${e.from}->${e.to}`)).toEqual([
       "001.0001->001.0050",
       "001.0050->002.0001",
@@ -88,8 +97,18 @@ describe("cookbook graph", () => {
     const cyclic: CookbookExtraction = {
       ...book,
       edges: [
-        { from: "001.0001", to: "001.0050", kind: "ingredient", method: "anchor" },
-        { from: "001.0050", to: "001.0001", kind: "variation", method: "title" },
+        {
+          from: "001.0001",
+          to: "001.0050",
+          kind: "ingredient",
+          method: "anchor",
+        },
+        {
+          from: "001.0050",
+          to: "001.0001",
+          kind: "variation",
+          method: "title",
+        },
       ],
     };
     expect(topoOrder(cyclic, ["001.0050", "001.0001"])).toEqual([

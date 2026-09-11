@@ -6,10 +6,7 @@ import {
   productShortcode,
   recipeShortcode,
 } from "./identifier-fields";
-import {
-  cookbookExtractionSchema,
-  cookbookRunReportSchema,
-} from "./cookbook";
+import { cookbookExtractionSchema, cookbookRunReportSchema } from "./cookbook";
 import { cookbookSummary } from "./recipe";
 
 // Times arrive twice over: the prose string is verbatim what the source printed,
@@ -300,7 +297,7 @@ export const gatewayForwardInput = z.object({
     .min(1)
     .max(300)
     .regex(
-      /^\/[a-z0-9-]+\/[A-Za-z0-9._\/-]+$/u,
+      /^\/[a-z0-9-]+\/[A-Za-z0-9._/-]+$/u,
       "path must be a gateway provider route such as /anthropic/v1/messages",
     ),
   headers: z.array(z.tuple([z.string().min(1), z.string()])).max(32),

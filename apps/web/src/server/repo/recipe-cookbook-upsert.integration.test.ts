@@ -136,10 +136,7 @@ describe("upsertCookbookRecipe", () => {
   });
   const galette = makeCookbookRecipe(
     "Apple Galette",
-    [
-      { line: "1 recipe The Only Piecrust", ref: "001.0001" },
-      "3 apples",
-    ],
+    [{ line: "1 recipe The Only Piecrust", ref: "001.0001" }, "3 apples"],
     { id: "001.0040" },
   );
   const tree = makeCookbookExtraction([piecrust, galette]);
@@ -157,7 +154,9 @@ describe("upsertCookbookRecipe", () => {
     );
     const flat = await getRecipeByID(db, first.id);
     expect(
-      flat!.sections.flatMap((s) => s.ingredients).every((ing) => ing.type === "ingredient"),
+      flat!.sections
+        .flatMap((s) => s.ingredients)
+        .every((ing) => ing.type === "ingredient"),
     ).toBe(true);
 
     const crust = await upsertCookbookRecipeFromCookbook(

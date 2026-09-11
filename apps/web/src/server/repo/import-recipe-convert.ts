@@ -178,7 +178,7 @@ const cookbookTimes = (
     : undefined;
 
 /** The notes markdown for a cookbook recipe: headnote, then labelled notes. */
-export const cookbookRecipeNotes = (item: CookbookRecipe): string | null =>
+const cookbookRecipeNotes = (item: CookbookRecipe): string | null =>
   composeNotesMarkdown(
     item.meta.description.join("\n\n"),
     item.notes.map((note) =>
@@ -194,7 +194,7 @@ export const cookbookRecipeNotes = (item: CookbookRecipe): string | null =>
  * ingredient and recipe ids. A reference to a recipe not yet imported stays a
  * plain ingredient line, which is why callers import in dependency order.
  */
-export const cookbookRecipeToRecipeInput = async (
+const cookbookRecipeToRecipeInput = async (
   item: CookbookRecipe,
   chapter: string | null,
   db: Database,
@@ -249,9 +249,13 @@ export const cookbookRecipeToRecipeInput = async (
               const codes = await lookupShortcodes(db, [
                 { entity: "recipe", id: targetRecipeId },
               ]);
-              const recipeId = codes.get(entityRefKey("recipe", targetRecipeId));
+              const recipeId = codes.get(
+                entityRefKey("recipe", targetRecipeId),
+              );
               if (!recipeId) {
-                throw new Error(`Recipe ${targetRecipeId} could not be resolved`);
+                throw new Error(
+                  `Recipe ${targetRecipeId} could not be resolved`,
+                );
               }
               return {
                 type: "recipe" as const,

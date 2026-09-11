@@ -4,10 +4,10 @@ import { getImageByIdSchema } from "@cubby/schemas/image";
 import { projectCreateInput } from "@cubby/schemas/project";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { describe, expect, it } from "vitest";
 
 import { cookbook, image, projectImage, vendor } from "~/server/db/schema";
+import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
 
 import { deleteCookbook, upsertCookbook } from "./cookbook";
@@ -322,7 +322,11 @@ describe("image repository — purchase (charge) documents", () => {
       });
       const { entityId: cookbookId } = await upsertCookbook(
         ctx.db,
-        { name: "Sweep Book", rawJson: makeCookbookExtraction(), sourceLabel: "Sweep Book" },
+        {
+          name: "Sweep Book",
+          rawJson: makeCookbookExtraction(),
+          sourceLabel: "Sweep Book",
+        },
         ctx.actor,
       );
       await getDb(ctx.db)

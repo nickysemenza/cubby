@@ -2,7 +2,6 @@ import type { RecipeId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
@@ -20,6 +19,7 @@ import {
   upsertCookbookRecipe,
 } from "~/server/repo/recipe";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
+import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import {
   ingredientRef,
   makeProductInput,
@@ -136,7 +136,11 @@ describe("recipe deletion cost-staleness workflows", () => {
     const bookName = "Doomed Book";
     const { output: cookbook, entityId: cookbookId } = await upsertCookbook(
       ctx.db,
-      { name: bookName, rawJson: makeCookbookExtraction(), sourceLabel: bookName },
+      {
+        name: bookName,
+        rawJson: makeCookbookExtraction(),
+        sourceLabel: bookName,
+      },
       ctx.actor,
     );
     const ingredient = await findOrCreateIngredient(ctx.db, "book flour");

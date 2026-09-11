@@ -10,8 +10,8 @@ import { z } from "zod";
 
 // Unknown keys are kept (as JSON) rather than stripped: the stored tree must
 // round-trip every field the crate wrote, not only the ones cubby reads.
-const passthrough = <T extends z.ZodRawShape>(shape: T) =>
-  z.object(shape).catchall(z.json());
+const passthrough = <T extends z.ZodRawShape>(fields: T) =>
+  z.object(fields).catchall(z.json());
 
 /** An image inside the EPUB archive: a path, never a URL. */
 export const archiveImageRefSchema = passthrough({
@@ -226,6 +226,9 @@ export const flattenCookbookRecipes = (
     ),
   );
 
-/** Whether a stored `rawJson` predates the book-tree format (an `ImportRecipe[]`). */
-export const isLegacyCookbookRawJson = (raw: unknown): boolean =>
-  Array.isArray(raw);
+/**
+ * Whether a stored `rawJson` predates the book-tree format: those rows hold
+ * an `ImportRecipe[]`, which the column's declared type cannot express.
+ */
+export const isLegacyCookbookRawJson = (stored: CookbookExtraction): boolean =>
+  Array.isArray(stored);

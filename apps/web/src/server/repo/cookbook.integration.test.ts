@@ -2,7 +2,7 @@ import {
   cookbookDiffInput,
   upsertCookbookInput,
 } from "@cubby/schemas/import-recipe";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -262,7 +262,11 @@ describe("cookbook repository", () => {
     const pancakes = makeCookbookRecipe("Pancakes", ["2 cups flour"], {
       id: "001.0001",
       photos: [
-        { path: "OEBPS/images/pancakes.jpg", mime: "image/jpeg", alt: "Pancakes" },
+        {
+          path: "OEBPS/images/pancakes.jpg",
+          mime: "image/jpeg",
+          alt: "Pancakes",
+        },
       ],
     });
     const raw = makeCookbookExtraction([pancakes]);
@@ -282,7 +286,10 @@ describe("cookbook repository", () => {
 
     await expect(
       getCookbookRecipePhotoSource(ctx.db, cookbookId, imported.id, "001.0001"),
-    ).resolves.toEqual({ path: "OEBPS/images/pancakes.jpg", mime: "image/jpeg" });
+    ).resolves.toEqual({
+      path: "OEBPS/images/pancakes.jpg",
+      mime: "image/jpeg",
+    });
 
     const other = await upsertCookbook(
       ctx.db,
@@ -305,15 +312,23 @@ describe("cookbook repository", () => {
   it("refuses to import from a cookbook stored in the retired flat format", async () => {
     const legacy = await upsertCookbook(
       ctx.db,
-      { name: "Legacy Book", rawJson: makeCookbookExtraction(), sourceLabel: "old.epub" },
+      {
+        name: "Legacy Book",
+        rawJson: makeCookbookExtraction(),
+        sourceLabel: "old.epub",
+      },
       ctx.actor,
     );
+    // Rows written before the tree format hold a flat array; the column's
+    // type cannot express that, so the row is rewritten in SQL.
     await getDb(ctx.db)
       .update(cookbook)
-      .set({ rawJson: [] as unknown as ReturnType<typeof makeCookbookExtraction> })
+      .set({ rawJson: sql`'[]'::jsonb` })
       .where(eq(cookbook.id, legacy.entityId));
     const summaries = await listCookbooks(ctx.db);
-    expect(summaries.find((s) => s.book === "Legacy Book")?.needsReextract).toBe(true);
+    expect(
+      summaries.find((s) => s.book === "Legacy Book")?.needsReextract,
+    ).toBe(true);
     await expect(
       getCookbookSource(ctx.db, legacy.entityId),
     ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });

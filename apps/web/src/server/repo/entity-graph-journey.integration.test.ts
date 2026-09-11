@@ -62,7 +62,9 @@ describe("entity graph cross-entity journey", () => {
       {
         name: cookbookName,
         sourceLabel: "journey.epub",
-        rawJson: makeCookbookExtraction([makeCookbookRecipe("Journey source", ["1 cup flour"])]),
+        rawJson: makeCookbookExtraction([
+          makeCookbookRecipe("Journey source", ["1 cup flour"]),
+        ]),
       },
       ctx.actor,
     );

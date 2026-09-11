@@ -14,14 +14,6 @@
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import {
-  type CookbookId,
-  type CookbookShortcode,
-  type ProductId,
-  parseShortcodeFor,
-  type RecipeId,
-} from "@cubby/schemas/identifiers";
 import {
   type CookbookExtraction,
   type CookbookRecipe,
@@ -30,6 +22,14 @@ import {
   flattenCookbookRecipes,
   isLegacyCookbookRawJson,
 } from "@cubby/schemas/cookbook";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import {
+  type CookbookId,
+  type CookbookShortcode,
+  type ProductId,
+  parseShortcodeFor,
+  type RecipeId,
+} from "@cubby/schemas/identifiers";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -339,7 +339,7 @@ export const setCookbookProduct = async (
  */
 const parseStoredExtraction = (
   id: CookbookId,
-  rawJson: unknown,
+  rawJson: CookbookExtraction,
 ): CookbookExtraction => {
   if (isLegacyCookbookRawJson(rawJson)) {
     throw createAppError(
@@ -381,10 +381,7 @@ export const cookbookRecipesById = (
   extraction: CookbookExtraction,
 ): Map<string, { recipe: CookbookRecipe; chapter: string | null }> =>
   new Map(
-    flattenCookbookRecipes(extraction).map((entry) => [
-      entry.recipe.id,
-      entry,
-    ]),
+    flattenCookbookRecipes(extraction).map((entry) => [entry.recipe.id, entry]),
   );
 
 /**

@@ -1,4 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import type {
+  CookbookExtraction,
+  CookbookRecipe,
+} from "@cubby/schemas/cookbook";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   type EntityId,
@@ -8,10 +12,6 @@ import {
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import type {
-  CookbookExtraction,
-  CookbookRecipe,
-} from "@cubby/schemas/cookbook";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
 import {
@@ -23,6 +23,7 @@ import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { wasm } from "~/lib/wasm";
@@ -319,6 +320,13 @@ export const makeImportRecipe = (
   ...overrides,
 });
 
+// A fixture ingredient line: bare text, or text with a reference to another
+// item by id. Parsed rather than type-tested, per the repo's lint rules.
+const cookbookFixtureLine = z.union([
+  z.string().transform((line) => ({ line, ref: undefined })),
+  z.object({ line: z.string(), ref: z.string() }),
+]);
+
 /**
  * A recipe item as the `cookbook` crate emits it: every ingredient line
  * already parsed (through the same wasm parser), an optional `ref` to another
@@ -338,10 +346,9 @@ export const makeCookbookRecipe = (
     section?: string;
   } = {},
 ): CookbookRecipe => {
-  const id = overrides.id ?? `001.${String(nextCookbookLine++).padStart(4, "0")}`;
-  const lines = ingredients.map((entry) =>
-    typeof entry === "string" ? { line: entry, ref: undefined } : entry,
-  );
+  const id =
+    overrides.id ?? `001.${String(nextCookbookLine++).padStart(4, "0")}`;
+  const lines = ingredients.map((entry) => cookbookFixtureLine.parse(entry));
   const parsed = wasm.parse_ingredient_lines(lines.map((l) => l.line));
   return {
     kind: "recipe",

@@ -1,31 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("~/server/clients/gateway-config", () => ({
-  gatewayAdapterConfig: () => ({
-    accountId: "acct",
-    gatewayId: "gw",
-    cfApiKey: "secret-token",
-  }),
-}));
-
-const gatewayCallUsage = vi.fn();
-vi.mock("~/lib/wasm", () => ({
-  wasm: {
-    gateway_call_usage: (model: string, body: string) =>
-      gatewayCallUsage(model, body),
-  },
-}));
-
-const recordAiUsage = vi.fn((_db: unknown, _input: unknown) =>
-  Promise.resolve(),
-);
-vi.mock("~/server/ai-usage", () => ({
-  recordAiUsage: (db: unknown, input: unknown) => recordAiUsage(db, input),
-}));
+import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 
-import { forwardGatewayRequest } from "./gateway-forward";
+import {
+  forwardGatewayRequest,
+  type GatewayForwardPort,
+} from "./gateway-forward";
 
 const request = {
   path: "/anthropic/v1/messages",
@@ -45,49 +25,75 @@ const request = {
         feature: "spoofed",
       }),
     ],
-  ] as [string, string][],
+  ] satisfies [string, string][],
   body: { model: "claude-haiku-4-5", messages: [] },
 };
 
+// A faithful stand-in for the forwarder's surroundings: it keeps what was
+// sent and what was recorded so the test reads them back typed.
+function fakePort(respond: () => Response) {
+  const sent: { url: string; init: RequestInit }[] = [];
+  const recorded: Parameters<GatewayForwardPort["recordUsage"]>[1][] = [];
+  const port: GatewayForwardPort = {
+    fetch: (input, init) => {
+      sent.push({ url: String(input), init: init ?? {} });
+      return Promise.resolve(respond());
+    },
+    config: () => ({
+      accountId: "acct",
+      gatewayId: "gw",
+      cfApiKey: "secret-token",
+    }),
+    callUsage: (_model, body) =>
+      body.includes('"usage"')
+        ? {
+            provider: "anthropic",
+            usage: {
+              input_tokens: 10,
+              output_tokens: 5,
+              cache_read_input_tokens: 0,
+              cache_creation_input_tokens: 0,
+            },
+            cost_usd: 0.000035,
+          }
+        : null,
+    recordUsage: (_db, input) => {
+      recorded.push(input);
+      return Promise.resolve();
+    },
+  };
+  return { port, sent, recorded };
+}
+
+// The unit under test never touches the database; the port receives it.
+// SAFETY: the unit under test never dereferences the database; it only hands
+// it to the injected `recordUsage` port, which ignores it.
+const db = {} as Database;
+
 describe("forwardGatewayRequest", () => {
   it("forwards the built request with the server's token and feature, and records priced usage", async () => {
-    const fetchMock = vi.fn(
-      (): Promise<Response> =>
-        Promise.resolve(
-          new Response('{"usage":{"input_tokens":10,"output_tokens":5}}', {
-            status: 200,
-            headers: { "cf-aig-log-id": "log-1", "x-secret": "hidden" },
-          }),
-        ),
+    const { port, sent, recorded } = fakePort(
+      () =>
+        new Response('{"usage":{"input_tokens":10,"output_tokens":5}}', {
+          status: 200,
+          headers: { "cf-aig-log-id": "log-1", "x-secret": "hidden" },
+        }),
     );
-    gatewayCallUsage.mockReturnValue({
-      provider: "anthropic",
-      usage: {
-        input_tokens: 10,
-        output_tokens: 5,
-        cache_read_input_tokens: 0,
-        cache_creation_input_tokens: 0,
-      },
-      cost_usd: 0.000035,
-    });
     const out = await forwardGatewayRequest(
       request,
-      { db: {} as Database, feature: "cookbook-epub-parsing" },
-      { fetch: fetchMock },
+      { db, feature: "cookbook-epub-parsing" },
+      port,
     );
     expect(out.status).toBe(200);
     expect(out.headers).toContainEqual(["cf-aig-log-id", "log-1"]);
     expect(out.headers.map(([name]) => name)).not.toContain("x-secret");
     expect(out.body).toContain('"input_tokens":10');
 
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [
-      string,
-      RequestInit,
-    ];
-    expect(url).toBe(
+    const [call] = sent;
+    expect(call?.url).toBe(
       "https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/messages",
     );
-    const headers = init.headers as Headers;
+    const headers = new Headers(call?.init.headers);
     expect(headers.get("cf-aig-authorization")).toBe("Bearer secret-token");
     expect(headers.get("authorization")).toBeNull();
     expect(headers.get("anthropic-version")).toBe("2023-06-01");
@@ -98,10 +104,9 @@ describe("forwardGatewayRequest", () => {
       contract: "cookbook-indexed-v1",
       feature: "cookbook-epub-parsing",
     });
-    expect(init.body).toBe(JSON.stringify(request.body));
+    expect(call?.init.body).toBe(JSON.stringify(request.body));
 
-    expect(recordAiUsage).toHaveBeenCalledWith(
-      expect.anything(),
+    expect(recorded).toEqual([
       expect.objectContaining({
         feature: "cookbook-epub-parsing",
         provider: "anthropic",
@@ -112,41 +117,49 @@ describe("forwardGatewayRequest", () => {
         estimatedCost: 0.000035,
         cacheStatus: "none",
       }),
-    );
+    ]);
   });
 
   it("returns provider errors as-is without recording usage", async () => {
-    recordAiUsage.mockClear();
-    const fetchMock = vi.fn(
-      (): Promise<Response> =>
-        Promise.resolve(
-          new Response('{"error":{"code":2018,"message":"Wholesale Rate limited"}}', {
-            status: 429,
-            headers: { "retry-after": "7" },
-          }),
+    const { port, recorded } = fakePort(
+      () =>
+        new Response(
+          '{"error":{"code":2018,"message":"Wholesale Rate limited"}}',
+          { status: 429, headers: { "retry-after": "7" } },
         ),
     );
     const out = await forwardGatewayRequest(
       request,
-      { db: {} as Database, feature: "cookbook-epub-parsing" },
-      { fetch: fetchMock },
+      { db, feature: "cookbook-epub-parsing" },
+      port,
     );
     expect(out.status).toBe(429);
     expect(out.headers).toContainEqual(["retry-after", "7"]);
     expect(out.body).toContain("Wholesale");
-    expect(recordAiUsage).not.toHaveBeenCalled();
+    expect(recorded).toEqual([]);
   });
 
   it("turns a network failure into a thrown error", async () => {
-    const fetchMock = vi.fn((): Promise<Response> =>
-      Promise.reject(new Error("socket hang up")),
-    );
+    const { port } = fakePort(() => {
+      throw new Error("socket hang up");
+    });
     await expect(
       forwardGatewayRequest(
         request,
         { feature: "cookbook-epub-parsing" },
-        { fetch: fetchMock },
+        port,
       ),
     ).rejects.toThrow(/socket hang up/);
+  });
+
+  it("refuses to forward without the gateway token", async () => {
+    const { port } = fakePort(() => new Response("{}"));
+    await expect(
+      forwardGatewayRequest(
+        request,
+        { feature: "cookbook-epub-parsing" },
+        { ...port, config: () => null },
+      ),
+    ).rejects.toThrow(/AI_GATEWAY_API_KEY/);
   });
 });

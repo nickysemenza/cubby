@@ -4,7 +4,6 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -36,6 +35,7 @@ import {
   wishCandidate,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
+import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 
 import {
