@@ -30,6 +30,9 @@ mod macros;
 mod availability;
 mod conversion;
 mod costing;
+// Upstream compiles `cookbook::wasm` only for wasm32, so the native
+// `cargo test` build of this crate has no EPUB module to re-export.
+#[cfg(target_arch = "wasm32")]
 mod epub;
 mod estimates;
 mod food_mappings;
@@ -40,6 +43,7 @@ mod reconcile;
 pub use availability::*;
 pub use conversion::*;
 pub use costing::*;
+#[cfg(target_arch = "wasm32")]
 pub use epub::*;
 pub use estimates::*;
 pub use food_mappings::*;
