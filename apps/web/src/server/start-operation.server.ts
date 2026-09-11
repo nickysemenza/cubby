@@ -33,6 +33,8 @@ import type { Workload } from "~/server/workload";
 export type StartOperationRequest = {
   headers: Headers;
   signal: AbortSignal;
+  /** Supplied only by the authenticated HTTP adapter, never request JSON. */
+  apiContext?: AuthenticatedStartOperationContext;
 };
 
 export type AuthenticatedStartOperationContext = ReturnType<
@@ -217,7 +219,8 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
   >(
     options: RunStartOperationOptions<InputSchema, OutputSchema>,
   ): Promise<StartOperationResult<z.output<OutputSchema>>> {
-    const workload = options.workload ?? "ui";
+    const workload =
+      options.workload ?? (options.request.apiContext ? "other" : "ui");
     const definition = startOperationDefinitionFor(options.operation);
     if (!definition || definition.kind !== options.type) {
       throw new Error(
@@ -229,7 +232,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
     >(
       definition,
       {
-        origin: "ui",
+        origin: options.request.apiContext ? "api" : "ui",
         workload,
         inspectResult: (result) => {
           const inspection: StartOperationInspection = {
@@ -244,12 +247,12 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
         let stage: OperationStage = "context";
         try {
           throwIfStartOperationAborted(options.request.signal);
-          const authenticated = await runtime.authenticate(
-            options.request.headers,
-            span,
-          );
+          const authenticated =
+            options.request.apiContext ??
+            (await runtime.authenticate(options.request.headers, span));
+          span.setAttribute("cubby.authenticated", true);
           const readPolicy =
-            options.readPolicy ??
+            (options.request.apiContext ? "strong" : options.readPolicy) ??
             (options.type === "mutation" ? "strong" : "context");
           const context = applyBrowserReadPolicy(authenticated, readPolicy);
           span.setAttributes({
@@ -325,7 +328,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
 const productionStartOperationRuntime = {
   authenticate: authenticateStartOperation,
   observe: observeOperation,
-  markCalendarDirty: (_context, headers, operation) => {
+  markCalendarDirty: (context, headers, operation) => {
     const headerOrigin = headers.get("origin");
     const host = headers.get("host");
     const origin = headerOrigin
@@ -333,9 +336,12 @@ const productionStartOperationRuntime = {
       : host
         ? `${headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`
         : undefined;
-    scheduleCalendarFeedDirty(`browser.${operation}`, {
-      origin,
-    });
+    scheduleCalendarFeedDirty(
+      `${context.requestOrigin === "api" ? "api" : "browser"}.${operation}`,
+      {
+        origin,
+      },
+    );
   },
 } satisfies StartOperationRuntime;
 

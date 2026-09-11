@@ -130,6 +130,10 @@
         }
       ],
       "outputs": ["{workspaceRoot}/packages/wasm"]
+    },
+    "http-api": {
+      "command": "pnpm --filter @cubby/web generate:http-api:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
+      "cache": true
     }
   }
 }

@@ -16,6 +16,7 @@ export const googleDriveFolderUrl = z
   .string()
   .trim()
   .transform((value) => (value === "" ? null : value))
+  .pipe(z.string().nullable())
   .nullable()
   .refine(
     (value) =>
@@ -36,6 +37,7 @@ export const notionPageUrl = z
   .string()
   .trim()
   .transform((value) => (value === "" ? null : value))
+  .pipe(z.string().nullable())
   .nullable()
   .refine(
     (value) =>

@@ -1,0 +1,7 @@
+extends:
+  - minimal
+rules:
+  info-license: off
+  operation-summary: off
+  security-defined: error
+  operation-operationId-unique: error

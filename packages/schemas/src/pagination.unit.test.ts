@@ -2,6 +2,7 @@ import { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  createPaginatedResponseSchemaWithContext,
   entityFilter,
   entityFilterList,
   MAX_SORTS,
@@ -93,4 +94,32 @@ describe("normalizeSorts", () => {
     expect(result).toHaveLength(MAX_SORTS);
     expect(result.map((s) => s.orderBy)).toEqual(["a", "b", "c"]);
   });
+});
+
+it("preserves paginated transforms once and annotates invalid record errors", () => {
+  const schema = createPaginatedResponseSchemaWithContext(
+    z.object({
+      name: z.string(),
+      value: z
+        .number()
+        .transform((value) => value + 1)
+        .pipe(z.number()),
+    }),
+    "fixture",
+  );
+  const meta = { pageIndex: 0, pageSize: 10, totalCount: 1 };
+  expect(
+    schema.parse({ meta, items: [{ name: "Record", value: 1 }] }).items[0]
+      ?.value,
+  ).toBe(2);
+  const invalid = schema.safeParse({
+    meta,
+    items: [{ name: "Record", value: "bad" }],
+  });
+  expect(invalid.success).toBe(false);
+  expect(invalid.error?.issues[0]?.message).toContain("fixture");
+  expect(invalid.error?.issues[0]?.message).toContain(
+    "Invalid input: expected number",
+  );
+  expect(invalid.error?.issues[0]?.path).toEqual(["items", 0, "value"]);
 });

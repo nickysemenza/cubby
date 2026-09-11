@@ -1,3 +1,4 @@
+import { apiKey } from "@better-auth/api-key";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { betterAuth, type BetterAuthAdvancedOptions } from "better-auth";
@@ -102,6 +103,13 @@ export const auth = betterAuth({
   // session-JWT one, so don't expose it.
   disabledPaths: ["/token"],
   plugins: [
+    apiKey({
+      configId: "http-api",
+      references: "user",
+      defaultPrefix: "cubby_",
+      enableSessionForAPIKeys: false,
+      rateLimit: { enabled: false },
+    }),
     passkey({
       rpID: isDev ? "localhost" : "cubby.nickysemenza.com",
       rpName: "Cubby",

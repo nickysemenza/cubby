@@ -277,7 +277,7 @@ export const inventoryBulkOperationPayload = z.object({
   // When the snapshot was loaded — lets the server reject a stale commit that
   // would delete-on-omit entries another surface added since. Optional so other
   // callers (MCP, tests) are unaffected.
-  loadedAt: z.date().optional(),
+  loadedAt: z.coerce.date<Date | string>().optional(),
 });
 
 /**
@@ -464,7 +464,7 @@ export type InventorySessionResolution = z.infer<
 export const reconcileSessionPayload = z.object({
   locationId: locationShortcode,
   expectedInventoryEntryIds: z.array(inventoryShortcode),
-  snapshotUpdatedAt: z.date().nullable(),
+  snapshotUpdatedAt: z.coerce.date<Date | string>().nullable(),
   resolutions: z.array(inventorySessionResolution),
 });
 

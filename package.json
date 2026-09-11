@@ -6,8 +6,8 @@
     "agent:setup": "pnpm install --frozen-lockfile && node scripts/ensure-wasm.ts",
     "dev": "pnpm -r dev",
     "build": "pnpm -r build",
-    "check": "NX_DAEMON=false nx run-many --projects=cubby-checks --outputStyle=stream --targets=entity,start-ops,types,lint,format,soft-delete,identifiers,knip",
-    "check:all": "NX_DAEMON=false nx run-many --projects=cubby-checks --outputStyle=stream --targets=entity,start-ops,types,lint,format,soft-delete,identifiers,knip,bindings,openapi,script-tests,security",
+    "check": "NX_DAEMON=false nx run-many --projects=cubby-checks --outputStyle=stream --targets=entity,start-ops,http-api,types,lint,format,soft-delete,identifiers,knip",
+    "check:all": "NX_DAEMON=false nx run-many --projects=cubby-checks --outputStyle=stream --targets=entity,start-ops,http-api,types,lint,format,soft-delete,identifiers,knip,bindings,openapi,script-tests,security",
     "typecheck": "pnpm -r --workspace-concurrency=2 typecheck && tsc --noEmit -p tsconfig.json",
     "typecheck:web": "pnpm --filter @cubby/web typecheck",
     "entity:generate": "tsx scripts/entity-generator.ts",
@@ -44,6 +44,7 @@
   },
   "devDependencies": {
     "@oxlint/plugins": "1.80.0",
+    "@redocly/cli": "^2.52.0",
     "@types/node": "^26.1.1",
     "concurrently": "^10.0.5",
     "husky": "^9.1.7",

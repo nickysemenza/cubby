@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import {
   type Expression,
   parseSync,
+  Visitor,
   type Program,
   type PropertyKey,
   type StringLiteral,
@@ -691,6 +692,141 @@ export const renderStartOperationHandlers = (): string => {
   );
 };
 
+/** Emit only schema expressions and their dependencies, never browser modules. */
+export const renderHttpContract = (): string => {
+  const imports = new Map<string, string>();
+  const bind = (source: string, name: string) => {
+    const key = `${source}#${name}`;
+    const existing = imports.get(key);
+    if (existing) return existing;
+    const alias = `schema${imports.size}`;
+    imports.set(key, alias);
+    return alias;
+  };
+  const expression = (
+    path: string,
+    node: Expression,
+    seen = new Set<string>(),
+  ): string => {
+    const text = readFileSync(path, "utf8");
+    const bindings = importBindings(parseFile(path).body);
+    for (const statement of parseFile(path).body) {
+      if (statement.type === "ImportDeclaration")
+        for (const specifier of statement.specifiers) {
+          if (specifier.type === "ImportNamespaceSpecifier")
+            bindings.set(specifier.local.name, {
+              source: statement.source.value,
+              imported: "*",
+            });
+        }
+    }
+    const locals = topLevelVariableDeclarators(parseFile(path));
+    const edits: { start: number; end: number; value: string }[] = [];
+    const ignored = new Set<number>();
+    new Visitor({
+      MemberExpression(item) {
+        if (!item.computed) ignored.add(item.property.start);
+      },
+      Property(item) {
+        ignored.add(item.key.start);
+      },
+      Identifier(item) {
+        if (
+          item.start < node.start ||
+          item.end > node.end ||
+          ignored.has(item.start)
+        )
+          return;
+        const imported = bindings.get(item.name);
+        const local = locals.find((entry) => entry.exportName === item.name);
+        let replacement: string | undefined;
+        if (imported) {
+          const resolved = sourcePath(path, imported.source);
+          replacement = bind(
+            resolved ? moduleSpecifier(resolved) : imported.source,
+            imported.imported,
+          );
+        } else if (local) {
+          if (seen.has(item.name))
+            throw new Error(`Circular HTTP schema: ${path} ${item.name}`);
+          replacement = `(${expression(path, local.init, new Set([...seen, item.name]))})`;
+        }
+        if (replacement)
+          edits.push({ start: item.start, end: item.end, value: replacement });
+      },
+    }).visit(parseFile(path));
+    let result = text.slice(node.start, node.end);
+    for (const edit of edits.sort((a, b) => b.start - a.start))
+      result =
+        result.slice(0, edit.start - node.start) +
+        edit.value +
+        result.slice(edit.end - node.start);
+    return result;
+  };
+  const domains = new Map<string, string[]>();
+  for (const [id, declaration] of [
+    ...collectDomainDeclarations().byOperation,
+  ].sort(([a], [b]) => a.localeCompare(b))) {
+    if (declaration.kind === "subscription") continue;
+    const domain = declaredDomain(
+      topLevelVariableDeclarators(parseFile(declaration.path)).find(
+        (entry) => entry.exportName === declaration.exportName,
+      )!.init,
+    )!;
+    const member = domain.definitions.properties.find(
+      (entry) =>
+        entry.type === "Property" &&
+        `${domain.name}.${propertyName(entry.key)}` === id,
+    );
+    if (member?.type !== "Property" || member.value.type !== "CallExpression")
+      throw new Error(`Missing HTTP definition: ${id}`);
+    const definition = member.value.arguments[0];
+    if (definition?.type !== "ObjectExpression")
+      throw new Error(`HTTP definition must be literal: ${id}`);
+    const field = (name: string) => {
+      const property = definition.properties.find(
+        (entry) =>
+          entry.type === "Property" && propertyName(entry.key) === name,
+      );
+      if (property?.type !== "Property") {
+        const spreads = definition.properties.filter(
+          (entry) => entry.type === "SpreadElement",
+        );
+        if (!spreads.length) throw new Error(`Missing ${name}: ${id}`);
+        return `({${spreads.map((entry) => `...${expression(declaration.path, entry.argument)}`).join(",")}}).${name}`;
+      }
+      return expression(declaration.path, property.value);
+    };
+    const schemas = ["entity.list", "entity.detail", "entity.mutate"].includes(
+      id,
+    )
+      ? `entityHttpSchemas[${JSON.stringify(id)}].input, entityHttpSchemas[${JSON.stringify(id)}].output`
+      : `${field("input")}, ${field("output")}`;
+    const members = domains.get(domain.name) ?? [];
+    members.push(
+      `${JSON.stringify(id.slice(domain.name.length + 1))}: httpOperation(${JSON.stringify(id)}, ${schemas}),`,
+    );
+    domains.set(domain.name, members);
+  }
+  return (
+    `/** Generated by scripts/start-operation-registry-generator.ts. */\n` +
+    [...imports]
+      .map(([key, alias]) => {
+        const split = key.lastIndexOf("#");
+        return `import ${key.slice(split + 1) === "*" ? `* as ${alias}` : `{ ${key.slice(split + 1)} as ${alias} }`} from ${JSON.stringify(key.slice(0, split))};`;
+      })
+      .join("\n") +
+    `\nimport { httpOperation, entityHttpSchemas } from "~/lib/http-api/contract";\nexport const httpContract = {\n` +
+    [...domains]
+      .map(
+        ([name, members]) =>
+          `${JSON.stringify(name)}: {\n${members.join("\n")}\n},`,
+      )
+      .join("\n") +
+    `\n} as const;\n`
+  );
+};
+
 const format = (path: string, source: string): string => {
   const formatted = spawnSync(
     "pnpm",
@@ -708,6 +844,10 @@ const format = (path: string, source: string): string => {
 const outputs = [
   [OUTPUT, renderStartOperationRegistry()],
   [HANDLER_OUTPUT, renderStartOperationHandlers()],
+  [
+    join(SOURCE_ROOT, "lib/generated/http-contract.gen.ts"),
+    renderHttpContract(),
+  ],
 ] as const;
 for (const [path, source] of outputs) {
   const rendered = format(path, source);

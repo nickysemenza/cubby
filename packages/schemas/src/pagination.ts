@@ -273,47 +273,27 @@ export function createItemsResponseSchema<Entry extends z.ZodTypeAny>(
 export function createPaginatedResponseSchemaWithContext<
   Entry extends z.ZodTypeAny,
 >(entrySchema: Entry, entityName: string) {
+  const context = z.check<z.output<Entry>[]>((payload) => {
+    payload.issues = payload.issues.map((issue) => {
+      const index = z.number().safeParse(issue.path?.[0]);
+      if (!index.success) return issue;
+      const record = identifyRecord(payload.value[index.data], index.data);
+      const description = formatRecordIdentifier(record);
+      const detail = z.core.util.finalizeIssue(
+        issue,
+        undefined,
+        z.config(),
+      ).message;
+      const message = `[${entityName} ${description}] ${issue.path?.slice(1).join(".")}: ${detail}`;
+      console.error(`[OutputValidation] ${message}`);
+      return { ...issue, message };
+    });
+  });
+  // Error decoration must run even when a record's field parsing aborted.
+  context._zod.def.when = () => true;
   return z.object({
     meta: paginatedMetaSchema,
-    items: z.array(z.unknown()).transform((items, ctx) => {
-      const results: z.infer<Entry>[] = [];
-      let hasErrors = false;
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const parseResult = entrySchema.safeParse(item);
-
-        if (parseResult.success) {
-          results.push(parseResult.data);
-        } else {
-          hasErrors = true;
-          const recordInfo = identifyRecord(item, i);
-          const recordStr = formatRecordIdentifier(recordInfo);
-
-          console.error(
-            `[OutputValidation] ${entityName} validation failed for ${recordStr}:`,
-            parseResult.error.issues.map((issue) => ({
-              path: issue.path.join("."),
-              message: issue.message,
-            })),
-          );
-
-          for (const issue of parseResult.error.issues) {
-            ctx.addIssue({
-              ...issue,
-              path: [i, ...issue.path],
-              message: `[${entityName} ${recordStr}] ${issue.path.join(".")}: ${issue.message}`,
-            });
-          }
-        }
-      }
-
-      if (hasErrors) {
-        return z.NEVER;
-      }
-
-      return results;
-    }),
+    items: z.array(entrySchema).check(context),
   });
 }
 
