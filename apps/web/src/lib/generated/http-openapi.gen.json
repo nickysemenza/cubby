@@ -83861,6 +83861,11 @@
           "updatedAt": {
             "$ref": "#/components/schemas/output_schema81"
           },
+          "coverImageUrl": {
+            "nullable": true,
+            "type": "string",
+            "format": "uri"
+          },
           "unitMappings": {
             "type": "array",
             "items": {
@@ -83905,6 +83910,7 @@
           "dataQuality",
           "createdAt",
           "updatedAt",
+          "coverImageUrl",
           "unitMappings",
           "food"
         ],
@@ -87232,6 +87238,11 @@
                       "updatedAt": {
                         "$ref": "#/components/schemas/output_schema81"
                       },
+                      "coverImageUrl": {
+                        "nullable": true,
+                        "type": "string",
+                        "format": "uri"
+                      },
                       "unitMappings": {
                         "type": "array",
                         "items": {
@@ -87260,6 +87271,7 @@
                       "dataQuality",
                       "createdAt",
                       "updatedAt",
+                      "coverImageUrl",
                       "unitMappings"
                     ],
                     "additionalProperties": false

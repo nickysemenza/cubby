@@ -652,12 +652,15 @@ const productInventoryWithLocationOut = z.object({
 
 export const productWithMappingsOut = z.object({
   ...productTopLevelFields,
+  // Derived cover, same rule as `productTopLevelOut` (the mapper always emits it).
+  coverImageUrl: z.url().nullable(),
   unitMappings: z.array(unitMappingOut),
 });
 export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
 
 export const productWithMappingsAndFoodOut = z.object({
   ...productTopLevelFields,
+  coverImageUrl: z.url().nullable(),
   unitMappings: z.array(unitMappingOut),
   food: foodSummary.nullable(),
 });
