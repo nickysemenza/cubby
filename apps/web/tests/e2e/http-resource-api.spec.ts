@@ -45,7 +45,8 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     expect(addressBar!.headers()["cache-control"]).toBe("no-store");
     const read = await page.evaluate(async () => {
       const query = new URLSearchParams({
-        pagination: JSON.stringify({ pageIndex: 0, pageSize: 1 }),
+        page: "1",
+        pageSize: "1",
       });
       const response = await fetch(`/api/v1/recipes?${query}`);
       return { status: response.status, body: await response.json() };
@@ -57,9 +58,10 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     expect(read.body.data.items).toHaveLength(1);
     const filtered = await page.request.get("/api/v1/recipes", {
       params: {
-        filters: JSON.stringify({ nameFilter: name }),
-        pagination: JSON.stringify({ pageIndex: 0, pageSize: 1 }),
-        sort: JSON.stringify([{ orderBy: "name", direction: "asc" }]),
+        nameFilter: name,
+        page: "1",
+        pageSize: "1",
+        sort: "name,-createdAt",
       },
     });
     expect(filtered.status(), await filtered.text()).toBe(200);
@@ -159,12 +161,10 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     expect(unsupported.status()).toBe(405);
     expect(unsupported.headers().allow).toBe("GET, PATCH, DELETE");
     expect(
-      (await page.request.get("/api/v1/recipes?pagination=broken")).status(),
+      (await page.request.get("/api/v1/recipes?page=broken")).status(),
     ).toBe(400);
     expect(
-      (
-        await page.request.get("/api/v1/recipes?filters={}&filters={}")
-      ).status(),
+      (await page.request.get("/api/v1/recipes?page=1&page=2")).status(),
     ).toBe(400);
     expect(
       (
@@ -201,17 +201,23 @@ test("typed resource and GET clients use the same generated request shapes", asy
   try {
     const counts = await client.queries.dashboard.counts({ query: {} });
     expect(counts.status).toBe(200);
+    const prefix = `Flat resource ${Date.now()}`;
     const created = await client.resources.recipe.create({
-      body: { name: "Typed resource", meta: null, sections: [] },
+      body: { name: `${prefix} A`, meta: null, sections: [] },
     });
     expect(created.status).toBe(201);
     if (created.status !== 201) throw new Error("Create failed");
     const id = created.body.data.item.id;
+    const second = await client.resources.recipe.create({
+      body: { name: `${prefix} B`, meta: null, sections: [] },
+    });
+    if (second.status !== 201) throw new Error("Second create failed");
+    const secondId = second.body.data.item.id;
     try {
       expect(
         (
           await client.resources.recipe.list({
-            query: { pagination: { pageIndex: 0, pageSize: 1 } },
+            query: { page: 1, pageSize: 1 },
           })
         ).status,
       ).toBe(200);
@@ -227,11 +233,60 @@ test("typed resource and GET clients use the same generated request shapes", asy
           })
         ).status,
       ).toBe(200);
+      const pageTwo = await client.resources.recipe.list({
+        query: {
+          page: 2,
+          pageSize: 1,
+          sort: "name,-createdAt",
+          nameFilter: prefix,
+        },
+      });
+      expect(pageTwo.body).toMatchObject({
+        ok: true,
+        data: {
+          items: [{ id: secondId }],
+          meta: { pageIndex: 1, pageSize: 1, totalCount: 2 },
+        },
+      });
+      const descending = await client.resources.recipe.list({
+        query: { pageSize: 1, sort: "-name", nameFilter: prefix },
+      });
+      expect(descending.body).toMatchObject({
+        ok: true,
+        data: { items: [{ id: secondId }] },
+      });
+      const operation = await client.queries.entity.list({
+        query: {
+          entity: "recipe",
+          filters: { nameFilter: prefix },
+          pagination: { pageIndex: 1, pageSize: 1 },
+          sort: { orderBy: "name", direction: "asc" },
+        },
+      });
+      expect(operation.body).toMatchObject({
+        ok: true,
+        data: { items: [{ id: secondId }], meta: { pageIndex: 1 } },
+      });
+      await client.resources.recipe.update({
+        params: { id },
+        body: { name: '"123"' },
+      });
+      const literalText = await client.resources.recipe.list({
+        query: { nameFilter: '"123"' },
+      });
+      expect(literalText.body).toMatchObject({
+        ok: true,
+        data: { items: [{ id }] },
+      });
       expect(
         (await client.queries.recipe.getManyByIDs({ query: { ids: [id] } }))
           .status,
       ).toBe(200);
     } finally {
+      expect(
+        (await client.resources.recipe.delete({ params: { id: secondId } }))
+          .status,
+      ).toBe(200);
       expect(
         (await client.resources.recipe.delete({ params: { id } })).status,
       ).toBe(200);

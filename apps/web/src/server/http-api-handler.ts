@@ -1,11 +1,16 @@
 import { userId } from "@cubby/schemas/identifiers";
-import { parseJsonQueryObject } from "@ts-rest/core";
+import { parseJsonQueryObject, type AppRoute } from "@ts-rest/core";
 import { StatusCodes } from "http-status-codes";
 import { z } from "zod";
 
 import { httpContract } from "~/lib/generated/http-contract.gen";
 import { type StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
-import { httpMetadataSchema, type HttpMetadata } from "~/lib/http-api/contract";
+import {
+  httpMetadataSchema,
+  httpSchemaSources,
+  type HttpMetadata,
+} from "~/lib/http-api/contract";
+import { decodeResourceListQuery } from "~/lib/http-api/resource-query";
 import { httpRoutes, httpPathSchema } from "~/lib/http-api/routes";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import type { RequestActor, requireActor } from "~/server/request-context";
@@ -57,8 +62,21 @@ function isOrdinaryOperation(
 function readQuery(
   request: Request,
   metadata: HttpMetadata,
+  route: AppRoute,
 ): UnparsedStartOperationData {
   const params = new URL(request.url).searchParams;
+  if (metadata.mode === "list") {
+    const schema =
+      route.query instanceof z.ZodType
+        ? httpSchemaSources.get(route.query)?.schema
+        : undefined;
+    if (!(schema instanceof z.ZodObject))
+      throw new Error("Resource queries require an object schema");
+    return {
+      ...decodeResourceListQuery(params, schema),
+      entity: metadata.entity,
+    };
+  }
   if (new Set(params.keys()).size !== params.size)
     throw new Error("Duplicate query parameters");
   const query = objectSchema.parse(
@@ -73,21 +91,16 @@ function readQuery(
     return metadata.mode === "null" ? null : undefined;
   }
   if (metadata.mode === "wrapped") return bodySchema.parse(query).input;
-  if (metadata.mode === "list")
-    return {
-      ...query,
-      filters: query.filters === undefined ? {} : query.filters,
-      entity: metadata.entity,
-    };
   return query;
 }
 async function readInput(
   request: Request,
   metadata: HttpMetadata,
+  route: AppRoute,
   id?: string,
 ): Promise<UnparsedStartOperationData> {
   if (request.method === "GET") {
-    const query = readQuery(request, metadata);
+    const query = readQuery(request, metadata, route);
     return metadata.mode === "detail"
       ? { entity: metadata.entity, shortcode: id }
       : query;
@@ -205,7 +218,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         return failure("FORBIDDEN", "Same-origin request required");
       let input: UnparsedStartOperationData;
       try {
-        input = await readInput(request, metadata, id);
+        input = await readInput(request, metadata, route, id);
       } catch {
         return failure("BAD_REQUEST", "Invalid request input");
       }

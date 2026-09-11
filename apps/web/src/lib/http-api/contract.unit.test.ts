@@ -87,12 +87,21 @@ describe("generated HTTP contract", () => {
         .sort(),
     ).toEqual(queryOperations);
     const pagination = document.paths["/api/v1/recipes"].get.parameters.find(
-      (parameter) => parameter.name === "pagination",
+      (parameter) => parameter.name === "page",
     );
     expect(pagination).toMatchObject({
       in: "query",
-      content: { "application/json": { schema: expect.anything() } },
+      schema: { $ref: expect.any(String) },
     });
+    const pageSchema = z
+      .object({ schema: z.object({ $ref: z.string() }) })
+      .parse(pagination).schema;
+    const pageValidator = new Validator({
+      ...pageSchema,
+      components: document.components,
+    });
+    expect(pageValidator.validate(1).valid).toBe(true);
+    expect(pageValidator.validate(0).valid).toBe(false);
     expect(document.paths["/api/v1/recipes/{id}"].get.parameters).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "id", in: "path", required: true }),

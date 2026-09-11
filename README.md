@@ -496,15 +496,22 @@ await fetch('/api/v1/recipes', {
   body: JSON.stringify({ name: 'Soup', meta: null, sections: [] }),
 });
 const query = new URLSearchParams({
-  filters: JSON.stringify({ nameFilter: 'Soup' }),
-  pagination: JSON.stringify({ pageIndex: 0, pageSize: 20 }),
-  sort: JSON.stringify([{ orderBy: 'name', direction: 'asc' }]),
+  nameFilter: 'Soup',
+  page: '1',
+  pageSize: '20',
+  sort: 'name,-createdAt',
 });
 await fetch(`/api/v1/recipes?${query}`);
 ```
 
-Nested query inputs use ts-rest's `jsonQuery` encoding; omitted list filters become
-`{}`. Safe query operations also have GET variants at their operation paths.
+Resource lists use 1-based `page` (default 1), `pageSize` (default 10, maximum 500),
+and comma-separated `sort` fields (`-` means descending; maximum 3 fields). Filters
+are individual query parameters; arrays, objects, and nullable values use JSON.
+`groupBy` retains its existing field name. Unknown or duplicate parameters are
+rejected. The response envelope and zero-based pagination metadata are unchanged.
+For example: `/api/v1/recipes?page=1&pageSize=20&sort=name&nameFilter=Soup`.
+
+Operation-style GETs retain ts-rest's `jsonQuery` encoding and original nested inputs.
 Object inputs become query fields; scalar/array inputs use one `input` parameter.
 No-input operations need no parameters. Query declarations must remain free of
 domain mutations; computation, external lookups, and usage logging are allowed.
@@ -520,7 +527,7 @@ The tiny `createCubbyClient({ baseUrl, apiKey? })` factory in
 `apps/web/src/lib/http-api/client.ts` uses same-origin browser credentials. Existing
 calls such as `client.dashboard.counts({ body: {} })` are unchanged. New calls include
 `client.queries.dashboard.counts({ query: {} })`,
-`client.resources.recipe.list({ query: { pagination: { pageIndex: 0, pageSize: 20 } } })`,
+`client.resources.recipe.list({ query: { page: 1, pageSize: 20, sort: "name", nameFilter: "Soup" } })`,
 and `client.resources.recipe.update({ params: { id }, body: { notes: 'Updated' } })`.
 Run TS scripts with the web tsconfig so schema import aliases resolve.
 

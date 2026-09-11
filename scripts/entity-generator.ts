@@ -1862,7 +1862,7 @@ export const renderEntityArtifacts = (
       );
       if (listIndex >= 0)
         routes.push(
-          `list: httpGet(${JSON.stringify(path)}, entityListInputSchema.options[${listIndex}].omit({entity:true}).partial({filters:true}), getEntityListOutputSchema(${key}), ${metadata("list", "entity.list")})`,
+          `list: httpGet(${JSON.stringify(path)}, resourceListQuerySchema(entityListInputSchema.options[${listIndex}].shape.filters), getEntityListOutputSchema(${key}), ${metadata("list", "entity.list")})`,
         );
       if (detailEntities.some((candidate) => candidate.key === entity.key))
         routes.push(
@@ -2432,6 +2432,7 @@ export const renderEntityArtifacts = (
         generatedHeader +
         'import { z } from "zod";\n' +
         'import { ENTITY_SCHEMA_BINDINGS, generatedEntityMutationCreateResultSchema, generatedEntityMutationUpdateResultSchema } from "~/server/generated/entity-bindings.gen";\n' +
+        'import { resourceListQuerySchema } from "~/lib/http-api/resource-query";\n' +
         'import { entityDeleteResultSchema } from "~/server/entity-kernel/contracts";\n' +
         'import { entityListInputSchema, getEntityListOutputSchema } from "~/entities/generated/entity-lists.gen";\n' +
         'import { getEntityDetailOutputSchema } from "~/entities/generated/entity-details.gen";\n' +
