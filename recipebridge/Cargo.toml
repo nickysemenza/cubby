@@ -25,13 +25,13 @@ tsify-next = { version = "0.5", features = ["js"] }
 # Pin the shared upstream commit so every CI job builds identical Rust sources.
 # Renovate follows main weekly and updates all three refs together. Locally the
 # global ~/.cargo/config.toml patch (above) can still override to a working copy.
-ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786" }
-recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786" }
+ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "522d0cc2786e4cff819cbd01cc18f832d1db311e" }
+recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "522d0cc2786e4cff819cbd01cc18f832d1db311e" }
 # EPUB cookbook extraction: the whole pipeline (open, chunk, model calls through
 # a JavaScript transport, validation, assembly, references) lives upstream in
 # `cookbook::wasm`; this crate only re-exports it. No native features (reqwest,
 # fs) reach the wasm build.
-cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "896c9a2893ee8bae332144da2c6178fbb8b22786", default-features = false, features = ["wasm"] }
+cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "522d0cc2786e4cff819cbd01cc18f832d1db311e", default-features = false, features = ["wasm"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde-wasm-bindgen = "0.6"
