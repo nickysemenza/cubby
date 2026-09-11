@@ -51,6 +51,42 @@ const filterKinds = [
   "range",
 ] as const;
 
+const compileEditIntents = (
+  value: NonNullable<EntityDeclarationMetadata["model"]>["intents"],
+  fieldKeys: readonly string[],
+  context: string,
+): EntityFieldModel["intents"] => {
+  if (value === undefined) return null;
+  const editorFields = value.editorFields ?? [];
+  const allowed = new Set([...fieldKeys, ...editorFields]);
+  for (const [intent, keys] of Object.entries(value.fields)) {
+    for (const key of keys) {
+      if (!allowed.has(key))
+        throw new EntityDeclarationError(
+          `${context}.fields.${intent} references undeclared field ${key}.`,
+        );
+    }
+    if (new Set(keys).size !== keys.length)
+      throw new EntityDeclarationError(
+        `${context}.fields.${intent} lists a field twice.`,
+      );
+  }
+  for (const operation of ["create", "update"] as const) {
+    for (const intent of value[operation]) {
+      if (!Object.hasOwn(value.fields, intent))
+        throw new EntityDeclarationError(
+          `${context}.${operation} names undeclared intent ${intent}.`,
+        );
+    }
+  }
+  return {
+    fields: value.fields,
+    create: value.create,
+    update: value.update,
+    editorFields,
+  };
+};
+
 const compileFieldModel = (
   value: EntityFieldModelMetadata | undefined,
   context: string,
@@ -64,6 +100,8 @@ const compileFieldModel = (
       bulk: [],
       audit: [],
       output: [],
+      sort: null,
+      intents: null,
     };
   }
   const model = value;
@@ -99,6 +137,9 @@ const compileFieldModel = (
         columnId: field.display.columnId,
         standard: field.display.standard,
         detailSection: field.display.detailSection,
+        width: field.display.width ?? null,
+        format: field.display.format ?? null,
+        mobile: field.display.mobile ?? null,
         detailOrder: field.display.detailOrder,
         list: field.display.list,
         detail: field.display.detail,
@@ -183,6 +224,47 @@ const compileFieldModel = (
     }
     return values;
   };
+  const sortValue = model.sort;
+  const sort: EntityFieldModel["sort"] =
+    sortValue === undefined
+      ? null
+      : (() => {
+          const sortContext = `${context}.sort`;
+          const computed = sortValue.computed ?? [];
+          const groupable = sortValue.groupable ?? [];
+          for (const key of sortValue.fields) {
+            if (computed.includes(key)) continue;
+            if (!fieldKeys.includes(key))
+              throw new EntityDeclarationError(
+                `${sortContext}.fields references undeclared field ${key}.`,
+              );
+          }
+          if (!sortValue.fields.includes(sortValue.default))
+            throw new EntityDeclarationError(
+              `${sortContext}.default ${sortValue.default} must be one of sort.fields.`,
+            );
+          for (const key of groupable) {
+            if (!sortValue.fields.includes(key))
+              throw new EntityDeclarationError(
+                `${sortContext}.groupable ${key} must be one of sort.fields.`,
+              );
+          }
+          for (const key of computed) {
+            if (!sortValue.fields.includes(key))
+              throw new EntityDeclarationError(
+                `${sortContext}.computed ${key} must be one of sort.fields.`,
+              );
+          }
+          const [first, ...rest] = sortValue.fields;
+          if (first === undefined)
+            throw new EntityDeclarationError(`${sortContext}.fields is empty.`);
+          return {
+            fields: [first, ...rest] as const,
+            default: sortValue.default,
+            computed,
+            groupable,
+          };
+        })();
   const compiled = {
     fields,
     storage,
@@ -191,6 +273,8 @@ const compileFieldModel = (
     bulk: policy("bulk"),
     audit: policy("audit"),
     output: policy("output"),
+    sort,
+    intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
   };
   for (const field of compiled.bulk) {
     if (!compiled.update.includes(field))
@@ -201,8 +285,99 @@ const compileFieldModel = (
   return compiled;
 };
 
+const derivableFilterKinds = new Set<string>([
+  "text",
+  "select",
+  "multiselect",
+  "boolean",
+  "presence",
+  "range",
+]);
+
+type RawFilterDescriptor =
+  EntityDeclarationMetadata["filters"]["descriptors"][number];
+
+const validateDerivedFilter = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  modelField: EntityField | undefined,
+  context: string,
+): void => {
+  const deriveSchema = value.deriveSchema ?? false;
+  const schemaFromRead = value.schemaFromRead ?? false;
+  const schemaRef = value.schemaRef ?? null;
+  const schemaDescription = value.schemaDescription ?? null;
+  if (
+    !deriveSchema &&
+    (schemaFromRead || schemaDescription !== null || schemaRef !== null)
+  )
+    throw new EntityDeclarationError(
+      `${context} schemaFromRead/schemaDescription/schemaRef require deriveSchema.`,
+    );
+  if (schemaFromRead && schemaRef !== null)
+    throw new EntityDeclarationError(
+      `${context} cannot declare both schemaFromRead and schemaRef.`,
+    );
+  if (schemaFromRead && modelField?.validation.read == null)
+    throw new EntityDeclarationError(
+      `${context} schemaFromRead needs a model field ${value.columnId} with a read schema.`,
+    );
+  if (deriveSchema && !derivableFilterKinds.has(kind))
+    throw new EntityDeclarationError(
+      `${context} deriveSchema is unsupported for kind ${kind}.`,
+    );
+  if (value.range != null && !(deriveSchema && kind === "range"))
+    throw new EntityDeclarationError(
+      `${context} range options apply only to derived range descriptors.`,
+    );
+};
+
+const resolveFilterRange = (
+  value: RawFilterDescriptor,
+  kind: FilterDescriptor["kind"],
+  modelField: EntityField | undefined,
+  context: string,
+): FilterDescriptor["range"] => {
+  if (!(value.deriveSchema ?? false) || kind !== "range") return null;
+  const inferred =
+    modelField?.kind === "number"
+      ? "number"
+      : modelField?.kind === "date" || modelField?.kind === "timestamp"
+        ? "date"
+        : null;
+  const rangeKind = value.range?.kind ?? inferred;
+  if (rangeKind === null)
+    throw new EntityDeclarationError(
+      `${context} range needs range.kind or a numeric/date model field ${value.columnId}.`,
+    );
+  return {
+    kind: rangeKind,
+    int: value.range?.int ?? false,
+    nonnegative: value.range?.nonnegative ?? false,
+  };
+};
+
+const validateStoredFilter = (
+  value: RawFilterDescriptor,
+  storageKeys: ReadonlySet<string>,
+  context: string,
+): boolean => {
+  const stored = value.stored ?? false;
+  if (stored && !(value.deriveSchema ?? false))
+    throw new EntityDeclarationError(
+      `${context} stored requires deriveSchema.`,
+    );
+  if (stored && !storageKeys.has(value.columnId))
+    throw new EntityDeclarationError(
+      `${context} stored needs a stored model field ${value.columnId}.`,
+    );
+  return stored;
+};
+
 const filterDescriptor = (
-  value: EntityDeclarationMetadata["filters"]["descriptors"][number],
+  value: RawFilterDescriptor,
+  fields: readonly EntityField[],
+  storageKeys: ReadonlySet<string>,
   context: string,
 ): FilterDescriptor => {
   const parsedKind = filterKinds.find((candidate) => candidate === value.kind);
@@ -216,14 +391,9 @@ const filterDescriptor = (
       `${context} cannot declare both options and optionsRef.`,
     );
   }
-  const nullable = value.nullable ?? null;
-  const deriveSchema = value.deriveSchema ?? false;
-  const schemaFromRead = value.schemaFromRead ?? false;
-  const schemaDescription = value.schemaDescription ?? null;
-  if (!deriveSchema && (schemaFromRead || schemaDescription !== null))
-    throw new EntityDeclarationError(
-      `${context} schemaFromRead/schemaDescription require deriveSchema.`,
-    );
+  const modelField = fields.find((field) => field.key === value.columnId);
+  validateDerivedFilter(value, parsedKind, modelField, context);
+  const stored = validateStoredFilter(value, storageKeys, context);
   return {
     columnId: value.columnId,
     field: value.field ?? null,
@@ -234,13 +404,16 @@ const filterDescriptor = (
     optionsRef,
     optionsKey: value.optionsKey ?? null,
     label: value.label ?? null,
-    schemaDescription,
-    deriveSchema,
-    schemaFromRead,
+    schemaDescription: value.schemaDescription ?? null,
+    deriveSchema: value.deriveSchema ?? false,
+    schemaFromRead: value.schemaFromRead ?? false,
     brandRef: value.brandRef ?? null,
     expandRef: value.expandRef ?? null,
+    schemaRef: value.schemaRef ?? null,
+    stored,
+    range: resolveFilterRange(value, parsedKind, modelField, context),
     urlOnly: value.urlOnly ?? false,
-    nullable,
+    nullable: value.nullable ?? null,
   };
 };
 
@@ -499,7 +672,7 @@ export const compileEntity = (
 ): CompiledEntity => {
   const context = `ENTITY_DECLARATIONS[${index}]`;
   const raw = objectValue(value, context);
-  const { filterSchemas: _filterSchemas, ...declared } = raw;
+  const declared = raw;
   let declaration;
   try {
     declaration = parseEntityDeclarationMetadata(declared, context);
@@ -534,7 +707,12 @@ export const compileEntity = (
       ? null
       : { module: filters.schema.module, export: filters.schema.export };
   const filterDescriptors = filters.descriptors.map((value, index) =>
-    filterDescriptor(value, `${context}.filters.descriptors[${index}]`),
+    filterDescriptor(
+      value,
+      fieldModel.fields,
+      new Set(fieldModel.storage.map(({ key }) => key)),
+      `${context}.filters.descriptors[${index}]`,
+    ),
   );
   const descriptorColumns = filterDescriptors.map(({ columnId }) => columnId);
   if (new Set(descriptorColumns).size !== descriptorColumns.length) {
@@ -578,6 +756,9 @@ export const compileEntity = (
           deriveSchema: false,
           schemaFromRead: false,
           brandRef: null,
+          schemaRef: null,
+          stored: false,
+          range: null,
           expandRef: {
             module: "~/entities/filter-behavior",
             export: "resolveCreatedDate",
@@ -604,6 +785,9 @@ export const compileEntity = (
           deriveSchema: false,
           schemaFromRead: false,
           brandRef: null,
+          schemaRef: null,
+          stored: false,
+          range: null,
           expandRef: {
             module: "~/entities/filter-behavior",
             export: "resolveUpdatedDate",

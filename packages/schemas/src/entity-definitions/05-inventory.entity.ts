@@ -163,6 +163,32 @@ export default defineEntity({
     update: ["amount", "productId", "locationId", "placement"],
     bulk: [],
     audit: ["amount", "productId", "locationId", "placement"],
+    sort: {
+      fields: [
+        "createdAt",
+        "updatedAt",
+        "name",
+        "product",
+        "location",
+        "amount",
+        "valuation",
+        "verifiedAt",
+      ],
+      default: "createdAt",
+      computed: ["name", "product", "location"],
+    },
+    intents: {
+      fields: {
+        capture: ["productId", "locationId", "amount", "placement"],
+        full: ["amount", "productId", "locationId", "placement"],
+        amount: ["amount"],
+        product: ["productId"],
+        location: ["locationId"],
+        placement: ["placement"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "amount", "product", "location", "placement"],
+    },
     output: [
       "id",
       "amount",

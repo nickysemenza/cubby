@@ -8,10 +8,6 @@ import {
   ledgerPartyShortcode,
 } from "../identifier-fields.js";
 import { z } from "zod";
-export const filterSchemas = {
-  search: z.string().optional(),
-  provisional: z.boolean().optional(),
-};
 export default defineEntity({
   key: "financialAccount",
   names: { singular: "Financial Account", plural: "Accounts" },
@@ -192,6 +188,46 @@ export default defineEntity({
       "notes",
       "ledgerPartyId",
     ],
+    sort: {
+      fields: [
+        "name",
+        "provisional",
+        "transactionCount",
+        "createdAt",
+        "updatedAt",
+      ],
+      default: "name",
+    },
+    intents: {
+      fields: {
+        capture: [
+          "name",
+          "kind",
+          "issuer",
+          "network",
+          "institution",
+          "accountType",
+          "provider",
+          "last4",
+          "provisional",
+          "sourceAliases",
+          "notes",
+        ],
+        full: ["name", "provisional", "sourceAliases", "notes"],
+        identity: ["name", "provisional", "sourceAliases", "notes"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity"],
+      editorFields: [
+        "kind",
+        "issuer",
+        "network",
+        "institution",
+        "accountType",
+        "provider",
+        "last4",
+      ],
+    },
     output: [
       "id",
       "name",

@@ -1,3 +1,4 @@
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -9,7 +10,6 @@ import type {
   ProjectOptionsOut,
   ProjectOut,
 } from "@cubby/schemas/project";
-import { projectSortableFields } from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
 import {
   and,
@@ -308,7 +308,7 @@ export const buildProjectListQuery = async (
   const orderByArray = buildOrderBy(
     project,
     sorts,
-    [...projectSortableFields],
+    [...generatedEntitySort.project.fields],
     {
       resolve: (s) =>
         s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,

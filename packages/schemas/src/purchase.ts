@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
   generatedPurchaseFieldSchemas,
   generatedPurchaseFilterFields,
@@ -158,20 +159,7 @@ export const purchaseFilterFields = {
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
 
-export const purchaseSortableFields = [
-  "orderId",
-  "displayLabel",
-  "date",
-  "statedTotal",
-  "vendor",
-  "expenseCount",
-  "expenseTotal",
-  "reconciliationGap",
-  "documentCount",
-  "createdAt",
-  "updatedAt",
-] as const;
-export type PurchaseSortField = (typeof purchaseSortableFields)[number];
+export type PurchaseSortField = GeneratedEntitySortField<"purchase">;
 
 export const purchaseOut = z.object({
   ...generatedPurchaseFieldSchemas.read,

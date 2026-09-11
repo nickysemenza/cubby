@@ -62,6 +62,13 @@ export type FilterDescriptor = Readonly<{
   schemaFromRead: boolean;
   brandRef: IdentifierRef | null;
   expandRef: SourceRef | null;
+  schemaRef: SourceRef | null;
+  stored: boolean;
+  range: Readonly<{
+    kind: "number" | "date";
+    int: boolean;
+    nonnegative: boolean;
+  }> | null;
   urlOnly: boolean;
   nullable: Readonly<{ field: string; label: string }> | null;
 }>;
@@ -107,6 +114,13 @@ export type EntityField = Readonly<{
     standard: "name" | "image" | null;
     detailOrder: number | null;
     detailSection: string;
+    width: "xs" | "sm" | "md" | "lg" | null;
+    format: "currency" | "plainDate" | "timestamp" | "external-link" | null;
+    mobile: Readonly<{
+      slot: string;
+      priority: number;
+      interactive?: boolean;
+    }> | null;
   }>;
   validation: Readonly<{
     read: z.ZodType | null;
@@ -124,6 +138,18 @@ export type EntityStorageField = Readonly<{
   reference: string | null;
   specialized: string | null;
 }>;
+type EntityFieldModelSort = Readonly<{
+  fields: readonly [string, ...string[]];
+  default: string;
+  computed: readonly string[];
+  groupable: readonly string[];
+}>;
+type EntityEditIntents = Readonly<{
+  fields: Readonly<Record<string, readonly string[]>>;
+  create: readonly string[];
+  update: readonly string[];
+  editorFields: readonly string[];
+}>;
 export type EntityFieldModel = Readonly<{
   fields: readonly EntityField[];
   storage: readonly EntityStorageField[];
@@ -132,6 +158,8 @@ export type EntityFieldModel = Readonly<{
   bulk: readonly string[];
   audit: readonly string[];
   output: readonly string[];
+  sort: EntityFieldModelSort | null;
+  intents: EntityEditIntents | null;
 }>;
 export type CompiledEntity = Readonly<{
   key: string;
@@ -250,7 +278,7 @@ export const booleanValue = (
 
 export const declarationModules = new Map<
   string,
-  { path: string; enumExports: string[]; hasFilters: boolean }
+  { path: string; enumExports: string[] }
 >();
 
 export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
@@ -267,24 +295,18 @@ export const loadEntityDeclarations = async (): Promise<CompiledEntity[]> => {
         pathToFileURL(resolve(SPEC_DIRECTORY, entry.name)).href
       );
       const raw = objectValue(module.default, entry.name);
-      const { filterSchemas: declaredFilters, ...metadata } = raw;
-      const filterSchemas = module.filterSchemas ?? declaredFilters;
-      if (filterSchemas !== undefined) {
-        for (const [key, schema] of Object.entries(
-          objectValue(filterSchemas, entry.name),
-        ))
-          if (!(schema instanceof z.ZodType))
-            throw new EntityDeclarationError(
-              `${entry.name}.filterSchemas.${key} must be a Zod schema.`,
-            );
-      }
-      const entity = compileEntity(metadata, 0);
+      // Filter schemas are generated from descriptors (`deriveSchema`); a
+      // hand-written map would silently shadow them.
+      if (module.filterSchemas !== undefined || "filterSchemas" in raw)
+        throw new EntityDeclarationError(
+          `${entry.name} exports filterSchemas; declare filters as descriptors with deriveSchema instead.`,
+        );
+      const entity = compileEntity(raw, 0);
       declarationModules.set(entity.key, {
         path: `../entity-definitions/${entry.name.replace(/\.ts$/, "")}`,
         enumExports: Object.keys(module).filter((key) =>
           key.startsWith("generated"),
         ),
-        hasFilters: filterSchemas !== undefined,
       });
       return entity;
     }),

@@ -13,15 +13,7 @@ import {
   purchaseImages,
   purchaseReconciliation,
 } from "@cubby/schemas/purchase-fields";
-import { numericRangeFields } from "@cubby/schemas/base-entity";
 import { z } from "zod";
-export const filterSchemas = {
-  displayLabelSearch: z
-    .string()
-    .optional()
-    .describe("Substring match on the human display label only"),
-  ...numericRangeFields("expenseTotal"),
-};
 export default defineEntity({
   key: "purchase",
   names: { singular: "Purchase", plural: "Purchases" },
@@ -341,6 +333,47 @@ export default defineEntity({
       "statedTotal",
       "notes",
     ],
+    sort: {
+      fields: [
+        "orderId",
+        "displayLabel",
+        "date",
+        "statedTotal",
+        "vendor",
+        "expenseCount",
+        "expenseTotal",
+        "reconciliationGap",
+        "documentCount",
+        "createdAt",
+        "updatedAt",
+      ],
+      default: "date",
+      computed: ["vendor", "reconciliationGap"],
+    },
+    intents: {
+      fields: {
+        capture: [
+          "vendorId",
+          "date",
+          "orderId",
+          "displayLabel",
+          "statedTotal",
+          "notes",
+        ],
+        full: [
+          "vendorId",
+          "date",
+          "orderId",
+          "displayLabel",
+          "statedTotal",
+          "notes",
+        ],
+        vendor: ["vendorId"],
+        identity: ["date", "orderId", "notes"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "vendor", "identity"],
+    },
     output: [
       "id",
       "vendorId",

@@ -11,12 +11,7 @@ import {
   recipeTotals,
   recipeYieldSchema,
 } from "@cubby/schemas/recipe-shared";
-import { numericRangeFields } from "@cubby/schemas/base-entity";
 import { z } from "zod";
-export const filterSchemas = {
-  nameFilter: z.string().optional(),
-  ...numericRangeFields("totalMinutes"),
-};
 export default defineEntity({
   key: "recipe",
   names: { singular: "Recipe", plural: "Recipes" },
@@ -276,6 +271,32 @@ export default defineEntity({
     ],
     bulk: [],
     audit: ["name"],
+    sort: {
+      fields: [
+        "createdAt",
+        "updatedAt",
+        "name",
+        "cookbook",
+        "costTotal",
+        "caloriesTotal",
+        "source",
+        "yield",
+        "tags",
+        "totalMinutes",
+      ],
+      default: "createdAt",
+      computed: ["cookbook", "costTotal", "caloriesTotal"],
+      groupable: ["name"],
+    },
+    intents: {
+      fields: {
+        capture: ["name"],
+        full: ["name", "cookbookId", "tags", "notes", "sections"],
+        identity: ["name", "cookbookId", "tags"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity"],
+    },
     output: [
       "id",
       "name",

@@ -1,6 +1,7 @@
 import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
@@ -125,6 +126,45 @@ export interface EntitySortContract {
   default: string;
   groupable?: readonly [string, ...string[]];
 }
+
+/**
+ * Every entity that declares `model.sort` gets its `EntitySortContract` for
+ * free from the generated roster, so `defineEntityAdapter` callers no longer
+ * hand-list `sort: { fields: xSortableFields, default: "..." }`. An empty
+ * generated `groupable` becomes `undefined` here (not `[]`) so the kernel's
+ * `binding.sort.groupable ?? binding.sort.fields` fallback in
+ * `entity-operations.ts` still treats every sortable field as groupable —
+ * exactly today's behavior for entities with no declared `groupable`.
+ */
+const derivedEntitySort = (entity: string): EntitySortContract => {
+  // SAFETY: `generatedEntitySort` is keyed by `Entity`, but this helper takes
+  // any kernel entity string so callers need no per-call literal narrowing;
+  // the lookup below on the next line handles an absent key explicitly.
+  const declared = (
+    generatedEntitySort as Record<
+      string,
+      {
+        fields: readonly [string, ...string[]];
+        default: string;
+        groupable: readonly string[];
+      }
+    >
+  )[entity];
+  if (declared === undefined)
+    throw new Error(
+      `${entity} has no generated model.sort; pass sort explicitly to defineEntityAdapter.`,
+    );
+  return {
+    fields: declared.fields,
+    default: declared.default,
+    // SAFETY: the length check on the line above confirms at least one
+    // element, matching the non-empty tuple this asserts.
+    groupable:
+      declared.groupable.length > 0
+        ? (declared.groupable as readonly [string, ...string[]])
+        : undefined,
+  };
+};
 
 export interface EntityLifecycleContract {
   delete: Record<string, OperationDisposition>;
@@ -254,7 +294,8 @@ export function defineEntityAdapter<
 >(config: {
   entity: E;
   sideEffects?: boolean;
-  sort: EntitySortContract;
+  /** Omit to derive from the entity's declared `model.sort` roster. */
+  sort?: EntitySortContract;
   lifecycle: EntityLifecycleContract;
   repository: EntityRepository<E>;
   merge?: EntityMergePort<
@@ -302,6 +343,7 @@ export function defineEntityAdapter<
       },
     },
     sideEffects: config.sideEffects ?? true,
+    sort: config.sort ?? derivedEntitySort(config.entity),
     schemas: ENTITY_SCHEMA_BINDINGS[config.entity],
     mergeOperation,
   };

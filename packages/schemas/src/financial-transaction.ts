@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 export {
   financialReconciliationStatus,
   financialReconciliationSummary,
@@ -370,18 +371,8 @@ export type MerchantVendorInferenceInput = z.infer<
   typeof merchantVendorInferenceInput
 >;
 
-export const financialTransactionSortableFields = [
-  "transactionDate",
-  "postedDate",
-  "amount",
-  "merchant",
-  "kind",
-  "status",
-  "createdAt",
-  "updatedAt",
-] as const;
 export type FinancialTransactionSortField =
-  (typeof financialTransactionSortableFields)[number];
+  GeneratedEntitySortField<"financialTransaction">;
 
 export const financialTransactionOut = postedRequiresDate(
   z.object(generatedFinancialTransactionFieldSchemas.read),

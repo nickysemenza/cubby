@@ -198,6 +198,19 @@ Unknown detail override keys and computed-fact anchors fail explicitly.
 field subset. Project resource links use this to retain their own card while
 the declaration still owns their labels and membership.
 
+`model.sort` owns the declared list-sort roster: `fields` (the ordered, complete
+sortable-column list), `default`, and optional `groupable`/`computed` subsets.
+Every `fields` entry not named in `computed` must be a `model.fields` key; a
+`computed` entry names a roster key with no scalar read projection — a
+correlated subquery or rollup resolved in the repository, such as a vendor's
+live purchase count or a product's expected-quantity variance. The generator
+emits the roster as `generatedEntitySort` in
+`packages/schemas/src/generated/entity-sort.gen.ts`, and the kernel's
+`defineEntityAdapter` derives its `EntitySortContract` from that map when a
+binding omits `sort` explicitly, so an entity adapter no longer hand-lists its
+own `sort: { fields: xSortableFields, default: "..." }`. The compiler enforces
+`default ∈ fields`, `groupable ⊆ fields`, and `computed ⊆ fields`.
+
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields
 already owned by a dedicated section, such as Wish candidates, stay outside
@@ -211,6 +224,29 @@ explicit `{ module, export }` references. The compiler rejects unsupported
 kinds/properties and duplicate columns or derived URL keys. `audit: true`
 expands the standard created/updated date filters. SQL predicates remain explicit
 in repository filter builders.
+
+`model.intents` owns the browser editor's field fragments: `fields` maps each
+semantic intent (`capture`, `full`, `identity`, ...) to model field keys,
+`create`/`update` list the ordered intent names each operation accepts (the
+first is the default), and `editorFields` names editor-only pseudo fields an
+intent may reference without a model field (a flattened identity). The
+generator emits `generatedEntityEditIntents`; the editing registry reads
+rosters and defaults from it and keeps only per-intent behaviour (defaults,
+seeds, builders). `generatedEntityFieldSchemaMaps` exposes every entity's
+create/update/read field maps by key for form resolvers.
+
+A descriptor with `deriveSchema: true` also owns its filter field's Zod, which
+the generator emits into `generated<Entity>FilterFields` next to the field
+schemas; canonical modules spread that map and add only computed filters (a
+canonical key that shadows a generated one fails the identity test). The key
+is `field ?? columnId`. `text` derives an optional string (or the model
+field's read schema with `schemaFromRead`), `boolean` an optional boolean,
+`presence` the shared presence filter, `select`/`multiselect` `oneOrMany` of
+the read schema (`schemaFromRead`), a named enum export (`schemaRef`), the
+static option values, or a plain string, and `range` the shared min/max or
+from/to fields, with the numeric/date kind inferred from the model field
+(`range.kind` overrides; `range.int`/`range.nonnegative` tighten it). A
+declaration module must not export `filterSchemas`.
 
 Generated artifacts provide the exhaustive entity keys and traits, public
 shortcode contracts (including inbound-only legacy aliases), schema bindings,

@@ -6,13 +6,7 @@ import {
   taskShortcode,
 } from "../identifier-fields.js";
 import { taskStatusSchema, tradeSchema } from "@cubby/schemas/task-fields";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
-export const filterSchemas = {
-  search: z.string().optional(),
-  status: oneOrMany(taskStatusSchema).optional(),
-  trade: oneOrMany(tradeSchema).optional(),
-};
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
@@ -310,6 +304,52 @@ export default defineEntity({
       "dueEndDate",
       "trade",
     ],
+    sort: {
+      fields: [
+        "name",
+        "status",
+        "dueDate",
+        "trade",
+        "project",
+        "subjectProduct",
+        "createdAt",
+        "updatedAt",
+      ],
+      default: "createdAt",
+      computed: ["project", "subjectProduct"],
+      groupable: ["status"],
+    },
+    intents: {
+      fields: {
+        capture: [
+          "name",
+          "status",
+          "projectId",
+          "subjectProductId",
+          "trade",
+          "dueDate",
+        ],
+        full: [
+          "name",
+          "status",
+          "projectId",
+          "subjectProductId",
+          "trade",
+          "dueDate",
+          "dueEndDate",
+          "notes",
+        ],
+        schedule: ["name", "status", "dueDate", "dueEndDate"],
+        status: ["status"],
+        project: ["projectId"],
+        subject: ["subjectProductId"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "schedule", "status", "project", "subject"],
+      // `notes` is accepted by the canonical task inputs but is not a scalar
+      // model field yet; the editor addresses it through the input contract.
+      editorFields: ["notes"],
+    },
     output: [
       "id",
       "name",
@@ -353,6 +393,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/task-fields",
+          export: "taskStatusSchema",
+        },
         options: [
           {
             value: "not_started",
@@ -378,6 +423,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by trade...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/task-fields",
+          export: "tradeSchema",
+        },
         optionsRef: {
           module: "~/app/projects/trade-options",
           export: "tradeOptions",

@@ -1,5 +1,3 @@
-import { projectSortableFields } from "@cubby/schemas/project";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -16,7 +14,6 @@ import { projectList } from "./lookup";
 
 export const projectEntityAdapter = defineEntityAdapter({
   entity: "project",
-  sort: { fields: projectSortableFields, default: "createdAt" },
   lifecycle: { delete: PROJECT_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getProjectByShortcode(ctx.db, id),

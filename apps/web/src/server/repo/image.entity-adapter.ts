@@ -1,5 +1,3 @@
-import { imageSortableFields } from "@cubby/schemas/image";
-
 import { defineEntityAdapter } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 
@@ -16,7 +14,6 @@ const imageShortcodes = bindShortcodeResolver("image");
 export const imageEntityAdapter = defineEntityAdapter({
   entity: "image",
   sideEffects: false,
-  sort: { fields: imageSortableFields, default: "createdAt" },
   lifecycle: { delete: IMAGE_HARD_DELETE },
   repository: {
     get: async (ctx, shortcode) =>

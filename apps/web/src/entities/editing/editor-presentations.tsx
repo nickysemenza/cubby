@@ -16,10 +16,7 @@ import {
 } from "react-hook-form";
 import { z } from "zod";
 
-import {
-  WithProductSearch,
-  WithProjectSearch,
-} from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
 import {
   NullableNumericField,
@@ -140,7 +137,9 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
         name="projectId"
         entity="project"
         label="Project"
-        SearchProvider={WithProjectSearch}
+        SearchProvider={(props) => (
+          <WithEntitySearch entity="project" {...props} />
+        )}
         clearable
       />
       <EntityValueField<FieldValues, "product">
@@ -148,7 +147,9 @@ function TaskCaptureFields({ form }: EntityEditorFieldsProps) {
         name="subjectProductId"
         entity="product"
         label="For"
-        SearchProvider={WithProductSearch}
+        SearchProvider={(props) => (
+          <WithEntitySearch entity="product" {...props} />
+        )}
         clearable
       />
     </>
@@ -251,7 +252,9 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
         name="projectId"
         entity="project"
         label="Project"
-        SearchProvider={WithProjectSearch}
+        SearchProvider={(props) => (
+          <WithEntitySearch entity="project" {...props} />
+        )}
         clearable
       />
     </>

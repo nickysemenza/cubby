@@ -1,7 +1,4 @@
-import {
-  ledgerPartyOut,
-  ledgerPartySortableFields,
-} from "@cubby/schemas/ledger-party";
+import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
 import { z } from "zod";
 
 import {
@@ -39,7 +36,6 @@ const ledgerPartyMergeSummary = z.object({
 export const ledgerPartyEntityAdapter = defineEntityAdapter({
   entity: "ledgerParty",
   sideEffects: false,
-  sort: { fields: ledgerPartySortableFields, default: "name" },
   lifecycle: {
     delete: LEDGER_PARTY_DELETE_EDGE_POLICY,
     merge: LEDGER_PARTY_MERGE_EDGE_POLICY,

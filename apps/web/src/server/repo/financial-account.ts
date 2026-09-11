@@ -5,6 +5,7 @@ import {
   type PublicImpactItem,
   toPublicImpact,
 } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type FinancialAccountCreateInput,
   type FinancialAccountFilters,
@@ -13,7 +14,6 @@ import {
   type FinancialAccountUpdateData,
   financialAccountIdentity,
   financialAccountOut,
-  financialAccountSortableFields,
 } from "@cubby/schemas/financial-account";
 import {
   type FinancialAccountId,
@@ -232,7 +232,7 @@ export async function listFinancialAccounts(
         ...buildOrderBy(
           financialAccount,
           sorts,
-          [...financialAccountSortableFields],
+          [...generatedEntitySort.financialAccount.fields],
           {
             resolve: (sort) =>
               sort.orderBy === "transactionCount"

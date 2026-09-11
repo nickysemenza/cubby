@@ -5,6 +5,7 @@ import type { ActorContext } from "@cubby/schemas/context";
  */
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ImageShortcode,
   type LocationId,
@@ -21,10 +22,7 @@ import type {
   LocationPickerItemOut,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
-import {
-  locationPickerSortableFields,
-  locationSortableFields,
-} from "@cubby/schemas/location";
+import { locationPickerSortableFields } from "@cubby/schemas/location";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -870,7 +868,7 @@ export const locationList = async (
   const orderByClause = buildOrderBy(
     location,
     sorts,
-    [...locationSortableFields],
+    [...generatedEntitySort.location.fields],
     {
       groupBy,
       // `valuation` is a persisted jsonb rollup; sort by direct value because

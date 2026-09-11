@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { recipeRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
@@ -53,20 +54,7 @@ export {
 
 export * from "./recipe-shared";
 
-export const recipeSortableFields = [
-  "createdAt",
-  "updatedAt",
-  "name",
-  "cookbook",
-  "costTotal",
-  "caloriesTotal",
-  "source",
-  "yield",
-  "tags",
-  "totalMinutes",
-] as const;
-
-export type RecipeSortField = (typeof recipeSortableFields)[number];
+export type RecipeSortField = GeneratedEntitySortField<"recipe">;
 
 // The section-ingredient's ingredient carries its aliases so the editor can tell
 // real parser drift from a re-parse that just hit one of this ingredient's

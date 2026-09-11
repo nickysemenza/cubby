@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { generatedEntitySort } from "./generated/entity-sort.gen";
 import {
   describeAttentionItem,
   expenseAnalyzeInput,
   expenseCreateInput,
   expenseFiltersSchema,
-  expenseSortableFields,
   projectCreateInput,
   projectOut,
   type ProjectAttentionDescribable,
@@ -234,7 +234,7 @@ describe("expense quantity filters", () => {
   });
 
   it("allows direct sorting on the physical quantity column", () => {
-    expect(expenseSortableFields).toContain("productQuantity");
+    expect(generatedEntitySort.expense.fields).toContain("productQuantity");
   });
 });
 

@@ -1,4 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -6,7 +7,6 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
-import { expenseSortableFields } from "@cubby/schemas/project";
 import {
   and,
   eq,
@@ -432,7 +432,7 @@ export const expenseList = async (
   const orderByArray = buildOrderBy(
     expense,
     sorts,
-    [...expenseSortableFields],
+    [...generatedEntitySort.expense.fields],
     {
       resolve: resolveExpenseSort,
     },

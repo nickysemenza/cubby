@@ -10,15 +10,7 @@ import {
   locationType,
   locationValuation,
 } from "@cubby/schemas/location-fields";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
-export const filterSchemas = {
-  nameFilter: z
-    .string()
-    .optional()
-    .describe("Filter by location name (substring)"),
-  itemTypeFilter: oneOrMany(locationType).optional(),
-};
 export default defineEntity({
   key: "location",
   names: { singular: "Location", plural: "Locations" },
@@ -311,6 +303,31 @@ export default defineEntity({
     ],
     bulk: ["parentId"],
     audit: ["name", "aliases", "tags", "type", "parentId"],
+    sort: {
+      fields: [
+        "createdAt",
+        "updatedAt",
+        "name",
+        "type",
+        "parent",
+        "lastBulkInventory",
+        "valuation",
+        "inventoryEntries",
+      ],
+      default: "createdAt",
+      computed: ["parent", "inventoryEntries"],
+      groupable: ["type"],
+    },
+    intents: {
+      fields: {
+        capture: ["name", "type", "parentId"],
+        full: ["name", "aliases", "type", "productId", "parentId"],
+        identity: ["name", "aliases", "type", "productId"],
+        parent: ["parentId"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity", "parent"],
+    },
     output: [
       "id",
       "name",
@@ -401,6 +418,10 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by type...",
         deriveSchema: true,
+        schemaRef: {
+          module: "@cubby/schemas/location-fields",
+          export: "locationType",
+        },
         optionsRef: {
           module: "~/app/_components/locations/location-icons",
           export: "locationTypeOptionsWithTheme",

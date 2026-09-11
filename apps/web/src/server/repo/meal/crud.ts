@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
@@ -10,7 +11,6 @@ import type {
   MealType,
   UpcomingMealSummaryOut,
 } from "@cubby/schemas/meal";
-import { mealSortableFields } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import {
   buildTakeSkip,
@@ -217,13 +217,18 @@ export const mealList = async (
         : sql`${rank} desc nulls last`,
     ];
   };
-  const orderByArray = buildOrderBy(meal, sorts, [...mealSortableFields], {
-    resolve: resolveMealSort,
-    // An unnamed meal displays as its date, so a name sort would otherwise
-    // dump every one of them into an arbitrarily-ordered NULL block. This
-    // orders that block the way its visible label reads.
-    tieBreaker: sql`${meal.date} desc`,
-  });
+  const orderByArray = buildOrderBy(
+    meal,
+    sorts,
+    [...generatedEntitySort.meal.fields],
+    {
+      resolve: resolveMealSort,
+      // An unnamed meal displays as its date, so a name sort would otherwise
+      // dump every one of them into an arbitrarily-ordered NULL block. This
+      // orders that block the way its visible label reads.
+      tieBreaker: sql`${meal.date} desc`,
+    },
+  );
   const { take, skip } = buildTakeSkip(pagination);
 
   const whereCondition = buildMealWhere(db, filters);

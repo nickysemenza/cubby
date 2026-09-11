@@ -2,7 +2,6 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   mergeProductsInput,
   productMergeSummaryOut,
-  productSortableFields,
   productTopLevelOut,
 } from "@cubby/schemas/product";
 import { z } from "zod";
@@ -50,11 +49,6 @@ async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
 export const productEntityAdapter = defineEntityAdapter({
   entity: "product",
   sideEffects: false,
-  sort: {
-    fields: productSortableFields,
-    default: "createdAt",
-    groupable: ["category"],
-  },
   lifecycle: {
     delete: PRODUCT_DELETE_EDGE_POLICY,
     merge: PRODUCT_MERGE_EDGE_POLICY,

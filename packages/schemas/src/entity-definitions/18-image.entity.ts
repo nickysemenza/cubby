@@ -1,6 +1,5 @@
 import { defineEntity } from "./definition.js";
 import { imageShortcode } from "../identifier-fields.js";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
 export const generatedImageStatusValues = [
   "PENDING",
@@ -18,12 +17,6 @@ export const generatedImageStorageStatusValues = [
   "missing",
   "metadata_mismatch",
 ] as const;
-export const filterSchemas = {
-  nameFilter: z.string().optional().describe("Filter by filename (substring)"),
-  status: oneOrMany(z.enum(generatedImageStatusValues))
-    .optional()
-    .describe("Filter by upload status"),
-};
 export default defineEntity({
   key: "image",
   names: { singular: "Image", plural: "Images" },
@@ -243,6 +236,10 @@ export default defineEntity({
     update: ["filename"],
     bulk: [],
     audit: [],
+    sort: {
+      fields: ["createdAt", "updatedAt", "filename", "size", "status"],
+      default: "createdAt",
+    },
     output: [
       "id",
       "url",
@@ -291,6 +288,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by upload status...",
         deriveSchema: true,
+        schemaFromRead: true,
         schemaDescription: "Filter by upload status",
         options: [
           { value: "PENDING", label: "Pending", color: "var(--slate)" },

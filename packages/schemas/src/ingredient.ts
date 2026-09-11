@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auditDateFilterFields } from "./base-entity";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
   generatedIngredientFieldSchemas,
   generatedIngredientFilterFields,
@@ -62,15 +63,7 @@ export const ingredientFilterFields = {
 export const ingredientFiltersSchema = z.object(ingredientFilterFields);
 export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
-export const ingredientSortableFields = [
-  "createdAt",
-  "updatedAt",
-  "name",
-  "appearsInRecipes",
-  "product",
-] as const;
-
-export type IngredientSortField = (typeof ingredientSortableFields)[number];
+export type IngredientSortField = GeneratedEntitySortField<"ingredient">;
 
 export const ingredientOutFields = {
   ...generatedIngredientFieldSchemas.read,

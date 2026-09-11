@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
   type ExternalIdKind,
@@ -30,7 +31,6 @@ import {
   type ProductCreateInput,
   type ProductTopLevelOut,
   type ProductUpdateInput,
-  productSortableFields,
 } from "@cubby/schemas/product";
 import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -291,7 +291,7 @@ const resolveProductSort = (sort: SortParams) => {
 };
 
 const productListOrderBy = (sorts: SortParams[], groupBy?: string) =>
-  buildOrderBy(product, sorts, [...productSortableFields], {
+  buildOrderBy(product, sorts, [...generatedEntitySort.product.fields], {
     groupBy,
     resolve: resolveProductSort,
     tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,

@@ -20,28 +20,7 @@ import {
 } from "@cubby/schemas/product-fields";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { fdcId } from "@cubby/usda-schemas";
-import { numericRangeFields } from "@cubby/schemas/base-entity";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
-export const filterSchemas = {
-  nameFilter: z.string().optional().describe("Filter by product name"),
-  manufacturerExact: oneOrMany(z.string()).optional(),
-  upcFilter: z
-    .string()
-    .optional()
-    .describe("Filter by UPC/barcode — matches ANY of the product's barcodes"),
-  modelFilter: z
-    .string()
-    .optional()
-    .describe(
-      "Filter by model number — a tool's real identity when the name is generic.",
-    ),
-  categoryFilter: oneOrMany(productCategory)
-    .optional()
-    .describe("Filter by category"),
-  ...numericRangeFields("expectedQuantity"),
-  notesFilter: z.string().optional(),
-};
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
@@ -472,6 +451,69 @@ export default defineEntity({
       "ingredientId",
       "price",
     ],
+    sort: {
+      fields: [
+        "createdAt",
+        "updatedAt",
+        "name",
+        "manufacturer",
+        "model",
+        "primaryGtin",
+        "category",
+        "fdc_id",
+        "price",
+        "notes",
+        "location",
+        "ingredient",
+        "expenseTotal",
+        "expenses",
+        "expectedQuantity",
+        "quantityVariance",
+        "purchaseDate",
+        "related:product.projects",
+        "related:product.vendors",
+        "related:product.purchases",
+        "identity_strength",
+      ],
+      default: "createdAt",
+      computed: [
+        "location",
+        "ingredient",
+        "expenseTotal",
+        "expenses",
+        "quantityVariance",
+        "purchaseDate",
+        "related:product.projects",
+        "related:product.vendors",
+        "related:product.purchases",
+        "identity_strength",
+      ],
+      groupable: ["category"],
+    },
+    intents: {
+      fields: {
+        capture: ["name", "manufacturer"],
+        full: [
+          "name",
+          "aliases",
+          "manufacturer",
+          "model",
+          "category",
+          "ingredientId",
+          "upc",
+          "fdc_id",
+          "price",
+          "stockTracked",
+          "unitMappings",
+          "notes",
+        ],
+        identity: ["name", "aliases", "manufacturer", "model", "category"],
+        price: ["price"],
+        stock: ["stockTracked"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity", "price", "stock"],
+    },
     output: [
       "id",
       "name",
@@ -585,6 +627,10 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by category...",
         deriveSchema: true,
+        schemaRef: {
+          module: "@cubby/schemas/product-fields",
+          export: "productCategory",
+        },
         schemaDescription: "Filter by category",
         optionsRef: {
           module: "~/app/_components/products/product-category-icons",

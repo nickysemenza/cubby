@@ -2,6 +2,7 @@ import { productCategoryValues } from "@cubby/shared";
 import { fdcId } from "@cubby/usda-schemas";
 import { gtin } from "./external-id";
 import { z } from "zod";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { locationRelatedFilterFields } from "./related-view";
 import {
   generatedLocationFieldSchemas,
@@ -109,22 +110,12 @@ export const locationFilterFields = {
 export const locationFiltersSchema = z.object(locationFilterFields);
 export type LocationFiltersInput = z.infer<typeof locationFiltersSchema>;
 
-export const locationSortableFields = [
-  "createdAt",
-  "updatedAt",
-  "name",
-  "type",
-  "parent",
-  "lastBulkInventory",
-  "valuation",
-  "inventoryEntries",
-] as const;
-
-export type LocationSortField = (typeof locationSortableFields)[number];
+export type LocationSortField = GeneratedEntitySortField<"location">;
 
 /**
- * What the picker endpoint can actually order by. Narrower than
- * `locationSortableFields` on purpose — `locationSearch` loads no relations, so
+ * What the picker endpoint can actually order by. Narrower than the
+ * declared `location` entity sort roster on purpose — `locationSearch` loads
+ * no relations, so
  * the joined/rollup sorts (parent name, valuation, inventory count) have
  * nothing to sort on and must not be advertised.
  */

@@ -1,7 +1,6 @@
 import {
   mergePurchasesInput,
   mergePurchasesOut,
-  purchaseSortableFields,
 } from "@cubby/schemas/purchase";
 
 import {
@@ -26,7 +25,6 @@ const purchaseShortcodes = bindShortcodeResolver("purchase");
 
 export const purchaseEntityAdapter = defineEntityAdapter({
   entity: "purchase",
-  sort: { fields: purchaseSortableFields, default: "date" },
   lifecycle: {
     delete: PURCHASE_DELETE_EDGE_POLICY,
     merge: PURCHASE_MERGE_EDGE_POLICY,

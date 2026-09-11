@@ -1,5 +1,3 @@
-import { inventorySortableFields } from "@cubby/schemas/inventory";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -23,7 +21,6 @@ const locationShortcodes = bindShortcodeResolver("location");
 
 export const inventoryEntityAdapter = defineEntityAdapter({
   entity: "inventory",
-  sort: { fields: inventorySortableFields, default: "createdAt" },
   lifecycle: { delete: INVENTORY_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getInventoryEntryByShortcode(ctx.db, id),

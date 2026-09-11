@@ -41,7 +41,7 @@ export const sealArtifact = (
 };
 
 const generatedName =
-  /^(?:entity-literal-.+|entity-manifest-data|entity-field-model|entity-field-schemas(?:\.[^.]+)?|entity-columns|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry|shortcode-tables)\.gen\.ts$/;
+  /^(?:entity-literal-.+|entity-manifest-data|entity-field-model|entity-field-schemas(?:\.[^.]+)?|entity-sort|entity-edit-intents|entity-field-schema-maps|entity-columns|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry|shortcode-tables)\.gen\.ts$/;
 
 const findExtraArtifacts = async (
   root: string,

@@ -12,8 +12,6 @@ import {
   ledgerTransferShortcode,
   purchaseShortcode,
 } from "../identifier-fields.js";
-import { dateRangeFields } from "@cubby/schemas/base-entity";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
 export const generatedFinancialTransactionKindValues = [
   "purchase",
@@ -32,14 +30,6 @@ export const generatedFinancialTransactionStatusValues = [
   "posted",
   "void",
 ] as const;
-export const filterSchemas = {
-  kind: oneOrMany(z.enum(generatedFinancialTransactionKindValues)).optional(),
-  status: oneOrMany(
-    z.enum(generatedFinancialTransactionStatusValues),
-  ).optional(),
-  ...dateRangeFields("postedDate"),
-  merchant: z.string().optional(),
-};
 export default defineEntity({
   key: "financialTransaction",
   names: { singular: "Financial Transaction", plural: "Transactions" },
@@ -374,6 +364,62 @@ export default defineEntity({
       "sourceRefs",
       "notes",
     ],
+    sort: {
+      fields: [
+        "transactionDate",
+        "postedDate",
+        "amount",
+        "merchant",
+        "kind",
+        "status",
+        "createdAt",
+        "updatedAt",
+      ],
+      default: "transactionDate",
+    },
+    intents: {
+      fields: {
+        capture: [
+          "accountId",
+          "purchaseId",
+          "kind",
+          "status",
+          "amount",
+          "transactionDate",
+          "postedDate",
+          "merchant",
+          "rawDescription",
+          "sourceCategory",
+          "sourceRefs",
+          "notes",
+        ],
+        full: [
+          "accountId",
+          "purchaseId",
+          "kind",
+          "status",
+          "amount",
+          "transactionDate",
+          "postedDate",
+          "merchant",
+          "rawDescription",
+          "sourceCategory",
+          "sourceRefs",
+          "notes",
+        ],
+        settlement: [
+          "accountId",
+          "purchaseId",
+          "kind",
+          "status",
+          "amount",
+          "transactionDate",
+          "postedDate",
+        ],
+      },
+      create: ["capture", "full"],
+      update: ["full", "settlement"],
+    },
     output: [
       "id",
       "accountId",
@@ -435,6 +481,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
+        schemaFromRead: true,
         options: [
           { value: "purchase", label: "Purchase" },
           { value: "refund", label: "Refund" },
@@ -452,6 +499,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        schemaFromRead: true,
         options: [
           { value: "expected", label: "Expected" },
           { value: "pending", label: "Pending" },

@@ -2,16 +2,6 @@ import { defineEntity } from "./definition.js";
 import { ingredientShortcode } from "../identifier-fields.js";
 import { baseKind } from "../codec.js";
 import { z } from "zod";
-export const filterSchemas = {
-  nameFilter: z
-    .string()
-    .optional()
-    .describe("Filter by ingredient name (substring)"),
-  usuallyOnHand: z
-    .boolean()
-    .optional()
-    .describe("Filter by ingredients usually kept on hand"),
-};
 export default defineEntity({
   key: "ingredient",
   names: { singular: "Ingredient", plural: "Ingredients" },
@@ -160,6 +150,20 @@ export default defineEntity({
     update: ["naKinds", "usuallyOnHand", "name", "aliases"],
     bulk: ["usuallyOnHand"],
     audit: ["name", "aliases", "naKinds", "usuallyOnHand"],
+    sort: {
+      fields: ["createdAt", "updatedAt", "name", "appearsInRecipes", "product"],
+      default: "createdAt",
+      computed: ["appearsInRecipes", "product"],
+    },
+    intents: {
+      fields: {
+        capture: ["name"],
+        full: ["name", "aliases", "naKinds"],
+        identity: ["name", "aliases"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity"],
+    },
     output: [
       "id",
       "name",

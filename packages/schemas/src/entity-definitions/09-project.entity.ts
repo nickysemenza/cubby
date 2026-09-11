@@ -12,16 +12,7 @@ import {
   projectDateWindow,
   projectRollup,
 } from "@cubby/schemas/project-output-fields";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
-export const filterSchemas = {
-  search: z.string().optional(),
-  status: oneOrMany(projectStatusSchema).optional(),
-  kind: oneOrMany(projectKindSchema).optional(),
-  location: oneOrMany(z.string())
-    .optional()
-    .describe("Any exact match against locations[]"),
-};
 export default defineEntity({
   key: "project",
   names: { singular: "Project", plural: "Projects" },
@@ -418,6 +409,51 @@ export default defineEntity({
       "googleDriveFolderUrl",
       "notionPageUrl",
     ],
+    sort: {
+      fields: [
+        "name",
+        "status",
+        "kind",
+        "startDate",
+        "costEstimate",
+        "createdAt",
+        "updatedAt",
+      ],
+      default: "createdAt",
+    },
+    intents: {
+      fields: {
+        capture: [
+          "name",
+          "status",
+          "kind",
+          "costEstimate",
+          "parentProjectId",
+          "startDate",
+        ],
+        full: [
+          "name",
+          "icon",
+          "status",
+          "kind",
+          "parentProjectId",
+          "startDate",
+          "endDate",
+          "costEstimate",
+          "locations",
+          "googleDriveFolderUrl",
+          "notionPageUrl",
+          "blockedByIds",
+          "notes",
+        ],
+        status: ["status"],
+        kind: ["kind"],
+        dates: ["startDate", "endDate"],
+        parent: ["parentProjectId"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "status", "kind", "dates", "parent"],
+    },
     output: [
       "id",
       "name",
@@ -474,6 +510,10 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        schemaRef: {
+          module: "@cubby/schemas/project-fields",
+          export: "projectStatusSchema",
+        },
         options: [
           { value: "planning", label: "Planning", color: "var(--chart-5)" },
           {
@@ -495,6 +535,10 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
+        schemaRef: {
+          module: "@cubby/schemas/project-fields",
+          export: "projectKindSchema",
+        },
         options: [
           { value: "furniture", label: "Furniture" },
           { value: "workshop", label: "Workshop" },

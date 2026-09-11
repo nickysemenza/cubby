@@ -1,5 +1,3 @@
-import { expenseSortableFields } from "@cubby/schemas/project";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -19,11 +17,6 @@ import { expenseList } from "./lookup";
 
 export const expenseEntityAdapter = defineEntityAdapter({
   entity: "expense",
-  sort: {
-    fields: expenseSortableFields,
-    default: "date",
-    groupable: ["costType"],
-  },
   lifecycle: { delete: EXPENSE_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getExpenseByShortcode(ctx.db, id),

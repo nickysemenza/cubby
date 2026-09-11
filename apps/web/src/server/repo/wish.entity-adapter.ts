@@ -1,5 +1,3 @@
-import { wishSortableFields } from "@cubby/schemas/wish";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -16,7 +14,6 @@ import {
 
 export const wishEntityAdapter = defineEntityAdapter({
   entity: "wish",
-  sort: { fields: wishSortableFields, default: "createdAt" },
   lifecycle: { delete: WISH_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getWishByShortcode(ctx.db, id),

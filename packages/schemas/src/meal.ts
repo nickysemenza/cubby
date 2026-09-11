@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auditDateFilterFields, uniqueBy } from "./base-entity";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { mealRelatedFilterFields } from "./related-view";
 import {
   aggregatedNeedOut,
@@ -62,15 +63,7 @@ export {
  * of current `recipe.totals x scale`; estimate status cannot be represented by
  * a useful SQL sort key.
  */
-export const mealSortableFields = [
-  "date",
-  "name",
-  "mealType",
-  "createdAt",
-  "updatedAt",
-] as const;
-
-export type MealSortField = (typeof mealSortableFields)[number];
+export type MealSortField = GeneratedEntitySortField<"meal">;
 
 export const mealCreateInput = z.object(generatedMealFieldSchemas.create);
 export type MealCreateInput = z.infer<typeof mealCreateInput>;

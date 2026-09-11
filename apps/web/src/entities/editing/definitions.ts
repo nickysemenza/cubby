@@ -1,3 +1,4 @@
+import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
@@ -276,12 +277,19 @@ const buildDefinition = <E extends EditableEntity>(
       },
     },
   };
-  if (body.create) {
-    operations.create = operationDefinition(entity, "create", body.create);
-  }
-  if (body.update) {
-    operations.update = operationDefinition(entity, "update", body.update);
-  }
+  // Operation intent lists default to the declaration; a registry entry only
+  // spells them out when an intent needs options (defaults, seeds, builders).
+  const declared = generatedEntityEditIntents[entity];
+  operations.create = operationDefinition(
+    entity,
+    "create",
+    body.create ?? declared.create,
+  );
+  operations.update = operationDefinition(
+    entity,
+    "update",
+    body.update ?? declared.update,
+  );
   return {
     entity,
     fields: body.fields,
@@ -403,236 +411,11 @@ const normalizeFinancialTransaction = (
   return normalized;
 };
 
-const purchaseFields = [
-  "vendorId",
-  "date",
-  "orderId",
-  "displayLabel",
-  "statedTotal",
-  "notes",
-] as const;
-
-const financialTransactionFields = [
-  "accountId",
-  "purchaseId",
-  "kind",
-  "status",
-  "amount",
-  "transactionDate",
-  "postedDate",
-  "merchant",
-  "rawDescription",
-  "sourceCategory",
-  "sourceRefs",
-  "notes",
-] as const;
-
 const vendorCreateDefaults = { name: "", website: null, notes: null } as const;
 
-/**
- * Semantic capabilities, rather than presentation surfaces, choose editable
- * fragments. A Calendar and a detail page can therefore share `schedule`
- * without sharing a form shell; a cell has no power to widen its patch.
- */
-const semanticFields = {
-  product: {
-    capture: ["name", "manufacturer"],
-    full: [
-      "name",
-      "aliases",
-      "manufacturer",
-      "model",
-      "category",
-      "ingredientId",
-      "upc",
-      "fdc_id",
-      "price",
-      "stockTracked",
-      "unitMappings",
-      "notes",
-    ],
-    identity: ["name", "aliases", "manufacturer", "model", "category"],
-    price: ["price"],
-    stock: ["stockTracked"],
-  },
-  ingredient: {
-    capture: ["name"],
-    full: ["name", "aliases", "naKinds"],
-    identity: ["name", "aliases"],
-  },
-  inventory: {
-    capture: ["productId", "locationId", "amount", "placement"],
-    full: ["amount", "productId", "locationId", "placement"],
-    amount: ["amount"],
-    product: ["productId"],
-    location: ["locationId"],
-    placement: ["placement"],
-  },
-  location: {
-    capture: ["name", "type", "parentId"],
-    full: ["name", "aliases", "type", "productId", "parentId"],
-    identity: ["name", "aliases", "type", "productId"],
-    parent: ["parentId"],
-  },
-  recipe: {
-    capture: ["name"],
-    full: ["name", "cookbookId", "tags", "notes", "sections"],
-    identity: ["name", "cookbookId", "tags"],
-  },
-  meal: {
-    capture: ["date", "name", "mealType", "mealKind"],
-    full: ["date", "name", "mealType", "mealKind", "sortOrder"],
-    calendar: ["date", "name", "mealType", "mealKind"],
-  },
-  project: {
-    capture: [
-      "name",
-      "status",
-      "kind",
-      "costEstimate",
-      "parentProjectId",
-      "startDate",
-    ],
-    full: [
-      "name",
-      "icon",
-      "status",
-      "kind",
-      "parentProjectId",
-      "startDate",
-      "endDate",
-      "costEstimate",
-      "locations",
-      "googleDriveFolderUrl",
-      "notionPageUrl",
-      "blockedByIds",
-      "notes",
-    ],
-    status: ["status"],
-    kind: ["kind"],
-    dates: ["startDate", "endDate"],
-    parent: ["parentProjectId"],
-  },
-  task: {
-    capture: [
-      "name",
-      "status",
-      "projectId",
-      "subjectProductId",
-      "trade",
-      "dueDate",
-    ],
-    full: [
-      "name",
-      "status",
-      "projectId",
-      "subjectProductId",
-      "trade",
-      "dueDate",
-      "dueEndDate",
-      "notes",
-    ],
-    schedule: ["name", "status", "dueDate", "dueEndDate"],
-    status: ["status"],
-    project: ["projectId"],
-    subject: ["subjectProductId"],
-  },
-  expense: {
-    capture: [
-      "name",
-      "lineKind",
-      "cost",
-      "date",
-      "future",
-      "projectId",
-      "productId",
-      "productQuantity",
-      "vendor",
-      "orderId",
-      "trade",
-      "costType",
-    ],
-    full: [
-      "name",
-      "lineKind",
-      "lineBasis",
-      "cost",
-      "date",
-      "future",
-      "projectId",
-      "productId",
-      "productQuantity",
-      "vendor",
-      "orderId",
-      "trade",
-      "costType",
-      "url",
-      "notes",
-    ],
-    planned: ["name", "cost", "date"],
-    cost: ["cost"],
-    date: ["date"],
-    project: ["projectId"],
-    product: ["productId"],
-  },
-  vendor: {
-    capture: ["name", "website", "notes"],
-    full: ["name", "website", "orderUrlTemplate", "notes"],
-    identity: ["name"],
-  },
-  purchase: {
-    capture: purchaseFields,
-    full: purchaseFields,
-    vendor: ["vendorId"],
-    identity: ["date", "orderId", "notes"],
-  },
-  financialAccount: {
-    capture: [
-      "name",
-      "kind",
-      "issuer",
-      "network",
-      "institution",
-      "accountType",
-      "provider",
-      "last4",
-      "provisional",
-      "sourceAliases",
-      "notes",
-    ],
-    full: ["name", "provisional", "sourceAliases", "notes"],
-    identity: ["name", "provisional", "sourceAliases", "notes"],
-  },
-  financialTransaction: {
-    capture: financialTransactionFields,
-    full: financialTransactionFields,
-    settlement: [
-      "accountId",
-      "purchaseId",
-      "kind",
-      "status",
-      "amount",
-      "transactionDate",
-      "postedDate",
-    ],
-  },
-  wish: {
-    capture: ["name"],
-    full: ["name", "notes", "candidateProductIds", "acquired"],
-    identity: ["name", "notes", "candidateProductIds"],
-    acquisition: ["acquired"],
-  },
-  // Browsable and kernel-writable, but no editor UI yet: only `delete` is
-  // reachable from the browser, and create/update stay on MCP. The entries
-  // exist so the shared action and command chrome stays type-exhaustive.
-  ledgerParty: { full: ["name", "kind", "notes"] },
-  ledgerTransfer: {
-    full: ["fromPartyId", "toPartyId", "amount", "date", "notes"],
-  },
-} satisfies Record<EditableEntity, Record<string, readonly string[]>>;
-
+/** Field fragments per semantic intent come from the entity declaration. */
 const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
-  Object.entries(semanticFields[entity]).find(
+  Object.entries(generatedEntityEditIntents[entity].fields).find(
     ([intent]) => intent === semanticIntent,
   )?.[1] ?? [];
 

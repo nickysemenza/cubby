@@ -1,3 +1,4 @@
+import type { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import type {
   FinancialAccountCreateInput,
   FinancialAccountUpdateData,
@@ -102,95 +103,15 @@ interface EntityEditDraftMap {
   wish: Partial<WishCreateInput & WishUpdateData>;
 }
 
-interface EntityEditIntentCatalog {
-  product: {
-    create: "capture" | "full";
-    update: "full" | "identity" | "price" | "stock";
+type GeneratedIntents = typeof generatedEntityEditIntents;
+/** Intent names per operation, from the entity declarations. */
+type EntityEditIntentCatalog = {
+  [E in keyof GeneratedIntents]: {
+    create: GeneratedIntents[E]["create"][number];
+    update: GeneratedIntents[E]["update"][number];
     delete: "delete";
   };
-  ingredient: {
-    create: "capture" | "full";
-    update: "full" | "identity";
-    delete: "delete";
-  };
-  inventory: {
-    create: "capture" | "full";
-    update: "full" | "amount" | "product" | "location" | "placement";
-    delete: "delete";
-  };
-  location: {
-    create: "capture" | "full";
-    update: "full" | "identity" | "parent";
-    delete: "delete";
-  };
-  recipe: {
-    create: "capture" | "full";
-    update: "full" | "identity";
-    delete: "delete";
-  };
-  meal: {
-    create: "capture" | "full";
-    update: "full" | "calendar";
-    delete: "delete";
-  };
-  project: {
-    create: "capture" | "full";
-    update: "full" | "status" | "kind" | "dates" | "parent";
-    delete: "delete";
-  };
-  task: {
-    create: "capture" | "full";
-    update: "full" | "schedule" | "status" | "project" | "subject";
-    delete: "delete";
-  };
-  expense: {
-    create: "capture" | "full";
-    update: "full" | "planned" | "cost" | "date" | "project" | "product";
-    delete: "delete";
-  };
-  vendor: {
-    create: "capture" | "full";
-    update: "full" | "identity";
-    delete: "delete";
-  };
-  purchase: {
-    create: "capture" | "full";
-    update: "full" | "vendor" | "identity";
-    delete: "delete";
-  };
-  financialAccount: {
-    create: "capture" | "full";
-    update: "full" | "identity";
-    delete: "delete";
-  };
-  /**
-   * Ledger records are browsable and kernel-writable but have no editor UI
-   * yet: only the `delete` intent is reachable from the browser, and
-   * create/update stay on MCP. The entries exist so the shared action and
-   * command chrome — which runs for every browser-routed entity — stays
-   * type-exhaustive rather than special-casing two entities at ~12 call sites.
-   */
-  ledgerParty: {
-    create: "full";
-    update: "full";
-    delete: "delete";
-  };
-  ledgerTransfer: {
-    create: "full";
-    update: "full";
-    delete: "delete";
-  };
-  financialTransaction: {
-    create: "capture" | "full";
-    update: "full" | "settlement";
-    delete: "delete";
-  };
-  wish: {
-    create: "capture" | "full";
-    update: "full" | "identity" | "acquisition";
-    delete: "delete";
-  };
-}
+};
 
 interface EntityEditCreateInputMap {
   product: ProductCreateInput;

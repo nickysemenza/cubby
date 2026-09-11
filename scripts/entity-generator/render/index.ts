@@ -11,6 +11,8 @@ import {
 import type {
   CompiledEntity,
   EntityArtifacts,
+  EntityField,
+  FilterDescriptor,
   RelationMutation,
   SourceRef,
 } from "../declarations.ts";
@@ -55,6 +57,171 @@ export const entityProjectionMaps = (
       ({ descriptor }) => descriptor.browserRoutes !== false,
     ),
   };
+};
+
+interface DerivedFilterFields {
+  imports: string;
+  entries: string[];
+}
+
+interface DerivedFilterNeeds {
+  z: boolean;
+  oneOrMany: boolean;
+  presence: boolean;
+  numeric: boolean;
+  date: boolean;
+}
+
+const derivedEnumValues = (
+  descriptor: FilterDescriptor,
+  needs: DerivedFilterNeeds,
+  readRef: (descriptor: FilterDescriptor) => string,
+  refAlias: (ref: SourceRef) => string,
+): string => {
+  if (descriptor.schemaFromRead) return readRef(descriptor);
+  if (descriptor.schemaRef !== null) return refAlias(descriptor.schemaRef);
+  needs.z = true;
+  return descriptor.options === null
+    ? "z.string()"
+    : `z.enum(${JSON.stringify(descriptor.options.map((option) => option.value))})`;
+};
+
+const derivedRangeEntry = (
+  entity: CompiledEntity,
+  descriptor: FilterDescriptor,
+  key: string,
+  needs: DerivedFilterNeeds,
+): string => {
+  const range = descriptor.range;
+  if (range === null)
+    throw new EntityDeclarationError(
+      `${entity.key} filter ${descriptor.columnId} range was not resolved.`,
+    );
+  if (range.kind === "date") {
+    needs.date = true;
+    return `...dateRangeFields(${JSON.stringify(key)})`;
+  }
+  needs.numeric = true;
+  const options = [
+    ...(range.int ? ["int:true"] : []),
+    ...(range.nonnegative ? ["nonnegative:true"] : []),
+  ];
+  return `...numericRangeFields(${JSON.stringify(key)}${options.length ? `,{${options.join(",")}}` : ""})`;
+};
+
+const derivedFilterImports = (
+  needs: DerivedFilterNeeds,
+  refs: ReadonlyMap<string, string>,
+): string => {
+  const byModule = new Map<string, string[]>();
+  for (const [key, alias] of refs) {
+    const [module = "", name = ""] = key.split("#");
+    const list = byModule.get(module) ?? [];
+    list.push(`${name} as ${alias}`);
+    byModule.set(module, list);
+  }
+  const pagination = [
+    ...(needs.oneOrMany ? ["oneOrMany"] : []),
+    ...(needs.presence ? ["presenceFilter"] : []),
+  ];
+  const ranges = [
+    ...(needs.date ? ["dateRangeFields"] : []),
+    ...(needs.numeric ? ["numericRangeFields"] : []),
+  ];
+  return [
+    ...(needs.z ? ['import { z } from "zod";'] : []),
+    ...(pagination.length
+      ? [
+          `import { ${pagination.join(", ")} } from "@cubby/schemas/pagination";`,
+        ]
+      : []),
+    ...(ranges.length
+      ? [`import { ${ranges.join(", ")} } from "@cubby/schemas/base-entity";`]
+      : []),
+    ...[...byModule.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([module, names]) =>
+          `import { ${names.join(", ")} } from ${JSON.stringify(module)};`,
+      ),
+  ]
+    .map((line) => `${line}\n`)
+    .join("");
+};
+
+/**
+ * Filter fields derived from descriptors flagged `deriveSchema`: the Zod for a
+ * filter key is spelled once, next to the column it filters. Enum values come
+ * from the model field's read schema (`schemaFromRead`), a named export
+ * (`schemaRef`), or the descriptor's static options; ranges expand to the
+ * shared min/max or from/to builders.
+ */
+const renderDerivedFilterFields = (
+  entity: CompiledEntity,
+  fields: readonly EntityField[],
+): DerivedFilterFields => {
+  const refs = new Map<string, string>();
+  const refAlias = (ref: SourceRef) => {
+    const key = `${ref.module}#${ref.export}`;
+    const existing = refs.get(key);
+    if (existing) return existing;
+    const alias = `filterSchema${refs.size}`;
+    refs.set(key, alias);
+    return alias;
+  };
+  const needs: DerivedFilterNeeds = {
+    z: false,
+    oneOrMany: false,
+    presence: false,
+    numeric: false,
+    date: false,
+  };
+  const readRef = (descriptor: FilterDescriptor) => {
+    const index = fields.findIndex(
+      (field) => field.key === descriptor.columnId,
+    );
+    if (index < 0)
+      throw new EntityDeclarationError(
+        `${entity.key} filter ${descriptor.columnId} has no model field for schemaFromRead.`,
+      );
+    return `definition.model.fields[${index}].validation.read`;
+  };
+  const entries = entity.filterDescriptors
+    .filter((descriptor) => descriptor.deriveSchema)
+    .map((descriptor) => {
+      const name = descriptor.field ?? descriptor.columnId;
+      const key = JSON.stringify(name);
+      const describe =
+        descriptor.schemaDescription === null
+          ? ""
+          : `.describe(${JSON.stringify(descriptor.schemaDescription)})`;
+      switch (descriptor.kind) {
+        case "text": {
+          if (!descriptor.schemaFromRead) needs.z = true;
+          const base = descriptor.schemaFromRead
+            ? readRef(descriptor)
+            : "z.string()";
+          return `${key}:${base}.optional()${describe}`;
+        }
+        case "boolean":
+          needs.z = true;
+          return `${key}:z.boolean().optional()${describe}`;
+        case "presence":
+          needs.presence = true;
+          return `${key}:presenceFilter${describe}`;
+        case "select":
+        case "multiselect":
+          needs.oneOrMany = true;
+          return `${key}:oneOrMany(${derivedEnumValues(descriptor, needs, readRef, refAlias)}).optional()${describe}`;
+        case "range":
+          return derivedRangeEntry(entity, descriptor, name, needs);
+        default:
+          throw new EntityDeclarationError(
+            `${entity.key} filter ${descriptor.columnId} cannot derive a ${descriptor.kind} schema.`,
+          );
+      }
+    });
+  return { imports: derivedFilterImports(needs, refs), entries };
 };
 
 // One render pass preserves deterministic cross-artifact ordering and hashes.
@@ -723,15 +890,50 @@ export const renderEntityArtifacts = (
     }),
   );
   const fieldModels = Object.fromEntries(
-    entities.map(({ key, fieldModel }) => [
-      key,
-      {
-        ...fieldModel,
-        fields: fieldModel.fields.map(
-          ({ validation: _validation, ...field }) => field,
-        ),
-      },
-    ]),
+    entities.map(({ key, fieldModel }) => {
+      const { sort: _sort, intents: _intents, ...rest } = fieldModel;
+      return [
+        key,
+        {
+          ...rest,
+          fields: fieldModel.fields.map(
+            ({ validation: _validation, ...field }) => field,
+          ),
+        },
+      ];
+    }),
+  );
+  const entitySortEntries = entities.flatMap(({ key, fieldModel }) =>
+    fieldModel.sort === null
+      ? []
+      : [
+          [
+            key,
+            {
+              fields: fieldModel.sort.fields,
+              default: fieldModel.sort.default,
+              computed: fieldModel.sort.computed,
+              groupable: fieldModel.sort.groupable,
+            },
+          ] as const,
+        ],
+  );
+  const entitySort = Object.fromEntries(entitySortEntries);
+  const entityEditIntents = Object.fromEntries(
+    entities.flatMap(({ key, fieldModel }) =>
+      fieldModel.intents === null
+        ? []
+        : [
+            [
+              key,
+              {
+                fields: fieldModel.intents.fields,
+                create: fieldModel.intents.create,
+                update: fieldModel.intents.update,
+              },
+            ] as const,
+          ],
+    ),
   );
   const fieldByKey = (entity: CompiledEntity, key: string) => {
     const field = entity.fieldModel.fields.find(
@@ -785,18 +987,20 @@ export const renderEntityArtifacts = (
         })
         .join(",")}}`;
     const prefix = `generated${entity.inspector.singular.replaceAll(" ", "")}`;
+    const filterFields = renderDerivedFilterFields(entity, fieldModel.fields);
     return [
       {
         relativePath: `packages/schemas/src/generated/entity-field-schemas.${entity.key}.gen.ts`,
         source:
           generatedHeader +
-          `import definition${declaration.hasFilters ? ", {filterSchemas}" : ""} from ${JSON.stringify(declaration.path)};\n` +
+          `import definition from ${JSON.stringify(declaration.path)};\n` +
+          filterFields.imports +
           (declaration.enumExports.length
             ? `export {${declaration.enumExports.join(",")}} from ${JSON.stringify(declaration.path)};\n`
             : "") +
           `export const ${prefix}FieldSchemas = {create:${schemaMap("create", fieldModel.create)},update:${schemaMap("update", fieldModel.update)},read:${schemaMap("read", fieldModel.output)}} as const;\n` +
-          (declaration.hasFilters
-            ? `export const ${prefix}FilterFields = filterSchemas;\n`
+          (filterFields.entries.length
+            ? `export const ${prefix}FilterFields = {${filterFields.entries.join(",")}} as const;\n`
             : ""),
       },
     ];
@@ -936,7 +1140,7 @@ export const renderEntityArtifacts = (
         `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
         `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; detailSection: string } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; detailSection: string; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "plainDate" | "timestamp" | "external-link" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +
@@ -946,6 +1150,68 @@ export const renderEntityArtifacts = (
         "};\n\n" +
         "// One authoritative field model per compiled entity.\n// oxfmt-ignore\n" +
         `export const generatedEntityFieldModels = ${compactLiteral(fieldModels)} as const satisfies Record<Entity, GeneratedEntityFieldModel>;\n`,
+    },
+    {
+      relativePath: "packages/schemas/src/generated/entity-edit-intents.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "../entity-core";\n\n' +
+        "// Editing intents per entity: named field fragments and the ordered\n" +
+        "// intent names each operation accepts (first is the default).\n" +
+        "// oxfmt-ignore\n" +
+        `export const generatedEntityEditIntents = ${compactLiteral(entityEditIntents)} as const satisfies Partial<Record<Entity, { fields: Record<string, readonly string[]>; create: readonly [string, ...string[]]; update: readonly [string, ...string[]] }>>;\n`,
+    },
+    {
+      relativePath:
+        "packages/schemas/src/generated/entity-field-schema-maps.gen.ts",
+      source:
+        generatedHeader +
+        entities
+          .filter(
+            ({ fieldModel }) =>
+              fieldModel.create.length +
+                fieldModel.update.length +
+                fieldModel.output.length >
+              0,
+          )
+          .map(
+            ({ key, inspector }) =>
+              `import { generated${inspector.singular.replaceAll(" ", "")}FieldSchemas } from "./entity-field-schemas.${key}.gen";\n`,
+          )
+          .join("") +
+        "\n// Every entity's generated field schema maps, by entity key.\n" +
+        "export const entityFieldSchemaMaps = {\n" +
+        entities
+          .filter(
+            ({ fieldModel }) =>
+              fieldModel.create.length +
+                fieldModel.update.length +
+                fieldModel.output.length >
+              0,
+          )
+          .map(
+            ({ key, inspector }) =>
+              `  ${JSON.stringify(key)}: generated${inspector.singular.replaceAll(" ", "")}FieldSchemas,\n`,
+          )
+          .join("") +
+        "} as const;\n",
+    },
+    {
+      relativePath: "packages/schemas/src/generated/entity-sort.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "../entity-core";\n\n' +
+        "/**\n" +
+        " * The declared list-sort roster for entities that expose one, keyed from\n" +
+        " * `model.sort` in `packages/schemas/src/entity-definitions/*.entity.ts`.\n" +
+        " * `computed` names roster entries with no `model.fields` read projection\n" +
+        " * (correlated subqueries and rollups); `groupable` is the `groupBy` allowlist,\n" +
+        " * defaulting to every sortable field when empty.\n" +
+        " */\n" +
+        "// Generated sort rosters stay one entity per line.\n// oxfmt-ignore\n" +
+        `export const generatedEntitySort = ${compactLiteral(entitySort)} as const satisfies Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; computed: readonly string[]; groupable: readonly string[] }>>;\n\n` +
+        "export type GeneratedEntitySortField<E extends keyof typeof generatedEntitySort> =\n" +
+        '  (typeof generatedEntitySort)[E]["fields"][number];\n',
     },
     {
       relativePath: "apps/web/src/server/db/generated/entity-columns.gen.ts",
@@ -985,7 +1251,7 @@ export const renderEntityArtifacts = (
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null;\n' +
+        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: boolean; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean } | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +

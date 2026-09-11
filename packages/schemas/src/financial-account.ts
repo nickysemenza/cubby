@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { financialAccountRelatedFilterFields } from "./related-view";
 import { auditDateFilterFields } from "./base-entity";
 import { financialAccountShortcode } from "./identifiers";
@@ -67,15 +68,8 @@ export type FinancialAccountFilters = z.infer<
   typeof financialAccountFiltersSchema
 >;
 
-export const financialAccountSortableFields = [
-  "name",
-  "provisional",
-  "transactionCount",
-  "createdAt",
-  "updatedAt",
-] as const;
 export type FinancialAccountSortField =
-  (typeof financialAccountSortableFields)[number];
+  GeneratedEntitySortField<"financialAccount">;
 
 export const financialAccountOut = z.object(
   generatedFinancialAccountFieldSchemas.read,

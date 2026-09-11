@@ -5,6 +5,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ImageShortcode,
   type PurchaseId,
@@ -26,7 +27,6 @@ import type {
   VendorOut,
   VendorUpdateData,
 } from "@cubby/schemas/vendor";
-import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -312,7 +312,7 @@ export const vendorList = async (
       )
       .where(whereClause)
       .orderBy(
-        ...buildOrderBy(vendor, sorts, [...vendorSortableFields], {
+        ...buildOrderBy(vendor, sorts, [...generatedEntitySort.vendor.fields], {
           resolve: resolveVendorSort,
         }),
       )

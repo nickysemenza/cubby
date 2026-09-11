@@ -1,5 +1,3 @@
-import { mealSortableFields } from "@cubby/schemas/meal";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -19,7 +17,6 @@ const mealShortcodes = bindShortcodeResolver("meal");
 
 export const mealEntityAdapter = defineEntityAdapter({
   entity: "meal",
-  sort: { fields: mealSortableFields, default: "date" },
   lifecycle: { delete: MEAL_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getMealByShortcode(ctx.db, id),

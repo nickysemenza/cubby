@@ -210,6 +210,17 @@ export default defineEntity({
       "sourceClaims",
       "evidenceTransactionIds",
     ],
+    sort: {
+      fields: ["date", "amount", "createdAt", "updatedAt"],
+      default: "date",
+    },
+    intents: {
+      fields: {
+        full: ["fromPartyId", "toPartyId", "amount", "date", "notes"],
+      },
+      create: ["full"],
+      update: ["full"],
+    },
     output: [
       "id",
       "fromPartyId",

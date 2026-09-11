@@ -6,6 +6,7 @@
  * costing path, and the enrichment-workbench worklist. None of these mutate.
  */
 
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type IngredientId,
   type IngredientShortcode,
@@ -16,7 +17,6 @@ import type {
   IngredientListItem,
   IngredientMergeCandidateImpact,
 } from "@cubby/schemas/ingredient";
-import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -630,7 +630,7 @@ const ingredientListImpl = async (
   const orderByClause = buildOrderBy(
     ingredient,
     sorts,
-    [...ingredientSortableFields],
+    [...generatedEntitySort.ingredient.fields],
     { resolve: resolveIngredientSort },
   );
 

@@ -54957,7 +54957,7 @@
                         "enum": ["recipe"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema27"
+                        "$ref": "#/components/schemas/input_schema32"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.recipe.update_body"
@@ -55017,7 +55017,7 @@
                         "enum": ["inventory"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema82"
+                        "$ref": "#/components/schemas/input_schema87"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.inventory.update_body"
@@ -55037,7 +55037,7 @@
                         "enum": ["meal"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema83"
+                        "$ref": "#/components/schemas/input_schema88"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.meal.update_body"
@@ -55057,7 +55057,7 @@
                         "enum": ["ledgerParty"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema45"
+                        "$ref": "#/components/schemas/input_schema50"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.ledgerParty.update_body"
@@ -55099,7 +55099,7 @@
                         "enum": ["project"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema53"
+                        "$ref": "#/components/schemas/input_schema58"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.project.update_body"
@@ -55119,7 +55119,7 @@
                         "enum": ["task"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema59"
+                        "$ref": "#/components/schemas/input_schema64"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.task.update_body"
@@ -55139,7 +55139,7 @@
                         "enum": ["vendor"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema61"
+                        "$ref": "#/components/schemas/input_schema66"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.vendor.update_body"
@@ -55159,7 +55159,7 @@
                         "enum": ["purchase"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema66"
+                        "$ref": "#/components/schemas/input_schema71"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.purchase.update_body"
@@ -55179,7 +55179,7 @@
                         "enum": ["financialAccount"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema65"
+                        "$ref": "#/components/schemas/input_schema70"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.financialAccount.update_body"
@@ -55199,7 +55199,7 @@
                         "enum": ["financialTransaction"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema50"
+                        "$ref": "#/components/schemas/input_schema55"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.financialTransaction.update_body"
@@ -55241,7 +55241,7 @@
                         "enum": ["expense"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema91"
+                        "$ref": "#/components/schemas/input_schema96"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.expense.update_body"
@@ -55261,7 +55261,7 @@
                         "enum": ["image"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema17"
+                        "$ref": "#/components/schemas/input_schema22"
                       },
                       "data": {
                         "$ref": "#/components/schemas/input_resources.image.update_body"
@@ -55301,7 +55301,7 @@
                     ]
                   },
                   "ids": {
-                    "$ref": "#/components/schemas/input_schema95"
+                    "$ref": "#/components/schemas/input_schema100"
                   }
                 },
                 "required": ["action", "entity", "ids"]
@@ -55320,13 +55320,13 @@
                         "enum": ["product"]
                       },
                       "ids": {
-                        "$ref": "#/components/schemas/input_schema95"
+                        "$ref": "#/components/schemas/input_schema100"
                       },
                       "data": {
                         "type": "object",
                         "properties": {
                           "stockTracked": {
-                            "$ref": "#/components/schemas/input_schema76"
+                            "$ref": "#/components/schemas/input_schema81"
                           }
                         },
                         "additionalProperties": false
@@ -55346,13 +55346,13 @@
                         "enum": ["ingredient"]
                       },
                       "ids": {
-                        "$ref": "#/components/schemas/input_schema95"
+                        "$ref": "#/components/schemas/input_schema100"
                       },
                       "data": {
                         "type": "object",
                         "properties": {
                           "usuallyOnHand": {
-                            "$ref": "#/components/schemas/input_schema77"
+                            "$ref": "#/components/schemas/input_schema82"
                           }
                         },
                         "additionalProperties": false
@@ -55372,13 +55372,13 @@
                         "enum": ["location"]
                       },
                       "ids": {
-                        "$ref": "#/components/schemas/input_schema95"
+                        "$ref": "#/components/schemas/input_schema100"
                       },
                       "data": {
                         "type": "object",
                         "properties": {
                           "parentId": {
-                            "$ref": "#/components/schemas/input_schema79"
+                            "$ref": "#/components/schemas/input_schema84"
                           }
                         },
                         "additionalProperties": false
@@ -55398,25 +55398,25 @@
                         "enum": ["task"]
                       },
                       "ids": {
-                        "$ref": "#/components/schemas/input_schema95"
+                        "$ref": "#/components/schemas/input_schema100"
                       },
                       "data": {
                         "type": "object",
                         "properties": {
                           "projectId": {
-                            "$ref": "#/components/schemas/input_schema85"
+                            "$ref": "#/components/schemas/input_schema90"
                           },
                           "status": {
-                            "$ref": "#/components/schemas/input_schema84"
+                            "$ref": "#/components/schemas/input_schema89"
                           },
                           "trade": {
-                            "$ref": "#/components/schemas/input_schema88"
+                            "$ref": "#/components/schemas/input_schema93"
                           },
                           "dueDate": {
-                            "$ref": "#/components/schemas/input_schema86"
+                            "$ref": "#/components/schemas/input_schema91"
                           },
                           "dueEndDate": {
-                            "$ref": "#/components/schemas/input_schema87"
+                            "$ref": "#/components/schemas/input_schema92"
                           }
                         },
                         "additionalProperties": false
@@ -55436,19 +55436,19 @@
                         "enum": ["expense"]
                       },
                       "ids": {
-                        "$ref": "#/components/schemas/input_schema95"
+                        "$ref": "#/components/schemas/input_schema100"
                       },
                       "data": {
                         "type": "object",
                         "properties": {
                           "projectId": {
-                            "$ref": "#/components/schemas/input_schema94"
+                            "$ref": "#/components/schemas/input_schema99"
                           },
                           "trade": {
-                            "$ref": "#/components/schemas/input_schema93"
+                            "$ref": "#/components/schemas/input_schema98"
                           },
                           "costType": {
-                            "$ref": "#/components/schemas/input_schema92"
+                            "$ref": "#/components/schemas/input_schema97"
                           }
                         },
                         "additionalProperties": false
@@ -55518,7 +55518,7 @@
                         "enum": ["resources"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema53"
+                        "$ref": "#/components/schemas/input_schema58"
                       },
                       "items": {
                         "minItems": 1,
@@ -55555,7 +55555,7 @@
                         "enum": ["products"]
                       },
                       "id": {
-                        "$ref": "#/components/schemas/input_schema66"
+                        "$ref": "#/components/schemas/input_schema71"
                       },
                       "items": {
                         "minItems": 1,
@@ -55609,7 +55609,7 @@
             "maxItems": 500,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           }
         },
@@ -55625,7 +55625,7 @@
           "entityType": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema96"
+                "$ref": "#/components/schemas/input_schema101"
               }
             ]
           }
@@ -55636,7 +55636,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema17"
+            "$ref": "#/components/schemas/input_schema22"
           }
         },
         "required": ["id"]
@@ -55645,7 +55645,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema17"
+            "$ref": "#/components/schemas/input_schema22"
           },
           "data": {
             "$ref": "#/components/schemas/input_resources.image.update_body"
@@ -55657,13 +55657,13 @@
         "type": "object",
         "properties": {
           "filename": {
-            "$ref": "#/components/schemas/input_schema97"
+            "$ref": "#/components/schemas/input_schema102"
           },
           "size": {
-            "$ref": "#/components/schemas/input_schema98"
+            "$ref": "#/components/schemas/input_schema103"
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema99"
+            "$ref": "#/components/schemas/input_schema104"
           },
           "contentType": {
             "type": "string",
@@ -55680,13 +55680,13 @@
         "type": "object",
         "properties": {
           "filename": {
-            "$ref": "#/components/schemas/input_schema97"
+            "$ref": "#/components/schemas/input_schema102"
           },
           "size": {
-            "$ref": "#/components/schemas/input_schema98"
+            "$ref": "#/components/schemas/input_schema103"
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema99"
+            "$ref": "#/components/schemas/input_schema104"
           },
           "contentType": {
             "type": "string",
@@ -55748,13 +55748,13 @@
                   "$ref": "#/components/schemas/input_schema2"
                 },
                 "amount": {
-                  "$ref": "#/components/schemas/input_schema19"
+                  "$ref": "#/components/schemas/input_schema24"
                 },
                 "placement": {
                   "description": "Defaults to 'stock'; pass 'installed' for a fixed fixture.",
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema38"
+                      "$ref": "#/components/schemas/input_schema43"
                     }
                   ]
                 }
@@ -55775,7 +55775,7 @@
               "type": "object",
               "properties": {
                 "inventoryEntryId": {
-                  "$ref": "#/components/schemas/input_schema82"
+                  "$ref": "#/components/schemas/input_schema87"
                 },
                 "quantity": {
                   "type": "number",
@@ -55788,14 +55788,14 @@
             }
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema39"
+            "$ref": "#/components/schemas/input_schema44"
           },
           "reason": {
             "default": null,
             "description": "Free text stored as each Expense's notes — broken, thrown away, given away.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema100"
+                "$ref": "#/components/schemas/input_schema105"
               }
             ]
           }
@@ -55818,10 +55818,10 @@
               "type": "object",
               "properties": {
                 "inventoryEntryId": {
-                  "$ref": "#/components/schemas/input_schema82"
+                  "$ref": "#/components/schemas/input_schema87"
                 },
                 "quantity": {
-                  "$ref": "#/components/schemas/input_schema19"
+                  "$ref": "#/components/schemas/input_schema24"
                 }
               },
               "required": ["inventoryEntryId", "quantity"]
@@ -55844,7 +55844,7 @@
                 "id": {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema82"
+                      "$ref": "#/components/schemas/input_schema87"
                     }
                   ]
                 },
@@ -55855,7 +55855,7 @@
                   "$ref": "#/components/schemas/input_schema0"
                 },
                 "amount": {
-                  "$ref": "#/components/schemas/input_schema19"
+                  "$ref": "#/components/schemas/input_schema24"
                 }
               },
               "required": ["productId", "locationId", "amount"]
@@ -55880,7 +55880,7 @@
               "type": "object",
               "properties": {
                 "inventoryEntryId": {
-                  "$ref": "#/components/schemas/input_schema82"
+                  "$ref": "#/components/schemas/input_schema87"
                 },
                 "targetLocationId": {
                   "$ref": "#/components/schemas/input_schema0"
@@ -55888,7 +55888,7 @@
                 "quantity": {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema19"
+                      "$ref": "#/components/schemas/input_schema24"
                     }
                   ]
                 }
@@ -55908,7 +55908,7 @@
           "expectedInventoryEntryIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema82"
+              "$ref": "#/components/schemas/input_schema87"
             }
           },
           "snapshotUpdatedAt": {
@@ -55929,7 +55929,7 @@
                       "enum": ["verify"]
                     },
                     "inventoryEntryId": {
-                      "$ref": "#/components/schemas/input_schema82"
+                      "$ref": "#/components/schemas/input_schema87"
                     }
                   },
                   "required": ["kind", "inventoryEntryId"]
@@ -55942,10 +55942,10 @@
                       "enum": ["adjust"]
                     },
                     "inventoryEntryId": {
-                      "$ref": "#/components/schemas/input_schema82"
+                      "$ref": "#/components/schemas/input_schema87"
                     },
                     "amount": {
-                      "$ref": "#/components/schemas/input_schema19"
+                      "$ref": "#/components/schemas/input_schema24"
                     }
                   },
                   "required": ["kind", "inventoryEntryId", "amount"]
@@ -55958,7 +55958,7 @@
                       "enum": ["remove"]
                     },
                     "inventoryEntryId": {
-                      "$ref": "#/components/schemas/input_schema82"
+                      "$ref": "#/components/schemas/input_schema87"
                     }
                   },
                   "required": ["kind", "inventoryEntryId"]
@@ -55971,7 +55971,7 @@
                       "enum": ["relocate"]
                     },
                     "inventoryEntryId": {
-                      "$ref": "#/components/schemas/input_schema82"
+                      "$ref": "#/components/schemas/input_schema87"
                     },
                     "targetLocationId": {
                       "$ref": "#/components/schemas/input_schema0"
@@ -56004,12 +56004,12 @@
               "type": "object",
               "properties": {
                 "entryId": {
-                  "$ref": "#/components/schemas/input_schema82"
+                  "$ref": "#/components/schemas/input_schema87"
                 },
                 "quantity": {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema19"
+                      "$ref": "#/components/schemas/input_schema24"
                     }
                   ]
                 }
@@ -56037,7 +56037,7 @@
                 "$ref": "#/components/schemas/input_product.findOrCreateByCode_body"
               },
               {
-                "$ref": "#/components/schemas/input_schema102"
+                "$ref": "#/components/schemas/input_schema107"
               }
             ],
             "description": "The scanned code."
@@ -56089,13 +56089,13 @@
         "type": "object",
         "properties": {
           "mealId": {
-            "$ref": "#/components/schemas/input_schema83"
+            "$ref": "#/components/schemas/input_schema88"
           },
           "recipeId": {
             "description": "Recipe ID to plan into the meal",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema27"
+                "$ref": "#/components/schemas/input_schema32"
               }
             ]
           },
@@ -56104,7 +56104,7 @@
             "description": "Scale multiplier (1 = as written)",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema42"
+                "$ref": "#/components/schemas/input_schema47"
               }
             ]
           },
@@ -56112,7 +56112,7 @@
             "description": "Sort order within the meal",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema103"
+                "$ref": "#/components/schemas/input_schema108"
               }
             ]
           }
@@ -56123,7 +56123,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema104"
+            "$ref": "#/components/schemas/input_schema109"
           }
         },
         "required": ["id"]
@@ -56132,14 +56132,14 @@
         "type": "object",
         "properties": {
           "mealRecipeId": {
-            "$ref": "#/components/schemas/input_schema104"
+            "$ref": "#/components/schemas/input_schema109"
           },
           "estimatedYieldGrams": {
             "anyOf": [
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema105"
+                    "$ref": "#/components/schemas/input_schema110"
                   }
                 ]
               },
@@ -56155,7 +56155,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema105"
+                    "$ref": "#/components/schemas/input_schema110"
                   }
                 ]
               },
@@ -56178,13 +56178,13 @@
                       "enum": ["set"]
                     },
                     "mealId": {
-                      "$ref": "#/components/schemas/input_schema83"
+                      "$ref": "#/components/schemas/input_schema88"
                     },
                     "ledgerPartyId": {
-                      "$ref": "#/components/schemas/input_schema45"
+                      "$ref": "#/components/schemas/input_schema50"
                     },
                     "grams": {
-                      "$ref": "#/components/schemas/input_schema105"
+                      "$ref": "#/components/schemas/input_schema110"
                     },
                     "confirmed": {
                       "type": "boolean"
@@ -56206,10 +56206,10 @@
                       "enum": ["remove"]
                     },
                     "mealId": {
-                      "$ref": "#/components/schemas/input_schema83"
+                      "$ref": "#/components/schemas/input_schema88"
                     },
                     "ledgerPartyId": {
-                      "$ref": "#/components/schemas/input_schema45"
+                      "$ref": "#/components/schemas/input_schema50"
                     }
                   },
                   "required": ["action", "mealId", "ledgerPartyId"]
@@ -56224,12 +56224,12 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema104"
+            "$ref": "#/components/schemas/input_schema109"
           },
           "scale": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema42"
+                "$ref": "#/components/schemas/input_schema47"
               }
             ]
           },
@@ -56311,7 +56311,7 @@
             "$ref": "#/components/schemas/input_schema2"
           },
           "upc": {
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema106"
           }
         },
         "required": ["id", "upc"]
@@ -56373,19 +56373,19 @@
             "description": "Units leaving the household, as a positive count. May be fractional — half a coil is 0.5. Stored on the Expense as a NEGATIVE productQuantity.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema106"
+                "$ref": "#/components/schemas/input_schema111"
               }
             ]
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema39"
+            "$ref": "#/components/schemas/input_schema44"
           },
           "reason": {
             "default": null,
             "description": "Free text stored as the Expense notes — broken, thrown away, given away.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema107"
+                "$ref": "#/components/schemas/input_schema112"
               }
             ]
           },
@@ -56399,7 +56399,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema82"
+                    "$ref": "#/components/schemas/input_schema87"
                   }
                 ]
               },
@@ -56423,7 +56423,7 @@
                 "enum": ["barcode"]
               },
               "value": {
-                "$ref": "#/components/schemas/input_schema101"
+                "$ref": "#/components/schemas/input_schema106"
               }
             },
             "required": ["kind", "value"]
@@ -56436,7 +56436,7 @@
                 "enum": ["isbn"]
               },
               "value": {
-                "$ref": "#/components/schemas/input_schema7"
+                "$ref": "#/components/schemas/input_schema8"
               }
             },
             "required": ["kind", "value"]
@@ -56447,7 +56447,7 @@
         "type": "object",
         "properties": {
           "upc": {
-            "$ref": "#/components/schemas/input_schema101"
+            "$ref": "#/components/schemas/input_schema106"
           },
           "defaultName": {
             "type": "string"
@@ -56498,22 +56498,6 @@
               }
             ]
           },
-          "isbn": {
-            "anyOf": [
-              {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/input_schema7"
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "nullable": true,
-                "enum": [null]
-              }
-            ]
-          },
           "expectedQuantity": {
             "nullable": true,
             "type": "integer",
@@ -56521,36 +56505,20 @@
             "exclusiveMinimum": true,
             "maximum": 9007199254740991
           },
+          "isbn": {
+            "$ref": "#/components/schemas/input_schema7"
+          },
           "model": {
-            "nullable": true,
-            "type": "string"
+            "$ref": "#/components/schemas/input_schema10"
           },
           "notes": {
-            "nullable": true,
-            "type": "string"
+            "$ref": "#/components/schemas/input_schema11"
           },
           "price": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/input_schema9"
-              }
-            ]
+            "$ref": "#/components/schemas/input_schema13"
           },
           "category": {
-            "anyOf": [
-              {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/input_schema1"
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "nullable": true,
-                "enum": [null]
-              }
-            ]
+            "$ref": "#/components/schemas/input_schema12"
           }
         },
         "required": ["name"]
@@ -56565,7 +56533,7 @@
             "maxItems": 200,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema53"
+              "$ref": "#/components/schemas/input_schema58"
             }
           }
         },
@@ -56575,7 +56543,7 @@
         "type": "object",
         "properties": {
           "projectId": {
-            "$ref": "#/components/schemas/input_schema53"
+            "$ref": "#/components/schemas/input_schema58"
           },
           "productIds": {
             "minItems": 1,
@@ -56595,7 +56563,7 @@
             "minItems": 1,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema59"
+              "$ref": "#/components/schemas/input_schema64"
             }
           },
           "project": {
@@ -56608,7 +56576,7 @@
         "type": "object",
         "properties": {
           "projectId": {
-            "$ref": "#/components/schemas/input_schema53"
+            "$ref": "#/components/schemas/input_schema58"
           },
           "productId": {
             "$ref": "#/components/schemas/input_schema2"
@@ -56623,7 +56591,7 @@
         "type": "object",
         "properties": {
           "purchaseId": {
-            "$ref": "#/components/schemas/input_schema66"
+            "$ref": "#/components/schemas/input_schema71"
           },
           "productIds": {
             "minItems": 1,
@@ -56640,13 +56608,13 @@
         "type": "object",
         "properties": {
           "purchaseId": {
-            "$ref": "#/components/schemas/input_schema66"
+            "$ref": "#/components/schemas/input_schema71"
           },
           "expenseIds": {
             "minItems": 1,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema91"
+              "$ref": "#/components/schemas/input_schema96"
             }
           }
         },
@@ -56656,13 +56624,13 @@
         "type": "object",
         "properties": {
           "keepId": {
-            "$ref": "#/components/schemas/input_schema66"
+            "$ref": "#/components/schemas/input_schema71"
           },
           "mergeIds": {
             "minItems": 1,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema66"
+              "$ref": "#/components/schemas/input_schema71"
             }
           }
         },
@@ -56672,7 +56640,7 @@
         "type": "object",
         "properties": {
           "expenseId": {
-            "$ref": "#/components/schemas/input_schema91"
+            "$ref": "#/components/schemas/input_schema96"
           },
           "attributionPolicy": {
             "type": "string",
@@ -56695,15 +56663,15 @@
                 "lineKind": {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema70"
+                      "$ref": "#/components/schemas/input_schema75"
                     }
                   ]
                 },
                 "costType": {
-                  "$ref": "#/components/schemas/input_schema72"
+                  "$ref": "#/components/schemas/input_schema77"
                 },
                 "trade": {
-                  "$ref": "#/components/schemas/input_schema60"
+                  "$ref": "#/components/schemas/input_schema65"
                 },
                 "projectId": {
                   "default": null,
@@ -56711,7 +56679,7 @@
                     {
                       "allOf": [
                         {
-                          "$ref": "#/components/schemas/input_schema53"
+                          "$ref": "#/components/schemas/input_schema58"
                         }
                       ]
                     },
@@ -56744,7 +56712,7 @@
                   "description": "Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon \"Account adjustment\", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.",
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema108"
+                      "$ref": "#/components/schemas/input_schema113"
                     }
                   ]
                 },
@@ -56752,7 +56720,7 @@
                   "description": "Omit to inherit the original Expense notes; pass null to clear them for this part.",
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema109"
+                      "$ref": "#/components/schemas/input_schema114"
                     }
                   ]
                 }
@@ -56767,10 +56735,10 @@
         "type": "object",
         "properties": {
           "cookbookId": {
-            "$ref": "#/components/schemas/input_schema110"
+            "$ref": "#/components/schemas/input_schema115"
           },
           "recipeId": {
-            "$ref": "#/components/schemas/input_schema27"
+            "$ref": "#/components/schemas/input_schema32"
           },
           "sourceRecipeId": {
             "type": "string",
@@ -56787,7 +56755,7 @@
         "type": "object",
         "properties": {
           "cookbookId": {
-            "$ref": "#/components/schemas/input_schema110"
+            "$ref": "#/components/schemas/input_schema115"
           }
         },
         "required": ["cookbookId"]
@@ -56796,7 +56764,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema27"
+            "$ref": "#/components/schemas/input_schema32"
           }
         },
         "required": ["id"]
@@ -56831,7 +56799,7 @@
             }
           },
           "body": {
-            "$ref": "#/components/schemas/input_schema111"
+            "$ref": "#/components/schemas/input_schema116"
           }
         },
         "required": ["path", "headers", "body"]
@@ -56840,7 +56808,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema27"
+            "$ref": "#/components/schemas/input_schema32"
           },
           "guidance": {
             "nullable": true,
@@ -56885,7 +56853,7 @@
         "type": "object",
         "properties": {
           "cookbookId": {
-            "$ref": "#/components/schemas/input_schema110"
+            "$ref": "#/components/schemas/input_schema115"
           },
           "productId": {
             "anyOf": [
@@ -56956,7 +56924,7 @@
                 },
                 "required": ["label", "sha256", "title"],
                 "additionalProperties": {
-                  "$ref": "#/components/schemas/input_schema112"
+                  "$ref": "#/components/schemas/input_schema117"
                 }
               },
               "cover": {
@@ -56964,7 +56932,7 @@
                   {
                     "allOf": [
                       {
-                        "$ref": "#/components/schemas/input_schema113"
+                        "$ref": "#/components/schemas/input_schema118"
                       }
                     ]
                   },
@@ -57070,7 +57038,7 @@
                                       }
                                     },
                                     "additionalProperties": {
-                                      "$ref": "#/components/schemas/input_schema115"
+                                      "$ref": "#/components/schemas/input_schema120"
                                     }
                                   },
                                   "equipment": {
@@ -57090,7 +57058,7 @@
                                   }
                                 },
                                 "additionalProperties": {
-                                  "$ref": "#/components/schemas/input_schema116"
+                                  "$ref": "#/components/schemas/input_schema121"
                                 }
                               },
                               "sections": {
@@ -57139,7 +57107,7 @@
                                                   },
                                                   "required": ["unit", "value"],
                                                   "additionalProperties": {
-                                                    "$ref": "#/components/schemas/input_schema117"
+                                                    "$ref": "#/components/schemas/input_schema122"
                                                   }
                                                 }
                                               },
@@ -57153,7 +57121,7 @@
                                             },
                                             "required": ["name", "amounts"],
                                             "additionalProperties": {
-                                              "$ref": "#/components/schemas/input_schema118"
+                                              "$ref": "#/components/schemas/input_schema123"
                                             }
                                           },
                                           "confidence": {
@@ -57164,7 +57132,7 @@
                                               {
                                                 "allOf": [
                                                   {
-                                                    "$ref": "#/components/schemas/input_schema119"
+                                                    "$ref": "#/components/schemas/input_schema124"
                                                   }
                                                 ]
                                               },
@@ -57183,7 +57151,7 @@
                                           "confidence"
                                         ],
                                         "additionalProperties": {
-                                          "$ref": "#/components/schemas/input_schema123"
+                                          "$ref": "#/components/schemas/input_schema128"
                                         }
                                       }
                                     },
@@ -57204,20 +57172,20 @@
                                             "default": [],
                                             "type": "array",
                                             "items": {
-                                              "$ref": "#/components/schemas/input_schema119"
+                                              "$ref": "#/components/schemas/input_schema124"
                                             }
                                           }
                                         },
                                         "required": ["text", "line"],
                                         "additionalProperties": {
-                                          "$ref": "#/components/schemas/input_schema124"
+                                          "$ref": "#/components/schemas/input_schema129"
                                         }
                                       }
                                     }
                                   },
                                   "required": ["ingredients", "steps"],
                                   "additionalProperties": {
-                                    "$ref": "#/components/schemas/input_schema125"
+                                    "$ref": "#/components/schemas/input_schema130"
                                   }
                                 }
                               },
@@ -57225,7 +57193,7 @@
                                 "default": [],
                                 "type": "array",
                                 "items": {
-                                  "$ref": "#/components/schemas/input_schema113"
+                                  "$ref": "#/components/schemas/input_schema118"
                                 }
                               },
                               "notes": {
@@ -57250,13 +57218,13 @@
                                       "default": [],
                                       "type": "array",
                                       "items": {
-                                        "$ref": "#/components/schemas/input_schema119"
+                                        "$ref": "#/components/schemas/input_schema124"
                                       }
                                     }
                                   },
                                   "required": ["text", "line"],
                                   "additionalProperties": {
-                                    "$ref": "#/components/schemas/input_schema126"
+                                    "$ref": "#/components/schemas/input_schema131"
                                   }
                                 }
                               },
@@ -57265,7 +57233,7 @@
                                 "type": "string"
                               },
                               "span": {
-                                "$ref": "#/components/schemas/input_schema127"
+                                "$ref": "#/components/schemas/input_schema132"
                               }
                             },
                             "required": [
@@ -57278,7 +57246,7 @@
                               "span"
                             ],
                             "additionalProperties": {
-                              "$ref": "#/components/schemas/input_schema129"
+                              "$ref": "#/components/schemas/input_schema134"
                             }
                           },
                           {
@@ -57303,16 +57271,16 @@
                                 "default": [],
                                 "type": "array",
                                 "items": {
-                                  "$ref": "#/components/schemas/input_schema113"
+                                  "$ref": "#/components/schemas/input_schema118"
                                 }
                               },
                               "span": {
-                                "$ref": "#/components/schemas/input_schema127"
+                                "$ref": "#/components/schemas/input_schema132"
                               }
                             },
                             "required": ["kind", "id", "title", "name", "span"],
                             "additionalProperties": {
-                              "$ref": "#/components/schemas/input_schema130"
+                              "$ref": "#/components/schemas/input_schema135"
                             }
                           }
                         ]
@@ -57321,7 +57289,7 @@
                   },
                   "required": ["id", "items"],
                   "additionalProperties": {
-                    "$ref": "#/components/schemas/input_schema131"
+                    "$ref": "#/components/schemas/input_schema136"
                   }
                 }
               },
@@ -57340,22 +57308,22 @@
                       "minLength": 1
                     },
                     "kind": {
-                      "$ref": "#/components/schemas/input_schema120"
+                      "$ref": "#/components/schemas/input_schema125"
                     },
                     "method": {
-                      "$ref": "#/components/schemas/input_schema121"
+                      "$ref": "#/components/schemas/input_schema126"
                     }
                   },
                   "required": ["from", "to", "kind", "method"],
                   "additionalProperties": {
-                    "$ref": "#/components/schemas/input_schema132"
+                    "$ref": "#/components/schemas/input_schema137"
                   }
                 }
               }
             },
             "required": ["contract", "source", "chapters"],
             "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema133"
+              "$ref": "#/components/schemas/input_schema138"
             }
           },
           "report": {
@@ -57395,7 +57363,7 @@
                 "items": {
                   "type": "object",
                   "additionalProperties": {
-                    "$ref": "#/components/schemas/input_schema134"
+                    "$ref": "#/components/schemas/input_schema139"
                   }
                 }
               },
@@ -57405,7 +57373,7 @@
                 "items": {
                   "type": "object",
                   "additionalProperties": {
-                    "$ref": "#/components/schemas/input_schema135"
+                    "$ref": "#/components/schemas/input_schema140"
                   }
                 }
               },
@@ -57443,7 +57411,7 @@
                 },
                 "required": ["nav_titles", "matched"],
                 "additionalProperties": {
-                  "$ref": "#/components/schemas/input_schema136"
+                  "$ref": "#/components/schemas/input_schema141"
                 }
               },
               "usage_by_model": {
@@ -57467,7 +57435,7 @@
                   },
                   "required": ["model", "calls"],
                   "additionalProperties": {
-                    "$ref": "#/components/schemas/input_schema137"
+                    "$ref": "#/components/schemas/input_schema142"
                   }
                 }
               }
@@ -57484,7 +57452,7 @@
               "crosscheck"
             ],
             "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema138"
+              "$ref": "#/components/schemas/input_schema143"
             }
           },
           "author": {
@@ -57621,7 +57589,7 @@
               "type": "object",
               "properties": {
                 "id": {
-                  "$ref": "#/components/schemas/input_schema59"
+                  "$ref": "#/components/schemas/input_schema64"
                 },
                 "sortOrder": {
                   "type": "number"
@@ -57634,7 +57602,7 @@
             "type": "object",
             "properties": {
               "id": {
-                "$ref": "#/components/schemas/input_schema59"
+                "$ref": "#/components/schemas/input_schema64"
               },
               "patch": {
                 "type": "object",
@@ -57642,7 +57610,7 @@
                   "status": {
                     "allOf": [
                       {
-                        "$ref": "#/components/schemas/input_schema58"
+                        "$ref": "#/components/schemas/input_schema63"
                       }
                     ]
                   },
@@ -57651,7 +57619,7 @@
                       {
                         "allOf": [
                           {
-                            "$ref": "#/components/schemas/input_schema53"
+                            "$ref": "#/components/schemas/input_schema58"
                           }
                         ]
                       },
@@ -57665,7 +57633,7 @@
                   "trade": {
                     "allOf": [
                       {
-                        "$ref": "#/components/schemas/input_schema60"
+                        "$ref": "#/components/schemas/input_schema65"
                       }
                     ]
                   }
@@ -57681,7 +57649,7 @@
         "type": "object",
         "properties": {
           "id": {
-            "$ref": "#/components/schemas/input_schema61"
+            "$ref": "#/components/schemas/input_schema66"
           }
         },
         "required": ["id"]
@@ -57690,13 +57658,13 @@
         "type": "object",
         "properties": {
           "keepId": {
-            "$ref": "#/components/schemas/input_schema61"
+            "$ref": "#/components/schemas/input_schema66"
           },
           "mergeIds": {
             "minItems": 1,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema61"
+              "$ref": "#/components/schemas/input_schema66"
             }
           }
         },
@@ -57741,27 +57709,14 @@
             ]
           },
           "isbn": {
-            "anyOf": [
-              {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/input_schema7"
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "nullable": true,
-                "enum": [null]
-              }
-            ]
+            "$ref": "#/components/schemas/input_schema7"
           },
           "fdc_id": {
             "anyOf": [
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema8"
+                    "$ref": "#/components/schemas/input_schema9"
                   }
                 ]
               },
@@ -57776,32 +57731,17 @@
             "type": "string"
           },
           "model": {
-            "nullable": true,
-            "type": "string"
+            "$ref": "#/components/schemas/input_schema10"
           },
           "notes": {
-            "nullable": true,
-            "type": "string"
+            "$ref": "#/components/schemas/input_schema11"
           },
           "expectedQuantity": {
             "nullable": true,
             "type": "number"
           },
           "category": {
-            "anyOf": [
-              {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/input_schema1"
-                  }
-                ]
-              },
-              {
-                "type": "string",
-                "nullable": true,
-                "enum": [null]
-              }
-            ]
+            "$ref": "#/components/schemas/input_schema12"
           },
           "ingredientId": {
             "anyOf": [
@@ -57820,24 +57760,20 @@
             ]
           },
           "price": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/input_schema9"
-              }
-            ]
+            "$ref": "#/components/schemas/input_schema13"
           },
           "unitMappings": {
             "default": [],
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema10"
+              "$ref": "#/components/schemas/input_schema15"
             }
           },
           "externalIds": {
             "default": [],
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema15"
+                "$ref": "#/components/schemas/input_schema20"
               }
             ]
           },
@@ -57852,7 +57788,7 @@
           "pendingImageIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           }
         },
@@ -57905,7 +57841,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema7"
+                    "$ref": "#/components/schemas/input_schema8"
                   }
                 ]
               },
@@ -57921,7 +57857,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema8"
+                    "$ref": "#/components/schemas/input_schema9"
                   }
                 ]
               },
@@ -57982,20 +57918,20 @@
           "price": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema9"
+                "$ref": "#/components/schemas/input_schema14"
               }
             ]
           },
           "unitMappings": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema10"
+              "$ref": "#/components/schemas/input_schema15"
             }
           },
           "externalIds": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema15"
+                "$ref": "#/components/schemas/input_schema20"
               }
             ]
           },
@@ -58004,24 +57940,24 @@
             "type": "boolean"
           },
           "stockTracked": {
-            "$ref": "#/components/schemas/input_schema76"
+            "$ref": "#/components/schemas/input_schema81"
           },
           "pendingImageIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           },
           "removeImageIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           },
           "imageOrder": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           }
         }
@@ -58034,14 +57970,14 @@
             "minLength": 1
           },
           "meta": {
-            "$ref": "#/components/schemas/input_schema18"
+            "$ref": "#/components/schemas/input_schema23"
           },
           "yield": {
             "anyOf": [
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema19"
+                    "$ref": "#/components/schemas/input_schema24"
                   }
                 ]
               },
@@ -58057,7 +57993,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema20"
+                    "$ref": "#/components/schemas/input_schema25"
                   }
                 ]
               },
@@ -58073,7 +58009,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema21"
+                    "$ref": "#/components/schemas/input_schema26"
                   }
                 ]
               },
@@ -58089,7 +58025,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema22"
+                    "$ref": "#/components/schemas/input_schema27"
                   }
                 ]
               },
@@ -58101,12 +58037,12 @@
             ]
           },
           "sections": {
-            "$ref": "#/components/schemas/input_schema23"
+            "$ref": "#/components/schemas/input_schema28"
           },
           "pendingImageIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           }
         },
@@ -58122,7 +58058,7 @@
           "meta": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema18"
+                "$ref": "#/components/schemas/input_schema23"
               }
             ]
           },
@@ -58131,7 +58067,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema19"
+                    "$ref": "#/components/schemas/input_schema24"
                   }
                 ]
               },
@@ -58147,7 +58083,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema20"
+                    "$ref": "#/components/schemas/input_schema25"
                   }
                 ]
               },
@@ -58163,7 +58099,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema21"
+                    "$ref": "#/components/schemas/input_schema26"
                   }
                 ]
               },
@@ -58179,7 +58115,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema22"
+                    "$ref": "#/components/schemas/input_schema27"
                   }
                 ]
               },
@@ -58193,26 +58129,26 @@
           "sections": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema23"
+                "$ref": "#/components/schemas/input_schema28"
               }
             ]
           },
           "pendingImageIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           },
           "removeImageIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           },
           "imageOrder": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           }
         }
@@ -58229,7 +58165,7 @@
             "default": [],
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema28"
+              "$ref": "#/components/schemas/input_schema33"
             },
             "description": "Alternate names for this ingredient"
           },
@@ -58237,7 +58173,7 @@
             "default": [],
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema29"
+              "$ref": "#/components/schemas/input_schema34"
             }
           },
           "usuallyOnHand": {
@@ -58253,11 +58189,11 @@
           "naKinds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema29"
+              "$ref": "#/components/schemas/input_schema34"
             }
           },
           "usuallyOnHand": {
-            "$ref": "#/components/schemas/input_schema77"
+            "$ref": "#/components/schemas/input_schema82"
           },
           "name": {
             "type": "string",
@@ -58268,7 +58204,7 @@
             "description": "New aliases (replaces existing list)",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema78"
+                "$ref": "#/components/schemas/input_schema83"
               }
             ]
           }
@@ -58278,31 +58214,31 @@
         "type": "object",
         "properties": {
           "name": {
-            "$ref": "#/components/schemas/input_schema30"
+            "$ref": "#/components/schemas/input_schema35"
           },
           "aliases": {
             "default": [],
             "description": "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema31"
+                "$ref": "#/components/schemas/input_schema36"
               }
             ]
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema32"
+            "$ref": "#/components/schemas/input_schema37"
           },
           "type": {
-            "$ref": "#/components/schemas/input_schema34"
+            "$ref": "#/components/schemas/input_schema39"
           },
           "productId": {
-            "$ref": "#/components/schemas/input_schema35"
+            "$ref": "#/components/schemas/input_schema40"
           },
           "parentId": {
-            "$ref": "#/components/schemas/input_schema36"
+            "$ref": "#/components/schemas/input_schema41"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema37"
+            "$ref": "#/components/schemas/input_schema42"
           }
         },
         "required": ["name"]
@@ -58313,45 +58249,45 @@
           "name": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema30"
+                "$ref": "#/components/schemas/input_schema35"
               }
             ]
           },
           "aliases": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema31"
+                "$ref": "#/components/schemas/input_schema36"
               }
             ]
           },
           "tags": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema32"
+                "$ref": "#/components/schemas/input_schema37"
               }
             ]
           },
           "type": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema34"
+                "$ref": "#/components/schemas/input_schema39"
               }
             ]
           },
           "productId": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema35"
+                "$ref": "#/components/schemas/input_schema40"
               }
             ]
           },
           "parentId": {
-            "$ref": "#/components/schemas/input_schema79"
+            "$ref": "#/components/schemas/input_schema84"
           },
           "pendingImageIds": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema37"
+                "$ref": "#/components/schemas/input_schema42"
               }
             ]
           },
@@ -58359,7 +58295,7 @@
             "description": "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema80"
+                "$ref": "#/components/schemas/input_schema85"
               }
             ]
           },
@@ -58367,7 +58303,7 @@
             "description": "existing image ids in display order; first = cover",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema81"
+                "$ref": "#/components/schemas/input_schema86"
               }
             ]
           }
@@ -58383,13 +58319,13 @@
             "$ref": "#/components/schemas/input_schema0"
           },
           "amount": {
-            "$ref": "#/components/schemas/input_schema19"
+            "$ref": "#/components/schemas/input_schema24"
           },
           "placement": {
             "description": "Defaults to 'stock'; pass 'installed' for a fixed fixture.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema38"
+                "$ref": "#/components/schemas/input_schema43"
               }
             ]
           }
@@ -58402,7 +58338,7 @@
           "amount": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema19"
+                "$ref": "#/components/schemas/input_schema24"
               }
             ]
           },
@@ -58424,7 +58360,7 @@
             "description": "Flip between movable stock and a fixed installation. Installing something does not move it — the row keeps its location, it just stops being counted.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema38"
+                "$ref": "#/components/schemas/input_schema43"
               }
             ]
           }
@@ -58434,7 +58370,7 @@
         "type": "object",
         "properties": {
           "date": {
-            "$ref": "#/components/schemas/input_schema39"
+            "$ref": "#/components/schemas/input_schema44"
           },
           "name": {
             "nullable": true,
@@ -58452,7 +58388,7 @@
                 "description": "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema40"
+                    "$ref": "#/components/schemas/input_schema45"
                   }
                 ]
               },
@@ -58467,7 +58403,7 @@
             "description": "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema41"
+                "$ref": "#/components/schemas/input_schema46"
               }
             ]
           },
@@ -58480,7 +58416,7 @@
                   "description": "Recipe ID to plan into the meal",
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema27"
+                      "$ref": "#/components/schemas/input_schema32"
                     }
                   ]
                 },
@@ -58489,7 +58425,7 @@
                   "description": "Scale multiplier (1 = as written)",
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema42"
+                      "$ref": "#/components/schemas/input_schema47"
                     }
                   ]
                 },
@@ -58497,7 +58433,7 @@
                   "description": "Sort order within the meal",
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema43"
+                      "$ref": "#/components/schemas/input_schema48"
                     }
                   ]
                 }
@@ -58514,7 +58450,7 @@
           "date": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema39"
+                "$ref": "#/components/schemas/input_schema44"
               }
             ]
           },
@@ -58534,7 +58470,7 @@
                 "description": "Which eating occasion of the day this is. Null when unslotted; the planning calendar orders a day's meals by it.",
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema40"
+                    "$ref": "#/components/schemas/input_schema45"
                   }
                 ]
               },
@@ -58549,7 +58485,7 @@
             "description": "How the meal is eaten. Defaults to `cooked`. Use `eating_out`/`takeout` for a placeholder meal that intentionally has no recipes; only `cooked` meals feed the shopping list.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema41"
+                "$ref": "#/components/schemas/input_schema46"
               }
             ]
           }
@@ -58563,7 +58499,7 @@
             "minLength": 1
           },
           "kind": {
-            "$ref": "#/components/schemas/input_schema44"
+            "$ref": "#/components/schemas/input_schema49"
           },
           "notes": {
             "default": null,
@@ -58583,7 +58519,7 @@
           "kind": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema44"
+                "$ref": "#/components/schemas/input_schema49"
               }
             ]
           },
@@ -58597,16 +58533,16 @@
         "type": "object",
         "properties": {
           "fromPartyId": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema50"
           },
           "toPartyId": {
-            "$ref": "#/components/schemas/input_schema45"
+            "$ref": "#/components/schemas/input_schema50"
           },
           "amount": {
-            "$ref": "#/components/schemas/input_schema46"
+            "$ref": "#/components/schemas/input_schema51"
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema39"
+            "$ref": "#/components/schemas/input_schema44"
           },
           "notes": {
             "default": null,
@@ -58619,7 +58555,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema48"
+                    "$ref": "#/components/schemas/input_schema53"
                   }
                 ]
               },
@@ -58636,7 +58572,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema49"
+                    "$ref": "#/components/schemas/input_schema54"
                   }
                 ]
               },
@@ -58656,28 +58592,28 @@
           "fromPartyId": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema45"
+                "$ref": "#/components/schemas/input_schema50"
               }
             ]
           },
           "toPartyId": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema45"
+                "$ref": "#/components/schemas/input_schema50"
               }
             ]
           },
           "amount": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema46"
+                "$ref": "#/components/schemas/input_schema51"
               }
             ]
           },
           "date": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema39"
+                "$ref": "#/components/schemas/input_schema44"
               }
             ]
           },
@@ -58690,7 +58626,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema48"
+                    "$ref": "#/components/schemas/input_schema53"
                   }
                 ]
               },
@@ -58706,7 +58642,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema49"
+                    "$ref": "#/components/schemas/input_schema54"
                   }
                 ]
               },
@@ -58730,7 +58666,7 @@
             "default": "planning",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema51"
+                "$ref": "#/components/schemas/input_schema56"
               }
             ]
           },
@@ -58740,7 +58676,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema52"
+                    "$ref": "#/components/schemas/input_schema57"
                   }
                 ]
               },
@@ -58762,7 +58698,7 @@
             "default": null,
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema9"
+                "$ref": "#/components/schemas/input_schema14"
               }
             ]
           },
@@ -58772,7 +58708,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema53"
+                    "$ref": "#/components/schemas/input_schema58"
                   }
                 ]
               },
@@ -58789,7 +58725,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -58806,7 +58742,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -58831,7 +58767,7 @@
             "default": null,
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema54"
+                "$ref": "#/components/schemas/input_schema59"
               }
             ]
           },
@@ -58839,7 +58775,7 @@
             "default": null,
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema56"
+                "$ref": "#/components/schemas/input_schema61"
               }
             ]
           }
@@ -58856,7 +58792,7 @@
           "status": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema51"
+                "$ref": "#/components/schemas/input_schema56"
               }
             ]
           },
@@ -58865,7 +58801,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema52"
+                    "$ref": "#/components/schemas/input_schema57"
                   }
                 ]
               },
@@ -58885,7 +58821,7 @@
           "costEstimate": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema9"
+                "$ref": "#/components/schemas/input_schema14"
               }
             ]
           },
@@ -58894,7 +58830,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema53"
+                    "$ref": "#/components/schemas/input_schema58"
                   }
                 ]
               },
@@ -58910,7 +58846,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -58926,7 +58862,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -58948,21 +58884,21 @@
           "googleDriveFolderUrl": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema54"
+                "$ref": "#/components/schemas/input_schema59"
               }
             ]
           },
           "notionPageUrl": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema56"
+                "$ref": "#/components/schemas/input_schema61"
               }
             ]
           },
           "blockedByIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema53"
+              "$ref": "#/components/schemas/input_schema58"
             },
             "description": "Full replacement set of blocking-project ids"
           }
@@ -58979,7 +58915,7 @@
             "default": "not_started",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema58"
+                "$ref": "#/components/schemas/input_schema63"
               }
             ]
           },
@@ -58989,7 +58925,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema53"
+                    "$ref": "#/components/schemas/input_schema58"
                   }
                 ]
               },
@@ -59023,7 +58959,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema59"
+                    "$ref": "#/components/schemas/input_schema64"
                   }
                 ]
               },
@@ -59040,7 +58976,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -59058,7 +58994,7 @@
                 "description": "End of a due-date range",
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -59070,7 +59006,7 @@
             ]
           },
           "trade": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema65"
           },
           "sortOrder": {
             "default": null,
@@ -59088,10 +59024,10 @@
             "minLength": 1
           },
           "status": {
-            "$ref": "#/components/schemas/input_schema84"
+            "$ref": "#/components/schemas/input_schema89"
           },
           "projectId": {
-            "$ref": "#/components/schemas/input_schema85"
+            "$ref": "#/components/schemas/input_schema90"
           },
           "subjectProductId": {
             "anyOf": [
@@ -59114,7 +59050,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema59"
+                    "$ref": "#/components/schemas/input_schema64"
                   }
                 ]
               },
@@ -59126,13 +59062,13 @@
             ]
           },
           "dueDate": {
-            "$ref": "#/components/schemas/input_schema86"
+            "$ref": "#/components/schemas/input_schema91"
           },
           "dueEndDate": {
-            "$ref": "#/components/schemas/input_schema87"
+            "$ref": "#/components/schemas/input_schema92"
           },
           "trade": {
-            "$ref": "#/components/schemas/input_schema88"
+            "$ref": "#/components/schemas/input_schema93"
           },
           "sortOrder": {
             "nullable": true,
@@ -59141,7 +59077,7 @@
           "blockedByIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema59"
+              "$ref": "#/components/schemas/input_schema64"
             }
           }
         }
@@ -59198,7 +59134,7 @@
         "type": "object",
         "properties": {
           "vendorId": {
-            "$ref": "#/components/schemas/input_schema61"
+            "$ref": "#/components/schemas/input_schema66"
           },
           "orderId": {
             "default": null,
@@ -59210,7 +59146,7 @@
             "type": "string"
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema39"
+            "$ref": "#/components/schemas/input_schema44"
           },
           "statedTotal": {
             "default": null,
@@ -59218,7 +59154,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema47"
+                    "$ref": "#/components/schemas/input_schema52"
                   }
                 ]
               },
@@ -59237,7 +59173,7 @@
           "pendingImageIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           }
         },
@@ -59249,7 +59185,7 @@
           "vendorId": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema61"
+                "$ref": "#/components/schemas/input_schema66"
               }
             ]
           },
@@ -59264,7 +59200,7 @@
           "date": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema39"
+                "$ref": "#/components/schemas/input_schema44"
               }
             ]
           },
@@ -59273,7 +59209,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema47"
+                    "$ref": "#/components/schemas/input_schema52"
                   }
                 ]
               },
@@ -59291,14 +59227,14 @@
           "pendingImageIds": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema17"
+              "$ref": "#/components/schemas/input_schema22"
             }
           },
           "removeImageIds": {
             "description": "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema89"
+                "$ref": "#/components/schemas/input_schema94"
               }
             ]
           },
@@ -59306,7 +59242,7 @@
             "description": "existing document ids in display order",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema90"
+                "$ref": "#/components/schemas/input_schema95"
               }
             ]
           }
@@ -59320,7 +59256,7 @@
             "minLength": 1
           },
           "identity": {
-            "$ref": "#/components/schemas/input_schema62"
+            "$ref": "#/components/schemas/input_schema67"
           },
           "provisional": {
             "default": false,
@@ -59330,7 +59266,7 @@
             "default": [],
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema64"
+                "$ref": "#/components/schemas/input_schema69"
               }
             ]
           },
@@ -59340,7 +59276,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema45"
+                    "$ref": "#/components/schemas/input_schema50"
                   }
                 ]
               },
@@ -59369,7 +59305,7 @@
           "identity": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema62"
+                "$ref": "#/components/schemas/input_schema67"
               }
             ]
           },
@@ -59379,7 +59315,7 @@
           "sourceAliases": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema64"
+                "$ref": "#/components/schemas/input_schema69"
               }
             ]
           },
@@ -59388,7 +59324,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema45"
+                    "$ref": "#/components/schemas/input_schema50"
                   }
                 ]
               },
@@ -59409,7 +59345,7 @@
         "type": "object",
         "properties": {
           "accountId": {
-            "$ref": "#/components/schemas/input_schema65"
+            "$ref": "#/components/schemas/input_schema70"
           },
           "purchaseId": {
             "default": null,
@@ -59417,7 +59353,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema66"
+                    "$ref": "#/components/schemas/input_schema71"
                   }
                 ]
               },
@@ -59447,7 +59383,7 @@
             "enum": ["expected", "pending", "posted", "void"]
           },
           "amount": {
-            "$ref": "#/components/schemas/input_schema67"
+            "$ref": "#/components/schemas/input_schema72"
           },
           "transactionDate": {
             "default": null,
@@ -59455,7 +59391,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -59472,7 +59408,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -59502,7 +59438,7 @@
             "default": [],
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema68"
+                "$ref": "#/components/schemas/input_schema73"
               }
             ]
           },
@@ -59515,7 +59451,7 @@
             "default": [],
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema69"
+                "$ref": "#/components/schemas/input_schema74"
               }
             ]
           }
@@ -59529,7 +59465,7 @@
           "accountId": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema65"
+                "$ref": "#/components/schemas/input_schema70"
               }
             ]
           },
@@ -59538,7 +59474,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema66"
+                    "$ref": "#/components/schemas/input_schema71"
                   }
                 ]
               },
@@ -59570,7 +59506,7 @@
           "amount": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema67"
+                "$ref": "#/components/schemas/input_schema72"
               }
             ]
           },
@@ -59579,7 +59515,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -59595,7 +59531,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema39"
+                    "$ref": "#/components/schemas/input_schema44"
                   }
                 ]
               },
@@ -59621,7 +59557,7 @@
           "sourceRefs": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema68"
+                "$ref": "#/components/schemas/input_schema73"
               }
             ]
           },
@@ -59632,7 +59568,7 @@
           "allocations": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema69"
+                "$ref": "#/components/schemas/input_schema74"
               }
             ]
           }
@@ -59698,7 +59634,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema47"
+                    "$ref": "#/components/schemas/input_schema52"
                   }
                 ]
               },
@@ -59710,12 +59646,12 @@
             ]
           },
           "date": {
-            "$ref": "#/components/schemas/input_schema39"
+            "$ref": "#/components/schemas/input_schema44"
           },
           "lineKind": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema70"
+                "$ref": "#/components/schemas/input_schema75"
               }
             ]
           },
@@ -59723,15 +59659,15 @@
             "default": "item_line",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema71"
+                "$ref": "#/components/schemas/input_schema76"
               }
             ]
           },
           "costType": {
-            "$ref": "#/components/schemas/input_schema72"
+            "$ref": "#/components/schemas/input_schema77"
           },
           "trade": {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema65"
           },
           "url": {
             "default": null,
@@ -59753,7 +59689,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema53"
+                    "$ref": "#/components/schemas/input_schema58"
                   }
                 ]
               },
@@ -59786,7 +59722,7 @@
             "description": "Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon \"Account adjustment\", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt.",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema73"
+                "$ref": "#/components/schemas/input_schema78"
               }
             ]
           },
@@ -59806,7 +59742,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema66"
+                    "$ref": "#/components/schemas/input_schema71"
                   }
                 ]
               },
@@ -59823,7 +59759,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema75"
+                    "$ref": "#/components/schemas/input_schema80"
                   }
                 ]
               },
@@ -59840,7 +59776,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema75"
+                    "$ref": "#/components/schemas/input_schema80"
                   }
                 ]
               },
@@ -59857,7 +59793,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema48"
+                    "$ref": "#/components/schemas/input_schema53"
                   }
                 ]
               },
@@ -59883,7 +59819,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema47"
+                    "$ref": "#/components/schemas/input_schema52"
                   }
                 ]
               },
@@ -59897,29 +59833,29 @@
           "date": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema39"
+                "$ref": "#/components/schemas/input_schema44"
               }
             ]
           },
           "lineKind": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema70"
+                "$ref": "#/components/schemas/input_schema75"
               }
             ]
           },
           "lineBasis": {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema71"
+                "$ref": "#/components/schemas/input_schema76"
               }
             ]
           },
           "costType": {
-            "$ref": "#/components/schemas/input_schema92"
+            "$ref": "#/components/schemas/input_schema97"
           },
           "trade": {
-            "$ref": "#/components/schemas/input_schema93"
+            "$ref": "#/components/schemas/input_schema98"
           },
           "url": {
             "nullable": true,
@@ -59933,7 +59869,7 @@
             "type": "boolean"
           },
           "projectId": {
-            "$ref": "#/components/schemas/input_schema94"
+            "$ref": "#/components/schemas/input_schema99"
           },
           "productId": {
             "anyOf": [
@@ -59956,7 +59892,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema74"
+                    "$ref": "#/components/schemas/input_schema79"
                   }
                 ]
               },
@@ -59980,7 +59916,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema66"
+                    "$ref": "#/components/schemas/input_schema71"
                   }
                 ]
               },
@@ -59996,7 +59932,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema75"
+                    "$ref": "#/components/schemas/input_schema80"
                   }
                 ]
               },
@@ -60012,7 +59948,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema75"
+                    "$ref": "#/components/schemas/input_schema80"
                   }
                 ]
               },
@@ -60028,7 +59964,7 @@
               {
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema48"
+                    "$ref": "#/components/schemas/input_schema53"
                   }
                 ]
               },
@@ -60127,34 +60063,81 @@
         "description": "Barcode (UPC/EAN/GTIN); stored canonically as GTIN-14"
       },
       "input_schema7": {
-        "type": "string"
+        "anyOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/input_schema8"
+              }
+            ]
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          }
+        ]
       },
       "input_schema8": {
+        "type": "string"
+      },
+      "input_schema9": {
         "type": "integer",
         "minimum": 0,
         "exclusiveMinimum": true,
         "maximum": 9007199254740991,
         "description": "USDA FoodData Central id (universal food primary key)"
       },
-      "input_schema9": {
+      "input_schema10": {
+        "nullable": true,
+        "type": "string"
+      },
+      "input_schema11": {
+        "nullable": true,
+        "type": "string"
+      },
+      "input_schema12": {
+        "anyOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/input_schema1"
+              }
+            ]
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          }
+        ]
+      },
+      "input_schema13": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/input_schema14"
+          }
+        ]
+      },
+      "input_schema14": {
         "nullable": true,
         "type": "number",
         "minimum": 0
       },
-      "input_schema10": {
+      "input_schema15": {
         "type": "object",
         "properties": {
           "a": {
             "type": "object",
             "properties": {
               "value": {
-                "$ref": "#/components/schemas/input_schema11"
+                "$ref": "#/components/schemas/input_schema16"
               },
               "unit": {
-                "$ref": "#/components/schemas/input_schema12"
+                "$ref": "#/components/schemas/input_schema17"
               },
               "upperValue": {
-                "$ref": "#/components/schemas/input_schema13"
+                "$ref": "#/components/schemas/input_schema18"
               }
             },
             "required": ["value", "unit"],
@@ -60164,13 +60147,13 @@
             "type": "object",
             "properties": {
               "value": {
-                "$ref": "#/components/schemas/input_schema11"
+                "$ref": "#/components/schemas/input_schema16"
               },
               "unit": {
-                "$ref": "#/components/schemas/input_schema12"
+                "$ref": "#/components/schemas/input_schema17"
               },
               "upperValue": {
-                "$ref": "#/components/schemas/input_schema13"
+                "$ref": "#/components/schemas/input_schema18"
               }
             },
             "required": ["value", "unit"],
@@ -60182,7 +60165,7 @@
                 "description": "provenance note (null if unknown), e.g. \"manual\"",
                 "allOf": [
                   {
-                    "$ref": "#/components/schemas/input_schema14"
+                    "$ref": "#/components/schemas/input_schema19"
                   }
                 ]
               },
@@ -60201,22 +60184,22 @@
         },
         "required": ["a", "b", "source"]
       },
-      "input_schema11": {
+      "input_schema16": {
         "type": "number"
       },
-      "input_schema12": {
+      "input_schema17": {
         "type": "string",
         "minLength": 1
       },
-      "input_schema13": {
+      "input_schema18": {
         "type": "number",
         "minimum": 0,
         "exclusiveMinimum": true
       },
-      "input_schema14": {
+      "input_schema19": {
         "type": "string"
       },
-      "input_schema15": {
+      "input_schema20": {
         "type": "array",
         "items": {
           "type": "object",
@@ -60248,7 +60231,7 @@
               "description": "Optional direct link to the product page",
               "allOf": [
                 {
-                  "$ref": "#/components/schemas/input_schema16"
+                  "$ref": "#/components/schemas/input_schema21"
                 }
               ]
             },
@@ -60264,17 +60247,17 @@
           "required": ["source", "kind", "externalId"]
         }
       },
-      "input_schema16": {
+      "input_schema21": {
         "nullable": true,
         "type": "string",
         "format": "uri"
       },
-      "input_schema17": {
+      "input_schema22": {
         "type": "string",
         "pattern": "^IMG-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "image shortcode, e.g. IMG-4K7M"
       },
-      "input_schema18": {
+      "input_schema23": {
         "nullable": true,
         "type": "object",
         "properties": {
@@ -60343,37 +60326,37 @@
         },
         "required": ["url"]
       },
-      "input_schema19": {
+      "input_schema24": {
         "type": "object",
         "properties": {
           "value": {
-            "$ref": "#/components/schemas/input_schema11"
+            "$ref": "#/components/schemas/input_schema16"
           },
           "unit": {
-            "$ref": "#/components/schemas/input_schema12"
+            "$ref": "#/components/schemas/input_schema17"
           },
           "upperValue": {
-            "$ref": "#/components/schemas/input_schema13"
+            "$ref": "#/components/schemas/input_schema18"
           }
         },
         "required": ["value", "unit"]
       },
-      "input_schema20": {
+      "input_schema25": {
         "type": "integer",
         "minimum": 0,
         "exclusiveMinimum": true,
         "maximum": 9007199254740991
       },
-      "input_schema21": {
+      "input_schema26": {
         "type": "array",
         "items": {
           "type": "string"
         }
       },
-      "input_schema22": {
+      "input_schema27": {
         "type": "string"
       },
-      "input_schema23": {
+      "input_schema28": {
         "type": "array",
         "items": {
           "type": "object",
@@ -60406,21 +60389,21 @@
                       "amounts": {
                         "type": "array",
                         "items": {
-                          "$ref": "#/components/schemas/input_schema19"
+                          "$ref": "#/components/schemas/input_schema24"
                         }
                       },
                       "id": {
                         "allOf": [
                           {
-                            "$ref": "#/components/schemas/input_schema24"
+                            "$ref": "#/components/schemas/input_schema29"
                           }
                         ]
                       },
                       "rawLine": {
-                        "$ref": "#/components/schemas/input_schema25"
+                        "$ref": "#/components/schemas/input_schema30"
                       },
                       "modifier": {
-                        "$ref": "#/components/schemas/input_schema26"
+                        "$ref": "#/components/schemas/input_schema31"
                       }
                     },
                     "required": ["type", "ingredientId", "recipeId", "amounts"]
@@ -60433,7 +60416,7 @@
                         "enum": ["recipe"]
                       },
                       "recipeId": {
-                        "$ref": "#/components/schemas/input_schema27"
+                        "$ref": "#/components/schemas/input_schema32"
                       },
                       "ingredientId": {
                         "type": "string",
@@ -60443,21 +60426,21 @@
                       "amounts": {
                         "type": "array",
                         "items": {
-                          "$ref": "#/components/schemas/input_schema19"
+                          "$ref": "#/components/schemas/input_schema24"
                         }
                       },
                       "id": {
                         "allOf": [
                           {
-                            "$ref": "#/components/schemas/input_schema24"
+                            "$ref": "#/components/schemas/input_schema29"
                           }
                         ]
                       },
                       "rawLine": {
-                        "$ref": "#/components/schemas/input_schema25"
+                        "$ref": "#/components/schemas/input_schema30"
                       },
                       "modifier": {
-                        "$ref": "#/components/schemas/input_schema26"
+                        "$ref": "#/components/schemas/input_schema31"
                       }
                     },
                     "required": ["type", "recipeId", "ingredientId", "amounts"]
@@ -60477,7 +60460,7 @@
                   "id": {
                     "allOf": [
                       {
-                        "$ref": "#/components/schemas/input_schema24"
+                        "$ref": "#/components/schemas/input_schema29"
                       }
                     ]
                   }
@@ -60488,61 +60471,61 @@
             "id": {
               "allOf": [
                 {
-                  "$ref": "#/components/schemas/input_schema24"
+                  "$ref": "#/components/schemas/input_schema29"
                 }
               ]
             }
           }
         }
       },
-      "input_schema24": {
+      "input_schema29": {
         "type": "string",
         "format": "uuid",
         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
         "description": "entity identifier"
       },
-      "input_schema25": {
+      "input_schema30": {
         "nullable": true,
         "type": "string"
       },
-      "input_schema26": {
+      "input_schema31": {
         "nullable": true,
         "type": "string"
       },
-      "input_schema27": {
+      "input_schema32": {
         "type": "string",
         "pattern": "^RCP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "recipe shortcode, e.g. RCP-4K7M"
-      },
-      "input_schema28": {
-        "type": "string"
-      },
-      "input_schema29": {
-        "type": "string",
-        "enum": ["weight", "volume", "money", "calories"]
-      },
-      "input_schema30": {
-        "type": "string",
-        "minLength": 1,
-        "description": "name of location"
-      },
-      "input_schema31": {
-        "type": "array",
-        "items": {
-          "type": "string"
-        }
-      },
-      "input_schema32": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/input_schema33"
-        },
-        "description": "Tags assigned directly to this location"
       },
       "input_schema33": {
         "type": "string"
       },
       "input_schema34": {
+        "type": "string",
+        "enum": ["weight", "volume", "money", "calories"]
+      },
+      "input_schema35": {
+        "type": "string",
+        "minLength": 1,
+        "description": "name of location"
+      },
+      "input_schema36": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "input_schema37": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/input_schema38"
+        },
+        "description": "Tags assigned directly to this location"
+      },
+      "input_schema38": {
+        "type": "string"
+      },
+      "input_schema39": {
         "nullable": true,
         "type": "string",
         "enum": [
@@ -60559,7 +60542,7 @@
         ],
         "description": "type of location (room, container, etc)"
       },
-      "input_schema35": {
+      "input_schema40": {
         "anyOf": [
           {
             "allOf": [
@@ -60575,7 +60558,7 @@
           }
         ]
       },
-      "input_schema36": {
+      "input_schema41": {
         "anyOf": [
           {
             "allOf": [
@@ -60591,62 +60574,62 @@
           }
         ]
       },
-      "input_schema37": {
+      "input_schema42": {
         "type": "array",
         "items": {
-          "$ref": "#/components/schemas/input_schema17"
+          "$ref": "#/components/schemas/input_schema22"
         }
       },
-      "input_schema38": {
+      "input_schema43": {
         "type": "string",
         "enum": ["stock", "installed"]
       },
-      "input_schema39": {
+      "input_schema44": {
         "type": "string",
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
         "description": "Calendar day as \"YYYY-MM-DD\""
       },
-      "input_schema40": {
+      "input_schema45": {
         "type": "string",
         "enum": ["breakfast", "brunch", "lunch", "snack", "dinner", "dessert"]
       },
-      "input_schema41": {
+      "input_schema46": {
         "type": "string",
         "enum": ["cooked", "leftovers", "eating_out", "takeout", "other"]
       },
-      "input_schema42": {
+      "input_schema47": {
         "type": "number",
         "minimum": 0.01,
         "maximum": 1000
       },
-      "input_schema43": {
+      "input_schema48": {
         "nullable": true,
         "type": "integer",
         "minimum": -9007199254740991,
         "maximum": 9007199254740991
       },
-      "input_schema44": {
+      "input_schema49": {
         "type": "string",
         "enum": ["member", "guest", "household"]
       },
-      "input_schema45": {
+      "input_schema50": {
         "type": "string",
         "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ledgerParty shortcode, e.g. LPY-4K7M"
       },
-      "input_schema46": {
+      "input_schema51": {
         "minimum": 0,
         "exclusiveMinimum": true,
         "allOf": [
           {
-            "$ref": "#/components/schemas/input_schema47"
+            "$ref": "#/components/schemas/input_schema52"
           }
         ]
       },
-      "input_schema47": {
+      "input_schema52": {
         "type": "number"
       },
-      "input_schema48": {
+      "input_schema53": {
         "type": "array",
         "items": {
           "type": "object",
@@ -60663,7 +60646,7 @@
               "type": "object",
               "properties": {
                 "amount": {
-                  "$ref": "#/components/schemas/input_schema47"
+                  "$ref": "#/components/schemas/input_schema52"
                 },
                 "occurredOn": {
                   "default": null,
@@ -60671,7 +60654,7 @@
                     {
                       "allOf": [
                         {
-                          "$ref": "#/components/schemas/input_schema39"
+                          "$ref": "#/components/schemas/input_schema44"
                         }
                       ]
                     },
@@ -60739,23 +60722,23 @@
           "additionalProperties": false
         }
       },
-      "input_schema49": {
+      "input_schema54": {
         "maxItems": 2,
         "type": "array",
         "items": {
-          "$ref": "#/components/schemas/input_schema50"
+          "$ref": "#/components/schemas/input_schema55"
         }
       },
-      "input_schema50": {
+      "input_schema55": {
         "type": "string",
         "pattern": "^FTX-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "financialTransaction shortcode, e.g. FTX-4K7M"
       },
-      "input_schema51": {
+      "input_schema56": {
         "type": "string",
         "enum": ["planning", "not_started", "in_progress", "done"]
       },
-      "input_schema52": {
+      "input_schema57": {
         "type": "string",
         "enum": [
           "furniture",
@@ -60766,18 +60749,18 @@
           "trip"
         ]
       },
-      "input_schema53": {
+      "input_schema58": {
         "type": "string",
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema54": {
+      "input_schema59": {
         "anyOf": [
           {
             "description": "Complete HTTPS drive.google.com folder URL; empty input clears the field",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema55"
+                "$ref": "#/components/schemas/input_schema60"
               }
             ]
           },
@@ -60788,16 +60771,16 @@
           }
         ]
       },
-      "input_schema55": {
+      "input_schema60": {
         "type": "string"
       },
-      "input_schema56": {
+      "input_schema61": {
         "anyOf": [
           {
             "description": "Complete HTTPS notion.so/notion.site page URL (including subdomains) or app.notion.com page URL; empty input clears the field",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema57"
+                "$ref": "#/components/schemas/input_schema62"
               }
             ]
           },
@@ -60808,19 +60791,19 @@
           }
         ]
       },
-      "input_schema57": {
+      "input_schema62": {
         "type": "string"
       },
-      "input_schema58": {
+      "input_schema63": {
         "type": "string",
         "enum": ["not_started", "later", "in_progress", "blocked", "done"]
       },
-      "input_schema59": {
+      "input_schema64": {
         "type": "string",
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema60": {
+      "input_schema65": {
         "type": "string",
         "enum": [
           "planning",
@@ -60844,12 +60827,12 @@
           "other"
         ]
       },
-      "input_schema61": {
+      "input_schema66": {
         "type": "string",
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema62": {
+      "input_schema67": {
         "oneOf": [
           {
             "type": "object",
@@ -60868,7 +60851,7 @@
                 "enum": ["visa", "mastercard", "amex", "discover", "other"]
               },
               "last4": {
-                "$ref": "#/components/schemas/input_schema63"
+                "$ref": "#/components/schemas/input_schema68"
               }
             },
             "required": ["kind", "issuer", "network", "last4"],
@@ -60890,7 +60873,7 @@
                 "enum": ["checking", "savings", "money_market", "other"]
               },
               "last4": {
-                "$ref": "#/components/schemas/input_schema63"
+                "$ref": "#/components/schemas/input_schema68"
               }
             },
             "required": ["kind", "institution", "accountType", "last4"],
@@ -60908,7 +60891,7 @@
                 "minLength": 1
               },
               "last4": {
-                "$ref": "#/components/schemas/input_schema63"
+                "$ref": "#/components/schemas/input_schema68"
               }
             },
             "required": ["kind", "provider", "last4"],
@@ -60937,7 +60920,7 @@
                 "type": "string"
               },
               "last4": {
-                "$ref": "#/components/schemas/input_schema63"
+                "$ref": "#/components/schemas/input_schema68"
               }
             },
             "required": ["kind", "institution", "last4"],
@@ -60945,12 +60928,12 @@
           }
         ]
       },
-      "input_schema63": {
+      "input_schema68": {
         "nullable": true,
         "type": "string",
         "pattern": "^\\d{4}$"
       },
-      "input_schema64": {
+      "input_schema69": {
         "type": "array",
         "items": {
           "type": "object",
@@ -60973,24 +60956,24 @@
           "additionalProperties": false
         }
       },
-      "input_schema65": {
+      "input_schema70": {
         "type": "string",
         "pattern": "^FAC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "financialAccount shortcode, e.g. FAC-4K7M"
       },
-      "input_schema66": {
+      "input_schema71": {
         "type": "string",
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema67": {
+      "input_schema72": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/input_schema47"
+            "$ref": "#/components/schemas/input_schema52"
           }
         ]
       },
-      "input_schema68": {
+      "input_schema73": {
         "type": "array",
         "items": {
           "type": "object",
@@ -61008,22 +60991,22 @@
           "additionalProperties": false
         }
       },
-      "input_schema69": {
+      "input_schema74": {
         "type": "array",
         "items": {
           "type": "object",
           "properties": {
             "purchaseId": {
-              "$ref": "#/components/schemas/input_schema66"
+              "$ref": "#/components/schemas/input_schema71"
             },
             "amount": {
-              "$ref": "#/components/schemas/input_schema47"
+              "$ref": "#/components/schemas/input_schema52"
             }
           },
           "required": ["purchaseId", "amount"]
         }
       },
-      "input_schema70": {
+      "input_schema75": {
         "type": "string",
         "enum": [
           "principal",
@@ -61035,20 +61018,20 @@
           "other_adjustment"
         ]
       },
-      "input_schema71": {
+      "input_schema76": {
         "type": "string",
         "enum": ["item_line", "allocation"]
       },
-      "input_schema72": {
+      "input_schema77": {
         "type": "string",
         "enum": ["materials", "tools", "services"]
       },
-      "input_schema73": {
+      "input_schema78": {
         "anyOf": [
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema74"
+                "$ref": "#/components/schemas/input_schema79"
               }
             ]
           },
@@ -61059,11 +61042,11 @@
           }
         ]
       },
-      "input_schema74": {
+      "input_schema79": {
         "type": "number",
         "description": "Product units covered by this expense; fractional values are allowed (half a coil thrown away is -0.5). Null means the receipt does not establish quantity. Signed: money direction wins, so a positive-cost line is an acquisition of |qty| and a negative-cost line is an exit of |qty|. On a $0 line the sign IS the fact — a positive quantity is a free acquisition (promo pack, bundled accessory), a negative quantity is a discard/write-off. Zero is legal ONLY on a negative-cost line and means money came back but no unit left — a price concession with the item kept (Amazon \"Account adjustment\", a partial refund for shipping damage). Prefer 0 over null there: null says the count is unknown and gets reported as data-entry debt."
       },
-      "input_schema75": {
+      "input_schema80": {
         "type": "array",
         "items": {
           "type": "object",
@@ -61073,7 +61056,7 @@
                 {
                   "allOf": [
                     {
-                      "$ref": "#/components/schemas/input_schema45"
+                      "$ref": "#/components/schemas/input_schema50"
                     }
                   ]
                 },
@@ -61095,77 +61078,61 @@
           "additionalProperties": false
         }
       },
-      "input_schema76": {
+      "input_schema81": {
         "nullable": true,
         "type": "boolean"
       },
-      "input_schema77": {
+      "input_schema82": {
         "type": "boolean"
       },
-      "input_schema78": {
+      "input_schema83": {
         "type": "array",
         "items": {
           "type": "string"
         }
       },
-      "input_schema79": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/input_schema36"
-          }
-        ]
-      },
-      "input_schema80": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/input_schema17"
-        }
-      },
-      "input_schema81": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/input_schema17"
-        }
-      },
-      "input_schema82": {
-        "type": "string",
-        "pattern": "^INV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-        "description": "inventory shortcode, e.g. INV-4K7M"
-      },
-      "input_schema83": {
-        "type": "string",
-        "pattern": "^MEL-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-        "description": "meal shortcode, e.g. MEL-4K7M"
-      },
       "input_schema84": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/input_schema58"
+            "$ref": "#/components/schemas/input_schema41"
           }
         ]
       },
       "input_schema85": {
-        "anyOf": [
-          {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/input_schema53"
-              }
-            ]
-          },
-          {
-            "type": "string",
-            "nullable": true,
-            "enum": [null]
-          }
-        ]
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/input_schema22"
+        }
       },
       "input_schema86": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/input_schema22"
+        }
+      },
+      "input_schema87": {
+        "type": "string",
+        "pattern": "^INV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "inventory shortcode, e.g. INV-4K7M"
+      },
+      "input_schema88": {
+        "type": "string",
+        "pattern": "^MEL-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "meal shortcode, e.g. MEL-4K7M"
+      },
+      "input_schema89": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/input_schema63"
+          }
+        ]
+      },
+      "input_schema90": {
         "anyOf": [
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema39"
+                "$ref": "#/components/schemas/input_schema58"
               }
             ]
           },
@@ -61176,13 +61143,29 @@
           }
         ]
       },
-      "input_schema87": {
+      "input_schema91": {
+        "anyOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/input_schema44"
+              }
+            ]
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          }
+        ]
+      },
+      "input_schema92": {
         "anyOf": [
           {
             "description": "End of a due-date range",
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema39"
+                "$ref": "#/components/schemas/input_schema44"
               }
             ]
           },
@@ -61190,53 +61173,53 @@
             "type": "string",
             "nullable": true,
             "enum": [null]
-          }
-        ]
-      },
-      "input_schema88": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/input_schema60"
-          }
-        ]
-      },
-      "input_schema89": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/input_schema17"
-        }
-      },
-      "input_schema90": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/input_schema17"
-        }
-      },
-      "input_schema91": {
-        "type": "string",
-        "pattern": "^EXP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
-        "description": "expense shortcode, e.g. EXP-4K7M"
-      },
-      "input_schema92": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/input_schema72"
           }
         ]
       },
       "input_schema93": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/input_schema60"
+            "$ref": "#/components/schemas/input_schema65"
           }
         ]
       },
       "input_schema94": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/input_schema22"
+        }
+      },
+      "input_schema95": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/input_schema22"
+        }
+      },
+      "input_schema96": {
+        "type": "string",
+        "pattern": "^EXP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "expense shortcode, e.g. EXP-4K7M"
+      },
+      "input_schema97": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/input_schema77"
+          }
+        ]
+      },
+      "input_schema98": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/input_schema65"
+          }
+        ]
+      },
+      "input_schema99": {
         "anyOf": [
           {
             "allOf": [
               {
-                "$ref": "#/components/schemas/input_schema53"
+                "$ref": "#/components/schemas/input_schema58"
               }
             ]
           },
@@ -61247,7 +61230,7 @@
           }
         ]
       },
-      "input_schema95": {
+      "input_schema100": {
         "minItems": 1,
         "maxItems": 500,
         "type": "array",
@@ -61256,7 +61239,7 @@
           "minLength": 1
         }
       },
-      "input_schema96": {
+      "input_schema101": {
         "type": "string",
         "enum": [
           "PRODUCT",
@@ -61267,33 +61250,33 @@
           "PURCHASE"
         ]
       },
-      "input_schema97": {
+      "input_schema102": {
         "type": "string"
       },
-      "input_schema98": {
+      "input_schema103": {
         "type": "integer",
         "minimum": 0,
         "exclusiveMinimum": true,
         "maximum": 52428800
       },
-      "input_schema99": {
+      "input_schema104": {
         "allOf": [
           {
-            "$ref": "#/components/schemas/input_schema96"
+            "$ref": "#/components/schemas/input_schema101"
           }
         ]
       },
-      "input_schema100": {
+      "input_schema105": {
         "nullable": true,
         "type": "string",
         "maxLength": 500
       },
-      "input_schema101": {
+      "input_schema106": {
         "type": "string",
         "pattern": "^\\d{8}$|^\\d{12,14}$",
         "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
       },
-      "input_schema102": {
+      "input_schema107": {
         "type": "object",
         "properties": {
           "kind": {
@@ -61306,196 +61289,45 @@
         },
         "required": ["kind", "value"]
       },
-      "input_schema103": {
+      "input_schema108": {
         "nullable": true,
         "type": "integer",
         "minimum": -9007199254740991,
         "maximum": 9007199254740991
       },
-      "input_schema104": {
+      "input_schema109": {
         "type": "string",
         "format": "uuid",
         "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
       },
-      "input_schema105": {
+      "input_schema110": {
         "type": "integer",
         "minimum": 0,
         "exclusiveMinimum": true,
         "maximum": 9007199254740991
       },
-      "input_schema106": {
+      "input_schema111": {
         "type": "number",
         "minimum": 0,
         "exclusiveMinimum": true
       },
-      "input_schema107": {
+      "input_schema112": {
         "nullable": true,
         "type": "string",
         "maxLength": 500
       },
-      "input_schema108": {
+      "input_schema113": {
         "nullable": true,
         "type": "number"
       },
-      "input_schema109": {
+      "input_schema114": {
         "nullable": true,
         "type": "string"
       },
-      "input_schema110": {
+      "input_schema115": {
         "type": "string",
         "pattern": "^CKB-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "cookbook shortcode, e.g. CKB-4K7M"
-      },
-      "input_schema111": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "string",
-            "nullable": true,
-            "enum": [null]
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/input_schema111"
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema111"
-            }
-          }
-        ]
-      },
-      "input_schema112": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "string",
-            "nullable": true,
-            "enum": [null]
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/input_schema112"
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema112"
-            }
-          }
-        ]
-      },
-      "input_schema113": {
-        "type": "object",
-        "properties": {
-          "path": {
-            "type": "string",
-            "minLength": 1
-          },
-          "mime": {
-            "type": "string",
-            "minLength": 1
-          },
-          "alt": {
-            "nullable": true,
-            "type": "string"
-          },
-          "caption": {
-            "nullable": true,
-            "type": "string"
-          },
-          "line": {
-            "nullable": true,
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["path", "mime"],
-        "additionalProperties": {
-          "$ref": "#/components/schemas/input_schema114"
-        }
-      },
-      "input_schema114": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "string",
-            "nullable": true,
-            "enum": [null]
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/input_schema114"
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema114"
-            }
-          }
-        ]
-      },
-      "input_schema115": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "string",
-            "nullable": true,
-            "enum": [null]
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/input_schema115"
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema115"
-            }
-          }
-        ]
       },
       "input_schema116": {
         "anyOf": [
@@ -61558,6 +61390,37 @@
         ]
       },
       "input_schema118": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mime": {
+            "type": "string",
+            "minLength": 1
+          },
+          "alt": {
+            "nullable": true,
+            "type": "string"
+          },
+          "caption": {
+            "nullable": true,
+            "type": "string"
+          },
+          "line": {
+            "nullable": true,
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["path", "mime"],
+        "additionalProperties": {
+          "$ref": "#/components/schemas/input_schema119"
+        }
+      },
+      "input_schema119": {
         "anyOf": [
           {
             "type": "string"
@@ -61576,46 +61439,76 @@
           {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/input_schema118"
+              "$ref": "#/components/schemas/input_schema119"
             }
           },
           {
             "type": "object",
             "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema118"
+              "$ref": "#/components/schemas/input_schema119"
             }
           }
         ]
       },
-      "input_schema119": {
-        "type": "object",
-        "properties": {
-          "target_id": {
-            "type": "string",
-            "minLength": 1
-          },
-          "text": {
+      "input_schema120": {
+        "anyOf": [
+          {
             "type": "string"
           },
-          "kind": {
-            "$ref": "#/components/schemas/input_schema120"
+          {
+            "type": "number"
           },
-          "method": {
-            "$ref": "#/components/schemas/input_schema121"
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/input_schema120"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/input_schema120"
+            }
           }
-        },
-        "required": ["target_id", "text", "kind", "method"],
-        "additionalProperties": {
-          "$ref": "#/components/schemas/input_schema122"
-        }
-      },
-      "input_schema120": {
-        "type": "string",
-        "enum": ["ingredient", "step", "note", "variation", "caption"]
+        ]
       },
       "input_schema121": {
-        "type": "string",
-        "enum": ["anchor", "page", "title"]
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/input_schema121"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/input_schema121"
+            }
+          }
+        ]
       },
       "input_schema122": {
         "anyOf": [
@@ -61678,120 +61571,64 @@
         ]
       },
       "input_schema124": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "string",
-            "nullable": true,
-            "enum": [null]
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/input_schema124"
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema124"
-            }
-          }
-        ]
-      },
-      "input_schema125": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "string",
-            "nullable": true,
-            "enum": [null]
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/input_schema125"
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema125"
-            }
-          }
-        ]
-      },
-      "input_schema126": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "string",
-            "nullable": true,
-            "enum": [null]
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/input_schema126"
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema126"
-            }
-          }
-        ]
-      },
-      "input_schema127": {
         "type": "object",
         "properties": {
-          "start": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
+          "target_id": {
+            "type": "string",
+            "minLength": 1
           },
-          "end": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "doc_path": {
+          "text": {
             "type": "string"
           },
-          "page": {
-            "nullable": true,
-            "type": "string"
+          "kind": {
+            "$ref": "#/components/schemas/input_schema125"
+          },
+          "method": {
+            "$ref": "#/components/schemas/input_schema126"
           }
         },
-        "required": ["start", "end", "doc_path"],
+        "required": ["target_id", "text", "kind", "method"],
         "additionalProperties": {
-          "$ref": "#/components/schemas/input_schema128"
+          "$ref": "#/components/schemas/input_schema127"
         }
+      },
+      "input_schema125": {
+        "type": "string",
+        "enum": ["ingredient", "step", "note", "variation", "caption"]
+      },
+      "input_schema126": {
+        "type": "string",
+        "enum": ["anchor", "page", "title"]
+      },
+      "input_schema127": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/input_schema127"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/input_schema127"
+            }
+          }
+        ]
       },
       "input_schema128": {
         "anyOf": [
@@ -61914,34 +61751,30 @@
         ]
       },
       "input_schema132": {
-        "anyOf": [
-          {
+        "type": "object",
+        "properties": {
+          "start": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "end": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "doc_path": {
             "type": "string"
           },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "string",
+          "page": {
             "nullable": true,
-            "enum": [null]
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/input_schema132"
-            }
-          },
-          {
-            "type": "object",
-            "additionalProperties": {
-              "$ref": "#/components/schemas/input_schema132"
-            }
+            "type": "string"
           }
-        ]
+        },
+        "required": ["start", "end", "doc_path"],
+        "additionalProperties": {
+          "$ref": "#/components/schemas/input_schema133"
+        }
       },
       "input_schema133": {
         "anyOf": [
@@ -62119,6 +61952,156 @@
             "type": "object",
             "additionalProperties": {
               "$ref": "#/components/schemas/input_schema138"
+            }
+          }
+        ]
+      },
+      "input_schema139": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/input_schema139"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/input_schema139"
+            }
+          }
+        ]
+      },
+      "input_schema140": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/input_schema140"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/input_schema140"
+            }
+          }
+        ]
+      },
+      "input_schema141": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/input_schema141"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/input_schema141"
+            }
+          }
+        ]
+      },
+      "input_schema142": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/input_schema142"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/input_schema142"
+            }
+          }
+        ]
+      },
+      "input_schema143": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "number"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "string",
+            "nullable": true,
+            "enum": [null]
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/input_schema143"
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/input_schema143"
             }
           }
         ]

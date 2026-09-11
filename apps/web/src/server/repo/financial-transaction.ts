@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type {
   FinancialTransactionCreateInput,
   FinancialTransactionFilters,
@@ -12,7 +13,6 @@ import {
   financialTransactionKind,
   financialTransactionOut,
   financialTransactionSettlementViolation,
-  financialTransactionSortableFields,
 } from "@cubby/schemas/financial-transaction";
 import {
   type FinancialTransactionId,
@@ -344,7 +344,7 @@ export async function listFinancialTransactions(
           ...buildOrderBy(
             financialTransaction,
             sorts,
-            [...financialTransactionSortableFields],
+            [...generatedEntitySort.financialTransaction.fields],
             {
               resolve: (sort) =>
                 sort.orderBy === "merchant"

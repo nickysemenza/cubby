@@ -406,6 +406,57 @@ describe("typed entity compiler", () => {
     ).toThrow("references undeclared field missing");
   });
 
+  it("compiles a declared sort roster and treats computed keys as exempt from the field roster", () => {
+    const entity = compileEntityDeclarations([
+      {
+        ...base,
+        model: {
+          ...model,
+          sort: {
+            fields: ["name", "related:example.count"],
+            default: "name",
+            computed: ["related:example.count"],
+            groupable: ["name"],
+          },
+        },
+      },
+    ])[0]!;
+    expect(entity.fieldModel.sort).toEqual({
+      fields: ["name", "related:example.count"],
+      default: "name",
+      computed: ["related:example.count"],
+      groupable: ["name"],
+    });
+  });
+
+  it("defaults an absent sort declaration to null", () => {
+    const entity = compileEntityDeclarations([{ ...base, model }])[0]!;
+    expect(entity.fieldModel.sort).toBeNull();
+  });
+
+  it.each([
+    [
+      { fields: ["missing"], default: "missing" },
+      "references undeclared field missing",
+    ],
+    [
+      { fields: ["name"], default: "missing" },
+      "default missing must be one of sort.fields",
+    ],
+    [
+      { fields: ["name"], default: "name", computed: ["missing"] },
+      "computed missing must be one of sort.fields",
+    ],
+    [
+      { fields: ["name"], default: "name", groupable: ["missing"] },
+      "groupable missing must be one of sort.fields",
+    ],
+  ])("rejects an invalid sort declaration: %j", (sort, message) => {
+    expect(() =>
+      compileEntityDeclarations([{ ...base, model: { ...model, sort } }]),
+    ).toThrow(message);
+  });
+
   it("validates standard display renderers and sections", () => {
     const compile = (
       display: { standard?: string; detailSection?: string },
@@ -614,9 +665,19 @@ describe("typed entity compiler", () => {
     expect(artifact("entity-field-schemas.ingredient.gen.ts")).toContain(
       "definition.model.fields[",
     );
-    expect(artifact("entity-field-schemas.ingredient.gen.ts")).not.toContain(
-      "z.string()",
+    // Field schema maps reference the declaration; only the filter fields
+    // derived from descriptor metadata spell Zod, and those come after them.
+    const ingredientSchemas = artifact(
+      "entity-field-schemas.ingredient.gen.ts",
     );
+    const [fieldMaps, filterFields] = ingredientSchemas.split(
+      "generatedIngredientFilterFields",
+    );
+    expect(fieldMaps).not.toContain("z.string()");
+    expect(filterFields).toContain(
+      'nameFilter":z.string().optional().describe(',
+    );
+    expect(filterFields).toContain('"usuallyOnHand":z.boolean().optional()');
     expect(artifact("entity-field-model.gen.ts")).not.toContain("validation:");
     expect(artifact("entity-field-model.gen.ts")).not.toMatch(
       /^import .*entity-definitions\//m,
