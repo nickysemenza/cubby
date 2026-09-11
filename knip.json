@@ -11,7 +11,7 @@
         "scripts/ci-scope.ts!",
         "scripts/ci-scope.test.ts!",
         "scripts/ensure-wasm.ts!",
-        "scripts/entity-generator.ts!"
+        "scripts/entity-generator/main.ts!"
       ],
       "project": ["scripts/**/*.ts!"],
       "ignoreDependencies": ["vitest", "vite"]

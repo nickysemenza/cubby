@@ -18,16 +18,16 @@ import {
   readFieldSchemas,
 } from "../../../packages/schemas/src/entity-definitions/definition";
 import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
+import { checkEntityArtifacts } from "../../../scripts/entity-generator/artifacts";
+import { compileEntityDeclarations } from "../../../scripts/entity-generator/compile";
+import { loadEntityDeclarations } from "../../../scripts/entity-generator/declarations";
+import type { CompiledEntity } from "../../../scripts/entity-generator/declarations";
+import { renderEntityArtifacts } from "../../../scripts/entity-generator/render/index";
+import { renderFilterArtifacts } from "../../../scripts/entity-generator/render/filters";
 import {
-  checkEntityArtifacts,
-  compileEntityDeclarations,
   expectedBrowserRouteFiles,
   missingBrowserRouteFiles,
-  loadEntityDeclarations,
-  renderEntityArtifacts,
-  renderFilterArtifacts,
-} from "../../../scripts/entity-generator";
-import type { CompiledEntity } from "../../../scripts/entity-generator";
+} from "../../../scripts/entity-generator/render/routes";
 
 const temporaryRoots: string[] = [];
 afterEach(async () => {
