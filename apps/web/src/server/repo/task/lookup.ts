@@ -1,4 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { EntityId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -7,7 +8,6 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
-import { taskSortableFields } from "@cubby/schemas/project";
 import {
   type AnyColumn,
   and,
@@ -42,6 +42,7 @@ import {
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
   collectDescendantIds,
@@ -239,13 +240,13 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
       ...auditDateWhereConditions(task, filters),
       ...relatedWhereConditions("task", filters, task.id),
       searchCondition(),
-      eqAny(task.status, filters.status),
+      // `status` and `trade` are declared stored filters.
+      ...declaredFilterPredicates("task", task, filters),
       // Carries `projectPresenceFilter` too — it ORs with the id selection, so
       // it can't be a sibling condition here (that AND is what made
       // "project A or unassigned" inexpressible).
       projectCondition,
       subjectProductCondition(),
-      eqAny(task.trade, filters.trade),
       filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
       parentTaskCondition(),
       scopeCondition(),
@@ -277,9 +278,14 @@ export const taskList = async (
   const dbClient = getDb(db);
   const whereClause = await buildTaskWhere(db, filters);
 
-  const orderByArray = buildOrderBy(task, sorts, [...taskSortableFields], {
-    resolve: resolveTaskSort,
-  });
+  const orderByArray = buildOrderBy(
+    task,
+    sorts,
+    [...generatedEntitySort.task.fields],
+    {
+      resolve: resolveTaskSort,
+    },
+  );
   const { take, skip } = buildTakeSkip(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount({
