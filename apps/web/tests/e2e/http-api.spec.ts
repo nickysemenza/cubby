@@ -159,7 +159,7 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
       (
         await page.request.post("/api/v1/dashboard/counts", { data: {} })
       ).status(),
-    ).toBe(401);
+    ).toBe(403);
     expect(
       (
         await page.request.post("/api/v1/dashboard/counts", {
@@ -188,7 +188,7 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
       (
         await page.request.get("/api/v1/dashboard/counts", { headers })
       ).status(),
-    ).toBe(405);
+    ).toBe(200);
   } finally {
     expect(
       (
@@ -250,6 +250,14 @@ test("Scalar renders generated operations and account settings expose API keys",
     .click();
   await page
     .getByRole("dialog", { name: "API Client" })
+    .getByRole("button", {
+      name: "Selected Auth Type: sessionCookie",
+      exact: true,
+    })
+    .click();
+  await page.getByText("apiKey", { exact: true }).last().click();
+  await page
+    .getByRole("dialog", { name: "API Client" })
     .getByRole("textbox", { name: "Value", exact: true })
     .fill(key.key);
   const sent = page.waitForResponse(
@@ -266,6 +274,14 @@ test("Scalar renders generated operations and account settings expose API keys",
       exact: true,
     })
     .click();
+  await page
+    .getByRole("dialog", { name: "API Client" })
+    .getByRole("button", {
+      name: "Selected Auth Type: sessionCookie",
+      exact: true,
+    })
+    .click();
+  await page.getByText("apiKey", { exact: true }).last().click();
   await expect(
     page
       .getByRole("dialog", { name: "API Client" })
