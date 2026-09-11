@@ -421,7 +421,7 @@ function RecipeWorkflowContent({
         nutrition={nutritionNutrients}
         nutritionBasisLabel={nutritionServingLabel}
         nutritionFactor={
-          getRecipeNutritionBasis(scaledRecipe, nutritionBasis).factor
+          getRecipeNutritionBasis(recipe, nutritionBasis, factor).factor
         }
       />
       <RecipeWorkflowSupplemental
@@ -730,8 +730,9 @@ const RecipeDetailInner: React.FC<{
   const requestedNutritionBasis =
     controlledNutritionBasis ?? internalNutritionBasis;
   const nutritionView = getRecipeNutritionBasis(
-    scaledRecipe,
+    recipe,
     requestedNutritionBasis,
+    factor,
   );
   const nutritionBasis = nutritionView.basis;
   const setNutritionBasis = onNutritionBasisChange ?? setInternalNutritionBasis;

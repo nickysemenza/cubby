@@ -98,6 +98,17 @@ it("nutrition basis requires a serving count and preserves one serving", () => {
   });
 });
 
+it("keeps per-serving nutrition independent of fractional display rounding", () => {
+  const recipeScale = 0.3333;
+  const basis = getRecipeNutritionBasis(
+    { servings: 2 },
+    "serving",
+    recipeScale,
+  );
+  expect(150 * recipeScale * basis.factor).toBeCloseTo(75);
+  expect(250 * recipeScale * basis.factor).toBeCloseTo(125);
+});
+
 /**
  * A unitless yield carries the parser's "whole" sentinel; formatYield drops it
  * so "18 whole" renders as "18". Real units render normally.

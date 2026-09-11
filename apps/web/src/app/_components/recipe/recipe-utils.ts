@@ -79,12 +79,13 @@ export const perUnitSuffix = (
 export function getRecipeNutritionBasis(
   recipe: Pick<RecipeOut, "servings" | "yield">,
   requested: NutritionBasis = "whole",
+  recipeScale = 1,
 ) {
   const servings = getEffectiveServings(recipe);
   if (requested === "serving" && servings && servings > 0)
     return {
       basis: "serving" as const,
-      factor: 1 / servings,
+      factor: 1 / (servings * recipeScale),
       label: "per serving",
       hasServing: true,
     };

@@ -77,6 +77,11 @@ test("nutrition matrix shares URL basis, preserves partial ranges and zero, and 
   await expect(contributions).toContainText("300 kcal–500 kcal");
   await page.getByRole("button", { name: "Per serving", exact: true }).click();
   await expect(contributions).toContainText("75 kcal–125 kcal");
+  await page.goto(
+    `/recipes/${recipe.id}?view=data&scale=0.3333&nutritionBasis=serving`,
+  );
+  await waitForAppHydration(page);
+  await expect(contributions).toContainText("75 kcal–125 kcal");
 });
 
 test("calendar discloses partial planned nutrition and pending cleared totals", async ({

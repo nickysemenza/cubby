@@ -122,7 +122,7 @@ function RecipeExportBody({ recipe }: { recipe: RecipeOut }) {
   );
   const rootCosting = costingById?.get(recipe.id) ?? null;
   const totals = rootCosting?.totals ?? null;
-  const nutritionView = getRecipeNutritionBasis(scaledRecipe, nutritionBasis);
+  const nutritionView = getRecipeNutritionBasis(recipe, nutritionBasis, factor);
 
   const setFormat = (next: ExportFormat) =>
     navigate({
