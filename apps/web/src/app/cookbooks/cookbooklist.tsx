@@ -16,7 +16,9 @@ import {
   createCubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
 import { useClientEntityList } from "~/app/_components/hooks/useClientEntityList";
+import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
+import { Badge } from "~/components/ui/badge";
 import { cookbook } from "~/entities/cookbook.functions";
 
 /**
@@ -76,19 +78,34 @@ export function CookbookList() {
               className: "w-32",
               mobile: { slot: "meta", priority: 20 },
             },
-            // `sourceRecipeCount` is how many recipes the EPUB extraction holds;
-            // `recipeCount` is how many have actually been imported. Show the
-            // partial fraction while there are still recipes to import, else a
-            // plain count once everything (or more) is in.
+            // `sourceRecipeCount` is how many recipes the stored extraction
+            // holds; `recipeCount` is how many have actually been imported.
+            // Show the partial fraction while there are still recipes to
+            // import, else a plain count once everything (or more) is in.
+            //
+            // A book stored in the retired format is called out here rather
+            // than left to look merely under-imported: its source cannot be
+            // read at all, so "12 / 40" would imply 28 recipes are one click
+            // away when the only way back to them is a fresh extraction.
             cell: (info) => {
               const row = info.row.original;
               const allImported = row.sourceRecipeCount <= row.recipeCount;
               return (
-                <span className="tabular-nums">
-                  {allImported
-                    ? row.recipeCount
-                    : `${row.recipeCount} / ${row.sourceRecipeCount}`}
-                </span>
+                <Row as="span" align="center" justify="end" gap="xs">
+                  <span className="tabular-nums">
+                    {row.needsReextract || allImported
+                      ? row.recipeCount
+                      : `${row.recipeCount} / ${row.sourceRecipeCount}`}
+                  </span>
+                  {row.needsReextract && (
+                    <Badge
+                      variant="warning"
+                      title="Extracted with a retired format — re-extract from the EPUB"
+                    >
+                      re-extract
+                    </Badge>
+                  )}
+                </Row>
               );
             },
           }),
