@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { Button } from "~/components/ui/button";
@@ -104,7 +104,7 @@ export function MoveToProjectDialog<T extends MoveToProjectItem>({
       isPending={isPending}
     >
       <FormFieldGroup label="Project">
-        <WithProjectSearch>
+        <WithEntitySearch entity="project">
           {({ items, onSearchChange, isLoading, onOpenChange }) => (
             <EntityPicker
               entity="project"
@@ -121,7 +121,7 @@ export function MoveToProjectDialog<T extends MoveToProjectItem>({
               placeholder="Select a project…"
             />
           )}
-        </WithProjectSearch>
+        </WithEntitySearch>
         {allowNoProject && (
           <Button
             type="button"

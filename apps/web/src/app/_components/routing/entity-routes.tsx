@@ -62,6 +62,18 @@ interface ListPageOptions {
    * capture-request builder, an icon module — runs at module load.
    */
   actions?: () => ReactNode;
+  /**
+   * A `ViewSwitcher` or similar, rendered in the workbench header's first
+   * tier. A thunk for the same reason as `actions`: it closes over that
+   * route's own `Route.useSearch()`/`useNavigate()`, so it has to be called
+   * during this shell's render rather than built at module load.
+   */
+  workbenchControls?: () => ReactNode;
+  /**
+   * Passed straight through to `Page`. A thunk because the routes that need
+   * it derive it from the same live view state as `workbenchControls`.
+   */
+  bodyGutter?: () => "none" | "standard";
 }
 
 /**
@@ -87,6 +99,19 @@ interface ListChromeOptions {
   compact?: boolean;
   decoration?: "accent" | "none";
   actions?: () => ReactNode;
+  /**
+   * A `ViewSwitcher` or similar, rendered in the workbench header's first
+   * tier. A thunk for the same reason as `actions`: it closes over that
+   * route's own `Route.useSearch()`/`useNavigate()`, so it has to be called
+   * during this shell's render rather than built at module load.
+   */
+  workbenchControls?: () => ReactNode;
+  /**
+   * Passed straight through to `Page`. A thunk because the routes that need
+   * it (a table view flush to the edge, other views gutter-contained) derive
+   * it from the same live view state as `workbenchControls`.
+   */
+  bodyGutter?: () => "none" | "standard";
 }
 
 /**
@@ -106,6 +131,8 @@ export function listChromePage({
   compact,
   decoration,
   actions,
+  workbenchControls,
+  bodyGutter,
 }: ListChromeOptions) {
   return function ListChromeShell() {
     return (
@@ -119,6 +146,8 @@ export function listChromePage({
         compact={compact}
         decoration={decoration}
         actions={actions?.()}
+        workbenchControls={workbenchControls?.()}
+        bodyGutter={bodyGutter?.()}
       >
         <PageBody />
       </Page>

@@ -6,9 +6,9 @@ import {
 import { lazy, Suspense } from "react";
 
 import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
+import { listPage } from "~/app/_components/routing/entity-routes";
 import { ExpenseList } from "~/app/expenses/expenselist";
 import { Stack } from "~/components/layout";
-import { Page } from "~/components/page/Page";
 import { Skeleton } from "~/components/ui/skeleton";
 import {
   ViewSwitcher,
@@ -43,6 +43,59 @@ const VIEW_SWITCHER_OPTIONS: ViewSwitcherOption<ViewOption>[] = [
   { value: "analytics", label: "Analytics" },
 ];
 
+function useExpensesView(): ViewOption {
+  const { view } = Route.useSearch();
+  return view ?? "ledger";
+}
+
+function ExpensesListBody() {
+  const view = useExpensesView();
+
+  return (
+    <Stack gap="md">
+      {view === "ledger" && <ExpenseList />}
+
+      {view === "analytics" && (
+        <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+          <ExpenseAnalyticsView />
+        </Suspense>
+      )}
+    </Stack>
+  );
+}
+
+function ExpensesWorkbenchControls() {
+  const view = useExpensesView();
+  const navigate = useNavigate({ from: Route.fullPath });
+
+  return (
+    <ViewSwitcher
+      ariaLabel="Expenses view"
+      options={VIEW_SWITCHER_OPTIONS}
+      value={view}
+      onValueChange={(v) =>
+        // Merge, don't replace: table-search/filter params survive a
+        // renderer switch and stay shareable in the URL.
+        navigate({ search: (prev) => ({ ...prev, view: v }) })
+      }
+    />
+  );
+}
+
+function useExpensesBodyGutter(): "none" | "standard" {
+  return useExpensesView() === "ledger" ? "none" : "standard";
+}
+
+// Bound to a const, not inlined into the options object: see the splitter
+// note atop `entity-routes.tsx`.
+const ExpensesPage = listPage({
+  title: "Expenses",
+  list: ExpensesListBody,
+  workbenchControls: () => <ExpensesWorkbenchControls />,
+  bodyGutter: useExpensesBodyGutter,
+  actions: () => <CreateDialogAction request={expenseCaptureRequest()} />,
+});
+
 export const Route = createFileRoute("/_authenticated/expenses/")({
   validateSearch: expenseSearchSchema,
   search: { middlewares: [stripSearchParams(expenseSearchDefaults)] },
@@ -58,42 +111,3 @@ export const Route = createFileRoute("/_authenticated/expenses/")({
   component: ExpensesPage,
   head: () => ({ meta: [{ title: pageTitle("Expenses") }] }),
 });
-
-function ExpensesPage() {
-  const search = Route.useSearch();
-  const view = search.view ?? "ledger";
-  const navigate = useNavigate({ from: Route.fullPath });
-
-  return (
-    <Page
-      variant="list"
-      listChrome="workbench"
-      title="Expenses"
-      layout="full"
-      bodyGutter={view === "ledger" ? "none" : "standard"}
-      actions={<CreateDialogAction request={expenseCaptureRequest()} />}
-      workbenchControls={
-        <ViewSwitcher
-          ariaLabel="Expenses view"
-          options={VIEW_SWITCHER_OPTIONS}
-          value={view}
-          onValueChange={(v) =>
-            // Merge, don't replace: table-search/filter params survive a
-            // renderer switch and stay shareable in the URL.
-            navigate({ search: (prev) => ({ ...prev, view: v }) })
-          }
-        />
-      }
-    >
-      <Stack gap="md">
-        {view === "ledger" && <ExpenseList />}
-
-        {view === "analytics" && (
-          <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-            <ExpenseAnalyticsView />
-          </Suspense>
-        )}
-      </Stack>
-    </Page>
-  );
-}

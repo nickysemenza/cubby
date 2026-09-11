@@ -2,15 +2,10 @@ import {
   parseShortcodeFor,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseShortcode } from "@cubby/shared";
-import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { toast } from "sonner";
 
-import { vendor } from "~/app/vendors/vendor.functions";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
-import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { search } from "~/lib/search.functions";
 
 import {
   buildSearchHitComboboxItem,
@@ -18,8 +13,10 @@ import {
   buildVendorShortcodeComboboxItem,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
-import { useDeferredSearch, useEntitySearch } from "./entity-search-hooks";
-import type { WithEntitySearchProps } from "./with-search-hook";
+import {
+  WithEntitySearch,
+  type WithEntitySearchProps,
+} from "./with-search-hook";
 
 /**
  * The vendor picker's items key on the vendor's NAME, not its id.
@@ -36,52 +33,6 @@ import type { WithEntitySearchProps } from "./with-search-hook";
  * layer.
  */
 export type VendorName = string;
-
-/** Shared vendor query orchestration for name- and shortcode-valued pickers. */
-function useVendorSearchRows() {
-  const { searchQuery, onSearchChange } = useEntitySearch();
-  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
-  const parsedCode = parseShortcode(searchQuery);
-  const exactCode = parsedCode?.type === "vendor" ? parsedCode.shortcode : null;
-  const searchingByCode = parsedCode != null;
-
-  const { data, isLoading } = useQuery({
-    ...vendor.options.queryOptions(null),
-    enabled: enabled && !searchingByCode && searchQuery.trim() === "",
-  });
-  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...search.find.queryOptions({
-      query: searchQuery || "vendor",
-      entityTypes: ["vendor"],
-      limit: 20,
-    }),
-    enabled: enabled && !searchingByCode && searchQuery.trim() !== "",
-  });
-  const { data: exactItem, isLoading: isExactLoading } = useQuery(
-    entityDetailFor("vendor").queryOptions(exactCode ?? "VEN-2222", {
-      enabled: exactCode != null,
-    }),
-  );
-
-  const rows = useMemo(
-    () => (searchingByCode ? (exactItem ? [exactItem] : []) : (data ?? [])),
-    [data, exactItem, searchingByCode],
-  );
-
-  return {
-    rows,
-    searchHits,
-    isTypedSearch: searchQuery.trim() !== "" && !searchingByCode,
-    searchQuery,
-    onSearchChange,
-    onOpenChange,
-    isLoading: exactCode
-      ? isExactLoading
-      : searchQuery.trim()
-        ? isSearchLoading
-        : isLoading,
-  };
-}
 
 /**
  * Vendor roster picker. Opening with a blank query uses the compact popularity-
@@ -102,49 +53,30 @@ function useVendorSearchRows() {
 export function WithVendorSearch({
   children,
 }: WithEntitySearchProps<VendorName>) {
-  const {
-    rows,
-    searchHits,
-    isTypedSearch,
-    onSearchChange,
-    onOpenChange,
-    isLoading,
-  } = useVendorSearchRows();
-
-  const items = useMemo<ComboboxItem<VendorName>[]>(() => {
-    // Destructuring the real `id` here while the item's own `id` stays the
-    // NAME (per this module's doc above) looks like a bug — it isn't. The
-    // combobox item's identity is deliberately the name; `id` is consumed only
-    // by the icon, to resolve a rename-proof logo via `VendorMark`'s
-    // `vendorId` prop.
-    if (!isTypedSearch) return rows.map(buildVendorNameComboboxItem);
-    return (searchHits ?? []).map((hit) => {
-      const item = buildSearchHitComboboxItem(hit, "vendor");
-      return { ...item, id: hit.title };
-    });
-  }, [isTypedSearch, rows, searchHits]);
-
-  // No server round trip: the item's id/name IS the typed vendor name, and the
-  // roster row is created by the save that follows. Trimmed so a stray space
-  // can't produce a "Amazon " that `findOrCreateVendor` reads as a new vendor.
-  const onCreateNew = useCallback(
-    async (name: string): Promise<ComboboxItem<VendorName>> => {
-      const trimmed = name.trim();
-      return { id: trimmed, name: trimmed };
-    },
-    [],
-  );
-
   return (
-    <>
-      {children({
-        items,
-        onSearchChange,
-        isLoading,
-        onCreateNew,
-        onOpenChange,
-      })}
-    </>
+    <WithEntitySearch<VendorName>
+      entity="vendor"
+      build={buildVendorNameComboboxItem}
+      buildSearchHit={(hit) => {
+        // Destructuring the real `id` here while the item's own `id` stays the
+        // NAME (per this module's doc above) looks like a bug — it isn't. The
+        // combobox item's identity is deliberately the name; `id` is consumed
+        // only by the icon, to resolve a rename-proof logo via `VendorMark`'s
+        // `vendorId` prop.
+        const item = buildSearchHitComboboxItem(hit, "vendor");
+        return { ...item, id: hit.title };
+      }}
+      // No server round trip: the item's id/name IS the typed vendor name, and
+      // the roster row is created by the save that follows. Trimmed so a stray
+      // space can't produce a "Amazon " that `findOrCreateVendor` reads as a
+      // new vendor.
+      onCreateNew={async (name) => {
+        const trimmed = name.trim();
+        return { id: trimmed, name: trimmed };
+      }}
+    >
+      {children}
+    </WithEntitySearch>
   );
 }
 
@@ -152,22 +84,6 @@ export function WithVendorSearch({
 export function WithVendorShortcodeSearch({
   children,
 }: WithEntitySearchProps<VendorShortcode>) {
-  const {
-    rows,
-    searchHits,
-    isTypedSearch,
-    onSearchChange,
-    onOpenChange,
-    isLoading,
-  } = useVendorSearchRows();
-
-  const items = useMemo<ComboboxItem<VendorShortcode>[]>(() => {
-    if (!isTypedSearch) return rows.map(buildVendorShortcodeComboboxItem);
-    return (searchHits ?? []).map((hit) =>
-      buildSearchHitComboboxItem(hit, "vendor"),
-    );
-  }, [isTypedSearch, rows, searchHits]);
-
   const commands = useEntityCommands("vendor");
   const onCreateNew = useCallback(
     async (name: string): Promise<ComboboxItem<VendorShortcode>> => {
@@ -197,14 +113,13 @@ export function WithVendorShortcodeSearch({
   );
 
   return (
-    <>
-      {children({
-        items,
-        onSearchChange,
-        isLoading,
-        onCreateNew,
-        onOpenChange,
-      })}
-    </>
+    <WithEntitySearch<VendorShortcode>
+      entity="vendor"
+      build={buildVendorShortcodeComboboxItem}
+      buildSearchHit={(hit) => buildSearchHitComboboxItem(hit, "vendor")}
+      onCreateNew={onCreateNew}
+    >
+      {children}
+    </WithEntitySearch>
   );
 }

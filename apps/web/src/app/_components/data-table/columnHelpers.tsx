@@ -65,13 +65,9 @@ import {
   buildRecipeComboboxItem,
 } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
-import type { WithEntitySearchProps } from "../combobox/with-search-hook";
 import {
-  WithIngredientSearch,
-  WithLocationSearch,
-  WithProductSearch,
-  WithProjectSearch,
-  WithRecipeSearch,
+  WithEntitySearch,
+  type WithEntitySearchProps,
 } from "../combobox/with-search-hook";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { EntityInlineLinkList } from "../EntityInlineLinkList";
@@ -705,7 +701,7 @@ export function createInventoryEntriesColumn<
      * LocationList's Products column, or the "stacked" layout).
      */
     inlineEdit?: {
-      /** WithLocationSearch — injected so unit tests can stub it. */
+      /** `WithEntitySearch entity="location"` — injected so unit tests can stub it. */
       SearchProvider: (
         props: WithEntitySearchProps<LocationShortcode>,
       ) => ReactNode;
@@ -1219,7 +1215,9 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: WithIngredientSearch,
+    SearchProvider: (props) => (
+      <WithEntitySearch entity="ingredient" {...props} />
+    ),
   }),
   product: defineSingleEntityAdapter(productInlineSchema, {
     buildItem: (data) =>
@@ -1243,7 +1241,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: WithProductSearch,
+    SearchProvider: (props) => <WithEntitySearch entity="product" {...props} />,
   }),
   recipe: defineSingleEntityAdapter(recipeInlineSchema, {
     buildItem: (data) =>
@@ -1267,7 +1265,7 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: WithRecipeSearch,
+    SearchProvider: (props) => <WithEntitySearch entity="recipe" {...props} />,
   }),
   location: defineSingleEntityAdapter(locationInlineSchema, {
     buildItem: (data) =>
@@ -1291,7 +1289,9 @@ const singleEntityAdapters = {
       />
     ),
     collectionId: (item) => item.id,
-    SearchProvider: WithLocationSearch,
+    SearchProvider: (props) => (
+      <WithEntitySearch entity="location" {...props} />
+    ),
   }),
   "usda-food": defineSingleEntityAdapter(usdaFoodInlineSchema, {
     renderLink: (data) => (
@@ -2103,7 +2103,9 @@ export function createProjectLinkColumn<T extends ProjectRefRow>(
             trigger="pencil"
             onSave={(newId) => editable.onSave(newId, row)}
             clipboard={specFromCellData(cellData, row)}
-            SearchProvider={WithProjectSearch}
+            SearchProvider={(props) => (
+              <WithEntitySearch entity="project" {...props} />
+            )}
             renderValue={(value) => {
               if (!value) return <NoneValue />;
               return (
@@ -2210,7 +2212,9 @@ export function createProductLinkColumn<T extends ProductRefRow>(
               trigger="pencil"
               onSave={(newId) => editable.onSave(newId, row)}
               clipboard={specFromCellData(cellData, row)}
-              SearchProvider={WithProductSearch}
+              SearchProvider={(props) => (
+                <WithEntitySearch entity="product" {...props} />
+              )}
               renderValue={(v) =>
                 v ? (
                   <EntityInlineLink
@@ -2297,7 +2301,9 @@ export function createSubjectProductLinkColumn<T extends SubjectProductRefRow>(
               trigger="pencil"
               onSave={(newId) => editable.onSave(newId, row)}
               clipboard={specFromCellData(cellData, row)}
-              SearchProvider={WithProductSearch}
+              SearchProvider={(props) => (
+                <WithEntitySearch entity="product" {...props} />
+              )}
               renderValue={(v) =>
                 v ? (
                   <EntityInlineLink

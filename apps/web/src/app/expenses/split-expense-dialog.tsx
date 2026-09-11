@@ -17,7 +17,7 @@ import { useRef, useState } from "react";
 
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { purchase } from "~/app/purchases/purchase.functions";
 import { Row, Stack } from "~/components/layout";
@@ -285,7 +285,7 @@ export function SplitExpenseDialog({
                   compact
                 />
                 <div className="w-48">
-                  <WithProjectSearch>
+                  <WithEntitySearch entity="project">
                     {({ items, onSearchChange, isLoading, onOpenChange }) => {
                       const selectedId = part.projectId
                         ? parseShortcodeFor("project", part.projectId)
@@ -316,7 +316,7 @@ export function SplitExpenseDialog({
                         />
                       );
                     }}
-                  </WithProjectSearch>
+                  </WithEntitySearch>
                 </div>
                 {expense.productId && (
                   <Row align="center" gap="xs">

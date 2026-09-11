@@ -1,4 +1,11 @@
+import type { SearchHit } from "@cubby/schemas/search";
+import { parseShortcode } from "@cubby/shared";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
+
+import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { getEntityFilters } from "~/entities/filter-manifest";
+import { search } from "~/lib/search.functions";
 
 import type { ComboboxItem } from "./combobox-types";
 
@@ -6,6 +13,73 @@ export const pagination = {
   pageIndex: 0,
   pageSize: 20,
 };
+
+/** The entities `WithEntitySearch` drives end-to-end (list + typed + exact-code + optional create). */
+export type PickerSearchEntity =
+  | "ingredient"
+  | "location"
+  | "product"
+  | "recipe"
+  | "project"
+  | "task"
+  | "vendor";
+
+/**
+ * Row source for the blank- or typed-query branch. Hook-shaped (its own
+ * `useQuery` runs unconditionally every render) so per-entity variants can be
+ * selected by plain object lookup — `config.useListSource(...)` — without ever
+ * putting a hook call inside a branch.
+ */
+type EntitySearchRowSource<TRow> = (
+  searchQuery: string,
+  enabled: boolean,
+) => { data: TRow[] | undefined; isLoading: boolean };
+
+export interface UseEntitySearchConfig<TId extends string, TRow, TDetail> {
+  /**
+   * Detail-shaped placeholder id queried (disabled) while no exact code is
+   * typed — keeps the exact-lookup `useQuery` call unconditional.
+   */
+  detailPlaceholder: string;
+  /**
+   * false collapses the blank/typed split into a single always-live source
+   * (product: one `product.search` call for every query, typed or not).
+   */
+  splitBlankTyped: boolean;
+  /** Hook-shaped row source for the blank-query (or, when `splitBlankTyped`
+   * is false, every) branch. */
+  useListSource: EntitySearchRowSource<TRow>;
+  /** Maps a list/search row into a picker item. */
+  build: (row: TRow) => ComboboxItem<TId>;
+  /** Maps an exact-code detail read into a picker item (may differ in shape
+   * from `build`'s list rows — location's ancestor chain, for instance). */
+  buildDetail: (row: TDetail) => ComboboxItem<TId>;
+  /** Maps a global-search hit into a picker item for the typed-query branch
+   * (vendor's name-keyed picker overrides the id onto the hit's title). */
+  buildSearchHit: (hit: SearchHit) => ComboboxItem<TId>;
+  /**
+   * Hook-shaped: resolves the value handed to the picker as `onCreateNew`.
+   * Receives the raw dialog-opening function; returns `undefined` for
+   * entities with no create-from-picker affordance.
+   */
+  useOnCreateNew: (
+    openDialog: (name: string) => Promise<ComboboxItem<TId>>,
+  ) => ((name: string) => Promise<ComboboxItem<TId>>) | undefined;
+  /**
+   * "dialog"/"upcAware" render the shared `EntityFormDialog` on create;
+   * "none" leaves creation entirely to `useOnCreateNew` (vendor mints its own
+   * row on save, with no dialog in the picker at all).
+   */
+  createNew: "dialog" | "upcAware" | "none";
+  /** Required when `createNew` isn't "none": parses the dialog's raw save
+   * result into the shape `buildDetail` expects. */
+  parseCreatedResult?: CreatedResultParser<TDetail>;
+}
+
+/** A boundary parser for a create dialog's raw save result. */
+export type CreatedResultParser<TDetail> = (
+  result: unknown,
+) => TDetail | undefined;
 
 /**
  * Defer an entity-list options query until the picker is first opened (or the
@@ -51,7 +125,7 @@ export function useEntitySearch() {
  * Generic over the branded entity id so created items keep their branding
  * end-to-end (picker → onSave).
  */
-export function useEntitySearchWithDialog<TId extends string = string>() {
+function useEntitySearchWithDialog<TId extends string = string>() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [pendingName, setPendingName] = useState("");
@@ -102,6 +176,115 @@ export function useEntitySearchWithDialog<TId extends string = string>() {
     pendingName,
     openDialog,
     closeDialog,
+    resolveWithEntity,
+  };
+}
+
+/**
+ * Fallback only: the manifest-declared `name` column normally carries the
+ * blank-query filter field itself (`nameFilter` for product/recipe/ingredient/
+ * location, `search` for project/task). Used only if an entity's filter
+ * descriptors have no `name` column — not expected to trigger for any current
+ * `PickerSearchEntity`.
+ */
+const FALLBACK_BLANK_FILTER_KEY = {
+  ingredient: "nameFilter",
+  location: "nameFilter",
+  product: "nameFilter",
+  recipe: "nameFilter",
+  project: "search",
+  task: "search",
+} satisfies Record<Exclude<PickerSearchEntity, "vendor">, string>;
+
+/** Resolves the filter field a blank-query list request should key on. */
+export function resolveBlankFilterKey(
+  entity: Exclude<PickerSearchEntity, "vendor">,
+): string {
+  const nameFilter = getEntityFilters(entity).find(
+    (spec) => spec.columnId === "name",
+  );
+  return nameFilter?.field ?? FALLBACK_BLANK_FILTER_KEY[entity];
+}
+
+/**
+ * Shared orchestration behind every entity combobox: search-query + optional
+ * dialog state, the exact-shortcode detail lookup, and the blank/typed row
+ * queries — resolved via `config`'s hook-shaped `useListSource`/
+ * `useOnCreateNew` so a single object-property call site stays unconditional
+ * regardless of which entity is active (see each field's doc for why).
+ */
+export function useEntitySearchRows<
+  E extends PickerSearchEntity,
+  TId extends string,
+  TRow,
+  TDetail,
+>(entity: E, config: UseEntitySearchConfig<TId, TRow, TDetail>) {
+  const {
+    searchQuery,
+    onSearchChange,
+    isDialogOpen,
+    setIsDialogOpen,
+    pendingName,
+    openDialog,
+    resolveWithEntity,
+  } = useEntitySearchWithDialog<TId>();
+  const { enabled, onOpenChange } = useDeferredSearch(searchQuery);
+
+  const parsedCode = parseShortcode(searchQuery);
+  const exactCode = parsedCode?.type === entity ? parsedCode.shortcode : null;
+  const searchingByCode = parsedCode != null;
+  const hasTypedText = searchQuery.trim() !== "";
+  const useBlankPath = !config.splitBlankTyped || !hasTypedText;
+
+  const { data: rows, isLoading: isRowsLoading } = config.useListSource(
+    searchQuery,
+    enabled && !searchingByCode && useBlankPath,
+  );
+  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
+    ...search.find.queryOptions({
+      query: searchQuery || entity,
+      entityTypes: [entity],
+      limit: 20,
+    }),
+    enabled:
+      enabled && !searchingByCode && config.splitBlankTyped && !useBlankPath,
+  });
+  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+    entityDetailFor(entity).queryOptions(
+      exactCode ?? config.detailPlaceholder,
+      { enabled: exactCode != null },
+    ),
+  );
+
+  const onCreateNew = config.useOnCreateNew(openDialog);
+
+  const items: ComboboxItem<TId>[] = searchingByCode
+    ? exactItem
+      ? // SAFETY: `entityDetailFor(entity).queryOptions` is keyed by the same
+        // `entity` this `config` was built for, so its result already matches
+        // `TDetail` — TS can't thread that through the generic `E`/`TDetail`
+        // pair on its own.
+        [config.buildDetail(exactItem as TDetail)]
+      : []
+    : useBlankPath
+      ? (rows ?? []).map(config.build)
+      : (searchHits ?? []).map((hit) => config.buildSearchHit(hit));
+
+  const isLoading = exactCode
+    ? isExactLoading
+    : useBlankPath
+      ? isRowsLoading
+      : isSearchLoading;
+
+  return {
+    items,
+    isLoading,
+    onSearchChange,
+    onOpenChange,
+    onCreateNew,
+    isDialogOpen,
+    setIsDialogOpen,
+    pendingName,
     resolveWithEntity,
   };
 }

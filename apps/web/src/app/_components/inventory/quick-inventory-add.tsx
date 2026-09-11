@@ -39,7 +39,7 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { cn } from "~/lib/utils";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
-import { WithProductSearch } from "../combobox/with-search-hook";
+import { WithEntitySearch } from "../combobox/with-search-hook";
 import {
   type ProductFormFieldPaths,
   ProductFormFields,
@@ -303,7 +303,7 @@ export function QuickInventoryAdd({
           <div className="flex flex-col gap-2">
             <Row align="end" gap="sm">
               <div className="flex-1">
-                <WithProductSearch intent="stock">
+                <WithEntitySearch entity="product" intent="stock">
                   {({ items, onSearchChange, isLoading, onOpenChange }) => (
                     <ComboboxField
                       entity="product"
@@ -317,7 +317,7 @@ export function QuickInventoryAdd({
                       onOpenChange={onOpenChange}
                     />
                   )}
-                </WithProductSearch>
+                </WithEntitySearch>
               </div>
               <Button
                 type="button"

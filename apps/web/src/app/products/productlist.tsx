@@ -47,7 +47,7 @@ import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 
-import { WithLocationSearch } from "../_components/combobox/with-search-hook";
+import { WithEntitySearch } from "../_components/combobox/with-search-hook";
 import {
   createBooleanColumn,
   createCurrencyColumn,
@@ -820,7 +820,9 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
               mobile: { slot: "meta", priority: 40, interactive: true },
               onQuickEdit: (product) => setQuickEditProductId(product.id),
               inlineEdit: {
-                SearchProvider: WithLocationSearch,
+                SearchProvider: (props) => (
+                  <WithEntitySearch entity="location" {...props} />
+                ),
                 onMoveEntry: async (entry, locationId) => {
                   await updateInventoryMutation.mutateAsync({
                     id: entry.id,

@@ -12,7 +12,7 @@ import { useMemo } from "react";
 import { z } from "zod";
 
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { useRecipeCostingData } from "~/app/_components/hooks/useRecipeCostingData";
 import {
   type ComparedRecipe,
@@ -162,7 +162,7 @@ function RecipeComparePage() {
           <RecipeCompareGrid compared={compared} onRemove={handleRemove} />
 
           <div className="mx-auto max-w-sm">
-            <WithRecipeSearch>
+            <WithEntitySearch entity="recipe">
               {({ items, onSearchChange, isLoading, onOpenChange }) => (
                 <EntityPicker
                   entity="recipe"
@@ -179,7 +179,7 @@ function RecipeComparePage() {
                   }}
                 />
               )}
-            </WithRecipeSearch>
+            </WithEntitySearch>
           </div>
         </div>
       )}

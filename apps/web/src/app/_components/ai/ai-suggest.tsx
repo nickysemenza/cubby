@@ -1,13 +1,12 @@
 import type { Confidence } from "@cubby/schemas/ai";
-import { type ReactNode, useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { type ReactNode, useEffect, useRef } from "react";
 
 import { VerbButton } from "~/app/_components/actions/action-verb-ui";
 import { Row, Stack } from "~/components/layout";
 import { Description } from "~/components/ui/description";
-import { getErrorMessage } from "~/lib/error-utils";
 
 import { AiProposalCard, AiProvenance } from "./ai-proposal-card";
+import { useAiProposal } from "./use-ai-proposal";
 
 /**
  * A field paired with a "Suggest" button. Owns the ai-availability gate,
@@ -56,46 +55,33 @@ export function FieldWithAISuggest<
    */
   children?: (result: TResult) => ReactNode;
 }) {
-  const [suggestion, setSuggestion] = useState<{
-    result: TResult;
-    basisKey: string;
-    currentValue: unknown;
-    at: Date;
-  } | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const basisRef = useRef(basisKey);
-  basisRef.current = basisKey;
+  const { proposal, isLoading, request, accept, dismiss } =
+    useAiProposal<TResult>({ basisKey, run: runSuggest });
+
+  // `useAiProposal` only tracks `basisKey`; the field a suggestion would
+  // write to is not part of it, so a manual edit to that field after a
+  // proposal appears needs its own staleness check. `requestValueRef` is the
+  // field's value when the *currently shown* proposal was requested — set at
+  // click time, copied into `committedValueRef` only once that request's
+  // response actually lands as a proposal (a stale/dropped response must not
+  // stomp the value belonging to whatever proposal is still on screen).
+  const requestValueRef = useRef(currentValue);
+  const committedValueRef = useRef<unknown>(null);
 
   useEffect(() => {
-    if (
-      suggestion &&
-      (suggestion.basisKey !== basisKey ||
-        (fieldDirty && suggestion.currentValue !== currentValue))
-    ) {
-      setSuggestion(null);
-    }
-  }, [basisKey, currentValue, fieldDirty, suggestion]);
+    if (proposal) committedValueRef.current = requestValueRef.current;
+  }, [proposal]);
 
-  const handleSuggest = async () => {
-    if (!enabled) return;
-    const requestBasis = basisKey;
-    const requestValue = currentValue;
-    setIsLoading(true);
-    try {
-      const result = await runSuggest();
-      // A response for old product/location inputs is not a proposal anymore.
-      if (basisRef.current !== requestBasis) return;
-      setSuggestion({
-        result,
-        basisKey: requestBasis,
-        currentValue: requestValue,
-        at: new Date(),
-      });
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setIsLoading(false);
+  useEffect(() => {
+    if (proposal && fieldDirty && committedValueRef.current !== currentValue) {
+      dismiss();
     }
+  }, [proposal, fieldDirty, currentValue, dismiss]);
+
+  const handleSuggest = () => {
+    if (!enabled) return;
+    requestValueRef.current = currentValue;
+    void request();
   };
 
   return (
@@ -109,7 +95,7 @@ export function FieldWithAISuggest<
           pending={isLoading}
           disabledReason={enabled ? undefined : disabledReason}
           className="min-h-9 max-sm:min-h-11"
-          onClick={() => void handleSuggest()}
+          onClick={handleSuggest}
         />
       </Row>
 
@@ -117,25 +103,25 @@ export function FieldWithAISuggest<
           a touch device, which is where half this form is filled in. */}
       {!enabled && <Description size="xs">{disabledReason}</Description>}
 
-      {suggestion && (
+      {proposal && (
         <AiProposalCard
           label={`Suggested ${object}`}
-          confidence={suggestion.result.confidence}
-          reasoning={suggestion.result.reasoning}
+          confidence={proposal.result.confidence}
+          reasoning={proposal.result.reasoning}
           // The suggest endpoints answer with the value alone: no model, no
           // analysis timestamp. Until `packages/schemas/src/ai.ts` carries
           // them, the honest provenance is when it was asked.
-          provenance={<AiProvenance analyzedAt={suggestion.at} />}
+          provenance={<AiProvenance analyzedAt={proposal.at} />}
           onAccept={() => {
-            onAccept(suggestion.result);
-            setSuggestion(null);
+            const result = accept();
+            if (result) onAccept(result);
           }}
           onDismiss={() => {
-            onDismiss?.(suggestion.result);
-            setSuggestion(null);
+            onDismiss?.(proposal.result);
+            dismiss();
           }}
         >
-          {children?.(suggestion.result)}
+          {children?.(proposal.result)}
         </AiProposalCard>
       )}
     </Stack>

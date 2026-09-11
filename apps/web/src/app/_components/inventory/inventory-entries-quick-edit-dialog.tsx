@@ -6,7 +6,7 @@ import type {
 import type { LocationType } from "@cubby/schemas/location";
 
 import { buildLocationComboboxItem } from "~/app/_components/combobox/combobox-builders";
-import { WithLocationSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { EditableAmountCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -76,7 +76,9 @@ export function InventoryEntriesQuickEditDialog({
               <EditableEntityCell
                 value={buildLocationComboboxItem(entry.location)}
                 label="location"
-                SearchProvider={WithLocationSearch}
+                SearchProvider={(props) => (
+                  <WithEntitySearch entity="location" {...props} />
+                )}
                 onSave={async (newLocationId) => {
                   if (!newLocationId) return;
                   await updateInventoryMutation.mutateAsync({

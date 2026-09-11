@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type {
   FieldPathByValue,
   FieldValues,
@@ -7,33 +6,10 @@ import type {
 
 import type { ProductPickerIntent } from "../combobox/combobox-builders";
 import type { ComboboxItem } from "../combobox/combobox-types";
-import {
-  WithIngredientSearch,
-  WithLocationSearch,
-  WithProductSearch,
-  WithRecipeSearch,
-} from "../combobox/with-search-hook";
+import { WithEntitySearch } from "../combobox/with-search-hook";
 import { ComboboxField } from "../form-utils";
 
 type SearchType = "ingredient" | "product" | "location" | "recipe";
-
-interface WithEntitySearchProps {
-  intent?: ProductPickerIntent;
-  children: (props: {
-    items: ComboboxItem[];
-    onSearchChange: (query: string) => void;
-    isLoading: boolean;
-    onCreateNew?: (name: string) => Promise<ComboboxItem>;
-    onOpenChange: (open: boolean) => void;
-  }) => ReactNode;
-}
-
-const searchWrapperMap = {
-  ingredient: WithIngredientSearch,
-  product: WithProductSearch,
-  location: WithLocationSearch,
-  recipe: WithRecipeSearch,
-} satisfies Record<SearchType, React.ComponentType<WithEntitySearchProps>>;
 
 interface ComboboxFieldWithSearchProps<
   TFieldValues extends FieldValues,
@@ -62,10 +38,9 @@ export function ComboboxFieldWithSearch<
   productIntent,
   disabledItemReasons,
 }: ComboboxFieldWithSearchProps<TFieldValues, TName>) {
-  const SearchWrapper = searchWrapperMap[searchType];
-
   return (
-    <SearchWrapper
+    <WithEntitySearch
+      entity={searchType}
       intent={searchType === "product" ? productIntent : undefined}
     >
       {({ items, onSearchChange, isLoading, onCreateNew, onOpenChange }) => (
@@ -82,6 +57,6 @@ export function ComboboxFieldWithSearch<
           disabledItemReasons={disabledItemReasons}
         />
       )}
-    </SearchWrapper>
+    </WithEntitySearch>
   );
 }

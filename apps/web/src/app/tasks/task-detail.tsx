@@ -18,11 +18,7 @@ import type { FC } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import {
-  WithProductSearch,
-  WithProjectSearch,
-  WithTaskSearch,
-} from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { formatDateRange, tradeOptions } from "~/app/projects/shared";
@@ -413,7 +409,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               data: { projectId },
             });
           }}
-          SearchProvider={WithProjectSearch}
+          SearchProvider={(props) => (
+            <WithEntitySearch entity="project" {...props} />
+          )}
           renderValue={(value) =>
             value && task.projectId && value.id === task.projectId ? (
               <EntityInlineLink
@@ -461,7 +459,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
               data: { subjectProductId },
             });
           }}
-          SearchProvider={WithProductSearch}
+          SearchProvider={(props) => (
+            <WithEntitySearch entity="product" {...props} />
+          )}
           renderValue={(value) =>
             value &&
             task.subjectProductId &&
@@ -519,7 +519,9 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
                   data: { blockedByIds: ids },
                 });
               }}
-              SearchProvider={WithTaskSearch}
+              SearchProvider={(props) => (
+                <WithEntitySearch entity="task" {...props} />
+              )}
               label="task"
               excludeId={task.id}
               renderReadChip={(item) => {
