@@ -109,6 +109,61 @@ describe("HTTP boundary", () => {
     );
     expect(ports.getSession).not.toHaveBeenCalled();
   });
+  it("lets bearer-authenticated writes through without an Origin", async () => {
+    expect(
+      (
+        await request("recipes/RCP-ABCD", {
+          method: "PATCH",
+          headers: {
+            authorization: "Bearer token.signature",
+            "content-type": "application/json",
+          },
+          body: '{"notes":"Changed"}',
+        })
+      ).status,
+    ).toBe(200);
+    // The bearer plugin turns the header into a session before getSession
+    // runs, so the boundary still reads the session authoritatively.
+    expect(ports.getSession).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
+      query: { disableCookieCache: true },
+    });
+    expect(ports.verifyApiKey).not.toHaveBeenCalled();
+    expect(ports.context).toHaveBeenCalledWith({
+      headers: expect.any(Headers),
+      actor: {
+        userId: "user-fixture",
+        sessionId: "session-fixture",
+        source: "api",
+      },
+    });
+  });
+  it("rejects a bearer token the auth layer does not recognise", async () => {
+    ports.getSession.mockResolvedValue(null);
+    expect(
+      (
+        await request("recipes", {
+          headers: { authorization: "Bearer invalid" },
+        })
+      ).status,
+    ).toBe(401);
+    expect(ports.dispatch).not.toHaveBeenCalled();
+  });
+  it("still requires a same-origin write for non-bearer Authorization schemes", async () => {
+    expect(
+      (
+        await request("recipes/RCP-ABCD", {
+          method: "PATCH",
+          headers: {
+            authorization: "Basic dXNlcjpwYXNz",
+            "content-type": "application/json",
+          },
+          body: '{"name":"Change"}',
+        })
+      ).status,
+    ).toBe(403);
+    expect(ports.dispatch).not.toHaveBeenCalled();
+  });
   it.each([
     ["recipe/getManyByIDs?ids=%5B%22RCP-ABCD%22%5D", { ids: ["RCP-ABCD"] }],
     ["dashboard/counts", undefined],

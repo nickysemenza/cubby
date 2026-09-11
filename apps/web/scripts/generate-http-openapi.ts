@@ -49,6 +49,7 @@ const makeDocument = () =>
       components: {
         securitySchemes: {
           apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+          bearerAuth: { type: "http", scheme: "bearer" },
           sessionCookie: {
             type: "apiKey",
             in: "cookie",
@@ -56,7 +57,7 @@ const makeDocument = () =>
           },
         },
       },
-      security: [{ apiKey: [] }, { sessionCookie: [] }],
+      security: [{ apiKey: [] }, { bearerAuth: [] }, { sessionCookie: [] }],
     },
     {
       setOperationId: "concatenated-path",
