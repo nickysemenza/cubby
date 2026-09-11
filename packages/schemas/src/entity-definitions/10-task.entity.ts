@@ -31,7 +31,13 @@ export default defineEntity({
         key: "status",
         kind: "enum",
         control: { kind: "select" },
-        display: { list: true, detail: true, detailOrder: 1 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 1,
+          width: "sm",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: taskStatusSchema,
           create: taskStatusSchema.default("not_started"),
@@ -85,7 +91,14 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date", section: "schedule" },
-        display: { list: true, detail: true, detailOrder: 3 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 3,
+          width: "sm",
+          format: "plainDate",
+          mobile: { slot: "meta", priority: 40, interactive: true },
+        },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -114,7 +127,13 @@ export default defineEntity({
         key: "trade",
         kind: "enum",
         control: { kind: "select" },
-        display: { list: true, detail: true, detailOrder: 2 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 2,
+          width: "sm",
+          mobile: { slot: "meta", priority: 50 },
+        },
         validation: {
           read: tradeSchema,
           create: tradeSchema,

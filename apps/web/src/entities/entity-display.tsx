@@ -3,30 +3,125 @@ import {
   entityFieldModels,
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { ReactNode } from "react";
 import { z } from "zod";
 
 import {
+  dateCellData,
   numberCellData,
   textCellData,
+  timestampCellData,
 } from "~/app/_components/data-table/cell-data";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
   type CubbyColumnHelper,
 } from "~/app/_components/data-table/table-features";
-import { attachCubbyColumnMeta } from "~/app/_components/data-table/table-meta";
+import {
+  attachCubbyColumnMeta,
+  type MobileColumnMeta,
+} from "~/app/_components/data-table/table-meta";
+import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { BasicInfo, type BasicInfoField } from "~/components/common/basic-info";
 import {
   renderScalarValue,
   type ScalarDisplayValue,
 } from "~/components/common/scalar-value";
 import { NoneValue } from "~/components/ui/none-value";
+import { formatCurrency } from "~/lib/utils";
 
 type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
 const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
   entityFieldModels[entity].fields.filter((field) => field.display[surface]);
+
+/**
+ * Buckets a declared `display.width` into the shared table's fixed-layout
+ * class. Four buckets can't reproduce every hand-tuned pixel width in the app
+ * (observed widths run from `w-20` to `w-64`); each bucket picks the class
+ * closest to its cluster's center rather than the extremes, so this is a
+ * deliberate approximation, not a literal replay of any one column's class.
+ */
+function widthClassName(
+  width: DisplayField["display"]["width"],
+): string | undefined {
+  switch (width) {
+    case "xs":
+      return "w-20";
+    case "sm":
+      return "w-28";
+    case "md":
+      return "w-40";
+    case "lg":
+      return "w-56";
+    case null:
+      return undefined;
+  }
+}
+
+/**
+ * Renders a declared scalar per its `display.format`, falling back to the
+ * kind-derived default ({@link renderScalarValue}) when no format is set or
+ * the value's runtime kind doesn't match the declared formatter (an "empty"
+ * value always short-circuits, regardless of format).
+ */
+function renderFormattedScalar(
+  format: DisplayField["display"]["format"],
+  value: ScalarDisplayValue,
+): ReactNode {
+  if (value.kind === "empty") return renderScalarValue(value, "list");
+  switch (format) {
+    case "currency":
+      return value.kind === "number" ? (
+        <span className="text-positive">{formatCurrency(value.raw)}</span>
+      ) : (
+        renderScalarValue(value, "list")
+      );
+    case "plainDate":
+      return renderScalarValue(
+        {
+          kind: "date",
+          raw: value.kind === "date" ? value.raw : String(value.raw),
+        },
+        "list",
+      );
+    case "timestamp":
+      return renderScalarValue(
+        {
+          kind: "timestamp",
+          raw: value.kind === "timestamp" ? value.raw : String(value.raw),
+        },
+        "list",
+      );
+    case "external-link": {
+      const href = value.kind === "text" ? value.raw : String(value.raw);
+      return href ? <ExternalLinkText href={href} truncate /> : <NoneValue />;
+    }
+    case null:
+      return renderScalarValue(value, "list");
+  }
+}
+
+/**
+ * The declaration's `mobile.slot` is a plain string — it's just the slot name
+ * a `.entity.ts` author typed, not the shared table's own `MobileSlot` union —
+ * so this is the one place that trusts a declared slot name at the table's
+ * boundary rather than plumbing the union type back through the generator.
+ */
+function toMobileColumnMeta(
+  mobile: DisplayField["display"]["mobile"],
+): MobileColumnMeta | undefined {
+  if (!mobile) return undefined;
+  return {
+    // SAFETY: entity declarations only ever write one of MobileColumnMeta's
+    // own slot literals (compile.ts requires a nonempty string, not a real
+    // enum) — this is the declared-metadata boundary that trusts that.
+    slot: mobile.slot as MobileColumnMeta["slot"],
+    priority: mobile.priority,
+    interactive: mobile.interactive,
+  };
+}
 
 function readScalarField<TRecord extends object>(
   record: TRecord,
@@ -146,6 +241,38 @@ export function EntityBasicInfo<TRecord extends object>({
   );
 }
 
+/**
+ * The copy/paste descriptor for a generated column, keyed off the same
+ * `display.format` the cell renderer switches on — `external-link` copies
+ * like the field's own kind (number or text), so it has no dedicated branch.
+ */
+function cellDataForField<TRecord extends object>(field: DisplayField) {
+  switch (field.display.format) {
+    case "currency":
+      return numberCellData<TRecord>("currency", (record) => {
+        const value = readScalarField(record, field);
+        return value.kind === "number" ? value.raw : null;
+      });
+    case "plainDate":
+      return dateCellData<TRecord>((record) => copyScalarField(record, field));
+    case "timestamp":
+      return timestampCellData<TRecord>((record) => {
+        const value = readScalarField(record, field);
+        return value.kind === "timestamp" ? value.raw : null;
+      });
+    case "external-link":
+    case null:
+      return field.kind === "number"
+        ? numberCellData<TRecord>("number", (record) => {
+            const value = readScalarField(record, field);
+            return value.kind === "number" ? value.raw : null;
+          })
+        : textCellData<TRecord>("text", (record) =>
+            copyScalarField(record, field),
+          );
+  }
+}
+
 /** Specialized columns retain their cell behavior and table metadata. Declared
  * membership, field accessors, and plain headers belong to the entity model. */
 export function createEntityDisplayColumns<TRecord extends object>(
@@ -153,11 +280,25 @@ export function createEntityDisplayColumns<TRecord extends object>(
   helper: CubbyColumnHelper<TRecord>,
   overrides?: CubbyColumnCollection<TRecord>,
 ): CubbyColumnCollection<TRecord> {
+  // SAFETY: `generatedEntitySort` is `as const satisfies Partial<Record<Entity,
+  // ...>>`, so its inferred type carries only the entity keys actually present
+  // (e.g. "cookbook" and "usda-food" have no sort roster at all) — indexing it
+  // with a generic `Entity` needs the wider Partial view reinstated here, not
+  // the narrower literal TS would otherwise reject for those missing keys. The
+  // `?? []` just below is what makes an absent roster safe: an entity with no
+  // sort declaration then sorts no generated column, rather than throwing.
+  const sortRoster = (
+    generatedEntitySort as Partial<
+      Record<Entity, { fields: readonly string[] }>
+    >
+  )[entity];
+  const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
   return createCubbyColumnCollection<TRecord>((add) => {
     const usedOverrides = new Set<string>();
     for (const field of entityDisplayFields(entity, "list")) {
       if (field.display.standard) continue;
       const columnId = field.display.columnId ?? field.key;
+      const defaultEnableSorting = sortableColumnIds.includes(columnId);
       let overridden = false;
       overrides?.visit((column) => {
         const id =
@@ -178,6 +319,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
             z.string().safeParse(column.header).success
               ? field.label
               : column.header,
+          // Only fills in when the override left its own value unset — a
+          // specialized column that deliberately opts out (or in) keeps that
+          // choice.
+          enableSorting: column.enableSorting ?? defaultEnableSorting,
         });
       });
       if (overridden) continue;
@@ -190,25 +335,23 @@ export function createEntityDisplayColumns<TRecord extends object>(
           `Display field ${entity}.${field.key} needs a specialized column`,
         );
       }
+      const format = field.display.format;
       add(
         helper.accessor((record) => readScalarField(record, field).raw, {
           id: columnId,
           header: field.label,
+          enableSorting: defaultEnableSorting,
           meta: attachCubbyColumnMeta({
-            cellData:
-              field.kind === "number"
-                ? numberCellData<TRecord>("number", (record) => {
-                    const value = readScalarField(record, field);
-                    return value.kind === "number" ? value.raw : null;
-                  })
-                : textCellData<TRecord>("text", (record) =>
-                    copyScalarField(record, field),
-                  ),
+            className: widthClassName(field.display.width),
+            numeric: format === "currency" ? true : undefined,
+            mobile: toMobileColumnMeta(field.display.mobile),
+            cellData: cellDataForField<TRecord>(field),
           }),
           cell: ({ row }) =>
-            renderScalarValue(readScalarField(row.original, field), "list") ?? (
-              <NoneValue />
-            ),
+            renderFormattedScalar(
+              format,
+              readScalarField(row.original, field),
+            ) ?? <NoneValue />,
         }),
       );
     }

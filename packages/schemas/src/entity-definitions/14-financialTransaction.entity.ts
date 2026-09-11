@@ -87,7 +87,12 @@ export default defineEntity({
             { value: "other", label: "other" },
           ],
         },
-        display: { list: true, detail: true, detailOrder: 40 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 40,
+          width: "sm",
+        },
         validation: {
           read: z.enum(generatedFinancialTransactionKindValues),
           create: z.enum(generatedFinancialTransactionKindValues),
@@ -106,7 +111,13 @@ export default defineEntity({
             { value: "void", label: "void" },
           ],
         },
-        display: { list: true, detail: true, detailOrder: 50 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 50,
+          width: "xs",
+          mobile: { slot: "meta", priority: 20 },
+        },
         validation: {
           read: z.enum(generatedFinancialTransactionStatusValues),
           create: z.enum(generatedFinancialTransactionStatusValues),
@@ -117,7 +128,14 @@ export default defineEntity({
         key: "amount",
         kind: "number",
         control: { kind: "number", renderer: "money" },
-        display: { list: true, detail: true, detailOrder: 30 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 30,
+          width: "sm",
+          format: "currency",
+          mobile: { slot: "trailing", priority: 1 },
+        },
         validation: {
           read: financialTransactionNonZeroAmount,
           create: financialTransactionNonZeroAmount,
@@ -141,7 +159,14 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { section: "schedule", kind: "date" },
-        display: { list: true, detail: true, detailOrder: 80 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 80,
+          width: "sm",
+          format: "plainDate",
+          mobile: { slot: "meta", priority: 30 },
+        },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -153,7 +178,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { section: "identity", kind: "text" },
-        display: { list: true, detail: true, detailOrder: 10 },
+        display: { list: true, detail: true, detailOrder: 10, width: "md" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -481,6 +506,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
+        stored: true,
         schemaFromRead: true,
         options: [
           { value: "purchase", label: "Purchase" },
@@ -499,6 +525,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        stored: true,
         schemaFromRead: true,
         options: [
           { value: "expected", label: "Expected" },
@@ -506,13 +533,13 @@ export default defineEntity({
           { value: "posted", label: "Posted" },
           { value: "void", label: "Void" },
         ],
-        stored: true,
       },
       {
         columnId: "postedDate",
         kind: "range",
         placeholder: "Filter by posted date...",
         deriveSchema: true,
+        stored: true,
         options: [
           { value: "30d", label: "Last 30 days" },
           { value: "90d", label: "Last 90 days" },
@@ -525,7 +552,6 @@ export default defineEntity({
         },
       },
       {
-        stored: true,
         columnId: "accountId",
         kind: "idMulti",
         placeholder: "Filter by account...",
@@ -539,7 +565,6 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        stored: true,
         columnId: "purchasePresence",
         field: "purchasePresenceFilter",
         kind: "presence",
@@ -566,6 +591,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by merchant...",
         deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "amount",
@@ -591,7 +617,6 @@ export default defineEntity({
       {
         columnId: "amountMax",
         kind: "text",
-        stored: true,
         placeholder: "Maximum amount...",
         urlOnly: true,
       },

@@ -106,7 +106,13 @@ export default defineEntity({
         nullable: true,
         label: "USDA FDC ID",
         control: { kind: "number" },
-        display: { list: true, detail: true, detailOrder: 7 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 7,
+          width: "sm",
+          format: "external-link",
+        },
         validation: {
           read: fdcId.nullable(),
           create: fdcId.nullable().optional(),
@@ -117,7 +123,13 @@ export default defineEntity({
         key: "manufacturer",
         kind: "text",
         control: { kind: "text", section: "manufacturer" },
-        display: { list: true, detail: true, detailOrder: 2 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 2,
+          width: "md",
+          mobile: { slot: "subtitle", priority: 20 },
+        },
         validation: {
           read: z.string(),
           create: z.string(),
@@ -129,7 +141,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text", section: "identity-model" },
-        display: { list: true, detail: true, detailOrder: 3 },
+        display: { list: true, detail: true, detailOrder: 3, width: "md" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -141,7 +153,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea", section: "notes" },
-        display: { list: true },
+        display: { list: true, width: "md" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -165,7 +177,13 @@ export default defineEntity({
         kind: "enum",
         nullable: true,
         control: { kind: "select" },
-        display: { list: true, detail: true, detailOrder: 5 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 5,
+          width: "sm",
+          mobile: { slot: "subtitle", priority: 30 },
+        },
         validation: {
           read: productCategory.nullable(),
           create: productCategory.nullable().optional(),
@@ -193,7 +211,12 @@ export default defineEntity({
         nullable: true,
         label: "Valuation price",
         control: { kind: "number", renderer: "money" },
-        display: { list: true, detail: true, detailOrder: 4 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 4,
+          format: "currency",
+        },
         validation: {
           read: moneyNullable.describe(
             "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
@@ -242,7 +265,7 @@ export default defineEntity({
         kind: "boolean",
         nullable: true,
         control: { kind: "checkbox" },
-        display: { list: true },
+        display: { list: true, width: "sm" },
         validation: {
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
@@ -302,7 +325,12 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         label: "UPC",
-        display: { list: true, detail: true, detailOrder: 6 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 6,
+          width: "sm",
+        },
         validation: {
           read: gtin.nullable(),
           create: null,
@@ -566,6 +594,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by name...",
         deriveSchema: true,
+        stored: true,
         schemaDescription: "Filter by product name",
       },
       {
@@ -574,6 +603,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by manufacturer...",
         deriveSchema: true,
+        stored: true,
         optionsKey: "manufacturers",
       },
       {
@@ -594,16 +624,15 @@ export default defineEntity({
       },
       {
         columnId: "model",
-        stored: true,
         field: "modelFilter",
         kind: "text",
         placeholder: "Filter by model...",
         deriveSchema: true,
+        stored: true,
         schemaDescription:
           "Filter by model number — a tool's real identity when the name is generic.",
       },
       {
-        stored: true,
         columnId: "modelPresence",
         field: "modelPresenceFilter",
         kind: "presence",
@@ -628,8 +657,8 @@ export default defineEntity({
         field: "categoryFilter",
         kind: "multiselect",
         placeholder: "Filter by category...",
-        stored: true,
         deriveSchema: true,
+        stored: true,
         schemaRef: {
           module: "@cubby/schemas/product-fields",
           export: "productCategory",
@@ -658,7 +687,6 @@ export default defineEntity({
         options: [
           { value: "has", label: "Has in service as a location", meta: true },
           { value: "none", label: "(none)", meta: true },
-        stored: true,
         ],
       },
       {
@@ -738,6 +766,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search notes...",
         deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "notesPresence",
@@ -766,7 +795,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter data gaps...",
         options: [
-        stored: true,
           { value: "product_manufacturer", label: "Manufacturer" },
           { value: "product_category", label: "Category" },
           { value: "product_model", label: "Model" },

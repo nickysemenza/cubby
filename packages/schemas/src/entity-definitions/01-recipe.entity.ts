@@ -65,7 +65,12 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number", section: "servings" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "xs",
+          mobile: { slot: "subtitle", priority: 5, interactive: true },
+        },
         validation: {
           read: recipeServings.nullable().optional(),
           create: recipeServings.nullable().optional(),
@@ -427,12 +432,12 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter total time...",
         deriveSchema: true,
+        stored: true,
         options: [
           { value: "under30", label: "Under 30 min" },
           { value: "30to60", label: "30–60 min" },
           { value: "60plus", label: "Over an hour" },
         ],
-        stored: true,
         expandRef: {
           module: "~/entities/filter-behavior",
           export: "resolveRecipeTotalTime",
