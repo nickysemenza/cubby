@@ -263,7 +263,10 @@ function RecipeSummary({
             )}
           </span>
           <span>Weight: {Math.round(totals.weight)} g</span>
-          <span>{totals.totalIngredients} ingredients</span>
+          <span>
+            {totals.totalIngredients}{" "}
+            {totals.totalIngredients === 1 ? "ingredient" : "ingredients"}
+          </span>
         </div>
         {nutrition ? (
           <NutritionLabel
