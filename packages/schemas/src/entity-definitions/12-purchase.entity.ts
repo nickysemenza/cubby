@@ -432,6 +432,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search display label...",
         deriveSchema: true,
+        stored: true,
         schemaDescription: "Substring match on the human display label only",
       },
       {

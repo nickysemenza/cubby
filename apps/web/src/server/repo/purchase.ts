@@ -106,6 +106,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -531,7 +532,7 @@ export const buildPurchaseWhereClause = async (
     : undefined;
   return buildSearchConditions(
     purchase,
-    [{ column: purchase.displayLabel, term: filters.displayLabelSearch }],
+    [],
     [
       filters.search
         ? or(
@@ -542,6 +543,8 @@ export const buildPurchaseWhereClause = async (
       ...auditDateWhereConditions(purchase, filters),
       vendorCondition,
       ...relatedWhereConditions("purchase", filters, purchase.id),
+      // `displayLabel` (text) is a declared stored filter.
+      ...declaredFilterPredicates("purchase", purchase, filters),
       eqAny(purchase.orderId, filters.orderId),
       presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
       presenceCondition(

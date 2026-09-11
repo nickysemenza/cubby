@@ -594,6 +594,7 @@ export default defineEntity({
       },
       {
         columnId: "model",
+        stored: true,
         field: "modelFilter",
         kind: "text",
         placeholder: "Filter by model...",
@@ -602,6 +603,7 @@ export default defineEntity({
           "Filter by model number — a tool's real identity when the name is generic.",
       },
       {
+        stored: true,
         columnId: "modelPresence",
         field: "modelPresenceFilter",
         kind: "presence",
@@ -626,6 +628,7 @@ export default defineEntity({
         field: "categoryFilter",
         kind: "multiselect",
         placeholder: "Filter by category...",
+        stored: true,
         deriveSchema: true,
         schemaRef: {
           module: "@cubby/schemas/product-fields",
@@ -655,6 +658,7 @@ export default defineEntity({
         options: [
           { value: "has", label: "Has in service as a location", meta: true },
           { value: "none", label: "(none)", meta: true },
+        stored: true,
         ],
       },
       {
@@ -762,6 +766,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter data gaps...",
         options: [
+        stored: true,
           { value: "product_manufacturer", label: "Manufacturer" },
           { value: "product_category", label: "Category" },
           { value: "product_model", label: "Model" },

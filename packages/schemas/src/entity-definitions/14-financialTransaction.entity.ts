@@ -506,6 +506,7 @@ export default defineEntity({
           { value: "posted", label: "Posted" },
           { value: "void", label: "Void" },
         ],
+        stored: true,
       },
       {
         columnId: "postedDate",
@@ -524,6 +525,7 @@ export default defineEntity({
         },
       },
       {
+        stored: true,
         columnId: "accountId",
         kind: "idMulti",
         placeholder: "Filter by account...",
@@ -537,6 +539,7 @@ export default defineEntity({
         urlOnly: true,
       },
       {
+        stored: true,
         columnId: "purchasePresence",
         field: "purchasePresenceFilter",
         kind: "presence",
@@ -588,6 +591,7 @@ export default defineEntity({
       {
         columnId: "amountMax",
         kind: "text",
+        stored: true,
         placeholder: "Maximum amount...",
         urlOnly: true,
       },

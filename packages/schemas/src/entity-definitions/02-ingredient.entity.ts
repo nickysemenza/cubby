@@ -232,6 +232,7 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter pantry staples...",
         deriveSchema: true,
+        stored: true,
         schemaDescription: "Filter by ingredients usually kept on hand",
         options: [
           { value: "true", label: "Usually on hand" },

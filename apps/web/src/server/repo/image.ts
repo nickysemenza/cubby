@@ -66,7 +66,6 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
-  eqAny,
   executeListQueryWithCount,
   getDb,
   imageJoinBindings,
@@ -77,6 +76,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import {
@@ -498,9 +498,12 @@ export const buildImageWhere = (
 
   return buildSearchConditions(
     outerImage,
-    [{ column: outerImage.filename, term: filters.nameFilter }],
+    [],
     [
-      eqAny(outerImage.status, filters.status),
+      // `filename` (text) and `status` (multiselect) are declared stored
+      // filters — passed `outerImage` so the aliased-table row query and the
+      // unaliased count query each resolve their own columns.
+      ...declaredFilterPredicates("image", outerImage, filters),
       ...auditDateWhereConditions(outerImage, filters),
       referencePresence,
       filters.uploadedAgeHoursMin !== undefined

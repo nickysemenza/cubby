@@ -270,6 +270,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search accounts...",
         deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "identity",
@@ -289,6 +290,7 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        stored: true,
         options: [
           { value: "false", label: "Known" },
           { value: "true", label: "Provisional" },

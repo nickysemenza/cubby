@@ -1,11 +1,9 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { EntityId } from "@cubby/schemas/identifiers";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type PresenceFilter,
-  type SortParams,
+import type {
+  PaginationParams,
+  PresenceFilter,
+  SortParams,
 } from "@cubby/schemas/pagination";
 import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
 import {
@@ -29,8 +27,6 @@ import type { Database } from "~/server/db";
 import { product, task } from "~/server/db/schema";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   countWhere,
   eqAny,
   eqAnyOrPresence,
@@ -42,7 +38,7 @@ import {
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
   collectDescendantIds,
@@ -146,6 +142,8 @@ const resolveTaskSort = (sort: SortParams) => {
   return null;
 };
 
+const taskScaffold = listScaffold("task", task);
+
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
   const dbClient = getDb(db);
@@ -233,39 +231,35 @@ export const buildTaskWhere = async (db: Database, filters: TaskFilters) => {
         ? eq(task.status, "done")
         : undefined;
 
-  return buildSearchConditions(
-    task,
-    [],
-    [
-      ...auditDateWhereConditions(task, filters),
-      ...relatedWhereConditions("task", filters, task.id),
-      searchCondition(),
-      // `status` and `trade` are declared stored filters.
-      ...declaredFilterPredicates("task", task, filters),
-      // Carries `projectPresenceFilter` too — it ORs with the id selection, so
-      // it can't be a sibling condition here (that AND is what made
-      // "project A or unassigned" inexpressible).
-      projectCondition,
-      subjectProductCondition(),
-      filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
-      parentTaskCondition(),
-      scopeCondition(),
-      // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
-      // ranged task still inside its window isn't treated as overdue, matching
-      // the "overdue" semantics used on the board/stat tiles.
-      //
-      // A task with BOTH due columns null falls out of any window by plain SQL
-      // comparison semantics — `coalesce(NULL, NULL) >= x` is NULL, not true —
-      // that's intended, not a bug to work around (the identical rule is
-      // documented for `expense.date` in `expense/lookup.ts`'s
-      // `buildExpenseWhereClause`). The dashboard surfaces the count of rows
-      // hidden this way as `hiddenByDate.tasks`.
-      ...dueConditions(),
-      // Completion scope: undefined/"all" adds no condition (today's default,
-      // unchanged) — see taskCompletionSchema.
-      completionCondition(),
-    ],
-  );
+  // `status` and `trade` are declared stored filters — `taskScaffold.where`
+  // applies them via `declaredFilterPredicates` before the conditions below.
+  return taskScaffold.where(filters, [
+    ...auditDateWhereConditions(task, filters),
+    ...relatedWhereConditions("task", filters, task.id),
+    searchCondition(),
+    // Carries `projectPresenceFilter` too — it ORs with the id selection, so
+    // it can't be a sibling condition here (that AND is what made
+    // "project A or unassigned" inexpressible).
+    projectCondition,
+    subjectProductCondition(),
+    filters.topLevelOnly ? isNull(task.parentTaskId) : undefined,
+    parentTaskCondition(),
+    scopeCondition(),
+    // Filter on the EFFECTIVE due date — `dueEndDate ?? dueDate` — so a
+    // ranged task still inside its window isn't treated as overdue, matching
+    // the "overdue" semantics used on the board/stat tiles.
+    //
+    // A task with BOTH due columns null falls out of any window by plain SQL
+    // comparison semantics — `coalesce(NULL, NULL) >= x` is NULL, not true —
+    // that's intended, not a bug to work around (the identical rule is
+    // documented for `expense.date` in `expense/lookup.ts`'s
+    // `buildExpenseWhereClause`). The dashboard surfaces the count of rows
+    // hidden this way as `hiddenByDate.tasks`.
+    ...dueConditions(),
+    // Completion scope: undefined/"all" adds no condition (today's default,
+    // unchanged) — see taskCompletionSchema.
+    completionCondition(),
+  ]);
 };
 
 export const taskList = async (
@@ -278,15 +272,10 @@ export const taskList = async (
   const dbClient = getDb(db);
   const whereClause = await buildTaskWhere(db, filters);
 
-  const orderByArray = buildOrderBy(
-    task,
-    sorts,
-    [...generatedEntitySort.task.fields],
-    {
-      resolve: resolveTaskSort,
-    },
-  );
-  const { take, skip } = buildTakeSkip(pagination);
+  const orderByArray = taskScaffold.orderBy(sorts, {
+    resolve: resolveTaskSort,
+  });
+  const { take, skip } = taskScaffold.page(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount({
     kind: readIntent,

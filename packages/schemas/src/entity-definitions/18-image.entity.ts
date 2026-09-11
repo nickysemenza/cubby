@@ -281,6 +281,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by filename...",
         deriveSchema: true,
+        stored: true,
         schemaDescription: "Filter by filename (substring)",
       },
       {
@@ -288,6 +289,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by upload status...",
         deriveSchema: true,
+        stored: true,
         schemaFromRead: true,
         schemaDescription: "Filter by upload status",
         options: [

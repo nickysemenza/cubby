@@ -432,6 +432,7 @@ export default defineEntity({
           { value: "30to60", label: "30–60 min" },
           { value: "60plus", label: "Over an hour" },
         ],
+        stored: true,
         expandRef: {
           module: "~/entities/filter-behavior",
           export: "resolveRecipeTotalTime",

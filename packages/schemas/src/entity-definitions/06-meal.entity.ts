@@ -222,6 +222,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by meal type...",
         deriveSchema: true,
+        stored: true,
         schemaRef: {
           module: "@cubby/schemas/meal-classification",
           export: "mealTypeSchema",
@@ -241,6 +242,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
+        stored: true,
         schemaRef: {
           module: "@cubby/schemas/meal-classification",
           export: "mealKindSchema",

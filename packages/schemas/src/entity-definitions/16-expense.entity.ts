@@ -640,6 +640,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by cost type...",
         deriveSchema: true,
+        stored: true,
         schemaRef: {
           module: "@cubby/schemas/expense-fields",
           export: "costTypeSchema",
@@ -655,6 +656,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by line kind...",
         deriveSchema: true,
+        stored: true,
         schemaRef: {
           module: "@cubby/schemas/expense-line-kind",
           export: "expenseLineKindSchema",
@@ -686,6 +688,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by itemization...",
         deriveSchema: true,
+        stored: true,
         schemaRef: {
           module: "@cubby/schemas/expense-line-kind",
           export: "expenseLineBasisSchema",
@@ -704,6 +707,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by trade...",
         deriveSchema: true,
+        stored: true,
         schemaRef: {
           module: "@cubby/schemas/task-fields",
           export: "tradeSchema",
@@ -718,6 +722,7 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        stored: true,
         options: [
           { value: "true", label: "Planned" },
           { value: "false", label: "Already made" },

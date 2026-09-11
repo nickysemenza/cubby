@@ -418,6 +418,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by type...",
         deriveSchema: true,
+        stored: true,
         schemaRef: {
           module: "@cubby/schemas/location-fields",
           export: "locationType",

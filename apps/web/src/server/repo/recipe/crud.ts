@@ -82,6 +82,7 @@ import {
   withTransaction,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
@@ -515,7 +516,9 @@ export const buildRecipeWhere = async (
         filters,
         "caloriesTotal",
       ),
-      ...rangeConditions(recipe.totalMinutes, filters, "totalMinutes"),
+      // `totalMinutes` is a declared stored range filter over the real
+      // `Recipe.totalMinutes` column.
+      ...declaredFilterPredicates("recipe", recipe, filters),
     ],
   );
 };

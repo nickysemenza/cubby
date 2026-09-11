@@ -44,7 +44,6 @@ import {
   countWhere,
   eqAny,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   type ListReadIntent,
   lockAndValidateForDelete,
@@ -52,6 +51,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { allocationIntegrityDefectSql } from "~/server/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
@@ -290,18 +290,17 @@ export async function buildFinancialTransactionWhere(
       filters.allocationIntegrity === "defect"
         ? allocationIntegrityDefectSql('"FinancialTransaction"')
         : undefined,
-      // `eqAny`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
-      // template into a row constructor (`ANY(($1, $2))`), which postgres
-      // rejects — `ANY` wants an array, so the whole query 500s.
-      eqAny(financialTransaction.kind, filters.kind),
-      eqAny(financialTransaction.status, filters.status),
+      // `kind`, `status`, `merchant`, and `postedDate` are declared stored
+      // filters.
+      ...declaredFilterPredicates(
+        "financialTransaction",
+        financialTransaction,
+        filters,
+      ),
       refsCondition(
         filters.source ? [filters.source].flat() : undefined,
         filters.externalId ? [filters.externalId].flat() : undefined,
       ),
-      filters.merchant
-        ? formatSearchTerm(financialTransaction.merchant, filters.merchant)
-        : undefined,
       filters.amountMin === undefined
         ? undefined
         : sql`${financialTransaction.amount} >= ${filters.amountMin}`,
@@ -313,12 +312,6 @@ export async function buildFinancialTransactionWhere(
         : undefined,
       filters.transactionDateTo
         ? sql`${financialTransaction.transactionDate} <= ${filters.transactionDateTo}`
-        : undefined,
-      filters.postedDateFrom
-        ? sql`${financialTransaction.postedDate} >= ${filters.postedDateFrom}`
-        : undefined,
-      filters.postedDateTo
-        ? sql`${financialTransaction.postedDate} <= ${filters.postedDateTo}`
         : undefined,
     ],
   );

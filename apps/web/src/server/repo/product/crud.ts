@@ -88,7 +88,6 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
-  eqAnyOrPresence,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -105,6 +104,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { patchEntityRows } from "~/server/repo/entity-patch";
@@ -693,11 +693,9 @@ export const buildProductWhere = async (
   const classificationConditions = () => [
     ...auditDateWhereConditions(product, filters),
     ...relatedWhereConditions("product", filters, product.id),
-    eqAnyOrPresence(
-      product.category,
-      filters.categoryFilter,
-      filters.categoryPresenceFilter,
-    ),
+    // name/model/notes (text), category (multiselect + presence), and
+    // manufacturerExact (multiselect) are declared stored filters.
+    ...declaredFilterPredicates("product", product, filters),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
       : or(
@@ -871,9 +869,6 @@ export const buildProductWhere = async (
     filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
     presenceCondition(product.notes, filters.notesPresenceFilter),
     presenceCondition(product.stockTracked, filters.stockTrackedPresenceFilter),
-    filters.manufacturerExact
-      ? inArray(product.manufacturer, [filters.manufacturerExact].flat())
-      : undefined,
   ];
 
   const qualityConditions = () => [
@@ -913,12 +908,7 @@ export const buildProductWhere = async (
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
     product,
-    [
-      { column: product.name, term: filters.nameFilter },
-      { column: product.manufacturer, term: filters.manufacturerFilter },
-      { column: product.model, term: filters.modelFilter },
-      { column: product.notes, term: filters.notesFilter },
-    ],
+    [{ column: product.manufacturer, term: filters.manufacturerFilter }],
     [
       ...classificationConditions(),
       ...inventoryConditions(),
