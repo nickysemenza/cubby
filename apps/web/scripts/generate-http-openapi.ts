@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { ContractNoBody } from "@ts-rest/core";
+import { ContractNoBody, isAppRouteOtherResponse } from "@ts-rest/core";
 import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
 import { getCookies } from "better-auth/cookies";
@@ -9,12 +9,21 @@ import { httpContract } from "../src/lib/generated/http-contract.gen";
 import {
   httpSchemaSources,
   httpMetadataSchema,
+  failure,
 } from "../src/lib/http-api/contract";
 
 const registries = {
   input: z.registry<{ id: string }>(),
   output: z.registry<{ id: string }>(),
 };
+// `failure` (contract.ts) is one shared object reused across every error
+// status of every route via httpResponses(). Schema identity is how the
+// registry dedupes ids, but the fallback id below is otherwise derived from
+// the route — so without a fixed id here, whichever route's error response
+// the transformer visits first "steals" the component name for every other
+// route's error responses too. Registering it up front, before any route is
+// processed, gives it one stable name that every 4xx/5xx response $refs.
+registries.output.add(failure, { id: "ErrorEnvelope" });
 checkHttpRoutes(httpContract);
 const components: Record<string, z.core.JSONSchema.JSONSchema> = {};
 interface ParameterSchema {
@@ -93,7 +102,7 @@ const makeDocument = () =>
         }
         return operation;
       },
-      schemaTransformer: ({ schema, concatenatedPath, type }) => {
+      schemaTransformer: ({ schema, appRoute, concatenatedPath, type }) => {
         if (
           schema === undefined ||
           schema === null ||
@@ -107,9 +116,22 @@ const makeDocument = () =>
           io: "output" as const,
         };
         const registry = registries[source.io];
+        // Responses need the status code in the fallback id: every status of
+        // one route otherwise shares one `${io}_${path}_response` id (see the
+        // ErrorEnvelope registration above for why that matters). body/query/
+        // path ids stay unchanged since only one of those exists per route.
+        const statusCode =
+          type === "response"
+            ? Object.entries(appRoute.responses).find(([, response]) => {
+                const value = isAppRouteOtherResponse(response)
+                  ? response.body
+                  : response;
+                return value === schema;
+              })?.[0]
+            : undefined;
         const id =
           registry.get(source.schema)?.id ??
-          `${source.io}_${concatenatedPath}_${type}`;
+          `${source.io}_${concatenatedPath}_${type}${statusCode ? `_${statusCode}` : ""}`;
         if (!registry.has(source.schema)) registry.add(source.schema, { id });
         if (type === "query" || type === "path") {
           const root = components[id];

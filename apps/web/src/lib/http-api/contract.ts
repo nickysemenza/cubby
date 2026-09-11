@@ -35,7 +35,7 @@ function wireSchema<T>(schema: z.ZodType, io: "input" | "output") {
   httpSchemaSources.set(wire, { schema, io });
   return wire;
 }
-const failure = z.object({
+export const failure = z.object({
   ok: z.literal(false),
   error: publicStartOperationErrorSchema,
 });
