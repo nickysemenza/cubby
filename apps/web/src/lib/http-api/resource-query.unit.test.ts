@@ -1,12 +1,10 @@
+import { encodeQueryParamsJson, parseJsonQueryObject } from "@ts-rest/core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import {
-  resourceListQuerySchema,
-  decodeResourceListQuery,
-} from "./resource-query";
+import { resourceListInputFrom, resourceListQuery } from "./resource-query";
 
-const schema = resourceListQuerySchema(
+const schema = resourceListQuery(
   z.object({
     nameFilter: z.string().optional(),
     nullableName: z.string().nullable().optional(),
@@ -16,10 +14,15 @@ const schema = resourceListQuerySchema(
     range: z.object({ min: z.number(), max: z.number() }).optional(),
   }),
 );
+/** What the server sees: ts-rest's jsonQuery decoding, then the wire schema. */
 const decode = (query: string) =>
-  decodeResourceListQuery(new URLSearchParams(query), schema);
+  resourceListInputFrom(
+    schema.parse(
+      parseJsonQueryObject(Object.fromEntries(new URLSearchParams(query))),
+    ),
+  );
 
-describe("resource query parameters", () => {
+describe("resource list query", () => {
   it("maps 1-based pages and a sort stack to existing list inputs", () => {
     expect(
       decode(
@@ -44,21 +47,7 @@ describe("resource query parameters", () => {
     });
     expect(decode("")).toEqual({ filters: {} });
   });
-  it.each([
-    "123",
-    "001",
-    "true",
-    "false",
-    "null",
-    '"quoted"',
-    "[1,2]",
-    "a&b+c",
-  ])("preserves literal text %s", (text) => {
-    expect(
-      decode(new URLSearchParams({ nameFilter: text }).toString()),
-    ).toEqual({ filters: { nameFilter: text } });
-  });
-  it("decodes booleans, numbers, and JSON-valued filters using their schemas", () => {
+  it("decodes booleans, numbers, and JSON values using their schemas", () => {
     expect(
       decode(
         new URLSearchParams({
@@ -77,6 +66,25 @@ describe("resource query parameters", () => {
       },
     });
   });
+  it.each(["123", "001", "true", "false", "null", "a&b+c"])(
+    "round-trips literal text %s through the typed client encoding",
+    (text) => {
+      // The client quotes numeric/boolean/null-looking strings, so the server
+      // reads them back as the same text; a hand-typed URL must quote them
+      // the same way.
+      const query = encodeQueryParamsJson({ nameFilter: text });
+      expect(decode(query)).toEqual({ filters: { nameFilter: text } });
+    },
+  );
+  it("reads array- and object-looking text as JSON unless it is quoted", () => {
+    // ts-rest's jsonQuery only quotes scalars; a string like "[1,2]" must be
+    // quoted by the caller to stay text, otherwise it decodes as JSON and fails
+    // the string filter.
+    expect(() => decode("nameFilter=%5B1%2C2%5D")).toThrow(/./u);
+    expect(decode("nameFilter=%22%5B1%2C2%5D%22")).toEqual({
+      filters: { nameFilter: "[1,2]" },
+    });
+  });
   it("preserves JSON null and quoted strings for nullable filters", () => {
     expect(decode("nullableName=null")).toEqual({
       filters: { nullableName: null },
@@ -92,7 +100,6 @@ describe("resource query parameters", () => {
     "page=no",
     "pageSize=0",
     "pageSize=501",
-    "page=1&page=2",
     "sort=",
     "sort=-",
     "sort=name,",
@@ -107,8 +114,8 @@ describe("resource query parameters", () => {
     expect(() => decode(query)).toThrow(/./u);
   });
   it("rejects filter names colliding with resource controls", () => {
-    expect(() =>
-      resourceListQuerySchema(z.object({ page: z.number() })),
-    ).toThrow("collision");
+    expect(() => resourceListQuery(z.object({ page: z.number() }))).toThrow(
+      "collision",
+    );
   });
 });

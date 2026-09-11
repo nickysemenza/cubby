@@ -4,7 +4,8 @@ import document from "~/lib/generated/http-openapi.gen.json";
 
 interface SchemaObject {
   $ref?: string;
-  properties?: Record<string, { enum?: unknown[] }>;
+  enum?: unknown[];
+  properties?: Record<string, { enum?: unknown[]; $ref?: string }>;
 }
 type Responses = Record<
   string,
@@ -32,8 +33,15 @@ function responseSchemaRef(response: Responses[string]): string | undefined {
   return response?.content?.["application/json"]?.schema?.$ref;
 }
 
+// `reused: "ref"` may extract a shared literal into its own component.
+function okEnum(schema: SchemaObject): unknown[] | undefined {
+  const ok = schema.properties?.ok;
+  if (!ok) return undefined;
+  return ok.$ref === undefined ? ok.enum : resolveRef(ok.$ref).schema.enum;
+}
+
 function isFailureEnvelope(schema: SchemaObject): boolean {
-  const ok = schema.properties?.ok?.enum;
+  const ok = okEnum(schema);
   return Array.isArray(ok) && ok.length === 1 && ok[0] === false;
 }
 
@@ -69,14 +77,15 @@ describe("generated HTTP OpenAPI document", () => {
     );
     if (!ref) throw new Error("agent.ask 200 response has no $ref");
     const { schema } = resolveRef(ref);
-    expect(schema.properties?.ok?.enum).toEqual([true]);
+    expect(okEnum(schema)).toEqual([true]);
     expect(schema.properties).toHaveProperty("data");
   });
 
   it("routes every error response through one ErrorEnvelope component", () => {
     const errorEnvelope = schemas.ErrorEnvelope;
     expect(errorEnvelope).toBeDefined();
-    expect(errorEnvelope?.properties?.ok?.enum).toEqual([false]);
+    if (!errorEnvelope) throw new Error("ErrorEnvelope is missing");
+    expect(okEnum(errorEnvelope)).toEqual([false]);
 
     let errorResponseCount = 0;
     for (const methods of Object.values(paths)) {

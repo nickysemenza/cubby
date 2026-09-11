@@ -1,11 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { httpContract } from "~/lib/generated/http-contract.gen";
+import * as contracts from "~/contracts/index";
+import {
+  detailEntities,
+  entityDetailInputSchema,
+  getEntityDetailOutputSchema,
+} from "~/entities/generated/entity-details.gen";
+import {
+  entityListInputSchema,
+  getEntityListOutputSchema,
+  listEntities,
+} from "~/entities/generated/entity-lists.gen";
 import { mock } from "~/lib/test/mock-schema";
+import {
+  entityBrowserMutationCommandSchema,
+  entityBrowserMutationResultSchema,
+} from "~/server/entity-kernel/contracts";
 
-import { httpSchemaSources } from "./contract";
-import { httpRoutes } from "./routes";
 import { type Json, toWire, WireSchemaError, wireRegistry } from "./wire";
 
 interface WireCase {
@@ -15,30 +27,46 @@ interface WireCase {
 }
 
 /**
- * Every domain schema the HTTP contract exposes, once per identity. Success
- * responses and request parts both count; the shared failure envelope has no
- * Dates and is covered by the contract tests.
+ * Every schema the HTTP contract carries, once per identity: each contract
+ * member's input and output, with the entity operations' type-only carriers
+ * replaced by their real generated schemas.
  */
 const cases = (() => {
+  const carriers = new Map<z.ZodType, z.ZodType>([
+    [contracts.entityListContract.ops.list.input, entityListInputSchema],
+    [
+      contracts.entityListContract.ops.list.output,
+      z.union(listEntities.map(getEntityListOutputSchema)),
+    ],
+    [contracts.entityDetailContract.ops.detail.input, entityDetailInputSchema],
+    [
+      contracts.entityDetailContract.ops.detail.output,
+      z.union(detailEntities.map(getEntityDetailOutputSchema)).nullable(),
+    ],
+    [
+      contracts.entityMutationContract.ops.mutate.input,
+      entityBrowserMutationCommandSchema,
+    ],
+    [
+      contracts.entityMutationContract.ops.mutate.output,
+      entityBrowserMutationResultSchema,
+    ],
+  ]);
   const seen = new Map<z.ZodType, WireCase>();
-  for (const route of httpRoutes(httpContract)) {
-    const parts: [string, unknown][] = [
-      ...Object.entries(route.responses).filter(([status]) =>
-        status.startsWith("2"),
-      ),
-      ["body", "body" in route ? route.body : undefined],
-      ["query", route.query],
-      ["pathParams", route.pathParams],
-    ];
-    for (const [part, candidate] of parts) {
-      if (!(candidate instanceof z.ZodType)) continue;
-      const source = httpSchemaSources.get(candidate);
-      if (!source || seen.has(source.schema)) continue;
-      seen.set(source.schema, {
-        name: `${route.method} ${route.path} ${part}`,
-        io: source.io,
-        schema: source.schema,
-      });
+  for (const contract of Object.values(contracts)) {
+    for (const [member, operation] of Object.entries(contract.ops)) {
+      if (operation.kind === "subscription") continue;
+      const name = `${contract.domain}.${member}`;
+      const input = carriers.get(operation.input) ?? operation.input;
+      const output = carriers.get(operation.output) ?? operation.output;
+      if (!seen.has(input) && !(input instanceof z.ZodUndefined))
+        seen.set(input, { name: `${name} input`, io: "input", schema: input });
+      if (!seen.has(output))
+        seen.set(output, {
+          name: `${name} output`,
+          io: "output",
+          schema: output,
+        });
     }
   }
   return [...seen.values()];

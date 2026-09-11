@@ -3,11 +3,19 @@ import {
   MAX_SORTS,
   sortPaginationFields,
 } from "@cubby/schemas/pagination";
-import { parseJsonQueryObject } from "@ts-rest/core";
 import { z } from "zod";
 
-import { unparsedStartOperationDataSchema } from "~/server/start-operation.contract";
+import {
+  type UnparsedStartOperationData,
+  unparsedStartOperationDataSchema,
+} from "~/server/start-operation.contract";
 
+import { type Json, toWire } from "./wire";
+
+/**
+ * Resource-list controls. They ride alongside the entity's flat filter
+ * parameters, so a filter may not reuse one of these names.
+ */
 const controls = z.object({
   page: z
     .number()
@@ -38,61 +46,56 @@ const controls = z.object({
     ),
   groupBy: sortPaginationFields.groupBy,
 });
-export const resourceQueryValues = z.record(
-  z.string(),
-  unparsedStartOperationDataSchema,
-);
+type Controls = z.input<typeof controls>;
+export type ResourceListQuery<Filters extends z.ZodTypeAny> = Json<
+  z.input<Filters>
+> &
+  Controls;
 
-export function resourceParameterIsText(schema: z.core.$ZodType): boolean {
-  if (schema instanceof z.ZodOptional || schema instanceof z.ZodDefault)
-    return resourceParameterIsText(schema.unwrap());
-  return (
-    schema instanceof z.ZodString ||
-    (schema instanceof z.ZodEnum &&
-      schema.options.every((value) => z.string().safeParse(value).success))
-  );
-}
-
-export function resourceListQuerySchema<S extends z.ZodRawShape>(
-  filters: z.ZodObject<S>,
-) {
+/**
+ * The wire schema of a resource list: the entity's filter fields as flat
+ * query parameters plus the paging controls. Structured filter values travel
+ * JSON-encoded per ts-rest's `jsonQuery`.
+ */
+export function resourceListQuery<Filters extends z.ZodObject>(
+  filters: Filters,
+): z.ZodType<ResourceListQuery<Filters>, ResourceListQuery<Filters>> {
   for (const name of Object.keys(filters.shape)) {
     if (Object.hasOwn(controls.shape, name))
       throw new Error(`HTTP resource query parameter collision: ${name}`);
   }
-  return z.strictObject({ ...filters.shape, ...controls.shape });
+  const wire = toWire(filters, "input");
+  if (!(wire instanceof z.ZodObject))
+    throw new Error("Resource filters must be an object schema");
+  const query: z.ZodType = z.strictObject({ ...wire.shape, ...controls.shape });
+  // SAFETY: the strict object is exactly the filter wire shape plus the
+  // controls, which is what `ResourceListQuery` spells at the type level.
+  return query as z.ZodType<
+    ResourceListQuery<Filters>,
+    ResourceListQuery<Filters>
+  >;
 }
 
-interface ResourceListInput {
-  filters: z.output<typeof resourceQueryValues>;
+export interface ResourceListInput {
+  filters: Record<string, UnparsedStartOperationData>;
   pagination?: { pageIndex: number; pageSize: number };
   sort?: { orderBy: string; direction: "asc" | "desc" }[];
   groupBy?: string;
 }
 
-export function decodeResourceListQuery(
-  params: URLSearchParams,
-  schema: z.ZodObject,
-) {
-  if (new Set(params.keys()).size !== params.size)
-    throw new Error("Duplicate query parameters");
-  const decoded = resourceQueryValues.parse(
-    parseJsonQueryObject(Object.fromEntries(params)),
-  );
-  // Text filters keep literal URL text; structured filters use the JSON decoder.
-  for (const [name, raw] of params) {
-    const field = schema.shape[name];
-    if (!field) throw new Error(`Unknown query parameter: ${name}`);
-    if (
-      resourceParameterIsText(field) ||
-      !field.safeParse(decoded[name]).success
-    )
-      decoded[name] = raw;
-  }
-  schema.parse(decoded);
-  const { page, pageSize, sort, groupBy } = controls.parse(decoded);
+/** The decoded query values a resource list accepts: JSON values by name. */
+export const resourceQueryValues = z.record(
+  z.string(),
+  unparsedStartOperationDataSchema,
+);
+
+/** Map a validated resource-list query onto the entity list operation input. */
+export function resourceListInputFrom(
+  values: z.output<typeof resourceQueryValues>,
+): ResourceListInput {
+  const { page, pageSize, sort, groupBy } = controls.parse(values);
   const filters = Object.fromEntries(
-    Object.entries(decoded).filter(
+    Object.entries(values).filter(
       ([name]) => !Object.hasOwn(controls.shape, name),
     ),
   );

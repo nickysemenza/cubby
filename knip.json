@@ -28,6 +28,7 @@
         "src/lib/sentry-cf-shim.ts!",
         "src/integrations/**/*.{ts,tsx}!",
         "src/contracts/index.ts!",
+        "src/lib/generated/http-resources.gen.ts!",
         "src/**/*.test.{ts,tsx}!",
         "tests/**/*.{ts,tsx}!",
         "scripts/ai-eval.ts!",

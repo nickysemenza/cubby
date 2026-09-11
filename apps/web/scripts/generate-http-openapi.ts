@@ -1,187 +1,156 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { ContractNoBody, isAppRouteOtherResponse } from "@ts-rest/core";
 import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
 import { getCookies } from "better-auth/cookies";
-import { checkHttpRoutes } from "../src/lib/http-api/routes";
 import { httpContract } from "../src/lib/generated/http-contract.gen";
-import {
-  httpSchemaSources,
-  httpMetadataSchema,
-  failure,
-} from "../src/lib/http-api/contract";
+import { httpMetadataSchema } from "../src/lib/http-api/router";
+import { checkHttpRoutes } from "../src/lib/http-api/routes";
+import { wireRegistry } from "../src/lib/http-api/wire";
 
+checkHttpRoutes(httpContract);
+
+type JsonSchema = z.core.JSONSchema.JSONSchema;
+// JSON Schema allows bare booleans; OpenAPI parameters need object schemas.
+const isObjectSchema = (value: JsonSchema | boolean): value is JsonSchema =>
+  value !== true && value !== false;
 const registries = {
   input: z.registry<{ id: string }>(),
   output: z.registry<{ id: string }>(),
 };
-// `failure` (contract.ts) is one shared object reused across every error
-// status of every route via httpResponses(). Schema identity is how the
-// registry dedupes ids, but the fallback id below is otherwise derived from
-// the route — so without a fixed id here, whichever route's error response
-// the transformer visits first "steals" the component name for every other
-// route's error responses too. Registering it up front, before any route is
-// processed, gives it one stable name that every 4xx/5xx response $refs.
-registries.output.add(failure, { id: "ErrorEnvelope" });
-checkHttpRoutes(httpContract);
-const components: Record<string, z.core.JSONSchema.JSONSchema> = {};
-interface ParameterSchema {
-  $ref?: string;
-  nullable?: boolean;
-  type?: string | string[];
-  allOf?: ParameterSchema[];
-  anyOf?: ParameterSchema[];
-  oneOf?: ParameterSchema[];
-}
-function scalarParameter(schema: ParameterSchema): boolean {
-  if (schema.nullable) return false;
-  if (schema.$ref) {
-    const key = schema.$ref
-      .replace("#/components/schemas/", "")
-      .replace(/(input|output)___shared#\/definitions\//u, "$1_");
-    const resolved = components[key];
-    return resolved !== undefined && scalarParameter(resolved);
+const responseStatus = (route: { responses: object }, schema: z.ZodType) =>
+  Object.entries(route.responses).find(([, value]) => value === schema)?.[0];
+
+/** Every route schema is real Zod, so the JSON Schema comes straight from it. */
+const inlineSchema = (schema: z.ZodType, io: "input" | "output") =>
+  z.toJSONSchema(schema, {
+    target: "openapi-3.0",
+    io,
+    reused: "inline",
+    unrepresentable: "any",
+    override: stripMockHints,
+  });
+
+const stripMockHints: NonNullable<
+  Parameters<typeof z.toJSONSchema>[1]
+>["override"] = ({ jsonSchema }) => {
+  delete jsonSchema.mock;
+  delete jsonSchema.mockValue;
+  if (jsonSchema.nullable && !jsonSchema.type) {
+    const { nullable: _nullable, ...inner } = jsonSchema;
+    for (const key of Object.keys(jsonSchema)) delete jsonSchema[key];
+    jsonSchema.anyOf = [
+      inner,
+      { type: "string", nullable: true, enum: [null] },
+    ];
   }
-  const variants = schema.anyOf ?? schema.oneOf ?? schema.allOf;
-  return variants
-    ? variants.every(scalarParameter)
-    : z.enum(["string", "number", "integer", "boolean"]).safeParse(schema.type)
-        .success;
+};
+
+/**
+ * Query parameters must be listed individually, so a query schema is inlined
+ * as one object; a union of objects (the entity list) merges its variants into
+ * a single object whose members are required only when every variant needs
+ * them.
+ */
+function parameterObject(schema: JsonSchema): JsonSchema {
+  const variants = (schema.oneOf ?? schema.anyOf ?? [schema]).map((variant) =>
+    isObjectSchema(variant) ? variant : {},
+  );
+  if (variants.some((variant) => variant.type !== "object"))
+    throw new Error("HTTP query parameters must be objects");
+  const names = new Set(
+    variants.flatMap((variant) => Object.keys(variant.properties ?? {})),
+  );
+  return {
+    type: "object",
+    required: [...names].filter((name) =>
+      variants.every((variant) => variant.required?.includes(name)),
+    ),
+    properties: Object.fromEntries(
+      [...names].map((name) => {
+        const schemas = variants.flatMap((variant) => {
+          const property = variant.properties?.[name];
+          return property !== undefined && isObjectSchema(property)
+            ? [property]
+            : [];
+        });
+        const [single] = schemas;
+        return [
+          name,
+          schemas.length === 1 && single !== undefined
+            ? single
+            : { anyOf: schemas },
+        ];
+      }),
+    ),
+  };
 }
-const makeDocument = () =>
-  generateOpenApi(
-    httpContract,
-    {
-      info: { title: "Cubby API", version: "1.0.0" },
-      servers: [{ url: "/" }],
-      components: {
-        securitySchemes: {
-          apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
-          bearerAuth: { type: "http", scheme: "bearer" },
-          sessionCookie: {
-            type: "apiKey",
-            in: "cookie",
-            name: getCookies({}).sessionToken.name,
-          },
+
+// SAFETY: Zod emits OpenAPI 3.0 schemas; its broader JSON Schema type also
+// permits booleans, which no route schema produces.
+const asSchemaObject = (schema: JsonSchema) =>
+  schema as NonNullable<ReturnType<SchemaTransformerSync>>;
+
+const document = generateOpenApi(
+  httpContract,
+  {
+    info: { title: "Cubby API", version: "1.0.0" },
+    servers: [{ url: "/" }],
+    components: {
+      securitySchemes: {
+        apiKey: { type: "apiKey", in: "header", name: "x-api-key" },
+        sessionCookie: {
+          type: "apiKey",
+          in: "cookie",
+          name: getCookies({}).sessionToken.name,
         },
       },
-      security: [{ apiKey: [] }, { bearerAuth: [] }, { sessionCookie: [] }],
     },
-    {
-      setOperationId: "concatenated-path",
-      jsonQuery: true,
-      operationMapper: (operation, route) => {
-        const metadata = z
-          .object({ http: httpMetadataSchema })
-          .parse(route.metadata).http;
-        operation.tags = [metadata.entity ?? metadata.operation.split(".")[0]!];
-        if (metadata.mode === "list") {
-          operation.description =
-            "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters; arrays and objects use JSON. Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.";
-          for (const parameter of operation.parameters ?? []) {
-            if ("$ref" in parameter || parameter.in !== "query") continue;
-            const schema = parameter.content?.["application/json"]?.schema;
-            if (schema && scalarParameter(schema)) {
-              parameter.schema = schema;
-              parameter.style = "form";
-              parameter.explode = true;
-              delete parameter.content;
-            }
-          }
-        }
-        if (metadata.mode === "create") {
-          const response = operation.responses[201];
-          if (response && !("$ref" in response))
-            response.headers = {
-              Location: {
-                schema: { type: "string" },
-                description: "Created resource URL",
-              },
-            };
-        }
-        return operation;
-      },
-      schemaTransformer: ({ schema, appRoute, concatenatedPath, type }) => {
-        if (
-          schema === undefined ||
-          schema === null ||
-          schema === ContractNoBody
-        )
-          return null;
-        if (!(schema instanceof z.ZodType))
-          throw new Error("HTTP contracts require runtime Zod schemas");
-        const source = httpSchemaSources.get(schema) ?? {
-          schema,
-          io: "output" as const,
-        };
-        const registry = registries[source.io];
-        // Responses need the status code in the fallback id: every status of
-        // one route otherwise shares one `${io}_${path}_response` id (see the
-        // ErrorEnvelope registration above for why that matters). body/query/
-        // path ids stay unchanged since only one of those exists per route.
-        const statusCode =
-          type === "response"
-            ? Object.entries(appRoute.responses).find(([, response]) => {
-                const value = isAppRouteOtherResponse(response)
-                  ? response.body
-                  : response;
-                return value === schema;
-              })?.[0]
-            : undefined;
-        const id =
-          registry.get(source.schema)?.id ??
-          `${source.io}_${concatenatedPath}_${type}${statusCode ? `_${statusCode}` : ""}`;
-        if (!registry.has(source.schema)) registry.add(source.schema, { id });
-        if (type === "query" || type === "path") {
-          const root = components[id];
-          if (!root) return { type: "object", properties: {} };
-          const resolve = (
-            value: z.core.JSONSchema.JSONSchema,
-          ): z.core.JSONSchema.JSONSchema => {
-            if (!value.$ref) return value;
-            const key = value.$ref
-              .replace("#/components/schemas/", "")
-              .replace(/(input|output)___shared#\/definitions\//u, "$1_");
-            const resolved = components[key];
-            if (!resolved) throw new Error(`Missing parameter schema ${key}`);
-            return resolve(resolved);
+    security: [{ apiKey: [] }, { sessionCookie: [] }],
+  },
+  {
+    setOperationId: "concatenated-path",
+    jsonQuery: true,
+    operationMapper: (operation, route) => {
+      const metadata = httpMetadataSchema.parse(route.metadata);
+      operation.tags = [metadata.entity ?? metadata.operation.split(".")[0]!];
+      if (metadata.resource === "list")
+        operation.description =
+          "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters; plain strings stay literal and every other value is JSON-encoded. Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.";
+      if (metadata.resource === "create") {
+        const response = operation.responses[201];
+        if (response && !("$ref" in response))
+          response.headers = {
+            Location: {
+              schema: { type: "string" },
+              description: "Created resource URL",
+            },
           };
-          const resolved = resolve(root);
-          const variants = (resolved.oneOf ?? resolved.anyOf ?? [resolved]).map(
-            resolve,
-          );
-          if (variants.some((variant) => variant.type !== "object"))
-            throw new Error(`Parameters must be objects: ${id}`);
-          const names = new Set(
-            variants.flatMap((variant) =>
-              Object.keys(variant.properties ?? {}),
-            ),
-          );
-          // SAFETY: Zod emits OpenAPI 3.0 schemas; its broader JSON Schema type also permits booleans.
-          return {
-            type: "object",
-            required: [...names].filter((name) =>
-              variants.every((variant) => variant.required?.includes(name)),
-            ),
-            properties: Object.fromEntries(
-              [...names].map((name) => {
-                const schemas = variants.flatMap((variant) =>
-                  variant.properties?.[name] ? [variant.properties[name]] : [],
-                );
-                return [
-                  name,
-                  schemas.length === 1 ? schemas[0] : { anyOf: schemas },
-                ];
-              }),
-            ),
-          } as NonNullable<ReturnType<SchemaTransformerSync>>;
-        }
-        return { $ref: `#/components/schemas/${id}` };
-      },
+      }
+      return operation;
     },
-  );
-makeDocument();
+    schemaTransformer: ({ schema, appRoute, concatenatedPath, type }) => {
+      if (!(schema instanceof z.ZodType)) return null;
+      if (type === "query" || type === "path")
+        return asSchemaObject(parameterObject(inlineSchema(schema, "input")));
+      const io = type === "response" ? "output" : "input";
+      const registry = registries[io];
+      const suffix =
+        type === "response" ? `_${responseStatus(appRoute, schema) ?? ""}` : "";
+      // Names: a wire schema derived from a `.meta({ id })` domain schema, a
+      // schema that carries its own `.meta({ id })`, or the route position.
+      const id =
+        registry.get(schema)?.id ??
+        wireRegistry.get(schema)?.id ??
+        z.globalRegistry.get(schema)?.id ??
+        `${io}_${concatenatedPath}_${type}${suffix}`;
+      if (!registry.has(schema)) registry.add(schema, { id });
+      return { $ref: `#/components/schemas/${id}` };
+    },
+  },
+);
+
+const components: Record<string, JsonSchema> = {};
 for (const io of ["input", "output"] as const) {
   const { schemas } = z.toJSONSchema(registries[io], {
     target: "openapi-3.0",
@@ -190,54 +159,7 @@ for (const io of ["input", "output"] as const) {
     unrepresentable: "any",
     uri: (id) =>
       `#/components/schemas/${id === "__shared" ? `${io}___shared` : id}`,
-    override: ({ zodSchema, jsonSchema, path }) => {
-      delete jsonSchema.mock;
-      delete jsonSchema.mockValue;
-      if (jsonSchema.nullable && !jsonSchema.type) {
-        const { nullable: _nullable, ...inner } = jsonSchema;
-        for (const key of Object.keys(jsonSchema)) delete jsonSchema[key];
-        jsonSchema.anyOf = [
-          inner,
-          { type: "string", nullable: true, enum: [null] },
-        ];
-      }
-      const type = zodSchema._zod.def.type;
-      if (
-        zodSchema._zod.def.type === "literal" &&
-        zodSchema._zod.def.values.some(
-          (value) => !z.json().safeParse(value).success,
-        )
-      )
-        throw new Error("HTTP literals must be JSON values");
-      if (type === "date") {
-        if (
-          io === "input" &&
-          !(zodSchema instanceof z.ZodDate && zodSchema.def.coerce)
-        )
-          throw new Error(
-            `HTTP input dates must accept ISO strings with z.coerce.date(): ${path.join(".")}`,
-          );
-        jsonSchema.type = "string";
-        jsonSchema.format = "date-time";
-      } else if (
-        [
-          "custom",
-          "function",
-          "promise",
-          "file",
-          "bigint",
-          "symbol",
-          "map",
-          "set",
-          "nan",
-          "undefined",
-          "void",
-        ].includes(type)
-      )
-        throw new Error(`HTTP schema contains unsupported ${type}`);
-      else if (type === "transform" && io === "output")
-        throw new Error("HTTP output transforms need a concrete output schema");
-    },
+    override: stripMockHints,
   });
   for (const [id, schema] of Object.entries(schemas)) {
     if (id === "__shared") {
@@ -246,29 +168,6 @@ for (const io of ["input", "output"] as const) {
     } else components[id] = schema;
   }
 }
-const document = makeDocument();
-// Parameter roots are inlined by OpenAPI; retain only components reachable from the document.
-const references = (
-  value: ReturnType<typeof generateOpenApi> | z.core.JSONSchema.JSONSchema,
-) =>
-  [
-    ...JSON.stringify(value).matchAll(
-      /"\$ref":"#\/components\/schemas\/([^" ]+)"/gu,
-    ),
-  ].map((match) =>
-    match[1]!.replace(/(input|output)___shared#\/definitions\//u, "$1_"),
-  );
-const reachable = new Set<string>();
-const pending = references(document);
-for (const name of pending) {
-  if (reachable.has(name)) continue;
-  reachable.add(name);
-  const schema = components[name];
-  if (!schema) throw new Error(`Unresolved HTTP component ${name}`);
-  pending.push(...references(schema));
-}
-for (const name of Object.keys(components))
-  if (!reachable.has(name)) delete components[name];
 
 const serialized = `${JSON.stringify(
   { ...document, components: { ...document.components, schemas: components } },
