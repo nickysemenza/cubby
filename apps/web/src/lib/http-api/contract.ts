@@ -17,15 +17,9 @@ import {
 } from "~/server/entity-kernel/contracts";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 
-export type Json<T> = T extends string | number | boolean | null | undefined
-  ? T
-  : T extends Date
-    ? string
-    : T extends readonly (infer V)[]
-      ? Json<V>[]
-      : T extends object
-        ? { [K in keyof T]: Json<T[K]> }
-        : T;
+import type { Json } from "./wire";
+
+export type { Json };
 export const httpSchemaSources = new WeakMap<
   z.ZodType,
   { schema: z.ZodType; io: "input" | "output" }
