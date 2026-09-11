@@ -721,6 +721,39 @@ describe("lookup resolves a barcode to its newest record", () => {
   });
 });
 
+describe("name filter → FTS MATCH", () => {
+  it("issues a MATCH for a hyphenated name", async () => {
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).listFoods({
+      nameFilter: "all-purpose flour",
+      orderBy: "description",
+      direction: "asc",
+      pageIndex: 0,
+      pageSize: 10,
+    });
+
+    expect(queries.filter((q) => q.includes(" MATCH ?"))).toHaveLength(2);
+  });
+
+  it("skips the FTS join when the filter tokenizes to nothing", async () => {
+    // "-" survives `.trim()` but yields an empty MATCH string, which FTS5
+    // rejects as a syntax error. Treat it as "no name filter" instead.
+    const { env, queries } = makeQueryRecordingEnv();
+    await createEdgeUsdaDataSource(env).listFoods({
+      nameFilter: "-",
+      orderBy: "description",
+      direction: "asc",
+      pageIndex: 0,
+      pageSize: 10,
+    });
+
+    expect(queries.some((q) => q.includes("MATCH"))).toBe(false);
+    expect(queries.some((q) => q.includes("ORDER BY i.description ASC"))).toBe(
+      true,
+    );
+  });
+});
+
 describe("relevance ordering", () => {
   it("puts textual fit before data type and FDC stability", async () => {
     const { env, queries } = makeQueryRecordingEnv();

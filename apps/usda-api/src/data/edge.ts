@@ -355,7 +355,11 @@ export function createEdgeUsdaDataSource(
     }) {
       const tables = await getActiveVersion(env.DB);
       const offset = pageIndex * pageSize;
-      const hasName = !!nameFilter && nameFilter.trim().length > 0;
+      // Decide on the *built* query, not the raw filter: a punctuation-only
+      // filter such as "-" trims to a non-empty string but tokenizes to nothing,
+      // and `MATCH ''` is an FTS5 syntax error (a 500 in production).
+      const ftsQuery = toFtsQuery(nameFilter ?? "");
+      const hasName = ftsQuery.length > 0;
       let dataFrom: string;
       let countFrom: string;
       let where: string;
@@ -375,7 +379,7 @@ export function createEdgeUsdaDataSource(
         where =
           `WHERE ${tables.foodSearch} MATCH ?` +
           (dt.sql ? ` AND ${dt.sql}` : "");
-        values = [toFtsQuery(nameFilter), ...dt.values];
+        values = [ftsQuery, ...dt.values];
       } else {
         dataFrom = `${tables.foodIndex} i`;
         countFrom = `${tables.foodIndex} i`;
