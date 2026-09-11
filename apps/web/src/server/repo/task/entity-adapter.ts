@@ -1,5 +1,3 @@
-import { taskSortableFields } from "@cubby/schemas/project";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -18,11 +16,6 @@ import { taskList } from "./lookup";
 
 export const taskEntityAdapter = defineEntityAdapter({
   entity: "task",
-  sort: {
-    fields: taskSortableFields,
-    default: "createdAt",
-    groupable: ["status"],
-  },
   lifecycle: { delete: TASK_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getTaskByShortcode(ctx.db, id),

@@ -1,38 +1,9 @@
-import {
-  relatedBranchInput,
-  relatedBranchOutput,
-  relatedOptionsInput,
-  relatedOptionsOutput,
-  relatedPreviewInput,
-  relatedPreviewOutput,
-  relatedSummaryInput,
-  relatedSummaryOutput,
-} from "@cubby/schemas/related-view";
+import { relatedDataContract } from "~/contracts/related-data.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
-
-export const relatedData = defineOperationDomain("relatedData", {
-  previews: query({
-    input: relatedPreviewInput,
-    output: relatedPreviewOutput,
-    tags: [["relatedData", "previews"]],
-  }),
-  branch: query({
-    input: relatedBranchInput,
-    output: relatedBranchOutput,
-    tags: [["relatedData", "branch"]],
-  }),
-  options: query({
-    input: relatedOptionsInput,
-    output: relatedOptionsOutput,
-    tags: [["relatedData", "options"]],
-  }),
-  summary: query({
-    input: relatedSummaryInput,
-    output: relatedSummaryOutput,
-    tags: [["relatedData", "summary"]],
-  }),
+export const relatedData = defineOperationDomain(relatedDataContract, {
+  previews: { tags: [["relatedData", "previews"]] },
+  branch: { tags: [["relatedData", "branch"]] },
+  options: { tags: [["relatedData", "options"]] },
+  summary: { tags: [["relatedData", "summary"]] },
 });

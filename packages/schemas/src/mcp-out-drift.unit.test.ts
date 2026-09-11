@@ -108,4 +108,39 @@ describe("productMcpOut stays within productTopLevelOut", () => {
     expect(field(mcpFields, "price").description).toContain("override");
     expect(field(plainFields, "price").description).toContain("override");
   });
+
+  /**
+   * `productTopLevelOut` is built straight off `generatedProductFieldSchemas.
+   * read` (see product-output-fields.ts), and `productMcpFields` (product.ts)
+   * now references that same generated map directly for most of its fields —
+   * see `field-map-drift.unit.test.ts`, which asserts this same identity
+   * project-wide. Checking it again here, narrowly, keeps the ONE pairing
+   * this file is about honest even if the broader test's scope ever changes:
+   * a key that stops being the SAME INSTANCE on both sides has silently
+   * started hand-copying again, which is exactly how `price` drifted before.
+   *
+   * Every entry here is deliberately NOT the same instance and must stay
+   * documented (see field-map-drift.unit.test.ts's INTENTIONAL_RESPELLINGS
+   * for the per-field reasons): `price`/`expectedQuantity`/`externalIds` are
+   * hand-written with a different shape or wording than the generated read
+   * field, and `coverImageUrl` isn't a generated field at all — both sides
+   * separately declare it as a derived, non-stored value.
+   */
+  it("reuses the same schema instance as productTopLevelOut for every other shared key", () => {
+    const EXPECTED_INSTANCE_DIFFERENCES = new Set([
+      "price",
+      "expectedQuantity",
+      "externalIds",
+      "coverImageUrl",
+    ]);
+    const mismatches = Object.keys(mcpFields)
+      .filter((key) => key in plainFields)
+      .filter((key) => !EXPECTED_INSTANCE_DIFFERENCES.has(key))
+      .filter((key) => field(mcpFields, key) !== field(plainFields, key))
+      .map(
+        (key) =>
+          `${key}: productMcpOut and productTopLevelOut no longer share the same schema instance — reference generatedProductFieldSchemas.read.${key} from both, or add it to EXPECTED_INSTANCE_DIFFERENCES with a reason`,
+      );
+    expect(mismatches).toEqual([]);
+  });
 });

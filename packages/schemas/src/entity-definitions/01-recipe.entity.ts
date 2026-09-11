@@ -11,12 +11,7 @@ import {
   recipeTotals,
   recipeYieldSchema,
 } from "@cubby/schemas/recipe-shared";
-import { numericRangeFields } from "@cubby/schemas/base-entity";
 import { z } from "zod";
-export const filterSchemas = {
-  nameFilter: z.string().optional(),
-  ...numericRangeFields("totalMinutes"),
-};
 export default defineEntity({
   key: "recipe",
   names: { singular: "Recipe", plural: "Recipes" },
@@ -70,7 +65,12 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number", section: "servings" },
-        display: { list: true, detail: true },
+        display: {
+          list: true,
+          detail: true,
+          width: "xs",
+          mobile: { slot: "subtitle", priority: 5, interactive: true },
+        },
         validation: {
           read: recipeServings.nullable().optional(),
           create: recipeServings.nullable().optional(),
@@ -276,6 +276,32 @@ export default defineEntity({
     ],
     bulk: [],
     audit: ["name"],
+    sort: {
+      fields: [
+        "createdAt",
+        "updatedAt",
+        "name",
+        "cookbook",
+        "costTotal",
+        "caloriesTotal",
+        "source",
+        "yield",
+        "tags",
+        "totalMinutes",
+      ],
+      default: "createdAt",
+      computed: ["cookbook", "costTotal", "caloriesTotal"],
+      groupable: ["name"],
+    },
+    intents: {
+      fields: {
+        capture: ["name"],
+        full: ["name", "cookbookId", "tags", "notes", "sections"],
+        identity: ["name", "cookbookId", "tags"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity"],
+    },
     output: [
       "id",
       "name",
@@ -406,6 +432,7 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter total time...",
         deriveSchema: true,
+        stored: true,
         options: [
           { value: "under30", label: "Under 30 min" },
           { value: "30to60", label: "30–60 min" },

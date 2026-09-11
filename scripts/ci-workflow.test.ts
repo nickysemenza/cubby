@@ -179,8 +179,9 @@ test("local checks retain every required gate and keep stateful verification liv
   ];
   const extra = ["bindings", "openapi", "script-tests", "security"];
   const commands = {
-    entity: "tsx scripts/entity-generator.ts --check",
-    "start-ops": "node scripts/start-operation-registry-generator.ts --check",
+    entity: "tsx scripts/entity-generator/main.ts --check",
+    "start-ops":
+      "tsx --tsconfig apps/web/tsconfig.json scripts/start-operation-registry-generator.ts --check",
     "http-api":
       "pnpm --filter @cubby/web generate:http-api:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
     types: "pnpm typecheck",

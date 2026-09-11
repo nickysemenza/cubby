@@ -1,5 +1,3 @@
-import { locationSortableFields } from "@cubby/schemas/location";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -28,11 +26,6 @@ const locationShortcodes = bindShortcodeResolver("location");
 export const locationEntityAdapter = defineEntityAdapter({
   entity: "location",
   sideEffects: false,
-  sort: {
-    fields: locationSortableFields,
-    default: "createdAt",
-    groupable: ["type"],
-  },
   lifecycle: { delete: LOCATION_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getLocationByShortcode(ctx.db, id),

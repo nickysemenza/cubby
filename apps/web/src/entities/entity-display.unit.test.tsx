@@ -1,13 +1,41 @@
+import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
+  type CubbyColumnDef,
 } from "~/app/_components/data-table/table-features";
 
 import { createEntityDisplayColumns, EntityBasicInfo } from "./entity-display";
+
+/**
+ * Narrows a column's `cell` to a callable renderer taking only `{ row }` —
+ * every plain-scalar column `createEntityDisplayColumns` builds itself.
+ * Generic over `TValue` (matching `CubbyColumnDef`'s own shape) so this can
+ * be called from inside a `CubbyColumnCollection.visit()` callback, where a
+ * column's `cell` is typed against that one call's own captured `TValue`
+ * rather than the default `CellData` — see `materializeCubbyColumns`'s doc
+ * in table-features.ts on why that capture can't be widened after the fact.
+ */
+function isRowRenderer<TRecord extends object, TValue extends CellData>(
+  cell: CubbyColumnDef<TRecord, TValue>["cell"],
+): cell is (context: { row: { original: TRecord } }) => ReactNode {
+  return typeof cell === "function";
+}
+
+function renderRowCell<TRecord extends object, TValue extends CellData>(
+  cell: CubbyColumnDef<TRecord, TValue>["cell"],
+  record: TRecord,
+): ReactNode {
+  if (!isRowRenderer<TRecord, TValue>(cell)) {
+    throw new Error("Expected a row cell renderer.");
+  }
+  return cell({ row: { original: record } });
+}
 
 describe("declared entity displays", () => {
   it("selects declared detail sections without leaking overview fields", () => {
@@ -235,5 +263,209 @@ describe("declared entity displays", () => {
     expect(columns.visit((column) => column.id)).not.toContain(
       "evidenceTransactionIds",
     );
+  });
+
+  describe("declared width/format/mobile/sorting", () => {
+    // `product` is the one entity whose full `list: true` roster is plain
+    // scalars (nothing identifier/reference/json), so it builds with zero
+    // overrides — the cleanest surface for the generic mapping itself.
+    interface ProductRow {
+      fdc_id: number | null;
+      manufacturer: string;
+      model: string | null;
+      notes: string | null;
+      expectedQuantity: number | null;
+      category: string | null;
+      price: number | null;
+      usdaUnavailable: boolean | null;
+      stockTracked: boolean | null;
+      primaryGtin: string | null;
+    }
+    const PRODUCT_ROW: ProductRow = {
+      fdc_id: 173944,
+      manufacturer: "Acme",
+      model: "X-100",
+      notes: "Fixture notes",
+      expectedQuantity: 3,
+      category: null,
+      price: 12.5,
+      usdaUnavailable: null,
+      stockTracked: true,
+      primaryGtin: null,
+    };
+
+    // Deliberately drops `cell` — a column's cell type is captured per-visit
+    // against that column's own existentially-quantified `TValue` (see
+    // `materializeCubbyColumns`'s doc in table-features.ts): carrying it out
+    // through a plain mapped array collapses TValue to `unknown` and no
+    // longer type-checks as callable. Metadata (id/className/mobile/
+    // enableSorting) isn't TValue-parameterized, so it survives the trip.
+    function buildProductColumnMeta() {
+      const columns = createEntityDisplayColumns(
+        "product",
+        createCubbyColumnHelper<ProductRow>(),
+      );
+      return columns.visit((column) => ({
+        id: String(
+          column.id ?? ("accessorKey" in column ? column.accessorKey : ""),
+        ),
+        className: column.meta?.className,
+        mobile: column.meta?.mobile,
+        numeric: column.meta?.numeric,
+        enableSorting: column.enableSorting,
+      }));
+    }
+
+    /** Renders one column's cell against a fixture row — filtered to a single
+     * column and invoked inside the same `.visit()` callback, so its `cell`
+     * is used exactly where its `TValue` is still concrete. */
+    function renderProductCell(columnId: string, row: ProductRow) {
+      const columns = createEntityDisplayColumns(
+        "product",
+        createCubbyColumnHelper<ProductRow>(),
+      );
+      const matched = columns.filter(
+        (column) =>
+          (column.id ??
+            ("accessorKey" in column ? column.accessorKey : null)) === columnId,
+      );
+      const rendered = matched.visit((column) =>
+        renderRowCell(column.cell, row),
+      );
+      const [first] = rendered;
+      if (rendered.length !== 1 || first === undefined) {
+        throw new Error(`Expected exactly one column with id ${columnId}.`);
+      }
+      return first;
+    }
+
+    it("buckets declared widths into the shared table's fixed classes", () => {
+      const byId = Object.fromEntries(
+        buildProductColumnMeta().map((d) => [d.id, d]),
+      );
+      // width: "sm" -> "w-28", width: "md" -> "w-40"
+      expect(byId.fdc_id?.className).toBe("w-28");
+      expect(byId.category?.className).toBe("w-28");
+      expect(byId.stockTracked?.className).toBe("w-28");
+      expect(byId.manufacturer?.className).toBe("w-40");
+      expect(byId.model?.className).toBe("w-40");
+      expect(byId.notes?.className).toBe("w-40");
+      // No declared width (e.g. expectedQuantity, usdaUnavailable) stays unset.
+      expect(byId.expectedQuantity?.className).toBeUndefined();
+    });
+
+    it("passes declared mobile placement straight through as column meta", () => {
+      const byId = Object.fromEntries(
+        buildProductColumnMeta().map((d) => [d.id, d]),
+      );
+      expect(byId.manufacturer?.mobile).toEqual({
+        slot: "subtitle",
+        priority: 20,
+        interactive: undefined,
+      });
+      expect(byId.category?.mobile).toEqual({
+        slot: "subtitle",
+        priority: 30,
+        interactive: undefined,
+      });
+      // A field with no declared `display.mobile` gets no mobile meta.
+      expect(byId.notes?.mobile).toBeUndefined();
+    });
+
+    it("renders format: external-link as an outbound link over the raw value", () => {
+      render(<>{renderProductCell("fdc_id", PRODUCT_ROW)}</>);
+      const link = screen.getByRole("link", { name: "173944" });
+      expect(link).toHaveAttribute("href", "173944");
+    });
+
+    it("renders format: currency through the shared currency formatter", () => {
+      const byId = Object.fromEntries(
+        buildProductColumnMeta().map((d) => [d.id, d]),
+      );
+      expect(byId.price?.numeric).toBe(true);
+      render(<>{renderProductCell("price", PRODUCT_ROW)}</>);
+      expect(screen.getByText("$12.50")).toBeVisible();
+    });
+
+    it("derives enableSorting from the generated sort roster per column id", () => {
+      const byId = Object.fromEntries(
+        buildProductColumnMeta().map((d) => [d.id, d]),
+      );
+      // In `generatedEntitySort.product.fields`.
+      expect(byId.manufacturer?.enableSorting).toBe(true);
+      expect(byId.fdc_id?.enableSorting).toBe(true);
+      expect(byId.notes?.enableSorting).toBe(true);
+      // Not in the roster.
+      expect(byId.stockTracked?.enableSorting).toBe(false);
+      expect(byId.usdaUnavailable?.enableSorting).toBe(false);
+    });
+
+    it("leaves an override's own enableSorting alone, and fills it in only when unset", () => {
+      const helper = createCubbyColumnHelper<{
+        projectId: string | null;
+        subjectProductId: string | null;
+        parentTaskId: string | null;
+        blockedByIds: string[];
+        blockingIds: string[];
+        trade: string;
+      }>();
+      const columns = createEntityDisplayColumns(
+        "task",
+        helper,
+        createCubbyColumnCollection((add) => {
+          // Required: these are identifier/reference fields, which the
+          // auto-render path always rejects.
+          for (const id of [
+            "projectId",
+            "subjectProductId",
+            "parentTaskId",
+            "blockedByIds",
+            "blockingIds",
+          ]) {
+            add(helper.display({ id, cell: () => null }));
+          }
+          // "trade" IS in `generatedEntitySort.task.fields`, but this
+          // override deliberately opts out — that explicit choice must win
+          // over the roster-derived default.
+          add(
+            helper.display({
+              id: "trade",
+              enableSorting: false,
+              cell: () => null,
+            }),
+          );
+        }),
+      );
+      const byId = Object.fromEntries(
+        columns.visit((column) => [
+          String(
+            column.id ?? ("accessorKey" in column ? column.accessorKey : ""),
+          ),
+          {
+            className: column.meta?.className,
+            mobile: column.meta?.mobile,
+            enableSorting: column.enableSorting,
+          },
+        ]),
+      );
+      // "status" is in `generatedEntitySort.task.fields` — the auto column
+      // picks that up with no explicit `enableSorting` needed.
+      expect(byId.status?.enableSorting).toBe(true);
+      // "dueDate" is declared `format: "plainDate"`, `width: "sm"`, and a
+      // `mobile` placement — all read straight off the task entity file.
+      expect(byId.dueDate?.className).toBe("w-28");
+      expect(byId.dueDate?.mobile).toEqual({
+        slot: "meta",
+        priority: 40,
+        interactive: true,
+      });
+      expect(byId.dueDate?.enableSorting).toBe(true);
+      // Overrides for reference fields aren't in the roster at all — they
+      // still get filled in as unsortable (false), not left `undefined`.
+      expect(byId.projectId?.enableSorting).toBe(false);
+      // The explicit override on "trade" survives despite the roster saying
+      // true for that column id.
+      expect(byId.trade?.enableSorting).toBe(false);
+    });
   });
 });

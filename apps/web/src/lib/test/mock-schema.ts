@@ -428,10 +428,8 @@ const genCollection = (
     }
     case "tuple":
       return (def.items ?? []).map((item) => recurse(item));
-    case "record": {
-      const key = String(def.keyType ? recurse(def.keyType) : "key");
-      return { [key]: def.valueType ? recurse(def.valueType) : undefined };
-    }
+    case "record":
+      return mockRecord(def, recurse);
     case "map":
       return new Map([
         [
@@ -504,6 +502,32 @@ const genCompositeWrapper = (
     default:
       return UNHANDLED_MOCK_TYPE;
   }
+};
+
+interface EnumKeyDef {
+  type?: string;
+  entries?: Record<string, string | number>;
+}
+
+// Zod 4 treats a record keyed by an enum as exhaustive: every enum member
+// must be present, so emit them all instead of one sample key.
+const mockRecord = (
+  def: RuntimeDefinition,
+  recurse: (schema: z.ZodType) => MockValue,
+) => {
+  // SAFETY: the record key's def is read for its `type`/`entries` only;
+  // both are optional here and checked before use.
+  const keyDef = def.keyType?._zod.def as EnumKeyDef | undefined;
+  if (keyDef?.type === "enum" && keyDef.entries) {
+    return Object.fromEntries(
+      Object.values(keyDef.entries).map((value) => [
+        String(value),
+        def.valueType ? recurse(def.valueType) : undefined,
+      ]),
+    );
+  }
+  const key = String(def.keyType ? recurse(def.keyType) : "key");
+  return { [key]: def.valueType ? recurse(def.valueType) : undefined };
 };
 
 function gen(

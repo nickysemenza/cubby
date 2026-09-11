@@ -11,7 +11,7 @@ import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { tradeOptions } from "~/app/projects/shared";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -167,7 +167,9 @@ export function SettleExpenseDialog({
           name="projectId"
           entity="project"
           label="Project"
-          SearchProvider={WithProjectSearch}
+          SearchProvider={(props) => (
+            <WithEntitySearch entity="project" {...props} />
+          )}
           clearable
         />
         {/* Roster picker, not free text — see `VendorField`. */}

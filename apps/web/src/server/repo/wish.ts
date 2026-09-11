@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ProductId,
   parseShortcodeFor,
@@ -18,7 +19,6 @@ import type {
   WishOut,
   WishUpdateData,
 } from "@cubby/schemas/wish";
-import { wishSortableFields } from "@cubby/schemas/wish";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -305,7 +305,7 @@ export const wishList = async (
         .from(wish)
         .where(where)
         .orderBy(
-          ...buildOrderBy(wish, sorts, [...wishSortableFields], {
+          ...buildOrderBy(wish, sorts, [...generatedEntitySort.wish.fields], {
             resolve: resolveWishSort,
           }),
         )

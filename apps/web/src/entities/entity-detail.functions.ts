@@ -1,17 +1,14 @@
 import { parseShortcode } from "@cubby/shared";
 import { queryOptions } from "@tanstack/react-query";
-import { z } from "zod";
 
+import { entityDetailContract } from "~/contracts/entity-detail.contract";
 import {
   defineOperationDomain,
   type OperationQueryKey,
-  query,
 } from "~/integrations/tanstack-query/operation-catalog";
 
 import {
-  detailEntities,
   type DetailEntity,
-  type EntityDetailByEntity,
   type EntityDetailInputByEntity,
   entityDetailInputFor,
   getEntityDetailOutputSchema,
@@ -37,23 +34,8 @@ export class EntityDetailError extends Error {
 }
 
 /** @lintignore Discovered by the operation registry generator. */
-export const entityDetail = defineOperationDomain("entity", {
-  detail: query({
-    input: z.custom<EntityDetailInputByEntity[DetailEntity]>(),
-    output: z.custom<EntityDetailByEntity[DetailEntity] | null>(),
-    observability: {
-      entities: detailEntities,
-      productPhases: [
-        "resolve",
-        "base",
-        "pricing",
-        "quantity",
-        "breadcrumbs",
-        "quality",
-        "recipe_usages",
-        "food",
-      ],
-    },
+export const entityDetail = defineOperationDomain(entityDetailContract, {
+  detail: {
     parse: (result, input) =>
       result === null
         ? null
@@ -63,7 +45,7 @@ export const entityDetail = defineOperationDomain("entity", {
       persistedDetailEntities.has(input.entity)
         ? "persisted-detail"
         : undefined,
-  }),
+  },
 });
 
 /**

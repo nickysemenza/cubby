@@ -34,6 +34,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   expectedQuantity: null,
   category: "tools",
   images: [],
+  coverImageUrl: null,
   externalIds: [],
   price: 99,
   pricing: {

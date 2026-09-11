@@ -3,11 +3,11 @@ import {
   normalizeSorts,
 } from "@cubby/schemas/pagination";
 
-import { usdaFood } from "~/entities/usda.functions";
+import { usdaFoodContract } from "~/contracts/usda.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { findUsdaFoodWorkflow } from "~/server/workflows/usda.server";
 
-export const usdaFoodHandlers = implementOperationDomain(usdaFood, {
+export const usdaFoodHandlers = implementOperationDomain(usdaFoodContract, {
   list: {
     run: async (context, input) => {
       const { data, count } = await context.usdaService.listFoods(

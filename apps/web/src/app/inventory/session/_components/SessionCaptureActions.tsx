@@ -17,7 +17,7 @@ import { AiProvenance } from "~/app/_components/ai/ai-proposal-card";
 import { AiProposalList } from "~/app/_components/ai/ai-proposal-list";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import {
   getProductShortcode,
   requiredProductField,
@@ -492,7 +492,7 @@ function SuggestionProductOverride({
   onChange: (value: ComboboxItem<ProductShortcode> | null) => void;
 }) {
   return (
-    <WithProductSearch intent="stock">
+    <WithEntitySearch entity="product" intent="stock">
       {({ items, onSearchChange, isLoading, onOpenChange }) => (
         <SuggestionProductCombobox
           itemName={item.name}
@@ -504,7 +504,7 @@ function SuggestionProductOverride({
           onChange={onChange}
         />
       )}
-    </WithProductSearch>
+    </WithEntitySearch>
   );
 }
 
@@ -607,7 +607,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
       className="min-w-0 flex-1"
     >
       <div className="min-w-56 flex-1">
-        <WithProductSearch intent="stock">
+        <WithEntitySearch entity="product" intent="stock">
           {({ items, onSearchChange, isLoading, onOpenChange }) => (
             <ComboboxField
               form={form}
@@ -621,7 +621,7 @@ function ManualAdd({ locationId }: { locationId: LocationShortcode }) {
               entity="product"
             />
           )}
-        </WithProductSearch>
+        </WithEntitySearch>
       </div>
       <div className="w-44 shrink-0">
         <AmountFieldGroup

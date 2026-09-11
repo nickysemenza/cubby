@@ -105,6 +105,29 @@ const metadataSchemas = () => {
         .optional()
         .default(null),
       detailSection: nonEmptyString().optional().default("overview"),
+      /** List column width bucket; the shared table maps it to a class. */
+      width: z
+        .enum(["xs", "sm", "md", "lg"])
+        .nullable()
+        .optional()
+        .default(null),
+      /** List cell formatter chosen by the shared column compiler. */
+      format: z
+        .enum(["currency", "plainDate", "timestamp", "external-link"])
+        .nullable()
+        .optional()
+        .default(null),
+      /** Mobile card placement for the list column. */
+      mobile: z
+        .object({
+          slot: nonEmptyString(),
+          priority: z.number().int().nonnegative(),
+          interactive: z.boolean({ error: "must be a boolean" }).optional(),
+        })
+        .strict()
+        .nullable()
+        .optional()
+        .default(null),
     })
     .strict();
 
@@ -150,6 +173,31 @@ const metadataSchemas = () => {
       .strict(),
   ]);
 
+  const entityFieldModelSortMetadataSchema = z
+    .object({
+      fields: z.array(nonEmptyString()).min(1),
+      default: nonEmptyString(),
+      computed: z.array(nonEmptyString()).optional().default([]),
+      groupable: z.array(nonEmptyString()).optional().default([]),
+    })
+    .strict();
+
+  /**
+   * Editing intents: named field fragments the browser editor exposes, plus
+   * the ordered intent names each operation accepts (the first is the
+   * default). `editorFields` lists editor-only pseudo fields (for example a
+   * flattened discriminated identity) that intents may name without a model
+   * field.
+   */
+  const entityFieldModelIntentsMetadataSchema = z
+    .object({
+      fields: z.record(nonEmptyString(), z.array(nonEmptyString()).min(1)),
+      create: z.array(nonEmptyString()).min(1),
+      update: z.array(nonEmptyString()).min(1),
+      editorFields: z.array(nonEmptyString()).optional().default([]),
+    })
+    .strict();
+
   const entityFieldModelMetadataSchema = z
     .object({
       fields: z.array(entityFieldMetadataSchema),
@@ -159,6 +207,8 @@ const metadataSchemas = () => {
       output: z.array(nonEmptyString()),
       bulk: z.array(nonEmptyString()),
       audit: z.array(nonEmptyString()),
+      sort: entityFieldModelSortMetadataSchema.optional(),
+      intents: entityFieldModelIntentsMetadataSchema.optional(),
     })
     .strict();
 
@@ -260,6 +310,23 @@ const metadataSchemas = () => {
         .nullable()
         .optional(),
       expandRef: sourceRefMetadataSchema.nullable().optional(),
+      /** A named schema for select/multiselect values (an enum export). */
+      schemaRef: sourceRefMetadataSchema.nullable().optional(),
+      /**
+       * The filter is the standard predicate over the stored column named by
+       * `columnId`, so the repository composes it from the declaration.
+       */
+      stored: z.boolean({ error: "must be a boolean" }).optional(),
+      /** Range bounds; `kind` is inferred from the model field when omitted. */
+      range: z
+        .object({
+          kind: z.enum(["number", "date"]).optional(),
+          int: z.boolean({ error: "must be a boolean" }).optional(),
+          nonnegative: z.boolean({ error: "must be a boolean" }).optional(),
+        })
+        .strict()
+        .nullable()
+        .optional(),
       urlOnly: z.boolean({ error: "must be a boolean" }).optional(),
       nullable: z
         .object({ field: nonEmptyString(), label: nonEmptyString() })

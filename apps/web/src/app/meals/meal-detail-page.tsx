@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { WithRecipeSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { DetailSections } from "~/app/_components/data-table/detail-page";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
@@ -398,7 +398,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                   <Description as="span" size="xs" className="mb-1 block">
                     Add a recipe
                   </Description>
-                  <WithRecipeSearch>
+                  <WithEntitySearch entity="recipe">
                     {({ items, onSearchChange, isLoading, onOpenChange }) => (
                       <EntityPicker
                         entity="recipe"
@@ -420,7 +420,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                         }}
                       />
                     )}
-                  </WithRecipeSearch>
+                  </WithEntitySearch>
                 </div>
               </Stack>
             ),

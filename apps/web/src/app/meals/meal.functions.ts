@@ -1,51 +1,14 @@
-import * as schemas from "@cubby/schemas/meal";
-
+import { mealContract } from "~/contracts/meal.contract";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  defineOperationDomain,
-  mutation,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-export const meal = defineOperationDomain("meal", {
-  getByDateRange: query({
-    input: schemas.mealDateRange,
-    output: schemas.mealListOut,
-    tags: [["meal", "getByDateRange"]],
-  }),
-  upcomingSummary: query({
-    input: schemas.mealDateRange,
-    output: schemas.upcomingMealSummaryOut,
-    tags: [["meal", "upcomingSummary"]],
-  }),
-  getPreparations: query({
-    input: schemas.getMealPreparationsInput,
-    output: schemas.getMealPreparationsOut,
-    tags: [["meal", "getPreparations"]],
-  }),
-  getShoppingList: query({
-    input: schemas.shoppingListInput,
-    output: schemas.shoppingListOut,
-    tags: [["meal", "getShoppingList"]],
-  }),
-  addRecipe: mutation({
-    input: schemas.mealAddRecipeInput,
-    output: schemas.mealOut,
-    invalidates: ripple.meal,
-  }),
-  updateRecipe: mutation({
-    input: schemas.mealUpdateRecipeInput,
-    output: schemas.mealOut,
-    invalidates: ripple.meal,
-  }),
-  removeRecipe: mutation({
-    input: schemas.mealRecipeIdInput,
-    output: schemas.mealOut,
-    invalidates: ripple.meal,
-  }),
-  savePreparation: mutation({
-    input: schemas.saveMealRecipePreparationInput,
-    output: schemas.saveMealRecipePreparationOut,
-    invalidates: ripple.meal,
-  }),
+export const meal = defineOperationDomain(mealContract, {
+  getByDateRange: { tags: [["meal", "getByDateRange"]] },
+  upcomingSummary: { tags: [["meal", "upcomingSummary"]] },
+  getPreparations: { tags: [["meal", "getPreparations"]] },
+  getShoppingList: { tags: [["meal", "getShoppingList"]] },
+  addRecipe: { invalidates: ripple.meal },
+  updateRecipe: { invalidates: ripple.meal },
+  removeRecipe: { invalidates: ripple.meal },
+  savePreparation: { invalidates: ripple.meal },
 });

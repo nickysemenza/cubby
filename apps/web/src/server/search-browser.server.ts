@@ -1,4 +1,4 @@
-import { search } from "~/lib/search.functions";
+import { searchContract } from "~/contracts/search.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   enqueueEmbeddingBackfillWorkflow,
@@ -17,7 +17,7 @@ import {
  * repair, debug, and the embedding mutations stay authoritative through the
  * central browser read policy.
  */
-export const searchHandlers = implementOperationDomain(search, {
+export const searchHandlers = implementOperationDomain(searchContract, {
   find: (context, input) => findSearchHitsWorkflow(context.readDb, input),
   grouped: (context, input) =>
     findGroupedSearchHitsWorkflow(context.readDb, input),

@@ -1,27 +1,10 @@
-import {
-  householdContributionLedgerInput,
-  householdContributionLedgerOut,
-  projectContributionInput,
-  projectContributionOut,
-} from "@cubby/schemas/household-contribution";
-
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
+import { householdContributionContract } from "~/contracts/household-contribution.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
 export const householdContribution = defineOperationDomain(
-  "householdContribution",
+  householdContributionContract,
   {
-    ledger: query({
-      input: householdContributionLedgerInput,
-      output: householdContributionLedgerOut,
-      tags: [["householdContribution", "ledger"]],
-    }),
-    project: query({
-      input: projectContributionInput,
-      output: projectContributionOut,
-      tags: [["householdContribution", "project"]],
-    }),
+    ledger: { tags: [["householdContribution", "ledger"]] },
+    project: { tags: [["householdContribution", "project"]] },
   },
 );

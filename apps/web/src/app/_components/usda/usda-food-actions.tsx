@@ -21,7 +21,7 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
-import { WithIngredientSearch } from "../combobox/with-search-hook";
+import { WithEntitySearch } from "../combobox/with-search-hook";
 import { useEntityActionMutation } from "../hooks/useActionMutation";
 import { ProductForm } from "../products/product-form";
 
@@ -136,7 +136,7 @@ function LinkFoodToIngredientButton({
                 </DialogDescription>
               </DialogHeader>
               <div className="mt-4">
-                <WithIngredientSearch>
+                <WithEntitySearch entity="ingredient">
                   {({
                     items,
                     onSearchChange,
@@ -158,7 +158,7 @@ function LinkFoodToIngredientButton({
                       placeholder="Search ingredients…"
                     />
                   )}
-                </WithIngredientSearch>
+                </WithEntitySearch>
               </div>
             </>
           ) : (

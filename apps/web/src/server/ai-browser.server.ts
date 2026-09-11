@@ -1,4 +1,4 @@
-import { ai, aiStreams } from "~/lib/ai.functions";
+import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
@@ -20,7 +20,7 @@ import {
 } from "~/server/workflows/ai.server";
 
 /** AI reads are authoritative: suggestions must see the row just written. */
-export const aiHandlers = implementOperationDomain(ai, {
+export const aiHandlers = implementOperationDomain(aiContract, {
   suggestCategory: {
     run: (context, input) => suggestCategoryWorkflow(context.db, input),
   },
@@ -51,7 +51,7 @@ export const aiHandlers = implementOperationDomain(ai, {
   },
 });
 
-export const aiStreamHandlers = implementSubscriptionDomain(aiStreams, {
+export const aiStreamHandlers = implementSubscriptionDomain(aiStreamsContract, {
   backfillLocationDescriptions: (context, _input, signal) =>
     backfillLocationDescriptionsWorkflow(context.db, signal),
   precomputeEnrichmentProposals: (context, input, signal) =>

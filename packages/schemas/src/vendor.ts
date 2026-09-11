@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { imageUrlSummary } from "./image-summary";
 import { vendorRelatedFilterFields } from "./related-view";
 import { auditDateFilterFields } from "./base-entity";
@@ -48,17 +49,10 @@ export const vendorFilterFields = {
 export const vendorFiltersSchema = z.object(vendorFilterFields);
 export type VendorFilters = z.infer<typeof vendorFiltersSchema>;
 
-export const vendorSortableFields = [
-  "name",
-  // Rollups over the vendor's live purchases and their expenses, resolved by
-  // correlated subqueries in repo/vendor.ts — not columns on `Vendor`.
-  "purchaseCount",
-  "spend",
-  "latestPurchaseDate",
-  "createdAt",
-  "updatedAt",
-] as const;
-export type VendorSortField = (typeof vendorSortableFields)[number];
+// `purchaseCount`, `spend`, and `latestPurchaseDate` are rollups over the
+// vendor's live purchases and their expenses, resolved by correlated
+// subqueries in repo/vendor.ts — not columns on `Vendor`.
+export type VendorSortField = GeneratedEntitySortField<"vendor">;
 
 export const vendorOut = z.object({
   ...generatedVendorFieldSchemas.read,

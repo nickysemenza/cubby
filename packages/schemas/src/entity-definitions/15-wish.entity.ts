@@ -2,10 +2,6 @@ import { defineEntity } from "./definition.js";
 import { productShortcode, wishShortcode } from "../identifier-fields.js";
 import { wishCandidateOut } from "@cubby/schemas/wish-fields";
 import { z } from "zod";
-export const filterSchemas = {
-  search: z.string().trim().min(1).max(200).optional(),
-  acquired: z.boolean().optional(),
-};
 export default defineEntity({
   key: "wish",
   names: { singular: "Wish", plural: "Wishlist" },
@@ -128,6 +124,21 @@ export default defineEntity({
     update: ["name", "notes", "candidateProductIds", "acquired"],
     bulk: [],
     audit: ["name", "notes", "acquiredAt", "candidateProductIds"],
+    sort: {
+      fields: ["name", "acquiredAt", "priceRange", "createdAt", "updatedAt"],
+      default: "createdAt",
+      computed: ["priceRange"],
+    },
+    intents: {
+      fields: {
+        capture: ["name"],
+        full: ["name", "notes", "candidateProductIds", "acquired"],
+        identity: ["name", "notes", "candidateProductIds"],
+        acquisition: ["acquired"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity", "acquisition"],
+    },
     output: [
       "id",
       "name",

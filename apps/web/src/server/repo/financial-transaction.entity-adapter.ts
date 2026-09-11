@@ -1,5 +1,3 @@
-import { financialTransactionSortableFields } from "@cubby/schemas/financial-transaction";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -16,10 +14,6 @@ import {
 
 export const financialTransactionEntityAdapter = defineEntityAdapter({
   entity: "financialTransaction",
-  sort: {
-    fields: financialTransactionSortableFields,
-    default: "transactionDate",
-  },
   lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getFinancialTransactionByShortcode(ctx.db, id),

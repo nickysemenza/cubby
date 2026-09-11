@@ -1,85 +1,20 @@
-import {
-  bulkMovePayload,
-  inventoryBulkAddOut,
-  inventoryBulkAddPayload,
-  inventoryBulkDiscardOut,
-  inventoryBulkDiscardPayload,
-  inventoryBulkOperationPayload,
-  inventoryDuplicateUniqueProductsOut,
-  inventoryFindDuplicatesInput,
-  inventoryLocationIdsInput,
-  inventoryWithLocationAndProductListAndSideEffectsOut,
-  inventoryWithLocationAndProductListOut,
-  moveInventoryEntriesPayload,
-  reconcileSessionPayload,
-} from "@cubby/schemas/inventory";
-import {
-  resolveScanStraysInput,
-  resolveScanStraysOut,
-  scanAtLocationInput,
-  scanAtLocationOut,
-} from "@cubby/schemas/scan";
-
+import { inventoryContract } from "~/contracts/inventory.contract";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  defineOperationDomain,
-  mutation,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-export const inventory = defineOperationDomain("inventory", {
-  bulkProcess: mutation({
-    input: inventoryBulkOperationPayload,
-    output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: ripple.inventory,
-  }),
-  bulkAdd: mutation({
-    input: inventoryBulkAddPayload,
-    output: inventoryBulkAddOut,
-    invalidates: ripple.inventory,
-  }),
+export const inventory = defineOperationDomain(inventoryContract, {
+  bulkProcess: { invalidates: ripple.inventory },
+  bulkAdd: { invalidates: ripple.inventory },
   // `ripple.expense`, not `ripple.inventory`: a discard mints a $0 Expense per
   // row, and that ripple already carries the stock surfaces (see `costAndStock`)
   // alongside the ledger ones the narrower inventory ripple omits. Same choice
   // as the single-row `product.discard`.
-  bulkDiscard: mutation({
-    input: inventoryBulkDiscardPayload,
-    output: inventoryBulkDiscardOut,
-    invalidates: ripple.expense,
-  }),
-  bulkMove: mutation({
-    input: bulkMovePayload,
-    output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: ripple.inventory,
-  }),
-  moveEntries: mutation({
-    input: moveInventoryEntriesPayload,
-    output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: ripple.inventory,
-  }),
-  reconcileSession: mutation({
-    input: reconcileSessionPayload,
-    output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: ripple.inventory,
-  }),
-  scanAtLocation: mutation({
-    input: scanAtLocationInput,
-    output: scanAtLocationOut,
-    invalidates: ripple.inventory,
-  }),
-  resolveScanStrays: mutation({
-    input: resolveScanStraysInput,
-    output: resolveScanStraysOut,
-    invalidates: ripple.inventory,
-  }),
-  findDuplicates: query({
-    input: inventoryFindDuplicatesInput,
-    output: inventoryDuplicateUniqueProductsOut,
-    tags: [["inventory", "findDuplicates"]],
-  }),
-  getByLocationIds: query({
-    input: inventoryLocationIdsInput,
-    output: inventoryWithLocationAndProductListOut,
-    tags: [["inventory", "getByLocationIds"]],
-  }),
+  bulkDiscard: { invalidates: ripple.expense },
+  bulkMove: { invalidates: ripple.inventory },
+  moveEntries: { invalidates: ripple.inventory },
+  reconcileSession: { invalidates: ripple.inventory },
+  scanAtLocation: { invalidates: ripple.inventory },
+  resolveScanStrays: { invalidates: ripple.inventory },
+  findDuplicates: { tags: [["inventory", "findDuplicates"]] },
+  getByLocationIds: { tags: [["inventory", "getByLocationIds"]] },
 });

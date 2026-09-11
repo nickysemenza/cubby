@@ -1,3 +1,4 @@
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -9,7 +10,6 @@ import type {
   ProjectOptionsOut,
   ProjectOut,
 } from "@cubby/schemas/project";
-import { projectSortableFields } from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
 import {
   and,
@@ -30,7 +30,6 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
-  eqAny,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -39,6 +38,7 @@ import {
   notDeleted,
   presenceCondition,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
@@ -241,8 +241,11 @@ export const buildProjectListQuery = async (
       ...auditDateWhereConditions(project, filters),
       ...relatedWhereConditions("project", filters, project.id),
       pickerSearch,
-      eqAny(project.status, filters.status),
-      eqAny(project.kind, filters.kind),
+      // `status` and `kind` are declared stored filters. `location` is NOT:
+      // `project.locations` is an array column, and the standard multiselect
+      // predicate is a scalar `eqAny`/`inArray`, not `arrayOverlaps` — the
+      // wrong shape for an array column — so it stays hand-written below.
+      ...declaredFilterPredicates("project", project, filters),
       filters.location
         ? arrayOverlaps(project.locations, [filters.location].flat())
         : undefined,
@@ -308,7 +311,7 @@ export const buildProjectListQuery = async (
   const orderByArray = buildOrderBy(
     project,
     sorts,
-    [...projectSortableFields],
+    [...generatedEntitySort.project.fields],
     {
       resolve: (s) =>
         s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,

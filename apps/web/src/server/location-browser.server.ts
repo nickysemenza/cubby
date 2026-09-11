@@ -1,4 +1,4 @@
-import { location } from "~/app/locations/location.functions";
+import { locationContract } from "~/contracts/location.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   bulkUpdateParentWorkflow,
@@ -13,7 +13,7 @@ import {
   valuationSummaryWorkflow,
 } from "~/server/workflows/location.server";
 
-export const locationHandlers = implementOperationDomain(location, {
+export const locationHandlers = implementOperationDomain(locationContract, {
   makeTree: makeTreeWorkflow,
   valuationSummary: valuationSummaryWorkflow,
   subtree: subtreeWorkflow,

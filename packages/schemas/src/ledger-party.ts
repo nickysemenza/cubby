@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auditDateFilterFields } from "./base-entity";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
   generatedLedgerPartyFieldSchemas,
   generatedLedgerPartyFilterFields,
@@ -43,13 +44,7 @@ export const ledgerPartyFilterFields = {
 export const ledgerPartyFiltersSchema = z.object(ledgerPartyFilterFields);
 export type LedgerPartyFilters = z.infer<typeof ledgerPartyFiltersSchema>;
 
-export const ledgerPartySortableFields = [
-  "name",
-  "kind",
-  "createdAt",
-  "updatedAt",
-] as const;
-export type LedgerPartySortField = (typeof ledgerPartySortableFields)[number];
+export type LedgerPartySortField = GeneratedEntitySortField<"ledgerParty">;
 
 export const ledgerPartyOut = z.object({
   ...generatedLedgerPartyFieldSchemas.read,

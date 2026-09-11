@@ -1,17 +1,6 @@
-import {
-  productLookupResponseSchema,
-  upcLookupInput,
-} from "@cubby/upc-contract";
+import { upcContract } from "~/contracts/upc.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
-
-export const upc = defineOperationDomain("upc", {
-  lookup: query({
-    input: upcLookupInput,
-    output: productLookupResponseSchema.nullable(),
-    tags: [["upc", "lookup"]],
-  }),
+export const upc = defineOperationDomain(upcContract, {
+  lookup: { tags: [["upc", "lookup"]] },
 });

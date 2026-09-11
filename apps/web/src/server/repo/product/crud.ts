@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
   type ExternalIdKind,
@@ -30,7 +31,6 @@ import {
   type ProductCreateInput,
   type ProductTopLevelOut,
   type ProductUpdateInput,
-  productSortableFields,
 } from "@cubby/schemas/product";
 import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -88,7 +88,6 @@ import {
   buildSearchConditions,
   countWhere,
   eqAny,
-  eqAnyOrPresence,
   executeListQueryWithCount,
   formatSearchTerm,
   getDb,
@@ -105,6 +104,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { patchEntityRows } from "~/server/repo/entity-patch";
@@ -291,7 +291,7 @@ const resolveProductSort = (sort: SortParams) => {
 };
 
 const productListOrderBy = (sorts: SortParams[], groupBy?: string) =>
-  buildOrderBy(product, sorts, [...productSortableFields], {
+  buildOrderBy(product, sorts, [...generatedEntitySort.product.fields], {
     groupBy,
     resolve: resolveProductSort,
     tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
@@ -384,12 +384,16 @@ const productReader = createEntityReader({
   entity: "product",
   fetchById: fetchProductById,
   fromDB: async (db, row: ProductDeepDB) => {
-    const qualities = await observeOperationPhase(
-      PRODUCT_DETAIL_OPERATION,
-      "quality",
-      () => loadProductDataQualities(db, [row.id]),
+    const [qualities, coverImageUrls] = await Promise.all([
+      observeOperationPhase(PRODUCT_DETAIL_OPERATION, "quality", () =>
+        loadProductDataQualities(db, [row.id]),
+      ),
+      getProductCoverImageUrlsByProductIds(db, [row.id]),
+    ]);
+    return dbProductToAPI(
+      { ...row, coverImageUrl: coverImageUrls.get(row.id) ?? null },
+      qualities.get(row.id)!,
     );
-    return dbProductToAPI(row, qualities.get(row.id)!);
   },
 });
 
@@ -467,16 +471,27 @@ export const getProductsByShortcodes = async (
     where: and(inArray(product.shortcode, uppercased), notDeleted(product)),
     ...relations.product.full,
   });
-  const qualities = await loadProductDataQualities(
-    db,
-    results.map((row) => row.id),
-  );
+  const [qualities, coverImageUrls] = await Promise.all([
+    loadProductDataQualities(
+      db,
+      results.map((row) => row.id),
+    ),
+    getProductCoverImageUrlsByProductIds(
+      db,
+      results.map((row) => row.id),
+    ),
+  ]);
   const priced = await enrichProductRowsWithPricing(db, results);
   const ledgered = await hydrateProductLocationBreadcrumbs(
     db,
     await enrichProductRowsWithQuantityLedger(db, priced),
   );
-  return ledgered.map((row) => dbProductToAPI(row, qualities.get(row.id)!));
+  return ledgered.map((row) =>
+    dbProductToAPI(
+      { ...row, coverImageUrl: coverImageUrls.get(row.id) ?? null },
+      qualities.get(row.id)!,
+    ),
+  );
 };
 
 /**
@@ -678,11 +693,9 @@ export const buildProductWhere = async (
   const classificationConditions = () => [
     ...auditDateWhereConditions(product, filters),
     ...relatedWhereConditions("product", filters, product.id),
-    eqAnyOrPresence(
-      product.category,
-      filters.categoryFilter,
-      filters.categoryPresenceFilter,
-    ),
+    // name/model/notes (text), category (multiselect + presence), and
+    // manufacturerExact (multiselect) are declared stored filters.
+    ...declaredFilterPredicates("product", product, filters),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
       : or(
@@ -856,9 +869,6 @@ export const buildProductWhere = async (
     filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
     presenceCondition(product.notes, filters.notesPresenceFilter),
     presenceCondition(product.stockTracked, filters.stockTrackedPresenceFilter),
-    filters.manufacturerExact
-      ? inArray(product.manufacturer, [filters.manufacturerExact].flat())
-      : undefined,
   ];
 
   const qualityConditions = () => [
@@ -898,12 +908,7 @@ export const buildProductWhere = async (
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
     product,
-    [
-      { column: product.name, term: filters.nameFilter },
-      { column: product.manufacturer, term: filters.manufacturerFilter },
-      { column: product.model, term: filters.modelFilter },
-      { column: product.notes, term: filters.notesFilter },
-    ],
+    [{ column: product.manufacturer, term: filters.manufacturerFilter }],
     [
       ...classificationConditions(),
       ...inventoryConditions(),

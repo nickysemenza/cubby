@@ -5,6 +5,7 @@ import type { ActorContext } from "@cubby/schemas/context";
  */
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ImageShortcode,
   type LocationId,
@@ -21,10 +22,7 @@ import type {
   LocationPickerItemOut,
   LocationUpdateInput,
 } from "@cubby/schemas/location";
-import {
-  locationPickerSortableFields,
-  locationSortableFields,
-} from "@cubby/schemas/location";
+import { locationPickerSortableFields } from "@cubby/schemas/location";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -93,6 +91,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { stockOnly } from "~/server/repo/inventory/placement";
@@ -814,7 +813,8 @@ export const buildLocationWhere = async (
       ...auditDateWhereConditions(location, filters),
       ...relatedWhereConditions("location", filters, location.id),
       locationNameSearchCondition(filters.nameFilter),
-      eqAny(location.type, filters.itemTypeFilter),
+      // `type` is a declared stored filter.
+      ...declaredFilterPredicates("location", location, filters),
       parentCondition,
       productCondition,
       idSetPresence(
@@ -870,7 +870,7 @@ export const locationList = async (
   const orderByClause = buildOrderBy(
     location,
     sorts,
-    [...locationSortableFields],
+    [...generatedEntitySort.location.fields],
     {
       groupBy,
       // `valuation` is a persisted jsonb rollup; sort by direct value because

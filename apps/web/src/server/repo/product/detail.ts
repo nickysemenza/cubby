@@ -15,6 +15,7 @@ import { getDb, notDeleted, relations } from "~/server/repo/database-helpers";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { getRecipeUsagesForIngredient } from "~/server/repo/ingredient";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
+import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product/crud";
 import { foodLookupParamFromProduct } from "~/server/repo/product/helpers";
 import { dbProductToAPI, primaryGtinOf } from "~/server/repo/product/mappers";
 import { enrichProductRowsWithPricing } from "~/server/repo/product/pricing";
@@ -159,6 +160,14 @@ export async function readProductDetail(
     "quality",
     () => loadProductDetailDataQuality(context.db, row),
   );
+  // Not wrapped in `observeOperationPhase`: the tracked phase vocabulary for
+  // "entity.detail" is a closed list (`entity-detail.functions.ts`) this repo
+  // module doesn't own, so this batched lookup rides alongside the "quality"
+  // phase's timing instead of minting a new one.
+  const coverImageUrl =
+    (await getProductCoverImageUrlsByProductIds(context.db, [row.id])).get(
+      row.id,
+    ) ?? null;
   const recipe = await observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
     "recipe_usages",
@@ -174,6 +183,7 @@ export async function readProductDetail(
       ...breadcrumbed,
       pricing,
       quantityLedger,
+      coverImageUrl,
     },
     dataQuality,
   );

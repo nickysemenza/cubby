@@ -3,8 +3,9 @@ import {
   inventoryPlacementValues,
   UNSPECIFIED_MANUFACTURER,
 } from "@cubby/shared";
-import { fdcId, foodSummary, upc } from "@cubby/usda-schemas";
+import { foodSummary, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { productRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
@@ -449,35 +450,12 @@ export type ProductMovementTimelineOut = z.infer<
   typeof productMovementTimelineOut
 >;
 
-export const productSortableFields = [
-  "createdAt",
-  "updatedAt",
-  "name",
-  "manufacturer",
-  "model",
-  "primaryGtin",
-  "category",
-  "fdc_id",
-  "price",
-  "notes",
-  "location",
-  "ingredient",
-  "expenseTotal",
-  "expenses",
-  // Units bought minus units gone, and shelf minus that. Both correlated
-  // subqueries in repo/product/quantity-ledger.ts. These strings must stay
-  // identical to the column ids in productlist.tsx, or `buildOrderBy` drops
-  // the sort while the header still renders a sort affordance.
-  "expectedQuantity",
-  "quantityVariance",
-  "purchaseDate",
-  "related:product.projects",
-  "related:product.vendors",
-  "related:product.purchases",
-  "identity_strength",
-] as const;
-
-export type ProductSortField = (typeof productSortableFields)[number];
+// `expectedQuantity` and `quantityVariance` (units bought minus units gone,
+// and shelf minus that) are correlated subqueries in
+// repo/product/quantity-ledger.ts. Their sort keys must stay identical to the
+// column ids in productlist.tsx, or `buildOrderBy` drops the sort while the
+// header still renders a sort affordance.
+export type ProductSortField = GeneratedEntitySortField<"product">;
 
 /**
  * Units bought minus units gone, derived from the Expense ledger. See
@@ -674,12 +652,15 @@ const productInventoryWithLocationOut = z.object({
 
 export const productWithMappingsOut = z.object({
   ...productTopLevelFields,
+  // Derived cover, same rule as `productTopLevelOut` (the mapper always emits it).
+  coverImageUrl: z.url().nullable(),
   unitMappings: z.array(unitMappingOut),
 });
 export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
 
 export const productWithMappingsAndFoodOut = z.object({
   ...productTopLevelFields,
+  coverImageUrl: z.url().nullable(),
   unitMappings: z.array(unitMappingOut),
   food: foodSummary.nullable(),
 });
@@ -749,6 +730,9 @@ export type ProductQuantitySummariesOut = z.infer<
 
 export const productWithIngredientAndInventoryAndMappingsOut = z.object({
   ...productTopLevelFields,
+  // Same derived cover rule as `productTopLevelOut`/the picker (see
+  // `getProductCoverImageUrlsByProductIds`) — not a stored field.
+  coverImageUrl: z.url().nullable(),
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
@@ -821,6 +805,9 @@ export const productListItemMcpEntityOut = productListItemOut.extend({
 
 export const productWithFoodOut = z.object({
   ...productTopLevelFields,
+  // Same derived cover rule as `productTopLevelOut`/the picker (see
+  // `getProductCoverImageUrlsByProductIds`) — not a stored field.
+  coverImageUrl: z.url().nullable(),
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
@@ -857,6 +844,11 @@ export const productTopLevelMcpEntityOut = productTopLevelOut.extend({
 
 export const productWithFoodAndSideEffectsOut = z.object({
   ...productTopLevelFields,
+  // Same derived cover rule as `productTopLevelOut`/the picker (see
+  // `getProductCoverImageUrlsByProductIds`) — not a stored field. Required so
+  // this shape stays assignable to `productTopLevelOut` for the generic
+  // entity kernel's create/update output typing.
+  coverImageUrl: z.url().nullable(),
   ingredient: productIngredientOut.nullable(),
   unitMappings: z.array(unitMappingOut),
   inventoryEntry: z.array(productInventoryWithLocationOut),
@@ -972,15 +964,24 @@ export const productCategoryDistributionOut = z.array(
 );
 
 export const productQuickCreatePayload = z.object({
+  // `name`/`manufacturer` deliberately diverge from the generated create
+  // field (see INTENTIONAL_RESPELLINGS in field-map-drift.unit.test.ts):
+  // quick-create keeps its own label, and defaults manufacturer instead of
+  // requiring it.
   name: requiredName("Product name"),
   manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
+  // `upc`/`expectedQuantity` deliberately loosen/tighten the generated
+  // create field (also registered): quick-create allows omitting upc
+  // entirely, and constrains expectedQuantity to a positive integer.
   upc: gtin.nullable().optional(),
-  isbn: isbn.nullable().optional(),
   expectedQuantity: z.number().int().positive().nullable().optional(),
-  model: z.string().nullable().optional(),
-  notes: z.string().nullable().optional(),
-  price: positiveMoneyNullable.optional(),
-  category: productCategory.nullable().optional(),
+  // These are unchanged copies of the generated create field — reference it
+  // directly rather than re-declaring the same schema.
+  isbn: generatedProductFieldSchemas.create.isbn,
+  model: generatedProductFieldSchemas.create.model,
+  notes: generatedProductFieldSchemas.create.notes,
+  price: generatedProductFieldSchemas.create.price,
+  category: generatedProductFieldSchemas.create.category,
 });
 
 export type ProductQuickCreatePayload = z.infer<
@@ -989,17 +990,19 @@ export type ProductQuickCreatePayload = z.infer<
 
 const productMcpFields = {
   id: productShortcode,
-  name: z.string(),
-  manufacturer: z.string(),
-  model: z.string().nullable(),
-  notes: z.string().nullable(),
-  primaryGtin: gtin.nullable(),
-  category: productCategory.nullable(),
-  tags: z.array(z.string()),
+  name: generatedProductFieldSchemas.read.name,
+  manufacturer: generatedProductFieldSchemas.read.manufacturer,
+  model: generatedProductFieldSchemas.read.model,
+  notes: generatedProductFieldSchemas.read.notes,
+  primaryGtin: generatedProductFieldSchemas.read.primaryGtin,
+  category: generatedProductFieldSchemas.read.category,
+  tags: generatedProductFieldSchemas.read.tags,
   /**
-   * Hand-written rather than picked from `productTopLevelOut`: this shape adds
-   * `effectivePrice` alongside `price`, and the two must keep the SAME meaning
-   * their `productTopLevelOut`/`productPricingOut` counterparts have.
+   * Hand-written rather than referencing `generatedProductFieldSchemas.read.
+   * price` directly: this shape adds `effectivePrice` alongside `price`, and
+   * documents the pairing in its own `.describe()` — see
+   * INTENTIONAL_RESPELLINGS in field-map-drift.unit.test.ts. The MEANING
+   * still matches `productTopLevelOut`/`productPricingOut`'s counterparts.
    */
   price: moneyNullable.describe(
     "Manual per-item valuation/replacement-price override, exactly as stored; null means no override and `effectivePrice` falls back to the Expense-derived value.",
@@ -1008,13 +1011,16 @@ const productMcpFields = {
     "Resolved valuation/costing price: the manual `price` override when set, else the Expense-derived price. Same number as `pricing.effectivePrice` — this is what values stock and costs recipes.",
   ),
   pricing: productPricingOut,
+  // Stricter than the generated read field (`z.number().nullable()`, no
+  // int/positive) — registered in INTENTIONAL_RESPELLINGS.
   expectedQuantity: z.number().int().positive().nullable(),
   imageCount: z.number().int().nonnegative(),
   coverImageUrl: z.url().nullable(),
-  // USDA FoodData Central id — declared exception, not a cubby shortcode.
-  fdc_id: fdcId.nullable(),
-  usdaUnavailable: z.boolean().nullable(),
-  stockTracked: z.boolean().nullable(),
+  fdc_id: generatedProductFieldSchemas.read.fdc_id,
+  usdaUnavailable: generatedProductFieldSchemas.read.usdaUnavailable,
+  stockTracked: generatedProductFieldSchemas.read.stockTracked,
+  // A slimmer MCP-facing projection of `externalIdOut` (no raw `id`/
+  // `isPrimary`) — registered in INTENTIONAL_RESPELLINGS.
   externalIds: z.array(
     z.object({
       source: externalIdSource,
@@ -1027,7 +1033,13 @@ const productMcpFields = {
   ),
   // USDA FoodData Central id — declared exception, not a cubby shortcode.
   usdaFdcId: z.number().nullable(),
-  ingredientId: ingredientShortcode.nullable(),
+  // `ingredientId` has no generated *read* field (readKey: null on the
+  // entity); this reuses the generated *create* field, which carries the
+  // same nullable-shortcode meaning.
+  ingredientId: generatedProductFieldSchemas.create.ingredientId,
+  // Output-shaped (`mcpUnitMappingOut`), unlike the generated create/update
+  // field's input shape (`unitMappingInput`) — registered in
+  // INTENTIONAL_RESPELLINGS.
   unitMappings: z.array(mcpUnitMappingOut),
   dataQuality,
 };

@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithIngredientSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { getOptionalIngredientId } from "~/app/_components/form-fields";
 import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { Row, Stack } from "~/components/layout";
@@ -164,7 +164,7 @@ export function SweepProductFollowUp({
               disabled={save.isPending}
             />
           )}
-          <WithIngredientSearch>
+          <WithEntitySearch entity="ingredient">
             {({
               items,
               onSearchChange,
@@ -184,7 +184,7 @@ export function SweepProductFollowUp({
                 onOpenChange={onOpenChange}
               />
             )}
-          </WithIngredientSearch>
+          </WithEntitySearch>
           <Row gap="sm" justify="end">
             <Button
               type="button"

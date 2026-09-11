@@ -1,31 +1,15 @@
-import {
-  foodSummaryWithLinkedProducts,
-  usdaFoodIdInput,
-  usdaFoodListOut,
-  usdaFoodLookupInput,
-  usdaListInput,
-} from "@cubby/schemas/usda";
+import { usdaFoodContract } from "~/contracts/usda.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
-
-export const usdaFood = defineOperationDomain("usda-food", {
-  list: query({
-    input: usdaListInput,
-    output: usdaFoodListOut,
+export const usdaFood = defineOperationDomain(usdaFoodContract, {
+  list: {
     tags: [["usda-food"]],
-  }),
-  detail: query({
-    input: usdaFoodIdInput,
-    output: foodSummaryWithLinkedProducts.nullable(),
+  },
+  detail: {
     tags: [["usda-food"]],
     cache: "stable",
-  }),
-  alternateId: query({
-    input: usdaFoodLookupInput,
-    output: foodSummaryWithLinkedProducts.nullable(),
+  },
+  alternateId: {
     tags: [["usda-food"]],
-  }),
+  },
 });

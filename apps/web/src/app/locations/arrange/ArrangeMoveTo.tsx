@@ -6,7 +6,7 @@ import { match } from "ts-pattern";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithLocationSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -129,7 +129,7 @@ function MoveToDialog({
       }
     >
       <Stack gap="md">
-        <WithLocationSearch>
+        <WithEntitySearch entity="location">
           {({ items, onSearchChange, isLoading, onOpenChange }) => (
             <EntityPicker
               entity="location"
@@ -175,7 +175,7 @@ function MoveToDialog({
               }}
             />
           )}
-        </WithLocationSearch>
+        </WithEntitySearch>
 
         {error && (
           <StatusText as="div" tone="destructive" className="text-sm">

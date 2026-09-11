@@ -1,14 +1,14 @@
 import {
-  recipe as recipeDomain,
-  recipeStreams,
-  suggestions,
-} from "~/app/recipes/recipe.functions";
+  recipeContract as recipeDomainContract,
+  recipeStreamsContract,
+  suggestionsContract,
+} from "~/contracts/recipe.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import * as imports from "~/server/workflows/recipe-import.server";
 import * as recipe from "~/server/workflows/recipe.server";
 
-export const recipeHandlers = implementOperationDomain(recipeDomain, {
+export const recipeHandlers = implementOperationDomain(recipeDomainContract, {
   getManyByIDs: (context, input) =>
     recipe.getManyByIDsWorkflow(context.db, input),
   getAllTags: (context) => recipe.getAllTagsWorkflow(context.db),
@@ -57,32 +57,41 @@ export const recipeHandlers = implementOperationDomain(recipeDomain, {
     imports.attachCookbookRecipePhotoWorkflow(context, input),
 });
 
-export const suggestionsHandlers = implementOperationDomain(suggestions, {
-  getRecipeAvailability: (context, input) =>
-    recipe.getRecipeAvailabilityWorkflow(
-      input.recipeId,
-      context.services.availability,
-    ),
-  getMakeable: (context, input) =>
-    recipe.getMakeableWorkflow(
-      context.db,
-      input,
-      context.services.availability,
-    ),
-});
+export const suggestionsHandlers = implementOperationDomain(
+  suggestionsContract,
+  {
+    getRecipeAvailability: (context, input) =>
+      recipe.getRecipeAvailabilityWorkflow(
+        input.recipeId,
+        context.services.availability,
+      ),
+    getMakeable: (context, input) =>
+      recipe.getMakeableWorkflow(
+        context.db,
+        input,
+        context.services.availability,
+      ),
+  },
+);
 
-export const recipeStreamHandlers = implementSubscriptionDomain(recipeStreams, {
-  recomputeAllDurable: (context, _input, signal) =>
-    recipe.recomputeAllDurableWorkflow(context.services.recipeCosting, signal),
-  recomputeStaleDurable: (context, _input, signal) =>
-    recipe.recomputeStaleDurableWorkflow(
-      context.services.recipeCosting,
-      signal,
-    ),
-  importCookbookStream: (context, input, signal) =>
-    imports.importCookbookWorkflow(context, input, signal),
-  importNotionSyncStream: (context, input, signal) =>
-    imports.importNotionSyncWorkflow(context, input, signal),
-  reprocessCookbook: (context, input, signal) =>
-    imports.reprocessCookbookWorkflow(context, input, signal),
-});
+export const recipeStreamHandlers = implementSubscriptionDomain(
+  recipeStreamsContract,
+  {
+    recomputeAllDurable: (context, _input, signal) =>
+      recipe.recomputeAllDurableWorkflow(
+        context.services.recipeCosting,
+        signal,
+      ),
+    recomputeStaleDurable: (context, _input, signal) =>
+      recipe.recomputeStaleDurableWorkflow(
+        context.services.recipeCosting,
+        signal,
+      ),
+    importCookbookStream: (context, input, signal) =>
+      imports.importCookbookWorkflow(context, input, signal),
+    importNotionSyncStream: (context, input, signal) =>
+      imports.importNotionSyncWorkflow(context, input, signal),
+    reprocessCookbook: (context, input, signal) =>
+      imports.reprocessCookbookWorkflow(context, input, signal),
+  },
+);

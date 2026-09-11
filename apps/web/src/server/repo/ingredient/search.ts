@@ -6,6 +6,7 @@
  * costing path, and the enrichment-workbench worklist. None of these mutate.
  */
 
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type IngredientId,
   type IngredientShortcode,
@@ -16,7 +17,6 @@ import type {
   IngredientListItem,
   IngredientMergeCandidateImpact,
 } from "@cubby/schemas/ingredient";
-import { ingredientSortableFields } from "@cubby/schemas/ingredient";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -59,6 +59,7 @@ import {
   notDeleted,
   relations,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import {
   enrichProductRowsWithPricing,
   loadProductPricingForIngredientIds,
@@ -564,9 +565,14 @@ export const buildIngredientListWhere = async (
     }
   }
 
-  if (filters.usuallyOnHand !== undefined) {
-    conditions.push(eq(ingredient.usuallyOnHand, filters.usuallyOnHand));
-  }
+  // `usuallyOnHand` is a declared stored filter. `nameFilter` above stays
+  // hand-written — it ORs the alias match in, which the standard text shape
+  // can't express — and the presence filters below stay hand-written too,
+  // since their descriptors aren't `deriveSchema: true` and resolve against a
+  // correlated id-set subquery, not a real column.
+  conditions.push(
+    ...declaredFilterPredicates("ingredient", ingredient, filters),
+  );
 
   conditions.push(
     idSetPresence(
@@ -630,7 +636,7 @@ const ingredientListImpl = async (
   const orderByClause = buildOrderBy(
     ingredient,
     sorts,
-    [...ingredientSortableFields],
+    [...generatedEntitySort.ingredient.fields],
     { resolve: resolveIngredientSort },
   );
 

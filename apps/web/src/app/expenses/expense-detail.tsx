@@ -2,10 +2,7 @@ import type { ExpenseOut, ExpenseUpdateInput } from "@cubby/schemas/project";
 import { Info, PackagePlus, Receipt, Split } from "lucide-react";
 import { type FC, useState } from "react";
 
-import {
-  WithProductSearch,
-  WithProjectSearch,
-} from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { WithVendorSearch } from "~/app/_components/combobox/with-vendor-search";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
@@ -167,7 +164,9 @@ function expenseProductRenderers(
                 });
               },
             )}
-            SearchProvider={WithProductSearch}
+            SearchProvider={(props) => (
+              <WithEntitySearch entity="product" {...props} />
+            )}
             renderValue={(value) =>
               value && expense.productId && value.id === expense.productId ? (
                 <EntityInlineLink
@@ -562,7 +561,9 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
               });
             },
           )}
-          SearchProvider={WithProjectSearch}
+          SearchProvider={(props) => (
+            <WithEntitySearch entity="project" {...props} />
+          )}
           renderValue={(v) =>
             // `expense.projectId` is the project's shortcode (per the
             // project shortcode cutover), the same value the combobox

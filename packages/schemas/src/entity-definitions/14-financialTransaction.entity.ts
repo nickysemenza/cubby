@@ -12,8 +12,6 @@ import {
   ledgerTransferShortcode,
   purchaseShortcode,
 } from "../identifier-fields.js";
-import { dateRangeFields } from "@cubby/schemas/base-entity";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
 export const generatedFinancialTransactionKindValues = [
   "purchase",
@@ -32,14 +30,6 @@ export const generatedFinancialTransactionStatusValues = [
   "posted",
   "void",
 ] as const;
-export const filterSchemas = {
-  kind: oneOrMany(z.enum(generatedFinancialTransactionKindValues)).optional(),
-  status: oneOrMany(
-    z.enum(generatedFinancialTransactionStatusValues),
-  ).optional(),
-  ...dateRangeFields("postedDate"),
-  merchant: z.string().optional(),
-};
 export default defineEntity({
   key: "financialTransaction",
   names: { singular: "Financial Transaction", plural: "Transactions" },
@@ -97,7 +87,12 @@ export default defineEntity({
             { value: "other", label: "other" },
           ],
         },
-        display: { list: true, detail: true, detailOrder: 40 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 40,
+          width: "sm",
+        },
         validation: {
           read: z.enum(generatedFinancialTransactionKindValues),
           create: z.enum(generatedFinancialTransactionKindValues),
@@ -116,7 +111,13 @@ export default defineEntity({
             { value: "void", label: "void" },
           ],
         },
-        display: { list: true, detail: true, detailOrder: 50 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 50,
+          width: "xs",
+          mobile: { slot: "meta", priority: 20 },
+        },
         validation: {
           read: z.enum(generatedFinancialTransactionStatusValues),
           create: z.enum(generatedFinancialTransactionStatusValues),
@@ -127,7 +128,14 @@ export default defineEntity({
         key: "amount",
         kind: "number",
         control: { kind: "number", renderer: "money" },
-        display: { list: true, detail: true, detailOrder: 30 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 30,
+          width: "sm",
+          format: "currency",
+          mobile: { slot: "trailing", priority: 1 },
+        },
         validation: {
           read: financialTransactionNonZeroAmount,
           create: financialTransactionNonZeroAmount,
@@ -151,7 +159,14 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { section: "schedule", kind: "date" },
-        display: { list: true, detail: true, detailOrder: 80 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 80,
+          width: "sm",
+          format: "plainDate",
+          mobile: { slot: "meta", priority: 30 },
+        },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -163,7 +178,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { section: "identity", kind: "text" },
-        display: { list: true, detail: true, detailOrder: 10 },
+        display: { list: true, detail: true, detailOrder: 10, width: "md" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -374,6 +389,62 @@ export default defineEntity({
       "sourceRefs",
       "notes",
     ],
+    sort: {
+      fields: [
+        "transactionDate",
+        "postedDate",
+        "amount",
+        "merchant",
+        "kind",
+        "status",
+        "createdAt",
+        "updatedAt",
+      ],
+      default: "transactionDate",
+    },
+    intents: {
+      fields: {
+        capture: [
+          "accountId",
+          "purchaseId",
+          "kind",
+          "status",
+          "amount",
+          "transactionDate",
+          "postedDate",
+          "merchant",
+          "rawDescription",
+          "sourceCategory",
+          "sourceRefs",
+          "notes",
+        ],
+        full: [
+          "accountId",
+          "purchaseId",
+          "kind",
+          "status",
+          "amount",
+          "transactionDate",
+          "postedDate",
+          "merchant",
+          "rawDescription",
+          "sourceCategory",
+          "sourceRefs",
+          "notes",
+        ],
+        settlement: [
+          "accountId",
+          "purchaseId",
+          "kind",
+          "status",
+          "amount",
+          "transactionDate",
+          "postedDate",
+        ],
+      },
+      create: ["capture", "full"],
+      update: ["full", "settlement"],
+    },
     output: [
       "id",
       "accountId",
@@ -435,6 +506,8 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
+        stored: true,
+        schemaFromRead: true,
         options: [
           { value: "purchase", label: "Purchase" },
           { value: "refund", label: "Refund" },
@@ -452,6 +525,8 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        stored: true,
+        schemaFromRead: true,
         options: [
           { value: "expected", label: "Expected" },
           { value: "pending", label: "Pending" },
@@ -464,6 +539,7 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter by posted date...",
         deriveSchema: true,
+        stored: true,
         options: [
           { value: "30d", label: "Last 30 days" },
           { value: "90d", label: "Last 90 days" },
@@ -515,6 +591,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by merchant...",
         deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "amount",

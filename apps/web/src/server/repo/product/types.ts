@@ -36,6 +36,10 @@ type ProductLocationAncestor = LocationAncestorOut & {
 
 export type ProductDeepDB = ProductSelect & {
   pricing?: ProductPricing;
+  // Batch-resolved by the caller via `getProductCoverImageUrlsByProductIds`
+  // (same rule the picker uses). Optional: callers that never asked for it
+  // (e.g. ingredient-relation reads) fall back to `null` in the mapper.
+  coverImageUrl?: string | null;
   ingredient: typeof ingredient.$inferSelect | null;
   unitMappings: Array<typeof productUnitMappings.$inferSelect>;
   externalIds: MappableProductExternalId[];

@@ -182,7 +182,7 @@ describe("HTTP boundary", () => {
     );
   });
   it("resolves registered operation names before resource identifiers", async () => {
-    expect((await request("image/detail?shortcode=IMG-ABCD")).status).toBe(200);
+    expect((await request("image/detail?id=IMG-ABCD")).status).toBe(200);
     expect(ports.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "image.detail" }),
     );

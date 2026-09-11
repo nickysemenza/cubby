@@ -1,30 +1,17 @@
-import {
-  agentAskInputSchema,
-  agentResultSchema,
-  agentStreamEventSchema,
-} from "@cubby/schemas/agent";
+import type { agentAskInputSchema } from "@cubby/schemas/agent";
 import type { z } from "zod";
 
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import {
-  defineOperationDomain,
-  mutation,
-  subscription,
-} from "~/integrations/tanstack-query/operation-catalog";
+  agentContract,
+  agentStreamsContract,
+} from "~/contracts/agent.contract";
+import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-export const agent = defineOperationDomain("agent", {
-  ask: mutation({
-    input: agentAskInputSchema,
-    output: agentResultSchema,
-    invalidates: ripple.none,
-  }),
+export const agent = defineOperationDomain(agentContract, {
+  ask: { invalidates: ripple.none },
 });
-export const agentStreams = defineOperationDomain("agent", {
-  askStream: subscription({
-    input: agentAskInputSchema,
-    event: agentStreamEventSchema,
-  }),
-});
+export const agentStreams = defineOperationDomain(agentStreamsContract);
 
 export const askAgentStream = (
   input: z.input<typeof agentAskInputSchema>,

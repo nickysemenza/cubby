@@ -1,8 +1,8 @@
-import { meal } from "~/app/meals/meal.functions";
+import { mealContract } from "~/contracts/meal.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import * as workflow from "~/server/workflows/meal.server";
 
-export const mealHandlers = implementOperationDomain(meal, {
+export const mealHandlers = implementOperationDomain(mealContract, {
   getByDateRange: (context, input) =>
     workflow.getMealsByDateRangeWorkflow(context.db, input),
   upcomingSummary: (context, input) =>

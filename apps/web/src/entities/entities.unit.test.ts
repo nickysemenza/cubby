@@ -3,27 +3,9 @@ import {
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { entityNames } from "@cubby/schemas/entity-names";
-import { financialAccountSortableFields } from "@cubby/schemas/financial-account";
-import { financialTransactionSortableFields } from "@cubby/schemas/financial-transaction";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
-import { imageSortableFields } from "@cubby/schemas/image";
-import { ingredientSortableFields } from "@cubby/schemas/ingredient";
-import { inventorySortableFields } from "@cubby/schemas/inventory";
-import { ledgerPartySortableFields } from "@cubby/schemas/ledger-party";
-import { ledgerTransferSortableFields } from "@cubby/schemas/ledger-transfer";
-import { locationSortableFields } from "@cubby/schemas/location";
-import { mealSortableFields } from "@cubby/schemas/meal";
-import { productSortableFields } from "@cubby/schemas/product";
-import {
-  expenseSortableFields,
-  projectSortableFields,
-  taskSortableFields,
-} from "@cubby/schemas/project";
-import { purchaseSortableFields } from "@cubby/schemas/purchase";
-import { recipeSortableFields } from "@cubby/schemas/recipe";
 import { usdaFoodSortableFields } from "@cubby/schemas/usda";
-import { vendorSortableFields } from "@cubby/schemas/vendor";
-import { wishSortableFields } from "@cubby/schemas/wish";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
@@ -45,25 +27,25 @@ describe("entity sortableFields", () => {
       ]),
     );
     expect(declared).toEqual({
-      ingredient: ingredientSortableFields,
-      product: productSortableFields,
-      recipe: recipeSortableFields,
+      ingredient: generatedEntitySort.ingredient.fields,
+      product: generatedEntitySort.product.fields,
+      recipe: generatedEntitySort.recipe.fields,
       cookbook: [],
-      location: locationSortableFields,
-      inventory: inventorySortableFields,
-      meal: mealSortableFields,
-      ledgerParty: ledgerPartySortableFields,
-      ledgerTransfer: ledgerTransferSortableFields,
-      project: projectSortableFields,
-      task: taskSortableFields,
-      vendor: vendorSortableFields,
-      purchase: purchaseSortableFields,
-      expense: expenseSortableFields,
-      financialAccount: financialAccountSortableFields,
-      financialTransaction: financialTransactionSortableFields,
-      wish: wishSortableFields,
+      location: generatedEntitySort.location.fields,
+      inventory: generatedEntitySort.inventory.fields,
+      meal: generatedEntitySort.meal.fields,
+      ledgerParty: generatedEntitySort.ledgerParty.fields,
+      ledgerTransfer: generatedEntitySort.ledgerTransfer.fields,
+      project: generatedEntitySort.project.fields,
+      task: generatedEntitySort.task.fields,
+      vendor: generatedEntitySort.vendor.fields,
+      purchase: generatedEntitySort.purchase.fields,
+      expense: generatedEntitySort.expense.fields,
+      financialAccount: generatedEntitySort.financialAccount.fields,
+      financialTransaction: generatedEntitySort.financialTransaction.fields,
+      wish: generatedEntitySort.wish.fields,
       "usda-food": usdaFoodSortableFields,
-      image: imageSortableFields,
+      image: generatedEntitySort.image.fields,
     });
   });
 });

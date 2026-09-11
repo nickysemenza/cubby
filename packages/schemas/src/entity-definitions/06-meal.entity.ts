@@ -10,12 +10,7 @@ import {
   mealTotals,
 } from "@cubby/schemas/meal-fields";
 import { mealDate } from "@cubby/schemas/meal-shared";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
-export const filterSchemas = {
-  mealType: oneOrMany(mealTypeSchema).optional(),
-  mealKind: oneOrMany(mealKindSchema).optional(),
-};
 export default defineEntity({
   key: "meal",
   names: { singular: "Meal", plural: "Meals" },
@@ -175,6 +170,19 @@ export default defineEntity({
     update: ["date", "name", "sortOrder", "mealType", "mealKind"],
     bulk: [],
     audit: [],
+    sort: {
+      fields: ["date", "name", "mealType", "createdAt", "updatedAt"],
+      default: "date",
+    },
+    intents: {
+      fields: {
+        capture: ["date", "name", "mealType", "mealKind"],
+        full: ["date", "name", "mealType", "mealKind", "sortOrder"],
+        calendar: ["date", "name", "mealType", "mealKind"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "calendar"],
+    },
     output: [
       "id",
       "date",
@@ -214,6 +222,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by meal type...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/meal-classification",
+          export: "mealTypeSchema",
+        },
         options: [
           { value: "breakfast", label: "Breakfast" },
           { value: "brunch", label: "Brunch" },
@@ -229,6 +242,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/meal-classification",
+          export: "mealKindSchema",
+        },
         options: [
           { value: "cooked", label: "Cooked", color: "var(--slate)" },
           { value: "leftovers", label: "Leftovers", color: "var(--slate)" },

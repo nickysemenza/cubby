@@ -1,38 +1,10 @@
-import {
-  connectedAppsOut,
-  orphanedOAuthClientsOut,
-  pruneOrphanedOAuthClientsOut,
-  revokeConnectedAppInput,
-  revokeConnectedAppOut,
-} from "@cubby/schemas/oauth";
-import { z } from "zod";
-
+import { oauthContract } from "~/contracts/connected-apps.contract";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import {
-  defineOperationDomain,
-  mutation,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-export const oauth = defineOperationDomain("oauth", {
-  listConnectedApps: query({
-    input: z.null(),
-    output: connectedAppsOut,
-    tags: [["oauth", "connectedApps"]],
-  }),
-  revokeConnectedApp: mutation({
-    input: revokeConnectedAppInput,
-    output: revokeConnectedAppOut,
-    invalidates: ripple.connectedApps,
-  }),
-  countOrphanedClients: query({
-    input: z.null(),
-    output: orphanedOAuthClientsOut,
-    tags: [["oauth", "orphaned"]],
-  }),
-  pruneOrphanedClients: mutation({
-    input: z.null(),
-    output: pruneOrphanedOAuthClientsOut,
-    invalidates: ripple.orphanedOAuth,
-  }),
+export const oauth = defineOperationDomain(oauthContract, {
+  listConnectedApps: { tags: [["oauth", "connectedApps"]] },
+  revokeConnectedApp: { invalidates: ripple.connectedApps },
+  countOrphanedClients: { tags: [["oauth", "orphaned"]] },
+  pruneOrphanedClients: { invalidates: ripple.orphanedOAuth },
 });

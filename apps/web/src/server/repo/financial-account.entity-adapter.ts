@@ -1,5 +1,3 @@
-import { financialAccountSortableFields } from "@cubby/schemas/financial-account";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -16,7 +14,6 @@ import {
 
 export const financialAccountEntityAdapter = defineEntityAdapter({
   entity: "financialAccount",
-  sort: { fields: financialAccountSortableFields, default: "name" },
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getFinancialAccountByShortcode(ctx.db, id),

@@ -35,7 +35,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { WithProjectSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
 import { DependencyPicker } from "~/app/_components/data-table/dependency-picker";
 import {
@@ -1174,7 +1174,9 @@ export function ProjectDetailPage({ project }: ProjectDetailPageProps) {
                 data: { blockedByIds: ids },
               });
             }}
-            SearchProvider={WithProjectSearch}
+            SearchProvider={(props) => (
+              <WithEntitySearch entity="project" {...props} />
+            )}
             label="project"
             excludeId={project.id}
             renderReadChip={(item) => {

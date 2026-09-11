@@ -20,28 +20,7 @@ import {
 } from "@cubby/schemas/product-fields";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { fdcId } from "@cubby/usda-schemas";
-import { numericRangeFields } from "@cubby/schemas/base-entity";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
-export const filterSchemas = {
-  nameFilter: z.string().optional().describe("Filter by product name"),
-  manufacturerExact: oneOrMany(z.string()).optional(),
-  upcFilter: z
-    .string()
-    .optional()
-    .describe("Filter by UPC/barcode — matches ANY of the product's barcodes"),
-  modelFilter: z
-    .string()
-    .optional()
-    .describe(
-      "Filter by model number — a tool's real identity when the name is generic.",
-    ),
-  categoryFilter: oneOrMany(productCategory)
-    .optional()
-    .describe("Filter by category"),
-  ...numericRangeFields("expectedQuantity"),
-  notesFilter: z.string().optional(),
-};
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
@@ -127,7 +106,13 @@ export default defineEntity({
         nullable: true,
         label: "USDA FDC ID",
         control: { kind: "number" },
-        display: { list: true, detail: true, detailOrder: 7 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 7,
+          width: "sm",
+          format: "external-link",
+        },
         validation: {
           read: fdcId.nullable(),
           create: fdcId.nullable().optional(),
@@ -138,7 +123,13 @@ export default defineEntity({
         key: "manufacturer",
         kind: "text",
         control: { kind: "text", section: "manufacturer" },
-        display: { list: true, detail: true, detailOrder: 2 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 2,
+          width: "md",
+          mobile: { slot: "subtitle", priority: 20 },
+        },
         validation: {
           read: z.string(),
           create: z.string(),
@@ -150,7 +141,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text", section: "identity-model" },
-        display: { list: true, detail: true, detailOrder: 3 },
+        display: { list: true, detail: true, detailOrder: 3, width: "md" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -162,7 +153,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea", section: "notes" },
-        display: { list: true },
+        display: { list: true, width: "md" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -186,7 +177,13 @@ export default defineEntity({
         kind: "enum",
         nullable: true,
         control: { kind: "select" },
-        display: { list: true, detail: true, detailOrder: 5 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 5,
+          width: "sm",
+          mobile: { slot: "subtitle", priority: 30 },
+        },
         validation: {
           read: productCategory.nullable(),
           create: productCategory.nullable().optional(),
@@ -214,7 +211,12 @@ export default defineEntity({
         nullable: true,
         label: "Valuation price",
         control: { kind: "number", renderer: "money" },
-        display: { list: true, detail: true, detailOrder: 4 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 4,
+          format: "currency",
+        },
         validation: {
           read: moneyNullable.describe(
             "Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.",
@@ -263,7 +265,7 @@ export default defineEntity({
         kind: "boolean",
         nullable: true,
         control: { kind: "checkbox" },
-        display: { list: true },
+        display: { list: true, width: "sm" },
         validation: {
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
@@ -323,7 +325,12 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         label: "UPC",
-        display: { list: true, detail: true, detailOrder: 6 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 6,
+          width: "sm",
+        },
         validation: {
           read: gtin.nullable(),
           create: null,
@@ -472,6 +479,69 @@ export default defineEntity({
       "ingredientId",
       "price",
     ],
+    sort: {
+      fields: [
+        "createdAt",
+        "updatedAt",
+        "name",
+        "manufacturer",
+        "model",
+        "primaryGtin",
+        "category",
+        "fdc_id",
+        "price",
+        "notes",
+        "location",
+        "ingredient",
+        "expenseTotal",
+        "expenses",
+        "expectedQuantity",
+        "quantityVariance",
+        "purchaseDate",
+        "related:product.projects",
+        "related:product.vendors",
+        "related:product.purchases",
+        "identity_strength",
+      ],
+      default: "createdAt",
+      computed: [
+        "location",
+        "ingredient",
+        "expenseTotal",
+        "expenses",
+        "quantityVariance",
+        "purchaseDate",
+        "related:product.projects",
+        "related:product.vendors",
+        "related:product.purchases",
+        "identity_strength",
+      ],
+      groupable: ["category"],
+    },
+    intents: {
+      fields: {
+        capture: ["name", "manufacturer"],
+        full: [
+          "name",
+          "aliases",
+          "manufacturer",
+          "model",
+          "category",
+          "ingredientId",
+          "upc",
+          "fdc_id",
+          "price",
+          "stockTracked",
+          "unitMappings",
+          "notes",
+        ],
+        identity: ["name", "aliases", "manufacturer", "model", "category"],
+        price: ["price"],
+        stock: ["stockTracked"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity", "price", "stock"],
+    },
     output: [
       "id",
       "name",
@@ -524,6 +594,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by name...",
         deriveSchema: true,
+        stored: true,
         schemaDescription: "Filter by product name",
       },
       {
@@ -532,6 +603,7 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by manufacturer...",
         deriveSchema: true,
+        stored: true,
         optionsKey: "manufacturers",
       },
       {
@@ -556,6 +628,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by model...",
         deriveSchema: true,
+        stored: true,
         schemaDescription:
           "Filter by model number — a tool's real identity when the name is generic.",
       },
@@ -585,6 +658,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by category...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/product-fields",
+          export: "productCategory",
+        },
         schemaDescription: "Filter by category",
         optionsRef: {
           module: "~/app/_components/products/product-category-icons",
@@ -688,6 +766,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search notes...",
         deriveSchema: true,
+        stored: true,
       },
       {
         columnId: "notesPresence",

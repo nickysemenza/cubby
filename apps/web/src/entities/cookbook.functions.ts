@@ -1,23 +1,12 @@
-import { cookbookShortcode } from "@cubby/schemas/identifiers";
-import { cookbookSummariesOut } from "@cubby/schemas/import-recipe";
-import { cookbookSummary } from "@cubby/schemas/recipe";
-import { z } from "zod";
+import { cookbookContract } from "~/contracts/cookbook.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
-
-export const cookbook = defineOperationDomain("cookbook", {
-  list: query({
-    input: z.null(),
-    output: cookbookSummariesOut,
+export const cookbook = defineOperationDomain(cookbookContract, {
+  list: {
     tags: [["cookbook"]],
     cache: "browse",
-  }),
-  detail: query({
-    input: z.object({ shortcode: cookbookShortcode }),
-    output: cookbookSummary.nullable(),
+  },
+  detail: {
     tags: [["cookbook"]],
-  }),
+  },
 });

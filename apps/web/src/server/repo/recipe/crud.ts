@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type CookbookId,
   type ImageShortcode,
@@ -22,7 +23,6 @@ import type {
   RecipeOut,
   RecipeUpdateInput,
 } from "@cubby/schemas/recipe";
-import { recipeSortableFields } from "@cubby/schemas/recipe";
 import {
   type AnyColumn,
   and,
@@ -82,6 +82,7 @@ import {
   withTransaction,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
@@ -515,7 +516,9 @@ export const buildRecipeWhere = async (
         filters,
         "caloriesTotal",
       ),
-      ...rangeConditions(recipe.totalMinutes, filters, "totalMinutes"),
+      // `totalMinutes` is a declared stored range filter over the real
+      // `Recipe.totalMinutes` column.
+      ...declaredFilterPredicates("recipe", recipe, filters),
     ],
   );
 };
@@ -565,10 +568,15 @@ export const recipeList = async (
       ];
     return null;
   };
-  const orderByClause = buildOrderBy(recipe, sorts, [...recipeSortableFields], {
-    resolve: resolveRecipeSort,
-    tieBreaker: sql`${recipe.name} asc`,
-  });
+  const orderByClause = buildOrderBy(
+    recipe,
+    sorts,
+    [...generatedEntitySort.recipe.fields],
+    {
+      resolve: resolveRecipeSort,
+      tieBreaker: sql`${recipe.name} asc`,
+    },
+  );
 
   const { take, skip } = buildTakeSkip(pagination);
 

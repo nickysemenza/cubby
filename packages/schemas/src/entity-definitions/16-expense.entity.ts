@@ -23,15 +23,7 @@ import {
 } from "@cubby/schemas/ledger-transfer-fields";
 import { wholeCentAmount } from "@cubby/schemas/money";
 import { tradeSchema } from "@cubby/schemas/task-fields";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
-export const filterSchemas = {
-  costType: oneOrMany(costTypeSchema).optional(),
-  lineKind: oneOrMany(expenseLineKindSchema).optional(),
-  lineBasis: oneOrMany(expenseLineBasisSchema).optional(),
-  trade: oneOrMany(tradeSchema).optional(),
-  future: z.boolean().optional(),
-};
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
@@ -500,6 +492,68 @@ export default defineEntity({
       "productQuantity",
       "purchaseId",
     ],
+    sort: {
+      fields: [
+        "name",
+        "cost",
+        "lineKind",
+        "productQuantity",
+        "date",
+        "costType",
+        "trade",
+        "project",
+        "product",
+        "vendor",
+        "orderId",
+        "createdAt",
+        "updatedAt",
+      ],
+      default: "date",
+      computed: ["project", "product"],
+      groupable: ["costType"],
+    },
+    intents: {
+      fields: {
+        capture: [
+          "name",
+          "lineKind",
+          "cost",
+          "date",
+          "future",
+          "projectId",
+          "productId",
+          "productQuantity",
+          "vendor",
+          "orderId",
+          "trade",
+          "costType",
+        ],
+        full: [
+          "name",
+          "lineKind",
+          "lineBasis",
+          "cost",
+          "date",
+          "future",
+          "projectId",
+          "productId",
+          "productQuantity",
+          "vendor",
+          "orderId",
+          "trade",
+          "costType",
+          "url",
+          "notes",
+        ],
+        planned: ["name", "cost", "date"],
+        cost: ["cost"],
+        date: ["date"],
+        project: ["projectId"],
+        product: ["productId"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "planned", "cost", "date", "project", "product"],
+    },
     output: [
       "id",
       "name",
@@ -586,6 +640,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by cost type...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/expense-fields",
+          export: "costTypeSchema",
+        },
         options: [
           { value: "materials", label: "Materials", color: "var(--chart-1)" },
           { value: "tools", label: "Tools", color: "var(--chart-5)" },
@@ -597,6 +656,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by line kind...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/expense-line-kind",
+          export: "expenseLineKindSchema",
+        },
         options: [
           {
             value: "principal",
@@ -624,6 +688,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by itemization...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/expense-line-kind",
+          export: "expenseLineBasisSchema",
+        },
         options: [
           { value: "item_line", label: "Line item", color: "var(--slate)" },
           {
@@ -638,6 +707,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by trade...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/task-fields",
+          export: "tradeSchema",
+        },
         optionsRef: {
           module: "~/app/projects/trade-options",
           export: "tradeOptions",
@@ -648,6 +722,7 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        stored: true,
         options: [
           { value: "true", label: "Planned" },
           { value: "false", label: "Already made" },

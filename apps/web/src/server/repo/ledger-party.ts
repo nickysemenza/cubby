@@ -44,6 +44,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import {
@@ -169,18 +170,26 @@ const reader = createEntityReader<
 
 export const getLedgerPartyByShortcode = reader.getByShortcode;
 
+/** The complete WHERE for this entity's list. */
+export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
+  and(
+    notDeleted(ledgerParty),
+    ...auditDateWhereConditions(ledgerParty, filters),
+    // `name`/`search` stays hand-written: it trims the term before matching,
+    // which `declaredFilterPredicates`'s plain `formatSearchTerm` does not —
+    // a real (if narrow) behavior difference, not just an alternate spelling.
+    formatSearchTerm(ledgerParty.name, filters.search?.trim()),
+    // `kind` is a declared stored filter.
+    ...declaredFilterPredicates("ledgerParty", ledgerParty, filters),
+  );
+
 export async function listLedgerParties(
   db: Database,
   filters: LedgerPartyFilters,
   sorts: SortParams[],
   pagination: PaginationParams,
 ) {
-  const where = and(
-    notDeleted(ledgerParty),
-    ...auditDateWhereConditions(ledgerParty, filters),
-    formatSearchTerm(ledgerParty.name, filters.search?.trim()),
-    filters.kind ? inArray(ledgerParty.kind, [filters.kind].flat()) : undefined,
-  );
+  const where = buildLedgerPartyWhere(filters);
   const order = sorts[0] ?? { orderBy: "name", direction: "asc" as const };
   const orderColumn = (() => {
     switch (order.orderBy) {

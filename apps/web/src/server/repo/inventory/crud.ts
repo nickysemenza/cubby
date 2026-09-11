@@ -2,6 +2,7 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type {
   InventoryId,
   LocationId,
@@ -10,7 +11,6 @@ import type {
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type { InventoryPlacement } from "@cubby/schemas/inventory";
-import { inventorySortableFields } from "@cubby/schemas/inventory";
 import {
   buildTakeSkip,
   type PaginationParams,
@@ -293,10 +293,15 @@ const resolveInventorySort = (sort: SortParams) => {
 };
 
 const inventoryListOrderBy = (sorts: SortParams[]) =>
-  buildOrderBy(inventoryEntry, sorts, [...inventorySortableFields], {
-    resolve: resolveInventorySort,
-    tieBreaker: desc(inventoryEntry.createdAt),
-  });
+  buildOrderBy(
+    inventoryEntry,
+    sorts,
+    [...generatedEntitySort.inventory.fields],
+    {
+      resolve: resolveInventorySort,
+      tieBreaker: desc(inventoryEntry.createdAt),
+    },
+  );
 
 /**
  * The complete WHERE for an inventory list. `getEntityCounts` calls it with

@@ -1,6 +1,7 @@
 /** Image data boundary: derive association and cascade behavior from INCOMING_EDGES.image. */
 
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type {
   EntityRef,
   ImageId,
@@ -17,10 +18,7 @@ import type {
   ImageUpdateInput,
   ImageWithEntity,
 } from "@cubby/schemas/image";
-import {
-  attachableImageEntityId,
-  imageSortableFields,
-} from "@cubby/schemas/image";
+import { attachableImageEntityId } from "@cubby/schemas/image";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import {
   aliasedTable,
@@ -68,7 +66,6 @@ import {
   buildOrderBy,
   buildSearchConditions,
   countWhere,
-  eqAny,
   executeListQueryWithCount,
   getDb,
   imageJoinBindings,
@@ -79,6 +76,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { resolveAllPresent } from "~/server/repo/shortcode-resolver";
 import {
@@ -500,9 +498,12 @@ export const buildImageWhere = (
 
   return buildSearchConditions(
     outerImage,
-    [{ column: outerImage.filename, term: filters.nameFilter }],
+    [],
     [
-      eqAny(outerImage.status, filters.status),
+      // `filename` (text) and `status` (multiselect) are declared stored
+      // filters — passed `outerImage` so the aliased-table row query and the
+      // unaliased count query each resolve their own columns.
+      ...declaredFilterPredicates("image", outerImage, filters),
       ...auditDateWhereConditions(outerImage, filters),
       referencePresence,
       filters.uploadedAgeHoursMin !== undefined
@@ -527,7 +528,9 @@ export const imageList = async (
   );
   const countWhereClause = buildImageWhere(db, filters, image);
 
-  const orderByClause = buildOrderBy(image, sorts, [...imageSortableFields]);
+  const orderByClause = buildOrderBy(image, sorts, [
+    ...generatedEntitySort.image.fields,
+  ]);
 
   const take = pagination.pageSize;
   const skip = pagination.pageIndex * pagination.pageSize;

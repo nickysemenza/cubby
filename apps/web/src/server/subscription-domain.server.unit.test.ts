@@ -3,6 +3,8 @@ import superjson from "superjson";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { defineContract, query, subscription } from "~/contracts/define";
+
 import { implementOperationDomain } from "./operation-domain.server";
 import { createRequestContext, requireActor } from "./request-context";
 import type { AuthenticatedStartOperationContext } from "./start-operation.server";
@@ -16,20 +18,18 @@ import {
 const tickInput = z.object({ count: z.number() });
 const tickEvent = z.object({ n: z.number() });
 
-const domain = {
-  tick: {
-    id: "agent.askStream",
-    definition: { kind: "subscription", input: tickInput, event: tickEvent },
-  },
-  sweep: {
-    id: "recipe.reprocessCookbook",
-    definition: {
-      kind: "subscription",
-      input: z.undefined(),
-      event: z.string(),
-    },
-  },
-} as const;
+// Member names must be registered subscription ids under one domain; the
+// schemas are the test's own.
+const domain = defineContract("ai", {
+  backfillLocationDescriptions: subscription({
+    input: tickInput,
+    event: tickEvent,
+  }),
+  precomputeEnrichmentProposals: subscription({
+    input: z.undefined(),
+    event: z.string(),
+  }),
+});
 
 /** Exhaustiveness filler: a member has to exist for the table to be closed. */
 async function* noEvents(): AsyncGenerator<never> {}
@@ -41,7 +41,7 @@ const streamRequest = <Input>(input: Input, signal?: AbortSignal) => {
   };
   if (signal) init.signal = signal;
   return new Request(
-    "https://cubby.test/api/workflow-stream/agent.askStream",
+    "https://cubby.test/api/workflow-stream/ai.backfillLocationDescriptions",
     init,
   );
 };
@@ -160,8 +160,8 @@ describe("implementSubscriptionDomain", () => {
     const handlers = implementSubscriptionDomain(
       domain,
       {
-        sweep: noEvents,
-        tick: async function* (context, input) {
+        precomputeEnrichmentProposals: noEvents,
+        backfillLocationDescriptions: async function* (context, input) {
           seen.context = context;
           seen.input = input;
           for (let n = 1; n <= input.count; n++) yield { n };
@@ -171,13 +171,15 @@ describe("implementSubscriptionDomain", () => {
     );
 
     const request = streamRequest({ count: 2 });
-    const response = await handlers.streams.tick({ request });
+    const response = await handlers.streams.backfillLocationDescriptions({
+      request,
+    });
     expect(response.headers.get("content-type")).toBe(
       "application/x-ndjson; charset=utf-8",
     );
     expect(await eventsOf(response)).toEqual([{ n: 1 }, { n: 2 }]);
     expect(adapter.last).toMatchObject({
-      operation: "agent.askStream",
+      operation: "ai.backfillLocationDescriptions",
       request,
     });
     expect(adapter.last?.inputSchema).toBe(tickInput);
@@ -190,8 +192,8 @@ describe("implementSubscriptionDomain", () => {
     const handlers = implementSubscriptionDomain(
       domain,
       {
-        sweep: noEvents,
-        tick: async function* () {
+        precomputeEnrichmentProposals: noEvents,
+        backfillLocationDescriptions: async function* () {
           yield { n: 1 };
           // SAFETY: deliberately malformed runtime data exercises the adapter's
           // event-schema guard; the declared member type is not being widened.
@@ -205,7 +207,9 @@ describe("implementSubscriptionDomain", () => {
     // The valid event is delivered; the invalid event terminates the stream
     // with a protocol error instead of leaking unvalidated payloads.
     const frames = await framesOf(
-      await handlers.streams.tick({ request: streamRequest({ count: 3 }) }),
+      await handlers.streams.backfillLocationDescriptions({
+        request: streamRequest({ count: 3 }),
+      }),
     );
     expect(frames.map((frame) => frame.kind)).toEqual(["event", "error"]);
   });
@@ -215,8 +219,8 @@ describe("implementSubscriptionDomain", () => {
     const handlers = implementSubscriptionDomain(
       domain,
       {
-        sweep: noEvents,
-        tick: async function* () {
+        precomputeEnrichmentProposals: noEvents,
+        backfillLocationDescriptions: async function* () {
           invoked = true;
           yield { n: 1 };
         },
@@ -225,7 +229,9 @@ describe("implementSubscriptionDomain", () => {
     );
 
     const [frame] = await framesOf(
-      await handlers.streams.tick({ request: streamRequest({ count: "two" }) }),
+      await handlers.streams.backfillLocationDescriptions({
+        request: streamRequest({ count: "two" }),
+      }),
     );
     expect(frame?.kind).toBe("error");
     expect(frame?.kind === "error" && frame.error.code).toBe("BAD_REQUEST");
@@ -238,8 +244,12 @@ describe("implementSubscriptionDomain", () => {
     const handlers = implementSubscriptionDomain(
       domain,
       {
-        sweep: noEvents,
-        tick: async function* (_context, _input, signal) {
+        precomputeEnrichmentProposals: noEvents,
+        backfillLocationDescriptions: async function* (
+          _context,
+          _input,
+          signal,
+        ) {
           seenSignal = signal;
           yield { n: 1 };
         },
@@ -248,7 +258,9 @@ describe("implementSubscriptionDomain", () => {
     );
 
     await handlers.streams
-      .tick({ request: streamRequest({ count: 1 }, controller.signal) })
+      .backfillLocationDescriptions({
+        request: streamRequest({ count: 1 }, controller.signal),
+      })
       .then((response) => response.text());
     expect(seenSignal?.aborted).toBe(false);
     controller.abort();
@@ -257,17 +269,19 @@ describe("implementSubscriptionDomain", () => {
 
   it("retains the production adapter's NDJSON error framing", async () => {
     const handlers = implementSubscriptionDomain(domain, {
-      sweep: noEvents,
-      tick: async function* () {
+      precomputeEnrichmentProposals: noEvents,
+      backfillLocationDescriptions: async function* () {
         yield { n: 1 };
       },
     });
     const request = new Request(
-      "https://cubby.test/api/workflow-stream/agent.askStream",
+      "https://cubby.test/api/workflow-stream/ai.backfillLocationDescriptions",
       { method: "POST", body: "not-superjson" },
     );
 
-    const [frame] = await framesOf(await handlers.streams.tick({ request }));
+    const [frame] = await framesOf(
+      await handlers.streams.backfillLocationDescriptions({ request }),
+    );
     expect(frame?.kind).toBe("error");
     expect(frame?.kind === "error" && frame.error.code).toBe(
       "INTERNAL_SERVER_ERROR",
@@ -279,47 +293,37 @@ describe("implementSubscriptionDomain", () => {
       implementSubscriptionDomain(
         domain,
         // @ts-expect-error every declared member must be implemented
-        { tick: noEvents },
+        { backfillLocationDescriptions: noEvents },
         adapter,
       ),
-    ).toThrow("Missing handler for recipe.reprocessCookbook");
+    ).toThrow("Missing handler for ai.precomputeEnrichmentProposals");
 
     const handlers = implementSubscriptionDomain(domain, {
-      tick: noEvents,
-      sweep: noEvents,
+      backfillLocationDescriptions: noEvents,
+      precomputeEnrichmentProposals: noEvents,
       // @ts-expect-error members outside the domain are rejected
       extra: noEvents,
     });
-    expect(Object.keys(handlers.streams)).toEqual(["tick", "sweep"]);
+    expect(Object.keys(handlers.streams)).toEqual([
+      "backfillLocationDescriptions",
+      "precomputeEnrichmentProposals",
+    ]);
   });
 
-  it("cannot cross subscription and unary implementation tables", () => {
-    const unaryDomain = {
-      range: {
-        id: "calendar.range",
-        definition: {
-          kind: "query",
-          input: z.undefined(),
-          output: z.number(),
-        },
-      },
-    } as const;
+  it("skips members of the other implementation table", () => {
+    // A contract may mix kinds; each implementer owns only its own kind and
+    // the generated registry checks that every member has an implementer.
+    const unaryDomain = defineContract("calendar", {
+      range: query({ input: z.undefined(), output: z.number() }),
+    });
 
-    expect(() =>
-      implementSubscriptionDomain(
-        // @ts-expect-error a query domain has output, not event
-        unaryDomain,
-        { range: noEvents },
-        adapter,
+    expect(
+      Object.keys(
+        implementSubscriptionDomain(unaryDomain, {}, adapter).streams,
       ),
-    ).not.toThrow();
-
-    expect(() =>
-      implementOperationDomain(
-        // @ts-expect-error a subscription domain has event, not output
-        domain,
-        { tick: async () => null, sweep: async () => null },
-      ),
-    ).not.toThrow();
+    ).toEqual([]);
+    expect(
+      Object.keys(implementOperationDomain(domain, {}).operations),
+    ).toEqual([]);
   });
 });

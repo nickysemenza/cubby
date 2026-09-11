@@ -5,6 +5,7 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseId,
@@ -35,7 +36,6 @@ import type {
   SplitExpenseInput,
 } from "@cubby/schemas/purchase";
 import {
-  purchaseSortableFields,
   RECONCILIATION_TOLERANCE,
   reconcilePurchase,
 } from "@cubby/schemas/purchase";
@@ -106,6 +106,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -531,7 +532,7 @@ export const buildPurchaseWhereClause = async (
     : undefined;
   return buildSearchConditions(
     purchase,
-    [{ column: purchase.displayLabel, term: filters.displayLabelSearch }],
+    [],
     [
       filters.search
         ? or(
@@ -542,6 +543,8 @@ export const buildPurchaseWhereClause = async (
       ...auditDateWhereConditions(purchase, filters),
       vendorCondition,
       ...relatedWhereConditions("purchase", filters, purchase.id),
+      // `displayLabel` (text) is a declared stored filter.
+      ...declaredFilterPredicates("purchase", purchase, filters),
       eqAny(purchase.orderId, filters.orderId),
       presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
       presenceCondition(
@@ -608,9 +611,14 @@ export const purchaseList = async (
         .from(purchase)
         .where(whereClause)
         .orderBy(
-          ...buildOrderBy(purchase, sorts, [...purchaseSortableFields], {
-            resolve: resolvePurchaseSort,
-          }),
+          ...buildOrderBy(
+            purchase,
+            sorts,
+            [...generatedEntitySort.purchase.fields],
+            {
+              resolve: resolvePurchaseSort,
+            },
+          ),
         )
         .limit(take)
         .offset(skip),

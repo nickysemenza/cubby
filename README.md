@@ -515,38 +515,45 @@ await fetch(`/api/v1/recipes?${query}`);
 
 Resource lists use 1-based `page` (default 1), `pageSize` (default 10, maximum 500),
 and comma-separated `sort` fields (`-` means descending; maximum 3 fields). Filters
-are individual query parameters; arrays, objects, and nullable values use JSON.
-`groupBy` retains its existing field name. Unknown or duplicate parameters are
-rejected. The response envelope and zero-based pagination metadata are unchanged.
-For example: `/api/v1/recipes?page=1&pageSize=20&sort=name&nameFilter=Soup`.
+are individual query parameters encoded the way ts-rest's `jsonQuery` expects: a
+plain string stays literal and every other value is JSON, so arrays, objects,
+numbers, booleans and `null` are JSON-encoded, and a string that would parse as
+JSON (`123`, `true`, `null`, `[1,2]`) must be quoted (`nameFilter=%22123%22`). The
+typed client quotes numeric, boolean and null-looking strings automatically;
+quote array- or object-looking text yourself. `groupBy` retains its existing field name.
+Unknown parameters are rejected. The response envelope and zero-based pagination
+metadata are unchanged. For example: `/api/v1/recipes?page=1&pageSize=20&sort=name&nameFilter=Soup`.
 
-Operation-style GETs retain ts-rest's `jsonQuery` encoding and original nested inputs.
-Object inputs become query fields; scalar/array inputs use one `input` parameter.
-No-input operations need no parameters. Query declarations must remain free of
-domain mutations; computation, external lookups, and usage logging are allowed.
+Every ordinary operation is one route: queries are `GET /api/v1/{domain}/{op}`
+and mutations are `POST /api/v1/{domain}/{op}`. An object input is the query
+parameters (JSON-encoded per `jsonQuery`) or the JSON body itself; a scalar or
+array input travels as `input`; a no-input operation takes `{}` or no
+parameters. Responses retain `{ok, data}` / `{ok, error}`, mutation metadata,
+HTTP error statuses, and ISO timestamps; wire validation failures return 400
+with `validationIssues`. Specialized workflows and bulk actions remain
+operation-shaped; streams are excluded. Scalar at `/api/v1/docs` uses the
+current browser session and supports explicit keys, which it forgets on reload.
+`/api/v1/openapi.json` describes both auth methods.
 
-All original `POST /api/v1/{resource}/{operation}` endpoints remain available with
-JSON `{ "input": ... }`, or `{}` for no input. Responses retain `{ok, data}` /
-`{ok, error}`, mutation metadata, HTTP error statuses, and ISO timestamps.
-Specialized workflows and bulk actions remain operation-shaped; streams are excluded.
-Scalar at `/api/v1/docs` uses the current browser session and supports explicit
-keys, which it forgets on reload. `/api/v1/openapi.json` describes both auth methods.
-
-The tiny `createCubbyClient({ baseUrl, apiKey? })` factory in
-`apps/web/src/lib/http-api/client.ts` uses same-origin browser credentials. Existing
-calls such as `client.dashboard.counts({ body: {} })` are unchanged. New calls include
-`client.queries.dashboard.counts({ query: {} })`,
+The contract is a real ts-rest router (`apps/web/src/lib/generated/http-contract.gen.ts`,
+built from the operation contracts in `apps/web/src/contracts/` and the entity
+resource table), served by `@ts-rest/serverless` and documented by
+`@ts-rest/open-api`. `createCubbyClient({ baseUrl, apiKey? })` in
+`apps/web/src/lib/http-api/client.ts` is a plain `initClient` over it with
+same-origin browser credentials: `client.dashboard.counts({ query: {} })`,
+`client.entity.mutate({ body: { action: "create", entity: "vendor", data: { name } } })`,
 `client.resources.recipe.list({ query: { page: 1, pageSize: 20, sort: "name", nameFilter: "Soup" } })`,
 and `client.resources.recipe.update({ params: { id }, body: { notes: 'Updated' } })`.
 Run TS scripts with the web tsconfig so schema import aliases resolve.
 
-After changing declarations or schemas, run `pnpm entity:generate`,
-`pnpm start-operations:generate`, and `pnpm --filter @cubby/web generate:http-api`.
-`pnpm check:all` checks freshness, route collisions, and OpenAPI validity. Existing
-operation declarations, entity capabilities, and runtime schemas remain authoritative;
-new ordinary operations require no HTTP-specific edits. Output transforms must end
-in concrete schemas, and timestamp inputs must accept ISO strings. Generation rejects
-unsupported JSON representations.
+After changing contracts, declarations or schemas, run `pnpm generate` (entity,
+start-operation, then HTTP OpenAPI generation) and `pnpm generate:check` before a
+PR; `pnpm check:all` includes it. Operation contracts, entity capabilities, and
+runtime schemas remain authoritative; new ordinary operations require no
+HTTP-specific edits. Wire schemas are derived from the domain schemas by
+`toWire` (`apps/web/src/lib/http-api/wire.ts`): Dates become ISO strings, output
+transforms must end in concrete schemas, timestamp inputs must accept ISO strings,
+and unsupported JSON representations fail at generation.
 
 ### Connecting to the MCP server
 

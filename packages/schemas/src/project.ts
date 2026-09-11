@@ -34,6 +34,7 @@ import {
   generatedProjectFieldSchemas,
   generatedProjectFilterFields,
 } from "./generated/entity-field-schemas.project.gen";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { projectKindSchema, projectStatusSchema } from "./project-fields";
 import { taskStatusSchema, tradeSchema } from "./task-fields";
 import type { Trade } from "./task-fields";
@@ -207,16 +208,7 @@ export const projectFilterFields = {
 export const projectFiltersSchema = z.object(projectFilterFields);
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
 
-export const projectSortableFields = [
-  "name",
-  "status",
-  "kind",
-  "startDate",
-  "costEstimate",
-  "createdAt",
-  "updatedAt",
-] as const;
-export type ProjectSortField = (typeof projectSortableFields)[number];
+export type ProjectSortField = GeneratedEntitySortField<"project">;
 
 export const projectDateSourceSchema = z.enum(["explicit", "derived", "none"]);
 export type ProjectDateSource = z.infer<typeof projectDateSourceSchema>;
@@ -369,17 +361,7 @@ export const taskFilterFields = {
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
 
-export const taskSortableFields = [
-  "name",
-  "status",
-  "dueDate",
-  "trade",
-  "project",
-  "subjectProduct",
-  "createdAt",
-  "updatedAt",
-] as const;
-export type TaskSortField = (typeof taskSortableFields)[number];
+export type TaskSortField = GeneratedEntitySortField<"task">;
 
 export const taskOut = z.object({
   ...generatedTaskFieldSchemas.read,
@@ -653,22 +635,7 @@ export const expenseFilterFields = {
 export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
 
-export const expenseSortableFields = [
-  "name",
-  "cost",
-  "lineKind",
-  "productQuantity",
-  "date",
-  "costType",
-  "trade",
-  "project",
-  "product",
-  "vendor",
-  "orderId",
-  "createdAt",
-  "updatedAt",
-] as const;
-export type ExpenseSortField = (typeof expenseSortableFields)[number];
+export type ExpenseSortField = GeneratedEntitySortField<"expense">;
 
 export const expenseOut = z.object(generatedExpenseFieldSchemas.read);
 export type ExpenseOut = z.infer<typeof expenseOut>;

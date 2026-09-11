@@ -16,10 +16,7 @@ import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { cn } from "~/lib/utils";
 
-import {
-  WithIngredientSearch,
-  WithRecipeSearch,
-} from "../../combobox/with-search-hook";
+import { WithEntitySearch } from "../../combobox/with-search-hook";
 import { ComboboxField } from "../../form-utils";
 import { IngredientReparse } from "./ingredient-reparse";
 import type { IngItem, RecipeFormValues } from "./types";
@@ -184,7 +181,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
 
                   <div className="min-w-0">
                     {row.type === "ingredient" ? (
-                      <WithIngredientSearch>
+                      <WithEntitySearch entity="ingredient">
                         {({
                           items,
                           onSearchChange,
@@ -212,9 +209,9 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             }
                           />
                         )}
-                      </WithIngredientSearch>
+                      </WithEntitySearch>
                     ) : (
-                      <WithRecipeSearch>
+                      <WithEntitySearch entity="recipe">
                         {({
                           items,
                           onSearchChange,
@@ -231,7 +228,7 @@ export const IngredientFieldArray: FC<IngredientFieldArrayProps> = ({
                             onOpenChange={onOpenChange}
                           />
                         )}
-                      </WithRecipeSearch>
+                      </WithEntitySearch>
                     )}
                   </div>
 

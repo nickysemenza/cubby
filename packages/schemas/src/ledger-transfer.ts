@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auditDateFilterFields, plainDate } from "./base-entity";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { ledgerPartyShortcode, ledgerTransferShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import { generatedLedgerTransferFieldSchemas } from "./generated/entity-field-schemas.ledgerTransfer.gen";
@@ -46,14 +47,8 @@ export const ledgerTransferFilterFields = {
 export const ledgerTransferFiltersSchema = z.object(ledgerTransferFilterFields);
 export type LedgerTransferFilters = z.infer<typeof ledgerTransferFiltersSchema>;
 
-export const ledgerTransferSortableFields = [
-  "date",
-  "amount",
-  "createdAt",
-  "updatedAt",
-] as const;
 export type LedgerTransferSortField =
-  (typeof ledgerTransferSortableFields)[number];
+  GeneratedEntitySortField<"ledgerTransfer">;
 
 export const ledgerTransferOut = z.object({
   ...generatedLedgerTransferFieldSchemas.read,

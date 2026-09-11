@@ -13,7 +13,6 @@ import {
   type FinancialAccountUpdateData,
   financialAccountIdentity,
   financialAccountOut,
-  financialAccountSortableFields,
 } from "@cubby/schemas/financial-account";
 import {
   type FinancialAccountId,
@@ -22,7 +21,6 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { buildTakeSkip } from "@cubby/schemas/pagination";
 import type { AppErrorReason } from "@cubby/shared";
 import { and, asc, desc, eq, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
@@ -38,9 +36,7 @@ import { createAppError, createBlockedError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
   buildPartialUpdateValues,
-  buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
   getDb,
@@ -54,6 +50,7 @@ import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
 import { countByTarget, impact } from "~/server/repo/impact";
 import { lockLedgerPartiesForReference } from "~/server/repo/ledger-party-reference";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -174,46 +171,42 @@ const aliasCondition = (
   )`;
 };
 
+const financialAccountScaffold = listScaffold(
+  "financialAccount",
+  financialAccount,
+);
+
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildFinancialAccountWhere = (filters: FinancialAccountFilters) =>
-  buildSearchConditions(
-    financialAccount,
-    [{ column: financialAccount.name, term: filters.search }],
-    [
-      ...auditDateWhereConditions(financialAccount, filters),
-      ...relatedWhereConditions(
-        "financialAccount",
-        filters,
-        financialAccount.id,
-      ),
-      // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
-      // JS array in a template into a row constructor (`ANY(($1, $2))`), which
-      // postgres rejects.
-      filters.identityKind
-        ? matchesStringValues(
-            sql`"FinancialAccount"."identity"->>'kind'`,
-            [filters.identityKind].flat(),
-          )
+  // `name` (text) and `provisional` (boolean) are declared stored filters —
+  // applied by `.where` before the conditions below.
+  financialAccountScaffold.where(filters, [
+    ...auditDateWhereConditions(financialAccount, filters),
+    ...relatedWhereConditions("financialAccount", filters, financialAccount.id),
+    // `matchesStringValues`, NOT sql`expr = ANY(${arr})`: drizzle expands a
+    // JS array in a template into a row constructor (`ANY(($1, $2))`), which
+    // postgres rejects.
+    filters.identityKind
+      ? matchesStringValues(
+          sql`"FinancialAccount"."identity"->>'kind'`,
+          [filters.identityKind].flat(),
+        )
+      : undefined,
+    filters.last4
+      ? sql`"FinancialAccount"."identity"->>'last4' = ${filters.last4}`
+      : undefined,
+    aliasCondition(
+      filters.source ? [filters.source].flat() : undefined,
+      filters.externalAccountId
+        ? [filters.externalAccountId].flat()
         : undefined,
-      filters.provisional === undefined
-        ? undefined
-        : eq(financialAccount.provisional, filters.provisional),
-      filters.last4
-        ? sql`"FinancialAccount"."identity"->>'last4' = ${filters.last4}`
+    ),
+    filters.sourceAliasPresenceFilter === "has"
+      ? sql`jsonb_array_length("FinancialAccount"."sourceAliases") > 0`
+      : filters.sourceAliasPresenceFilter === "none"
+        ? sql`jsonb_array_length("FinancialAccount"."sourceAliases") = 0`
         : undefined,
-      aliasCondition(
-        filters.source ? [filters.source].flat() : undefined,
-        filters.externalAccountId
-          ? [filters.externalAccountId].flat()
-          : undefined,
-      ),
-      filters.sourceAliasPresenceFilter === "has"
-        ? sql`jsonb_array_length("FinancialAccount"."sourceAliases") > 0`
-        : filters.sourceAliasPresenceFilter === "none"
-          ? sql`jsonb_array_length("FinancialAccount"."sourceAliases") = 0`
-          : undefined,
-    ],
-  );
+  ]);
 
 export async function listFinancialAccounts(
   db: Database,
@@ -222,24 +215,19 @@ export async function listFinancialAccounts(
   pagination: PaginationParams,
 ): Promise<{ data: FinancialAccountOut[]; count: number }> {
   const where = buildFinancialAccountWhere(filters);
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = financialAccountScaffold.page(pagination);
   const { data: rows, count } = await executeListQueryWithCount(
     getDb(db)
       .select(columns)
       .from(financialAccount)
       .where(where)
       .orderBy(
-        ...buildOrderBy(
-          financialAccount,
-          sorts,
-          [...financialAccountSortableFields],
-          {
-            resolve: (sort) =>
-              sort.orderBy === "transactionCount"
-                ? [(sort.direction === "asc" ? asc : desc)(transactionCount)]
-                : null,
-          },
-        ),
+        ...financialAccountScaffold.orderBy(sorts, {
+          resolve: (sort) =>
+            sort.orderBy === "transactionCount"
+              ? [(sort.direction === "asc" ? asc : desc)(transactionCount)]
+              : null,
+        }),
       )
       .limit(take)
       .offset(skip),

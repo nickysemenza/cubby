@@ -1,11 +1,12 @@
-import { initClient, tsRestFetchApi } from "@ts-rest/core";
-import { z } from "zod";
+import { initClient } from "@ts-rest/core";
 
 import { httpContract } from "~/lib/generated/http-contract.gen";
 
-import { httpMetadataSchema, httpSchemaSources } from "./contract";
-import { resourceQueryValues, resourceParameterIsText } from "./resource-query";
-
+/**
+ * A typed client for the HTTP API. `jsonQuery` is what the server decodes:
+ * plain strings stay literal on the URL and every other value is JSON, so
+ * structured filters and numeric-looking text both round-trip.
+ */
 export function createCubbyClient({
   baseUrl,
   apiKey,
@@ -18,37 +19,5 @@ export function createCubbyClient({
     baseHeaders: apiKey === undefined ? {} : { "x-api-key": apiKey },
     credentials: "same-origin",
     jsonQuery: true,
-    api: (args) => {
-      const metadata = z
-        .object({ http: httpMetadataSchema })
-        .parse(args.route.metadata).http;
-      if (metadata.mode !== "list") return tsRestFetchApi(args);
-      const schema =
-        args.route.query instanceof z.ZodType
-          ? httpSchemaSources.get(args.route.query)?.schema
-          : undefined;
-      if (!(schema instanceof z.ZodObject))
-        throw new Error("Resource queries require an object schema");
-      const params = new URLSearchParams();
-      for (const [name, value] of Object.entries(
-        resourceQueryValues.parse(args.rawQuery ?? {}),
-      )) {
-        const text = z.string().safeParse(value);
-        if (value !== undefined)
-          params.set(
-            name,
-            text.success &&
-              schema.shape[name] &&
-              resourceParameterIsText(schema.shape[name])
-              ? text.data
-              : JSON.stringify(value),
-          );
-      }
-      const query = params.toString();
-      return tsRestFetchApi({
-        ...args,
-        path: args.path.replace(/\?.*$/u, "") + (query ? `?${query}` : ""),
-      });
-    },
   });
 }

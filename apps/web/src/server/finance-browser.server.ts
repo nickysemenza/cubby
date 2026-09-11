@@ -1,8 +1,8 @@
 import {
-  financialAccount,
-  financialTransaction,
-  ledgerParty,
-} from "~/app/finance/finance.functions";
+  financialAccountContract,
+  financialTransactionContract,
+  ledgerPartyContract,
+} from "~/contracts/finance.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   financialAccountOptionsWorkflow,
@@ -12,18 +12,21 @@ import {
 } from "~/server/workflows/finance.server";
 
 export const financialAccountHandlers = implementOperationDomain(
-  financialAccount,
+  financialAccountContract,
   {
     options: (context) => financialAccountOptionsWorkflow(context.readDb),
   },
 );
 
-export const ledgerPartyHandlers = implementOperationDomain(ledgerParty, {
-  options: (context) => ledgerPartyOptionsWorkflow(context.readDb),
-});
+export const ledgerPartyHandlers = implementOperationDomain(
+  ledgerPartyContract,
+  {
+    options: (context) => ledgerPartyOptionsWorkflow(context.readDb),
+  },
+);
 
 export const financialTransactionHandlers = implementOperationDomain(
-  financialTransaction,
+  financialTransactionContract,
   {
     sourceOptions: (context) =>
       financialTransactionSourceOptionsWorkflow(context.readDb),

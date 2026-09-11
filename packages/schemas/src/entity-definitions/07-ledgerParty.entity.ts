@@ -1,12 +1,7 @@
 import { defineEntity } from "./definition.js";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
-import { oneOrMany } from "@cubby/schemas/pagination";
 import { z } from "zod";
-export const filterSchemas = {
-  search: z.string().optional(),
-  kind: oneOrMany(ledgerPartyKind).optional(),
-};
 export default defineEntity({
   key: "ledgerParty",
   names: { singular: "Ledger Party", plural: "Ledger Parties" },
@@ -104,6 +99,17 @@ export default defineEntity({
     update: ["name", "kind", "notes"],
     bulk: [],
     audit: ["name", "kind", "notes"],
+    sort: {
+      fields: ["name", "kind", "createdAt", "updatedAt"],
+      default: "name",
+    },
+    intents: {
+      fields: {
+        full: ["name", "kind", "notes"],
+      },
+      create: ["full"],
+      update: ["full"],
+    },
     output: ["id", "name", "kind", "notes", "createdAt", "updatedAt"],
   },
   fields: {
@@ -137,6 +143,11 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
+        stored: true,
+        schemaRef: {
+          module: "@cubby/schemas/ledger-party-fields",
+          export: "ledgerPartyKind",
+        },
         options: [
           { value: "member", label: "Member" },
           { value: "guest", label: "Guest" },

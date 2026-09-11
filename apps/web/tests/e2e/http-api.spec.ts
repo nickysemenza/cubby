@@ -46,7 +46,7 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
         "UPDATE apikey SET config_id = 'default' WHERE id = $1",
         [key.id],
       );
-      expect((await client.dashboard.counts({ body: {} })).status).toBe(401);
+      expect((await client.dashboard.counts({ query: {} })).status).toBe(401);
       await pool.query(
         "UPDATE apikey SET config_id = 'http-api' WHERE id = $1",
         [key.id],
@@ -72,31 +72,29 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
           await createCubbyClient({
             baseUrl: baseURL!,
             apiKey: expired.key,
-          }).dashboard.counts({ body: {} })
+          }).dashboard.counts({ query: {} })
         ).status,
       ).toBe(401);
     } finally {
       await pool.end();
     }
-    const counts = await client.dashboard.counts({ body: {} });
+    const counts = await client.dashboard.counts({ query: {} });
     expect(counts.status).toBe(200);
     if (counts.status !== 200) throw new Error("Dashboard failed");
     expect(counts.body.ok).toBe(true);
     const created = await page.request.post("/api/v1/entity/mutate", {
       headers,
       data: {
-        input: {
-          action: "create",
-          entity: "vendor",
-          data: { name: `HTTP fixture ${Date.now()}` },
-        },
+        action: "create",
+        entity: "vendor",
+        data: { name: `HTTP fixture ${Date.now()}` },
       },
     });
     expect(created.status()).toBe(200);
     const result = entityCreated.parse(await created.json());
     await expect
       .poll(async () => {
-        const calendar = await client.calendar.inspectFeed({ body: {} });
+        const calendar = await client.calendar.inspectFeed({ query: {} });
         return calendar.status === 200
           ? calendar.body.data.dirty?.reason
           : undefined;
@@ -105,12 +103,10 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     const domainError = await page.request.post("/api/v1/entity/mutate", {
       headers,
       data: {
-        input: {
-          action: "update",
-          entity: "vendor",
-          id: "VEN-ZZZZ",
-          data: { name: "Missing" },
-        },
+        action: "update",
+        entity: "vendor",
+        id: "VEN-ZZZZ",
+        data: { name: "Missing" },
       },
     });
     expect(domainError.status()).toBe(404);
@@ -119,16 +115,14 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
       error: { code: "NOT_FOUND" },
     });
     const detail = await client.entity.detail({
-      body: { input: { entity: "vendor", shortcode: result.data.item.id } },
+      query: { entity: "vendor", shortcode: result.data.item.id },
     });
     expect(detail.status).toBe(200);
     const audit = await client.auditLog.list({
-      body: {
-        input: {
-          entityType: "vendor",
-          entityId: result.data.item.id,
-          source: "api",
-        },
+      query: {
+        entityType: "vendor",
+        entityId: result.data.item.id,
+        source: "api",
       },
     });
     expect(audit.status).toBe(200);
@@ -141,31 +135,44 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
         createdAt: expect.stringMatching(/^\d{4}-/u),
       }),
     ]);
-    const malformed = await page.request.post("/api/v1/dashboard/counts", {
+    const malformed = await page.request.post("/api/v1/entity/mutate", {
       headers: { ...headers, "content-type": "application/json" },
       data: "{",
     });
     expect(malformed.status()).toBe(400);
-    const badInput = await page.request.post("/api/v1/entity/detail", {
+    const badInput = await page.request.get("/api/v1/entity/detail", {
       headers,
-      data: { input: { entity: "vendor", shortcode: "invalid" } },
+      params: { entity: "vendor", shortcode: "invalid" },
     });
     expect(badInput.status()).toBe(400);
-    const spoof = await page.request.post("/api/v1/dashboard/counts", {
+    const spoof = await page.request.get("/api/v1/dashboard/counts", {
       headers,
-      data: { actor: { source: "ui" } },
+      params: { actor: '{"source":"ui"}' },
     });
     expect(spoof.status()).toBe(400);
+    const wrongMethod = await page.request.post("/api/v1/dashboard/counts", {
+      headers,
+      data: {},
+    });
+    expect(wrongMethod.status()).toBe(405);
+    // Auth ordering on a mutation route: a cookie session without a matching
+    // Origin is rejected before the body is looked at, and an invalid key is
+    // an authentication failure rather than a validation one.
+    const mutateBody = {
+      action: "create",
+      entity: "vendor",
+      data: { name: "Never created" },
+    };
     expect(
       (
-        await page.request.post("/api/v1/dashboard/counts", { data: {} })
+        await page.request.post("/api/v1/entity/mutate", { data: mutateBody })
       ).status(),
     ).toBe(403);
     expect(
       (
-        await page.request.post("/api/v1/dashboard/counts", {
+        await page.request.post("/api/v1/entity/mutate", {
           headers: { "x-api-key": "invalid" },
-          data: {},
+          data: mutateBody,
         })
       ).status(),
     ).toBe(401);
@@ -200,7 +207,7 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
       ).status(),
     ).toBe(200);
   }
-  expect((await client.dashboard.counts({ body: {} })).status).toBe(401);
+  expect((await client.dashboard.counts({ query: {} })).status).toBe(401);
 });
 
 test("Scalar renders generated operations and account settings expose API keys", async ({
@@ -242,10 +249,10 @@ test("Scalar renders generated operations and account settings expose API keys",
   await expect(
     page.getByText("Scalar acceptance", { exact: true }),
   ).toBeVisible();
-  await page.goto("/api/v1/docs#tag/dashboard/POST/api/v1/dashboard/counts");
+  await page.goto("/api/v1/docs#tag/dashboard/GET/api/v1/dashboard/counts");
   await page
     .getByRole("button", {
-      name: "Test Request (post /api/v1/dashboard/counts)",
+      name: "Test Request (get /api/v1/dashboard/counts)",
       exact: true,
     })
     .click();
@@ -264,14 +271,14 @@ test("Scalar renders generated operations and account settings expose API keys",
   const sent = page.waitForResponse(
     (response) =>
       response.url().endsWith("/api/v1/dashboard/counts") &&
-      response.request().method() === "POST",
+      response.request().method() === "GET",
   );
-  await page.getByRole("button", { name: /^Send post request/ }).click();
+  await page.getByRole("button", { name: /^Send get request/ }).click();
   expect((await sent).status()).toBe(200);
   await page.reload();
   await page
     .getByRole("button", {
-      name: "Test Request (post /api/v1/dashboard/counts)",
+      name: "Test Request (get /api/v1/dashboard/counts)",
       exact: true,
     })
     .click();
@@ -302,7 +309,7 @@ test("Scalar renders generated operations and account settings expose API keys",
       await createCubbyClient({
         baseUrl: baseURL!,
         apiKey: key.key,
-      }).dashboard.counts({ body: {} })
+      }).dashboard.counts({ query: {} })
     ).status,
   ).toBe(401);
 });

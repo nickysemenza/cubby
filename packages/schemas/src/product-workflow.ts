@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { mutationSideEffectsSchema } from "./background-jobs";
+import { generatedEntitySort } from "./generated/entity-sort.gen";
 import {
   createPaginatedResponseSchemaWithContext,
   createSortPaginationFields,
@@ -27,7 +28,6 @@ import {
   productQuickCreatePayload,
   productShortcodeListOut,
   productShortcodesInput,
-  productSortableFields,
   productSummariesInput,
   productSummariesOut,
   productTagOptionsOut,
@@ -56,7 +56,7 @@ import { productPurchasesInput, productPurchasesOut } from "./purchase";
 export const productSearchInput = z.object({
   filters: productFiltersSchema,
   ...createSortPaginationFields({
-    sortableFields: productSortableFields,
+    sortableFields: generatedEntitySort.product.fields,
     defaultSort: "name",
   }),
 });

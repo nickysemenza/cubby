@@ -1,45 +1,27 @@
-import { financialAccountOptionsOut } from "@cubby/schemas/financial-account";
 import {
-  financialTransactionSourceOptionsOut,
-  merchantVendorInference,
-  merchantVendorInferenceInput,
-} from "@cubby/schemas/financial-transaction";
-import { ledgerPartyOptionsOut } from "@cubby/schemas/ledger-party";
-import { z } from "zod";
+  financialAccountContract,
+  financialTransactionContract,
+  ledgerPartyContract,
+} from "~/contracts/finance.contract";
+import { defineOperationDomain } from "~/integrations/tanstack-query/operation-catalog";
 
-import {
-  defineOperationDomain,
-  query,
-} from "~/integrations/tanstack-query/operation-catalog";
+export const financialAccount = defineOperationDomain(
+  financialAccountContract,
+  {
+    options: { tags: [["financialAccount", "options"]] },
+  },
+);
 
-export const financialAccount = defineOperationDomain("financialAccount", {
-  options: query({
-    input: z.null(),
-    output: financialAccountOptionsOut,
-    tags: [["financialAccount", "options"]],
-  }),
-});
-
-export const ledgerParty = defineOperationDomain("ledgerParty", {
-  options: query({
-    input: z.null(),
-    output: ledgerPartyOptionsOut,
-    tags: [["ledgerParty", "options"]],
-  }),
+export const ledgerParty = defineOperationDomain(ledgerPartyContract, {
+  options: { tags: [["ledgerParty", "options"]] },
 });
 
 export const financialTransaction = defineOperationDomain(
-  "financialTransaction",
+  financialTransactionContract,
   {
-    sourceOptions: query({
-      input: z.null(),
-      output: financialTransactionSourceOptionsOut,
-      tags: [["financialTransaction", "sourceOptions"]],
-    }),
-    vendorInference: query({
-      input: merchantVendorInferenceInput,
-      output: merchantVendorInference,
+    sourceOptions: { tags: [["financialTransaction", "sourceOptions"]] },
+    vendorInference: {
       tags: [["financialTransaction"], ["purchase"], ["vendor"]],
-    }),
+    },
   },
 );

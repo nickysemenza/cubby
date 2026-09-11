@@ -1,4 +1,4 @@
-import { statementRow } from "~/lib/statement-row.functions";
+import { statementRowContract } from "~/contracts/statement-row.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   getStatementRowSummaryWorkflow,
@@ -6,14 +6,18 @@ import {
   listStatementRowsWorkflow,
 } from "~/server/workflows/statement-row.server";
 
-export const statementRowHandlers = implementOperationDomain(statementRow, {
-  list: {
-    run: (context, input) => listStatementRowsWorkflow(context.db, input),
+export const statementRowHandlers = implementOperationDomain(
+  statementRowContract,
+  {
+    list: {
+      run: (context, input) => listStatementRowsWorkflow(context.db, input),
+    },
+    summary: {
+      run: (context, input) =>
+        getStatementRowSummaryWorkflow(context.db, input),
+    },
+    imports: {
+      run: (context, input) => listStatementImportsWorkflow(context.db, input),
+    },
   },
-  summary: {
-    run: (context, input) => getStatementRowSummaryWorkflow(context.db, input),
-  },
-  imports: {
-    run: (context, input) => listStatementImportsWorkflow(context.db, input),
-  },
-});
+);

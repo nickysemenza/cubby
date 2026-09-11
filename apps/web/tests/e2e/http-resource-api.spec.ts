@@ -92,9 +92,9 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
         },
       },
     });
-    const legacy = await page.request.post("/api/v1/entity/detail", {
+    const legacy = await page.request.get("/api/v1/entity/detail", {
       headers: origin,
-      data: { input: { entity: "recipe", shortcode: id } },
+      params: { entity: "recipe", shortcode: id },
     });
     expect(await legacy.json()).toMatchObject({
       ok: true,
@@ -186,7 +186,7 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
   expect((await page.request.get(path)).status()).toBe(404);
 });
 
-test("typed resource and GET clients use the same generated request shapes", async ({
+test("typed resource and operation clients use the same generated request shapes", async ({
   page,
   baseURL,
 }) => {
@@ -199,7 +199,7 @@ test("typed resource and GET clients use the same generated request shapes", asy
     .parse(await keyResponse.json());
   const client = createCubbyClient({ baseUrl: baseURL!, apiKey: key.key });
   try {
-    const counts = await client.queries.dashboard.counts({ query: {} });
+    const counts = await client.dashboard.counts({ query: {} });
     expect(counts.status).toBe(200);
     const prefix = `Flat resource ${Date.now()}`;
     const created = await client.resources.recipe.create({
@@ -222,8 +222,7 @@ test("typed resource and GET clients use the same generated request shapes", asy
         ).status,
       ).toBe(200);
       expect(
-        (await client.resources.recipe.get({ params: { id }, query: {} }))
-          .status,
+        (await client.resources.recipe.get({ params: { id } })).status,
       ).toBe(200);
       expect(
         (
@@ -255,7 +254,7 @@ test("typed resource and GET clients use the same generated request shapes", asy
         ok: true,
         data: { items: [{ id: secondId }] },
       });
-      const operation = await client.queries.entity.list({
+      const operation = await client.entity.list({
         query: {
           entity: "recipe",
           filters: { nameFilter: prefix },
@@ -279,8 +278,7 @@ test("typed resource and GET clients use the same generated request shapes", asy
         data: { items: [{ id }] },
       });
       expect(
-        (await client.queries.recipe.getManyByIDs({ query: { ids: [id] } }))
-          .status,
+        (await client.recipe.getManyByIDs({ query: { ids: [id] } })).status,
       ).toBe(200);
     } finally {
       expect(
@@ -321,12 +319,7 @@ test("revoked sessions cannot use a still-valid cookie cache", async ({
     await pool.query("DELETE FROM session WHERE id = $1", [session.session.id]);
     expect((await context.request.get("/api/v1/recipes")).status()).toBe(401);
     expect(
-      (
-        await context.request.post("/api/v1/dashboard/counts", {
-          headers: { Origin: baseURL! },
-          data: {},
-        })
-      ).status(),
+      (await context.request.get("/api/v1/dashboard/counts")).status(),
     ).toBe(401);
     await context.request.post("/api/auth/sign-in/email", {
       headers: { Origin: baseURL! },

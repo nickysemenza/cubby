@@ -1,4 +1,7 @@
-import { product, productStreams } from "~/app/products/product.functions";
+import {
+  productContract,
+  productStreamsContract,
+} from "~/contracts/product.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
@@ -31,7 +34,7 @@ import {
   setProductProjectUsesWorkflow,
 } from "~/server/workflows/product.server";
 
-export const productHandlers = implementOperationDomain(product, {
+export const productHandlers = implementOperationDomain(productContract, {
   search: searchProductsWorkflow,
   summaries: getProductSummariesWorkflow,
   quantitySummaries: getProductQuantitySummariesWorkflow,
@@ -59,7 +62,7 @@ export const productHandlers = implementOperationDomain(product, {
 });
 
 export const productStreamHandlers = implementSubscriptionDomain(
-  productStreams,
+  productStreamsContract,
   {
     createMany: (context, input, signal) =>
       createManyProductsWorkflow(context, input, signal),

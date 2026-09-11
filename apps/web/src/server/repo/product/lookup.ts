@@ -19,6 +19,7 @@ import { inventoryEntry, product, productExternalId } from "~/server/db/schema";
 import { enrichProductRowsWithDataQuality } from "~/server/repo/data-quality";
 import { getDb, imageOrder, notDeleted } from "~/server/repo/database-helpers";
 
+import { getProductCoverImageUrlsByProductIds } from "./crud";
 import { loadPrimaryGtins, productHasGtin } from "./gtin";
 import { foodLookupParamFromProduct } from "./helpers";
 import {
@@ -109,7 +110,16 @@ export const findProductsByFoodIdentifiers = async (
 
   const priced = await enrichProductRowsWithPricing(db, res);
   const qualified = await enrichProductRowsWithDataQuality(db, priced);
-  const linkedProducts = qualified.map(dbProductToTopLevelAPI);
+  const coverImageUrls = await getProductCoverImageUrlsByProductIds(
+    db,
+    qualified.map((row) => row.id),
+  );
+  const linkedProducts = qualified.map((row) =>
+    dbProductToTopLevelAPI({
+      ...row,
+      coverImageUrl: coverImageUrls.get(row.id) ?? null,
+    }),
+  );
   return lookups.map((lookup) =>
     linkedProducts.filter((linkedProduct) =>
       productMatchesFoodLookup(linkedProduct, lookup),
@@ -201,7 +211,12 @@ const findProductToAPI = async (
   const priced = (await enrichProductRowsWithPricing(db, [res]))[0];
   if (!priced) return null;
   const qualified = (await enrichProductRowsWithDataQuality(db, [priced]))[0];
-  return qualified ? dbProductToTopLevelAPI(qualified) : null;
+  if (!qualified) return null;
+  const coverImageUrl =
+    (await getProductCoverImageUrlsByProductIds(db, [qualified.id])).get(
+      qualified.id,
+    ) ?? null;
+  return dbProductToTopLevelAPI({ ...qualified, coverImageUrl });
 };
 
 /**

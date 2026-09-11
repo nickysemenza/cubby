@@ -3,17 +3,7 @@ import { vendorShortcode } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
 import { money } from "@cubby/schemas/money";
 import { plainDate } from "@cubby/schemas/base-entity";
-import {
-  dateRangeFields,
-  numericRangeFields,
-} from "@cubby/schemas/base-entity";
 import { z } from "zod";
-export const filterSchemas = {
-  search: z.string().optional(),
-  ...numericRangeFields("purchaseCount", { int: true, nonnegative: true }),
-  ...numericRangeFields("spend"),
-  ...dateRangeFields("latestPurchaseDate"),
-};
 export default defineEntity({
   key: "vendor",
   names: { singular: "Vendor", plural: "Vendors" },
@@ -186,6 +176,26 @@ export default defineEntity({
     update: ["name", "website", "orderUrlTemplate", "notes"],
     bulk: [],
     audit: ["name", "website", "orderUrlTemplate", "notes"],
+    sort: {
+      fields: [
+        "name",
+        "purchaseCount",
+        "spend",
+        "latestPurchaseDate",
+        "createdAt",
+        "updatedAt",
+      ],
+      default: "name",
+    },
+    intents: {
+      fields: {
+        capture: ["name", "website", "notes"],
+        full: ["name", "website", "orderUrlTemplate", "notes"],
+        identity: ["name"],
+      },
+      create: ["capture", "full"],
+      update: ["full", "identity"],
+    },
     output: [
       "id",
       "name",
@@ -222,6 +232,7 @@ export default defineEntity({
         kind: "range",
         placeholder: "Filter purchase count...",
         deriveSchema: true,
+        range: { int: true, nonnegative: true },
         options: [
           { value: "has", label: "Has purchases", meta: true },
           { value: "none", label: "(none)", meta: true },

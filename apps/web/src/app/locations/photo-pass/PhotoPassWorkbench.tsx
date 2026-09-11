@@ -32,7 +32,7 @@ import { z } from "zod";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
-import { WithLocationSearch } from "~/app/_components/combobox/with-search-hook";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { LocationScanButton } from "~/app/_components/locations/location-scan-button";
 import { useLocationPhotoCapture } from "~/app/_components/locations/use-location-photo-capture";
 import {
@@ -117,7 +117,7 @@ function PhotoPassStart() {
             <Description>
               Walks everything inside it that has no photo yet.
             </Description>
-            <WithLocationSearch>
+            <WithEntitySearch entity="location">
               {({ items, onSearchChange, isLoading, onOpenChange }) => (
                 <EntityPicker
                   entity="location"
@@ -134,7 +134,7 @@ function PhotoPassStart() {
                   placeholder="Garage, pantry, shed…"
                 />
               )}
-            </WithLocationSearch>
+            </WithEntitySearch>
           </Stack>
 
           <Row gap="sm" wrap>

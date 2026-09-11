@@ -3,38 +3,32 @@ import type {
   IngredientWithRecipesAndProductOut,
   ingredientCreateInput,
 } from "@cubby/schemas/ingredient";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import type { FC } from "react";
-import { type Control, useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
+import { type Control, useWatch } from "react-hook-form";
+import type { z } from "zod";
 
 import { AliasesField, filterAliases } from "~/components/forms/aliases-field";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-fields";
+import { useEntityFormController } from "~/entities/editing/use-entity-form-controller";
 import { entityListFor } from "~/entities/entity-list.functions";
 
 import { EntityInlineLink } from "../EntityInlineLink";
-import {
-  buildUpdateObject,
-  type CreateModeProps,
-  type EditModeProps,
-  FormWrapper,
-  getSubmitButtonText,
-  submitOrCancel,
-} from "../form-utils";
+import { type EntityFormProps, FormWrapper } from "../form-utils";
 
-// Form schema for ingredient
-const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  aliases: z.array(z.string()),
-  usuallyOnHand: z.boolean(),
-});
+// Module-level so `useEntityFormController`'s resolver memoization sees a
+// stable reference across renders (never a fresh inline array).
+const INGREDIENT_FORM_FIELDS = ["name", "aliases", "usuallyOnHand"] as const;
 
-type IngredientFormValues = z.infer<typeof formSchema>;
+interface IngredientFormValues {
+  name: string;
+  aliases: string[];
+  usuallyOnHand: boolean;
+}
 
 /**
  * Live duplicate-name check for ingredient CREATE. Watches the name field,
@@ -95,77 +89,40 @@ function DuplicateNameHint({
   );
 }
 
-// Props for create mode
-interface CreateIngredientFormProps extends CreateModeProps<
-  z.infer<typeof ingredientCreateInput>
-> {
-  ingredient?: never;
-  initialName?: string;
-}
-
-// Props for edit mode
-interface EditIngredientFormProps extends EditModeProps<
+type IngredientFormProps = EntityFormProps<
+  z.infer<typeof ingredientCreateInput>,
   IngredientUpdateInput,
   IngredientWithRecipesAndProductOut
-> {
-  entity: IngredientWithRecipesAndProductOut;
-}
-
-// Combined props type
-type IngredientFormProps = CreateIngredientFormProps | EditIngredientFormProps;
+> & { initialName?: string };
 
 export const IngredientForm: FC<IngredientFormProps> = (props) => {
-  const { mode, isPending, error, onCancel } = props;
+  const { mode, onCancel } = props;
   const ingredient = mode === "edit" ? props.entity : undefined;
   const initialName = mode === "create" ? props.initialName : undefined;
 
-  // Initialize form
-  const form = useForm<IngredientFormValues>({
-    resolver: zodResolver(formSchema),
+  const controller = useEntityFormController("ingredient", props, {
+    fields: INGREDIENT_FORM_FIELDS,
     defaultValues: {
       name: ingredient ? ingredient.name : (initialName ?? ""),
       aliases: ingredient ? ingredient.aliases : [],
       usuallyOnHand: ingredient?.usuallyOnHand ?? false,
     },
-  });
-
-  const handleSubmit = (values: IngredientFormValues) => {
-    // Filter out empty alias strings
-    const filteredAliases = filterAliases(values.aliases);
-
-    if (mode === "create") {
-      // For creation, pass all fields
-      // Get current date for timestamps (will be replaced by server)
-      const createData: z.infer<typeof ingredientCreateInput> = {
+    transform: {
+      diffValues: (values) => ({
+        ...values,
+        aliases: filterAliases(values.aliases),
+      }),
+      create: (values) => ({
         name: values.name,
-        aliases: filteredAliases,
+        aliases: filterAliases(values.aliases),
         usuallyOnHand: values.usuallyOnHand,
         naKinds: [],
-      };
-      props.onCreate(createData);
-    } else if (mode === "edit" && ingredient) {
-      // In edit mode, determine which fields have changed
-      const updatedValues = {
-        ...values,
-        aliases: filteredAliases,
-      };
+      }),
+      edit: (updates) => ({ id: ingredient!.id, data: updates }),
+    },
+  });
+  const { form, handleSubmit, isPending, error, submitButtonText } = controller;
 
-      const updates = buildUpdateObject(ingredient, updatedValues, [
-        "name",
-        "aliases",
-        "usuallyOnHand",
-      ]);
-
-      submitOrCancel(
-        updates,
-        () => ({ id: ingredient.id, data: updates }),
-        props.onEdit,
-        onCancel,
-      );
-    }
-  };
-
-  const buttonText = getSubmitButtonText(mode);
   return (
     <FormWrapper
       form={form}
@@ -173,7 +130,7 @@ export const IngredientForm: FC<IngredientFormProps> = (props) => {
       error={error}
       isPending={isPending}
       onCancel={onCancel}
-      submitButtonText={buttonText}
+      submitButtonText={submitButtonText}
     >
       <Card>
         <CardContent className="px-4 py-1">

@@ -13,11 +13,7 @@ import {
   type VendorId,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   VendorCreateInput,
   VendorFilters,
@@ -26,7 +22,6 @@ import type {
   VendorOut,
   VendorUpdateData,
 } from "@cubby/schemas/vendor";
-import { vendorSortableFields } from "@cubby/schemas/vendor";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -43,8 +38,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   correlated,
   countWhere,
   formatSearchTerm,
@@ -63,6 +56,7 @@ import {
   displayableImageWhere,
 } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   assertDistinctMergeTargets,
   finalizeMerge,
@@ -231,41 +225,39 @@ const dbVendorToAPI = (row: VendorRow): VendorOut => ({
   updatedAt: row.updatedAt,
 });
 
+const vendorScaffold = listScaffold("vendor", vendor);
+
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildVendorWhereClause = (filters: VendorFilters) =>
-  buildSearchConditions(
-    vendor,
-    [],
-    [
-      ...auditDateWhereConditions(vendor, filters),
-      ...rangeConditions(vendorPurchaseCount, filters, "purchaseCount"),
-      ...rangeConditions(vendorSpend, filters, "spend"),
-      filters.latestPurchaseDatePresenceFilter === "has"
-        ? sql`${vendorLatestPurchaseDate} IS NOT NULL`
-        : filters.latestPurchaseDatePresenceFilter === "none"
-          ? sql`${vendorLatestPurchaseDate} IS NULL`
-          : undefined,
-      filters.latestPurchaseDateFrom
-        ? sql`${vendorLatestPurchaseDate} >= ${filters.latestPurchaseDateFrom}`
+  vendorScaffold.where(filters, [
+    ...auditDateWhereConditions(vendor, filters),
+    ...rangeConditions(vendorPurchaseCount, filters, "purchaseCount"),
+    ...rangeConditions(vendorSpend, filters, "spend"),
+    filters.latestPurchaseDatePresenceFilter === "has"
+      ? sql`${vendorLatestPurchaseDate} IS NOT NULL`
+      : filters.latestPurchaseDatePresenceFilter === "none"
+        ? sql`${vendorLatestPurchaseDate} IS NULL`
         : undefined,
-      filters.latestPurchaseDateTo
-        ? sql`${vendorLatestPurchaseDate} <= ${filters.latestPurchaseDateTo}`
+    filters.latestPurchaseDateFrom
+      ? sql`${vendorLatestPurchaseDate} >= ${filters.latestPurchaseDateFrom}`
+      : undefined,
+    filters.latestPurchaseDateTo
+      ? sql`${vendorLatestPurchaseDate} <= ${filters.latestPurchaseDateTo}`
+      : undefined,
+    filters.logoPresenceFilter === "has"
+      ? sql`${vendorHasDisplayableLogo}`
+      : filters.logoPresenceFilter === "none"
+        ? sql`NOT ${vendorHasDisplayableLogo}`
         : undefined,
-      filters.logoPresenceFilter === "has"
-        ? sql`${vendorHasDisplayableLogo}`
-        : filters.logoPresenceFilter === "none"
-          ? sql`NOT ${vendorHasDisplayableLogo}`
-          : undefined,
-      ...relatedWhereConditions("vendor", filters, vendor.id),
-      filters.search
-        ? or(
-            formatSearchTerm(vendor.name, filters.search),
-            formatSearchTerm(vendor.notes, filters.search),
-            formatSearchTerm(vendor.website, filters.search),
-          )
-        : undefined,
-    ],
-  );
+    ...relatedWhereConditions("vendor", filters, vendor.id),
+    filters.search
+      ? or(
+          formatSearchTerm(vendor.name, filters.search),
+          formatSearchTerm(vendor.notes, filters.search),
+          formatSearchTerm(vendor.website, filters.search),
+        )
+      : undefined,
+  ]);
 
 const resolveVendorSort = (sort: SortParams) => {
   const dir = sort.direction === "asc" ? asc : desc;
@@ -295,7 +287,7 @@ export const vendorList = async (
       sums: { spend: 0, purchaseCount: 0 },
     };
   }
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = vendorScaffold.page(pagination);
 
   // Footer totals cover the filtered set, not only the loaded page.
   const [rows, count, [totals]] = await Promise.all([
@@ -311,11 +303,7 @@ export const vendorList = async (
         ),
       )
       .where(whereClause)
-      .orderBy(
-        ...buildOrderBy(vendor, sorts, [...vendorSortableFields], {
-          resolve: resolveVendorSort,
-        }),
-      )
+      .orderBy(...vendorScaffold.orderBy(sorts, { resolve: resolveVendorSort }))
       .limit(take)
       .offset(skip),
     countWhere(db, vendor, whereClause),

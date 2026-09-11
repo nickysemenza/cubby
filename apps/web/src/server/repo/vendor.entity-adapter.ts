@@ -1,9 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import {
-  mergeVendorsInput,
-  mergeVendorsOut,
-  vendorSortableFields,
-} from "@cubby/schemas/vendor";
+import { mergeVendorsInput, mergeVendorsOut } from "@cubby/schemas/vendor";
 
 import {
   defineEntityAdapter,
@@ -24,7 +20,6 @@ import {
 
 export const vendorEntityAdapter = defineEntityAdapter({
   entity: "vendor",
-  sort: { fields: vendorSortableFields, default: "name" },
   lifecycle: {
     delete: VENDOR_DELETE_EDGE_POLICY,
     merge: VENDOR_MERGE_EDGE_POLICY,

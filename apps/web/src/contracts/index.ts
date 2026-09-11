@@ -1,0 +1,61 @@
+/**
+ * Every operation contract, by export name. The registry generator imports
+ * this barrel at build time; the HTTP router imports it at runtime. A contract
+ * module that is not exported here is a generator error.
+ */
+export { agentContract, agentStreamsContract } from "./agent.contract";
+export { aiContract, aiStreamsContract } from "./ai.contract";
+export { auditLogContract } from "./audit-log.contract";
+export {
+  backgroundBatchContract,
+  backgroundJobContract,
+} from "./background-batch.contract";
+export { calendarContract } from "./calendar.contract";
+export { collectionContract } from "./collection.contract";
+export { oauthContract } from "./connected-apps.contract";
+export { cookbookContract } from "./cookbook.contract";
+export { dashboardContract } from "./dashboard.contract";
+export { entityDetailContract } from "./entity-detail.contract";
+export { entityFilterOptionsContract } from "./entity-filter-options.contract";
+export { entityGraphContract } from "./entity-graph.contract";
+export { entityInspectorHealthContract } from "./entity-inspector-health.contract";
+export {
+  entityIntegrityContract,
+  integrityProblemsContract,
+} from "./entity-integrity.contract";
+export { entityListContract } from "./entity-list.contract";
+export { entityMutationContract } from "./entity-mutation.contract";
+export { expenseContract } from "./expense.contract";
+export {
+  financialAccountContract,
+  ledgerPartyContract,
+  financialTransactionContract,
+} from "./finance.contract";
+export { householdContributionContract } from "./household-contribution.contract";
+export { imageUploadContract } from "./image-upload.contract";
+export { imageContract } from "./image.contract";
+export { ingredientContract } from "./ingredient.contract";
+export { inventoryContract } from "./inventory.contract";
+export { locationContract } from "./location.contract";
+export { mcpContract } from "./mcp.contract";
+export { mealContract } from "./meal.contract";
+export { problemsContract, problemsStreamsContract } from "./problems.contract";
+export { productContract, productStreamsContract } from "./product.contract";
+export { projectContract } from "./project.contract";
+export { purchaseContract } from "./purchase.contract";
+export {
+  recipeContract,
+  suggestionsContract,
+  recipeStreamsContract,
+} from "./recipe.contract";
+export {
+  relatednessContract,
+  recommendationsContract,
+} from "./recommendations.contract";
+export { relatedDataContract } from "./related-data.contract";
+export { searchContract } from "./search.contract";
+export { statementRowContract } from "./statement-row.contract";
+export { taskContract } from "./task.contract";
+export { upcContract } from "./upc.contract";
+export { usdaFoodContract } from "./usda.contract";
+export { vendorContract } from "./vendor.contract";

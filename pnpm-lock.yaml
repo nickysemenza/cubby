@@ -529,6 +529,9 @@ importers:
       '@ts-rest/open-api':
         specifier: 3.53.0-rc.1
         version: 3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.2.0))(zod@4.4.3)
+      '@ts-rest/serverless':
+        specifier: 3.53.0-rc.1
+        version: 3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.2.0))(@types/aws-lambda@8.10.162)
       '@viz-js/viz':
         specifier: ^3.30.0
         version: 3.30.0
@@ -5807,6 +5810,21 @@ packages:
       '@ts-rest/core': 3.53.0-rc.1
       zod: ^3.22.3
 
+  '@ts-rest/serverless@3.53.0-rc.1':
+    resolution: {integrity: sha512-MtwjH3GqGXx4r4Tyqb381JNN5W7tKZt491Yp0OSAxU2cdduJ3s9lNZV4+AFbDTdY+ZyInlQntCIr94+VBSr+TA==}
+    peerDependencies:
+      '@azure/functions': ^4.0.0
+      '@ts-rest/core': 3.53.0-rc.1
+      '@types/aws-lambda': ^8.10.115
+      next: ^16.2.6
+    peerDependenciesMeta:
+      '@azure/functions':
+        optional: true
+      '@types/aws-lambda':
+        optional: true
+      next:
+        optional: true
+
   '@tybys/wasm-util@0.10.3':
     resolution: {integrity: sha512-F3fo1MYrRJYL3zER0OUOmkutjr1Vp23m7OsSgp7nq4SP6OqX6C/56XFIPAl5bt3zaBRjmW7SGz3u/6LwFpYcOg==}
 
@@ -7888,6 +7906,9 @@ packages:
   istanbul-reports@3.2.0:
     resolution: {integrity: sha512-HGYWWS/ehqTV3xN10i23tkPkpH46MLCIMFNCaaKNavAXTF1RkqxawEPtnjnGZ6XKSInBKkiOA5BKS+aZiY3AvA==}
     engines: {node: '>=8'}
+
+  itty-router@5.0.24:
+    resolution: {integrity: sha512-PXij1qGKtE6jg3dLgrTRdh/Frovl5Wc4Av67sD2xfhDPrgNt4u79++/il8/c/OfZGkhD/8uYJub8tjo+H165rA==}
 
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
@@ -15046,6 +15067,13 @@ snapshots:
       openapi3-ts: 2.0.2
       zod: 4.4.3
 
+  '@ts-rest/serverless@3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.2.0))(@types/aws-lambda@8.10.162)':
+    dependencies:
+      '@ts-rest/core': 3.53.0-rc.1(@types/node@26.2.0)
+      itty-router: 5.0.24
+    optionalDependencies:
+      '@types/aws-lambda': 8.10.162
+
   '@tybys/wasm-util@0.10.3':
     dependencies:
       tslib: 2.8.1
@@ -17041,6 +17069,8 @@ snapshots:
     dependencies:
       html-escaper: 2.0.2
       istanbul-lib-report: 3.0.1
+
+  itty-router@5.0.24: {}
 
   jackspeak@3.4.3:
     dependencies:

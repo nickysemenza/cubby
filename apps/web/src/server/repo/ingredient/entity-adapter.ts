@@ -3,7 +3,6 @@ import {
   ingredientMergeInput,
   ingredientOut,
   mergeSummary as ingredientMergeSummary,
-  ingredientSortableFields,
 } from "@cubby/schemas/ingredient";
 import { z } from "zod";
 
@@ -32,7 +31,6 @@ const ingredientShortcodes = bindShortcodeResolver("ingredient");
 
 export const ingredientEntityAdapter = defineEntityAdapter({
   entity: "ingredient",
-  sort: { fields: ingredientSortableFields, default: "createdAt" },
   lifecycle: {
     delete: INGREDIENT_DELETE_EDGE_POLICY,
     merge: INGREDIENT_MERGE_EDGE_POLICY,

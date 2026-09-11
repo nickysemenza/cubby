@@ -1,4 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
   buildTakeSkip,
@@ -6,10 +7,8 @@ import {
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
-import { expenseSortableFields } from "@cubby/schemas/project";
 import {
   and,
-  eq,
   gt,
   gte,
   inArray,
@@ -42,6 +41,7 @@ import {
   rangeConditions,
   relations,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { disposalPurchaseIds } from "~/server/repo/product/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
@@ -284,10 +284,9 @@ export const buildExpenseWhereClause = async (
       ...relatedWhereConditions("expense", filters, expense.id),
       ...(options?.extraConditions ?? []),
       nameSearch,
-      eqAny(expense.lineKind, filters.lineKind),
-      eqAny(expense.lineBasis, filters.lineBasis),
-      eqAny(expense.costType, filters.costType),
-      eqAny(expense.trade, filters.trade),
+      // `lineKind`, `lineBasis`, `costType`, `trade` (multiselect) and
+      // `future` (boolean) are declared stored filters.
+      ...declaredFilterPredicates("expense", expense, filters),
       projectCondition,
       scopedProjectIds
         ? scopedProjectIds.length > 0
@@ -323,9 +322,6 @@ export const buildExpenseWhereClause = async (
       // and let the presence filter alone decide — or, with no presence filter
       // either, let the whole condition vanish and match every row).
       vendorFilterCondition(db, filters, vendorIds),
-      filters.future !== undefined
-        ? eq(expense.future, filters.future)
-        : undefined,
       filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
       filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
       relativeDateCondition(filters.dateRelative),
@@ -432,7 +428,7 @@ export const expenseList = async (
   const orderByArray = buildOrderBy(
     expense,
     sorts,
-    [...expenseSortableFields],
+    [...generatedEntitySort.expense.fields],
     {
       resolve: resolveExpenseSort,
     },

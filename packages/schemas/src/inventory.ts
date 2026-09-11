@@ -1,6 +1,7 @@
 import { inventoryPlacementValues } from "@cubby/shared";
 import { fdcId } from "@cubby/usda-schemas";
 import { z } from "zod";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { inventoryRelatedFilterFields } from "./related-view";
 import {
   auditDateFilterFields,
@@ -114,20 +115,10 @@ export const inventoryFilterFields = {
 
 export const inventoryFiltersSchema = z.object(inventoryFilterFields);
 
-export const inventorySortableFields = [
-  "createdAt",
-  "updatedAt",
-  "name",
-  "product",
-  "location",
-  "amount",
-  "valuation",
-  // Last deliberate recount (null = never). Sortable so "what haven't I counted
-  // in ages?" is one click — NULLS LAST in both directions per the house rule.
-  "verifiedAt",
-] as const;
-
-export type InventorySortField = (typeof inventorySortableFields)[number];
+// `verifiedAt` (last deliberate recount, null = never) is sortable so "what
+// haven't I counted in ages?" is one click — NULLS LAST in both directions per
+// the house rule.
+export type InventorySortField = GeneratedEntitySortField<"inventory">;
 
 export const inventoryEntryFields = {
   ...generatedInventoryItemFieldSchemas.read,

@@ -1,13 +1,23 @@
 import { isAppRoute, type AppRouter, type AppRoute } from "@ts-rest/core";
 import { z } from "zod";
 
-import { httpMetadataSchema, httpSchemaSources } from "./contract";
+import { httpMetadataSchema } from "./router";
 
+/** Every route of a router, depth first. */
 export function httpRoutes(router: AppRouter): AppRoute[] {
   return Object.values(router).flatMap((route) =>
     isAppRoute(route) ? [route] : httpRoutes(route),
   );
 }
+
+const routeMetadata = (route: AppRoute) =>
+  z.object({ http: httpMetadataSchema }).parse({ http: route.metadata }).http;
+
+/**
+ * Reject routers whose routes would shadow one another or the documentation
+ * endpoints: an RPC domain named like a resource collection, or a fixed path
+ * that a `/:id` pattern would also match.
+ */
 export function checkHttpRoutes(router: AppRouter): void {
   const seen = new Set<string>();
   const routes = httpRoutes(router);
@@ -25,15 +35,13 @@ export function checkHttpRoutes(router: AppRouter): void {
         )
           continue;
         const id = route.path.slice(candidate.path.length - 3);
-        if (httpPathSchema(candidate)?.safeParse({ id }).success)
+        if (
+          candidate.pathParams instanceof z.ZodType &&
+          candidate.pathParams.safeParse({ id }).success
+        )
           throw new Error(`HTTP resource identifier collision: ${route.path}`);
       }
     }
-    z.object({ http: httpMetadataSchema }).parse(route.metadata);
+    routeMetadata(route);
   }
-}
-export function httpPathSchema(route: AppRoute) {
-  return route.pathParams instanceof z.ZodType
-    ? httpSchemaSources.get(route.pathParams)?.schema
-    : undefined;
 }

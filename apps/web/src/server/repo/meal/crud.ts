@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
@@ -10,7 +11,6 @@ import type {
   MealType,
   UpcomingMealSummaryOut,
 } from "@cubby/schemas/meal";
-import { mealSortableFields } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import {
   buildTakeSkip,
@@ -33,8 +33,6 @@ import {
   auditDateWhereConditions,
   buildOrderBy,
   countWhere,
-  eqAny,
-  eqAnyOrPresence,
   executeListQueryWithCount,
   getDb,
   insertAndReturn,
@@ -46,6 +44,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
@@ -177,14 +176,10 @@ export const buildMealWhere = (
     // the manifest renders its control — omitting this is the #588 drift, where
     // the UI sends a filter the server silently ignores.
     ...relatedWhereConditions("meal", filters, meal.id),
-    // OR-ed, not narrowed: "unslotted" is a value of the same picker, so
-    // selecting it alongside `dinner` means "dinner or unslotted".
-    eqAnyOrPresence(
-      meal.mealType,
-      filters.mealType,
-      filters.mealTypePresenceFilter,
-    ),
-    eqAny(meal.mealKind, filters.mealKind),
+    // `mealType` (OR-ed with its presence filter — "unslotted" is a value of
+    // the same picker, so selecting it alongside `dinner` means "dinner or
+    // unslotted") and `mealKind` are declared stored filters.
+    ...declaredFilterPredicates("meal", meal, filters),
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
     filters.recipeCostCoverage === "understated"
@@ -217,13 +212,18 @@ export const mealList = async (
         : sql`${rank} desc nulls last`,
     ];
   };
-  const orderByArray = buildOrderBy(meal, sorts, [...mealSortableFields], {
-    resolve: resolveMealSort,
-    // An unnamed meal displays as its date, so a name sort would otherwise
-    // dump every one of them into an arbitrarily-ordered NULL block. This
-    // orders that block the way its visible label reads.
-    tieBreaker: sql`${meal.date} desc`,
-  });
+  const orderByArray = buildOrderBy(
+    meal,
+    sorts,
+    [...generatedEntitySort.meal.fields],
+    {
+      resolve: resolveMealSort,
+      // An unnamed meal displays as its date, so a name sort would otherwise
+      // dump every one of them into an arbitrarily-ordered NULL block. This
+      // orders that block the way its visible label reads.
+      tieBreaker: sql`${meal.date} desc`,
+    },
+  );
   const { take, skip } = buildTakeSkip(pagination);
 
   const whereCondition = buildMealWhere(db, filters);

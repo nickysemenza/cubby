@@ -69,6 +69,7 @@ export const makeProduct = (
   usdaUnavailable: null,
   stockTracked: null,
   images: [],
+  coverImageUrl: null,
   externalIds: [],
   dataQuality: {
     status: "complete",

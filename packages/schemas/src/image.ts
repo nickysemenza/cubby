@@ -1,5 +1,7 @@
 import { imageOut } from "./entity-definitions/field-primitives";
 import { z } from "zod";
+import { generatedEntitySort } from "./generated/entity-sort.gen";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import {
@@ -37,15 +39,7 @@ export const imageStorageStatusValues = generatedImageStorageStatusValues;
 export type ImageRenderStatus = z.infer<typeof ImageRenderStatus>;
 export type ImageStorageStatus = z.infer<typeof ImageStorageStatus>;
 
-export const imageSortableFields = [
-  "createdAt",
-  "updatedAt",
-  "filename",
-  "size",
-  "status",
-] as const;
-
-export type ImageSortField = (typeof imageSortableFields)[number];
+export type ImageSortField = GeneratedEntitySortField<"image">;
 
 export const ALLOWED_IMAGE_TYPES = [
   "image/jpeg",
@@ -440,7 +434,7 @@ export type ImageWithEntity = z.infer<typeof imageWithEntitySchema>;
 export const imageBrowserListInput = z.object({
   filters: imageListFiltersSchema,
   ...createSortPaginationFields({
-    sortableFields: imageSortableFields,
+    sortableFields: generatedEntitySort.image.fields,
     defaultSort: "createdAt",
   }),
 });

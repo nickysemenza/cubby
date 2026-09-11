@@ -1,5 +1,3 @@
-import { ledgerTransferSortableFields } from "@cubby/schemas/ledger-transfer";
-
 import {
   defineEntityAdapter,
   entityMutationReferences,
@@ -17,7 +15,6 @@ import {
 export const ledgerTransferEntityAdapter = defineEntityAdapter({
   entity: "ledgerTransfer",
   sideEffects: false,
-  sort: { fields: ledgerTransferSortableFields, default: "date" },
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
   repository: {
     get: (ctx, id) => getLedgerTransferByShortcode(ctx.db, id),

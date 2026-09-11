@@ -9,8 +9,8 @@ import {
 } from "@cubby/schemas/image";
 import type { z } from "zod";
 
-import { image } from "~/entities/image.functions";
-import { imageUpload } from "~/lib/image.functions";
+import { imageUploadContract } from "~/contracts/image-upload.contract";
+import { imageContract } from "~/contracts/image.contract";
 import {
   type EntityKernelContext,
   executeEntity,
@@ -162,7 +162,7 @@ async function loadProjectImageSummaries(
   return projectImageSummaries(projectIds, entityIds, imagesByEntityId);
 }
 
-export const imageHandlers = implementOperationDomain(image, {
+export const imageHandlers = implementOperationDomain(imageContract, {
   list: {
     run: (context, input) => productionImageBrowserPorts.list(context, input),
   },
@@ -181,17 +181,20 @@ export const imageHandlers = implementOperationDomain(image, {
   },
 });
 
-export const imageUploadHandlers = implementOperationDomain(imageUpload, {
-  markUploaded: (context, input) =>
-    markImageUploadedWorkflow(context.db, input),
-  uploadImage: (context, input) =>
-    initiateImageUploadWorkflow(context.db, input),
-  uploadDocument: (context, input) =>
-    initiateDocumentUploadWorkflow(context.db, input),
-  importFromUrl: (context, input) =>
-    importImageFromUrlWorkflow(context.db, input),
-  cullPendingImages: (context, input) =>
-    cullPendingImagesWorkflow(context.db, input),
-  cleanupUnreferencedImages: (context) =>
-    cleanupUnreferencedImagesWorkflow(context.db),
-});
+export const imageUploadHandlers = implementOperationDomain(
+  imageUploadContract,
+  {
+    markUploaded: (context, input) =>
+      markImageUploadedWorkflow(context.db, input),
+    uploadImage: (context, input) =>
+      initiateImageUploadWorkflow(context.db, input),
+    uploadDocument: (context, input) =>
+      initiateDocumentUploadWorkflow(context.db, input),
+    importFromUrl: (context, input) =>
+      importImageFromUrlWorkflow(context.db, input),
+    cullPendingImages: (context, input) =>
+      cullPendingImagesWorkflow(context.db, input),
+    cleanupUnreferencedImages: (context) =>
+      cleanupUnreferencedImagesWorkflow(context.db),
+  },
+);

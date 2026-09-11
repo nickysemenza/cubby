@@ -40,6 +40,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
     updatedAt: new Date("2026-01-01"),
   },
   images: [],
+  coverImageUrl: null,
   externalIds: [],
   food: null,
   tags: ["M18"],
