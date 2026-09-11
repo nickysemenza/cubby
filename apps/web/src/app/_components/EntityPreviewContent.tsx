@@ -4,12 +4,15 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageAssociation, ImageWithEntity } from "@cubby/schemas/image";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { locationCoverImage } from "@cubby/schemas/location";
+import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
-import { RECIPE_MACRO_KEYS } from "@cubby/schemas/recipe-shared";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
-import type { NutrientKey } from "@cubby/usda-schemas";
-import { buildNutrients, dataTypeLabel } from "@cubby/usda-schemas";
+import {
+  KEY_NUTRIENT_KEYS,
+  TIER1_NUTRIENTS,
+  dataTypeLabel,
+} from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import { sumBy } from "es-toolkit";
 import { ListChecks } from "lucide-react";
@@ -38,6 +41,7 @@ import { image } from "~/entities/image.functions";
 import { usdaFood } from "~/entities/usda.functions";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { formatCurrency } from "~/lib/utils";
@@ -53,7 +57,7 @@ import {
 } from "./preview/manifest-card";
 import type { HoverPreviewEntity } from "./preview/preview-entities";
 import { PreviewQuery } from "./preview/preview-query";
-import { coverageLabel, formatYield } from "./recipe/recipe-utils";
+import { formatYield } from "./recipe/recipe-utils";
 
 type CompactPreviewPresentation = {
   showOpenAction?: boolean;
@@ -131,14 +135,6 @@ const vendorCrossLink = (shortcode: string, name: string): CrossLink => ({
 });
 
 /** "9/13" when partial, undefined when fully covered (or unknown). */
-const coverageCaption = (
-  covered: number | undefined,
-  total: number,
-): string | undefined => {
-  const { complete, fraction } = coverageLabel(covered, total);
-  return complete ? undefined : fraction;
-};
-
 // Each toXCard maps an entity-detail payload straight into the declarative
 // ManifestCardProps the shared <ManifestCard> renders — no intermediate
 // view-model. <GenericPreviewContent> below pairs each one with its query in
@@ -151,20 +147,10 @@ const coverageCaption = (
 export function toRecipeCard(
   data: EntityDetailByEntity["recipe"],
 ): ManifestCardProps {
-  // Whole-recipe macros from persisted totals. Older rows may not have them
-  // yet, so buildNutrients drops missing values.
-  const macros = buildNutrients(
-    RECIPE_MACRO_KEYS.reduce<Partial<Record<NutrientKey, number | undefined>>>(
-      (acc, key) => {
-        acc[key] = data.totals?.[`${key}Total`];
-        return acc;
-      },
-      {},
-    ),
+  const ingredientCount = sumBy(
+    data.sections,
+    (section) => section.ingredients.length,
   );
-  const ingredientCount =
-    data.totals?.ingredientCount ??
-    sumBy(data.sections, (s) => s.ingredients.length);
   const stepCount = sumBy(data.sections, (s) => s.instructions.length);
   const yieldText = data.yield?.value
     ? `makes ${formatYield(data.yield)}`
@@ -174,25 +160,33 @@ export function toRecipeCard(
   const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
 
   const stats: { label: string; value: ReactNode; caption?: string }[] = [];
-  if (data.totals?.costTotal != null)
+  if (data.totals) {
     stats.push({
       label: "Cost",
-      value: formatCurrency(data.totals.costTotal),
-      caption: coverageCaption(data.totals?.costCovered, ingredientCount),
+      value: formatEstimate(data.totals.cost, formatCurrency),
     });
-  if (data.totals?.caloriesTotal != null)
-    stats.push({
-      label: "Calories",
-      value: `${Math.round(data.totals.caloriesTotal)} kcal`,
-      caption: coverageCaption(data.totals?.caloriesCovered, ingredientCount),
-    });
+    for (const key of KEY_NUTRIENT_KEYS) {
+      const estimate = data.totals.nutrition[key];
+      const info = TIER1_NUTRIENTS[key];
+      stats.push({
+        label: info.displayName,
+        value: formatEstimate(
+          estimate,
+          (value) =>
+            `${info.unit === "G" ? value.toFixed(1) : Math.round(value)} ${info.unit.toLowerCase()}`,
+        ),
+        caption:
+          hasKnownEstimate(estimate) && estimate.status === "partial"
+            ? `${estimate.coverage.covered}/${estimate.coverage.total} ingredient rows`
+            : undefined,
+      });
+    }
+  } else stats.push({ label: "Nutrition", value: "Pending" });
   stats.push({ label: "Ingredients", value: ingredientCount });
   if (stepCount > 0) stats.push({ label: "Steps", value: stepCount });
 
   const body: BodyBlock[] = [];
   if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
-  if (Object.keys(macros).length > 0)
-    body.push({ kind: "nutrients", nutrients: macros, label: "Per recipe" });
   body.push({ kind: "stats", stats });
 
   return {
@@ -619,12 +613,14 @@ export function toMealCard(
           },
           {
             label: "Cost",
-            value: formatCurrency(data.totals.costTotal),
-            caption: data.totals.pending ? "partial" : undefined,
+            value: formatEstimate(data.totals.cost, formatCurrency),
           },
           {
             label: "Calories",
-            value: `${Math.round(data.totals.caloriesTotal)} kcal`,
+            value: formatEstimate(
+              data.totals.nutrition.kcal,
+              (value) => `${Math.round(value)} kcal`,
+            ),
           },
         ],
       },

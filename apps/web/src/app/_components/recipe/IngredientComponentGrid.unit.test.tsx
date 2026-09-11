@@ -1,3 +1,4 @@
+import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import {
   recipeOut,
   type SectionIngredientOut,
@@ -7,6 +8,14 @@ import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { act, render, screen, within } from "@testing-library/react";
 import { ok } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+const unavailableNutrition = buildNutrition(() => ({
+  status: "unavailable" as const,
+  reason: "no_data" as const,
+}));
+const unavailableTotals: NutritionTotals = {
+  cost: { status: "unavailable", reason: "no_data" },
+  nutrition: unavailableNutrition,
+};
 
 import { EMPTY_MARK } from "~/components/matrix/matrix-chrome";
 import type { RecipeCosting } from "~/lib/recipe-costing";
@@ -93,6 +102,7 @@ const costing = (
         nutrient: ok({}),
       },
       totalsMissing: { price: false, weight: false, nutrients: false },
+      nutrition: unavailableNutrition,
     };
   }),
   totals: {
@@ -102,6 +112,7 @@ const costing = (
     nutrients: {},
     missingByType: { price: [], weight: [], nutrients: [] },
     diagnostics: [],
+    estimates: unavailableTotals,
   },
   estimatedRows: new Map(),
   bakerPct: new Map(),

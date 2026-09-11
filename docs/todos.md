@@ -115,6 +115,16 @@ history is the archive. Permanent product constraints live in the
 
 ## Triggered
 
+- **Exact nutrition source tracing** — Resume when upstream conversion work is in
+  scope. Extend `ingredient-parser` reports to retain actual mapping identities,
+  directions, and competing mappings from the selected calculation path. Then
+  update Cubby and expose Product/USDA/manual-mapping provenance through nutrient
+  cells and nested recipes, including consumption and yield adjustments. Show
+  selected results with conflicting alternatives and repair links, preserving
+  existing resolution rules. Return inspected values and traces from the same
+  computation; never infer selected sources from matching values or linked-product
+  lists. The Cubby-only nutrition overhaul does not depend on this work.
+
 - **TanStack Start observability** — Remove Cubby's observability wrapper when
   TanStack Start supplies equivalent named request/result/error events and trace
   hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.

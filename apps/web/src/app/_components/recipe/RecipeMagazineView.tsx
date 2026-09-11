@@ -1,3 +1,9 @@
+import {
+  hasKnownEstimate,
+  type NutritionEstimate,
+  type NutritionTotals,
+  type MeasureEstimate,
+} from "@cubby/schemas/nutrition";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { sumBy } from "es-toolkit";
 import { Eye, EyeOff } from "lucide-react";
@@ -7,6 +13,8 @@ import { Row, Stack } from "~/components/layout";
 import { MarkdownText } from "~/components/markdown";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { sectionRuleClass } from "~/components/ui/section-rule";
+import { scaleEstimate } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import type {
   CalculateTotalsResult,
@@ -26,9 +34,6 @@ import {
   buildRecipeKicker,
   getEffectiveServings,
   getIngredientName,
-  getServingBasis,
-  type RecipeMacroStats,
-  recipeMacroStats,
 } from "./recipe-utils";
 import { RecipeHero } from "./RecipeHero";
 import { RecipeInstructions } from "./RecipeInstructions";
@@ -49,24 +54,38 @@ function VitalsPanel({
   show,
   onToggle,
 }: {
-  stats: RecipeMacroStats;
+  stats: NutritionTotals & { basisLabel: string };
   show: boolean;
   onToggle: () => void;
 }) {
-  const macros = MACRO_DEFS.map((m) => ({
-    label: m.label,
-    color: m.color,
-    grams: stats[m.key] ?? 0,
-    kcal: (stats[m.key] ?? 0) * m.kcalPerG,
-  })).filter((m) => m.grams > 0);
+  const macros = MACRO_DEFS.map((m) => {
+    const estimate = stats.nutrition[m.key];
+    return {
+      label: m.label,
+      color: m.color,
+      estimate,
+      kcal: hasKnownEstimate(estimate) ? estimate.lower * m.kcalPerG : 0,
+    };
+  });
   const macroKcal = sumBy(macros, (m) => m.kcal);
 
   // Two small nutrient-density figures, re-expressed from the same cost/kcal/
   // protein numbers already shown above — no new engine call, just division
   // (see nutrition-intel.ts). Null-safe: a recipe missing protein or calorie
   // data just omits these rather than showing a bogus ratio.
-  const proteinDensity = proteinPer100Kcal(stats.protein, stats.kcal);
-  const costPerProteinGram = costPerNutrient(stats.cost, stats.protein);
+  const exactValue = (estimate: MeasureEstimate) =>
+    estimate.status === "complete" &&
+    (estimate.upper == null || estimate.upper === estimate.lower)
+      ? estimate.lower
+      : undefined;
+  const proteinDensity = proteinPer100Kcal(
+    exactValue(stats.nutrition.protein),
+    exactValue(stats.nutrition.kcal),
+  );
+  const costPerProteinGram = costPerNutrient(
+    exactValue(stats.cost),
+    exactValue(stats.nutrition.protein),
+  );
 
   return (
     <aside className="w-full lg:w-[230px] lg:self-start lg:justify-self-end">
@@ -84,25 +103,19 @@ function VitalsPanel({
             </button>
           </Row>
 
-          {(stats.cost != null || stats.kcal != null) && (
-            <Row align="baseline" justify="between" className="mb-2">
-              {stats.cost != null && (
-                <span className="font-heading text-2xl font-semibold tracking-tight">
-                  {formatCurrency(stats.cost)}
-                </span>
+          <div className="mb-3 space-y-1">
+            <div className="font-heading text-lg font-semibold tracking-tight">
+              {formatEstimate(stats.cost, formatCurrency)}
+            </div>
+            <div className="font-mono text-sm text-muted-foreground tabular-nums">
+              {formatEstimate(
+                stats.nutrition.kcal,
+                (value) => `${Math.round(value)} kcal`,
               )}
-              {stats.kcal != null && (
-                <span className="font-mono text-sm text-muted-foreground tabular-nums">
-                  {Math.round(stats.kcal)}
-                  <span className="ml-1 text-2xs tracking-wide uppercase">
-                    kcal
-                  </span>
-                </span>
-              )}
-            </Row>
-          )}
+            </div>
+          </div>
 
-          {macros.length > 0 && macroKcal > 0 && (
+          {macroKcal > 0 && (
             <>
               <div className="flex h-2 overflow-hidden rounded-full bg-muted">
                 {macros.map((m) => (
@@ -115,24 +128,29 @@ function VitalsPanel({
                   />
                 ))}
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-1 text-center">
-                {macros.map((m) => (
-                  <div key={m.label}>
-                    <div className="font-mono text-sm tabular-nums">
-                      {Math.round(m.grams)}g
-                    </div>
-                    <div className="flex items-center justify-center gap-1 text-2xs tracking-wide text-muted-foreground uppercase">
-                      <span
-                        className="inline-block size-1.5 rounded-full"
-                        style={{ backgroundColor: m.color }}
-                      />
-                      {m.label}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <p className="mt-1 text-2xs text-muted-foreground">
+                Macro mix uses known lower amounts.
+              </p>
             </>
           )}
+          <dl className="mt-2 space-y-2">
+            {macros.map((macro) => (
+              <div
+                key={macro.label}
+                className="flex flex-wrap items-baseline justify-between gap-x-2"
+              >
+                <dt className="text-2xs text-muted-foreground">
+                  {macro.label}
+                </dt>
+                <dd className="font-mono text-xs tabular-nums">
+                  {formatEstimate(
+                    macro.estimate,
+                    (value) => `${Number(value.toFixed(1))} g`,
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
 
           {(proteinDensity != null || costPerProteinGram != null) && (
             <Row
@@ -174,6 +192,9 @@ interface RecipeMagazineViewProps {
    * "2 tsp ground ginger" → "3 g"), so the ledger matches the table view.
    */
   costing: RecipeCosting | null;
+  nutrition: NutritionEstimate | null;
+  nutritionBasisLabel: string;
+  nutritionFactor?: number;
 }
 
 /** Broadsheet section heading: heavy top rule + serif title. */
@@ -292,11 +313,13 @@ export function RecipeMagazineView({
   recipe,
   totals,
   costing,
+  nutrition,
+  nutritionBasisLabel,
+  nutritionFactor = 1,
 }: RecipeMagazineViewProps) {
   const servings = getEffectiveServings(recipe);
   // Per-portion basis: explicit servings, else the yield count labelled by unit
   // (e.g. "/ cup", "/ churro"); falls back to "each".
-  const basis = getServingBasis(recipe);
 
   // Ingredient id → derived gram weight, from the same engine the table uses.
   const gramById = useMemo(() => gramMapFromCosting(costing), [costing]);
@@ -307,14 +330,15 @@ export function RecipeMagazineView({
   const kicker = buildRecipeKicker({ yield: recipe.yield, servings }).join(
     "  ·  ",
   );
-  const stats = totals ? recipeMacroStats(totals, basis) : null;
-  const hasStats =
-    !!stats &&
-    (stats.cost != null ||
-      stats.kcal != null ||
-      stats.protein != null ||
-      stats.fat != null ||
-      stats.carbs != null);
+  const stats =
+    totals && nutrition
+      ? {
+          basisLabel: nutritionBasisLabel,
+          cost: scaleEstimate(totals.estimates.cost, nutritionFactor),
+          nutrition,
+        }
+      : null;
+  const hasStats = stats != null;
   const [showVitals, setShowVitals] = useState(true);
 
   return (

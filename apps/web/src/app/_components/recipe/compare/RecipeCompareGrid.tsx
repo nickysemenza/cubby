@@ -1,3 +1,8 @@
+import type {
+  MeasureEstimate,
+  NutritionTotals,
+} from "@cubby/schemas/nutrition";
+import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { Link } from "@tanstack/react-router";
 import { ChefHat, Equal, X } from "lucide-react";
@@ -6,11 +11,9 @@ import { type ReactNode, useMemo, useState } from "react";
 import { stickyRowHeaderCard } from "~/components/matrix/matrix-chrome";
 import { Image } from "~/components/ui/image";
 import { ChoiceSwitcher } from "~/components/ui/view-switcher";
-import {
-  formatCurrencyRange,
-  formatNumberRange,
-  rangeMidpoint,
-} from "~/lib/format-range";
+import { rangeMidpoint } from "~/lib/format-range";
+import { scaleEstimate } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import type { RecipeCosting } from "~/lib/recipe-costing";
 import { getRecipeIngredientName } from "~/lib/recipe-graph";
@@ -18,14 +21,7 @@ import { formatCurrency } from "~/lib/utils";
 
 import { compactRound } from "../recipe-scaling-pct";
 import { RecipeSourceLink, sourceLabel } from "../recipe-source";
-import {
-  coverageLabel,
-  formatYield,
-  getServingBasis,
-  perServingRange,
-  perUnitSuffix,
-  type RecipeHeadlineTotals,
-} from "../recipe-utils";
+import { formatYield, getServingBasis, perUnitSuffix } from "../recipe-utils";
 import {
   buildCompareRows,
   type CompareBasis,
@@ -41,9 +37,9 @@ import { DistributionGlyph, StripPlotCell } from "./DeviationBar";
 /** A recipe plus the figures the comparison grid renders. */
 export interface ComparedRecipe {
   recipe: RecipeOut;
-  headline: RecipeHeadlineTotals | null;
   effectiveServings: number | null;
   costing: RecipeCosting | null;
+  estimates: NutritionTotals | null;
 }
 
 /**
@@ -205,92 +201,48 @@ export const RecipeCompareGrid: React.FC<{
     [perRecipe, basis],
   );
 
-  // Pre-compute per-recipe detail figures and their cross-recipe stats. Each
-  // per-serving figure carries both range bounds; stats aggregate the midpoint
-  // so a ranged recipe ($3–5) compares fairly against a flat one ($4.50).
-  type Ranged = { lower: number; upper?: number };
-  // Per-serving figures via the shared perServingRange (its {value,upper} maps
-  // to this view's {lower,upper}), so the division lives in one place.
-  const costPerServing = (c: ComparedRecipe): Ranged | null => {
-    const sb = getServingBasis(c.recipe);
-    if (!sb || !c.headline) return null;
-    const per = perServingRange(
-      c.headline.cost,
-      c.headline.costUpper,
-      sb.divisor,
-    );
-    return { lower: per.value, upper: per.upper };
-  };
-  const caloriesPerServing = (c: ComparedRecipe): Ranged | null => {
-    const sb = getServingBasis(c.recipe);
-    if (!sb || !c.headline) return null;
-    const per = perServingRange(
-      c.headline.calories,
-      c.headline.caloriesUpper,
-      sb.divisor,
-    );
-    return { lower: per.value, upper: per.upper };
-  };
+  // Comparisons use complete estimates; an incomplete subtotal is not a
+  // comparable complete recipe. Ranges retain their displayed bounds while
+  // the distribution statistics use their midpoint.
+  const midpoint = (estimate: MeasureEstimate | undefined): number | null =>
+    estimate?.status === "complete"
+      ? rangeMidpoint(estimate.lower, estimate.upper ?? undefined)
+      : null;
   const present = (xs: (number | null)[]): number[] =>
     xs.filter((x): x is number => x != null);
-  const midOf = (r: Ranged | null): number | null =>
-    r ? rangeMidpoint(r.lower, r.upper) : null;
-
+  const servingMidpoint = (c: ComparedRecipe, key: "cost" | "kcal") => {
+    const basis = getServingBasis(c.recipe);
+    const estimate =
+      key === "cost" ? c.estimates?.cost : c.estimates?.nutrition.kcal;
+    return estimate && basis
+      ? midpoint(scaleEstimate(estimate, 1 / basis.divisor))
+      : null;
+  };
   const costStats = computeStats(
-    present(
-      compared.map((c) =>
-        c.headline
-          ? rangeMidpoint(c.headline.cost, c.headline.costUpper)
-          : null,
-      ),
-    ),
+    present(compared.map((c) => midpoint(c.estimates?.cost))),
   );
   const costPerServingStats = computeStats(
-    present(compared.map((c) => midOf(costPerServing(c)))),
+    present(compared.map((c) => servingMidpoint(c, "cost"))),
   );
   const caloriesStats = computeStats(
-    present(
-      compared.map((c) =>
-        c.headline
-          ? rangeMidpoint(c.headline.calories, c.headline.caloriesUpper)
-          : null,
-      ),
-    ),
+    present(compared.map((c) => midpoint(c.estimates?.nutrition.kcal))),
   );
   const caloriesPerServingStats = computeStats(
-    present(compared.map((c) => midOf(caloriesPerServing(c)))),
+    present(compared.map((c) => servingMidpoint(c, "kcal"))),
   );
   const proteinStats = computeStats(
-    present(
-      compared.map((c) =>
-        c.headline
-          ? rangeMidpoint(c.headline.protein, c.headline.proteinUpper)
-          : null,
-      ),
-    ),
+    present(compared.map((c) => midpoint(c.estimates?.nutrition.protein))),
   );
-
-  // Protein density and price-per-nutrient, from the same headline totals as
-  // the rows above. Each combines two independently-ranged figures (cost vs.
-  // protein, protein vs. calories), so — unlike Cost/serving's single-scalar
-  // division — these render one point value from each figure's midpoint
-  // rather than propagating a compound range. `costPerNutrient`/
-  // `proteinPer100Kcal` already null-guard a missing/zero denominator, so a
-  // recipe with no protein or calorie data just shows a dash here.
   const proteinDensity = (c: ComparedRecipe): number | null =>
-    c.headline
-      ? proteinPer100Kcal(
-          rangeMidpoint(c.headline.protein, c.headline.proteinUpper),
-          rangeMidpoint(c.headline.calories, c.headline.caloriesUpper),
-        )
-      : null;
+    proteinPer100Kcal(
+      midpoint(c.estimates?.nutrition.protein),
+      midpoint(c.estimates?.nutrition.kcal),
+    );
   const costPerProteinGram = (c: ComparedRecipe): number | null =>
-    c.headline
-      ? costPerNutrient(
-          rangeMidpoint(c.headline.cost, c.headline.costUpper),
-          rangeMidpoint(c.headline.protein, c.headline.proteinUpper),
-        )
-      : null;
+    costPerNutrient(
+      midpoint(c.estimates?.cost),
+      midpoint(c.estimates?.nutrition.protein),
+    );
   const proteinDensityStats = computeStats(
     present(compared.map(proteinDensity)),
   );
@@ -319,6 +271,10 @@ export const RecipeCompareGrid: React.FC<{
         </span>
       </div>
 
+      <p className="px-2 py-2 text-xs text-muted-foreground">
+        Nutrition averages and ratios use complete estimates; ranges use their
+        midpoint.
+      </p>
       <table className="w-full border-collapse text-sm">
         <thead>
           <tr>
@@ -470,8 +426,10 @@ export const RecipeCompareGrid: React.FC<{
             label="Total cost"
             recipes={compared}
             renderCell={(c) =>
-              c.headline
-                ? formatCurrencyRange(c.headline.cost, c.headline.costUpper)
+              c.estimates
+                ? formatEstimate(c.estimates.cost, (value) =>
+                    formatCurrency(value),
+                  )
                 : DASH
             }
             average={<AverageCell stats={costStats} format={currencyFormat} />}
@@ -480,11 +438,14 @@ export const RecipeCompareGrid: React.FC<{
             label="Cost / serving"
             recipes={compared}
             renderCell={(c) => {
-              const cps = costPerServing(c);
               const sb = getServingBasis(c.recipe);
-              return cps != null && sb ? (
+              const estimate =
+                c.estimates && sb
+                  ? scaleEstimate(c.estimates.cost, 1 / sb.divisor)
+                  : null;
+              return estimate && sb ? (
                 <span>
-                  {formatCurrencyRange(cps.lower, cps.upper)}{" "}
+                  {formatEstimate(estimate, formatCurrency)}{" "}
                   <span className="text-xs text-muted-foreground">
                     {perUnitSuffix(sb.noun)}
                   </span>
@@ -504,8 +465,11 @@ export const RecipeCompareGrid: React.FC<{
             label="Calories"
             recipes={compared}
             renderCell={(c) =>
-              c.headline
-                ? `${formatNumberRange(c.headline.calories, c.headline.caloriesUpper, (n) => `${Math.round(n)}`)} kcal`
+              c.estimates
+                ? formatEstimate(
+                    c.estimates.nutrition.kcal,
+                    (n) => `${Math.round(n)} kcal`,
+                  )
                 : DASH
             }
             average={
@@ -519,9 +483,13 @@ export const RecipeCompareGrid: React.FC<{
             label="Calories / serving"
             recipes={compared}
             renderCell={(c) => {
-              const cps = caloriesPerServing(c);
-              return cps != null
-                ? `${formatNumberRange(cps.lower, cps.upper, (n) => `${Math.round(n)}`)} kcal`
+              const sb = getServingBasis(c.recipe);
+              const estimate =
+                c.estimates && sb
+                  ? scaleEstimate(c.estimates.nutrition.kcal, 1 / sb.divisor)
+                  : null;
+              return estimate
+                ? formatEstimate(estimate, (n) => `${Math.round(n)} kcal`)
                 : DASH;
             }}
             average={
@@ -535,8 +503,11 @@ export const RecipeCompareGrid: React.FC<{
             label="Protein"
             recipes={compared}
             renderCell={(c) =>
-              c.headline
-                ? `${formatNumberRange(c.headline.protein, c.headline.proteinUpper, (n) => `${Math.round(n)}`)}g`
+              c.estimates
+                ? formatEstimate(
+                    c.estimates.nutrition.protein,
+                    (n) => `${Number(n.toFixed(1))} g`,
+                  )
                 : DASH
             }
             average={
@@ -578,13 +549,11 @@ export const RecipeCompareGrid: React.FC<{
             label="Costed"
             recipes={compared}
             renderCell={(c) => {
-              if (!c.costing) return DASH;
-              const total = c.costing.totals.totalIngredients;
-              const covered =
-                total - c.costing.totals.missingByType.price.length;
+              const estimate = c.estimates?.cost;
+              if (!estimate || !hasKnownEstimate(estimate)) return DASH;
               return (
                 <span className="text-xs text-muted-foreground">
-                  {coverageLabel(covered, total).fraction}
+                  {estimate.coverage.covered}/{estimate.coverage.total}
                 </span>
               );
             }}

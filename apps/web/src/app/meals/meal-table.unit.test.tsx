@@ -1,4 +1,5 @@
 import { mealOut } from "@cubby/schemas/meal";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -17,9 +18,16 @@ const meal = mealOut.parse({
   mealKind: "cooked",
   recipes: [],
   totals: {
-    costTotal: 18.5,
-    caloriesTotal: 640,
-    pending: false,
+    cost: {
+      status: "complete",
+      lower: 18.5,
+      upper: null,
+      coverage: { covered: 1, total: 1 },
+    },
+    nutrition: buildNutrition(() => ({
+      status: "unavailable",
+      reason: "no_data",
+    })),
   },
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),

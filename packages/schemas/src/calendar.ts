@@ -9,6 +9,7 @@ import {
 } from "./identifiers";
 import { oneOrMany, presenceFilter } from "./pagination";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
+import { nutritionTotals } from "./nutrition";
 import {
   plainDate,
   projectKindSchema,
@@ -55,9 +56,7 @@ export const calendarMealItem = z.object({
   mealKind: mealKindSchema,
   recipeNames: z.array(z.string()),
   coverImageUrl: z.url().nullable(),
-  cost: money,
-  calories: z.number(),
-  nutritionPending: z.boolean(),
+  mealTotals: nutritionTotals,
 });
 
 export const calendarTaskItem = z.object({
@@ -175,8 +174,7 @@ export type CalendarRangeInput = z.infer<typeof calendarRangeInput>;
 export const calendarDaySummary = z.object({
   actualSpend: money,
   plannedSpend: money,
-  calories: z.number(),
-  nutritionPending: z.boolean(),
+  mealTotals: nutritionTotals,
   taskCount: z.number().int(),
   expenseCount: z.number().int(),
   mealCount: z.number().int(),

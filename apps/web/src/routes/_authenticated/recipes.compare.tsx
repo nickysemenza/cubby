@@ -21,7 +21,6 @@ import {
 import {
   getEffectiveServings,
   getIngredientName,
-  recipeHeadlineTotals,
 } from "~/app/_components/recipe/recipe-utils";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -95,7 +94,7 @@ function RecipeComparePage() {
       return {
         recipe,
         costing,
-        headline: costing ? recipeHeadlineTotals(costing.totals) : null,
+        estimates: costing?.totals.estimates ?? null,
         effectiveServings: getEffectiveServings(recipe),
       };
     });

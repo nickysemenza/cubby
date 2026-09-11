@@ -16,6 +16,10 @@ import type {
 } from "@cubby/recipebridge";
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import type {
+  NutritionEstimate,
+  NutritionTotals,
+} from "@cubby/schemas/nutrition";
 import type { ProductWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import type {
   RecipeGraphOut,
@@ -32,6 +36,10 @@ import {
 } from "@cubby/usda-schemas";
 import { err, ok } from "neverthrow";
 
+import {
+  fromNamedEstimates,
+  fromWMeasureEstimate,
+} from "~/lib/nutrition-estimates";
 import { toWFoodInput } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
@@ -159,6 +167,8 @@ export type IngredientDataItem = CostingRow & {
     weight: boolean;
     nutrients: boolean;
   };
+  /** Canonical estimate for every tier-1 nutrient on this row. */
+  nutrition: NutritionEstimate;
 };
 
 /**
@@ -201,6 +211,8 @@ export type CalculateTotalsResult = {
   };
   /** Per-row trace, in input order. Cheap: records what was already computed. */
   diagnostics: RowDiagnostic[];
+  /** Canonical completeness-aware totals for durable nutrition consumers. */
+  estimates: NutritionTotals;
 };
 
 /** One recipe's complete costing: totals plus everything the per-row views need. */
@@ -355,6 +367,10 @@ const projectRecipeCosting = (
       nutrients: [...w.missing_by_type.nutrients],
     },
     diagnostics: w.rows.map(toRowDiagnostic),
+    estimates: {
+      cost: fromWMeasureEstimate(w.estimates.cost),
+      nutrition: fromNamedEstimates(w.estimates.nutrition),
+    },
   };
   if (w.price_upper != null) totals.priceUpper = w.price_upper;
   if (anyNutrientUpper) totals.nutrientsUpper = nutrientsUpper;
@@ -376,6 +392,7 @@ const projectRecipeCosting = (
           weight: true,
           nutrients: true,
         },
+        nutrition: r ? fromNamedEstimates(r.nutrition) : fromNamedEstimates([]),
       };
     }),
     estimatedRows: new Map(

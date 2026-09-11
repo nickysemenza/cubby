@@ -1,5 +1,5 @@
 /**
- * Persistence + invalidation for precomputed recipe totals (cost/calories).
+ * Persistence + invalidation for precomputed recipe cost and nutrition totals.
  * Totals live in the `Recipe.totals` jsonb; `totalsComputedAt IS NULL` marks a
  * row stale. Marking is event-driven (recipe/product writes); recompute is done
  * by the presence-driven drain. See recipe-costing.service.
@@ -7,7 +7,7 @@
 
 import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
-import { and, count, eq, inArray, or, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -19,22 +19,7 @@ import {
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-// JSONB totals written before per-target nutrient coverage existed look fresh
-// by timestamp alone, but cannot safely answer protein (or any macro) portion
-// estimates. Keep the persisted data readable and let the normal stale drain
-// upgrade it; no migration/backfill stamp is needed.
-const totalsNeedNutrientCoverage = sql`(
-  ${recipe.totals} ->> 'caloriesCovered' IS NULL OR
-  ${recipe.totals} ->> 'proteinCovered' IS NULL OR
-  ${recipe.totals} ->> 'fatCovered' IS NULL OR
-  ${recipe.totals} ->> 'carbsCovered' IS NULL OR
-  ${recipe.totals} ->> 'fiberCovered' IS NULL OR
-  ${recipe.totals} ->> 'sodiumCovered' IS NULL
-)`;
-const recipeTotalsAreStale = or(
-  sql`${recipe.totalsComputedAt} IS NULL`,
-  totalsNeedNutrientCoverage,
-);
+const recipeTotalsAreStale = sql`(${recipe.totalsComputedAt} IS NULL OR ${recipe.totals} IS NULL)`;
 
 /**
  * Persist computed totals for one or many recipes in one raw `UPDATE ... FROM
@@ -148,7 +133,7 @@ export const markRecipesStaleReturningTransitioned = async (
   return rows.rows.map((r) => r.id);
 };
 
-/** Count active recipes pending recompute, including legacy totals without coverage. */
+/** Count active recipes whose derived totals are missing or stale. */
 export const countStaleRecipeTotals = async (db: Database): Promise<number> => {
   const [row] = await getDb(db)
     .select({ n: count() })
@@ -231,11 +216,9 @@ export const selectAllActiveRecipeIds = async (
   });
 
 /**
- * All active recipe ids whose totals are stale — the id-returning sibling of
- * {@link countStaleRecipeTotals} (same predicate: timestamp stale OR legacy
- * totals missing nutrient coverage, and not deleted). Used to seed a
- * stale-only recompute pass. Timestamp-stale rows use the partial index; the
- * one-time legacy JSONB upgrade may scan fresh timestamp rows.
+ * All active recipe ids whose totals are missing or stale — the id-returning
+ * sibling of {@link countStaleRecipeTotals}. Used to seed a stale-only
+ * recompute pass; timestamp-stale rows use the partial index.
  */
 export const selectAllStaleRecipeIds = async (
   db: Database,

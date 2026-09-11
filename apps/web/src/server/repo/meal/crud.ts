@@ -166,7 +166,7 @@ export const buildMealWhere = (
     .where(
       and(
         notDeleted(mealRecipe),
-        sql`(${recipe.totals} ->> 'costCovered')::int < (${recipe.totals} ->> 'ingredientCount')::int`,
+        sql`${recipe.totals} -> 'cost' ->> 'status' = 'partial'`,
       ),
     );
 

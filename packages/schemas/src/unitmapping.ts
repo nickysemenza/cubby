@@ -17,6 +17,12 @@ const sourceMetadata = z.discriminatedUnion("type", [
   }),
 ]);
 
+// A known zero is a valid one-way conversion from a positive source amount.
+const mappingTargetAmount = amount.refine((a) => a.value >= 0, {
+  error: "Mapping target must be zero or greater",
+  path: ["value"],
+});
+
 export const unitMappingBase = z.object({
   a: amount.describe('left side of the pair, e.g. { value: 8, unit: "oz" }'),
   b: amount.describe(
@@ -32,7 +38,7 @@ export const unitMappingInput = z.object({
   a: positiveAmount.describe(
     'left side of the pair, e.g. { value: 8, unit: "oz" }',
   ),
-  b: positiveAmount.describe(
+  b: mappingTargetAmount.describe(
     'right side of the pair, e.g. { value: 10, unit: "dollar" }',
   ),
   source: z
@@ -53,7 +59,7 @@ export const mcpUnitMappingInput = z
     a: positiveAmount.describe(
       'left side of the pair, e.g. { value: 8, unit: "oz" }',
     ),
-    b: positiveAmount.describe(
+    b: mappingTargetAmount.describe(
       'right side of the pair, e.g. { value: 10, unit: "dollar" }',
     ),
     source: z.string().optional(),

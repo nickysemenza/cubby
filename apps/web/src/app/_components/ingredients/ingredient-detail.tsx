@@ -19,6 +19,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { sourceNutritionEstimate } from "~/lib/nutrition-format";
 import {
   getAllUnitMappingsFromProduct,
   getIngredientMappings,
@@ -107,9 +108,18 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
             content: (
               <Stack gap="md">
                 <NutritionLabel
-                  nutrients={nutritionInfo.nutrientsPer100}
+                  estimates={sourceNutritionEstimate(
+                    nutritionInfo.nutrientsPer100,
+                  )}
                   servingLabel="per 100 g"
                 />
+                <Description>
+                  Shown from {nutritionProduct.name}
+                  {nutritionProduct.manufacturer
+                    ? ` by ${nutritionProduct.manufacturer}`
+                    : ""}
+                  .
+                </Description>
                 <NutrientDensityStats
                   nutrients={nutritionInfo.nutrientsPer100}
                   mappings={nutritionMappings}

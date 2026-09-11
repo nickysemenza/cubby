@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
+import { sourceNutritionEstimate } from "~/lib/nutrition-format";
 import {
   getAllUnitMappingsFromProduct,
   unitMappingsFromFood,
@@ -202,7 +203,7 @@ export const USDAFoodDetail: React.FC<{
   const nutritionSection = (
     <Stack gap="sm">
       <NutritionLabel
-        nutrients={nutritionInfo.nutrientsPer100}
+        estimates={sourceNutritionEstimate(nutritionInfo.nutrientsPer100)}
         servingLabel="per 100 g"
       />
       {/* An unlinked food has no price — gate on a linked product existing at

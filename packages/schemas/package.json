@@ -21,6 +21,7 @@
     "./recommendations": "./src/recommendations.ts",
     "./identifiers": "./src/identifiers.ts",
     "./money": "./src/money.ts",
+    "./nutrition": "./src/nutrition.ts",
     "./testing": "./src/test-support/identifiers.ts",
     "./common": "./src/common.ts",
     "./base-entity": "./src/base-entity.ts",

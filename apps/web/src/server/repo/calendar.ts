@@ -11,11 +11,13 @@ import {
   type MealType,
   mealTypeRank,
 } from "@cubby/schemas/meal-classification";
+import type { NutritionTotals } from "@cubby/schemas/nutrition";
 import { addDays } from "date-fns";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import { and, eq, gte, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { aggregateTotals } from "~/lib/nutrition-estimates";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, task } from "~/server/db/schema";
@@ -38,8 +40,7 @@ import { dbTaskToAPI } from "./task/helpers";
 const emptyDaySummary = (): CalendarDaySummary => ({
   actualSpend: 0,
   plannedSpend: 0,
-  calories: 0,
-  nutritionPending: false,
+  mealTotals: aggregateTotals([]),
   taskCount: 0,
   expenseCount: 0,
   mealCount: 0,
@@ -249,9 +250,7 @@ const mapMealItems = (
       meal.recipes
         .map((recipe) => recipeCoverImageUrls.get(recipe.recipeId))
         .find((url) => url !== undefined) ?? null,
-    cost: meal.totals.costTotal,
-    calories: meal.totals.caloriesTotal,
-    nutritionPending: meal.totals.pending,
+    mealTotals: meal.totals,
   }));
 
 const mapTaskItems = (
@@ -363,12 +362,14 @@ const summarizeCalendarDays = (
   items: CalendarItem[],
 ) => {
   const days: Record<string, CalendarDaySummary> = {};
+  const mealTotalsByDay: Record<string, NutritionTotals[]> = {};
   for (
     let day = input.startDate;
     day < input.endDateExclusive;
     day = shiftPlainDate(day, 1)
   ) {
     days[day] = emptyDaySummary();
+    mealTotalsByDay[day] = [];
   }
   for (const item of items) {
     const firstDay =
@@ -386,8 +387,7 @@ const summarizeCalendarDays = (
       if (!summary) continue;
       if (item.kind === "meal") {
         summary.mealCount += 1;
-        summary.calories += item.calories;
-        summary.nutritionPending ||= item.nutritionPending;
+        mealTotalsByDay[day]?.push(item.mealTotals);
       } else if (item.kind === "task") summary.taskCount += 1;
       else if (item.kind === "expense") {
         summary.expenseCount += 1;
@@ -395,6 +395,10 @@ const summarizeCalendarDays = (
         else summary.actualSpend += item.cost ?? 0;
       } else summary.projectCount += 1;
     }
+  }
+  for (const [day, totals] of Object.entries(mealTotalsByDay)) {
+    const summary = days[day];
+    if (summary) summary.mealTotals = aggregateTotals(totals);
   }
   return days;
 };

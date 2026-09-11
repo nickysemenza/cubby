@@ -1,4 +1,5 @@
 import { getMealPreparationsOut, mealOut } from "@cubby/schemas/meal";
+import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
@@ -16,13 +17,27 @@ it("waits for meal detail when preparations resolve first, then uses the meal's 
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   const mealId = testShortcode("meal", "MEA-2222");
+  const totals: NutritionTotals = {
+    cost: { status: "unavailable", reason: "empty" },
+    nutrition: buildNutrition(() => ({
+      status: "unavailable",
+      reason: "empty",
+    })),
+  };
   const preparation = mock(getMealPreparationsOut, {
-    overrides: { mealId, preparations: [] },
+    overrides: {
+      mealId,
+      preparations: [],
+      totals: {
+        confirmed: { portionCount: 0, totals },
+        projected: { portionCount: 0, totals },
+      },
+    },
   });
   client.setQueryData(meal.getPreparations.queryKey({ mealId }), preparation);
   client.setQueryData(ledgerParty.options.queryKey(null), []);
   const target = mock(mealOut, {
-    overrides: { id: mealId, date: "2026-03-15", recipes: [] },
+    overrides: { id: mealId, date: "2026-03-15", recipes: [], totals },
   });
   client.setQueryData(
     meal.getByDateRange.queryKey({ from: "2026-02-13", to: "2026-04-14" }),

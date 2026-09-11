@@ -1,4 +1,5 @@
 import type { CookbookShortcode } from "@cubby/schemas/identifiers";
+import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { RecipeListItem } from "@cubby/schemas/recipe";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCcw } from "lucide-react";
@@ -13,11 +14,12 @@ import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
-import { Skeleton } from "~/components/ui/skeleton";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
-import { formatCurrencyRange, formatNumberRange } from "~/lib/format-range";
+import { scaleEstimate } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { relatedData } from "~/lib/related-data.functions";
+import { formatCurrency } from "~/lib/utils";
 
 import {
   numberCellData,
@@ -39,43 +41,14 @@ import {
 } from "../_components/recipe/recipe-source";
 import { RecipeTag } from "../_components/recipe/recipe-tag";
 import {
-  coverageLabel,
   formatRecipeTime,
   formatYield,
   getServingBasis,
-  perServingRange,
   perUnitSuffix,
 } from "../_components/recipe/recipe-utils";
 import { TruncatedList } from "../_components/TruncatedList";
 import { totalsLookStuck } from "./recipe-totals-staleness";
 import { recipe as recipeOperations } from "./recipe.functions";
-
-/**
- * A computed list-cell value (cost, calories) whose confidence depends on how
- * many of the recipe's ingredients had the underlying data. When coverage is
- * complete the value stands on its own — no fraction. When partial, the value is
- * preliminary, so it's greyed and annotated with the (covered/total) fraction.
- */
-const CoverageValue: React.FC<{
-  covered: number;
-  total: number;
-  children: ReactNode;
-}> = ({ covered, total, children }) => {
-  const { complete, fraction } = coverageLabel(covered, total);
-  return (
-    <span
-      className={complete ? undefined : "opacity-60"}
-      title={`${fraction} ingredients`}
-    >
-      {children}
-      {!complete && (
-        <span className="ml-1 hidden text-2xs text-muted-foreground sm:inline">
-          ({fraction})
-        </span>
-      )}
-    </span>
-  );
-};
 
 const NO_INGREDIENT_OPTIONS: FilterableComboboxItem[] = [];
 
@@ -98,7 +71,7 @@ function StuckTotalsCell({
     success: "Recomputed recipe totals.",
   });
   const notCosted = (
-    <span className="text-2xs text-muted-foreground italic">not costed</span>
+    <span className="text-2xs text-muted-foreground">Pending</span>
   );
   if (!withAction) return notCosted;
   return (
@@ -109,7 +82,7 @@ function StuckTotalsCell({
         variant="outline"
         size="xs"
         disabled={recompute.isPending}
-        title="Recompute this recipe's cost & calorie totals"
+        title="Recompute this recipe's cost and nutrition"
         onClick={(e) => {
           e.stopPropagation();
           recompute.mutate({ id: recipe.id });
@@ -311,121 +284,73 @@ export function RecipeList({
           },
         }),
       );
-      // Total cost — read from the server-persisted rollup (recipe.totals).
-      // Accessor (not display) so the column sorts server-side by costTotal;
-      // null totals = not yet computed (the drain will fill it) → skeleton.
-      add(
-        columnHelper.accessor((row) => row.totals?.costTotal ?? undefined, {
-          id: "costTotal",
-          header: "Cost",
-          meta: {
-            numeric: true,
-            className: "w-24",
-            mobile: { slot: "trailing", priority: 5 },
-          },
-          sortUndefined: "last",
-          cell: (info) => {
-            const recipe = info.row.original;
-            const totals = recipe.totals;
-            // Null totals = not yet computed. Fresh recipe → the drain is about to
-            // fill it (skeleton); plausibly stuck → offer a manual recompute so the
-            // skeleton doesn't animate forever.
-            if (!totals)
-              return totalsLookStuck(recipe) ? (
-                <StuckTotalsCell recipe={recipe} withAction />
-              ) : (
-                <Skeleton className="h-4 w-12" />
-              );
-            if (!totals.costTotal) return <NoneValue />;
-            const perItem = getServingBasis(recipe);
-            return (
-              <Stack gap="xs">
-                <CoverageValue
-                  covered={totals.costCovered}
-                  total={totals.ingredientCount}
-                >
-                  {formatCurrencyRange(totals.costTotal, totals.costTotalUpper)}
-                </CoverageValue>
-                {perItem &&
-                  (() => {
-                    const per = perServingRange(
-                      totals.costTotal,
-                      totals.costTotalUpper,
-                      perItem.divisor,
-                    );
-                    return (
+      for (const metric of ["cost", "kcal"] as const) {
+        const getEstimate = (row: RecipeListItem) =>
+          metric === "cost" ? row.totals?.cost : row.totals?.nutrition.kcal;
+        const format =
+          metric === "cost"
+            ? formatCurrency
+            : (value: number) => `${Math.round(value)} kcal`;
+        add(
+          columnHelper.accessor(
+            (row) => {
+              const estimate = getEstimate(row);
+              return estimate && hasKnownEstimate(estimate)
+                ? estimate.lower
+                : undefined;
+            },
+            {
+              id: metric === "cost" ? "costTotal" : "caloriesTotal",
+              header: metric === "cost" ? "Cost" : "Calories",
+              meta: {
+                numeric: true,
+                className: "w-32",
+                mobile: {
+                  slot: "trailing",
+                  priority: metric === "cost" ? 5 : 10,
+                },
+              },
+              sortUndefined: "last",
+              cell: (info) => {
+                const recipe = info.row.original;
+                const estimate = getEstimate(recipe);
+                if (!estimate || estimate.status === "pending")
+                  return totalsLookStuck(recipe) ? (
+                    <StuckTotalsCell
+                      recipe={recipe}
+                      withAction={metric === "cost"}
+                    />
+                  ) : (
+                    <span className="text-muted-foreground">Pending</span>
+                  );
+                const perItem = getServingBasis(recipe);
+                return (
+                  <Stack gap="xs">
+                    <span
+                      title={
+                        hasKnownEstimate(estimate)
+                          ? `${estimate.coverage.covered}/${estimate.coverage.total} ingredient rows covered`
+                          : undefined
+                      }
+                    >
+                      {formatEstimate(estimate, format)}
+                    </span>
+                    {perItem && hasKnownEstimate(estimate) && (
                       <div className="text-2xs text-muted-foreground">
-                        {formatCurrencyRange(per.value, per.upper)}{" "}
+                        {formatEstimate(
+                          scaleEstimate(estimate, 1 / perItem.divisor),
+                          format,
+                        )}{" "}
                         {perUnitSuffix(perItem.noun, { short: true })}
                       </div>
-                    );
-                  })()}
-              </Stack>
-            );
-          },
-        }),
-      );
-      // Total calories — server-persisted rollup.
-      add(
-        columnHelper.accessor((row) => row.totals?.caloriesTotal ?? undefined, {
-          id: "caloriesTotal",
-          header: "Calories",
-          meta: {
-            numeric: true,
-            className: "w-28",
-            mobile: { slot: "trailing", priority: 10 },
-          },
-          sortUndefined: "last",
-          cell: (info) => {
-            const recipe = info.row.original;
-            const totals = recipe.totals;
-            // Mirror the cost cell: skeleton while fresh, "not costed" once stuck
-            // (the recompute affordance lives on the cost column so a row shows it
-            // once).
-            if (!totals)
-              return totalsLookStuck(recipe) ? (
-                <StuckTotalsCell recipe={recipe} withAction={false} />
-              ) : (
-                <Skeleton className="h-4 w-12" />
-              );
-            if (!totals.caloriesTotal) return <NoneValue />;
-            const perItem = getServingBasis(recipe);
-            return (
-              <Stack gap="xs">
-                <CoverageValue
-                  covered={totals.caloriesCovered}
-                  total={totals.ingredientCount}
-                >
-                  {formatNumberRange(
-                    totals.caloriesTotal,
-                    totals.caloriesTotalUpper,
-                    (n) => `${Math.round(n)}`,
-                  )}{" "}
-                  kcal
-                </CoverageValue>
-                {perItem &&
-                  (() => {
-                    const per = perServingRange(
-                      totals.caloriesTotal,
-                      totals.caloriesTotalUpper,
-                      perItem.divisor,
-                    );
-                    return (
-                      <div className="text-2xs text-muted-foreground">
-                        {formatNumberRange(
-                          per.value,
-                          per.upper,
-                          (n) => `${Math.round(n)}`,
-                        )}{" "}
-                        kcal {perUnitSuffix(perItem.noun, { short: true })}
-                      </div>
-                    );
-                  })()}
-              </Stack>
-            );
-          },
-        }),
-      );
+                    )}
+                  </Stack>
+                );
+              },
+            },
+          ),
+        );
+      }
       // Total time — the weeknight axis. Accessor on `totalMinutes` so sorting
       // and the range filter are the server's `Recipe.totalMinutes` column, but
       // the cell prints the source's own prose whenever there is one: a present

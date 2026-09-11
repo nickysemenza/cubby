@@ -189,7 +189,7 @@ fn portion_mapping(p: &WFoodPortion, fdc_id: u32) -> WUnitMapping {
 fn nutrition_mappings(food: &WFoodInput) -> impl Iterator<Item = WUnitMapping> + '_ {
     food.nutrients_per_100
         .iter()
-        .filter(|n| n.amount > 0.0)
+        .filter(|n| n.amount.is_finite() && n.amount >= 0.0)
         .map(|n| WUnitMapping {
             a: amount(100.0, "g"),
             b: amount(n.amount, n.unit.clone()),
@@ -459,7 +459,8 @@ mod tests {
                         unit: "g protein".to_string(),
                         amount: 15.0,
                     },
-                    // zero amounts are dropped
+                    // Zero is a known nutrient reading. The graph keeps the
+                    // forward 100 g -> 0 nutrient edge and drops its inverse.
                     WNutrientPer100 {
                         unit: "mg sodium".to_string(),
                         amount: 0.0,
@@ -469,7 +470,7 @@ mod tests {
         };
         let mappings = product_mappings(&product);
 
-        assert_eq!(mappings.len(), 3);
+        assert_eq!(mappings.len(), 4);
         // portion: 1 cup = 120 g
         assert_eq!(mappings[0].a.unit, "cup");
         assert_eq!(mappings[0].b.value, 120.0);
@@ -479,11 +480,14 @@ mod tests {
         );
         // nutrition: 100 g = 15 g protein
         assert_eq!(mappings[1].b.unit, "g protein");
+        // nutrition: explicit zero sodium stays a known conversion
+        assert_eq!(mappings[2].b.unit, "mg sodium");
+        assert_eq!(mappings[2].b.value, 0.0);
         // price: 1 each = $3.50
-        assert_eq!(mappings[2].a.unit, "each");
-        assert_eq!(mappings[2].b.value, 3.5);
+        assert_eq!(mappings[3].a.unit, "each");
+        assert_eq!(mappings[3].b.value, 3.5);
         assert_eq!(
-            mappings[2].source_metadata,
+            mappings[3].source_metadata,
             Some(WSourceMetadata::Product {
                 product_id: "prod-1".to_string()
             })

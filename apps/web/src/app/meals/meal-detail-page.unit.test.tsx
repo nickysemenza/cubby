@@ -1,18 +1,28 @@
 import { getMealPreparationsOut } from "@cubby/schemas/meal";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { buildMealHeroStats } from "./meal-detail-page";
 
+const complete = (lower: number) => ({
+  status: "complete" as const,
+  lower,
+  upper: lower,
+  coverage: { covered: 1, total: 1 },
+});
+const nutritionTotals = (cost: number, kcal: number, protein: number) => ({
+  cost: complete(cost),
+  nutrition: buildNutrition((key) =>
+    key === "kcal"
+      ? complete(kcal)
+      : key === "protein"
+        ? complete(protein)
+        : { status: "unavailable", reason: "no_data" },
+  ),
+});
 const mealSummary = {
-  totals: {
-    costTotal: 34.81,
-    caloriesTotal: 2836,
-    ingredientCount: 3,
-    costCovered: 3,
-    caloriesCovered: 3,
-    pending: false,
-  },
+  totals: nutritionTotals(34.81, 2836, 200),
   recipes: [{}, {}, {}, {}, {}],
 } as const;
 
@@ -24,15 +34,11 @@ describe("buildMealHeroStats", () => {
       totals: {
         confirmed: {
           portionCount: 1,
-          cost: { status: "complete", lower: 10, upper: 10 },
-          calories: { status: "complete", lower: 500, upper: 500 },
-          protein: { status: "complete", lower: 50, upper: 50 },
+          totals: nutritionTotals(10, 500, 50),
         },
         projected: {
           portionCount: 1,
-          cost: { status: "complete", lower: 10, upper: 10 },
-          calories: { status: "complete", lower: 500, upper: 500 },
-          protein: { status: "complete", lower: 50, upper: 50 },
+          totals: nutritionTotals(10, 500, 50),
         },
       },
     });
@@ -48,7 +54,7 @@ describe("buildMealHeroStats", () => {
   it("keeps the batch hero when nothing has been confirmed", () => {
     expect(buildMealHeroStats(mealSummary, undefined)).toEqual([
       { label: "Cost", value: "$34.81" },
-      { label: "Calories", value: 2836 },
+      { label: "Calories", value: "2,836 kcal" },
       { label: "Recipes", value: 5 },
     ]);
   });

@@ -1,3 +1,7 @@
+import {
+  nutritionBasis as nutritionBasisSchema,
+  type NutritionBasis,
+} from "@cubby/schemas/nutrition";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import {
   createFileRoute,
@@ -11,6 +15,7 @@ import { z } from "zod";
 import type { DetailSection } from "~/app/_components/data-table/detail-page";
 import { CopyRecipeParseButton } from "~/app/_components/recipe/copy-corpus-button";
 import EditRecipeForm from "~/app/_components/recipe/edit-recipe";
+import { getRecipeNutritionBasis } from "~/app/_components/recipe/recipe-utils";
 import { RecipeAvailabilityPanel } from "~/app/_components/recipe/RecipeAvailabilityPanel";
 import RecipeDetail, {
   type RecipeViewMode,
@@ -28,10 +33,13 @@ import { Page } from "~/components/page/Page";
 import { DetailPagePending } from "~/components/route-pending";
 import { Button } from "~/components/ui/button";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { scaleTotals } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { shortcodeHead } from "~/lib/page-title";
 import { formatCurrency } from "~/lib/utils";
 
 const searchSchema = z.object({
+  nutritionBasis: nutritionBasisSchema.optional().catch(undefined),
   costingGap: z.boolean().optional().catch(undefined),
   edit: z.boolean().optional().catch(undefined),
   // The enum accepts the four current views PLUS the five legacy names so old
@@ -62,6 +70,7 @@ const searchSchema = z.object({
 });
 
 const searchDefaults = {
+  nutritionBasis: undefined,
   costingGap: undefined,
   edit: undefined,
   view: undefined,
@@ -104,6 +113,7 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     view,
     flowLayout,
     scale,
+    nutritionBasis = "whole",
   } = Route.useSearch();
   const navigate = useNavigate();
 
@@ -135,21 +145,38 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
     });
   };
 
-  // Placard stats from the persisted totals — zero engine calls. The Data
-  // view's summary card shows live SCALED totals; these are the 1× ledger
-  // numbers, consistent with the recipe list.
-  const totals = recipe.totals;
+  const setNutritionBasis = (basis: NutritionBasis) => {
+    navigate({
+      to: ".",
+      search: (previous) => ({
+        ...previous,
+        nutritionBasis: basis === "whole" ? undefined : basis,
+      }),
+    });
+  };
+  const nutritionView = getRecipeNutritionBasis(recipe, nutritionBasis);
+  const nutritionScale =
+    nutritionView.basis === "serving" ? nutritionView.factor : (scale ?? 1);
+  const totals = recipe.totals
+    ? scaleTotals(recipe.totals, nutritionScale)
+    : null;
   const heroStats: DetailHeroStat[] = [
     ...(totals
       ? [
           {
             label: "Cost",
-            value:
-              totals.costTotalUpper != null
-                ? `${formatCurrency(totals.costTotal)}–${formatCurrency(totals.costTotalUpper)}`
-                : formatCurrency(totals.costTotal),
+            value: formatEstimate(totals.cost, formatCurrency),
           },
-          { label: "Calories", value: Math.round(totals.caloriesTotal) },
+          {
+            label:
+              nutritionView.basis === "serving"
+                ? "Calories per serving"
+                : "Calories · whole recipe",
+            value: formatEstimate(
+              totals.nutrition.kcal,
+              (value) => `${Math.round(value)} kcal`,
+            ),
+          },
         ]
       : []),
     ...(recipe.servings != null
@@ -226,6 +253,8 @@ function RecipeDetailBody({ recipe }: { recipe: RecipeOut }) {
           onCostingGapOpenChange={setCostingGapOpen}
           view={recipeView}
           onViewChange={setRecipeView}
+          nutritionBasis={nutritionBasis}
+          onNutritionBasisChange={setNutritionBasis}
           scale={scale}
           onScaleChange={setScale}
           flowLayout={flowLayout}

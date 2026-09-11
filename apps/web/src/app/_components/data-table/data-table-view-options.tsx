@@ -173,9 +173,11 @@ export function DataTableViewOptions<TData extends RowData>({
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         {isCustomized && (
-          <DropdownMenuLabel className="text-2xs text-muted-foreground">
-            Customized layout — restore defaults below
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="text-2xs text-muted-foreground">
+              Customized layout — restore defaults below
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
         )}
         <TableLayoutCustomizer table={table} />
       </DropdownMenuContent>

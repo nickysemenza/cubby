@@ -8,6 +8,7 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { StatusText } from "~/components/ui/status-text";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { formatCurrency } from "~/lib/utils";
 
 import { CopyJsonButton } from "./copy-debug-button";
@@ -98,7 +99,9 @@ export const RecipeCostingDebugCard: React.FC<{
   const { persisted, computed, drift } = data;
   // When the live compute is known-degraded (USDA misses), drift against it is
   // expected and meaningless — don't shout about it.
-  const showDrift = computed.complete && (drift.cost || drift.calories);
+  const showDrift =
+    computed.complete &&
+    (drift.cost || Object.values(drift.nutrition).some(Boolean));
 
   return (
     <Card>
@@ -122,14 +125,17 @@ export const RecipeCostingDebugCard: React.FC<{
           <span className="text-muted-foreground">
             persisted{" "}
             {persisted.totals
-              ? `${formatCurrency(persisted.totals.costTotal)} · ${Math.round(persisted.totals.caloriesTotal)} kcal`
+              ? `${formatEstimate(persisted.totals.cost, formatCurrency)} · ${formatEstimate(persisted.totals.nutrition.kcal, (value) => `${Math.round(value)} kcal`)}`
               : "—"}
             {persisted.totalsComputedAt &&
               ` @ ${persisted.totalsComputedAt.toLocaleString()}`}
           </span>
           <span className={showDrift ? "font-medium" : ""}>
-            live {formatCurrency(computed.totals.costTotal)} ·{" "}
-            {Math.round(computed.totals.caloriesTotal)} kcal
+            live {formatEstimate(computed.totals.cost, formatCurrency)} ·{" "}
+            {formatEstimate(
+              computed.totals.nutrition.kcal,
+              (value) => `${Math.round(value)} kcal`,
+            )}
             {showDrift && (
               <Badge className="ml-1" variant="destructive">
                 drift

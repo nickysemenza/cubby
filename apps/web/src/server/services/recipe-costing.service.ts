@@ -18,19 +18,19 @@ import {
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
+import {
+  hasKnownEstimate,
+  type MeasureEstimate,
+  nutrientKey,
+} from "@cubby/schemas/nutrition";
 import type { RecipeGraphOut } from "@cubby/schemas/recipe";
 import type {
   RecipeCostingExplain,
-  RecipeMacroColumn,
-  RecipeMacroCoverageColumn,
   RecipeTotals,
 } from "@cubby/schemas/recipe-shared";
-import {
-  RECIPE_MACRO_KEYS,
-  recipeTotalsFieldNames,
-} from "@cubby/schemas/recipe-shared";
-import { getNutrientValueByKey } from "@cubby/usda-schemas";
+import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
 import { keyBy, uniq } from "es-toolkit";
+import { z } from "zod";
 
 import {
   type CalculateTotalsResult,
@@ -72,96 +72,43 @@ import { TraceNames, withTrace } from "~/server/tracing";
 import { getIngredientsByIDs } from "./ingredient.service";
 import type { UsdaFoodBatchPort } from "./usda-helpers";
 
-const toRecipeTotals = (t: CalculateTotalsResult): RecipeTotals => {
-  const caloriesUpper = t.nutrientsUpper
-    ? getNutrientValueByKey(t.nutrientsUpper, "kcal")
-    : undefined;
-  const totals: RecipeTotals = {
-    costTotal: t.price,
-    caloriesTotal: getNutrientValueByKey(t.nutrients, "kcal") ?? 0,
-    ...RECIPE_MACRO_KEYS.reduce<Pick<RecipeTotals, RecipeMacroColumn>>(
-      (acc, key) => {
-        acc[`${key}Total`] = getNutrientValueByKey(t.nutrients, key);
-        return acc;
-      },
-      {},
-    ),
-    ingredientCount: t.totalIngredients,
-    costCovered: t.totalIngredients - t.missingByType.price.length,
-    // Nutrient coverage is target-specific: a line with sodium but no kcal is
-    // not calorie coverage, and a partial sub-recipe carries that incompleteness
-    // up to its parent in recipebridge.
-    caloriesCovered:
-      getNutrientValueByKey(t.nutrientCoverage ?? {}, "kcal") ?? 0,
-    ...RECIPE_MACRO_KEYS.reduce<Pick<RecipeTotals, RecipeMacroCoverageColumn>>(
-      (acc, key) => {
-        acc[`${key}Covered`] =
-          getNutrientValueByKey(t.nutrientCoverage ?? {}, key) ?? 0;
-        return acc;
-      },
-      {},
-    ),
-  };
-  if (t.priceUpper != null) totals.costTotalUpper = t.priceUpper;
-  if (caloriesUpper != null) totals.caloriesTotalUpper = caloriesUpper;
-  for (const key of RECIPE_MACRO_KEYS) {
-    const upper = t.nutrientsUpper
-      ? getNutrientValueByKey(t.nutrientsUpper, key)
-      : undefined;
-    if (upper == null) continue;
-    switch (key) {
-      case "protein":
-        totals.proteinTotalUpper = upper;
-        break;
-      case "fat":
-        totals.fatTotalUpper = upper;
-        break;
-      case "carbs":
-        totals.carbsTotalUpper = upper;
-        break;
-      case "fiber":
-        totals.fiberTotalUpper = upper;
-        break;
-      case "sodium":
-        totals.sodiumTotalUpper = upper;
-        break;
-    }
+const toRecipeTotals = (totals: CalculateTotalsResult): RecipeTotals =>
+  totals.estimates;
+
+// A status or coverage change is meaningful even when the known amount stays zero.
+const estimateDiffers = (
+  a: MeasureEstimate,
+  b: MeasureEstimate,
+  epsilon = 0.005,
+): boolean => {
+  if (a.status !== b.status) return true;
+  if (hasKnownEstimate(a) && hasKnownEstimate(b)) {
+    return (
+      Math.abs(a.lower - b.lower) > epsilon ||
+      (a.upper == null) !== (b.upper == null) ||
+      (a.upper != null &&
+        b.upper != null &&
+        Math.abs(a.upper - b.upper) > epsilon) ||
+      a.coverage.covered !== b.coverage.covered ||
+      a.coverage.total !== b.coverage.total
+    );
   }
-  return totals;
+  return "reason" in a && "reason" in b && a.reason !== b.reason;
 };
 
-// Per-field tolerance for "persisted differs from a fresh compute". Cost is
-// near-exact (only float-summation noise), but calories are integer-rounded
-// downstream, so a looser 0.5 avoids flagging rounding-only churn. Everything
-// else defaults to a small epsilon. One map so the dry-run predicate
-// (totalsDiffer) and explainRecipe's drift can't diverge.
-const DEFAULT_EPSILON = 0.005;
-const TOTALS_EPSILON = new Map<keyof RecipeTotals, number>([
-  ["caloriesTotal", 0.5],
-]);
-
-const fieldDiffers = (
-  a: RecipeTotals,
-  b: RecipeTotals,
-  field: keyof RecipeTotals,
-): boolean =>
-  Math.abs((a[field] ?? 0) - (b[field] ?? 0)) >
-  (TOTALS_EPSILON.get(field) ?? DEFAULT_EPSILON);
-
-// Whether a fresh compute differs from what's persisted — the honest "would
-// change" predicate behind the dry-run. The field roster is owned by the schema
-// package so adding a recipeTotals field keeps this comparison exhaustive.
 const totalsDiffer = (
   a: RecipeTotals | null | undefined,
   b: RecipeTotals,
-): boolean => {
-  if (!a) return true;
-  // Coverage fields are optional only to keep pre-contract JSONB rows readable.
-  // A missing field is not equivalent to a real zero: otherwise a legacy recipe
-  // with no protein coverage would be stamped fresh without being upgraded.
-  if (RECIPE_MACRO_KEYS.some((key) => a[`${key}Covered`] == null)) return true;
-  return recipeTotalsFieldNames.some((k) => fieldDiffers(a, b, k));
-};
+): boolean =>
+  !a ||
+  estimateDiffers(a.cost, b.cost) ||
+  TIER1_NUTRIENT_KEYS.some((key) =>
+    estimateDiffers(
+      a.nutrition[key],
+      b.nutrition[key],
+      key === "kcal" ? 0.5 : 0.005,
+    ),
+  );
 
 type CascadeMode = "inline" | "queue";
 interface RecipeRecomputeDispatchMetadata {
@@ -328,10 +275,22 @@ export class RecipeCostingService {
     const drift = {
       cost:
         persisted != null &&
-        fieldDiffers(persisted, computedTotals, "costTotal"),
-      calories:
-        persisted != null &&
-        fieldDiffers(persisted, computedTotals, "caloriesTotal"),
+        estimateDiffers(persisted.cost, computedTotals.cost),
+      nutrition: z
+        .record(nutrientKey, z.boolean())
+        .parse(
+          Object.fromEntries(
+            TIER1_NUTRIENT_KEYS.map((key) => [
+              key,
+              persisted != null &&
+                estimateDiffers(
+                  persisted.nutrition[key],
+                  computedTotals.nutrition[key],
+                  key === "kcal" ? 0.5 : 0.005,
+                ),
+            ]),
+          ),
+        ),
     };
 
     return {

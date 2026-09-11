@@ -15,19 +15,18 @@ import type React from "react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
-import {
-  EntitySummaryCard,
-  type RecipeSummaryData,
-} from "~/components/entity/entity-summary-card";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import {
+  ChoiceSwitcher,
   ViewSwitcher,
   type ViewSwitcherOption,
 } from "~/components/ui/view-switcher";
 import { useDebug } from "~/hooks/useDebug";
 import { useWakeLock } from "~/hooks/useWakeLock";
+import { scaleNutrition } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 import {
   type CalculateTotalsResult,
@@ -46,11 +45,7 @@ import { NutritionLabel } from "../nutrition/NutritionLabel";
 import { RecipeCostingDebugCard } from "./recipe-costing-debug-card";
 import { scaleRecipe } from "./recipe-scaling";
 import { RecipeTagList } from "./recipe-tag";
-import {
-  divideNutrients,
-  getIngredientName,
-  getServingBasis,
-} from "./recipe-utils";
+import { getIngredientName, getRecipeNutritionBasis } from "./recipe-utils";
 import { RecipeTotalsCoverageButton } from "./RecipeCostingCoverage";
 import { type RecipeFlowLayoutMode, RecipeFlowView } from "./RecipeFlowView";
 import { RecipeIngredientList } from "./recipeingredientlist";
@@ -115,6 +110,9 @@ function RecipeViewContent({
   ingredients,
   ingMap,
   totalsGaps,
+  nutrition,
+  nutritionBasisLabel,
+  nutritionFactor,
 }: {
   viewMode: RecipeViewMode;
   recipe: RecipeOut;
@@ -129,6 +127,9 @@ function RecipeViewContent({
   ingredients: CostingRow[];
   ingMap: Parameters<typeof RecipeIngredientList>[0]["ingMap"];
   totalsGaps: React.ComponentProps<typeof RecipeTotalsCoverageButton>["gaps"];
+  nutrition: React.ComponentProps<typeof NutritionLabel>["estimates"] | null;
+  nutritionBasisLabel: string;
+  nutritionFactor: number;
 }) {
   if (viewMode === "read")
     return (
@@ -136,6 +137,9 @@ function RecipeViewContent({
         recipe={scaledRecipe}
         totals={totals}
         costing={costing}
+        nutrition={nutrition}
+        nutritionBasisLabel={nutritionBasisLabel}
+        nutritionFactor={nutritionFactor}
       />
     );
   if (viewMode === "spec" || viewMode === "prep") {
@@ -163,9 +167,11 @@ function RecipeViewContent({
       ingredients={ingredients}
       ingMap={ingMap}
       costing={costing}
-      scaledRecipe={scaledRecipe}
       totalsGaps={totalsGaps}
       recipeShortcode={recipe.id}
+      nutrition={nutrition}
+      nutritionBasisLabel={nutritionBasisLabel}
+      nutritionFactor={nutritionFactor}
     />
   );
 }
@@ -185,9 +191,11 @@ function RecipeDataView({
   ingredients,
   ingMap,
   costing,
-  scaledRecipe,
   totalsGaps,
   recipeShortcode,
+  nutrition,
+  nutritionBasisLabel,
+  nutritionFactor,
 }: {
   totals: CalculateTotalsResult | null;
   ingredientDataItems: RecipeCosting["rows"];
@@ -195,63 +203,91 @@ function RecipeDataView({
   ingredients: CostingRow[];
   ingMap: Parameters<typeof RecipeIngredientList>[0]["ingMap"];
   costing: RecipeCosting | null;
-  scaledRecipe: RecipeOut;
   totalsGaps: React.ComponentProps<typeof RecipeTotalsCoverageButton>["gaps"];
   recipeShortcode: RecipeOut["id"];
+  nutrition: React.ComponentProps<typeof NutritionLabel>["estimates"] | null;
+  nutritionBasisLabel: string;
+  nutritionFactor: number;
 }) {
   return (
     <Stack gap="lg">
-      <RecipeSummary totals={totals} recipe={scaledRecipe} />
-      <RecipeDataCharts ingredients={ingredientDataItems} totals={totals} />
-      {recipeImages.length > 0 ? (
-        <EntityImageList images={recipeImages} />
-      ) : null}
       <RecipeIngredientList
         ingredients={ingredients}
         ingMap={ingMap ?? undefined}
         costing={costing}
-        perServing={getServingBasis(scaledRecipe)}
-        hideSummary
         gaps={totalsGaps}
         recipeShortcode={recipeShortcode}
+        nutritionFactor={nutritionFactor}
       />
+      <RecipeSummary
+        totals={totals}
+        nutrition={nutrition}
+        nutritionBasisLabel={nutritionBasisLabel}
+      />
+      <RecipeDataCharts
+        ingredients={ingredientDataItems}
+        totals={totals}
+        nutrition={nutrition}
+        nutritionBasisLabel={nutritionBasisLabel}
+        nutritionFactor={nutritionFactor}
+      />
+      {recipeImages.length > 0 ? (
+        <EntityImageList images={recipeImages} />
+      ) : null}
     </Stack>
   );
 }
 
 function RecipeSummary({
   totals,
-  recipe,
+  nutrition,
+  nutritionBasisLabel,
 }: {
   totals: CalculateTotalsResult | null;
-  recipe: RecipeOut;
+  nutrition: React.ComponentProps<typeof NutritionLabel>["estimates"] | null;
+  nutritionBasisLabel: string;
 }) {
   if (!totals) return null;
-  const summary: RecipeSummaryData = {
-    price: totals.price,
-    weight: totals.weight,
-    nutrients: totals.nutrients,
-    totalIngredients: totals.totalIngredients,
-    missingByType: totals.missingByType,
-    perServing: getServingBasis(recipe),
-  };
-  if (totals.priceUpper != null) summary.priceUpper = totals.priceUpper;
-  if (totals.weightUpper != null) summary.weightUpper = totals.weightUpper;
-  if (totals.nutrientsUpper) summary.nutrientsUpper = totals.nutrientsUpper;
   return (
-    <EntitySummaryCard
-      title="Recipe Summary"
-      summaryData={{ type: "recipe", data: summary }}
-    />
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle>Recipe summary</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-start gap-6">
+        <div className="grid gap-1 text-sm">
+          <span>
+            Cost:{" "}
+            {formatEstimate(
+              totals.estimates.cost,
+              (value) => `$${value.toFixed(2)}`,
+            )}
+          </span>
+          <span>Weight: {Math.round(totals.weight)} g</span>
+          <span>{totals.totalIngredients} ingredients</span>
+        </div>
+        {nutrition ? (
+          <NutritionLabel
+            estimates={nutrition}
+            servingLabel={nutritionBasisLabel}
+          />
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
 function RecipeDataCharts({
   ingredients,
   totals,
+  nutrition,
+  nutritionBasisLabel,
+  nutritionFactor,
 }: {
   ingredients: RecipeCosting["rows"];
   totals: CalculateTotalsResult | null;
+  nutrition: React.ComponentProps<typeof NutritionLabel>["estimates"] | null;
+  nutritionBasisLabel: string;
+  nutritionFactor: number;
 }) {
   const chart =
     ingredients.length > 0 ? (
@@ -272,7 +308,12 @@ function RecipeDataCharts({
             <CardTitle>Nutrition Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
-            <NutritionBars ingredients={ingredients} totals={totals} />
+            <NutritionBars
+              ingredients={ingredients}
+              nutrition={nutrition}
+              basisLabel={nutritionBasisLabel}
+              factor={nutritionFactor}
+            />
           </CardContent>
         </Card>
       </div>
@@ -302,6 +343,9 @@ function RecipeWorkflowContent({
   ingMap,
   nutritionNutrients,
   nutritionServingLabel,
+  nutritionBasis,
+  onNutritionBasisChange,
+  hasServingBasis,
   recipeImages,
   isDebugEnabled,
   openCostingGap,
@@ -326,9 +370,12 @@ function RecipeWorkflowContent({
   ingredients: CostingRow[];
   ingMap: Parameters<typeof RecipeIngredientList>[0]["ingMap"];
   nutritionNutrients:
-    | React.ComponentProps<typeof NutritionLabel>["nutrients"]
+    | React.ComponentProps<typeof NutritionLabel>["estimates"]
     | null;
   nutritionServingLabel: string;
+  nutritionBasis: "whole" | "serving";
+  onNutritionBasisChange: (basis: "whole" | "serving") => void;
+  hasServingBasis: boolean;
   recipeImages: RecipeOut["images"];
   isDebugEnabled: boolean;
   openCostingGap?: boolean;
@@ -353,6 +400,9 @@ function RecipeWorkflowContent({
         costingCoverageResolved={costingCoverageResolved}
         wakeLock={wakeLock}
         exportFormat={exportFormat}
+        nutritionBasis={nutritionBasis}
+        onNutritionBasisChange={onNutritionBasisChange}
+        hasServingBasis={hasServingBasis}
       />
       <RecipeViewContent
         viewMode={viewMode}
@@ -368,11 +418,16 @@ function RecipeWorkflowContent({
         ingredients={ingredients}
         ingMap={ingMap}
         totalsGaps={totalsGaps}
+        nutrition={nutritionNutrients}
+        nutritionBasisLabel={nutritionServingLabel}
+        nutritionFactor={
+          getRecipeNutritionBasis(scaledRecipe, nutritionBasis).factor
+        }
       />
       <RecipeWorkflowSupplemental
         viewMode={viewMode}
         recipeImages={recipeImages}
-        nutritionNutrients={nutritionNutrients}
+        nutritionEstimates={nutritionNutrients}
         nutritionServingLabel={nutritionServingLabel}
         recipeId={recipe.id}
         isDebugEnabled={isDebugEnabled}
@@ -395,6 +450,9 @@ function RecipeWorkflowControls({
   costingCoverageResolved,
   wakeLock,
   exportFormat,
+  nutritionBasis,
+  onNutritionBasisChange,
+  hasServingBasis,
 }: {
   recipe: RecipeOut;
   viewMode: RecipeViewMode;
@@ -409,6 +467,9 @@ function RecipeWorkflowControls({
   costingCoverageResolved: boolean;
   wakeLock: ReturnType<typeof useWakeLock>;
   exportFormat: "nested" | "flow" | undefined;
+  nutritionBasis: "whole" | "serving";
+  onNutritionBasisChange: (basis: "whole" | "serving") => void;
+  hasServingBasis: boolean;
 }) {
   return (
     <Row
@@ -438,6 +499,17 @@ function RecipeWorkflowControls({
           factor={factor}
           onFactorChange={setFactor}
         />
+        {hasServingBasis ? (
+          <ChoiceSwitcher
+            ariaLabel="Nutrition basis"
+            options={[
+              { value: "whole", label: "Whole scaled recipe" },
+              { value: "serving", label: "Per serving" },
+            ]}
+            value={nutritionBasis}
+            onValueChange={onNutritionBasisChange}
+          />
+        ) : null}
         <ViewSwitcher
           ariaLabel="Recipe view"
           options={RECIPE_VIEW_OPTIONS}
@@ -450,6 +522,8 @@ function RecipeWorkflowControls({
           search={{
             format: exportFormat,
             scale: factor === 1 ? undefined : factor,
+            nutritionBasis:
+              nutritionBasis === "whole" ? undefined : nutritionBasis,
           }}
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           title="Open the print / export sheet"
@@ -493,15 +567,15 @@ function WakeLockButton({
 function RecipeWorkflowSupplemental({
   viewMode,
   recipeImages,
-  nutritionNutrients,
+  nutritionEstimates,
   nutritionServingLabel,
   recipeId,
   isDebugEnabled,
 }: {
   viewMode: RecipeViewMode;
   recipeImages: RecipeOut["images"];
-  nutritionNutrients:
-    | React.ComponentProps<typeof NutritionLabel>["nutrients"]
+  nutritionEstimates:
+    | React.ComponentProps<typeof NutritionLabel>["estimates"]
     | null;
   nutritionServingLabel: string;
   recipeId: RecipeOut["id"];
@@ -510,7 +584,7 @@ function RecipeWorkflowSupplemental({
   return (
     <>
       <RecipeReaderImages viewMode={viewMode} images={recipeImages} />
-      {nutritionNutrients ? (
+      {nutritionEstimates ? (
         <details className="group border border-border bg-muted/30 px-4 py-2 print:hidden">
           <summary className="cursor-pointer eyebrow marker:content-none">
             <Apple className="mr-2 inline size-3 align-[-2px]" />
@@ -518,7 +592,7 @@ function RecipeWorkflowSupplemental({
           </summary>
           <div className="mt-4">
             <NutritionLabel
-              nutrients={nutritionNutrients}
+              estimates={nutritionEstimates}
               servingLabel={nutritionServingLabel}
             />
           </div>
@@ -559,6 +633,9 @@ const RecipeDetailInner: React.FC<{
   /** Controlled scale factor (URL-driven on the detail route); 1 = unscaled. */
   scale?: number;
   onScaleChange?: (factor: number) => void;
+  /** Controlled nutrition basis; the route persists this beside scale/view. */
+  nutritionBasis?: "whole" | "serving";
+  onNutritionBasisChange?: (basis: "whole" | "serving") => void;
   flowLayout?: RecipeFlowLayoutMode;
   onFlowLayoutChange?: (layout: RecipeFlowLayoutMode) => void;
   /** Opens the live totals-gap popover for a Problems drill-down. */
@@ -571,6 +648,8 @@ const RecipeDetailInner: React.FC<{
   onViewChange,
   scale: controlledScale,
   onScaleChange,
+  nutritionBasis: controlledNutritionBasis,
+  onNutritionBasisChange,
   flowLayout,
   onFlowLayoutChange,
   openCostingGap,
@@ -580,6 +659,9 @@ const RecipeDetailInner: React.FC<{
   // (e.g. the search preview panel embeds this without URL state).
   const [internalView, setInternalView] = useState<RecipeViewMode>("read");
   const [internalScale, setInternalScale] = useState(1);
+  const [internalNutritionBasis, setInternalNutritionBasis] = useState<
+    "whole" | "serving"
+  >("whole");
   const { isDebugEnabled } = useDebug();
   // Kitchen mode: keep the screen awake while the recipe is propped on the
   // counter (iOS auto-locks after ~30s mid-cook). Off by default.
@@ -644,20 +726,22 @@ const RecipeDetailInner: React.FC<{
   const totals = costing?.totals ?? null;
   const ingredientDataItems = costing?.rows ?? [];
 
-  // Nutrition Facts label data: totals divided down to one serving when the
-  // recipe has a serving basis (servings, or a "makes N units" yield),
-  // otherwise the whole-recipe totals as-is.
-  const servingBasis = getServingBasis(scaledRecipe);
-  const nutritionServingLabel = servingBasis
-    ? `per ${servingBasis.noun}`
-    : "whole recipe";
-  const nutritionDivisor = servingBasis?.divisor;
+  // A serving requires a serving count; a mass/volume yield is not a serving.
+  const requestedNutritionBasis =
+    controlledNutritionBasis ?? internalNutritionBasis;
+  const nutritionView = getRecipeNutritionBasis(
+    scaledRecipe,
+    requestedNutritionBasis,
+  );
+  const nutritionBasis = nutritionView.basis;
+  const setNutritionBasis = onNutritionBasisChange ?? setInternalNutritionBasis;
+  const nutritionServingLabel = nutritionView.label;
   const nutritionNutrients = useMemo(
     () =>
-      totals && nutritionDivisor
-        ? divideNutrients(totals.nutrients, nutritionDivisor)
-        : (totals?.nutrients ?? null),
-    [totals, nutritionDivisor],
+      totals
+        ? scaleNutrition(totals.estimates.nutrition, nutritionView.factor)
+        : null,
+    [totals, nutritionView.factor],
   );
 
   // Prioritized suggestions for every row blocking complete totals: ingredient
@@ -719,6 +803,9 @@ const RecipeDetailInner: React.FC<{
           ingMap={ingMap ?? undefined}
           nutritionNutrients={nutritionNutrients}
           nutritionServingLabel={nutritionServingLabel}
+          nutritionBasis={nutritionBasis}
+          onNutritionBasisChange={setNutritionBasis}
+          hasServingBasis={nutritionView.hasServing}
           recipeImages={recipeImages}
           isDebugEnabled={isDebugEnabled}
         />

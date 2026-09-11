@@ -506,12 +506,12 @@ export const buildRecipeWhere = async (
         presenceCondition(recipe.SourceType, filters.sourceTypePresenceFilter),
       ),
       ...rangeConditions(
-        sql`(${recipe.totals}->>'costTotal')::numeric`,
+        sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{cost,lower}')::numeric END`,
         filters,
         "costTotal",
       ),
       ...rangeConditions(
-        sql`(${recipe.totals}->>'caloriesTotal')::numeric`,
+        sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{nutrition,kcal,lower}')::numeric END`,
         filters,
         "caloriesTotal",
       ),
@@ -534,11 +534,11 @@ export const recipeList = async (
     const isAsc = s.direction === "asc";
     const dir = (col: AnyColumn): SQL =>
       isAsc ? sql`${col} asc nulls last` : sql`${col} desc nulls last`;
-    const jsonbSortKey =
+    const totalsSortValue =
       s.orderBy === "costTotal"
-        ? "costTotal"
+        ? sql`(${recipe.totals} #>> '{cost,lower}')::numeric`
         : s.orderBy === "caloriesTotal"
-          ? "caloriesTotal"
+          ? sql`(${recipe.totals} #>> '{nutrition,kcal,lower}')::numeric`
           : null;
     if (s.orderBy === "cookbook")
       return [
@@ -557,11 +557,11 @@ export const recipeList = async (
           ? sql`${recipe.tags}[1] asc nulls last`
           : sql`${recipe.tags}[1] desc nulls last`,
       ];
-    if (jsonbSortKey)
+    if (totalsSortValue)
       return [
         isAsc
-          ? sql`(${recipe.totals}->>${jsonbSortKey})::numeric asc nulls last`
-          : sql`(${recipe.totals}->>${jsonbSortKey})::numeric desc nulls last`,
+          ? sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN ${totalsSortValue} END asc nulls last`
+          : sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN ${totalsSortValue} END desc nulls last`,
       ];
     return null;
   };

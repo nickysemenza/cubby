@@ -2,8 +2,7 @@
  * Display-time ratios of numbers the Rust costing engine has already
  * computed — nutrient density (protein per 100 kcal) and price-per-nutrient
  * (cost per gram of protein). These are scalar re-expressions of figures the
- * engine already produced, the same category as `perServingRange`
- * (recipe-utils.ts) and the price/weight ratio in
+ * engine already produced, like the price/weight ratio in
  * command-menu/use-conversion-answer.ts — plain division of two numbers a
  * caller already has in hand. Do NOT add unit-conversion or costing logic
  * here: a conversion between two *different* units (grams to cups, an amount

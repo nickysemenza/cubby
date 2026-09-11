@@ -44,6 +44,10 @@ use super::types::{
 use crate::WConversionStep;
 use crate::food_mappings::product_non_price_mapping_pairs;
 use crate::reconcile::finite;
+use crate::{
+    WMeasureEstimate, WNamedEstimate, WNutritionTotals, WUnavailableReason,
+    aggregate_estimates_impl,
+};
 
 /// One recipe row paired with its resolved usage and the consumption plan that
 /// usage implies. Built up front (before the two resolution passes) so each
@@ -296,6 +300,7 @@ impl IngredientCtx {
 struct SubTotals {
     price: f64,
     price_upper: Option<f64>,
+    price_has_known: bool,
     weight: f64,
     weight_upper: Option<f64>,
     nutrients: Vec<(String, f64, Option<f64>)>,
@@ -387,6 +392,68 @@ impl<'a> Engine<'a> {
                 }))
             })
             .map(|target| target.code.clone())
+            .collect()
+    }
+
+    fn unavailable_reason_for_row(&self, row: &WCostingRow) -> WUnavailableReason {
+        if row.kind == WRowKind::Recipe
+            && self
+                .recipe(&row.target_id)
+                .is_some_and(|recipe| recipe.recipe_yield.is_none())
+        {
+            WUnavailableReason::YieldMissing
+        } else {
+            WUnavailableReason::NoData
+        }
+    }
+
+    fn estimate_for_measure(
+        &self,
+        measure: &MeasureRes,
+        missing: bool,
+        unavailable_reason: WUnavailableReason,
+    ) -> WMeasureEstimate {
+        match measure {
+            Ok(value) if value.value.is_finite() => {
+                WMeasureEstimate::known(value.value, value.upper.and_then(finite), !missing, 1)
+            }
+            _ => WMeasureEstimate::Unavailable {
+                reason: unavailable_reason,
+            },
+        }
+    }
+
+    fn nutrition_estimates_for_row(
+        &self,
+        trio: &Trio,
+        missing_nutrient_codes: &HashSet<String>,
+        unavailable_reason: WUnavailableReason,
+    ) -> Vec<WNamedEstimate> {
+        self.targets
+            .iter()
+            .map(|target| {
+                let resolved = match &trio.nutrients {
+                    Ok(entries) => entries
+                        .iter()
+                        .find(|(code, value, _)| code == &target.code && value.is_finite()),
+                    Err(_) => None,
+                };
+                let estimate = match resolved {
+                    Some((_, lower, upper)) => WMeasureEstimate::known(
+                        *lower,
+                        upper.and_then(finite),
+                        !missing_nutrient_codes.contains(&target.code),
+                        1,
+                    ),
+                    None => WMeasureEstimate::Unavailable {
+                        reason: unavailable_reason,
+                    },
+                };
+                WNamedEstimate {
+                    code: target.code.clone(),
+                    estimate,
+                }
+            })
             .collect()
     }
 
@@ -549,9 +616,14 @@ impl<'a> Engine<'a> {
                 v.insert(sub_id.to_string());
                 let mut sub_taint = false;
                 let out = self.cost_recipe_inner(sub, &v, false, &mut sub_taint);
+                let price_has_known = matches!(
+                    out.estimates.cost,
+                    WMeasureEstimate::Complete { .. } | WMeasureEstimate::Partial { .. }
+                );
                 let t = SubTotals {
                     price: out.price,
                     price_upper: out.price_upper,
+                    price_has_known,
                     weight: out.weight,
                     weight_upper: out.weight_upper,
                     nutrients: out
@@ -603,10 +675,13 @@ impl<'a> Engine<'a> {
         // saturates, so the parent silently reports a ~9.2e16 price that `finite`
         // can't reject and `missing_by_type` calls covered. Drop the edge and the
         // parent correctly reports missing instead.
-        let mut pairs: Vec<(Measure, Measure)> = vec![(
-            yield_measure.clone(),
-            measure_with_optional_upper("dollar", totals.price, totals.price_upper),
-        )];
+        let mut pairs: Vec<(Measure, Measure)> = Vec::new();
+        if totals.price_has_known {
+            pairs.push((
+                yield_measure.clone(),
+                measure_with_optional_upper("dollar", totals.price, totals.price_upper),
+            ));
+        }
         if totals.weight > 0.0 {
             pairs.push((
                 yield_measure.clone(),
@@ -968,26 +1043,52 @@ impl<'a> Engine<'a> {
         let mut own_grams: Vec<Option<f64>> = Vec::with_capacity(n);
         let mut flour_grams = 0.0_f64;
         let mut rows_out: Vec<WRowResult> = Vec::with_capacity(n);
+        let mut cost_estimates = Vec::with_capacity(n);
+        let mut nutrient_estimates = self
+            .targets
+            .iter()
+            .map(|target| (target.code.clone(), Vec::with_capacity(n)))
+            .collect::<Vec<_>>();
         for (idx, p) in planned.iter().enumerate() {
             // Every row is filled by pass 1 (non-deferred) or pass 2 (deferred),
             // so this is always Some. Degrade an unfilled row to an error outcome
             // rather than panic — keeps own_grams / rows_out index-aligned.
-            let (trio, own, basis, missing_flags, _) = outcomes[idx].take().unwrap_or_else(|| {
-                (
-                    Trio::all_err(format!("internal: row {idx} not resolved")),
-                    None,
-                    None,
-                    WRowMissing {
-                        price: true,
-                        weight: true,
-                        nutrients: true,
-                    },
-                    self.targets
-                        .iter()
-                        .map(|target| target.code.clone())
-                        .collect(),
-                )
-            });
+            let (trio, own, basis, missing_flags, missing_nutrient_codes) =
+                outcomes[idx].take().unwrap_or_else(|| {
+                    (
+                        Trio::all_err(format!("internal: row {idx} not resolved")),
+                        None,
+                        None,
+                        WRowMissing {
+                            price: true,
+                            weight: true,
+                            nutrients: true,
+                        },
+                        self.targets
+                            .iter()
+                            .map(|target| target.code.clone())
+                            .collect(),
+                    )
+                });
+            let unavailable_reason = self.unavailable_reason_for_row(p.row);
+            cost_estimates.push(self.estimate_for_measure(
+                &trio.price,
+                missing_flags.price,
+                unavailable_reason,
+            ));
+            let row_nutrition = self.nutrition_estimates_for_row(
+                &trio,
+                &missing_nutrient_codes,
+                unavailable_reason,
+            );
+            for entry in &row_nutrition {
+                if let Some((_, estimates)) = nutrient_estimates
+                    .iter_mut()
+                    .find(|(code, _)| code == &entry.code)
+                {
+                    estimates.push(entry.estimate.clone());
+                }
+            }
             let own_gram = own
                 .as_ref()
                 .and_then(|o| o.gram.as_ref().ok().map(|g| g.value));
@@ -1010,6 +1111,7 @@ impl<'a> Engine<'a> {
                 price: to_measure_result(&trio.price),
                 gram: to_measure_result(&trio.gram),
                 nutrients: to_nutrients_result(&trio.nutrients),
+                nutrition: row_nutrition,
                 missing: missing_flags,
                 own_gram,
                 estimated: p.plan.is_estimated(),
@@ -1035,6 +1137,17 @@ impl<'a> Engine<'a> {
             })
             .collect();
 
+        let estimates = WNutritionTotals {
+            cost: aggregate_estimates_impl(&cost_estimates),
+            nutrition: nutrient_estimates
+                .into_iter()
+                .map(|(code, entries)| WNamedEstimate {
+                    code,
+                    estimate: aggregate_estimates_impl(&entries),
+                })
+                .collect(),
+        };
+
         WRecipeCosting {
             recipe_id: recipe.id.clone(),
             price: total_price,
@@ -1051,6 +1164,7 @@ impl<'a> Engine<'a> {
                 .collect(),
             nutrient_coverage,
             total_ingredients: u32::try_from(n).unwrap_or(u32::MAX),
+            estimates,
             missing_by_type: missing,
             rows: rows_out,
             baker_percentages,

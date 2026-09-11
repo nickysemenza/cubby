@@ -5,6 +5,7 @@ import {
   mealAddRecipeInput,
   mealOut,
 } from "@cubby/schemas/meal";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -23,6 +24,13 @@ const updatedMeals: MealUpdateInput[] = [];
 const addedRecipes: Array<z.output<typeof mealAddRecipeInput>> = [];
 const mutationOrder: string[] = [];
 let mealRequests = 0;
+const emptyTotals = {
+  cost: { status: "unavailable" as const, reason: "empty" as const },
+  nutrition: buildNutrition(() => ({
+    status: "unavailable",
+    reason: "empty",
+  })),
+};
 
 const tuesdayDinner = mealOut.parse({
   id: testShortcode("meal", "MEL-4K7M"),
@@ -32,7 +40,7 @@ const tuesdayDinner = mealOut.parse({
   mealType: "dinner",
   mealKind: "cooked",
   recipes: [],
-  totals: { costTotal: 0, caloriesTotal: 0, pending: false },
+  totals: emptyTotals,
   createdAt: new Date("2026-06-16T12:00:00Z"),
   updatedAt: new Date("2026-06-16T12:00:00Z"),
 });
@@ -45,7 +53,7 @@ const cornerDeli = mealOut.parse({
   mealType: "lunch",
   mealKind: "eating_out",
   recipes: [],
-  totals: { costTotal: 0, caloriesTotal: 0, pending: false },
+  totals: emptyTotals,
   createdAt: new Date("2026-06-16T12:00:00Z"),
   updatedAt: new Date("2026-06-16T12:00:00Z"),
 });

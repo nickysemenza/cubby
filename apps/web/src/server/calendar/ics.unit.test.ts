@@ -4,6 +4,7 @@ import {
   calendarMealItem,
   calendarTaskItem,
 } from "@cubby/schemas/calendar";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -34,9 +35,24 @@ const meal = (overrides: DeepPartial<MealItem> = {}): MealItem =>
       startDate: "2026-08-15",
       endDateExclusive: "2026-08-16",
       recipeNames: ["Carnitas"],
-      cost: 12.5,
-      calories: 820,
-      nutritionPending: false,
+      mealTotals: {
+        cost: {
+          status: "complete",
+          lower: 12.5,
+          upper: null,
+          coverage: { covered: 1, total: 1 },
+        },
+        nutrition: buildNutrition((key) =>
+          key === "kcal"
+            ? {
+                status: "complete",
+                lower: 820,
+                upper: null,
+                coverage: { covered: 1, total: 1 },
+              }
+            : { status: "unavailable", reason: "no_data" },
+        ),
+      },
       // Pinned, not generated: `mock` would otherwise pick a random slot/kind
       // per seed, and a non-cooked kind adds a DESCRIPTION line that every
       // other assertion here would have to account for.

@@ -2,17 +2,33 @@ import { describe, expect, it } from "vitest";
 import { testShortcode } from "./test-support/identifiers";
 import {
   getMealPreparationsOut,
-  mealPreparationEstimate,
   mealPreparationYieldBasis,
   saveMealRecipePreparationInput,
   saveMealRecipePreparationOut,
 } from "./meal";
+import { buildNutrition, measureEstimate } from "./nutrition";
 
 const mealId = testShortcode("meal", "meal-preparation");
 const leftoversMealId = testShortcode("meal", "leftovers");
 const recipeId = testShortcode("recipe", "meal-preparation");
 const eaterId = testShortcode("ledgerParty", "meal-preparation");
 const mealRecipeId = "00000000-0000-4000-8000-000000000001";
+const complete = (lower: number) => ({
+  status: "complete" as const,
+  lower,
+  upper: null,
+  coverage: { covered: 1, total: 1 },
+});
+const totals = (cost: number, kcal: number, protein: number) => ({
+  cost: complete(cost),
+  nutrition: buildNutrition((key) =>
+    key === "kcal"
+      ? complete(kcal)
+      : key === "protein"
+        ? complete(protein)
+        : { status: "unavailable", reason: "no_data" },
+  ),
+});
 
 describe("meal preparation contracts", () => {
   it("accepts positive integer yields and keyed set/remove portion changes", () => {
@@ -99,22 +115,28 @@ describe("meal preparation contracts", () => {
     ).toBe(false);
   });
 
-  it("models calorie completeness and yield provenance as closed unions", () => {
+  it("models estimate completeness and yield provenance as closed unions", () => {
     expect(
-      mealPreparationEstimate.parse({
+      measureEstimate.parse({
         status: "pending",
         reason: "totals_stale",
       }),
     ).toEqual({ status: "pending", reason: "totals_stale" });
     expect(
-      mealPreparationEstimate.parse({
+      measureEstimate.parse({
         status: "complete",
         lower: 350,
         upper: null,
+        coverage: { covered: 1, total: 1 },
       }),
-    ).toEqual({ status: "complete", lower: 350, upper: null });
+    ).toEqual({
+      status: "complete",
+      lower: 350,
+      upper: null,
+      coverage: { covered: 1, total: 1 },
+    });
     expect(
-      mealPreparationEstimate.safeParse({
+      measureEstimate.safeParse({
         status: "unavailable",
         reason: "totals_missing",
       }).success,
@@ -157,9 +179,7 @@ describe("meal preparation contracts", () => {
             lowerGrams: 500,
             upperGrams: null,
           },
-          batchCalories: { status: "complete", lower: 1000, upper: null },
-          batchCost: { status: "complete", lower: 10, upper: null },
-          batchProtein: { status: "complete", lower: 80, upper: null },
+          totals: totals(10, 1000, 80),
           sourceSummary: {
             assignedGrams: 350,
             confirmedGrams: 200,
@@ -178,9 +198,7 @@ describe("meal preparation contracts", () => {
               grams: 200,
               confirmedAt: new Date("2026-08-31T19:00:00Z"),
               servedHere: true,
-              calories: { status: "complete", lower: 400, upper: null },
-              cost: { status: "complete", lower: 4, upper: null },
-              protein: { status: "complete", lower: 32, upper: null },
+              totals: totals(4, 400, 32),
             },
           ],
         },
@@ -188,15 +206,17 @@ describe("meal preparation contracts", () => {
       totals: {
         confirmed: {
           portionCount: 1,
-          calories: { status: "complete", lower: 400, upper: null },
-          cost: { status: "complete", lower: 4, upper: null },
-          protein: { status: "complete", lower: 32, upper: null },
+          totals: totals(4, 400, 32),
         },
         projected: {
           portionCount: 0,
-          calories: { status: "complete", lower: 0, upper: null },
-          cost: { status: "complete", lower: 0, upper: null },
-          protein: { status: "complete", lower: 0, upper: null },
+          totals: {
+            cost: { status: "unavailable", reason: "empty" },
+            nutrition: buildNutrition(() => ({
+              status: "unavailable",
+              reason: "empty",
+            })),
+          },
         },
       },
     });

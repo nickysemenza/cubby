@@ -14,11 +14,13 @@ import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
 import {
-  calorieText,
-  calorieTone,
+  estimateTone,
+  formatCostEstimate,
+  formatNutrientEstimate,
+  MealNutritionEstimates,
+} from "../meal-nutrition";
+import {
   mealLabel,
-  measureText,
-  measureTone,
   type MealPreparation,
   type PreparationEaterOption,
   type PreparationSaveRequest,
@@ -275,22 +277,23 @@ function YieldFields({
         <Stack gap={null}>
           <span className="text-sm font-medium">Yield</span>
           <Description size="xs">
-            Measure the cooked batch once; cost, calories, and protein stay tied
-            to this recipe occurrence.
+            Measure the cooked batch once; cost and nutrition stay tied to this
+            recipe occurrence.
           </Description>
         </Stack>
         <Row align="center" gap="xs" wrap>
-          <Badge variant={measureTone(source.batchCost)}>
-            {measureText(source.batchCost, "cost")}
+          <Badge variant={estimateTone(source.totals.cost)}>
+            {formatCostEstimate(source.totals)}
           </Badge>
-          <Badge variant={calorieTone(source.batchCalories)}>
-            {calorieText(source.batchCalories)}
+          <Badge variant={estimateTone(source.totals.nutrition.kcal)}>
+            {formatNutrientEstimate(source.totals, "kcal")}
           </Badge>
-          <Badge variant={measureTone(source.batchProtein)}>
-            {measureText(source.batchProtein, "protein")}
+          <Badge variant={estimateTone(source.totals.nutrition.protein)}>
+            {formatNutrientEstimate(source.totals, "protein")}
           </Badge>
         </Row>
       </Row>
+      <MealNutritionEstimates totals={source.totals} />
       <div className="grid grid-cols-2 gap-3">
         <Stack gap="xs">
           <Label htmlFor={`${source.mealRecipeId}-expected`}>
@@ -335,7 +338,7 @@ function YieldFields({
       ) : null}
       <Description size="xs">
         {source.actualYieldGrams == null && actualYield === ""
-          ? "Made yield unlocks per-gram cost, calorie, and protein estimates."
+          ? "Made yield unlocks per-gram cost and nutrition estimates."
           : `Basis: ${yieldBasisLabel(source.yieldBasis)}.`}
       </Description>
     </Stack>

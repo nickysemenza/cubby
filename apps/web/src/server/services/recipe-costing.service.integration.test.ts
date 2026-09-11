@@ -1,11 +1,14 @@
+import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import { recipeTotals } from "@cubby/schemas/recipe-shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { updateProduct } from "~/server/repo/product";
+import { getRecipesByIDs } from "~/server/repo/recipe/crud";
+import { recipeList } from "~/server/repo/recipe/crud";
 import {
   getRecipeTotalsState,
   selectAllStaleRecipeIds,
-  updateRecipeTotalsBatch,
 } from "~/server/repo/recipe/totals";
 import {
   recomputeAllDurableWorkflow,
@@ -19,6 +22,7 @@ import {
   ingredientRef,
   makeProductInput,
   makeRecipeInput,
+  setRecipeTotalsFixtureRaw,
 } from "../repo/repo.fixtures";
 import { createTestRequestContext } from "../testing/request-context";
 
@@ -49,6 +53,13 @@ describe("RecipeCostingService", () => {
         name: `${name} product`,
         ingredientId: ing.id,
         price: 4,
+        unitMappings: [
+          {
+            a: { value: 1, unit: "lb" },
+            b: { value: 4, unit: "dollar" },
+            source: "test",
+          },
+        ],
       }),
       ctx.actor,
     );
@@ -61,7 +72,7 @@ describe("RecipeCostingService", () => {
             instructions: [{ instruction: "Mix" }],
             ingredients: [
               ingredientRef(ing.shortcode, {
-                amounts: [{ value: 2, unit: "cup" }],
+                amounts: [{ value: 2, unit: "lb" }],
               }),
             ],
           },
@@ -117,7 +128,10 @@ describe("RecipeCostingService", () => {
       const entry = result.get(recipe.id);
       expect(entry).toBeDefined();
       expect(entry?.complete).toBe(true);
-      expect(entry?.totals.ingredientCount).toBe(1);
+      expect(entry?.totals.cost).toMatchObject({
+        status: "complete",
+        coverage: { covered: 1, total: 1 },
+      });
     });
   });
 
@@ -173,33 +187,97 @@ describe("RecipeCostingService", () => {
     });
   });
 
-  describe("recompute", () => {
-    it("queues fresh-timestamp legacy totals missing nutrient coverage and upgrades them", async () => {
-      const recipe = await seedPricedRecipe("Legacy nutrient coverage");
-
-      // This is a real pre-coverage JSONB shape. Its timestamp is deliberately
-      // fresh, so the stale drain must detect the absent contract field rather
-      // than relying only on `totalsComputedAt IS NULL`.
-      await updateRecipeTotalsBatch(ctx.db, [
-        {
-          id: recipe.entityId,
-          totals: {
-            costTotal: 0,
-            caloriesTotal: 0,
-            ingredientCount: 1,
-            costCovered: 0,
-            caloriesCovered: 0,
-          },
-        },
-      ]);
-      expect(await selectAllStaleRecipeIds(ctx.db)).toContain(recipe.entityId);
-
-      expect(await service().recomputeQueued([recipe.entityId])).toBe(1);
-      const state = await getRecipeTotalsState(ctx.db, recipe.entityId);
-      expect(state?.totals?.proteinCovered).toBeTypeOf("number");
-      expect(await selectAllStaleRecipeIds(ctx.db)).not.toContain(
-        recipe.entityId,
+  describe("persisted estimate list queries", () => {
+    it("sorts known zero numerically and excludes unavailable or stale calories from range filters", async () => {
+      const zero = await seedPricedRecipe("Zero estimate");
+      const partial = await seedPricedRecipe("Partial estimate");
+      const missing = await seedPricedRecipe("Missing estimate");
+      const stale = await seedPricedRecipe("Stale estimate");
+      const totals = (
+        value: number | null,
+        incomplete = false,
+      ): NutritionTotals => ({
+        cost: { status: "unavailable", reason: "no_data" },
+        nutrition: buildNutrition((key) => {
+          if (key !== "kcal" || value == null)
+            return { status: "unavailable", reason: "no_data" };
+          const amount = {
+            lower: value,
+            upper: null,
+            coverage: { covered: 1, total: incomplete ? 2 : 1 },
+          };
+          return incomplete
+            ? { status: "partial", ...amount }
+            : { status: "complete", ...amount };
+        }),
+      });
+      for (const [saved, value, isPartial] of [
+        [zero, 0, false],
+        [partial, 40, true],
+        [missing, null, false],
+        [stale, 10, false],
+      ] as const) {
+        await setRecipeTotalsFixtureRaw(
+          ctx.db,
+          saved.entityId,
+          totals(value, isPartial),
+          saved.id === stale.id ? null : new Date(),
+        );
+      }
+      const filtered = await recipeList(
+        ctx.db,
+        { caloriesTotalMax: 50 },
+        [{ orderBy: "caloriesTotal", direction: "asc" }],
+        { pageSize: 20, pageIndex: 0 },
       );
+      expect(filtered.data.map((entry) => entry.id)).toEqual([
+        zero.id,
+        partial.id,
+      ]);
+      const all = await recipeList(
+        ctx.db,
+        {},
+        [{ orderBy: "caloriesTotal", direction: "asc" }],
+        { pageSize: 20, pageIndex: 0 },
+      );
+      expect(all.data.slice(0, 2).map((entry) => entry.id)).toEqual([
+        zero.id,
+        partial.id,
+      ]);
+      expect(
+        all.data.find((entry) => entry.id === stale.id)?.totals?.nutrition.kcal,
+      ).toEqual({
+        status: "pending",
+        reason: "totals_stale",
+      });
+    });
+  });
+
+  describe("recompute", () => {
+    it("regenerates cleared derived totals without altering authored recipe data", async () => {
+      const saved = await seedPricedRecipe("Cleared nutrition cache");
+      await service().recomputeQueued([saved.entityId]);
+      const before = (await getRecipesByIDs(ctx.db, [saved.entityId]))[0];
+      await setRecipeTotalsFixtureRaw(ctx.db, saved.entityId, null, null);
+      const cleared = await getRecipeTotalsState(ctx.db, saved.entityId);
+      expect(cleared?.totals).toBeNull();
+      expect(cleared?.totalsComputedAt).toBeNull();
+      const pending = (await getRecipesByIDs(ctx.db, [saved.entityId]))[0];
+      expect(pending?.totals?.nutrition.kcal).toEqual({
+        status: "pending",
+        reason: "totals_missing",
+      });
+      expect(await selectAllStaleRecipeIds(ctx.db)).toContain(saved.entityId);
+      expect(await service().recomputeQueued([saved.entityId])).toBe(1);
+      const state = await getRecipeTotalsState(ctx.db, saved.entityId);
+      expect(recipeTotals.safeParse(state?.totals).success).toBe(true);
+      expect(state?.totalsComputedAt).toBeInstanceOf(Date);
+      expect(await selectAllStaleRecipeIds(ctx.db)).not.toContain(
+        saved.entityId,
+      );
+      const after = (await getRecipesByIDs(ctx.db, [saved.entityId]))[0];
+      expect(after?.sections).toEqual(before?.sections);
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
     });
 
     it("eagerly recomputes a parent when a child's cost changes", async () => {
@@ -262,7 +340,10 @@ describe("RecipeCostingService", () => {
       await service().recompute([parent.entityId, child.entityId]);
       const childBefore = await getRecipeTotalsState(ctx.db, child.entityId);
       const parentBefore = await getRecipeTotalsState(ctx.db, parent.entityId);
-      expect(childBefore?.totals?.costTotal).toBe(4);
+      expect(childBefore?.totals?.cost).toMatchObject({
+        status: "complete",
+        lower: 4,
+      });
       expect(parentBefore?.totalsComputedAt).not.toBeNull();
 
       // Change the child's cost, then recompute ONLY the child. Because the
@@ -278,7 +359,10 @@ describe("RecipeCostingService", () => {
 
       const childAfter = await getRecipeTotalsState(ctx.db, child.entityId);
       const parentAfter = await getRecipeTotalsState(ctx.db, parent.entityId);
-      expect(childAfter?.totals?.costTotal).toBe(10);
+      expect(childAfter?.totals?.cost).toMatchObject({
+        status: "complete",
+        lower: 10,
+      });
       expect(parentAfter?.totalsComputedAt?.getTime() ?? 0).toBeGreaterThan(
         parentBefore?.totalsComputedAt?.getTime() ?? 0,
       );

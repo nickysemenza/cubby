@@ -2,6 +2,8 @@ import type { CalendarDaySummary } from "@cubby/schemas/calendar";
 import { format } from "date-fns";
 import type { ReactNode } from "react";
 
+import { aggregateTotals } from "~/lib/nutrition-estimates";
+import { formatEstimate } from "~/lib/nutrition-format";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import { householdCalendarDate } from "./calendar-period";
@@ -9,8 +11,7 @@ import { householdCalendarDate } from "./calendar-period";
 const EMPTY_DAY_SUMMARY: CalendarDaySummary = {
   actualSpend: 0,
   plannedSpend: 0,
-  calories: 0,
-  nutritionPending: false,
+  mealTotals: aggregateTotals([]),
   taskCount: 0,
   expenseCount: 0,
   mealCount: 0,
@@ -68,7 +69,10 @@ function WeekSummaryGrid({
               <SummaryLine label="Tasks" value={summary.taskCount} />
               <SummaryLine
                 label="Calories"
-                value={`${Math.round(summary.calories).toLocaleString()}${summary.nutritionPending ? "+" : ""}`}
+                value={formatEstimate(
+                  summary.mealTotals.nutrition.kcal,
+                  (value) => Math.round(value).toLocaleString(),
+                )}
               />
               <SummaryLine
                 label="Spent"

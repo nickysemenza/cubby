@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 
 import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
 
-import { getAllUnitMappingsFromProduct } from "./unit-mapping-utils";
+import {
+  getAllUnitMappingsFromProduct,
+  toWFoodInput,
+} from "./unit-mapping-utils";
 
 // Note: unit-mapping STRING parsing (the "4 lb = $5" formats) lives upstream in
 // the `ingredient` crate; the dead TS wrapper that duplicated it here was removed.
@@ -94,5 +97,21 @@ describe("createServingMapping bare-count guard (serving/whole conflation)", () 
 
     expect(serving?.b.unit).toBe("cup");
     expect(serving?.b.value).toBe(0.5);
+  });
+});
+
+describe("nutrition mapping inputs", () => {
+  it("preserves an explicit zero nutrient reading", () => {
+    const food: FoodSummary = {
+      ...brandedFood("2 SCOOPS"),
+      nutritionInfo: {
+        nutrientSummary: [],
+        nutrientsPer100: { "203": 0, "999": 0 },
+      },
+    };
+
+    expect(toWFoodInput(food).nutrients_per_100).toEqual([
+      { unit: "g protein", amount: 0 },
+    ]);
   });
 });

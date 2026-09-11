@@ -56,11 +56,14 @@ export function computeNutrientDensityFigures(
 ): NutrientDensityFigures {
   const kcal = getNutrientValueByKey(nutrients, "kcal");
   const protein = getNutrientValueByKey(nutrients, "protein");
-  const proteinDensity = proteinPer100Kcal(protein, kcal);
+  const proteinDensity =
+    protein != null && kcal != null ? proteinPer100Kcal(protein, kcal) : null;
 
   const gramsPerEach = resolveGramsPerEach(mappings);
   const proteinGramsPerEach =
-    gramsPerEach != null ? (protein * gramsPerEach) / 100 : null;
+    gramsPerEach != null && protein != null
+      ? (protein * gramsPerEach) / 100
+      : null;
   const costPerGramProtein =
     price != null ? costPerNutrient(price, proteinGramsPerEach) : null;
   const needsWeightMapping = price != null && gramsPerEach == null;

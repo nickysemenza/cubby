@@ -12,7 +12,17 @@ describe("totalsLookStuck", () => {
   it("is false when totals are already computed, regardless of age", () => {
     expect(
       totalsLookStuck(
-        { totals: { costTotal: 5 }, updatedAt: at(TOTALS_STALE_AFTER_MS * 10) },
+        {
+          totals: {
+            cost: {
+              status: "complete",
+              lower: 5,
+              upper: null,
+              coverage: { covered: 1, total: 1 },
+            },
+          },
+          updatedAt: at(TOTALS_STALE_AFTER_MS * 10),
+        },
         NOW,
       ),
     ).toBe(false);
@@ -25,6 +35,18 @@ describe("totalsLookStuck", () => {
         NOW,
       ),
     ).toBe(false);
+  });
+
+  it("keeps the recovery affordance for canonical pending estimates", () => {
+    expect(
+      totalsLookStuck(
+        {
+          totals: { cost: { status: "pending", reason: "totals_stale" } },
+          updatedAt: at(TOTALS_STALE_AFTER_MS + 1_000),
+        },
+        NOW,
+      ),
+    ).toBe(true);
   });
 
   it("is true once a null-totals recipe is past the stale window", () => {

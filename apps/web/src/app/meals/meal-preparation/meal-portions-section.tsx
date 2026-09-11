@@ -6,11 +6,11 @@ import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 
 import {
-  calorieText,
-  measureText,
-  type MealPreparation,
-  type MealPreparationsView,
-} from "./types";
+  formatCostEstimate,
+  formatNutrientEstimate,
+  MealNutritionEstimates,
+} from "../meal-nutrition";
+import { type MealPreparation, type MealPreparationsView } from "./types";
 
 export function MealPortionsSection({
   view,
@@ -32,8 +32,8 @@ export function MealPortionsSection({
         <Stack gap={null}>
           <span className="text-sm font-semibold">Portions</span>
           <Description size="xs">
-            Cost, calories, and protein are shown per recipe source; grams are
-            never totaled across foods.
+            Nutrition and cost stay tied to each recipe source; grams are never
+            totaled across foods.
           </Description>
         </Stack>
         {onAddPreparedPortion ? (
@@ -72,7 +72,7 @@ export function MealPortionsSection({
             </span>
             <Description size="xs">
               {hasPreparedSource
-                ? "The batch is recorded. Add who ate it and the grams to project cost, calories, and protein."
+                ? "The batch is recorded. Add who ate it and the grams to project cost and nutrition."
                 : "Record a cooked yield on a recipe row, then assign portions here or to another meal."}
             </Description>
           </Stack>
@@ -150,19 +150,27 @@ function PortionLine({
         </Row>
       </Row>
       <Row align="start" gap="xs" className="mt-1" wrap>
-        {[portion.cost, portion.calories, portion.protein].some(
+        {[portion.totals.cost, ...Object.values(portion.totals.nutrition)].some(
           (estimate) =>
             estimate.status === "pending" || estimate.status === "unavailable",
         ) ? (
           <CircleAlert className="size-3 text-muted-foreground" />
         ) : null}
         <span className="text-2xs text-muted-foreground">
-          Cost {measureText(portion.cost, "cost")} · Calories{" "}
-          {calorieText(portion.calories)} · Protein{" "}
-          {measureText(portion.protein, "protein")} from{" "}
+          Cost {formatCostEstimate(portion.totals)} · Calories{" "}
+          {formatNutrientEstimate(portion.totals, "kcal")} · Protein{" "}
+          {formatNutrientEstimate(portion.totals, "protein")} from{" "}
           {preparation.recipe.name}
         </span>
       </Row>
+      <details className="mt-1 text-xs">
+        <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+          Portion nutrition
+        </summary>
+        <div className="mt-2 border-t pt-2">
+          <MealNutritionEstimates totals={portion.totals} />
+        </div>
+      </details>
     </div>
   );
 }
@@ -182,17 +190,20 @@ function SummaryStat({
         <span className="text-xs text-muted-foreground">{label}</span>
         <Stack gap={null} className="text-right text-2xs text-muted-foreground">
           <span className="tabular-nums">
-            Cost {measureText(totals.cost, "cost")}
+            Cost {formatCostEstimate(totals.totals)}
           </span>
           <span className="tabular-nums">
-            Calories {calorieText(totals.calories)}
+            Calories {formatNutrientEstimate(totals.totals, "kcal")}
           </span>
           <span className="tabular-nums">
-            Protein {measureText(totals.protein, "protein")}
+            Protein {formatNutrientEstimate(totals.totals, "protein")}
           </span>
         </Stack>
       </Row>
       <span className="text-2xs text-muted-foreground">{detail}</span>
+      <div className="mt-2 border-t pt-2 text-left">
+        <MealNutritionEstimates totals={totals.totals} />
+      </div>
     </div>
   );
 }

@@ -197,26 +197,31 @@ export function MealTable({
           ),
         );
         // Not sortable, and not an oversight: cost is a read-time rollup of
-        // `recipe.totals x scale` summed in JS, carrying a `pending` flag for
-        // recipes that have no totals yet. A SQL ORDER BY would have to
-        // COALESCE those to 0 and rank a pending meal as the cheapest — sorting
-        // by a number that isn't the one on screen. It resolves to
-        // `enableSorting: false` via the `mealSortableFields` allowlist.
+        // `recipe.totals x scale` summed through the estimate engine. A SQL
+        // ORDER BY cannot preserve partial/pending/unavailable semantics. It
+        // resolves to `enableSorting: false` via the allowlist.
         add(
-          columnHelper.accessor((row) => row.totals.costTotal, {
-            id: "cost",
-            header: "Cost",
-            meta: {
-              numeric: true,
-              className: "w-20",
-              mobile: { slot: "trailing", priority: 10 },
+          columnHelper.accessor(
+            (row) =>
+              row.totals.cost.status === "complete" ||
+              row.totals.cost.status === "partial"
+                ? row.totals.cost.lower
+                : null,
+            {
+              id: "cost",
+              header: "Cost",
+              meta: {
+                numeric: true,
+                className: "w-20",
+                mobile: { slot: "trailing", priority: 10 },
+              },
+              cell: (info) => (
+                <span className="tabular-nums">
+                  {formatMealCost(info.row.original.totals)}
+                </span>
+              ),
             },
-            cell: (info) => (
-              <span className="tabular-nums">
-                {formatMealCost(info.row.original.totals)}
-              </span>
-            ),
-          }),
+          ),
         );
       }),
     // oxlint-disable-next-line react/exhaustive-deps -- updateMealMutation changes every render but is functionally stable

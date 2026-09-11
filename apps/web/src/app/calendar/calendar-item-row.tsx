@@ -2,6 +2,7 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
 
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Badge } from "~/components/ui/badge";
+import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn, formatCurrency } from "~/lib/utils";
 
 import { calendarItemPresentation } from "./calendar-kind-registry";
@@ -10,19 +11,31 @@ import { itemSpanLabel } from "./calendar-span";
 type CalendarItemPresentationVariant = "month" | "detail" | "rich";
 
 function calendarItemCost(item: CalendarItem) {
-  if (item.kind === "expense" && item.cost != null) return item.cost;
-  if (item.kind === "meal" && item.cost > 0) return item.cost;
+  if (item.kind === "expense" && item.cost != null)
+    return formatCurrency(item.cost, 0);
+  if (
+    item.kind === "meal" &&
+    !(
+      item.mealTotals.cost.status === "unavailable" &&
+      item.mealTotals.cost.reason === "empty"
+    )
+  )
+    return formatEstimate(item.mealTotals.cost, (value) =>
+      formatCurrency(value, 0),
+    );
   return null;
 }
 
 function MealCalories({ item }: { item: CalendarItem }) {
-  if (item.kind !== "meal" || (item.calories <= 0 && !item.nutritionPending)) {
-    return null;
-  }
+  if (item.kind !== "meal") return null;
+  const kcal = item.mealTotals.nutrition.kcal;
+  if (kcal.status === "unavailable" && kcal.reason === "empty") return null;
   return (
-    <span>
-      {Math.round(item.calories).toLocaleString()}
-      {item.nutritionPending ? "+" : ""} cal
+    <span title={estimateStatusText(kcal) ?? undefined}>
+      {formatEstimate(
+        kcal,
+        (value) => `${Math.round(value).toLocaleString()} kcal`,
+      )}
     </span>
   );
 }
@@ -90,7 +103,7 @@ function CalendarItemRich({
   const Icon = presentation.icon;
   const { cover, metadata } = presentation;
   const cost = calendarItemCost(item);
-  const costLabel = cost == null ? null : formatCurrency(cost, 0);
+  const costLabel = cost;
   return (
     <div
       className={cn(

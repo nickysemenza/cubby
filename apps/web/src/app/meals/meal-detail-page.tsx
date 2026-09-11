@@ -38,9 +38,13 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { getErrorMessage } from "~/lib/error-utils";
-import { formatCurrency } from "~/lib/utils";
 
 import { EditableCell } from "../_components/data-table/editable-cell";
+import {
+  formatCostEstimate,
+  formatNutrientEstimate,
+  MealNutritionEstimates,
+} from "./meal-nutrition";
 import {
   mealKindBadgeVariant,
   mealKindOptions,
@@ -49,7 +53,6 @@ import {
 import { MealPortionsSection } from "./meal-preparation/meal-portions-section";
 import { PortionSheet } from "./meal-preparation/portion-sheet";
 import type { MealPreparationsView } from "./meal-preparation/types";
-import { calorieText, measureText } from "./meal-preparation/types";
 import { useMealPreparationController } from "./meal-preparation/use-meal-preparation-controller";
 import { meal as mealOperations } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
@@ -72,15 +75,15 @@ export function buildMealHeroStats(
     return [
       {
         label: "Consumed cost",
-        value: measureText(confirmed.cost, "cost"),
+        value: formatCostEstimate(confirmed.totals),
       },
       {
         label: "Consumed calories",
-        value: calorieText(confirmed.calories),
+        value: formatNutrientEstimate(confirmed.totals, "kcal"),
       },
       {
         label: "Consumed protein",
-        value: measureText(confirmed.protein, "protein"),
+        value: formatNutrientEstimate(confirmed.totals, "protein"),
       },
       { label: "Recipes", value: meal.recipes.length },
     ];
@@ -88,12 +91,12 @@ export function buildMealHeroStats(
   return [
     {
       label: "Cost",
-      value:
-        meal.totals.pending && meal.totals.costTotal === 0
-          ? "—"
-          : `${formatCurrency(meal.totals.costTotal)}${meal.totals.pending ? "+" : ""}`,
+      value: formatCostEstimate(meal.totals),
     },
-    { label: "Calories", value: Math.round(meal.totals.caloriesTotal) },
+    {
+      label: "Calories",
+      value: formatNutrientEstimate(meal.totals, "kcal"),
+    },
     { label: "Recipes", value: meal.recipes.length },
   ];
 }
@@ -375,6 +378,9 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                       />
                     ))
                   )}
+                  <div className="border-t pt-3">
+                    <MealNutritionEstimates totals={meal.totals} />
+                  </div>
                   {pendingRecipeName && (
                     <Row
                       align="center"
@@ -619,7 +625,7 @@ function RecipeRow({
         <span className="text-xs text-muted-foreground">×</span>
       </Row>
       <span className="w-16 text-right text-sm tabular-nums">
-        {mr.scaledTotals ? formatCurrency(mr.scaledTotals.costTotal) : "—"}
+        {formatCostEstimate(mr.scaledTotals)}
       </span>
       {onOpenPreparation ? (
         <Button

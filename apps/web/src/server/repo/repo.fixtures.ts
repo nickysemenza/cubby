@@ -4,6 +4,7 @@ import {
   type EntityId,
   type IngredientId,
   type IngredientShortcode,
+  type RecipeId,
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
@@ -16,11 +17,12 @@ import {
 import type { ProductCreateInput } from "@cubby/schemas/product";
 import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
-import { eq } from "drizzle-orm";
+import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
+import { eq, sql } from "drizzle-orm";
 
 import { mock } from "~/lib/test/mock-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { type image, product } from "~/server/db/schema";
+import { type image, product, recipe } from "~/server/db/schema";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import { getDb } from "./database-helpers";
@@ -154,6 +156,19 @@ export const updateProductNameFixtureRaw = async (
     .update(product)
     .set({ name })
     .where(eq(product.id, parseEntityId("product", productId)));
+};
+
+/** Model the coordinated cache cutover without invoking authored-row update hooks. */
+export const setRecipeTotalsFixtureRaw = async (
+  db: Database,
+  id: RecipeId,
+  totals: RecipeTotals | null,
+  computedAt: Date | null,
+): Promise<void> => {
+  await getDb(db).execute(sql`UPDATE ${recipe}
+    SET "totals" = ${totals == null ? null : JSON.stringify(totals)}::jsonb,
+        "totalsComputedAt" = ${computedAt}
+    WHERE ${recipe.id} = ${id}`);
 };
 
 export const createIngredientFixture = retainEntityId(

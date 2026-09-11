@@ -9,6 +9,7 @@ import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
 import type { Page } from "@playwright/test";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -23,6 +24,7 @@ import {
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
+import { getDb } from "~/server/repo/database-helpers";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -282,6 +284,94 @@ export async function seedStaplePlanningPrerequisite(page: Page, name: string) {
 
 export const seedIngredientPrerequisite = (page: Page, name: string) =>
   createFixture(page, "ingredient", { name });
+
+export async function seedNutritionPrerequisite(
+  page: Page,
+  name: string,
+  options: { missingCalories?: boolean } = {},
+) {
+  const measured = await createFixture(page, "ingredient", {
+    name: `${name} measured`,
+  });
+  const incomplete = await createFixture(page, "ingredient", {
+    name: `${name} incomplete`,
+  });
+  for (const [ingredient, mappings] of [
+    [
+      measured,
+      [
+        { value: 100, unit: "kcal" },
+        { value: 10, unit: "g protein" },
+        { value: 0, unit: "mg sodium" },
+        { value: 50, unit: "mg calcium" },
+      ],
+    ],
+    [incomplete, options.missingCalories ? [] : [{ value: 50, unit: "kcal" }]],
+  ] as const) {
+    await createFixture(
+      page,
+      "product",
+      productCreateInput.parse({
+        ...productFixtureInput(
+          `${ingredient.id} nutrition source`,
+          "E2E fixture",
+        ),
+        ingredientId: ingredient.id,
+        unitMappings: mappings.map((b) => ({
+          a: { value: 100, unit: "g" },
+          b,
+          source: "E2E fixture",
+        })),
+      }),
+    );
+  }
+  const recipe = await createFixture(page, "recipe", {
+    name,
+    servings: 2,
+    yield: { value: 300, unit: "g" },
+    meta: null,
+    sections: [
+      {
+        ingredients: [
+          {
+            type: "ingredient",
+            ingredientId: measured.id,
+            recipeId: null,
+            amounts: [{ value: 100, upperValue: 200, unit: "g" }],
+          },
+          {
+            type: "ingredient",
+            ingredientId: incomplete.id,
+            recipeId: null,
+            amounts: [{ value: 100, unit: "g" }],
+          },
+        ],
+        instructions: [{ instruction: "Combine." }],
+      },
+    ],
+  });
+  const db = getFixtureDb();
+  const row = await getDb(db).query.recipe.findFirst({
+    where: eq(schema.recipe.shortcode, recipe.id),
+  });
+  if (!row) throw new Error("Nutrition recipe fixture missing");
+  const context = createTestRequestContext(db, {
+    auth: { userId: await fixtureUserId(page) },
+  });
+  await context.services.recipeCosting.recompute([row.id]);
+  const meal = await createFixture(page, "meal", {
+    date: "2026-09-09",
+    name: `${name} meal`,
+    recipes: [{ recipeId: recipe.id, scale: 1 }],
+  });
+  return { recipe, measured, incomplete, meal };
+}
+
+export async function clearNutritionCachePrerequisite(shortcode: string) {
+  await getDb(getFixtureDb()).execute(sql`UPDATE ${schema.recipe}
+    SET "totals" = NULL, "totalsComputedAt" = NULL
+    WHERE ${schema.recipe.shortcode} = ${shortcode}`);
+}
 
 export async function seedLedgerDisplayPrerequisite(page: Page, name: string) {
   const db = getFixtureDb();

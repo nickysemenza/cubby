@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { DAILY_VALUES, dailyValuePct, TIER1_NUTRIENTS } from "./nutrient-codes";
+import {
+  DAILY_VALUES,
+  dailyValuePct,
+  TIER1_NUTRIENTS,
+  buildNutrients,
+  getNutrientValueByKey,
+} from "./nutrient-codes";
 
 describe("dailyValuePct", () => {
   it("computes the FDA label percent for a nutrient amount", () => {
@@ -21,5 +27,14 @@ describe("dailyValuePct", () => {
     for (const value of Object.values(DAILY_VALUES)) {
       expect(value).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("nutrient presence", () => {
+  it("retains measured zero and leaves absent nutrients undefined", () => {
+    const nutrients = buildNutrients({ protein: 0, fat: undefined });
+    expect(nutrients).toEqual({ "203": 0 });
+    expect(getNutrientValueByKey(nutrients, "protein")).toBe(0);
+    expect(getNutrientValueByKey(nutrients, "fat")).toBeUndefined();
   });
 });

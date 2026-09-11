@@ -1,4 +1,5 @@
 import type { CalendarDaySummary } from "@cubby/schemas/calendar";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,8 +8,19 @@ import { WeekSummaryGrid } from "./calendar-week-summary";
 const summary: CalendarDaySummary = {
   actualSpend: 1299,
   plannedSpend: 4200,
-  calories: 1875.4,
-  nutritionPending: true,
+  mealTotals: {
+    cost: { status: "unavailable", reason: "no_data" },
+    nutrition: buildNutrition((key) =>
+      key === "kcal"
+        ? {
+            status: "partial",
+            lower: 1875.4,
+            upper: null,
+            coverage: { covered: 2, total: 3 },
+          }
+        : { status: "unavailable", reason: "no_data" },
+    ),
+  },
   taskCount: 3,
   expenseCount: 1,
   mealCount: 2,
@@ -40,10 +52,13 @@ describe("WeekSummaryGrid", () => {
     });
     expect(todayHeader).toHaveAttribute("data-today", "true");
     expect(within(todayHeader).getByText("3")).toBeInTheDocument();
-    expect(within(todayHeader).getByText("1,875+")).toBeInTheDocument();
+    expect(
+      within(todayHeader).getByText("1,875 known · partial"),
+    ).toBeInTheDocument();
     expect(within(todayHeader).getByText("$1,299")).toBeInTheDocument();
     expect(within(todayHeader).getByText("$4,200")).toBeInTheDocument();
-    expect(within(sundayHeader).getAllByText("0")).toHaveLength(2);
+    expect(within(sundayHeader).getByText("0")).toBeInTheDocument();
+    expect(within(sundayHeader).getByText("—")).toBeInTheDocument();
     expect(within(sundayHeader).getAllByText("$0")).toHaveLength(2);
   });
 

@@ -2,6 +2,7 @@ import {
   getMealPreparationsOut,
   saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
+import { buildNutrition } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { useMutation } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -11,6 +12,23 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { meal } from "../meal.functions";
 import { PortionSheet } from "./portion-sheet";
+
+const complete = (lower: number) => ({
+  status: "complete" as const,
+  lower,
+  upper: null,
+  coverage: { covered: 1, total: 1 },
+});
+const nutritionTotals = (cost: number, kcal: number, protein: number) => ({
+  cost: complete(cost),
+  nutrition: buildNutrition((key) =>
+    key === "kcal"
+      ? complete(kcal)
+      : key === "protein"
+        ? complete(protein)
+        : { status: "unavailable", reason: "no_data" },
+  ),
+});
 
 const view = getMealPreparationsOut.parse({
   mealId: testShortcode("meal", "MEL-4K7M"),
@@ -28,9 +46,7 @@ const view = getMealPreparationsOut.parse({
       estimatedYieldGrams: 600,
       actualYieldGrams: 500,
       yieldBasis: { kind: "actual", lowerGrams: 500, upperGrams: 500 },
-      batchCalories: { status: "complete", lower: 1000, upper: null },
-      batchCost: { status: "complete", lower: 10, upper: null },
-      batchProtein: { status: "complete", lower: 80, upper: null },
+      totals: nutritionTotals(10, 1000, 80),
       sourceSummary: {
         assignedGrams: 350,
         confirmedGrams: 200,
@@ -52,9 +68,7 @@ const view = getMealPreparationsOut.parse({
           grams: 200,
           confirmedAt: new Date("2026-08-31T19:00:00Z"),
           servedHere: true,
-          calories: { status: "complete", lower: 400, upper: null },
-          cost: { status: "complete", lower: 4, upper: null },
-          protein: { status: "complete", lower: 32, upper: null },
+          totals: nutritionTotals(4, 400, 32),
         },
       ],
     },
@@ -62,15 +76,11 @@ const view = getMealPreparationsOut.parse({
   totals: {
     confirmed: {
       portionCount: 1,
-      calories: { status: "complete", lower: 400, upper: null },
-      cost: { status: "complete", lower: 4, upper: null },
-      protein: { status: "complete", lower: 32, upper: null },
+      totals: nutritionTotals(4, 400, 32),
     },
     projected: {
       portionCount: 1,
-      calories: { status: "complete", lower: 400, upper: null },
-      cost: { status: "complete", lower: 4, upper: null },
-      protein: { status: "complete", lower: 32, upper: null },
+      totals: nutritionTotals(4, 400, 32),
     },
   },
 });
