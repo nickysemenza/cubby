@@ -17,6 +17,29 @@ const registries = {
 };
 checkHttpRoutes(httpContract);
 const components: Record<string, z.core.JSONSchema.JSONSchema> = {};
+interface ParameterSchema {
+  $ref?: string;
+  nullable?: boolean;
+  type?: string | string[];
+  allOf?: ParameterSchema[];
+  anyOf?: ParameterSchema[];
+  oneOf?: ParameterSchema[];
+}
+function scalarParameter(schema: ParameterSchema): boolean {
+  if (schema.nullable) return false;
+  if (schema.$ref) {
+    const key = schema.$ref
+      .replace("#/components/schemas/", "")
+      .replace(/(input|output)___shared#\/definitions\//u, "$1_");
+    const resolved = components[key];
+    return resolved !== undefined && scalarParameter(resolved);
+  }
+  const variants = schema.anyOf ?? schema.oneOf ?? schema.allOf;
+  return variants
+    ? variants.every(scalarParameter)
+    : z.enum(["string", "number", "integer", "boolean"]).safeParse(schema.type)
+        .success;
+}
 const makeDocument = () =>
   generateOpenApi(
     httpContract,
@@ -43,9 +66,20 @@ const makeDocument = () =>
           .object({ http: httpMetadataSchema })
           .parse(route.metadata).http;
         operation.tags = [metadata.entity ?? metadata.operation.split(".")[0]!];
-        if (metadata.mode === "list")
+        if (metadata.mode === "list") {
           operation.description =
-            'Nested query fields use JSON: pagination={"pageIndex":0,"pageSize":20}. Omitted filters default to {}. Resource methods depend on entity capabilities.';
+            "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters; arrays and objects use JSON. Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.";
+          for (const parameter of operation.parameters ?? []) {
+            if ("$ref" in parameter || parameter.in !== "query") continue;
+            const schema = parameter.content?.["application/json"]?.schema;
+            if (schema && scalarParameter(schema)) {
+              parameter.schema = schema;
+              parameter.style = "form";
+              parameter.explode = true;
+              delete parameter.content;
+            }
+          }
+        }
         if (metadata.mode === "create") {
           const response = operation.responses[201];
           if (response && !("$ref" in response))

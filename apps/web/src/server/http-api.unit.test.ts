@@ -113,7 +113,7 @@ describe("HTTP boundary", () => {
     ["recipe/getManyByIDs?ids=%5B%22RCP-ABCD%22%5D", { ids: ["RCP-ABCD"] }],
     ["dashboard/counts", undefined],
     [
-      "recipes?pagination=%7B%22pageIndex%22%3A0%2C%22pageSize%22%3A5%7D",
+      "recipes?page=1&pageSize=5",
       {
         entity: "recipe",
         filters: {},
