@@ -110,6 +110,7 @@ const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
     pattern: /^\/api\/calendar\/[^/]+\/[^/]+$/u,
     template: "/api/calendar/:token/:feed",
   },
+  { pattern: /^\/api\/v1\/[^/]+$/u, template: "/api/v1/:resource" },
   {
     pattern: /^\/api\/v1\/[^/]+\/[^/]+$/u,
     template: "/api/v1/:resource/:operation",

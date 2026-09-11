@@ -105,6 +105,7 @@ import { Route as AuthenticatedWishesIndexRouteImport } from './routes/_authenti
 import { Route as AuthenticatedWishesShortcodeRouteImport } from './routes/_authenticated/wishes.$shortcode'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiDebugTimingRouteImport } from './routes/api/debug/timing'
+import { Route as ApiV1ResourceRouteImport } from './routes/api/v1/$resource'
 import { Route as ApiV1DocsRouteImport } from './routes/api/v1/docs'
 import { Route as ApiV1OpenapiDotjsonRouteImport } from './routes/api/v1/openapi[.]json'
 import { Route as ApiWorkflowStreamOperationRouteImport } from './routes/api/workflow-stream/$operation'
@@ -661,6 +662,11 @@ const ApiDebugTimingRoute = ApiDebugTimingRouteImport.update({
   path: '/api/debug/timing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiV1ResourceRoute = ApiV1ResourceRouteImport.update({
+  id: '/api/v1/$resource',
+  path: '/api/v1/$resource',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiV1DocsRoute = ApiV1DocsRouteImport.update({
   id: '/api/v1/docs',
   path: '/api/v1/docs',
@@ -719,9 +725,9 @@ const ApiCalendarTokenFeedRoute = ApiCalendarTokenFeedRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiV1ResourceOperationRoute = ApiV1ResourceOperationRouteImport.update({
-  id: '/api/v1/$resource/$operation',
-  path: '/api/v1/$resource/$operation',
-  getParentRoute: () => rootRouteImport,
+  id: '/$operation',
+  path: '/$operation',
+  getParentRoute: () => ApiV1ResourceRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -798,6 +804,7 @@ export interface FileRoutesByFullPath {
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
@@ -905,6 +912,7 @@ export interface FileRoutesByTo {
   '/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
@@ -1015,6 +1023,7 @@ export interface FileRoutesById {
   '/_authenticated/wishes/$shortcode': typeof AuthenticatedWishesShortcodeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/debug/timing': typeof ApiDebugTimingRoute
+  '/api/v1/$resource': typeof ApiV1ResourceRouteWithChildren
   '/api/v1/docs': typeof ApiV1DocsRoute
   '/api/v1/openapi.json': typeof ApiV1OpenapiDotjsonRoute
   '/api/workflow-stream/$operation': typeof ApiWorkflowStreamOperationRoute
@@ -1125,6 +1134,7 @@ export interface FileRouteTypes {
     | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
     | '/api/workflow-stream/$operation'
@@ -1232,6 +1242,7 @@ export interface FileRouteTypes {
     | '/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
     | '/api/workflow-stream/$operation'
@@ -1341,6 +1352,7 @@ export interface FileRouteTypes {
     | '/_authenticated/wishes/$shortcode'
     | '/api/auth/$'
     | '/api/debug/timing'
+    | '/api/v1/$resource'
     | '/api/v1/docs'
     | '/api/v1/openapi.json'
     | '/api/workflow-stream/$operation'
@@ -1388,11 +1400,11 @@ export interface RootRouteChildren {
   OauthConsentRoute: typeof OauthConsentRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiDebugTimingRoute: typeof ApiDebugTimingRoute
+  ApiV1ResourceRoute: typeof ApiV1ResourceRouteWithChildren
   ApiV1DocsRoute: typeof ApiV1DocsRoute
   ApiV1OpenapiDotjsonRoute: typeof ApiV1OpenapiDotjsonRoute
   ApiWorkflowStreamOperationRoute: typeof ApiWorkflowStreamOperationRoute
   ApiCalendarTokenFeedRoute: typeof ApiCalendarTokenFeedRoute
-  ApiV1ResourceOperationRoute: typeof ApiV1ResourceOperationRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -2069,6 +2081,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDebugTimingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/v1/$resource': {
+      id: '/api/v1/$resource'
+      path: '/api/v1/$resource'
+      fullPath: '/api/v1/$resource'
+      preLoaderRoute: typeof ApiV1ResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/v1/docs': {
       id: '/api/v1/docs'
       path: '/api/v1/docs'
@@ -2141,10 +2160,10 @@ declare module '@tanstack/react-router' {
     }
     '/api/v1/$resource/$operation': {
       id: '/api/v1/$resource/$operation'
-      path: '/api/v1/$resource/$operation'
+      path: '/$operation'
       fullPath: '/api/v1/$resource/$operation'
       preLoaderRoute: typeof ApiV1ResourceOperationRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof ApiV1ResourceRoute
     }
   }
 }
@@ -2392,6 +2411,18 @@ const DotwellKnownOauthProtectedResourceRouteWithChildren =
     DotwellKnownOauthProtectedResourceRouteChildren,
   )
 
+interface ApiV1ResourceRouteChildren {
+  ApiV1ResourceOperationRoute: typeof ApiV1ResourceOperationRoute
+}
+
+const ApiV1ResourceRouteChildren: ApiV1ResourceRouteChildren = {
+  ApiV1ResourceOperationRoute: ApiV1ResourceOperationRoute,
+}
+
+const ApiV1ResourceRouteWithChildren = ApiV1ResourceRoute._addFileChildren(
+  ApiV1ResourceRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
@@ -2406,11 +2437,11 @@ const rootRouteChildren: RootRouteChildren = {
   OauthConsentRoute: OauthConsentRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiDebugTimingRoute: ApiDebugTimingRoute,
+  ApiV1ResourceRoute: ApiV1ResourceRouteWithChildren,
   ApiV1DocsRoute: ApiV1DocsRoute,
   ApiV1OpenapiDotjsonRoute: ApiV1OpenapiDotjsonRoute,
   ApiWorkflowStreamOperationRoute: ApiWorkflowStreamOperationRoute,
   ApiCalendarTokenFeedRoute: ApiCalendarTokenFeedRoute,
-  ApiV1ResourceOperationRoute: ApiV1ResourceOperationRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
