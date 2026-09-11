@@ -23,8 +23,8 @@ describe("cookbook photo lifecycle", () => {
       [
         "book.epub",
         new Map([
-          [0, "blob:hero"],
-          [1, "blob:detail"],
+          ["003.0012", "blob:hero"],
+          ["004.0044", "blob:detail"],
         ]),
       ],
     ]);
@@ -37,7 +37,7 @@ describe("cookbook photo lifecycle", () => {
     expect(previews.has("book.epub")).toBe(false);
   });
 
-  it("makes a refreshed extraction persist its new source before index-addressed import", () => {
+  it("makes a refreshed extraction persist its new tree before id-addressed import", () => {
     const state = resetReextractedBook(true);
 
     expect(state.needsCookbookUpsert).toBe(true);
