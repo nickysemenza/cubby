@@ -29,6 +29,7 @@
         "src/integrations/**/*.{ts,tsx}!",
         "src/**/*.test.{ts,tsx}!",
         "tests/**/*.{ts,tsx}!",
+        "scripts/ai-eval.ts!",
         "scripts/build-sw.ts!",
         "scripts/build-sw.unit.test.ts!",
         "scripts/ensure-db-extensions.ts!",

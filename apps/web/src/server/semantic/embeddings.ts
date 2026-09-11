@@ -1,40 +1,60 @@
+import { embed } from "@tanstack/ai";
+import {
+  createOpenaiEmbedding,
+  type OpenAIEmbeddingAdapter,
+} from "@tanstack/ai-openai";
 import { LRUCache } from "lru-cache";
-import { z } from "zod";
 
-import { env } from "~/env";
 import { recordAiUsage } from "~/server/ai-usage";
-import { CF_ACCOUNT_ID, CF_AIG_GATEWAY_ID } from "~/server/cf-env";
+import {
+  gatewayBaseURL,
+  gatewayConfigured,
+  gatewayFetch,
+  type GatewayMetadata,
+} from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
 import { TraceNames, withTrace } from "~/server/tracing";
 
-import { getSemanticEmbeddingConfig } from "./config";
+import {
+  getSemanticEmbeddingConfig,
+  type SemanticEmbeddingConfig,
+} from "./config";
 
-const embeddingResponseSchema = z.object({
-  data: z
-    .array(z.object({ embedding: z.array(z.number()).optional() }))
-    .optional(),
-  usage: z
-    .object({
-      prompt_tokens: z.number().optional(),
-      total_tokens: z.number().optional(),
-    })
-    .optional(),
-});
+type SemanticEmbeddingAdapter = OpenAIEmbeddingAdapter<
+  SemanticEmbeddingConfig["model"]
+>;
+
+/**
+ * The gateway pays for the call under unified billing, so the SDK's mandatory
+ * key slot gets a placeholder that `gatewayFetch` strips before forwarding — a
+ * real `authorization` header would out-rank unified billing upstream.
+ */
+const UNIFIED_BILLING_PLACEHOLDER_KEY = "cf-aig-unified-billing";
 
 export interface EmbeddingPorts {
-  readonly apiKey: string | undefined;
-  readonly accountId: string;
-  readonly gatewayId: string;
-  readonly fetch: typeof fetch;
+  /**
+   * One adapter per call: the gateway's request metadata is fixed when the
+   * transport is built, so it cannot be hoisted to a shared client.
+   */
+  readonly adapter: (
+    config: SemanticEmbeddingConfig,
+    metadata: GatewayMetadata,
+  ) => SemanticEmbeddingAdapter;
+  readonly configured: () => boolean;
   readonly recordAiUsage: typeof recordAiUsage;
   readonly config: typeof getSemanticEmbeddingConfig;
 }
 
-const productionEmbeddingPorts: EmbeddingPorts = {
-  apiKey: env.AI_GATEWAY_API_KEY,
-  accountId: CF_ACCOUNT_ID,
-  gatewayId: CF_AIG_GATEWAY_ID,
-  fetch,
+/** Exported so a test can swap one port and keep the real transport. */
+export const productionEmbeddingPorts: EmbeddingPorts = {
+  adapter: (config, metadata) =>
+    createOpenaiEmbedding(config.model, UNIFIED_BILLING_PLACEHOLDER_KEY, {
+      baseURL: gatewayBaseURL("openai"),
+      // Response caching would hand back a vector for text we just changed;
+      // the whole refresh path exists because the text moved.
+      fetch: gatewayFetch("openai", { metadata, skipCache: true }),
+    }),
+  configured: gatewayConfigured,
   recordAiUsage,
   config: getSemanticEmbeddingConfig,
 };
@@ -44,30 +64,16 @@ const queryEmbeddingCache = new LRUCache<string, number[]>({
   ttl: 1000 * 60 * 60,
 });
 
-function gatewayEmbeddingsUrl(ports: EmbeddingPorts): string {
-  return `https://gateway.ai.cloudflare.com/v1/${ports.accountId}/${ports.gatewayId}/openai/embeddings`;
-}
-
-function embeddingHeaders(ports: EmbeddingPorts): HeadersInit | null {
-  const headers = new Headers({ "content-type": "application/json" });
-
-  if (ports.apiKey) {
-    headers.set("cf-aig-authorization", `Bearer ${ports.apiKey}`);
-  }
-
-  if (!headers.has("cf-aig-authorization")) {
-    return null;
-  }
-
-  return headers;
-}
-
 export function semanticEmbeddingsConfigured(
   ports: EmbeddingPorts = productionEmbeddingPorts,
 ): boolean {
-  return embeddingHeaders(ports) !== null;
+  return ports.configured();
 }
 
+/**
+ * One provider request for the whole array — the adapter batches natively, so
+ * `texts.length` vectors come back from a single call regardless of size.
+ */
 export async function embedTexts(
   texts: string[],
   opts?: {
@@ -80,74 +86,74 @@ export async function embedTexts(
   ports: EmbeddingPorts = productionEmbeddingPorts,
 ): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const headers = embeddingHeaders(ports);
-  if (!headers) {
+  if (!ports.configured()) {
     throw new Error(
       "Semantic embeddings are not configured. Set AI_GATEWAY_API_KEY so Cubby can call Cloudflare AI Gateway.",
     );
   }
+  const operation = opts?.operation ?? "embeddings";
+  const feature = opts?.feature ?? "semantic-embedding";
 
-  return withTrace(
-    TraceNames.api("embeddings", opts?.operation ?? "embeddings"),
-    async (span) => {
-      const config = ports.config();
-      span.setAttributes({
-        "ai.provider": config.provider,
-        "ai.model": config.model,
-        "ai.dimensions": config.dimensions,
-        "ai.input_count": texts.length,
-      });
-      const startedAt = performance.now();
-      const response = await ports.fetch(gatewayEmbeddingsUrl(ports), {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          model: config.model,
-          dimensions: config.dimensions,
-          input: texts,
-        }),
-      });
+  return withTrace(TraceNames.api("embeddings", operation), async (span) => {
+    const config = ports.config();
+    span.setAttributes({
+      "ai.provider": config.provider,
+      "ai.model": config.model,
+      "ai.dimensions": config.dimensions,
+      "ai.input_count": texts.length,
+    });
+    const startedAt = performance.now();
+    // At most five entries survive the gateway; `batchId` is the fifth and is
+    // omitted rather than displacing one of the four that always apply.
+    const metadata: GatewayMetadata = {
+      feature,
+      operation,
+      inputCount: texts.length,
+    };
+    if (opts?.batchId) metadata.batchId = opts.batchId;
+    const result = await embed({
+      adapter: ports.adapter(config, metadata),
+      input: texts,
+      dimensions: config.dimensions,
+    });
 
-      if (!response.ok) {
-        const body = await response.text();
+    if (opts?.db) {
+      await ports.recordAiUsage(opts.db, {
+        feature,
+        provider: config.provider,
+        model: config.model,
+        operation,
+        inputTokens:
+          result.usage?.promptTokens ?? result.usage?.totalTokens ?? null,
+        outputTokens: null,
+        durationMs: Math.round(performance.now() - startedAt),
+        cacheStatus: "none",
+        entity: opts.entity,
+        batchId: opts.batchId,
+      });
+    }
+
+    // Ordered by the reported input position, not by arrival. A batch caller
+    // zips these against its own refs, so a reordered response would write
+    // every vector onto the wrong entity — silently, and only detectably as
+    // bad search results months later.
+    const embeddings = [...result.embeddings]
+      .sort((left, right) => left.index - right.index)
+      .map((item) => item.vector);
+    if (embeddings.length !== texts.length) {
+      throw new Error(
+        `Embedding response returned ${embeddings.length} vectors for ${texts.length} inputs`,
+      );
+    }
+    for (const embedding of embeddings) {
+      if (embedding.length !== config.dimensions) {
         throw new Error(
-          `Embedding request failed: ${response.status} ${body.slice(0, 500)}`,
+          `Embedding dimension mismatch: expected ${config.dimensions}, got ${embedding.length}`,
         );
       }
-
-      const json = embeddingResponseSchema.parse(await response.json());
-      if (opts?.db) {
-        const inputTokens =
-          json.usage?.prompt_tokens ?? json.usage?.total_tokens ?? null;
-        await ports.recordAiUsage(opts.db, {
-          feature: opts.feature ?? "semantic-embedding",
-          provider: config.provider,
-          model: config.model,
-          operation: opts.operation ?? "embeddings",
-          inputTokens,
-          outputTokens: null,
-          durationMs: Math.round(performance.now() - startedAt),
-          cacheStatus: "none",
-          entity: opts.entity,
-          batchId: opts.batchId,
-        });
-      }
-      const embeddings = json.data?.map((row) => row.embedding ?? []) ?? [];
-      if (embeddings.length !== texts.length) {
-        throw new Error(
-          `Embedding response returned ${embeddings.length} vectors for ${texts.length} inputs`,
-        );
-      }
-      for (const embedding of embeddings) {
-        if (embedding.length !== config.dimensions) {
-          throw new Error(
-            `Embedding dimension mismatch: expected ${config.dimensions}, got ${embedding.length}`,
-          );
-        }
-      }
-      return embeddings;
-    },
-  );
+    }
+    return embeddings;
+  });
 }
 
 export async function embedQuery(

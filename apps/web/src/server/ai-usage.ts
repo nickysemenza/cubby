@@ -19,6 +19,9 @@ export type RecordAiUsageInput = {
   operation: string;
   inputTokens?: number | null;
   outputTokens?: number | null;
+  /** Prompt-cache tokens, when the adapter reports them: priced, not stored. */
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
   durationMs: number;
   cacheStatus?: "hit" | "miss" | "none" | null;
   entity?: { entityType: string; entityId: string } | null;
@@ -45,6 +48,8 @@ export async function recordAiUsage(
       operation: input.operation,
       inputTokens: input.inputTokens ?? null,
       outputTokens: input.outputTokens ?? null,
+      cacheReadTokens: input.cacheReadTokens ?? null,
+      cacheWriteTokens: input.cacheWriteTokens ?? null,
       durationMs: input.durationMs,
       cacheStatus: input.cacheStatus ?? null,
       entityType: input.entity?.entityType ?? null,

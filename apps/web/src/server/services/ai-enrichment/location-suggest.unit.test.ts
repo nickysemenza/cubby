@@ -1,4 +1,3 @@
-import type { LocationSuggestionAiResult } from "@cubby/schemas/ai";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -6,7 +5,8 @@ import type { LocationPutAwayCandidate } from "~/server/repo/location";
 
 import {
   formatLocationCandidates,
-  resolveSuggestedLocation,
+  locationSuggestionSpec,
+  resolveLocationSuggestion,
 } from "./location-suggest";
 
 const candidate = (
@@ -22,12 +22,6 @@ const candidate = (
   holdsProduct: false,
   ...overrides,
   id: testShortcode("location", overrides.id),
-});
-
-const aiResult = (locationId: string): LocationSuggestionAiResult => ({
-  locationId,
-  confidence: "high",
-  reasoning: "It is the PACKOUT wall.",
 });
 
 describe("formatLocationCandidates", () => {
@@ -97,32 +91,66 @@ describe("formatLocationCandidates", () => {
   });
 });
 
-describe("resolveSuggestedLocation", () => {
-  const candidates = [
-    candidate({
-      id: "LOC-2222",
-      name: "PACKOUT Wall",
-      ancestors: [
-        {
-          id: testShortcode("location", "LOC-AAAA"),
-          name: "Garage",
-          type: "room",
-        },
-      ],
-    }),
-    candidate({ id: "LOC-3333", name: "Empty Bin" }),
-  ];
+// `resolveSuggestedLocation`'s old id-matching and rejection behavior now
+// lives in `runAiSelection`'s generic guard; these pin the spec's own half
+// of the contract — the line format and id extraction `runAiSelection`
+// drives that guard with.
+describe("locationSuggestionSpec", () => {
+  const packoutWall = candidate({
+    id: "LOC-2222",
+    name: "PACKOUT Wall",
+    ancestors: [
+      {
+        id: testShortcode("location", "LOC-AAAA"),
+        name: "Garage",
+        type: "room",
+      },
+    ],
+  });
 
-  it("returns the candidate's own shortcode and name, not the model's string", () => {
+  it("renders one candidate the same way formatLocationCandidates does", () => {
+    expect(locationSuggestionSpec.renderLine(packoutWall)).toBe(
+      formatLocationCandidates([packoutWall]),
+    );
+  });
+
+  it("extracts the candidate's own shortcode as the selection id", () => {
+    expect(locationSuggestionSpec.idOf(packoutWall)).toBe("LOC-2222");
+  });
+
+  it("caps the shortlist at 400 locations", () => {
+    expect(locationSuggestionSpec.maxCandidates).toBe(400);
+  });
+});
+
+describe("resolveLocationSuggestion", () => {
+  const packoutWall = candidate({
+    id: "LOC-2222",
+    name: "PACKOUT Wall",
+    ancestors: [
+      {
+        id: testShortcode("location", "LOC-AAAA"),
+        name: "Garage",
+        type: "room",
+      },
+    ],
+  });
+
+  it("shapes a resolved candidate into the public suggestion", () => {
     expect(
-      resolveSuggestedLocation(candidates, aiResult("  loc-2222 ")),
+      resolveLocationSuggestion(
+        {
+          selected: packoutWall,
+          confidence: "high",
+          reasoning: "It is the PACKOUT wall.",
+        },
+        2,
+      ),
     ).toEqual({
       location: {
         id: "LOC-2222",
         name: "PACKOUT Wall",
         type: "shelf",
-        // The chain comes back too: without it the picker renders a bare name,
-        // and same-named shelves are indistinguishable once accepted.
         ancestors: [{ id: "LOC-AAAA", name: "Garage", type: "room" }],
       },
       confidence: "high",
@@ -130,18 +158,15 @@ describe("resolveSuggestedLocation", () => {
     });
   });
 
-  it("throws rather than passing through a code that names no candidate", () => {
+  // `runAiSelection`'s own guard already resolves an off-roster or invented
+  // id to `selected: null` (see ai/selection.unit.test.ts); this pins what
+  // happens next, at the location layer, when that guard comes back empty.
+  it("throws rather than passing through a null selection", () => {
     expect(() =>
-      resolveSuggestedLocation(candidates, aiResult("LOC-9999")),
-    ).toThrow(/LOC-9999/);
-  });
-
-  // A near-miss must fail like any other miss: guessing which location was
-  // meant is exactly what this function refuses to do.
-  it("does not prefix-match a truncated code", () => {
-    expect(
-      () => resolveSuggestedLocation(candidates, aiResult("LOC-222")),
-      // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
-    ).toThrow();
+      resolveLocationSuggestion(
+        { selected: null, confidence: "low", reasoning: "no match" },
+        3,
+      ),
+    ).toThrow(/3 locations/);
   });
 });

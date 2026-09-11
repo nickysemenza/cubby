@@ -25,6 +25,7 @@ import {
   verbBulkAction,
 } from "./action-verb-ui";
 import type { ActionVerbId } from "./action-verbs";
+import { askCubbyEntityActionDefinitions } from "./ask-cubby-entity-action";
 import { deleteEntityActionDefinition } from "./delete-entity-action";
 import {
   defineEntityAction,
@@ -334,6 +335,7 @@ const entityActions: readonly EntityActionDefinition[] = [
     preserveSelection: true,
     use: useDiscardInventoryAction,
   }),
+  ...askCubbyEntityActionDefinitions,
   ...recipeEntityActionDefinitions,
   ...ingredientEntityActionDefinitions,
   ...inventoryLocationEntityActionDefinitions,

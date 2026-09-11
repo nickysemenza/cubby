@@ -193,6 +193,9 @@ async function enqueueEntityEmbeddingRefreshMany(
   const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
   if (uniqueRefs.length === 0) return [];
 
+  // Still the single-entity kind, not `entity-embedding.refresh-batch`: a
+  // mutation wave is a handful of refs, and keeping this kind is also what lets
+  // messages already in flight drain across a deploy.
   const dispatched = await ports.dispatchBackgroundJobs(db, {
     kind: "entity-embedding.refresh",
     source: "mutation",

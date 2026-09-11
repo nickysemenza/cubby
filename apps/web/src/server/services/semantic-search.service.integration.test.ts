@@ -1,3 +1,8 @@
+import {
+  ENTITY_EMBEDDING_BATCH_SIZE,
+  entityEmbeddingBackfillCoordinatorPayloadSchema,
+  entityEmbeddingRefreshBatchPayloadSchema,
+} from "@cubby/schemas/background-jobs";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +14,7 @@ import {
 import {
   createProductFixture as createProduct,
   makeProductInput,
+  seedSearchDocumentsFixtureRaw,
   updateProductNameFixtureRaw,
 } from "~/server/repo/repo.fixtures";
 import {
@@ -194,16 +200,51 @@ describe("semantic search background jobs", () => {
     expect(detail?.jobs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          kind: "entity-embedding.refresh",
+          kind: "entity-embedding.refresh-batch",
           status: "skipped",
           payload: {
-            entityType: "product",
-            entityId: product.entityId,
-            expectedEmbeddingHash: expect.any(String),
+            refs: [
+              {
+                entityType: "product",
+                entityId: product.entityId,
+                expectedEmbeddingHash: expect.any(String),
+              },
+            ],
           },
         }),
       ]),
     );
+  });
+
+  it("splits a full page into batch children while counting rows", async () => {
+    const pageSize = 250;
+    await seedSearchDocumentsFixtureRaw(ctx.db, "product", pageSize);
+
+    const result = await enqueueEmbeddingBackfillWorkflow(ctx.db, {
+      entityTypes: ["product"],
+    });
+    const detail = await getBackgroundBatchDetail(ctx.db, result.batch.id);
+    const batchJobs =
+      detail?.jobs.filter(
+        (job) => job.kind === "entity-embedding.refresh-batch",
+      ) ?? [];
+
+    expect(batchJobs).toHaveLength(
+      Math.ceil(pageSize / ENTITY_EMBEDDING_BATCH_SIZE),
+    );
+    const refCounts = batchJobs.map(
+      (job) =>
+        entityEmbeddingRefreshBatchPayloadSchema.parse(job.payload).refs.length,
+    );
+    expect([...refCounts].sort((left, right) => right - left)).toEqual([
+      64, 64, 64, 58,
+    ]);
+
+    const metadata = entityEmbeddingBackfillCoordinatorPayloadSchema.parse(
+      detail?.metadata,
+    );
+    // Rows, not jobs: the debug page reports backfill progress in entities.
+    expect(metadata.workflow.jobsQueued).toBe(pageSize);
   });
 
   it("requeues current text when the source changes after its page is read", async () => {

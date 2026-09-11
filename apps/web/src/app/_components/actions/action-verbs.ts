@@ -97,6 +97,26 @@ export const actionVerbs = {
     icon: Sparkles,
   },
 
+  // — AI ——————————————————————————————————————————————————————————————
+  //
+  // Every AI trigger is `Sparkles`. Before this the sixteen AI surfaces used
+  // seven trigger verbs and two non-Sparkles glyphs — inventory detection wore
+  // `PackagePlus` and Ask Cubby wore `Search`, so neither read as AI at all.
+  // The icon is the recognition; the label says what it will produce.
+  //
+  // `suggest` is the only AI verb with more than one object (product category,
+  // location type, put-away location, USDA food), so it carries the bare verb
+  // and each surface names its own object through `VerbButton`'s `object` prop
+  // — which is also what keeps its accessible name specific on a phone, where
+  // the text is hidden. The single-object verbs bake the object into the label.
+  suggest: { label: "Suggest", icon: Sparkles },
+  analyze: { label: "Analyze photos", icon: Sparkles },
+  identify: { label: "Identify product", icon: Sparkles },
+  detect: { label: "Detect items", icon: Sparkles },
+  ask: { label: "Ask Cubby", icon: Sparkles },
+  askAbout: { label: "Ask about this", icon: Sparkles },
+  regenerate: { label: "Regenerate flow", icon: Sparkles },
+
   // — immediate ——————————————————————————————————————————————————————
   markPurchased: { label: "Mark purchased", icon: CheckCircle2 },
   markInstalled: { label: "Mark installed", icon: Wrench },

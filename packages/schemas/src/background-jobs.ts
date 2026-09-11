@@ -12,6 +12,7 @@ const backgroundSearchableEntitySchema = z.enum(searchableEntities);
 export const backgroundJobKinds = [
   "recipe-totals.recompute",
   "entity-embedding.refresh",
+  "entity-embedding.refresh-batch",
   "entity-embedding.backfill.coordinator",
   "search-document.repair.coordinator",
   "location-ai.description.refresh",
@@ -101,6 +102,27 @@ export const entityEmbeddingRefreshPayloadSchema = z
   })
   .transform(parseSearchableEntityRef);
 
+/**
+ * The coordinator embeds a backfill page in batches of this many entities per
+ * provider call. 64 is bounded by HNSW write cost (64 serial upserts per job,
+ * three jobs concurrently), not by the provider, which accepts far more inputs.
+ */
+export const ENTITY_EMBEDDING_BATCH_SIZE = 64;
+
+/**
+ * One provider call for up to `ENTITY_EMBEDDING_BATCH_SIZE` entities. Each ref
+ * is the single-entity payload verbatim, so both kinds brand refs through the
+ * same transform. The single kind stays registered: mutation side effects
+ * enqueue it for small waves, and in-flight queue messages across a deploy
+ * must still parse.
+ */
+export const entityEmbeddingRefreshBatchPayloadSchema = z.object({
+  refs: z
+    .array(entityEmbeddingRefreshPayloadSchema)
+    .min(1)
+    .max(ENTITY_EMBEDDING_BATCH_SIZE),
+});
+
 const workflowCursorSchema = z
   .object(searchableEntityRefFields)
   .transform(parseSearchableEntityRef);
@@ -161,6 +183,10 @@ export const backgroundJobPayloadSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("entity-embedding.refresh"),
     payload: entityEmbeddingRefreshPayloadSchema,
+  }),
+  z.object({
+    kind: z.literal("entity-embedding.refresh-batch"),
+    payload: entityEmbeddingRefreshBatchPayloadSchema,
   }),
   z.object({
     kind: z.literal("entity-embedding.backfill.coordinator"),

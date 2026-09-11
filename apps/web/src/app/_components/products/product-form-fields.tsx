@@ -521,12 +521,13 @@ function ProductMediaFields<TFieldValues extends ProductFormFieldValues>({
         onExistingImagesRemove={imageHandlers.handleRemovedImagesChange}
         onExistingImagesReorder={imageHandlers.handleExistingImagesReorder}
       />
-      {pendingImages.length > 0 && (
-        <IdentifyProductButton
-          form={identityForm}
-          pendingImages={pendingImages}
-        />
-      )}
+      {/* Unconditional: the button disables itself and says why. Gating it
+          here is what made the affordance vanish, so nobody learned that a
+          photo unlocks it. */}
+      <IdentifyProductButton
+        form={identityForm}
+        pendingImages={pendingImages}
+      />
       {!compact && (
         <PendingDocumentUpload
           entityType="PRODUCT"

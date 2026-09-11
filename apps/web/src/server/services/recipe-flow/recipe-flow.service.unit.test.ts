@@ -114,8 +114,8 @@ const artifact = (fingerprint: string): RecipeFlowArtifact => ({
   guidance: null,
   warnings: [],
   contentFingerprint: fingerprint,
-  model: "claude-haiku-4-5",
-  promptVersion: "2026-09-07.1",
+  model: "claude-sonnet-5",
+  promptVersion: "2026-09-11.1",
   generatedAt: new Date("2026-07-29T12:00:00Z"),
 });
 
@@ -129,7 +129,7 @@ class InMemoryRecipeFlowPorts {
   }> = [];
   readonly generated: RecipeFlowAiPlan[] = [];
   readonly usage: Array<{ cacheStatus: string | null | undefined }> = [];
-  readonly repairRequests: unknown[] = [];
+  readonly runContexts: Array<{ force: boolean | undefined }> = [];
 
   readonly ports = {
     getRecipe: async () => recipe,
@@ -153,11 +153,31 @@ class InMemoryRecipeFlowPorts {
     recordAiUsage: async (_db, usage) => {
       this.usage.push({ cacheStatus: usage.cacheStatus });
     },
-    generateRecipeFlow: async (_prompt, _guidance, repair) => {
-      if (repair) this.repairRequests.push(repair);
-      const candidate = this.generated.shift();
-      if (!candidate) throw new Error("No in-memory recipe-flow candidate");
-      return candidate;
+    // Stands in for `AiClient.generateRecipeFlow`, which now runs through
+    // `runStructuredFeature`'s own bounded repair: one retry if `ctx.validate`
+    // rejects the first candidate, then a throw if the retry is rejected too.
+    // Mirrored here (rather than exercised through the real runner) so this
+    // suite stays a unit test of the service's wiring, not of the runner —
+    // that policy has its own coverage in `run-feature.unit.test.ts`.
+    generateRecipeFlow: async (_prompt, _guidance, ctx) => {
+      this.runContexts.push({ force: ctx.force });
+      const next = (): RecipeFlowAiPlan => {
+        const candidate = this.generated.shift();
+        if (!candidate) throw new Error("No in-memory recipe-flow candidate");
+        return candidate;
+      };
+
+      const first = next();
+      if (!ctx.validate) return first;
+      const firstValidation = ctx.validate(first);
+      if (firstValidation.ok) return first;
+
+      const repaired = next();
+      const repairValidation = ctx.validate(repaired);
+      if (repairValidation.ok) return repaired;
+      throw new Error(
+        `Structured output for "recipe-flow" is invalid after one repair attempt: ${repairValidation.issues.join("; ")}`,
+      );
     },
   } satisfies RecipeFlowPorts;
 }
@@ -189,16 +209,21 @@ describe("recipe-flow service", () => {
     });
   });
 
-  it("persists a valid primary-model graph", async () => {
+  it("persists a valid single-pass graph", async () => {
     memory.generated.push(validCandidate());
 
     await expect(
       generateRecipeFlow(db, { id: RECIPE_ID, force: false }, memory.ports),
-    ).resolves.toMatchObject({ model: "claude-haiku-4-5" });
+    ).resolves.toMatchObject({ model: "claude-sonnet-5" });
     expect(memory.analyses).toHaveLength(1);
   });
 
-  it("repairs a contextually invalid graph with the fallback model", async () => {
+  it("persists after one repair when the first pass is invalid but the second is valid", async () => {
+    // `ports.generateRecipeFlow` stands in for `AiClient.generateRecipeFlow`,
+    // which now runs through `runStructuredFeature`'s own one-repair-attempt
+    // policy — this in-memory port applies the `ctx.validate` the service
+    // wired through, the same way the real runner does, so a first invalid
+    // candidate followed by a valid one still resolves to the valid plan.
     const invalid = validCandidate();
     invalid.sources = [];
     invalid.operations[0]!.inputs = [{ kind: "source", id: "missing-bread" }];
@@ -206,19 +231,48 @@ describe("recipe-flow service", () => {
 
     await expect(
       generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),
-    ).resolves.toMatchObject({ model: "claude-sonnet-4-6" });
-    expect(memory.repairRequests).toHaveLength(1);
+    ).resolves.toMatchObject({ model: "claude-sonnet-5" });
+    expect(memory.analyses).toHaveLength(1);
   });
 
-  it("repairs a newly generated plan that omits its walkthrough", async () => {
-    const missingWalkthrough = validCandidate();
-    delete missingWalkthrough.walkthrough;
-    memory.generated.push(missingWalkthrough, validCandidate());
+  it("throws when both the first pass and its repair are invalid", async () => {
+    const invalid = validCandidate();
+    invalid.sources = [];
+    invalid.operations[0]!.inputs = [{ kind: "source", id: "missing-bread" }];
+    memory.generated.push(invalid, structuredClone(invalid));
 
     await expect(
       generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),
-    ).resolves.toMatchObject({ model: "claude-sonnet-4-6" });
-    expect(memory.repairRequests).toHaveLength(1);
+    ).rejects.toThrow(/invalid/i);
+    expect(memory.analyses).toHaveLength(0);
+  });
+
+  it("throws when a pass missing its walkthrough is never repaired", async () => {
+    const missingWalkthrough = validCandidate();
+    delete missingWalkthrough.walkthrough;
+    memory.generated.push(
+      missingWalkthrough,
+      structuredClone(missingWalkthrough),
+    );
+
+    await expect(
+      generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports),
+    ).rejects.toThrow(/walkthrough/i);
+    expect(memory.analyses).toHaveLength(0);
+  });
+
+  it("skips the gateway response cache when the caller forces a regenerate", async () => {
+    // The request body is identical on a forced regenerate, so without this
+    // the gateway would hand back the very flow the user asked to replace.
+    memory.generated.push(validCandidate());
+    await generateRecipeFlow(db, { id: RECIPE_ID, force: true }, memory.ports);
+    expect(memory.runContexts).toEqual([{ force: true }]);
+  });
+
+  it("leaves the gateway response cache in play for an unforced generate", async () => {
+    memory.generated.push(validCandidate());
+    await generateRecipeFlow(db, { id: RECIPE_ID, force: false }, memory.ports);
+    expect(memory.runContexts).toEqual([{ force: false }]);
   });
 
   it("serves an exact cache hit without calling the provider", async () => {

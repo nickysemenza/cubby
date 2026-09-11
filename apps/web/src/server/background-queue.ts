@@ -2,6 +2,7 @@ import {
   type BackgroundJobKind,
   backgroundJobPayloadSchema,
 } from "@cubby/schemas/background-jobs";
+import { entityRefKey } from "@cubby/schemas/entity";
 import { backgroundQueueMessageSchema } from "@cubby/schemas/queue-messages";
 
 import { getErrorMessage } from "~/lib/error-utils";
@@ -27,18 +28,22 @@ import {
 } from "~/server/repo/background-jobs";
 import {
   getStoredEmbeddingHash,
+  getStoredEmbeddingHashes,
   upsertEntityEmbedding,
+  upsertEntityEmbeddings,
 } from "~/server/repo/entity-embedding";
 import {
   getSearchDocumentEmbeddingText,
+  getSearchDocumentEmbeddingTexts,
   refreshSearchDocument,
+  refreshSearchDocuments,
 } from "~/server/repo/search-document";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import {
   embedTexts,
   semanticEmbeddingsConfigured,
 } from "~/server/semantic/embeddings";
-import { embeddingTextHash } from "~/server/semantic/hash";
+import { embeddingTextHash, sha256Hex } from "~/server/semantic/hash";
 import { normalizeSearchText } from "~/server/semantic/text";
 import { TraceNames, withTrace } from "~/server/tracing";
 import {
@@ -289,6 +294,199 @@ const entityEmbeddingPayloadWorkflow: WorkflowDefinition<
   })
   .output(({ document }) => document[0] ?? "skipped");
 
+type EntityEmbeddingBatchPayload = Extract<
+  ParsedBackgroundJob,
+  { readonly kind: "entity-embedding.refresh-batch" }
+>;
+
+type BatchEmbeddingRevision = {
+  text: Awaited<ReturnType<typeof getSearchDocumentEmbeddingTexts>>[number];
+  currentHash: string;
+};
+
+type BatchEmbeddingPlan = {
+  config: ReturnType<typeof getSemanticEmbeddingConfig>;
+  /** Stored hash differs from the live one: worth a provider call. */
+  needsWork: BatchEmbeddingRevision[];
+  /** The coordinator inspected text that has since moved on. */
+  obsolete: BatchEmbeddingRevision[];
+};
+
+const requestBatchEmbeddingWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  BatchEmbeddingPlan,
+  DeliveryStatus
+> = workflow<DeliveryContext, BatchEmbeddingPlan>(
+  "background-job.embedding.batch.request",
+)
+  // One provider request for the whole job. `entity` is deliberately absent
+  // from the usage record: the call covers many entities, and `batchId` is what
+  // attributes it.
+  .call("embeddings", ({ context }, { input }) =>
+    context.embeddingPort.embed(
+      input.needsWork.map((revision) => revision.text.embeddingText),
+      {
+        operation: "entityEmbeddingRefreshBatch",
+        db: context.db,
+        feature: "entity-embedding",
+        batchId: context.batchId,
+      },
+    ),
+  )
+  .commit("upsert", ({ context }, { input, embeddings }) =>
+    upsertEntityEmbeddings(
+      context.db,
+      input.needsWork.flatMap((revision, index) => {
+        const embedding = embeddings[index];
+        return embedding
+          ? [
+              {
+                ...revision.text,
+                embeddingHash: revision.currentHash,
+                config: input.config,
+                embedding,
+              },
+            ]
+          : [];
+      }),
+    ),
+  )
+  .output(() => "succeeded" as const);
+
+const replaceBatchEmbeddingRevisionsWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  { revisions: BatchEmbeddingRevision[] },
+  DeliveryStatus
+> = workflow<DeliveryContext, { revisions: BatchEmbeddingRevision[] }>(
+  "background-job.embedding.batch.replaceRevisions",
+)
+  .commit("replacementJobs", async ({ context }, { input }) => {
+    const refs = input.revisions.map((revision) => ({
+      entityType: revision.text.entityType,
+      entityId: revision.text.entityId,
+      expectedEmbeddingHash: revision.currentHash,
+    }));
+    // Every stale ref converges in ONE replacement job, keyed by the exact set
+    // of current hashes it carries — hashed because `dedupeKey` is indexed and
+    // 64 refs spelled out would overflow the btree entry limit.
+    const fingerprint = await sha256Hex(
+      refs
+        .map(
+          (ref) =>
+            `${ref.entityType}:${ref.entityId}:${ref.expectedEmbeddingHash}`,
+        )
+        .join("|"),
+    );
+    return addBackgroundJobsToBatch(context.db, context.batchId, [
+      {
+        kind: "entity-embedding.refresh-batch",
+        dedupeKey: `entity-embedding.refresh-batch:replacement:${fingerprint}`,
+        payload: { refs },
+      },
+    ]);
+  })
+  .effect("dispatchReplacement", async ({ context }, { replacementJobs }) => {
+    if (replacementJobs.length === 0) return;
+    const { dispatchQueuedBackgroundJobs } =
+      await import("./background-dispatch");
+    await dispatchQueuedBackgroundJobs(context.db, {
+      batchId: context.batchId,
+      jobIds: replacementJobs,
+      batchKind: "entity-embedding.backfill.coordinator",
+    });
+  })
+  .output(() => "skipped" as const);
+
+/**
+ * The single-entity chain, once per job instead of once per entity.
+ *
+ * Same gates in the same order — refresh the documents, hash the live text,
+ * compare against what the coordinator inspected and against what is stored —
+ * but every stage is a set operation, so a 64-ref job costs four round trips
+ * and one provider call rather than 64 of each.
+ */
+const entityEmbeddingBatchPayloadWorkflow: WorkflowDefinition<
+  DeliveryContext,
+  EntityEmbeddingBatchPayload,
+  DeliveryStatus
+> = workflow<DeliveryContext, EntityEmbeddingBatchPayload>(
+  "background-job.payload.entityEmbeddingRefreshBatch",
+)
+  .commit("refreshDocuments", ({ context }, { input }) =>
+    refreshSearchDocuments(
+      context.db,
+      input.payload.refs.map((ref) => ({
+        entityType: ref.entityType,
+        entityId: ref.entityId,
+      })),
+    ),
+  )
+  .call(
+    "plan",
+    async (
+      { context },
+      { input, refreshDocuments },
+    ): Promise<BatchEmbeddingPlan> => {
+      const config = context.embeddingPort.config();
+      const texts = await getSearchDocumentEmbeddingTexts(
+        context.db,
+        refreshDocuments
+          .filter((result) => result.status === "upserted")
+          .map(({ entityType, entityId }) => ({ entityType, entityId })),
+      );
+      const expectedByRef = new Map(
+        input.payload.refs.map((ref) => [
+          entityRefKey(ref.entityType, ref.entityId),
+          ref.expectedEmbeddingHash,
+        ]),
+      );
+      const storedHashes = await getStoredEmbeddingHashes(
+        context.db,
+        texts,
+        config,
+      );
+
+      const plan: BatchEmbeddingPlan = {
+        config,
+        needsWork: [],
+        obsolete: [],
+      };
+      for (const text of texts) {
+        const key = entityRefKey(text.entityType, text.entityId);
+        const currentHash = await embeddingTextHash({
+          entityType: text.entityType,
+          provider: config.provider,
+          model: config.model,
+          dimensions: config.dimensions,
+          text: normalizeSearchText(text.embeddingText),
+        });
+        const expectedHash = expectedByRef.get(key);
+        if (expectedHash && expectedHash !== currentHash) {
+          plan.obsolete.push({ text, currentHash });
+        } else if (storedHashes.get(key) !== currentHash) {
+          plan.needsWork.push({ text, currentHash });
+        }
+      }
+      return plan;
+    },
+  )
+  .call("configured", async ({ context }) => context.embeddingPort.configured())
+  .mapWorkflow("request", {
+    items: ({ plan, configured }) =>
+      configured && plan.needsWork.length > 0 ? [plan] : [],
+    concurrency: 1,
+    workflow: requestBatchEmbeddingWorkflow,
+  })
+  .mapWorkflow("replacement", {
+    items: ({ plan }) =>
+      plan.obsolete.length > 0 ? [{ revisions: plan.obsolete }] : [],
+    concurrency: 1,
+    workflow: replaceBatchEmbeddingRevisionsWorkflow,
+  })
+  .output(
+    ({ request, replacement }) => request[0] ?? replacement[0] ?? "skipped",
+  );
+
 const recipe_totals_recomputeWorkflow = workflow<
   DeliveryContext,
   Extract<ParsedBackgroundJob, { kind: "recipe-totals.recompute" }>
@@ -456,6 +654,12 @@ const payloadDeliveryWorkflow: WorkflowDefinition<
     concurrency: 1,
     workflow: entityEmbeddingPayloadWorkflow,
   })
+  .mapWorkflow("entityEmbeddingBatch", {
+    items: ({ parsed }) =>
+      parsed.kind === "entity-embedding.refresh-batch" ? [parsed] : [],
+    concurrency: 1,
+    workflow: entityEmbeddingBatchPayloadWorkflow,
+  })
   .mapWorkflow("entity_embedding_backfill_coordinator", {
     items: ({ parsed }) =>
       parsed.kind === "entity-embedding.backfill.coordinator" ? [parsed] : [],
@@ -501,6 +705,7 @@ const payloadDeliveryWorkflow: WorkflowDefinition<
     ({
       recipe_totals_recompute,
       entityEmbedding,
+      entityEmbeddingBatch,
       entity_embedding_backfill_coordinator,
       search_document_repair_coordinator,
       location_ai_description_refresh,
@@ -512,6 +717,7 @@ const payloadDeliveryWorkflow: WorkflowDefinition<
       const status = [
         ...recipe_totals_recompute,
         ...entityEmbedding,
+        ...entityEmbeddingBatch,
         ...entity_embedding_backfill_coordinator,
         ...search_document_repair_coordinator,
         ...location_ai_description_refresh,

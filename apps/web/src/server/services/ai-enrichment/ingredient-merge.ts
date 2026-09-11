@@ -1,34 +1,35 @@
 // AI-assisted ingredient merge suggestions
 //
 // EPUB imports create near-duplicate ingredients that string matching can't
-// catch (scallion≈green onion, cilantro≈coriander, garbanzo≈chickpea). Same
-// agentic loop as the USDA matcher: a search tool over existing ingredients + a
-// terminal select tool, with a `seen` map so the model can only target an id it
-// actually saw. Suggestions only — merge is destructive, so the user confirms.
+// catch (scallion≈green onion, cilantro≈coriander, garbanzo≈chickpea).
+// `merge-shortlist.ts` assembles a lexical+semantic shortlist; this asks the
+// fast tier to pick exactly one target in a single structured call via
+// `runAiSelection` (no agentic search loop). Suggestions only — merge is
+// destructive, so the user confirms.
 
-import { confidence, type Confidence } from "@cubby/schemas/ai";
+import type { Confidence } from "@cubby/schemas/ai";
 import {
   type IngredientId,
   type IngredientShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
-import { z } from "zod";
 
-import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
-import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
-import { getAnthropicClient } from "~/server/clients/anthropic";
+import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
-import { searchIngredientsForMerge } from "~/server/repo/ingredient";
 
-import { drainChat, IS_CF_WORKERS } from "./shared";
+import {
+  buildMergeShortlist,
+  ingredientMergeSpec,
+  type MergeShortlistEntry,
+  type MergeShortlistPort,
+} from "./merge-shortlist";
 
 export interface IngredientMergeAiPort {
-  getTextAdapter: ReturnType<typeof getAnthropicClient>["getTextAdapter"];
+  select: typeof runAiSelection<MergeShortlistEntry>;
 }
 
 const productionIngredientMergeAiPort: IngredientMergeAiPort = {
-  getTextAdapter: (...args) => getAnthropicClient().getTextAdapter(...args),
+  select: runAiSelection,
 };
 
 export interface IngredientMergeSuggestion {
@@ -41,153 +42,57 @@ export interface IngredientMergeSuggestion {
   reasoning: string;
 }
 
-interface MergeSelectionState {
-  selection: {
-    ingredientId: string | null;
-    confidence: Confidence;
-    reasoning: string;
-  } | null;
-}
-
-const ingredientSearchArguments = z.object({ query: z.string().min(1) });
-const mergeSelectionArguments = z.object({
-  ingredientId: z.string().nullable(),
-  confidence,
-  reasoning: z.string(),
-});
-
-function buildMergePrompt(): string {
-  return `You decide whether a recipe ingredient is the SAME purchasable item as an existing ingredient, so the two can be merged (deduplicated).
-
-Merge ONLY when they are the same thing you would buy — synonyms, alternate names, or spelling/case variants. Examples to merge: scallion = green onion; cilantro = coriander (leaf); garbanzo beans = chickpeas; confectioners' sugar = powdered sugar.
-
-NEVER merge distinct variants a cook treats differently: light vs dark brown sugar; whole vs 2% milk; salted vs unsalted butter; fresh vs dried herbs.
-
-Tools:
-- search_ingredients(query): existing ingredients by name, as "id [N products]: name". Prefer a target that already has products — the merge inherits them.
-- select_merge_target(ingredientId, confidence, reasoning): your decision. ingredientId must be an id from a search result, or null if there is no genuine duplicate. Call exactly once.
-
-Default to null when unsure. A wrong merge is destructive, so be conservative.`;
-}
-
 /**
  * Suggest an existing ingredient to merge a bare/imported one into. Read-only —
  * returns a candidate (or null) for the user to confirm; merges nothing.
+ *
+ * `shortlistPort` is a test-only seam over {@link buildMergeShortlist}'s own
+ * lexical/semantic ports; production callers never pass it.
  */
 export async function suggestIngredientMerge(
   db: Database,
   source: { id: IngredientId; name: string },
   ai: IngredientMergeAiPort = productionIngredientMergeAiPort,
+  shortlistPort?: MergeShortlistPort,
 ): Promise<IngredientMergeSuggestion> {
-  const adapter = ai.getTextAdapter({
-    feature: "ingredient-merge",
-    ingredient: source.name,
-    env: IS_CF_WORKERS ? "prod" : "dev",
-  });
-
-  const seen = new Map<
-    string,
-    { id: IngredientId; shortcode: IngredientShortcode; name: string }
-  >();
-  const state: MergeSelectionState = { selection: null };
-
-  // Run one ingredient search: record every hit in `seen` (so a later select can
-  // only target an id the model actually saw) and format for the model. Shared
-  // by the search tool and the up-front pre-seed below.
-  const runSearch = async (query: string): Promise<string> => {
-    const rows = await searchIngredientsForMerge(db, query, source.id, 12);
-    for (const r of rows)
-      seen.set(r.id, {
-        id: r.id,
-        shortcode: parseShortcodeFor("ingredient", r.shortcode),
-        name: r.name,
-      });
-    if (rows.length === 0) return "No results.";
-    return rows
-      .map((r) => `${r.id} [${r.productCount} products]: ${r.name}`)
-      .join("\n");
-  };
-
-  const searchTool = toolDefinition({
-    name: "search_ingredients",
-    description:
-      "Search existing ingredients by name. Returns up to 12 candidates as `id [N products]: name`.",
-    inputSchema: {
-      type: "object",
-      properties: { query: { type: "string", description: "Name to search" } },
-      required: ["query"],
-    },
-  }).server(async (rawArgs) => {
-    const parsed = ingredientSearchArguments.safeParse(rawArgs ?? {});
-    if (!parsed.success) return "Provide a query.";
-    return runSearch(parsed.data.query);
-  });
-
-  const selectTool = toolDefinition({
-    name: "select_merge_target",
-    description:
-      "Record your decision. Call exactly once. ingredientId must come from a search result, or null if there is no genuine duplicate.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ingredientId: { type: ["string", "null"] },
-        confidence: { type: "string", enum: ["high", "medium", "low"] },
-        reasoning: { type: "string" },
-      },
-      required: ["ingredientId", "confidence", "reasoning"],
-    },
-  }).server(async (rawArgs) => {
-    const parsed = mergeSelectionArguments.safeParse(rawArgs ?? {});
-    if (!parsed.success) return "Invalid selection.";
-    state.selection = parsed.data;
-    return "Recorded.";
-  });
-
-  // Pre-seed the obvious name search server-side so the model can decide on turn
-  // 1 in the common case (search_ingredients stays available to refine).
-  const initialResults = await runSearch(source.name);
-
-  const stream = chat({
-    adapter,
-    middleware: aiGatewayUsageMiddleware({
-      db,
-      feature: "ingredient-merge",
-      provider: "anthropic",
-      model: DEFAULT_CHAT_MODEL,
-      operation: "suggestIngredientMerge",
-      cacheStatus: "none",
-      entity: { entityType: "ingredient", entityId: source.id },
-    }),
-    systemPrompts: [buildMergePrompt()],
-    messages: [
-      {
-        role: "user",
-        content: `Is the recipe ingredient "${source.name}" the same purchasable item as an existing ingredient?
-
-Existing ingredients matching "${source.name}":
-${initialResults}
-
-If one is a genuine duplicate, call select_merge_target now. Otherwise search_ingredients to look wider, then call select_merge_target (null if there is no real duplicate).`,
-      },
-    ],
-    tools: [searchTool, selectTool],
-    agentLoopStrategy: maxIterations(6),
-  });
-  await drainChat(stream, "suggestIngredientMerge");
-
-  const { selection } = state;
-  if (!selection || selection.ingredientId == null) {
+  const shortlist = await buildMergeShortlist(db, source, 20, shortlistPort);
+  if (shortlist.length === 0) {
     return {
       target: null,
-      confidence: selection?.confidence ?? "low",
-      reasoning: selection?.reasoning || "No duplicate found.",
+      confidence: "low",
+      reasoning: "No duplicate found.",
     };
   }
-  // Only honor an id the model actually saw (anti-hallucination).
+
+  const { selected, confidence, reasoning } = await ai.select(
+    ingredientMergeSpec,
+    {
+      subject: `Is the recipe ingredient "${source.name}" the same purchasable item as an existing ingredient?`,
+      candidates: shortlist,
+      usage: {
+        db,
+        operation: "suggestIngredientMerge",
+        cacheStatus: "none",
+        entity: { entityType: "ingredient", entityId: source.id },
+      },
+    },
+  );
+
+  if (!selected) {
+    return {
+      target: null,
+      confidence,
+      reasoning: reasoning || "No duplicate found.",
+    };
+  }
   return {
-    target: seen.get(selection.ingredientId) ?? null,
-    confidence: selection.confidence,
-    reasoning: selection.reasoning,
+    target: {
+      id: selected.id,
+      shortcode: parseShortcodeFor("ingredient", selected.shortcode),
+      name: selected.name,
+    },
+    confidence,
+    reasoning,
   };
 }
 

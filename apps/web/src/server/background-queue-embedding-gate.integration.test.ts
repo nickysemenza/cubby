@@ -28,7 +28,7 @@ const configuredEmbeddingPort: BackgroundQueueEmbeddingPort = {
   config: getSemanticEmbeddingConfig,
   embed: async (texts) => {
     embeddedTextBatches.push([...texts]);
-    return [vector()];
+    return texts.map((_, index) => vector(index + 1));
   },
 };
 
@@ -67,6 +67,82 @@ describe("entity-embedding refresh provider gate", () => {
       configuredEmbeddingPort,
     );
   };
+
+  const runBatchRefresh = async (
+    entityIds: string[],
+    expectedEmbeddingHashes?: Record<string, string>,
+  ) => {
+    const { jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
+      kind: "entity-embedding.refresh-batch",
+      source: "backfill",
+      jobs: [
+        {
+          kind: "entity-embedding.refresh-batch",
+          dedupeKey: `entity-embedding.refresh-batch:test:${crypto.randomUUID()}`,
+          payload: {
+            refs: entityIds.map((entityId) => ({
+              entityType: "product",
+              entityId,
+              expectedEmbeddingHash: expectedEmbeddingHashes?.[entityId],
+            })),
+          },
+        },
+      ],
+    });
+    const jobId = jobIds[0];
+    if (!jobId) throw new Error("expected a job to be created");
+    return await processBackgroundJob(
+      ctx.db,
+      jobId,
+      "entity-embedding.refresh-batch",
+      configuredEmbeddingPort,
+    );
+  };
+
+  const stockProduct = async (name: string) => {
+    const product = await createProduct(
+      ctx.db,
+      makeProductInput({ name }),
+      ctx.actor,
+    );
+    await refreshSearchDocument(ctx.db, "product", product.entityId);
+    return product;
+  };
+
+  it("spends one provider call on a whole wave, then skips it unchanged", async () => {
+    const products = [];
+    for (const name of ["Batch red tarp", "Batch blue tarp", "Batch grey tarp"])
+      products.push(await stockProduct(name));
+    const entityIds = products.map((product) => product.entityId);
+
+    expect(await runBatchRefresh(entityIds)).toBe("succeeded");
+    expect(embeddedTextBatches).toHaveLength(1);
+    expect(embeddedTextBatches[0]).toHaveLength(3);
+
+    expect(await runBatchRefresh(entityIds)).toBe("skipped");
+    expect(embeddedTextBatches).toHaveLength(1);
+  });
+
+  it("re-embeds only the row whose text moved", async () => {
+    const changed = await stockProduct("Batch amber tarp");
+    const unchanged = await stockProduct("Batch olive tarp");
+    const entityIds = [changed.entityId, unchanged.entityId];
+
+    expect(await runBatchRefresh(entityIds)).toBe("succeeded");
+    expect(embeddedTextBatches).toHaveLength(1);
+
+    await updateProductNameFixtureRaw(
+      ctx.db,
+      changed.entityId,
+      "Batch violet tarp",
+    );
+    await refreshSearchDocument(ctx.db, "product", changed.entityId);
+
+    expect(await runBatchRefresh(entityIds)).toBe("succeeded");
+    expect(embeddedTextBatches).toHaveLength(2);
+    expect(embeddedTextBatches[1]).toHaveLength(1);
+    expect(embeddedTextBatches[1]?.[0]).toContain("Batch violet tarp");
+  });
 
   it("embeds once, then skips the provider while the text is unchanged", async () => {
     const product = await createProduct(

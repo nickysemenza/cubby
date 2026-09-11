@@ -9,8 +9,6 @@ import {
   locationSuggestionSchema,
   locationTypeSuggestionInput,
   locationTypeSuggestionSchema,
-  parseSearchInput,
-  parsedSearchSchema,
   productIdentificationInput,
   productIdentificationSchema,
   usdaFoodSuggestionInput,
@@ -37,7 +35,10 @@ import { agent } from "~/lib/agent.functions";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 
-const MODEL = "claude-haiku-4-5";
+/** The registry model each spec's code path actually runs on, shown per card
+ * instead of one global badge now that every feature can pick its own tier. */
+const FAST_TIER_MODEL = "gpt-5.6-luna";
+const REASONING_TIER_MODEL = "claude-sonnet-5";
 
 const jsonValueSchema = z.json();
 type JsonValue = z.infer<typeof jsonValueSchema>;
@@ -45,7 +46,6 @@ type SmokeResult =
   | z.infer<typeof categorySuggestionSchema>
   | z.infer<typeof locationTypeSuggestionSchema>
   | z.infer<typeof locationSuggestionSchema>
-  | z.infer<typeof parsedSearchSchema>
   | z.infer<typeof usdaFoodSuggestionOut>
   | z.infer<typeof productIdentificationSchema>
   | z.infer<typeof detectedInventorySchema>
@@ -56,6 +56,8 @@ interface EndpointSpec {
   key: string;
   label: string;
   description: string;
+  /** The registry model this code path runs on. */
+  model: string;
   /** Prefilled JSON input, or undefined for input-less endpoints. */
   defaultInput: JsonValue | undefined;
   run: (input: JsonValue) => Promise<SmokeResult>;
@@ -68,6 +70,7 @@ const SPECS: EndpointSpec[] = [
     key: "suggestCategory",
     label: "ai.suggestCategory",
     description: "Structured output — product → category",
+    model: FAST_TIER_MODEL,
     defaultInput: { productName: "cordless drill", manufacturer: "DeWalt" },
     run: (i) => ai.suggestCategory.call(categorySuggestionInput.parse(i)),
   },
@@ -75,6 +78,7 @@ const SPECS: EndpointSpec[] = [
     key: "suggestLocationType",
     label: "ai.suggestLocationType",
     description: "Structured output — location name → type",
+    model: FAST_TIER_MODEL,
     defaultInput: { locationName: "workbench drawer 3" },
     run: (i) =>
       ai.suggestLocationType.call(locationTypeSuggestionInput.parse(i)),
@@ -83,21 +87,16 @@ const SPECS: EndpointSpec[] = [
     key: "suggestLocation",
     label: "ai.suggestLocation",
     description:
-      "Structured output over your real location roster — product → where to put it",
+      "Shortlist + one structured call over your real location roster — product → where to put it",
+    model: FAST_TIER_MODEL,
     defaultInput: { productId: "PRD-XXXX" },
     run: (i) => ai.suggestLocation.call(locationSuggestionInput.parse(i)),
   },
   {
-    key: "parseSearch",
-    label: "ai.parseSearch",
-    description: "Structured output — free-text search → filters",
-    defaultInput: { query: "where are my canned tomatoes in the pantry" },
-    run: (i) => ai.parseSearch.call(parseSearchInput.parse(i)),
-  },
-  {
     key: "suggestUsdaFood",
     label: "ai.suggestUsdaFood",
-    description: "Agentic tool loop — search USDA → select best food",
+    description: "Shortlist + one structured call — search USDA, then select",
+    model: FAST_TIER_MODEL,
     defaultInput: { ingredientName: "olive oil" },
     run: (i) => ai.suggestUsdaFood.call(usdaFoodSuggestionInput.parse(i)),
   },
@@ -105,6 +104,7 @@ const SPECS: EndpointSpec[] = [
     key: "auditCategories",
     label: "ai.auditCategories",
     description: "Structured output over your real product catalog",
+    model: REASONING_TIER_MODEL,
     defaultInput: undefined,
     run: () => ai.auditCategories.call(),
   },
@@ -112,7 +112,8 @@ const SPECS: EndpointSpec[] = [
     key: "identifyProduct",
     label: "ai.identifyProduct",
     description:
-      "Vision — paste 1-5 public image URLs (R2 images work; Anthropic fetches them server-side)",
+      "Vision — paste 1-5 public image URLs (R2 images work; the gateway fetches them server-side)",
+    model: FAST_TIER_MODEL,
     defaultInput: {
       imageUrls: [`${__R2_PUBLIC_URL__}/cubby/replace-with-a-real-key.jpg`],
     },
@@ -123,6 +124,7 @@ const SPECS: EndpointSpec[] = [
     label: "ai.detectInventoryItems",
     description:
       "Vision — cached structured location inventory detection with product matching",
+    model: FAST_TIER_MODEL,
     defaultInput: { locationId: "replace-with-location-uuid" },
     run: (i) => ai.detectInventoryItems.call(aiLocationIdInput.parse(i)),
   },
@@ -130,6 +132,7 @@ const SPECS: EndpointSpec[] = [
     key: "agentAsk",
     label: "agent.ask",
     description: "Agentic MCP loop (non-streaming) over your data",
+    model: REASONING_TIER_MODEL,
     defaultInput: { query: "how many products do I have?" },
     run: (i) => agent.ask.call(agentAskInputSchema.parse(i)),
   },
@@ -181,6 +184,9 @@ function EndpointCard({
         <CardDescription>{spec.description}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
+        <Row align="center" gap="sm">
+          <Badge variant="outline">model: {spec.model}</Badge>
+        </Row>
         {input !== null && (
           <Textarea
             value={input}
@@ -338,7 +344,6 @@ export function AiSmokeTest() {
   return (
     <div className="flex flex-col gap-4">
       <Row align="center" wrap gap="sm">
-        <Badge variant="outline">model: {MODEL}</Badge>
         <Badge variant="secondary">{mode}</Badge>
         <Description as="span" size="2xs">
           In prod this exercises the real <code>env.AI.gateway("cubby")</code>{" "}

@@ -1,8 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Search, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Search } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
+import { verbDef } from "~/app/_components/actions/action-verbs";
 import {
   AgentAnswer,
   AgentSourceContent,
@@ -20,10 +22,23 @@ import { entityDetailLink, isBrowserRoutedEntity } from "~/entities/entities";
 import { focusOnMount } from "~/hooks/focus-on-mount";
 import { pageTitle } from "~/lib/page-title";
 
+/**
+ * `?q=` is how every other surface hands a question over: the entity action
+ * bar's "Ask about this" deep-links here with the record already named, so the
+ * page opens mid-question rather than at a blank box the user has to retype
+ * the shortcode into.
+ */
+const askSearchSchema = z.object({ q: z.string().optional() });
+
 export const Route = createFileRoute("/_authenticated/ask")({
   component: AskPage,
+  validateSearch: askSearchSchema,
   head: () => ({ meta: [{ title: pageTitle("Ask") }] }),
 });
+
+// The registry's Sparkles, not `Search`: asking Cubby is the AI verb, and the
+// magnifying glass said "this is the search box" on the one page that is not.
+const AskIcon = verbDef("ask").icon;
 
 const EXAMPLE_PROMPTS = [
   "Where's the orange spool of cable?",
@@ -34,9 +49,21 @@ const EXAMPLE_PROMPTS = [
 
 function AskPage() {
   const navigate = useNavigate();
-  const [query, setQuery] = useState("");
+  const { q } = Route.useSearch();
+  const [query, setQuery] = useState(q ?? "");
 
   const agent = useAgentStream();
+
+  // Run a deep-linked question once, and again only if the link changes.
+  const askedRef = useRef<string | null>(null);
+  const agentAsk = agent.ask;
+  useEffect(() => {
+    const prefilled = q?.trim();
+    if (!prefilled || askedRef.current === prefilled) return;
+    askedRef.current = prefilled;
+    setQuery(prefilled);
+    void agentAsk(prefilled);
+  }, [agentAsk, q]);
 
   // Surface stream errors as a toast.
   const agentError = agent.error;
@@ -77,28 +104,41 @@ function AskPage() {
             placeholder="where's the orange spool of cable?"
             ref={focusOnMount}
           />
-          <Button
-            type="submit"
-            disabled={agent.isStreaming || query.trim() === ""}
-          >
-            {agent.isStreaming ? (
-              <>
+          {agent.isStreaming ? (
+            <>
+              <Button
+                type="submit"
+                disabled
+                className="min-h-9 max-sm:min-h-11"
+              >
                 <Spinner className="mr-2" />
                 Thinking…
-              </>
-            ) : (
-              <>
-                <Search className="mr-2 size-4" />
-                Ask
-              </>
-            )}
-          </Button>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-9 max-sm:min-h-11"
+                onClick={agent.cancel}
+              >
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="submit"
+              disabled={query.trim() === ""}
+              className="min-h-9 max-sm:min-h-11"
+            >
+              <AskIcon className="mr-2 size-4" />
+              Ask
+            </Button>
+          )}
         </Row>
 
         {!hasRun && (
           <Stack gap="sm">
             <Row align="center" gap="snug" className="px-1 eyebrow">
-              <Sparkles className="size-3.5" />
+              <AskIcon className="size-3.5" />
               Try asking
             </Row>
             <div className="grid gap-2">

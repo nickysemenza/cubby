@@ -35,9 +35,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "ai.identifyProduct": async () =>
     (await import("~/server/ai-browser.server")).aiHandlers.operations
       .identifyProduct,
-  "ai.parseSearch": async () =>
-    (await import("~/server/ai-browser.server")).aiHandlers.operations
-      .parseSearch,
   "ai.suggestCategory": async () =>
     (await import("~/server/ai-browser.server")).aiHandlers.operations
       .suggestCategory,

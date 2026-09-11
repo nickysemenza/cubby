@@ -33,6 +33,7 @@ export {
   enrichmentWorkbenchIngredients,
   getIngredientByName,
   getIngredientMatches,
+  getIngredientMergeCandidatesByIds,
   getIngredientsByIDsLean,
   getRecipeUsagesForIngredient,
   ingredientList,

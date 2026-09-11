@@ -88,6 +88,7 @@ const SELECT_FILTERS = [
   ["batchStatus", "status", "Status", backgroundBatchStatuses],
 ] as const;
 const JOB_LABEL = {
+  "entity-embedding.refresh-batch": "Refresh embeddings (batched)",
   "entity-embedding.backfill.coordinator": "Continue semantic backfill",
   "search-document.repair.coordinator": "Continue document repair",
   "location-valuation.recompute": "All locations",

@@ -5,7 +5,10 @@ import { Search } from "lucide-react";
 import { type Ref, useEffect, useMemo, useRef, useState } from "react";
 
 import { verbDef } from "~/app/_components/actions/action-verbs";
-import { ConfidenceReasoningCard } from "~/app/_components/ai/ai-suggest";
+import {
+  AiProposalCard,
+  AiProvenance,
+} from "~/app/_components/ai/ai-proposal-card";
 import { UsdaFoodSearchField } from "~/app/_components/combobox/with-usda-food-search";
 import { QueuePassPosition } from "~/app/_components/queue-pass/QueuePassProgress";
 import { UsdaFoodResultRow } from "~/app/_components/usda/usda-food-result-row";
@@ -97,10 +100,13 @@ function QueueUsdaPicker({
   return (
     <Stack gap="sm">
       {usda && (
-        <ConfidenceReasoningCard
+        // Evidence only: the editor's own Apply is the acceptance, so the card
+        // carries no Accept/Dismiss of its own to compete with it.
+        <AiProposalCard
           confidence={usda.confidence}
           reasoning={usda.reasoning}
           label={noMatch ? "No confident match" : "AI match"}
+          provenance={<AiProvenance />}
         />
       )}
       {proposalPending && usda == null && (

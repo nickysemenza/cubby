@@ -6,20 +6,15 @@ import type {
 import { ALLOWED_IMAGE_TYPES } from "@cubby/schemas/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import {
-  Barcode,
-  Camera,
-  Check,
-  ImagePlus,
-  PackagePlus,
-  Plus,
-  X,
-} from "lucide-react";
+import { Barcode, Camera, ImagePlus, Plus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { VerbButton } from "~/app/_components/actions/action-verb-ui";
+import { AiProvenance } from "~/app/_components/ai/ai-proposal-card";
+import { AiProposalList } from "~/app/_components/ai/ai-proposal-list";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithProductSearch } from "~/app/_components/combobox/with-search-hook";
@@ -59,6 +54,14 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import type { SessionLocation } from "../session-utils";
 import { useSessionMutations } from "../useSessionMutations";
 
+/**
+ * A detected item's identity for the proposal list. The detection has no id of
+ * its own — it is model output, not a record — so the row is keyed by the
+ * fields that distinguish two sightings on the same shelf.
+ */
+const suggestionKey = (item: DetectedItem) =>
+  `${item.name}|${item.manufacturer}|${item.estimatedQuantity}|${item.unit}|${item.evidence}`;
+
 const manualAddSchema = z.object({
   product: requiredProductField,
   amount: z.object({
@@ -90,9 +93,11 @@ export function SessionCaptureActions({
   const [suggestionProductOverrides, setSuggestionProductOverrides] = useState<
     Record<number, ComboboxItem<ProductShortcode> | null>
   >({});
-  const [detectionCacheStatus, setDetectionCacheStatus] = useState<
-    "hit" | "miss" | null
-  >(null);
+  const [detection, setDetection] = useState<{
+    model: string;
+    cacheStatus: "hit" | "miss";
+    analyzedAt: Date;
+  } | null>(null);
   // Photo-as-identity: snap an unlabeled object, then name it.
   const addPhotoInputRef = useRef<HTMLInputElement>(null);
   const [pendingPhoto, setPendingPhoto] = useState<File | null>(null);
@@ -120,7 +125,11 @@ export function SessionCaptureActions({
     ai.detectInventoryItems.mutationOptions({
       onSuccess: (data) => {
         setSuggestions(data.items);
-        setDetectionCacheStatus(data.cache.status);
+        setDetection({
+          model: data.cache.model,
+          cacheStatus: data.cache.status,
+          analyzedAt: data.analyzedAt,
+        });
         setSuggestionProductOverrides(
           Object.fromEntries(
             data.items.map((item, index) => [
@@ -174,7 +183,11 @@ export function SessionCaptureActions({
     }
   };
 
+  const indexOfSuggestion = (id: string) =>
+    suggestions.findIndex((item) => suggestionKey(item) === id);
+
   const removeSuggestion = (index: number) => {
+    if (index < 0) return;
     setSuggestions((prev) => prev.filter((_, i) => i !== index));
     setSuggestionProductOverrides((prev) =>
       Object.fromEntries(
@@ -187,7 +200,13 @@ export function SessionCaptureActions({
     );
   };
 
-  const addSuggestion = async (item: DetectedItem, index: number) => {
+  // Rejects on failure rather than swallowing: `AiProposalList` removes the
+  // row the moment it is approved and puts it back if the write throws, and it
+  // can only do that if the failure reaches it.
+  const addSuggestion = async (id: string) => {
+    const index = indexOfSuggestion(id);
+    const item = suggestions[index];
+    if (!item) return;
     const { matchedProduct: _matchedProduct, ...detectedItem } = item;
     const override = suggestionProductOverrides[index];
     const productId = override?.id ?? item.matchedProduct?.id;
@@ -197,10 +216,11 @@ export function SessionCaptureActions({
         item: detectedItem,
         productId,
       });
-      removeSuggestion(index);
     } catch (error) {
       toast.error(`Could not add suggestion: ${getErrorMessage(error)}`);
+      throw error;
     }
+    removeSuggestion(index);
   };
 
   // Photo-as-identity: add an unlabeled object from a photo + a short name as a
@@ -292,7 +312,10 @@ export function SessionCaptureActions({
         <Stack gap="sm">
           <Row align="end" gap="sm" wrap className="min-w-0">
             <ManualAdd locationId={location.id} />
-            <Row gap="sm" wrap className="shrink-0">
+            {/* No `shrink-0`: it pinned this row to its max-content width, so
+                the four capture buttons ran off a phone's right edge instead
+                of wrapping. */}
+            <Row gap="sm" wrap>
               <Button
                 type="button"
                 variant="outline"
@@ -311,16 +334,18 @@ export function SessionCaptureActions({
                 <Barcode className="size-4" />
                 Barcode
               </Button>
-              <Button
-                type="button"
-                variant="outline"
+              <VerbButton
+                verb="detect"
+                size="default"
+                pending={detectItems.isPending}
+                disabledReason={
+                  location.imageCount === 0
+                    ? "Photograph this location first"
+                    : undefined
+                }
                 className="min-h-12 md:min-h-10"
                 onClick={() => detectItems.mutate({ locationId: location.id })}
-                disabled={detectItems.isPending || location.imageCount === 0}
-              >
-                {detectItems.isPending ? <Spinner /> : <PackagePlus />}
-                Detect
-              </Button>
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -333,65 +358,54 @@ export function SessionCaptureActions({
               </Button>
             </Row>
           </Row>
+          {/* Visible, not only the button's `title`: this sheet is opened on a
+              phone, where no tooltip can ever open. */}
+          {location.imageCount === 0 && (
+            <Description size="xs">
+              Photograph this location to detect what is in it.
+            </Description>
+          )}
           {suggestions.length > 0 && (
-            <Stack gap="sm">
-              <Description>
-                AI suggestions
-                {detectionCacheStatus ? ` · cache ${detectionCacheStatus}` : ""}
-              </Description>
-              {suggestions.map((item, index) => (
-                <Row
-                  key={`${item.name}-${item.manufacturer}-${item.estimatedQuantity}-${item.unit}-${item.evidence}`}
-                  align="start"
-                  gap="sm"
-                  wrap
-                  className="border border-[var(--border)] p-2"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">
-                      {item.name}
-                    </div>
-                    <Description size="xs">
-                      {item.estimatedQuantity} {item.unit} · {item.confidence}
-                      {item.category ? ` · ${item.category}` : ""}
-                      {item.isMisc ? " · misc" : ""}
-                    </Description>
-                    <Description size="xs">{item.evidence}</Description>
-                  </div>
-                  <div className="min-w-48 flex-1">
-                    <SuggestionProductOverride
-                      item={item}
-                      value={suggestionProductOverrides[index] ?? null}
-                      onChange={(value) =>
-                        setSuggestionProductOverrides((prev) => ({
-                          ...prev,
-                          [index]: value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addSuggestion(item, index)}
-                    disabled={approveDetectedItem.isPending}
-                  >
-                    <Check className="size-4" />
-                    Approve
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => removeSuggestion(index)}
-                  >
-                    <X className="size-4" />
-                    Reject
-                  </Button>
-                </Row>
-              ))}
-            </Stack>
+            <AiProposalList
+              heading="Detected items"
+              provenance={
+                detection ? (
+                  <AiProvenance
+                    model={detection.model}
+                    analyzedAt={detection.analyzedAt}
+                    cacheStatus={detection.cacheStatus}
+                  />
+                ) : undefined
+              }
+              rows={suggestions.map((item, index) => ({
+                id: suggestionKey(item),
+                title: item.name,
+                meta: [
+                  `${item.estimatedQuantity} ${item.unit}`,
+                  item.category,
+                  item.isMisc ? "misc" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+                confidence: item.confidence,
+                reasoning: item.evidence,
+                aside: (
+                  <SuggestionProductOverride
+                    item={item}
+                    value={suggestionProductOverrides[index] ?? null}
+                    onChange={(value) =>
+                      setSuggestionProductOverrides((prev) => ({
+                        ...prev,
+                        [index]: value,
+                      }))
+                    }
+                  />
+                ),
+              }))}
+              pending={approveDetectedItem.isPending}
+              onAccept={(id) => addSuggestion(id)}
+              onReject={(id) => removeSuggestion(indexOfSuggestion(id))}
+            />
           )}
         </Stack>
       </Stack>

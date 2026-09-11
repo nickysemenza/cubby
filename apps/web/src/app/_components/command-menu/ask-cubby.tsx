@@ -1,6 +1,6 @@
 import type { AgentResult } from "@cubby/schemas/agent";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Square } from "lucide-react";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
@@ -51,6 +51,18 @@ export function AskCubbyPanel({
           <ArrowLeft className="size-4" />
           <span>Back to search</span>
         </CommandItem>
+        {/* Stopping keeps whatever narration has landed — the palette's Back
+            would discard the run entirely by unmounting the panel. */}
+        {agent.isStreaming && (
+          <CommandItem
+            value="ask-cancel"
+            onSelect={agent.cancel}
+            className="flex items-center gap-2 text-muted-foreground"
+          >
+            <Square className="size-4" />
+            <span>Stop</span>
+          </CommandItem>
+        )}
       </CommandGroup>
       <AgentAnswer
         answer={agent.answer}

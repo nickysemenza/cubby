@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import type {
+  GatewayCallOptions,
+  GatewayProvider,
+} from "~/server/clients/ai-gateway";
 import type { Database } from "~/server/db";
 
 import {
@@ -29,21 +33,22 @@ const request = {
   body: { model: "claude-haiku-4-5", messages: [] },
 };
 
-// A faithful stand-in for the forwarder's surroundings: it keeps what was
-// sent and what was recorded so the test reads them back typed.
+// A faithful stand-in for the forwarder's surroundings: it keeps what the
+// transport shim was asked for and what was recorded, so the test reads them
+// back typed.
 function fakePort(respond: () => Response) {
-  const sent: { url: string; init: RequestInit }[] = [];
+  const sent: {
+    provider: GatewayProvider;
+    opts: GatewayCallOptions;
+    url: string;
+    init: RequestInit;
+  }[] = [];
   const recorded: Parameters<GatewayForwardPort["recordUsage"]>[1][] = [];
   const port: GatewayForwardPort = {
-    fetch: (input, init) => {
-      sent.push({ url: String(input), init: init ?? {} });
+    transport: (provider, opts) => (input, init) => {
+      sent.push({ provider, opts, url: String(input), init: init ?? {} });
       return Promise.resolve(respond());
     },
-    config: () => ({
-      accountId: "acct",
-      gatewayId: "gw",
-      cfApiKey: "secret-token",
-    }),
     callUsage: (_model, body) =>
       body.includes('"usage"')
         ? {
@@ -90,20 +95,22 @@ describe("forwardGatewayRequest", () => {
     expect(out.body).toContain('"input_tokens":10');
 
     const [call] = sent;
-    expect(call?.url).toBe(
-      "https://gateway.ai.cloudflare.com/v1/acct/gw/anthropic/v1/messages",
-    );
-    const headers = new Headers(call?.init.headers);
-    expect(headers.get("cf-aig-authorization")).toBe("Bearer secret-token");
-    expect(headers.get("authorization")).toBeNull();
-    expect(headers.get("anthropic-version")).toBe("2023-06-01");
-    expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual({
+    expect(call?.provider).toBe("anthropic");
+    expect(call?.url).toBe("https://ai-gateway.invalid/anthropic/v1/messages");
+    // The crate decides its own caching; the forwarder never forces a skip.
+    expect(call?.opts.skipCache).toBeUndefined();
+    expect(call?.opts.metadata).toEqual({
       cookbook: "Zuni",
       model: "claude-haiku-4-5",
       chunk: "k004",
       contract: "cookbook-indexed-v1",
       feature: "cookbook-epub-parsing",
     });
+    const headers = new Headers(call?.init.headers);
+    expect(headers.get("authorization")).toBeNull();
+    expect(headers.get("cf-aig-authorization")).toBeNull();
+    expect(headers.get("cf-aig-metadata")).toBeNull();
+    expect(headers.get("anthropic-version")).toBe("2023-06-01");
     expect(call?.init.body).toBe(JSON.stringify(request.body));
 
     expect(recorded).toEqual([
@@ -175,14 +182,30 @@ describe("forwardGatewayRequest", () => {
     ).rejects.toThrow(/socket hang up/);
   });
 
-  it("refuses to forward without the gateway token", async () => {
+  it("surfaces the shim's dev-only missing-credential error", async () => {
     const { port } = fakePort(() => new Response("{}"));
     await expect(
       forwardGatewayRequest(
         request,
         { feature: "cookbook-epub-parsing" },
-        { ...port, config: () => null },
+        {
+          ...port,
+          transport: () => () => {
+            throw new Error("AI_GATEWAY_API_KEY is not configured.");
+          },
+        },
       ),
     ).rejects.toThrow(/AI_GATEWAY_API_KEY/);
+  });
+
+  it("rejects a path whose provider segment is not a gateway provider", async () => {
+    const { port } = fakePort(() => new Response("{}"));
+    await expect(
+      forwardGatewayRequest(
+        { ...request, path: "/not-a-provider/v1/messages" },
+        { feature: "cookbook-epub-parsing" },
+        port,
+      ),
+    ).rejects.toThrow(/Unsupported gateway provider route/);
   });
 });

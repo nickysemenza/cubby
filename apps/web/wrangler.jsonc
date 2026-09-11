@@ -63,11 +63,12 @@
     { "binding": "USDA_API", "service": "usda-api" },
     { "binding": "UPC_LOOKUP", "service": "upc-lookup" }
   ],
-  // Workers AI binding — exposes `env.AI.gateway("cubby")` for routing the
-  // Anthropic/OpenAI adapters through Cubby's authenticated AI Gateway with
-  // implicit (Worker-identity) auth. Dev (vite Node) has no `env.AI`, so those
-  // clients fall back to gateway-REST with AI_GATEWAY_API_KEY. See
-  // src/server/clients/{anthropic,openai}.ts + src/server/cf-env.ts.
+  // Workers AI binding — exposes `env.AI.gateway("cubby")`, the Universal
+  // endpoint every AI call rides: the provider SDKs and the cookbook
+  // forwarder all fetch through one shim that authenticates with implicit
+  // (Worker-identity) auth. Dev (vite Node) has no `env.AI`, so the shim falls
+  // back to gateway-REST with AI_GATEWAY_API_KEY. See
+  // src/server/clients/ai-gateway.ts + src/server/cf-env.ts.
   "ai": { "binding": "AI" },
   "durable_objects": {
     "bindings": [

@@ -24,6 +24,7 @@ import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { locationToSegments } from "~/app/_components/locations/location-breadcrumb";
 import { LocationPickerThumb } from "~/app/_components/locations/location-picker-thumb";
 import { resolveLocationPrimaryVisual } from "~/app/_components/locations/location-visual-resolver";
+import { matchKindLabel } from "~/app/_components/search/search-utils";
 import { ProjectMark } from "~/app/projects/project-mark";
 import { VendorMark } from "~/components/entity/vendor-cell";
 import { Image } from "~/components/ui/image";
@@ -93,6 +94,20 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
       />
     );
 
+  const facts =
+    hit.matchField === "title" || hit.matchField === "shortcode"
+      ? undefined
+      : [hit.matchReason];
+  // The embedding fallback is the one match kind a picker cannot justify by
+  // looking at it: a lexical hit shows you the letters it matched, an
+  // embedding hit shows a row whose name shares nothing with what you typed.
+  // Unlabelled it reads as a broken search, so it sinks below the lexical hits
+  // under the divider the search results already call "Related".
+  const group =
+    hit.matchKind === "semantic"
+      ? { id: "semantic", label: matchKindLabel.semantic, order: 1 }
+      : undefined;
+
   return {
     // The server applies the entityTypes scope; narrowing it here preserves the
     // branded value each picker writes without ever exposing a private UUID.
@@ -102,9 +117,9 @@ export function buildSearchHitComboboxItem<E extends SearchableEntity>(
     secondary: hit.subtitle ?? hit.typeHint ?? undefined,
     detail: hit.subtitle && hit.typeHint ? hit.typeHint : undefined,
     presentation:
-      hit.matchField === "title" || hit.matchField === "shortcode"
-        ? undefined
-        : { facts: [hit.matchReason] },
+      facts || group
+        ? { ...(facts && { facts }), ...(group && { group }) }
+        : undefined,
     icon: fallback,
   };
 }

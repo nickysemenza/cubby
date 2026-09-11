@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import {
   backgroundJobPayloadSchema,
   entityEmbeddingBackfillCoordinatorPayloadSchema,
+  ENTITY_EMBEDDING_BATCH_SIZE,
 } from "./background-jobs";
 import type { ProductId, RecipeId } from "./identifiers";
 import { testEntityId } from "./test-support/identifiers";
@@ -32,6 +33,46 @@ describe("background job identifier parsing", () => {
       throw new Error("wrong entity");
     expectTypeOf(parsed.payload.ref.id).toEqualTypeOf<ProductId>();
     expect(parsed.payload.ref).toEqual({ entity: "product", id: entityId });
+  });
+
+  it("brands every ref in a batch and refuses an oversized one", () => {
+    const refs = Array.from(
+      { length: ENTITY_EMBEDDING_BATCH_SIZE },
+      (_, i) => ({
+        entityType: "product" as const,
+        entityId: testEntityId("product", `batch-${i}`),
+      }),
+    );
+    const parsed = backgroundJobPayloadSchema.parse({
+      kind: "entity-embedding.refresh-batch",
+      payload: { refs },
+    });
+
+    if (parsed.kind !== "entity-embedding.refresh-batch")
+      throw new Error("wrong job");
+    expect(parsed.payload.refs).toHaveLength(ENTITY_EMBEDDING_BATCH_SIZE);
+    const first = parsed.payload.refs[0];
+    if (!first) throw new Error("expected a branded ref");
+    if (first.ref.entity !== "product") throw new Error("wrong entity");
+    expectTypeOf(first.ref.id).toEqualTypeOf<ProductId>();
+    expect(first.ref).toEqual({ entity: "product", id: refs[0]?.entityId });
+
+    expect(
+      () =>
+        backgroundJobPayloadSchema.parse({
+          kind: "entity-embedding.refresh-batch",
+          payload: {
+            refs: [
+              ...refs,
+              {
+                entityType: "product",
+                entityId: testEntityId("product", "batch-overflow"),
+              },
+            ],
+          },
+        }),
+      // oxlint-disable-next-line vitest/require-to-throw-message -- The cap itself is contractual; the exact message is intentionally not.
+    ).toThrow();
   });
 
   it("brands workflow cursor ids and rejects malformed payload ids", () => {

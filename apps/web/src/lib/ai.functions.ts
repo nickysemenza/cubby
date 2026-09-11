@@ -1,5 +1,6 @@
 import {
   aiBackfillLocationDescriptionsEventSchema,
+  aiCacheMetadataSchema,
   aiEnrichmentProposalEventSchema,
   aiLocationIdInput,
   aiUsageRecentInput,
@@ -20,8 +21,6 @@ import {
   locationSuggestionSchema,
   locationTypeSuggestionInput,
   locationTypeSuggestionSchema,
-  parsedSearchSchema,
-  parseSearchInput,
   productIdentificationInput,
   productIdentificationSchema,
   usdaFoodSuggestionBatchInput,
@@ -39,6 +38,26 @@ import {
   query,
   subscription,
 } from "~/integrations/tanstack-query/operation-catalog";
+
+/**
+ * The description and the detection carry their provenance to the client so
+ * the surfaces can label it: which model read the photos, when, and whether
+ * this was a fresh read or a replay of a stored analysis.
+ *
+ * Composed here rather than in `@cubby/schemas` because that package holds
+ * shared field maps rather than zod combinators, and because provenance is a
+ * presentation concern of these two read paths, not part of what the model is
+ * asked to produce (`locationDescriptionSchema` is also the AiAnalysis row
+ * schema — widening it there would change what gets persisted).
+ */
+const locationDescriptionWithProvenance = locationDescriptionSchema.extend({
+  cache: aiCacheMetadataSchema,
+  analyzedAt: zod.coerce.date(),
+});
+
+const detectedInventoryWithProvenance = detectedInventorySchema.extend({
+  analyzedAt: zod.coerce.date(),
+});
 
 export const ai = defineOperationDomain("ai", {
   suggestCategory: query({
@@ -58,12 +77,12 @@ export const ai = defineOperationDomain("ai", {
   }),
   describeLocation: mutation({
     input: aiLocationIdInput,
-    output: locationDescriptionSchema,
+    output: locationDescriptionWithProvenance,
     invalidates: ripple.location,
   }),
   detectInventoryItems: mutation({
     input: aiLocationIdInput,
-    output: detectedInventorySchema,
+    output: detectedInventoryWithProvenance,
     invalidates: ripple.inventory,
   }),
   approveDetectedInventoryItem: mutation({
@@ -90,11 +109,6 @@ export const ai = defineOperationDomain("ai", {
     input: ingredientMergeSuggestionBatchInput,
     output: ingredientMergeSuggestionBatchOut,
     invalidates: ripple.ingredient,
-  }),
-  parseSearch: mutation({
-    input: parseSearchInput,
-    output: parsedSearchSchema,
-    invalidates: ripple.none,
   }),
   usageRecent: query({
     input: aiUsageRecentInput,

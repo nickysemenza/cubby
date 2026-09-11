@@ -9,11 +9,16 @@ import {
   searchableEntitySchema,
 } from "@cubby/schemas/search";
 import { chat, maxIterations } from "@tanstack/ai";
+import type { AnthropicSystemPromptMetadata } from "@tanstack/ai-anthropic";
 import { type JSONType, z } from "zod";
 
-import { DEFAULT_CHAT_MODEL } from "~/server/ai/models";
+import { AGENT_ASK_FEATURE } from "~/server/ai/features";
+import {
+  anthropicOptions,
+  reasoningAdapter,
+  usageFor,
+} from "~/server/clients/ai-adapters";
 import { aiGatewayUsageMiddleware } from "~/server/clients/ai-gateway-usage";
-import { getAnthropicClient } from "~/server/clients/anthropic";
 import type { Database } from "~/server/db";
 
 import type { createAgentToolset, ToolCallRecord } from "./mcp-bridge";
@@ -167,18 +172,41 @@ export async function* streamAgentChat(
   signal.addEventListener("abort", abort, { once: true });
   if (signal.aborted) abort();
   try {
+    // Declared in `features.ts` like every other feature (tier, cap,
+    // effort), but deliberately not routed through `runStructuredFeature`:
+    // this streams, calls tools over several iterations, and has no output
+    // schema. `cache: false` there is what `skipCache` spells here.
     yield* chat({
-      adapter: getAnthropicClient().getTextAdapter(),
-      abortController,
-      middleware: aiGatewayUsageMiddleware({
-        db,
-        feature: "agent-ask",
-        provider: "anthropic",
-        model: DEFAULT_CHAT_MODEL,
-        operation: "runAgentStream",
-        cacheStatus: "none",
+      adapter: reasoningAdapter({
+        metadata: {
+          feature: AGENT_ASK_FEATURE.feature,
+          operation: "runAgentStream",
+        },
+        skipCache: !AGENT_ASK_FEATURE.cache,
       }),
-      systemPrompts: [SYSTEM_PROMPT],
+      modelOptions: anthropicOptions({
+        maxTokens: AGENT_ASK_FEATURE.maxTokens,
+        effort: AGENT_ASK_FEATURE.effort,
+      }),
+      abortController,
+      middleware: aiGatewayUsageMiddleware(
+        usageFor(AGENT_ASK_FEATURE.model, {
+          db,
+          feature: AGENT_ASK_FEATURE.feature,
+          operation: "runAgentStream",
+          cacheStatus: "none",
+        }),
+      ),
+      // The MCP tool schemas render right after the system prompt, so caching
+      // it keeps that (large, stable) prefix out of every turn's billed input.
+      systemPrompts: [
+        {
+          content: SYSTEM_PROMPT,
+          metadata: {
+            cache_control: { type: "ephemeral" },
+          } satisfies AnthropicSystemPromptMetadata,
+        },
+      ],
       messages: [{ role: "user", content: query }],
       tools: toolset.tools,
       agentLoopStrategy: maxIterations(5),
