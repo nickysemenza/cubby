@@ -1,0 +1,9 @@
+{
+  "ok": false,
+  "error": {
+    "code": "CONFLICT",
+    "message": "This location changed since you loaded it. Reload and try again.",
+    "reason": "INVENTORY_STALE",
+    "requestId": "req_sample"
+  }
+}

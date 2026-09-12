@@ -1,0 +1,154 @@
+{
+  "ok": true,
+  "data": [
+    {
+      "id": "LOC-2345",
+      "name": "Home",
+      "aliases": [],
+      "tags": [],
+      "type": "house",
+      "product": null,
+      "lastBulkInventory": null,
+      "aiDescription": null,
+      "images": [],
+      "valuation": null,
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "childCount": 2,
+      "directItemCount": 0,
+      "totalItemCount": 5,
+      "children": [
+        {
+          "id": "LOC-3456",
+          "name": "Garage",
+          "aliases": [],
+          "tags": [],
+          "type": "room",
+          "product": null,
+          "lastBulkInventory": null,
+          "aiDescription": null,
+          "images": [],
+          "valuation": null,
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "childCount": 1,
+          "directItemCount": 1,
+          "totalItemCount": 4,
+          "children": [
+            {
+              "id": "LOC-4567",
+              "name": "Shelf A",
+              "aliases": [],
+              "tags": [],
+              "type": "shelf",
+              "product": null,
+              "lastBulkInventory": "2026-08-01T12:00:00.000Z",
+              "aiDescription": null,
+              "images": [],
+              "valuation": null,
+              "createdAt": "2026-01-01T00:00:00.000Z",
+              "updatedAt": "2026-01-01T00:00:00.000Z",
+              "childCount": 1,
+              "directItemCount": 0,
+              "totalItemCount": 3,
+              "children": [
+                {
+                  "id": "LOC-5678",
+                  "name": "Bin 1",
+                  "aliases": [],
+                  "tags": [],
+                  "type": "box",
+                  "product": null,
+                  "lastBulkInventory": null,
+                  "aiDescription": null,
+                  "images": [],
+                  "valuation": null,
+                  "createdAt": "2026-01-01T00:00:00.000Z",
+                  "updatedAt": "2026-01-01T00:00:00.000Z",
+                  "childCount": 1,
+                  "directItemCount": 2,
+                  "totalItemCount": 3,
+                  "children": [
+                    {
+                      "id": "LOC-6789",
+                      "name": "Bin 2",
+                      "aliases": [],
+                      "tags": [],
+                      "type": "box",
+                      "product": null,
+                      "lastBulkInventory": null,
+                      "aiDescription": null,
+                      "images": [],
+                      "valuation": null,
+                      "createdAt": "2026-01-01T00:00:00.000Z",
+                      "updatedAt": "2026-01-01T00:00:00.000Z",
+                      "childCount": 0,
+                      "directItemCount": 1,
+                      "totalItemCount": 1,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "LOC-789A",
+          "name": "Kitchen",
+          "aliases": [],
+          "tags": [],
+          "type": "room",
+          "product": null,
+          "lastBulkInventory": null,
+          "aiDescription": null,
+          "images": [],
+          "valuation": null,
+          "createdAt": "2026-01-01T00:00:00.000Z",
+          "updatedAt": "2026-01-01T00:00:00.000Z",
+          "childCount": 1,
+          "directItemCount": 0,
+          "totalItemCount": 1,
+          "children": [
+            {
+              "id": "LOC-89AB",
+              "name": "Bin 9",
+              "aliases": [],
+              "tags": [],
+              "type": "bag",
+              "product": null,
+              "lastBulkInventory": null,
+              "aiDescription": null,
+              "images": [],
+              "valuation": null,
+              "createdAt": "2026-01-01T00:00:00.000Z",
+              "updatedAt": "2026-01-01T00:00:00.000Z",
+              "childCount": 0,
+              "directItemCount": 1,
+              "totalItemCount": 1,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "LOC-9ABC",
+      "name": "Unknown",
+      "aliases": [],
+      "tags": [],
+      "type": "area",
+      "product": null,
+      "lastBulkInventory": null,
+      "aiDescription": null,
+      "images": [],
+      "valuation": null,
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z",
+      "childCount": 0,
+      "directItemCount": 0,
+      "totalItemCount": 0,
+      "children": []
+    }
+  ]
+}
