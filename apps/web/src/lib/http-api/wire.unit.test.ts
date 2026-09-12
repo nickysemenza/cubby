@@ -18,7 +18,14 @@ import {
   entityBrowserMutationResultSchema,
 } from "~/server/entity-kernel/contracts";
 
-import { type Json, toWire, WireSchemaError, wireRegistry } from "./wire";
+import {
+  isFlatQueryInput,
+  type Json,
+  QueryProjectionError,
+  toWire,
+  WireSchemaError,
+  wireRegistry,
+} from "./wire";
 
 interface WireCase {
   name: string;
@@ -247,5 +254,203 @@ describe("toWire mapping rules", () => {
     expect(toWire(codec, "input").safeParse({ n: "1" }).success).toBe(true);
     expect(toWire(codec, "output").safeParse({ n: 1 }).success).toBe(true);
     expect(toWire(codec, "output").safeParse({ n: "1" }).success).toBe(false);
+  });
+});
+
+const isQueryObject = (
+  value: Json<unknown>,
+): value is Record<string, Json<unknown>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** What a client puts on the URL: text per value, one key per list element. */
+const renderQuery = (value: Json<unknown>): URLSearchParams => {
+  const search = new URLSearchParams();
+  if (!isQueryObject(value)) return search;
+  for (const [key, entry] of Object.entries(value)) {
+    for (const item of Array.isArray(entry) ? entry : [entry]) {
+      if (item === undefined || item === null) continue;
+      search.append(key, String(item));
+    }
+  }
+  return search;
+};
+
+/** What the router hands the route: a string per key, an array for repeats. */
+const asRouterQuery = (search: URLSearchParams) => {
+  const query: Record<string, string | string[]> = {};
+  for (const key of new Set(search.keys())) {
+    const values = search.getAll(key);
+    const [single] = values;
+    query[key] = values.length === 1 && single !== undefined ? single : values;
+  }
+  return query;
+};
+
+/**
+ * Every `query` operation whose object input travels as GET parameters. The
+ * query projection normalises one-or-many filters to a list, so a bare value
+ * in the sample is equivalent to the one-element list that comes back.
+ */
+const flatQueries = Object.values(contracts).flatMap((contract) =>
+  Object.entries(contract.ops).flatMap(([member, operation]) => {
+    if (operation.kind !== "query") return [];
+    const { input } = operation;
+    if (!(input instanceof z.ZodObject)) return [];
+    if (!isFlatQueryInput(toWire(input, "input"))) return [];
+    const sample = sampleFor(input);
+    return sample === undefined
+      ? []
+      : [{ name: `${contract.domain}.${member}`, schema: input, sample }];
+  }),
+);
+
+const asList = (value: Json<unknown>) =>
+  Array.isArray(value) ? value : [value];
+
+const equivalentQueryValues = (
+  received: Json<unknown>,
+  expected: Json<unknown>,
+): boolean =>
+  isQueryObject(received) && isQueryObject(expected)
+    ? Object.keys({ ...received, ...expected }).every((key) => {
+        const [want, got] = [expected[key], received[key]];
+        if (want === undefined || want === null)
+          return got === undefined || got === null;
+        return (
+          JSON.stringify(asList(got ?? [])) === JSON.stringify(asList(want))
+        );
+      })
+    : JSON.stringify(received) === JSON.stringify(expected);
+
+describe("toWire query projection", () => {
+  it("covers the flat query inputs", () => {
+    expect(flatQueries.length).toBeGreaterThan(20);
+  });
+
+  it.each(flatQueries)("query round-trips: $name", ({ schema, sample }) => {
+    const rendered = asRouterQuery(renderQuery(roundTrip(sample)));
+    const onWire = toWire(schema, "query").safeParse(rendered);
+    expect(onWire.error?.issues ?? []).toEqual([]);
+    const domain = schema.safeParse(onWire.data);
+    expect(domain.error?.issues ?? []).toEqual([]);
+    expect(
+      equivalentQueryValues(
+        roundTrip(domain.data),
+        roundTrip(schema.parse(sample)),
+      ),
+    ).toBe(true);
+  });
+
+  it("coerces literal numbers and booleans", () => {
+    const wire = toWire(
+      z.object({
+        days: z.union([z.literal(7), z.literal(30)]),
+        on: z.literal(true),
+      }),
+      "query",
+    );
+    expect(wire.parse({ days: "30", on: "true" })).toEqual({
+      days: 30,
+      on: true,
+    });
+    expect(wire.safeParse({ days: "8", on: "true" }).success).toBe(false);
+  });
+
+  it("coerces numbers and keeps their checks", () => {
+    const wire = toWire(z.object({ page: z.number().int().min(1) }), "query");
+    expect(wire.parse({ page: "12" })).toEqual({ page: 12 });
+    expect(wire.parse({ page: 12 })).toEqual({ page: 12 });
+    expect(wire.safeParse({ page: "0" }).success).toBe(false);
+    expect(wire.safeParse({ page: "x" }).success).toBe(false);
+  });
+
+  it("reads booleans from their text form", () => {
+    const wire = toWire(z.object({ live: z.boolean() }), "query");
+    expect(wire.parse({ live: "false" })).toEqual({ live: false });
+    expect(wire.parse({ live: "true" })).toEqual({ live: true });
+    expect(wire.parse({ live: true })).toEqual({ live: true });
+    expect(wire.safeParse({ live: "yes" }).success).toBe(false);
+  });
+
+  it("carries lists as repeated keys and accepts a single value", () => {
+    const wire = toWire(z.object({ tag: z.array(z.string()) }), "query");
+    expect(wire.parse({ tag: "a" })).toEqual({ tag: ["a"] });
+    expect(wire.parse({ tag: ["a", "b"] })).toEqual({ tag: ["a", "b"] });
+  });
+
+  it("collapses the one-or-many union onto one list parameter", () => {
+    const status = z.enum(["open", "done"]);
+    const domain = z.object({
+      status: z.union([status, z.array(status)]).optional(),
+    });
+    const wire = toWire(domain, "query");
+    expect(wire.parse({ status: "open" })).toEqual({ status: ["open"] });
+    expect(wire.parse({})).toEqual({});
+    expect(
+      z.toJSONSchema(wire, { io: "output", target: "draft-2020-12" }),
+    ).toMatchObject({
+      properties: {
+        status: { type: "array", items: { enum: ["open", "done"] } },
+      },
+    });
+  });
+
+  it("turns nullable and defaulted fields into optionals", () => {
+    const wire = toWire(
+      z.object({ note: z.string().nullable(), size: z.number().default(3) }),
+      "query",
+    );
+    expect(wire.parse({})).toEqual({});
+    expect(wire.parse({ note: "x", size: "4" })).toEqual({
+      note: "x",
+      size: 4,
+    });
+  });
+
+  it("rejects unknown keys and nested objects", () => {
+    expect(
+      toWire(z.object({ a: z.string() }), "query").safeParse({ a: "x", b: "y" })
+        .success,
+    ).toBe(false);
+    expect(() =>
+      toWire(z.object({ scope: z.object({ a: z.string() }) }), "query"),
+    ).toThrow(QueryProjectionError);
+    expect(() =>
+      toWire(z.object({ rows: z.array(z.object({ a: z.string() })) }), "query"),
+    ).toThrow(/at rows/u);
+    expect(() =>
+      toWire(z.object({ map: z.record(z.string(), z.string()) }), "query"),
+    ).toThrow(QueryProjectionError);
+  });
+
+  it("decides flatness on the input wire", () => {
+    const flat = z.object({
+      q: z.string(),
+      page: z.number(),
+      tags: z.array(z.string()).optional(),
+      from: z.coerce.date().optional(),
+    });
+    expect(isFlatQueryInput(toWire(flat, "input"))).toBe(true);
+    expect(isFlatQueryInput(z.null())).toBe(true);
+    expect(isFlatQueryInput(z.string())).toBe(true);
+    expect(
+      isFlatQueryInput(
+        toWire(z.object({ scope: z.object({ a: z.string() }) }), "input"),
+      ),
+    ).toBe(false);
+    expect(
+      isFlatQueryInput(toWire(z.object({ a: z.string() }).optional(), "input")),
+    ).toBe(false);
+    expect(
+      isFlatQueryInput(
+        toWire(z.union([z.object({ a: z.string() }), z.object({})]), "input"),
+      ),
+    ).toBe(false);
+  });
+
+  it("memoises per io", () => {
+    const domain = z.object({ n: z.number() });
+    expect(toWire(domain, "query")).toBe(toWire(domain, "query"));
+    expect(toWire(domain, "query")).not.toBe(toWire(domain, "input"));
   });
 });
