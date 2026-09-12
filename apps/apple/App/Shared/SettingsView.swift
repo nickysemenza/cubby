@@ -18,6 +18,7 @@ struct SettingsView: View {
         Form {
             Section {
                 TextField("Base URL", text: $draftURL)
+                    .keyboardDismissBar()
                     .font(.porcelainCode)
                     .autocorrectionDisabled()
                     #if os(iOS)

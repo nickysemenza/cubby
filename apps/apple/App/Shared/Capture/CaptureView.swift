@@ -175,6 +175,7 @@ private struct CaptureContent: View {
             Eyebrow("Enter a code")
             HStack(spacing: PorcelainTokens.Space.sm) {
                 TextField("Barcode, ISBN, or PRD-/LOC- label", text: $capture.manualEntry)
+                    .keyboardDismissBar()
                     .font(.porcelainCode)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()

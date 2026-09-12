@@ -5,7 +5,10 @@ import Foundation
 /// Publishes every intent-exposed entity to Spotlight so a product or bin can be found from the
 /// home screen. Generic over the catalog; one table of per-kind list filters is the only
 /// per-entity knowledge. Items open through the same `cubby://entity/<id>` path as deep links.
-final class SpotlightIndexer {
+///
+/// An actor, not a MainActor class: the refresh pages through every exposed entity right after
+/// sign-in, and projecting thousands of rows into searchable items must not stall the UI.
+actor SpotlightIndexer {
     static let refreshInterval: TimeInterval = 24 * 60 * 60
     static let pageSize = 200
     /// Per-kind cap; a kitchen has a few hundred products, not tens of thousands.

@@ -23,6 +23,7 @@ struct AdjustCountSheet: View {
                 Section("New count") {
                     HStack(spacing: PorcelainTokens.Space.sm) {
                         TextField("Count", text: $text)
+                    .keyboardDismissBar()
                             #if os(iOS)
                             .keyboardType(.decimalPad)
                             #endif

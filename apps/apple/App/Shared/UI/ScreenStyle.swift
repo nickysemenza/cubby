@@ -6,6 +6,15 @@ extension View {
     func porcelainScreen() -> some View {
         scrollContentBackground(.hidden)
             .background(PorcelainTokens.canvas)
+            // Dragging any screen's content dismisses the keyboard; a permanent entry field with
+            // no Done key otherwise traps it on iOS.
+            .scrollDismissesKeyboard(.interactively)
+    }
+
+    /// A "Done" key above the software keyboard. Attached to a field, it shows only while that
+    /// field is focused.
+    func keyboardDismissBar() -> some View {
+        modifier(KeyboardDismissBar())
     }
 
     /// White row over the canvas, with the cool hairline as the separator. Applied per row so a
@@ -70,4 +79,26 @@ let porcelainTwoColumns = [
     }
     .padding(PorcelainTokens.Space.lg)
     .background(PorcelainTokens.canvas)
+}
+
+/// SwiftUI focus state, not a UIKit `resignFirstResponder` hack: the modifier owns a focus flag
+/// for the field it wraps and clears it from the Done key.
+private struct KeyboardDismissBar: ViewModifier {
+    @FocusState private var focused: Bool
+
+    func body(content: Content) -> some View {
+        #if os(iOS)
+        content
+            .focused($focused)
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { focused = false }
+                        .font(.porcelainBody.weight(.semibold))
+                }
+            }
+        #else
+        content
+        #endif
+    }
 }

@@ -39,6 +39,7 @@ struct ScopePickerSheet: View {
             Eyebrow("Scan or type a location code")
             HStack(spacing: PorcelainTokens.Space.sm) {
                 TextField("LOC-….", text: $code)
+                    .keyboardDismissBar()
                     .font(.porcelainCode)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()

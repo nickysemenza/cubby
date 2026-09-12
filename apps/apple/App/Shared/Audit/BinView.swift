@@ -71,6 +71,7 @@ struct BinView: View {
             Eyebrow("Scan or type a code")
             HStack(spacing: PorcelainTokens.Space.sm) {
                 TextField("Barcode, ISBN, or PRD-/LOC- label", text: $manualEntry)
+                    .keyboardDismissBar()
                     .font(.porcelainCode)
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
