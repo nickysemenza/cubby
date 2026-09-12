@@ -23,21 +23,20 @@ extension Entity {
         func run() async throws {
             try await CLI.run {
                 let descriptor = try Entity.descriptor(for: key)
-                guard descriptor.actions.contains(.list) else {
+                // `httpActions` is authoritative over the kernel roster's `descriptor.actions` —
+                // it's the set the HTTP document actually routes.
+                guard descriptor.key.httpActions.contains(.list) else {
                     throw CLIError.message("\(descriptor.plural) has no list route.")
                 }
 
                 let context = try CLIContext.make(from: global)
-                let result = try await context.client.raw.list(
-                    basePath: descriptor.basePath, page: page, pageSize: pageSize, sort: sort
-                )
+                let result = try await context.client.list(descriptor, page: page, pageSize: pageSize, sort: sort)
 
                 if global.json {
-                    print(try CLI.prettyJSON(.array(result.items)))
+                    print(try CLI.prettyJSON(.array(result.items.map(\.raw))))
                 } else {
-                    for item in result.items {
-                        let row = descriptor.row(from: item)
-                        print("\(row?.id ?? "?")\t\(row?.title ?? "?")")
+                    for row in result.items {
+                        print("\(row.id)\t\(row.title)")
                     }
                 }
             }
@@ -56,18 +55,19 @@ extension Entity {
         func run() async throws {
             try await CLI.run {
                 let descriptor = try Entity.descriptor(for: key)
-                guard descriptor.actions.contains(.get) else {
+                guard descriptor.key.httpActions.contains(.get) else {
                     throw CLIError.message("\(descriptor.singular) has no get route.")
                 }
 
                 let context = try CLIContext.make(from: global)
-                let object = try await context.client.raw.get(basePath: descriptor.basePath, id: id)
+                guard let row = try await context.client.row(descriptor, id: id) else {
+                    throw CLIError.message("No \(descriptor.singular.lowercased()) called \(id).")
+                }
 
                 if global.json {
-                    print(try CLI.prettyJSON(object))
+                    print(try CLI.prettyJSON(row.raw))
                 } else {
-                    let row = descriptor.row(from: object)
-                    print("\(row?.id ?? id)\t\(row?.title ?? id)")
+                    print("\(row.id)\t\(row.title)")
                 }
             }
         }

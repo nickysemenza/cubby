@@ -32,13 +32,9 @@ final class NeedsPhotoModel {
 
     func load() async {
         phase = .loading
-        var filters: [String: JSONValue] = ["imagePresenceFilter": .string("none")]
-        if let locationID { filters["locationIdFilter"] = .string(locationID.rawValue) }
         do {
-            let page = try await client.raw.list(
-                basePath: EntityCatalog[.product].basePath, page: 1, pageSize: pageSize, sort: "-createdAt", filters: filters
-            )
-            queue = page.items.compactMap(EntityCatalog[.product].row(from:))
+            let page = try await client.productsMissingImages(page: 1, pageSize: pageSize, at: locationID)
+            queue = page.items
             total = page.meta.totalCount
             phase = .ready
         } catch let error as CubbyAPIError {

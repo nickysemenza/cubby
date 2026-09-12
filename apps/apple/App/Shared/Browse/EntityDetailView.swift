@@ -71,7 +71,7 @@ struct EntityDetailView: View {
     }
 
     private func setup() async {
-        let model = await GenericEntityDetailModel(descriptor: descriptor, client: appModel.client.raw)
+        let model = await GenericEntityDetailModel(descriptor: descriptor, client: appModel.client)
         self.model = model
         await model.load(id: id)
     }
@@ -95,10 +95,9 @@ struct EntityDetailContent: View {
     private var stats: [EntityStat] { EntityFacts.stats(descriptor: descriptor, row: row) }
 
     // Relationship reads for the two hand-tuned entities. Empty/nil everywhere else, so the
-    // generic path (every other entity) never pays for this.
-    private var productGallery: [ProductGalleryImage] {
-        descriptor.key == .product ? ProductGallery.images(from: row) : []
-    }
+    // generic path (every other entity) never pays for this. There is no product gallery: every
+    // payload's `images` field carries shortcodes only (see `DetailRelations.swift`), so the hero
+    // below falls back to the single `coverImageUrl` like every other entity.
     private var productStockedAt: [ProductStockLocation] {
         descriptor.key == .product ? ProductRelations.stockedAt(from: row) : []
     }
@@ -173,9 +172,7 @@ struct EntityDetailContent: View {
 
     @ViewBuilder
     private var hero: some View {
-        if descriptor.key == .product, productGallery.count > 1 {
-            ProductGalleryHero(images: productGallery, maxHeight: heroMaxHeight)
-        } else if let url = row.imageURL {
+        if let url = row.imageURL {
             RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
                 .fill(PorcelainTokens.inset)
                 .aspectRatio(4.0 / 3.0, contentMode: .fit)
@@ -354,9 +351,11 @@ struct EntityDetailContent: View {
     }
 }
 
-/// A product with more than one uploaded photo and multiple `inventoryEntry` rows, so the gallery
-/// swap and "Stocked at" panel both render. Private to this file — no network, no `PreviewFixtures`.
-#Preview("Product with gallery + stock") {
+/// A product with multiple `inventoryEntry` rows, so the "Stocked at" panel renders. `images`
+/// carries shortcodes only on the wire now (no gallery to render — see `DetailRelations.swift`),
+/// and a stock location's `location` no longer carries `ancestors`, so `ancestorPath` is nil.
+/// Private to this file — no network, no `PreviewFixtures`.
+#Preview("Product with stock") {
     let raw: JSONValue = .object([
         "id": .string("PRD-2345"),
         "name": .string("Cast Iron Skillet"),
@@ -365,26 +364,19 @@ struct EntityDetailContent: View {
         "primaryGtin": .string("00075536010014"),
         "onHandUnits": .number(3),
         "pricing": .object(["effectivePrice": .number(24.95), "source": .string("derived")]),
-        "images": .array([
-            .object(["id": .string("IMG-1"), "status": .string("UPLOADED"), "url": .string("https://images.cubby.invalid/skillet-1.jpg")]),
-            .object(["id": .string("IMG-2"), "status": .string("UPLOADED"), "url": .string("https://images.cubby.invalid/skillet-2.jpg")]),
-            .object(["id": .string("IMG-3"), "status": .string("PENDING"), "url": .string("https://images.cubby.invalid/skillet-3.jpg")]),
-        ]),
+        "images": .array([.string("IMG-1"), .string("IMG-2")]),
         "inventoryEntry": .array([
             .object([
                 "id": .string("IE-1"),
                 "amount": .object(["value": .number(2), "unit": .string("units")]),
                 "placement": .string("stock"),
-                "location": .object([
-                    "id": .string("LOC-1001"), "name": .string("Pantry Shelf B"),
-                    "ancestors": .array([.object(["id": .string("LOC-1"), "name": .string("Kitchen")])]),
-                ]),
+                "location": .object(["id": .string("LOC-1001"), "name": .string("Pantry Shelf B")]),
             ]),
             .object([
                 "id": .string("IE-2"),
                 "amount": .object(["value": .number(1), "unit": .string("units")]),
                 "placement": .string("installed"),
-                "location": .object(["id": .string("LOC-1002"), "name": .string("Garage Cabinet"), "ancestors": .array([])]),
+                "location": .object(["id": .string("LOC-1002"), "name": .string("Garage Cabinet")]),
             ]),
         ]),
     ])

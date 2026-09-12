@@ -32,8 +32,7 @@ nonisolated enum IntentContext {
         guard let descriptor = EntityCatalog.descriptor(forShortcode: id), descriptor.isIntentExposed else {
             throw Failure.notFound("item called \(id)")
         }
-        let object = try await client.raw.get(basePath: descriptor.basePath, id: id)
-        guard let row = descriptor.row(from: object) else { throw Failure.notFound("item called \(id)") }
+        guard let row = try await client.row(descriptor, id: id) else { throw Failure.notFound("item called \(id)") }
         return CubbyEntity(row: row, kind: descriptor.key)
     }
 }

@@ -28,7 +28,7 @@ struct FindEntityIntent: AppIntent {
     func perform() async throws -> some ReturnsValue<[CubbyEntity]> & ProvidesDialog {
         let client = try await IntentContext.client()
         let kinds = kind?.key.map { [$0] }
-        let hits = try await client.raw.search(query, kinds: kinds, limit: 10).compactMap(CubbyEntity.init(hit:))
+        let hits = try await client.search(query, kinds: kinds, limit: 10).compactMap(CubbyEntity.init(hit:))
         if let first = hits.first { RecentEntities.record(first.id) }
         let dialog: IntentDialog = hits.isEmpty
             ? "Nothing in Cubby matches \(query)."
@@ -52,13 +52,14 @@ struct WhereIsProductIntent: AppIntent {
 
     func perform() async throws -> some ProvidesDialog {
         let client = try await IntentContext.client()
-        guard let hit = try await client.raw.search(product, kinds: [.product], limit: 1).first else {
+        guard let hit = try await client.search(product, kinds: [.product], limit: 1).first else {
             return .result(dialog: "No product in Cubby matches \(product).")
         }
         RecentEntities.record(hit.id)
         let descriptor = EntityCatalog[.product]
-        let object = try await client.raw.get(basePath: descriptor.basePath, id: hit.id)
-        guard let row = descriptor.row(from: object) else { throw IntentContext.Failure.notFound("product \(hit.id)") }
+        guard let row = try await client.row(descriptor, id: hit.id) else {
+            throw IntentContext.Failure.notFound("product \(hit.id)")
+        }
         let stocked = ProductRelations.stockedAt(from: row).filter { $0.placement != "installed" }
         guard !stocked.isEmpty else {
             return .result(dialog: "\(row.title) isn't stocked anywhere.")

@@ -89,11 +89,13 @@ struct BrowseRootView: View {
     }
 
     /// Split for one domain: `rows` are listable (real `NavigationLink`s), `unlisted` are the
-    /// plural names of everything else in the domain, for the footnote line.
+    /// plural names of everything else in the domain, for the footnote line. `httpActions` is
+    /// authoritative over the kernel roster's `descriptor.actions` here — it's the set the HTTP
+    /// document actually routes (see `GenericEntityListModel.load`).
     private func descriptors(in domain: AppDomain) -> (rows: [EntityDescriptor], unlisted: [String]) {
         let matches = descriptorsMatchingQuery.filter { $0.key.domain == domain }
-        let rows = matches.filter { $0.actions.contains(.list) }.sorted { $0.plural < $1.plural }
-        let unlisted = matches.filter { !$0.actions.contains(.list) }.sorted { $0.plural < $1.plural }.map(\.plural)
+        let rows = matches.filter { $0.key.httpActions.contains(.list) }.sorted { $0.plural < $1.plural }
+        let unlisted = matches.filter { !$0.key.httpActions.contains(.list) }.sorted { $0.plural < $1.plural }.map(\.plural)
         return (rows, unlisted)
     }
 }
@@ -102,21 +104,18 @@ struct BrowseRootView: View {
 /// failure, so a Browse row shows nothing on the right rather than a stale or fabricated number.
 @Observable
 final class BrowseCountsModel {
-    private(set) var counts: [String: Int]?
+    private(set) var counts: DashboardCounts?
 
     func load(client: CubbyClient) async {
         do {
-            let data = try await client.raw.call("dashboard.counts")
-            counts = data.objectValue?.compactMapValues { $0.doubleValue.map(Int.init) }
+            counts = try await client.dashboardCounts()
         } catch {
             counts = nil
         }
     }
 
     func count(for key: EntityKey) -> Int? {
-        // The response spells the USDA food count `usdaFoods` (plural); every other key matches
-        // `EntityKey.rawValue` directly.
-        counts?[key == .usdaFood ? "usdaFoods" : key.rawValue]
+        counts?.count(for: key)
     }
 }
 

@@ -116,7 +116,7 @@ struct EntityListView: View {
     }
 
     private func setup() async {
-        let model = await GenericEntityListModel(descriptor: descriptor, client: appModel.client.raw)
+        let model = await GenericEntityListModel(descriptor: descriptor, client: appModel.client)
         self.model = model
         await model.load(page: 1)
         loadedRows = model.rows

@@ -2,85 +2,18 @@ import CubbyKit
 import SwiftUI
 
 /// Plain-data relationship rendering for the two entities whose detail payload is worth more than
-/// the generic stats grid: `Product` (gallery, stocked-at) and `Location` (parent, contents,
+/// the generic stats grid: `Product` (stocked-at) and `Location` (parent, contents,
 /// sub-locations). Everything here reads `EntityRow.raw` directly — nothing issues a request, and
 /// nothing here is generic-entity machinery, so `EntityDetailContent` opts in per `descriptor.key`.
+///
+/// There is no product gallery here any more: every payload's `images` field is image
+/// *shortcodes* now (`ProductRelations.imageIDs(from:)`), never `{id,url,status}` objects, and
+/// `image.list` has no id filter to resolve a handful of shortcodes back into URLs (checked
+/// `imageBrowserListInput` in `packages/schemas/src/image.ts` — only `nameFilter`/`status`/date/
+/// presence filters exist). Faking a gallery from the single `coverImageUrl` would just repeat the
+/// plain hero image, so the multi-photo swipe view is dropped rather than kept and broken.
 
-// MARK: - Product: gallery
-
-/// One uploaded product image, ready for `AsyncImage`.
-struct ProductGalleryImage: Identifiable, Hashable {
-    let id: String
-    let url: URL
-}
-
-/// Parses the gallery a product detail payload carries; `stockedAt` lives in CubbyKit
-/// (`ProductRelations`) because the "where is" intent reads it too.
-enum ProductGallery {
-    /// Images that finished uploading, in payload order. A `PENDING`/`FAILED` image never earns a
-    /// gallery page — that failure state belongs to the ingredient workbench, not the detail screen.
-    static func images(from row: EntityRow) -> [ProductGalleryImage] {
-        ProductRelations.gallery(from: row).map { ProductGalleryImage(id: $0.id, url: $0.url) }
-    }
-}
-
-/// A swipeable hero for a product with more than one uploaded photo. `EntityDetailContent` keeps
-/// its plain single-image hero for zero or one photo — this view only earns its place once there
-/// is something to swipe between.
-struct ProductGalleryHero: View {
-    let images: [ProductGalleryImage]
-    var maxHeight: CGFloat = 280
-
-    @State private var page = 0
-
-    var body: some View {
-        VStack(spacing: PorcelainTokens.Space.sm) {
-            TabView(selection: $page) {
-                ForEach(Array(images.enumerated()), id: \.element.id) { index, image in
-                    AsyncImage(url: image.url) { phase in
-                        if case .success(let loaded) = phase {
-                            loaded.resizable().scaledToFill()
-                        } else if case .failure = phase {
-                            galleryPlaceholder
-                        } else {
-                            ProgressView().controlSize(.small)
-                        }
-                    }
-                    .tag(index)
-                }
-            }
-            #if os(iOS)
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            #endif
-            .aspectRatio(4.0 / 3.0, contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: maxHeight)
-            .background(PorcelainTokens.inset)
-            .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
-            .overlay(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                    .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
-            )
-
-            if images.count > 1 {
-                HStack(spacing: PorcelainTokens.Space.xs) {
-                    ForEach(images.indices, id: \.self) { index in
-                        Circle()
-                            .fill(index == page ? PorcelainTokens.cobalt : PorcelainTokens.hairline)
-                            .frame(width: 6, height: 6)
-                    }
-                }
-                .accessibilityHidden(true)
-            }
-        }
-    }
-
-    private var galleryPlaceholder: some View {
-        Image(systemName: "photo")
-            .font(.system(size: 32, weight: .light))
-            .foregroundStyle(PorcelainTokens.graphiteSecondary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
+// MARK: - Product: stocked-at
 
 /// "Stocked at": every `inventoryEntry` for a product, each a link to its location.
 struct ProductStockedAtSection: View {
@@ -312,16 +245,6 @@ private struct LocationChildRow: View {
 }
 
 // MARK: - Previews (private sample data; no network)
-
-#Preview("Product gallery") {
-    ProductGalleryHero(images: [
-        ProductGalleryImage(id: "IMG-1", url: URL(string: "https://images.cubby.invalid/skillet-1.jpg")!),
-        ProductGalleryImage(id: "IMG-2", url: URL(string: "https://images.cubby.invalid/skillet-2.jpg")!),
-        ProductGalleryImage(id: "IMG-3", url: URL(string: "https://images.cubby.invalid/skillet-3.jpg")!),
-    ])
-    .padding(PorcelainTokens.Space.lg)
-    .background(PorcelainTokens.canvas)
-}
 
 #Preview("Stocked at") {
     NavigationStack {

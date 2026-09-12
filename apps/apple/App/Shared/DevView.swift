@@ -125,9 +125,8 @@ struct DevView: View {
         checking = true
         defer { checking = false }
         do {
-            let page = try await model.client.raw.list(basePath: "products", page: 1, pageSize: 1)
-            let first = page.items.first.flatMap { EntityCatalog[.product].row(from: $0) }
-            apiResult = "\(page.meta.totalCount.formatted()) products · first: \(first?.title ?? "none")"
+            let page = try await model.client.list(EntityCatalog[.product], page: 1, pageSize: 1)
+            apiResult = "\(page.meta.totalCount.formatted()) products · first: \(page.items.first?.title ?? "none")"
         } catch {
             apiResult = String(describing: error)
             model.handle(error)

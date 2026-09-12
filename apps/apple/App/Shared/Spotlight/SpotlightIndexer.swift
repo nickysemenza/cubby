@@ -14,11 +14,6 @@ actor SpotlightIndexer {
     /// Per-kind cap; a kitchen has a few hundred products, not tens of thousands.
     static let maxPerKind = 2_000
 
-    /// Only stocked products earn a Spotlight entry; everything else is indexed whole.
-    private static let listFilters: [EntityKey: [String: JSONValue]] = [
-        .product: ["relatedInventoryPresenceFilter": .string("has")]
-    ]
-
     private var running = false
 
     private static func stampKey(_ host: String) -> String { "cubby.spotlight.refreshed.\(host)" }
@@ -40,7 +35,9 @@ actor SpotlightIndexer {
         defer { running = false }
         let index = CSSearchableIndex.default()
         do {
-            for descriptor in EntityCatalog.intentExposed where descriptor.actions.contains(.list) {
+            // `httpActions` is authoritative over the kernel roster's `descriptor.actions` — it's
+            // the set the HTTP document actually routes (see `GenericEntityListModel.load`).
+            for descriptor in EntityCatalog.intentExposed where descriptor.key.httpActions.contains(.list) {
                 let items = try await Self.items(for: descriptor, client: client)
                 try await index.deleteSearchableItems(withDomainIdentifiers: ["cubby.\(descriptor.key.rawValue)"])
                 if !items.isEmpty { try await index.indexSearchableItems(items) }
@@ -65,12 +62,12 @@ actor SpotlightIndexer {
         var items: [CSSearchableItem] = []
         var page = 1
         while items.count < maxPerKind {
-            let result = try await client.raw.list(
-                basePath: descriptor.basePath, page: page, pageSize: pageSize,
-                filters: listFilters[descriptor.key] ?? [:]
-            )
-            for object in result.items {
-                guard let row = descriptor.row(from: object) else { continue }
+            // Only stocked products earn a Spotlight entry; everything else is indexed whole.
+            let result =
+                descriptor.key == .product
+                ? try await client.stockedProducts(page: page, pageSize: pageSize)
+                : try await client.list(descriptor, page: page, pageSize: pageSize)
+            for row in result.items {
                 let attributes = CSSearchableItemAttributeSet(contentType: .text)
                 attributes.title = row.title
                 attributes.contentDescription = row.subtitle ?? descriptor.singular.capitalized
