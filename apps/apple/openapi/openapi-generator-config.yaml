@@ -4,8 +4,9 @@
 generate:
   - types
   - client
-# The App target never names a generated type: CubbyKit maps them at the boundary.
-accessModifier: internal
+# These land in the CubbyAPI target; `package` lets CubbyKit name them at its mapping
+# boundary while the App target, outside the package, still cannot.
+accessModifier: package
 namingStrategy: idiomatic
 filter:
   operations:

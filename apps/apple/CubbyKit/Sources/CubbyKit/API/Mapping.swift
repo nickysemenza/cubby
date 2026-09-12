@@ -1,3 +1,4 @@
+import CubbyAPI
 import Foundation
 
 /// The boundary between generated OpenAPI types and the domain types in `Models.swift`.

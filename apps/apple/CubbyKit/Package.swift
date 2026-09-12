@@ -27,9 +27,25 @@ let package = Package(
             name: "CubbyFFI",
             dependencies: ["CubbyFFIBinary"]
         ),
+        // swift-openapi-generator's ~58k-line output, isolated from the hand-written code so an
+        // edit to CubbyKit does not recompile it (Release/WMO archives and Debug incremental
+        // builds both paid that cost while it lived in CubbyKit). Generated symbols are
+        // `accessModifier: package`, so CubbyKit can name them and the App target cannot.
+        .target(
+            name: "CubbyAPI",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+            ],
+            // Line tables only: nothing here is ever stepped through, and full debug info for
+            // ~58k generated lines is what makes LLDB stall on launch (see apps/apple/CLAUDE.md's
+            // "Debugging on device"). `unsafeFlags` is safe because CubbyKit is only ever
+            // consumed as a local path dependency, never as a versioned remote package.
+            swiftSettings: [.unsafeFlags(["-gline-tables-only"])]
+        ),
         .target(
             name: "CubbyKit",
             dependencies: [
+                "CubbyAPI",
                 "CubbyFFI",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),

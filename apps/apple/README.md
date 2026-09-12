@@ -11,7 +11,8 @@ porting. See `/Users/nicky/.claude/plans/moonlit-juggling-finch.md` for the full
    `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`.
 2. `apps/apple/scripts/generate-openapi.sh` — runs the CLI `swift-openapi-generator` against
    `apps/web/src/lib/generated/http-openapi.gen.json`, writes committed sources under
-   `CubbyKit/Sources/CubbyKit/Generated/{Types,Client}.swift`.
+   `CubbyKit/Sources/CubbyAPI/{Types,Client}.swift`. That output is its own SPM target so a
+   hand-written CubbyKit edit no longer recompiles ~58k generated lines.
 3. `xcodegen generate --spec apps/apple/project.yml` — produces `Cubby.xcodeproj` (gitignored).
 
 If you see the literal error text `artifact of binary target 'CubbyFFIBinary' not found`, the
@@ -33,10 +34,13 @@ owned by W2 (this package, the app targets, and the CLI harness).
 - `CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift` — emitted by
   `scripts/entity-generator/render/swift-catalog.ts` from the entity spine. Regenerate with
   `pnpm entity:generate` from the repo root.
+- `CubbyKit/Sources/CubbyAPI/*.swift` — the whole `CubbyAPI` target is swift-openapi-generator's
+  output (`Client.swift` plus `Types*.swift`). Regenerate with
+  `apps/apple/scripts/generate-openapi.sh`; `check-openapi-drift.sh` fails when stale.
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — emitted by `uniffi-bindgen` from `cubby-ffi/`.
   Regenerate with `apps/apple/scripts/build-rust.sh`.
 
-Both are committed; hand-editing either fails the relevant `--check` gate.
+All are committed; hand-editing any of them fails the relevant `--check` gate.
 
 ## Verification
 

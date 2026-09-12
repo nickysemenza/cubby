@@ -25,12 +25,15 @@ Native PoC: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI harne
   first one.
 - Never name a `Components.Schemas.*_schemaNN` type, nor a positional `…Payload`/`InputSchemaNN`
   name, in hand-written Swift. Those are swift-openapi-generator's names for a 1,000+-schema doc
-  and are not stable across regeneration. Generated names are spelled only in five files —
-  `CubbyKit/Sources/CubbyKit/API/Mapping.swift`, `API/CubbyClient.swift`, `API/Pagination.swift`,
-  `API/CubbyAPIError.swift`, and `Generated/EntityOperations.swift` — and `accessModifier:
-  internal` in `openapi/openapi-generator-config.yaml` keeps every generated symbol out of reach
-  anywhere else in the module. Map generated types into hand-authored `Sendable` structs at that
-  boundary.
+  and are not stable across regeneration. The generator's output is its own SPM target,
+  `CubbyAPI` (`CubbyKit/Sources/CubbyAPI/`), so editing hand-written CubbyKit code no longer
+  recompiles ~58k generated lines. Generated names are spelled — and `import CubbyAPI` appears —
+  only in five files: `CubbyKit/Sources/CubbyKit/API/Mapping.swift`, `API/CubbyClient.swift`,
+  `API/Pagination.swift`, `API/CubbyAPIError.swift`, and `Generated/EntityOperations.swift`
+  (plus `Tests/CubbyKitTests/MappingTests.swift`). `accessModifier: package` in
+  `openapi/openapi-generator-config.yaml` lets those files inside the package name a generated
+  symbol while the App target, which is outside the package, still cannot. Map generated types
+  into hand-authored `Sendable` structs at that boundary.
 - Always pass `serverURL` explicitly when constructing a generated `Client`. The spec's `servers`
   entry is `"/"`, which is not a usable absolute URL on its own.
 
@@ -76,10 +79,11 @@ Native PoC: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI harne
   (repo root).
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
   `apps/apple/scripts/build-rust.sh`.
-- `CubbyKit/Sources/CubbyKit/Generated/{Client,Types+*}.swift` — swift-openapi-generator's typed
-  client and schema types, from `apps/web`'s committed OpenAPI document
-  (`apps/web/src/lib/generated/http-openapi.gen.json`). Regenerate with
-  `apps/apple/scripts/generate-openapi.sh`.
+- `CubbyKit/Sources/CubbyAPI/*.swift` (`Client.swift`, `Types*.swift`) — swift-openapi-generator's
+  typed client and schema types, from `apps/web`'s committed OpenAPI document
+  (`apps/web/src/lib/generated/http-openapi.gen.json`). The entire `CubbyAPI` target is generated,
+  which is why it is excluded from the `swift format` targets in `scripts/ci-scope.ts`. Regenerate
+  with `apps/apple/scripts/generate-openapi.sh`; `scripts/check-openapi-drift.sh` fails when stale.
 - `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations}.swift` — the runtime
   route table (`OperationRoute.all`) and the per-entity `list`/`get`/image-attach switches, from
   `apps/web/scripts/generate-http-openapi.ts` reading `openapi/native-operations.json`.

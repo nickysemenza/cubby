@@ -366,6 +366,8 @@ const runRustCheck = () => {
 // CubbyKit/Sources/CubbyKit/Generated is emitter-owned (see apps/apple/CLAUDE.md) and must never
 // be reformatted or linted. List that directory's other children instead of hand-maintaining
 // them, so a newly added sibling is picked up without touching this file.
+// Sources/CubbyAPI (swift-openapi-generator's whole target) is a sibling of Sources/CubbyKit, so
+// it is never enumerated here — keep it that way; it is generated end to end.
 const swiftFormatTargets = () => {
   const cubbyKitDir = "apps/apple/CubbyKit/Sources/CubbyKit";
   const siblingsOfGenerated = readdirSync(cubbyKitDir, { withFileTypes: true })

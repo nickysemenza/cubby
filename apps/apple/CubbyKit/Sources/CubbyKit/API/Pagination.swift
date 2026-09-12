@@ -1,3 +1,5 @@
+import CubbyAPI
+
 /// One page of rows. Every list endpoint declares its own generated page type — sixteen of them,
 /// one per entity, all with the same `{items, meta}` shape — so CubbyKit exposes one generic page
 /// instead of surfacing all sixteen.

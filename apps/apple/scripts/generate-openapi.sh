@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Regenerates CubbyKit's typed OpenAPI client from the web app's committed spec.
 #
-#   generate-openapi.sh                       write into CubbyKit/Sources/CubbyKit/Generated
+#   generate-openapi.sh                       write into CubbyKit/Sources/CubbyAPI
 #   generate-openapi.sh <out-dir>             write elsewhere (used by check-openapi-drift.sh)
 #   generate-openapi.sh --rebuild-generator   force a rebuild of the generator binary first
 #     (also settable via CUBBY_REBUILD_GENERATOR=1); may be combined with <out-dir>
@@ -25,7 +25,7 @@ for arg in "$@"; do
   fi
 done
 
-OUT="${ARGS[0]:-$IOS/CubbyKit/Sources/CubbyKit/Generated}"
+OUT="${ARGS[0]:-$IOS/CubbyKit/Sources/CubbyAPI}"
 SPEC="$ROOT/apps/web/src/lib/generated/http-openapi.gen.json"
 CONFIG="$IOS/openapi/openapi-generator-config.yaml"
 
@@ -46,8 +46,9 @@ if [ "$REBUILD_GENERATOR" = "1" ] \
 fi
 
 mkdir -p "$OUT"
-# Only the generator's own outputs are replaced; EntityCatalog.swift (from
-# `pnpm entity:generate`) lives in the same directory and is left alone.
+# CubbyAPI holds nothing but these files, so clearing them is enough; the other
+# generated Swift (EntityCatalog, OperationRoutes, EntityOperations) lives in
+# CubbyKit/Generated and belongs to other generators.
 rm -f "$OUT"/Types*.swift "$OUT"/Client.swift
 # The generator only warns when it silently drops a schema (a nullable union
 # member, an unsupported keyword), so any warning is a hole in the client.
