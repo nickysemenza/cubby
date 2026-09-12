@@ -624,14 +624,24 @@ public struct ParsedIngredient: Equatable, Hashable {
     public var amounts: [Amount]
     public var modifier: String?
     public var optional: Bool
+    /**
+     * The parser's own one-line rendering (`ingredient::Ingredient`'s `Display`), so Swift
+     * never formats amounts and units itself.
+     */
+    public var display: String
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(name: String, amounts: [Amount], modifier: String?, optional: Bool) {
+    public init(name: String, amounts: [Amount], modifier: String?, optional: Bool, 
+        /**
+         * The parser's own one-line rendering (`ingredient::Ingredient`'s `Display`), so Swift
+         * never formats amounts and units itself.
+         */display: String) {
         self.name = name
         self.amounts = amounts
         self.modifier = modifier
         self.optional = optional
+        self.display = display
     }
 
     
@@ -653,7 +663,8 @@ public struct FfiConverterTypeParsedIngredient: FfiConverterRustBuffer {
                 name: FfiConverterString.read(from: &buf), 
                 amounts: FfiConverterSequenceTypeAmount.read(from: &buf), 
                 modifier: FfiConverterOptionString.read(from: &buf), 
-                optional: FfiConverterBool.read(from: &buf)
+                optional: FfiConverterBool.read(from: &buf), 
+                display: FfiConverterString.read(from: &buf)
         )
     }
 
@@ -662,6 +673,7 @@ public struct FfiConverterTypeParsedIngredient: FfiConverterRustBuffer {
         FfiConverterSequenceTypeAmount.write(value.amounts, into: &buf)
         FfiConverterOptionString.write(value.modifier, into: &buf)
         FfiConverterBool.write(value.optional, into: &buf)
+        FfiConverterString.write(value.display, into: &buf)
     }
 }
 

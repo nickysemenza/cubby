@@ -15,17 +15,8 @@ public enum IngredientParser {
         public let amounts: [Amount]
         public let modifier: String?
         public let optional: Bool
-
-        /// "2 cups flour" style one-line summary, for the CLI and Dev screen.
-        public var summary: String {
-            let amount = amounts.map { a in
-                let value = a.value == a.value.rounded() ? String(Int(a.value)) : String(a.value)
-                let upper = a.upperValue.map { "-\($0)" } ?? ""
-                return "\(value)\(upper) \(a.unit)"
-            }.joined(separator: ", ")
-            let modifier = modifier.map { ", \($0)" } ?? ""
-            return "\(amount.isEmpty ? "" : amount + " ")\(name)\(modifier)\(optional ? " (optional)" : "")"
-        }
+        /// The parser's own "2 cups flour" rendering. Formatting lives in Rust, never here.
+        public let display: String
     }
 
     /// Infallible, like the Rust function: an unparseable line comes back name-only.
@@ -35,7 +26,8 @@ public enum IngredientParser {
             name: parsed.name,
             amounts: parsed.amounts.map { Amount(value: $0.value, upperValue: $0.upperValue, unit: $0.unit) },
             modifier: parsed.modifier,
-            optional: parsed.optional
+            optional: parsed.optional,
+            display: parsed.display
         )
     }
 

@@ -8,7 +8,7 @@ import Playgrounds
 
 #Playground("Parse an ingredient line") {
     let parsed = IngredientParser.parse("2 cups flour, sifted (optional)")
-    _ = parsed.summary
+    _ = parsed.display
     _ = parsed.amounts
     _ = IngredientParser.sizeUnitAliases.count
 }

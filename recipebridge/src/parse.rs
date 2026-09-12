@@ -324,6 +324,13 @@ pub fn parse_ingredient(input: &str) -> WIngredient {
     parse_ingredient_str(input).into()
 }
 
+/// The upstream parser's own one-line rendering of a parsed line ("2 cups flour, sifted
+/// (optional)"). Not a wasm export: the native client reaches it through `cubby-ffi`, so no
+/// consumer re-implements the formatter. The web renders from `WIngredient` fields today.
+pub fn format_ingredient(input: &str) -> String {
+    parse_ingredient_str(input).to_string()
+}
+
 /// `WIngredient[]` (`transparent` → `type WParsedLines = WIngredient[]`).
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi)]

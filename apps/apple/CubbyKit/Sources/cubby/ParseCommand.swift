@@ -37,7 +37,7 @@ struct Parse: AsyncParsableCommand {
             ])
             print(try CLI.prettyJSON(object))
         } else {
-            print(parsed.summary)
+            print(parsed.display)
         }
     }
 }

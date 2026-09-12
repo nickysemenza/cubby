@@ -40,15 +40,19 @@ pub struct ParsedIngredient {
     pub amounts: Vec<Amount>,
     pub modifier: Option<String>,
     pub optional: bool,
+    /// The parser's own one-line rendering (`ingredient::Ingredient`'s `Display`), so Swift
+    /// never formats amounts and units itself.
+    pub display: String,
 }
 
-impl From<recipebridge::WIngredient> for ParsedIngredient {
-    fn from(ingredient: recipebridge::WIngredient) -> Self {
+impl ParsedIngredient {
+    fn new(ingredient: recipebridge::WIngredient, display: String) -> Self {
         Self {
             name: ingredient.name,
             amounts: ingredient.amounts.into_iter().map(Amount::from).collect(),
             modifier: ingredient.modifier,
             optional: ingredient.optional,
+            display,
         }
     }
 }
@@ -58,7 +62,10 @@ impl From<recipebridge::WIngredient> for ParsedIngredient {
 /// consumer sees.
 #[uniffi::export]
 pub fn parse_ingredient(line: String) -> ParsedIngredient {
-    recipebridge::parse_ingredient(&line).into()
+    ParsedIngredient::new(
+        recipebridge::parse_ingredient(&line),
+        recipebridge::format_ingredient(&line),
+    )
 }
 
 /// The unit-alias vocabulary `parse_ingredient` recognizes for weight/volume
@@ -77,6 +84,8 @@ mod tests {
     fn parse_two_cups_flour() {
         let parsed = parse_ingredient("2 cups flour".to_string());
         assert_eq!(parsed.name, "flour");
+        assert!(parsed.display.starts_with("2 "), "{}", parsed.display);
+        assert!(parsed.display.ends_with("flour"), "{}", parsed.display);
         assert_eq!(parsed.amounts.len(), 1);
         let amount = &parsed.amounts[0];
         assert_eq!(amount.value, 2.0);
