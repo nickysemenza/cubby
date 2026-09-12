@@ -72,17 +72,56 @@ struct EntityDetailContent: View {
 
     private var stats: [EntityStat] { EntityFacts.stats(descriptor: descriptor, row: row) }
 
+    // Relationship reads for the two hand-tuned entities. Empty/nil everywhere else, so the
+    // generic path (every other entity) never pays for this.
+    private var productGallery: [ProductGalleryImage] {
+        descriptor.key == .product ? ProductRelations.gallery(from: row) : []
+    }
+    private var productStockedAt: [ProductStockLocation] {
+        descriptor.key == .product ? ProductRelations.stockedAt(from: row) : []
+    }
+    private var locationParent: LocationParentRef? {
+        descriptor.key == .location ? LocationRelations.parent(from: row) : nil
+    }
+    private var locationType: String? {
+        descriptor.key == .location ? row.raw["type"]?.stringValue : nil
+    }
+    private var locationAiDescription: String? {
+        guard descriptor.key == .location, let text = row.raw["aiDescription"]?.stringValue, !text.isEmpty
+        else { return nil }
+        return text
+    }
+    private var locationInventoryItems: [LocationInventoryItem] {
+        descriptor.key == .location ? LocationRelations.inventoryItems(from: row) : []
+    }
+    private var locationChildren: [LocationChildSummary] {
+        descriptor.key == .location ? LocationRelations.children(from: row) : []
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
                 hero
                 identity
+                if let locationAiDescription {
+                    Text(locationAiDescription)
+                        .font(.porcelainBody)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if !stats.isEmpty {
                     LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
                         ForEach(stats) { stat in
                             StatTile(label: stat.label, value: stat.value, detail: stat.detail, mono: stat.mono)
                         }
                     }
+                }
+                if descriptor.key == .product {
+                    ProductStockedAtSection(locations: productStockedAt)
+                }
+                if descriptor.key == .location {
+                    LocationContentsSection(items: locationInventoryItems)
+                    LocationSubLocationsSection(children: locationChildren)
                 }
                 if !detailRows.isEmpty {
                     VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
@@ -112,7 +151,9 @@ struct EntityDetailContent: View {
 
     @ViewBuilder
     private var hero: some View {
-        if let url = row.imageURL {
+        if descriptor.key == .product, productGallery.count > 1 {
+            ProductGalleryHero(images: productGallery, maxHeight: heroMaxHeight)
+        } else if let url = row.imageURL {
             RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
                 .fill(PorcelainTokens.inset)
                 .aspectRatio(4.0 / 3.0, contentMode: .fit)
@@ -155,6 +196,18 @@ struct EntityDetailContent: View {
 
     private var identity: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            if let parent = locationParent {
+                NavigationLink(value: Route.entityDetail(.location, id: parent.id)) {
+                    HStack(spacing: PorcelainTokens.Space.xs) {
+                        Image(systemName: "chevron.left")
+                            .font(.porcelainLabel.weight(.semibold))
+                        Text(parent.name)
+                            .font(.porcelainLabel)
+                    }
+                    .foregroundStyle(PorcelainTokens.cobalt)
+                }
+                .buttonStyle(.plain)
+            }
             Text(row.title)
                 .font(.title.weight(.semibold))
                 .tracking(-0.4)
@@ -176,6 +229,11 @@ struct EntityDetailContent: View {
                 Text(descriptor.singular)
                     .font(.porcelainLabel)
                     .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                if let locationType {
+                    Text("· \(locationType.capitalized)")
+                        .font(.porcelainLabel)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                }
             }
         }
     }
@@ -211,7 +269,12 @@ struct EntityDetailContent: View {
     /// grid already show. A detail screen that repeats its own title is a form, not a record.
     private var detailRows: [(field: FieldDescriptor, value: String)] {
         let claimedLabels = Set(stats.map(\.label))
-        let identityKeys: Set<String> = ["id", "shortcode", descriptor.titleField]
+        var identityKeys: Set<String> = ["id", "shortcode", descriptor.titleField]
+        if descriptor.key == .location {
+            // Shown instead by the identity breadcrumb (`parentId`/`type`) and the quiet paragraph
+            // (`aiDescription`) above — repeating them here would be the same fact twice.
+            identityKeys.formUnion(["type", "parentId", "aiDescription"])
+        }
         return
             descriptor.fields
             .filter(\.showInDetail)
@@ -266,5 +329,78 @@ struct EntityDetailContent: View {
     NavigationStack {
         EntityDetailContent(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow)
             .navigationTitle("Cast Iron Skillet")
+    }
+}
+
+/// A product with more than one uploaded photo and multiple `inventoryEntry` rows, so the gallery
+/// swap and "Stocked at" panel both render. Private to this file — no network, no `PreviewFixtures`.
+#Preview("Product with gallery + stock") {
+    let raw: JSONValue = .object([
+        "id": .string("PRD-2345"),
+        "name": .string("Cast Iron Skillet"),
+        "manufacturer": .string("Lodge"),
+        "category": .string("Cookware"),
+        "primaryGtin": .string("00075536010014"),
+        "onHandUnits": .number(3),
+        "pricing": .object(["effectivePrice": .number(24.95), "source": .string("derived")]),
+        "images": .array([
+            .object(["id": .string("IMG-1"), "status": .string("UPLOADED"), "url": .string("https://images.cubby.invalid/skillet-1.jpg")]),
+            .object(["id": .string("IMG-2"), "status": .string("UPLOADED"), "url": .string("https://images.cubby.invalid/skillet-2.jpg")]),
+            .object(["id": .string("IMG-3"), "status": .string("PENDING"), "url": .string("https://images.cubby.invalid/skillet-3.jpg")]),
+        ]),
+        "inventoryEntry": .array([
+            .object([
+                "id": .string("IE-1"),
+                "amount": .object(["value": .number(2), "unit": .string("units")]),
+                "placement": .string("stock"),
+                "location": .object([
+                    "id": .string("LOC-1001"), "name": .string("Pantry Shelf B"),
+                    "ancestors": .array([.object(["id": .string("LOC-1"), "name": .string("Kitchen")])]),
+                ]),
+            ]),
+            .object([
+                "id": .string("IE-2"),
+                "amount": .object(["value": .number(1), "unit": .string("units")]),
+                "placement": .string("installed"),
+                "location": .object(["id": .string("LOC-1002"), "name": .string("Garage Cabinet"), "ancestors": .array([])]),
+            ]),
+        ]),
+    ])
+    let row = EntityRow(id: "PRD-2345", title: "Cast Iron Skillet", subtitle: "Lodge", imageURL: nil, raw: raw)
+    return NavigationStack {
+        EntityDetailContent(descriptor: EntityCatalog[.product], row: row)
+            .navigationTitle("Cast Iron Skillet")
+    }
+}
+
+/// A location with a parent, direct inventory, and sub-locations, so the breadcrumb, "Contents",
+/// and "Sub-locations" panels all render.
+#Preview("Location with parent + contents") {
+    let raw: JSONValue = .object([
+        "id": .string("LOC-1001"),
+        "name": .string("Pantry Shelf B"),
+        "type": .string("shelf"),
+        "aiDescription": .string("Dry goods and cast iron, middle shelf of the pantry."),
+        "directItemCount": .number(2),
+        "totalItemCount": .number(5),
+        "parent": .object(["id": .string("LOC-1"), "name": .string("Kitchen Pantry")]),
+        "inventoryItems": .array([
+            .object([
+                "id": .string("INV-1"), "productId": .string("PRD-2345"), "productName": .string("Cast Iron Skillet"),
+                "amount": .object(["value": .number(1), "unit": .string("units")]),
+            ]),
+            .object([
+                "id": .string("INV-2"), "productId": .string("PRD-2346"), "productName": .string("Enameled Dutch Oven"),
+                "amount": .object(["value": .number(1), "unit": .string("units")]),
+            ]),
+        ]),
+        "children": .array([
+            .object(["id": .string("LOC-1002"), "name": .string("Shelf B, left bin"), "directItemCount": .number(3)]),
+        ]),
+    ])
+    let row = EntityRow(id: "LOC-1001", title: "Pantry Shelf B", subtitle: nil, imageURL: nil, raw: raw)
+    return NavigationStack {
+        EntityDetailContent(descriptor: EntityCatalog[.location], row: row)
+            .navigationTitle("Pantry Shelf B")
     }
 }

@@ -10,6 +10,9 @@ struct CubbyApp: App {
             RootView()
                 .environment(model)
                 .tint(PorcelainTokens.cobalt)
+                // Porcelain Transit is a light-only palette (DESIGN.md). Pin the scheme so the
+                // system chrome never goes dark over a porcelain canvas; dark tokens come later.
+                .preferredColorScheme(.light)
                 .task { await model.restoreSession() }
         }
         #if os(macOS)

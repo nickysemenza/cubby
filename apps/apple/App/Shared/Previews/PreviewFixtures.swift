@@ -64,4 +64,29 @@ enum PreviewFixtures {
         context.fill(CGRect(x: 0, y: 0, width: size, height: size))
         return context.makeImage()!
     }()
+
+    /// `task.todayBriefing`'s `next` rows, for `TodayView`'s preview.
+    static let sampleTodayTasks: [TodayTask] = [
+        TodayTask(
+            id: "TSK-1001", name: "Refill pantry staples list", status: "in_progress",
+            dueDate: "2026-09-11", projectName: "Kitchen"
+        ),
+        TodayTask(
+            id: "TSK-1002", name: "Ship the porcelain overhaul PR", status: "not_started",
+            dueDate: "2026-09-12", projectName: "Cubby app"
+        ),
+        TodayTask(id: "TSK-1003", name: "Call the fridge repair vendor back", status: "not_started"),
+    ]
+
+    /// Today's `GET /api/v1/meals` rows, for `TodayView`'s preview.
+    static let sampleTodayMeals: [TodayMeal] = [
+        TodayMeal(
+            id: "MEA-2001", name: "Dinner", mealType: "dinner", mealKind: "cooked",
+            recipeNames: ["Braised Short Ribs", "Roasted Carrots"]
+        ),
+        TodayMeal(id: "MEA-2002", name: "Lunch", mealType: "lunch", mealKind: "leftovers"),
+    ]
+
+    /// `problems/getCounts`, for `TodayView`'s preview.
+    static let sampleTodayProblems = TodayProblemCounts(total: 14, coverageTotal: 3)
 }

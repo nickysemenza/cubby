@@ -61,10 +61,19 @@ enum EntityFacts {
         case .product:
             if let onHand = number(raw["onHandUnits"]) {
                 stats.append(EntityStat(label: "On hand", value: format(onHand), detail: "units"))
+            } else if let entries = raw["inventoryEntry"]?.arrayValue, !entries.isEmpty {
+                stats.append(
+                    EntityStat(
+                        label: "On hand", value: format(Double(entries.count)),
+                        detail: entries.count == 1 ? "location" : "locations"
+                    )
+                )
             } else if let expected = number(raw["expectedQuantity"]) {
                 stats.append(EntityStat(label: "Expected", value: format(expected), detail: "units"))
             }
-            if let price = money(raw["price"]) {
+            // `pricing.effectivePrice` reflects the derived/explicit split; `price` is the plain
+            // fallback for entities the pricing endpoint hasn't touched.
+            if let price = money(raw["pricing"]?["effectivePrice"]) ?? money(raw["price"]) {
                 stats.append(EntityStat(label: "Price", value: price, detail: "valuation"))
             }
             if let category = raw["category"]?.stringValue ?? raw["model"]?.stringValue {
@@ -74,17 +83,17 @@ enum EntityFacts {
                 stats.append(EntityStat(label: "Barcode", value: gtin, mono: true))
             }
         case .location:
-            if let type = raw["type"]?.stringValue ?? raw["product"]?["name"]?.stringValue {
-                stats.append(EntityStat(label: "Type", value: type))
+            // Type and the parent link move into the identity block (`EntityDetailContent`); these
+            // three stay exactly as `DetailRelations` expects them, capped short of the generic
+            // fallback below so a leaf location doesn't also grow a redundant "Type" tile.
+            if let directCount = number(raw["directItemCount"]) {
+                stats.append(EntityStat(label: "Items here", value: format(directCount)))
             }
-            if let count = number(raw["itemCount"]) ?? number(raw["childCount"]) {
-                stats.append(EntityStat(label: "Items", value: format(count)))
+            if let totalCount = number(raw["totalItemCount"]) {
+                stats.append(EntityStat(label: "Items in tree", value: format(totalCount)))
             }
-            if let path = raw["path"]?.stringValue {
-                stats.append(EntityStat(label: "Path", value: path))
-            }
-            if let recount = date(raw["lastBulkInventory"]) {
-                stats.append(EntityStat(label: "Last recount", value: recount))
+            if let children = raw["children"]?.arrayValue {
+                stats.append(EntityStat(label: "Sub-locations", value: format(Double(children.count))))
             }
         case .inventory:
             if let amount = amount(raw["amount"]) {
@@ -120,7 +129,7 @@ enum EntityFacts {
             break
         }
 
-        if stats.count < 4 {
+        if stats.count < 4, descriptor.key != .location {
             stats += fallbackStats(descriptor: descriptor, row: row, excluding: Set(stats.map(\.label)))
         }
         return Array(stats.prefix(4))
