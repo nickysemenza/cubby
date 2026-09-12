@@ -67,69 +67,42 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/products`.
     /// - Remark: Generated from `#/paths//api/v1/products/get(resources.product.list)`.
     func resources_product_list(_ input: Operations.Resources_product_list.Input) async throws -> Operations.Resources_product_list.Output
-    /// - Remark: HTTP `POST /api/v1/products`.
-    /// - Remark: Generated from `#/paths//api/v1/products/post(resources.product.create)`.
-    func resources_product_create(_ input: Operations.Resources_product_create.Input) async throws -> Operations.Resources_product_create.Output
     /// - Remark: HTTP `GET /api/v1/products/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/products/{id}/get(resources.product.get)`.
     func resources_product_get(_ input: Operations.Resources_product_get.Input) async throws -> Operations.Resources_product_get.Output
     /// - Remark: HTTP `PATCH /api/v1/products/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/products/{id}/patch(resources.product.update)`.
     func resources_product_update(_ input: Operations.Resources_product_update.Input) async throws -> Operations.Resources_product_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/products/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/products/{id}/delete(resources.product.delete)`.
-    func resources_product_delete(_ input: Operations.Resources_product_delete.Input) async throws -> Operations.Resources_product_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/recipes`.
     /// - Remark: Generated from `#/paths//api/v1/recipes/get(resources.recipe.list)`.
     func resources_recipe_list(_ input: Operations.Resources_recipe_list.Input) async throws -> Operations.Resources_recipe_list.Output
-    /// - Remark: HTTP `POST /api/v1/recipes`.
-    /// - Remark: Generated from `#/paths//api/v1/recipes/post(resources.recipe.create)`.
-    func resources_recipe_create(_ input: Operations.Resources_recipe_create.Input) async throws -> Operations.Resources_recipe_create.Output
     /// - Remark: HTTP `GET /api/v1/recipes/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/get(resources.recipe.get)`.
     func resources_recipe_get(_ input: Operations.Resources_recipe_get.Input) async throws -> Operations.Resources_recipe_get.Output
     /// - Remark: HTTP `PATCH /api/v1/recipes/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/patch(resources.recipe.update)`.
     func resources_recipe_update(_ input: Operations.Resources_recipe_update.Input) async throws -> Operations.Resources_recipe_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/recipes/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/delete(resources.recipe.delete)`.
-    func resources_recipe_delete(_ input: Operations.Resources_recipe_delete.Input) async throws -> Operations.Resources_recipe_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/ingredients`.
     /// - Remark: Generated from `#/paths//api/v1/ingredients/get(resources.ingredient.list)`.
     func resources_ingredient_list(_ input: Operations.Resources_ingredient_list.Input) async throws -> Operations.Resources_ingredient_list.Output
-    /// - Remark: HTTP `POST /api/v1/ingredients`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/post(resources.ingredient.create)`.
-    func resources_ingredient_create(_ input: Operations.Resources_ingredient_create.Input) async throws -> Operations.Resources_ingredient_create.Output
     /// - Remark: HTTP `GET /api/v1/ingredients/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)`.
     func resources_ingredient_get(_ input: Operations.Resources_ingredient_get.Input) async throws -> Operations.Resources_ingredient_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/ingredients/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)`.
-    func resources_ingredient_update(_ input: Operations.Resources_ingredient_update.Input) async throws -> Operations.Resources_ingredient_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/ingredients/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/delete(resources.ingredient.delete)`.
-    func resources_ingredient_delete(_ input: Operations.Resources_ingredient_delete.Input) async throws -> Operations.Resources_ingredient_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/locations`.
     /// - Remark: Generated from `#/paths//api/v1/locations/get(resources.location.list)`.
     func resources_location_list(_ input: Operations.Resources_location_list.Input) async throws -> Operations.Resources_location_list.Output
-    /// - Remark: HTTP `POST /api/v1/locations`.
-    /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)`.
-    func resources_location_create(_ input: Operations.Resources_location_create.Input) async throws -> Operations.Resources_location_create.Output
     /// - Remark: HTTP `GET /api/v1/locations/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/locations/{id}/get(resources.location.get)`.
     func resources_location_get(_ input: Operations.Resources_location_get.Input) async throws -> Operations.Resources_location_get.Output
     /// - Remark: HTTP `PATCH /api/v1/locations/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)`.
     func resources_location_update(_ input: Operations.Resources_location_update.Input) async throws -> Operations.Resources_location_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/locations/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/locations/{id}/delete(resources.location.delete)`.
-    func resources_location_delete(_ input: Operations.Resources_location_delete.Input) async throws -> Operations.Resources_location_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/inventory`.
@@ -141,205 +114,97 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/inventory/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/get(resources.inventory.get)`.
     func resources_inventory_get(_ input: Operations.Resources_inventory_get.Input) async throws -> Operations.Resources_inventory_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/inventory/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/patch(resources.inventory.update)`.
-    func resources_inventory_update(_ input: Operations.Resources_inventory_update.Input) async throws -> Operations.Resources_inventory_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/inventory/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/delete(resources.inventory.delete)`.
-    func resources_inventory_delete(_ input: Operations.Resources_inventory_delete.Input) async throws -> Operations.Resources_inventory_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/meals`.
     /// - Remark: Generated from `#/paths//api/v1/meals/get(resources.meal.list)`.
     func resources_meal_list(_ input: Operations.Resources_meal_list.Input) async throws -> Operations.Resources_meal_list.Output
-    /// - Remark: HTTP `POST /api/v1/meals`.
-    /// - Remark: Generated from `#/paths//api/v1/meals/post(resources.meal.create)`.
-    func resources_meal_create(_ input: Operations.Resources_meal_create.Input) async throws -> Operations.Resources_meal_create.Output
     /// - Remark: HTTP `GET /api/v1/meals/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)`.
     func resources_meal_get(_ input: Operations.Resources_meal_get.Input) async throws -> Operations.Resources_meal_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/meals/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/meals/{id}/patch(resources.meal.update)`.
-    func resources_meal_update(_ input: Operations.Resources_meal_update.Input) async throws -> Operations.Resources_meal_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/meals/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/meals/{id}/delete(resources.meal.delete)`.
-    func resources_meal_delete(_ input: Operations.Resources_meal_delete.Input) async throws -> Operations.Resources_meal_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/ledger-parties`.
     /// - Remark: Generated from `#/paths//api/v1/ledger-parties/get(resources.ledgerParty.list)`.
     func resources_ledgerParty_list(_ input: Operations.Resources_ledgerParty_list.Input) async throws -> Operations.Resources_ledgerParty_list.Output
-    /// - Remark: HTTP `POST /api/v1/ledger-parties`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/post(resources.ledgerParty.create)`.
-    func resources_ledgerParty_create(_ input: Operations.Resources_ledgerParty_create.Input) async throws -> Operations.Resources_ledgerParty_create.Output
     /// - Remark: HTTP `GET /api/v1/ledger-parties/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/get(resources.ledgerParty.get)`.
     func resources_ledgerParty_get(_ input: Operations.Resources_ledgerParty_get.Input) async throws -> Operations.Resources_ledgerParty_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/ledger-parties/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/patch(resources.ledgerParty.update)`.
-    func resources_ledgerParty_update(_ input: Operations.Resources_ledgerParty_update.Input) async throws -> Operations.Resources_ledgerParty_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/ledger-parties/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/delete(resources.ledgerParty.delete)`.
-    func resources_ledgerParty_delete(_ input: Operations.Resources_ledgerParty_delete.Input) async throws -> Operations.Resources_ledgerParty_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/ledger-transfers`.
     /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/get(resources.ledgerTransfer.list)`.
     func resources_ledgerTransfer_list(_ input: Operations.Resources_ledgerTransfer_list.Input) async throws -> Operations.Resources_ledgerTransfer_list.Output
-    /// - Remark: HTTP `POST /api/v1/ledger-transfers`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/post(resources.ledgerTransfer.create)`.
-    func resources_ledgerTransfer_create(_ input: Operations.Resources_ledgerTransfer_create.Input) async throws -> Operations.Resources_ledgerTransfer_create.Output
     /// - Remark: HTTP `GET /api/v1/ledger-transfers/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/get(resources.ledgerTransfer.get)`.
     func resources_ledgerTransfer_get(_ input: Operations.Resources_ledgerTransfer_get.Input) async throws -> Operations.Resources_ledgerTransfer_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/ledger-transfers/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/patch(resources.ledgerTransfer.update)`.
-    func resources_ledgerTransfer_update(_ input: Operations.Resources_ledgerTransfer_update.Input) async throws -> Operations.Resources_ledgerTransfer_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/ledger-transfers/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/delete(resources.ledgerTransfer.delete)`.
-    func resources_ledgerTransfer_delete(_ input: Operations.Resources_ledgerTransfer_delete.Input) async throws -> Operations.Resources_ledgerTransfer_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/projects`.
     /// - Remark: Generated from `#/paths//api/v1/projects/get(resources.project.list)`.
     func resources_project_list(_ input: Operations.Resources_project_list.Input) async throws -> Operations.Resources_project_list.Output
-    /// - Remark: HTTP `POST /api/v1/projects`.
-    /// - Remark: Generated from `#/paths//api/v1/projects/post(resources.project.create)`.
-    func resources_project_create(_ input: Operations.Resources_project_create.Input) async throws -> Operations.Resources_project_create.Output
     /// - Remark: HTTP `GET /api/v1/projects/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/projects/{id}/get(resources.project.get)`.
     func resources_project_get(_ input: Operations.Resources_project_get.Input) async throws -> Operations.Resources_project_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/projects/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/projects/{id}/patch(resources.project.update)`.
-    func resources_project_update(_ input: Operations.Resources_project_update.Input) async throws -> Operations.Resources_project_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/projects/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/projects/{id}/delete(resources.project.delete)`.
-    func resources_project_delete(_ input: Operations.Resources_project_delete.Input) async throws -> Operations.Resources_project_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/tasks`.
     /// - Remark: Generated from `#/paths//api/v1/tasks/get(resources.task.list)`.
     func resources_task_list(_ input: Operations.Resources_task_list.Input) async throws -> Operations.Resources_task_list.Output
-    /// - Remark: HTTP `POST /api/v1/tasks`.
-    /// - Remark: Generated from `#/paths//api/v1/tasks/post(resources.task.create)`.
-    func resources_task_create(_ input: Operations.Resources_task_create.Input) async throws -> Operations.Resources_task_create.Output
     /// - Remark: HTTP `GET /api/v1/tasks/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)`.
     func resources_task_get(_ input: Operations.Resources_task_get.Input) async throws -> Operations.Resources_task_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/tasks/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/patch(resources.task.update)`.
-    func resources_task_update(_ input: Operations.Resources_task_update.Input) async throws -> Operations.Resources_task_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/tasks/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/delete(resources.task.delete)`.
-    func resources_task_delete(_ input: Operations.Resources_task_delete.Input) async throws -> Operations.Resources_task_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/vendors`.
     /// - Remark: Generated from `#/paths//api/v1/vendors/get(resources.vendor.list)`.
     func resources_vendor_list(_ input: Operations.Resources_vendor_list.Input) async throws -> Operations.Resources_vendor_list.Output
-    /// - Remark: HTTP `POST /api/v1/vendors`.
-    /// - Remark: Generated from `#/paths//api/v1/vendors/post(resources.vendor.create)`.
-    func resources_vendor_create(_ input: Operations.Resources_vendor_create.Input) async throws -> Operations.Resources_vendor_create.Output
     /// - Remark: HTTP `GET /api/v1/vendors/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/get(resources.vendor.get)`.
     func resources_vendor_get(_ input: Operations.Resources_vendor_get.Input) async throws -> Operations.Resources_vendor_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/vendors/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/patch(resources.vendor.update)`.
-    func resources_vendor_update(_ input: Operations.Resources_vendor_update.Input) async throws -> Operations.Resources_vendor_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/vendors/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/delete(resources.vendor.delete)`.
-    func resources_vendor_delete(_ input: Operations.Resources_vendor_delete.Input) async throws -> Operations.Resources_vendor_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/purchases`.
     /// - Remark: Generated from `#/paths//api/v1/purchases/get(resources.purchase.list)`.
     func resources_purchase_list(_ input: Operations.Resources_purchase_list.Input) async throws -> Operations.Resources_purchase_list.Output
-    /// - Remark: HTTP `POST /api/v1/purchases`.
-    /// - Remark: Generated from `#/paths//api/v1/purchases/post(resources.purchase.create)`.
-    func resources_purchase_create(_ input: Operations.Resources_purchase_create.Input) async throws -> Operations.Resources_purchase_create.Output
     /// - Remark: HTTP `GET /api/v1/purchases/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/purchases/{id}/get(resources.purchase.get)`.
     func resources_purchase_get(_ input: Operations.Resources_purchase_get.Input) async throws -> Operations.Resources_purchase_get.Output
     /// - Remark: HTTP `PATCH /api/v1/purchases/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/purchases/{id}/patch(resources.purchase.update)`.
     func resources_purchase_update(_ input: Operations.Resources_purchase_update.Input) async throws -> Operations.Resources_purchase_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/purchases/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/purchases/{id}/delete(resources.purchase.delete)`.
-    func resources_purchase_delete(_ input: Operations.Resources_purchase_delete.Input) async throws -> Operations.Resources_purchase_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/financial-accounts`.
     /// - Remark: Generated from `#/paths//api/v1/financial-accounts/get(resources.financialAccount.list)`.
     func resources_financialAccount_list(_ input: Operations.Resources_financialAccount_list.Input) async throws -> Operations.Resources_financialAccount_list.Output
-    /// - Remark: HTTP `POST /api/v1/financial-accounts`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/post(resources.financialAccount.create)`.
-    func resources_financialAccount_create(_ input: Operations.Resources_financialAccount_create.Input) async throws -> Operations.Resources_financialAccount_create.Output
     /// - Remark: HTTP `GET /api/v1/financial-accounts/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/get(resources.financialAccount.get)`.
     func resources_financialAccount_get(_ input: Operations.Resources_financialAccount_get.Input) async throws -> Operations.Resources_financialAccount_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/financial-accounts/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/patch(resources.financialAccount.update)`.
-    func resources_financialAccount_update(_ input: Operations.Resources_financialAccount_update.Input) async throws -> Operations.Resources_financialAccount_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/financial-accounts/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/delete(resources.financialAccount.delete)`.
-    func resources_financialAccount_delete(_ input: Operations.Resources_financialAccount_delete.Input) async throws -> Operations.Resources_financialAccount_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/financial-transactions`.
     /// - Remark: Generated from `#/paths//api/v1/financial-transactions/get(resources.financialTransaction.list)`.
     func resources_financialTransaction_list(_ input: Operations.Resources_financialTransaction_list.Input) async throws -> Operations.Resources_financialTransaction_list.Output
-    /// - Remark: HTTP `POST /api/v1/financial-transactions`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/post(resources.financialTransaction.create)`.
-    func resources_financialTransaction_create(_ input: Operations.Resources_financialTransaction_create.Input) async throws -> Operations.Resources_financialTransaction_create.Output
     /// - Remark: HTTP `GET /api/v1/financial-transactions/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/get(resources.financialTransaction.get)`.
     func resources_financialTransaction_get(_ input: Operations.Resources_financialTransaction_get.Input) async throws -> Operations.Resources_financialTransaction_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/financial-transactions/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/patch(resources.financialTransaction.update)`.
-    func resources_financialTransaction_update(_ input: Operations.Resources_financialTransaction_update.Input) async throws -> Operations.Resources_financialTransaction_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/financial-transactions/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/delete(resources.financialTransaction.delete)`.
-    func resources_financialTransaction_delete(_ input: Operations.Resources_financialTransaction_delete.Input) async throws -> Operations.Resources_financialTransaction_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/wishes`.
     /// - Remark: Generated from `#/paths//api/v1/wishes/get(resources.wish.list)`.
     func resources_wish_list(_ input: Operations.Resources_wish_list.Input) async throws -> Operations.Resources_wish_list.Output
-    /// - Remark: HTTP `POST /api/v1/wishes`.
-    /// - Remark: Generated from `#/paths//api/v1/wishes/post(resources.wish.create)`.
-    func resources_wish_create(_ input: Operations.Resources_wish_create.Input) async throws -> Operations.Resources_wish_create.Output
     /// - Remark: HTTP `GET /api/v1/wishes/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/wishes/{id}/get(resources.wish.get)`.
     func resources_wish_get(_ input: Operations.Resources_wish_get.Input) async throws -> Operations.Resources_wish_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/wishes/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/wishes/{id}/patch(resources.wish.update)`.
-    func resources_wish_update(_ input: Operations.Resources_wish_update.Input) async throws -> Operations.Resources_wish_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/wishes/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/wishes/{id}/delete(resources.wish.delete)`.
-    func resources_wish_delete(_ input: Operations.Resources_wish_delete.Input) async throws -> Operations.Resources_wish_delete.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/expenses`.
     /// - Remark: Generated from `#/paths//api/v1/expenses/get(resources.expense.list)`.
     func resources_expense_list(_ input: Operations.Resources_expense_list.Input) async throws -> Operations.Resources_expense_list.Output
-    /// - Remark: HTTP `POST /api/v1/expenses`.
-    /// - Remark: Generated from `#/paths//api/v1/expenses/post(resources.expense.create)`.
-    func resources_expense_create(_ input: Operations.Resources_expense_create.Input) async throws -> Operations.Resources_expense_create.Output
     /// - Remark: HTTP `GET /api/v1/expenses/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)`.
     func resources_expense_get(_ input: Operations.Resources_expense_get.Input) async throws -> Operations.Resources_expense_get.Output
-    /// - Remark: HTTP `PATCH /api/v1/expenses/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/patch(resources.expense.update)`.
-    func resources_expense_update(_ input: Operations.Resources_expense_update.Input) async throws -> Operations.Resources_expense_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/expenses/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/delete(resources.expense.delete)`.
-    func resources_expense_delete(_ input: Operations.Resources_expense_delete.Input) async throws -> Operations.Resources_expense_delete.Output
-    /// - Remark: HTTP `PATCH /api/v1/images/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/images/{id}/patch(resources.image.update)`.
-    func resources_image_update(_ input: Operations.Resources_image_update.Input) async throws -> Operations.Resources_image_update.Output
-    /// - Remark: HTTP `DELETE /api/v1/images/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/images/{id}/delete(resources.image.delete)`.
-    func resources_image_delete(_ input: Operations.Resources_image_delete.Input) async throws -> Operations.Resources_image_delete.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -520,17 +385,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/products`.
-    /// - Remark: Generated from `#/paths//api/v1/products/post(resources.product.create)`.
-    package func resources_product_create(
-        headers: Operations.Resources_product_create.Input.Headers = .init(),
-        body: Operations.Resources_product_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_product_create.Output {
-        try await resources_product_create(Operations.Resources_product_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/products/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/products/{id}/get(resources.product.get)`.
     package func resources_product_get(
@@ -555,17 +409,6 @@ extension APIProtocol {
             body: body
         ))
     }
-    /// - Remark: HTTP `DELETE /api/v1/products/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/products/{id}/delete(resources.product.delete)`.
-    package func resources_product_delete(
-        path: Operations.Resources_product_delete.Input.Path,
-        headers: Operations.Resources_product_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_product_delete.Output {
-        try await resources_product_delete(Operations.Resources_product_delete.Input(
-            path: path,
-            headers: headers
-        ))
-    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/recipes`.
@@ -577,17 +420,6 @@ extension APIProtocol {
         try await resources_recipe_list(Operations.Resources_recipe_list.Input(
             query: query,
             headers: headers
-        ))
-    }
-    /// - Remark: HTTP `POST /api/v1/recipes`.
-    /// - Remark: Generated from `#/paths//api/v1/recipes/post(resources.recipe.create)`.
-    package func resources_recipe_create(
-        headers: Operations.Resources_recipe_create.Input.Headers = .init(),
-        body: Operations.Resources_recipe_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_recipe_create.Output {
-        try await resources_recipe_create(Operations.Resources_recipe_create.Input(
-            headers: headers,
-            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/recipes/{id}`.
@@ -614,17 +446,6 @@ extension APIProtocol {
             body: body
         ))
     }
-    /// - Remark: HTTP `DELETE /api/v1/recipes/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/delete(resources.recipe.delete)`.
-    package func resources_recipe_delete(
-        path: Operations.Resources_recipe_delete.Input.Path,
-        headers: Operations.Resources_recipe_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_recipe_delete.Output {
-        try await resources_recipe_delete(Operations.Resources_recipe_delete.Input(
-            path: path,
-            headers: headers
-        ))
-    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/ingredients`.
@@ -638,17 +459,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/ingredients`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/post(resources.ingredient.create)`.
-    package func resources_ingredient_create(
-        headers: Operations.Resources_ingredient_create.Input.Headers = .init(),
-        body: Operations.Resources_ingredient_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_ingredient_create.Output {
-        try await resources_ingredient_create(Operations.Resources_ingredient_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/ingredients/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)`.
     package func resources_ingredient_get(
@@ -656,30 +466,6 @@ extension APIProtocol {
         headers: Operations.Resources_ingredient_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_ingredient_get.Output {
         try await resources_ingredient_get(Operations.Resources_ingredient_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/ingredients/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)`.
-    package func resources_ingredient_update(
-        path: Operations.Resources_ingredient_update.Input.Path,
-        headers: Operations.Resources_ingredient_update.Input.Headers = .init(),
-        body: Operations.Resources_ingredient_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_ingredient_update.Output {
-        try await resources_ingredient_update(Operations.Resources_ingredient_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/ingredients/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/delete(resources.ingredient.delete)`.
-    package func resources_ingredient_delete(
-        path: Operations.Resources_ingredient_delete.Input.Path,
-        headers: Operations.Resources_ingredient_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_ingredient_delete.Output {
-        try await resources_ingredient_delete(Operations.Resources_ingredient_delete.Input(
             path: path,
             headers: headers
         ))
@@ -695,17 +481,6 @@ extension APIProtocol {
         try await resources_location_list(Operations.Resources_location_list.Input(
             query: query,
             headers: headers
-        ))
-    }
-    /// - Remark: HTTP `POST /api/v1/locations`.
-    /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)`.
-    package func resources_location_create(
-        headers: Operations.Resources_location_create.Input.Headers = .init(),
-        body: Operations.Resources_location_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_location_create.Output {
-        try await resources_location_create(Operations.Resources_location_create.Input(
-            headers: headers,
-            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/locations/{id}`.
@@ -730,17 +505,6 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/locations/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/locations/{id}/delete(resources.location.delete)`.
-    package func resources_location_delete(
-        path: Operations.Resources_location_delete.Input.Path,
-        headers: Operations.Resources_location_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_location_delete.Output {
-        try await resources_location_delete(Operations.Resources_location_delete.Input(
-            path: path,
-            headers: headers
         ))
     }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
@@ -778,30 +542,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `PATCH /api/v1/inventory/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/patch(resources.inventory.update)`.
-    package func resources_inventory_update(
-        path: Operations.Resources_inventory_update.Input.Path,
-        headers: Operations.Resources_inventory_update.Input.Headers = .init(),
-        body: Operations.Resources_inventory_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_inventory_update.Output {
-        try await resources_inventory_update(Operations.Resources_inventory_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/inventory/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/delete(resources.inventory.delete)`.
-    package func resources_inventory_delete(
-        path: Operations.Resources_inventory_delete.Input.Path,
-        headers: Operations.Resources_inventory_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_inventory_delete.Output {
-        try await resources_inventory_delete(Operations.Resources_inventory_delete.Input(
-            path: path,
-            headers: headers
-        ))
-    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/meals`.
@@ -815,17 +555,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/meals`.
-    /// - Remark: Generated from `#/paths//api/v1/meals/post(resources.meal.create)`.
-    package func resources_meal_create(
-        headers: Operations.Resources_meal_create.Input.Headers = .init(),
-        body: Operations.Resources_meal_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_meal_create.Output {
-        try await resources_meal_create(Operations.Resources_meal_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/meals/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)`.
     package func resources_meal_get(
@@ -833,30 +562,6 @@ extension APIProtocol {
         headers: Operations.Resources_meal_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_meal_get.Output {
         try await resources_meal_get(Operations.Resources_meal_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/meals/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/meals/{id}/patch(resources.meal.update)`.
-    package func resources_meal_update(
-        path: Operations.Resources_meal_update.Input.Path,
-        headers: Operations.Resources_meal_update.Input.Headers = .init(),
-        body: Operations.Resources_meal_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_meal_update.Output {
-        try await resources_meal_update(Operations.Resources_meal_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/meals/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/meals/{id}/delete(resources.meal.delete)`.
-    package func resources_meal_delete(
-        path: Operations.Resources_meal_delete.Input.Path,
-        headers: Operations.Resources_meal_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_meal_delete.Output {
-        try await resources_meal_delete(Operations.Resources_meal_delete.Input(
             path: path,
             headers: headers
         ))
@@ -874,17 +579,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/ledger-parties`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/post(resources.ledgerParty.create)`.
-    package func resources_ledgerParty_create(
-        headers: Operations.Resources_ledgerParty_create.Input.Headers = .init(),
-        body: Operations.Resources_ledgerParty_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_ledgerParty_create.Output {
-        try await resources_ledgerParty_create(Operations.Resources_ledgerParty_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/ledger-parties/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/get(resources.ledgerParty.get)`.
     package func resources_ledgerParty_get(
@@ -892,30 +586,6 @@ extension APIProtocol {
         headers: Operations.Resources_ledgerParty_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_ledgerParty_get.Output {
         try await resources_ledgerParty_get(Operations.Resources_ledgerParty_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/ledger-parties/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/patch(resources.ledgerParty.update)`.
-    package func resources_ledgerParty_update(
-        path: Operations.Resources_ledgerParty_update.Input.Path,
-        headers: Operations.Resources_ledgerParty_update.Input.Headers = .init(),
-        body: Operations.Resources_ledgerParty_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_ledgerParty_update.Output {
-        try await resources_ledgerParty_update(Operations.Resources_ledgerParty_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/ledger-parties/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/delete(resources.ledgerParty.delete)`.
-    package func resources_ledgerParty_delete(
-        path: Operations.Resources_ledgerParty_delete.Input.Path,
-        headers: Operations.Resources_ledgerParty_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_ledgerParty_delete.Output {
-        try await resources_ledgerParty_delete(Operations.Resources_ledgerParty_delete.Input(
             path: path,
             headers: headers
         ))
@@ -933,17 +603,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/ledger-transfers`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/post(resources.ledgerTransfer.create)`.
-    package func resources_ledgerTransfer_create(
-        headers: Operations.Resources_ledgerTransfer_create.Input.Headers = .init(),
-        body: Operations.Resources_ledgerTransfer_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_ledgerTransfer_create.Output {
-        try await resources_ledgerTransfer_create(Operations.Resources_ledgerTransfer_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/ledger-transfers/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/get(resources.ledgerTransfer.get)`.
     package func resources_ledgerTransfer_get(
@@ -951,30 +610,6 @@ extension APIProtocol {
         headers: Operations.Resources_ledgerTransfer_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_ledgerTransfer_get.Output {
         try await resources_ledgerTransfer_get(Operations.Resources_ledgerTransfer_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/ledger-transfers/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/patch(resources.ledgerTransfer.update)`.
-    package func resources_ledgerTransfer_update(
-        path: Operations.Resources_ledgerTransfer_update.Input.Path,
-        headers: Operations.Resources_ledgerTransfer_update.Input.Headers = .init(),
-        body: Operations.Resources_ledgerTransfer_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_ledgerTransfer_update.Output {
-        try await resources_ledgerTransfer_update(Operations.Resources_ledgerTransfer_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/ledger-transfers/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/delete(resources.ledgerTransfer.delete)`.
-    package func resources_ledgerTransfer_delete(
-        path: Operations.Resources_ledgerTransfer_delete.Input.Path,
-        headers: Operations.Resources_ledgerTransfer_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_ledgerTransfer_delete.Output {
-        try await resources_ledgerTransfer_delete(Operations.Resources_ledgerTransfer_delete.Input(
             path: path,
             headers: headers
         ))
@@ -992,17 +627,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/projects`.
-    /// - Remark: Generated from `#/paths//api/v1/projects/post(resources.project.create)`.
-    package func resources_project_create(
-        headers: Operations.Resources_project_create.Input.Headers = .init(),
-        body: Operations.Resources_project_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_project_create.Output {
-        try await resources_project_create(Operations.Resources_project_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/projects/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/projects/{id}/get(resources.project.get)`.
     package func resources_project_get(
@@ -1010,30 +634,6 @@ extension APIProtocol {
         headers: Operations.Resources_project_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_project_get.Output {
         try await resources_project_get(Operations.Resources_project_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/projects/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/projects/{id}/patch(resources.project.update)`.
-    package func resources_project_update(
-        path: Operations.Resources_project_update.Input.Path,
-        headers: Operations.Resources_project_update.Input.Headers = .init(),
-        body: Operations.Resources_project_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_project_update.Output {
-        try await resources_project_update(Operations.Resources_project_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/projects/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/projects/{id}/delete(resources.project.delete)`.
-    package func resources_project_delete(
-        path: Operations.Resources_project_delete.Input.Path,
-        headers: Operations.Resources_project_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_project_delete.Output {
-        try await resources_project_delete(Operations.Resources_project_delete.Input(
             path: path,
             headers: headers
         ))
@@ -1051,17 +651,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/tasks`.
-    /// - Remark: Generated from `#/paths//api/v1/tasks/post(resources.task.create)`.
-    package func resources_task_create(
-        headers: Operations.Resources_task_create.Input.Headers = .init(),
-        body: Operations.Resources_task_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_task_create.Output {
-        try await resources_task_create(Operations.Resources_task_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/tasks/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)`.
     package func resources_task_get(
@@ -1069,30 +658,6 @@ extension APIProtocol {
         headers: Operations.Resources_task_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_task_get.Output {
         try await resources_task_get(Operations.Resources_task_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/tasks/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/patch(resources.task.update)`.
-    package func resources_task_update(
-        path: Operations.Resources_task_update.Input.Path,
-        headers: Operations.Resources_task_update.Input.Headers = .init(),
-        body: Operations.Resources_task_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_task_update.Output {
-        try await resources_task_update(Operations.Resources_task_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/tasks/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/delete(resources.task.delete)`.
-    package func resources_task_delete(
-        path: Operations.Resources_task_delete.Input.Path,
-        headers: Operations.Resources_task_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_task_delete.Output {
-        try await resources_task_delete(Operations.Resources_task_delete.Input(
             path: path,
             headers: headers
         ))
@@ -1110,17 +675,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/vendors`.
-    /// - Remark: Generated from `#/paths//api/v1/vendors/post(resources.vendor.create)`.
-    package func resources_vendor_create(
-        headers: Operations.Resources_vendor_create.Input.Headers = .init(),
-        body: Operations.Resources_vendor_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_vendor_create.Output {
-        try await resources_vendor_create(Operations.Resources_vendor_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/vendors/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/get(resources.vendor.get)`.
     package func resources_vendor_get(
@@ -1128,30 +682,6 @@ extension APIProtocol {
         headers: Operations.Resources_vendor_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_vendor_get.Output {
         try await resources_vendor_get(Operations.Resources_vendor_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/vendors/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/patch(resources.vendor.update)`.
-    package func resources_vendor_update(
-        path: Operations.Resources_vendor_update.Input.Path,
-        headers: Operations.Resources_vendor_update.Input.Headers = .init(),
-        body: Operations.Resources_vendor_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_vendor_update.Output {
-        try await resources_vendor_update(Operations.Resources_vendor_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/vendors/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/delete(resources.vendor.delete)`.
-    package func resources_vendor_delete(
-        path: Operations.Resources_vendor_delete.Input.Path,
-        headers: Operations.Resources_vendor_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_vendor_delete.Output {
-        try await resources_vendor_delete(Operations.Resources_vendor_delete.Input(
             path: path,
             headers: headers
         ))
@@ -1167,17 +697,6 @@ extension APIProtocol {
         try await resources_purchase_list(Operations.Resources_purchase_list.Input(
             query: query,
             headers: headers
-        ))
-    }
-    /// - Remark: HTTP `POST /api/v1/purchases`.
-    /// - Remark: Generated from `#/paths//api/v1/purchases/post(resources.purchase.create)`.
-    package func resources_purchase_create(
-        headers: Operations.Resources_purchase_create.Input.Headers = .init(),
-        body: Operations.Resources_purchase_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_purchase_create.Output {
-        try await resources_purchase_create(Operations.Resources_purchase_create.Input(
-            headers: headers,
-            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/purchases/{id}`.
@@ -1204,17 +723,6 @@ extension APIProtocol {
             body: body
         ))
     }
-    /// - Remark: HTTP `DELETE /api/v1/purchases/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/purchases/{id}/delete(resources.purchase.delete)`.
-    package func resources_purchase_delete(
-        path: Operations.Resources_purchase_delete.Input.Path,
-        headers: Operations.Resources_purchase_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_purchase_delete.Output {
-        try await resources_purchase_delete(Operations.Resources_purchase_delete.Input(
-            path: path,
-            headers: headers
-        ))
-    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/financial-accounts`.
@@ -1228,17 +736,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/financial-accounts`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/post(resources.financialAccount.create)`.
-    package func resources_financialAccount_create(
-        headers: Operations.Resources_financialAccount_create.Input.Headers = .init(),
-        body: Operations.Resources_financialAccount_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_financialAccount_create.Output {
-        try await resources_financialAccount_create(Operations.Resources_financialAccount_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/financial-accounts/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/get(resources.financialAccount.get)`.
     package func resources_financialAccount_get(
@@ -1246,30 +743,6 @@ extension APIProtocol {
         headers: Operations.Resources_financialAccount_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_financialAccount_get.Output {
         try await resources_financialAccount_get(Operations.Resources_financialAccount_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/financial-accounts/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/patch(resources.financialAccount.update)`.
-    package func resources_financialAccount_update(
-        path: Operations.Resources_financialAccount_update.Input.Path,
-        headers: Operations.Resources_financialAccount_update.Input.Headers = .init(),
-        body: Operations.Resources_financialAccount_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_financialAccount_update.Output {
-        try await resources_financialAccount_update(Operations.Resources_financialAccount_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/financial-accounts/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/delete(resources.financialAccount.delete)`.
-    package func resources_financialAccount_delete(
-        path: Operations.Resources_financialAccount_delete.Input.Path,
-        headers: Operations.Resources_financialAccount_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_financialAccount_delete.Output {
-        try await resources_financialAccount_delete(Operations.Resources_financialAccount_delete.Input(
             path: path,
             headers: headers
         ))
@@ -1287,17 +760,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/financial-transactions`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/post(resources.financialTransaction.create)`.
-    package func resources_financialTransaction_create(
-        headers: Operations.Resources_financialTransaction_create.Input.Headers = .init(),
-        body: Operations.Resources_financialTransaction_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_financialTransaction_create.Output {
-        try await resources_financialTransaction_create(Operations.Resources_financialTransaction_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/financial-transactions/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/get(resources.financialTransaction.get)`.
     package func resources_financialTransaction_get(
@@ -1305,30 +767,6 @@ extension APIProtocol {
         headers: Operations.Resources_financialTransaction_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_financialTransaction_get.Output {
         try await resources_financialTransaction_get(Operations.Resources_financialTransaction_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/financial-transactions/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/patch(resources.financialTransaction.update)`.
-    package func resources_financialTransaction_update(
-        path: Operations.Resources_financialTransaction_update.Input.Path,
-        headers: Operations.Resources_financialTransaction_update.Input.Headers = .init(),
-        body: Operations.Resources_financialTransaction_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_financialTransaction_update.Output {
-        try await resources_financialTransaction_update(Operations.Resources_financialTransaction_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/financial-transactions/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/delete(resources.financialTransaction.delete)`.
-    package func resources_financialTransaction_delete(
-        path: Operations.Resources_financialTransaction_delete.Input.Path,
-        headers: Operations.Resources_financialTransaction_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_financialTransaction_delete.Output {
-        try await resources_financialTransaction_delete(Operations.Resources_financialTransaction_delete.Input(
             path: path,
             headers: headers
         ))
@@ -1346,17 +784,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/wishes`.
-    /// - Remark: Generated from `#/paths//api/v1/wishes/post(resources.wish.create)`.
-    package func resources_wish_create(
-        headers: Operations.Resources_wish_create.Input.Headers = .init(),
-        body: Operations.Resources_wish_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_wish_create.Output {
-        try await resources_wish_create(Operations.Resources_wish_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/wishes/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/wishes/{id}/get(resources.wish.get)`.
     package func resources_wish_get(
@@ -1364,30 +791,6 @@ extension APIProtocol {
         headers: Operations.Resources_wish_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_wish_get.Output {
         try await resources_wish_get(Operations.Resources_wish_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/wishes/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/wishes/{id}/patch(resources.wish.update)`.
-    package func resources_wish_update(
-        path: Operations.Resources_wish_update.Input.Path,
-        headers: Operations.Resources_wish_update.Input.Headers = .init(),
-        body: Operations.Resources_wish_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_wish_update.Output {
-        try await resources_wish_update(Operations.Resources_wish_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/wishes/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/wishes/{id}/delete(resources.wish.delete)`.
-    package func resources_wish_delete(
-        path: Operations.Resources_wish_delete.Input.Path,
-        headers: Operations.Resources_wish_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_wish_delete.Output {
-        try await resources_wish_delete(Operations.Resources_wish_delete.Input(
             path: path,
             headers: headers
         ))
@@ -1405,17 +808,6 @@ extension APIProtocol {
             headers: headers
         ))
     }
-    /// - Remark: HTTP `POST /api/v1/expenses`.
-    /// - Remark: Generated from `#/paths//api/v1/expenses/post(resources.expense.create)`.
-    package func resources_expense_create(
-        headers: Operations.Resources_expense_create.Input.Headers = .init(),
-        body: Operations.Resources_expense_create.Input.Body? = nil
-    ) async throws -> Operations.Resources_expense_create.Output {
-        try await resources_expense_create(Operations.Resources_expense_create.Input(
-            headers: headers,
-            body: body
-        ))
-    }
     /// - Remark: HTTP `GET /api/v1/expenses/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)`.
     package func resources_expense_get(
@@ -1423,54 +815,6 @@ extension APIProtocol {
         headers: Operations.Resources_expense_get.Input.Headers = .init()
     ) async throws -> Operations.Resources_expense_get.Output {
         try await resources_expense_get(Operations.Resources_expense_get.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/expenses/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/patch(resources.expense.update)`.
-    package func resources_expense_update(
-        path: Operations.Resources_expense_update.Input.Path,
-        headers: Operations.Resources_expense_update.Input.Headers = .init(),
-        body: Operations.Resources_expense_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_expense_update.Output {
-        try await resources_expense_update(Operations.Resources_expense_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/expenses/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/delete(resources.expense.delete)`.
-    package func resources_expense_delete(
-        path: Operations.Resources_expense_delete.Input.Path,
-        headers: Operations.Resources_expense_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_expense_delete.Output {
-        try await resources_expense_delete(Operations.Resources_expense_delete.Input(
-            path: path,
-            headers: headers
-        ))
-    }
-    /// - Remark: HTTP `PATCH /api/v1/images/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/images/{id}/patch(resources.image.update)`.
-    package func resources_image_update(
-        path: Operations.Resources_image_update.Input.Path,
-        headers: Operations.Resources_image_update.Input.Headers = .init(),
-        body: Operations.Resources_image_update.Input.Body? = nil
-    ) async throws -> Operations.Resources_image_update.Output {
-        try await resources_image_update(Operations.Resources_image_update.Input(
-            path: path,
-            headers: headers,
-            body: body
-        ))
-    }
-    /// - Remark: HTTP `DELETE /api/v1/images/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/images/{id}/delete(resources.image.delete)`.
-    package func resources_image_delete(
-        path: Operations.Resources_image_delete.Input.Path,
-        headers: Operations.Resources_image_delete.Input.Headers = .init()
-    ) async throws -> Operations.Resources_image_delete.Output {
-        try await resources_image_delete(Operations.Resources_image_delete.Input(
             path: path,
             headers: headers
         ))

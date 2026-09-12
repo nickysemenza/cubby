@@ -40,9 +40,11 @@ Native PoC: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI harne
 - Never hand-write a `(method, path)` pair. `OperationRoute.all` is generated from the OpenAPI
   document by `apps/web/scripts/generate-http-openapi.ts` into `Generated/OperationRoutes.swift`
   (`pnpm --filter @cubby/web generate:http-api`; `pnpm check` fails when stale). Look routes up
-  by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. The RPC operation ids
-  CubbyKit calls (every `resources.*` id is generated automatically) are hand-kept in
-  `openapi/native-operations.json`, sorted and deduplicated; `openapi/openapi-generator-config.yaml`
+  by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. `resources.<entity>.list`
+  and `resources.<entity>.get` are generated automatically for every entity (the generic Browse
+  screens need them all); `resources.*.create/update/delete` are opt-in and, like the RPC operation
+  ids CubbyKit calls, are hand-kept in `openapi/native-operations.json`, sorted and deduplicated —
+  listing an automatic list/get id there is rejected. `openapi/openapi-generator-config.yaml`
   and `Generated/EntityOperations.swift` are themselves emitter-owned, derived from that allowlist
   by the same script — edit the allowlist, never the two files it produces. `generate-openapi.sh`
   fails the build on any swift-openapi-generator warning (a silently dropped schema), not just a
