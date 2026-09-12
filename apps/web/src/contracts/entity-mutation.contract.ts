@@ -14,6 +14,8 @@ export const entityMutationContract = defineContract("entity", {
     // substitutes the real wire schema.
     input: z.custom<EntityBrowserMutationInput>(),
     output: z.custom<EntityBrowserMutationResult>(),
+    // HTTP serves these as the per-entity resource routes instead.
+    http: false,
     observability: {
       entities: [
         ...entityMutationOutputEntities,

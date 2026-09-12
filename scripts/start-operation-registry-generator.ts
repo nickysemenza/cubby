@@ -49,12 +49,15 @@ type ContractMember = {
     entities?: readonly string[];
     productPhases?: readonly string[];
   };
+  /** `false` keeps the member off the HTTP API (see contracts/define.ts). */
+  http?: false;
 };
 type Contract = { domain: string; ops: Record<string, ContractMember> };
 type LoadedContract = { exportName: string; contract: Contract };
 type DeclaredOperation = {
   kind: Kind;
   observability: OperationObservability;
+  http: boolean;
   exportName: string;
   member: string;
 };
@@ -281,6 +284,7 @@ export const collectDeclaredOperations = (): Promise<
             entities: [...(definition.observability?.entities ?? [])],
             productPhases: [...(definition.observability?.productPhases ?? [])],
           },
+          http: definition.http !== false,
           exportName,
           member,
         });
@@ -589,7 +593,7 @@ export const renderHttpContract = async (): Promise<string> => {
   );
   const domains = new Map<string, string[]>();
   for (const [id, declaration] of declarations) {
-    if (declaration.kind === "subscription") continue;
+    if (declaration.kind === "subscription" || !declaration.http) continue;
     const domain = id.slice(0, id.length - declaration.member.length - 1);
     if (domain === "resources")
       throw new Error(`Reserved HTTP client namespace: ${domain}`);

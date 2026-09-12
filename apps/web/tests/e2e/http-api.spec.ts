@@ -82,15 +82,11 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     expect(counts.status).toBe(200);
     if (counts.status !== 200) throw new Error("Dashboard failed");
     expect(counts.body.ok).toBe(true);
-    const created = await page.request.post("/api/v1/entity/mutate", {
+    const created = await page.request.post("/api/v1/vendors", {
       headers,
-      data: {
-        action: "create",
-        entity: "vendor",
-        data: { name: `HTTP fixture ${Date.now()}` },
-      },
+      data: { name: `HTTP fixture ${Date.now()}` },
     });
-    expect(created.status()).toBe(200);
+    expect(created.status()).toBe(201);
     const result = entityCreated.parse(await created.json());
     await expect
       .poll(async () => {
@@ -100,24 +96,20 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
           : undefined;
       })
       .toBe("api.entity.mutate");
-    const domainError = await page.request.post("/api/v1/entity/mutate", {
+    const domainError = await page.request.patch("/api/v1/vendors/VEN-ZZZZ", {
       headers,
-      data: {
-        action: "update",
-        entity: "vendor",
-        id: "VEN-ZZZZ",
-        data: { name: "Missing" },
-      },
+      data: { name: "Missing" },
     });
     expect(domainError.status()).toBe(404);
     expect(await domainError.json()).toMatchObject({
       ok: false,
       error: { code: "NOT_FOUND" },
     });
-    const detail = await client.entity.detail({
-      query: { entity: "vendor", shortcode: result.data.item.id },
-    });
-    expect(detail.status).toBe(200);
+    const detail = await page.request.get(
+      `/api/v1/vendors/${result.data.item.id}`,
+      { headers },
+    );
+    expect(detail.status()).toBe(200);
     const audit = await client.auditLog.list({
       query: {
         entityType: "vendor",
@@ -135,16 +127,20 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
         createdAt: expect.stringMatching(/^\d{4}-/u),
       }),
     ]);
-    const malformed = await page.request.post("/api/v1/entity/mutate", {
+    const malformed = await page.request.post("/api/v1/vendors", {
       headers: { ...headers, "content-type": "application/json" },
       data: "{",
     });
     expect(malformed.status()).toBe(400);
-    const badInput = await page.request.get("/api/v1/entity/detail", {
+    const badInput = await page.request.get("/api/v1/vendors", {
       headers,
-      params: { entity: "vendor", shortcode: "invalid" },
+      params: { page: "nope" },
     });
     expect(badInput.status()).toBe(400);
+    const badId = await page.request.get("/api/v1/vendors/invalid", {
+      headers,
+    });
+    expect(badId.status()).toBe(404);
     const spoof = await page.request.get("/api/v1/dashboard/counts", {
       headers,
       params: { actor: '{"source":"ui"}' },
@@ -158,19 +154,15 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     // Auth ordering on a mutation route: a cookie session without a matching
     // Origin is rejected before the body is looked at, and an invalid key is
     // an authentication failure rather than a validation one.
-    const mutateBody = {
-      action: "create",
-      entity: "vendor",
-      data: { name: "Never created" },
-    };
+    const mutateBody = { name: "Never created" };
     expect(
       (
-        await page.request.post("/api/v1/entity/mutate", { data: mutateBody })
+        await page.request.post("/api/v1/vendors", { data: mutateBody })
       ).status(),
     ).toBe(403);
     expect(
       (
-        await page.request.post("/api/v1/entity/mutate", {
+        await page.request.post("/api/v1/vendors", {
           headers: { "x-api-key": "invalid" },
           data: mutateBody,
         })

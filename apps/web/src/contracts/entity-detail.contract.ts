@@ -15,6 +15,8 @@ export const entityDetailContract = defineContract("entity", {
     // server handler; the HTTP router substitutes the real wire schema.
     input: z.custom<EntityDetailInputByEntity[DetailEntity]>(),
     output: z.custom<EntityDetailByEntity[DetailEntity] | null>(),
+    // HTTP serves these as the per-entity resource routes instead.
+    http: false,
     observability: {
       entities: detailEntities,
       productPhases: [

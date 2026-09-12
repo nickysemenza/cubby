@@ -19,6 +19,12 @@ interface OperationObservability {
   readonly productPhases?: readonly string[];
 }
 
+/**
+ * `http: false` keeps an operation off the HTTP API while the Start transport
+ * and MCP still expose it. Used for operations whose input and output are
+ * type-only carriers over a per-entity union, which HTTP serves better as
+ * the per-entity resource routes.
+ */
 export interface QueryContract<
   Input extends z.ZodTypeAny = z.ZodTypeAny,
   Output extends z.ZodTypeAny = z.ZodTypeAny,
@@ -27,6 +33,7 @@ export interface QueryContract<
   readonly input: Input;
   readonly output: Output;
   readonly observability?: OperationObservability;
+  readonly http?: false;
 }
 
 export interface MutationContract<
@@ -37,6 +44,7 @@ export interface MutationContract<
   readonly input: Input;
   readonly output: Output;
   readonly observability?: OperationObservability;
+  readonly http?: false;
 }
 
 /**

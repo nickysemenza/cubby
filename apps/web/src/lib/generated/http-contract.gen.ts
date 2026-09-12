@@ -238,11 +238,6 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     entity: {
-      detail: rpcQuery(
-        "entity",
-        "detail",
-        contracts.entityDetailContract.ops["detail"],
-      ),
       filterOptions: rpcQuery(
         "entity",
         "filterOptions",
@@ -262,16 +257,6 @@ export const httpContract = httpContractBuilder.router(
         "entity",
         "inspectorHealth",
         contracts.entityInspectorHealthContract.ops["inspectorHealth"],
-      ),
-      list: rpcQuery(
-        "entity",
-        "list",
-        contracts.entityListContract.ops["list"],
-      ),
-      mutate: rpcMutation(
-        "entity",
-        "mutate",
-        contracts.entityMutationContract.ops["mutate"],
       ),
     },
     entityIntegrity: {

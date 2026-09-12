@@ -6,24 +6,15 @@ import {
 import { z } from "zod";
 
 import type { MutationContract, QueryContract } from "~/contracts/define";
-import * as contracts from "~/contracts/index";
 import {
   type DetailEntity,
-  detailEntities,
-  entityDetailInputSchema,
   getEntityDetailOutputSchema,
 } from "~/entities/generated/entity-details.gen";
 import {
-  entityListInputSchema,
   getEntityListOutputSchema,
   type ListEntity,
-  listEntities,
 } from "~/entities/generated/entity-lists.gen";
-import {
-  entityBrowserMutationCommandSchema,
-  entityBrowserMutationResultSchema,
-  entityDeleteResultSchema,
-} from "~/server/entity-kernel/contracts";
+import { entityDeleteResultSchema } from "~/server/entity-kernel/contracts";
 import {
   ENTITY_SCHEMA_BINDINGS,
   generatedEntityMutationCreateResultSchema,
@@ -32,7 +23,7 @@ import {
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 
 import { resourceListQuery } from "./resource-query";
-import { type Json, toWire, type WireOptions } from "./wire";
+import { type Json, toWire } from "./wire";
 
 /**
  * Route metadata the server handler dispatches on. `input` describes how an
@@ -63,47 +54,11 @@ const commonResponses = {
   500: failureEnvelope,
 };
 
-/**
- * Entity operations declare type-only carriers in their contracts because the
- * per-entity runtime schemas live in generated bindings; on the wire they are
- * the real discriminated unions.
- */
-const entityWire = new Map<z.ZodType, z.ZodType>([
-  [
-    contracts.entityListContract.ops.list.input,
-    toWire(entityListInputSchema, "input"),
-  ],
-  [
-    contracts.entityListContract.ops.list.output,
-    toWire(z.union(listEntities.map(getEntityListOutputSchema)), "output"),
-  ],
-  [
-    contracts.entityDetailContract.ops.detail.input,
-    toWire(entityDetailInputSchema, "input"),
-  ],
-  [
-    contracts.entityDetailContract.ops.detail.output,
-    toWire(
-      z.union(detailEntities.map(getEntityDetailOutputSchema)).nullable(),
-      "output",
-    ),
-  ],
-  [
-    contracts.entityMutationContract.ops.mutate.input,
-    toWire(entityBrowserMutationCommandSchema, "input"),
-  ],
-  [
-    contracts.entityMutationContract.ops.mutate.output,
-    toWire(entityBrowserMutationResultSchema, "output"),
-  ],
-]);
-const wireOptions: WireOptions = { overrides: entityWire };
-
 type Ok<O extends z.ZodTypeAny> = { ok: true; data: Json<z.output<O>> };
 const ok = <O extends z.ZodTypeAny>(output: O): z.ZodType<Ok<O>> =>
   z.object({
     ok: z.literal(true),
-    data: toWire(output, "output", wireOptions),
+    data: toWire(output, "output"),
   });
 
 type IsObjectInput<T> = T extends readonly unknown[]
@@ -142,7 +97,7 @@ const rpcInput = <I extends z.ZodTypeAny>(input: I) => {
       wire: empty as z.ZodType<RpcInput<I>, RpcInput<I>>,
     };
   }
-  const wire = toWire(input, "input", wireOptions);
+  const wire = toWire(input, "input");
   const carrier = isObjectLike(wire)
     ? ("object" as const)
     : ("wrapped" as const);

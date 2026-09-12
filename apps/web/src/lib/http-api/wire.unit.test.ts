@@ -2,21 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import * as contracts from "~/contracts/index";
-import {
-  detailEntities,
-  entityDetailInputSchema,
-  getEntityDetailOutputSchema,
-} from "~/entities/generated/entity-details.gen";
-import {
-  entityListInputSchema,
-  getEntityListOutputSchema,
-  listEntities,
-} from "~/entities/generated/entity-lists.gen";
 import { mock } from "~/lib/test/mock-schema";
-import {
-  entityBrowserMutationCommandSchema,
-  entityBrowserMutationResultSchema,
-} from "~/server/entity-kernel/contracts";
 
 import {
   isFlatQueryInput,
@@ -34,38 +20,17 @@ interface WireCase {
 }
 
 /**
- * Every schema the HTTP contract carries, once per identity: each contract
- * member's input and output, with the entity operations' type-only carriers
- * replaced by their real generated schemas.
+ * Every schema the HTTP contract carries, once per identity: each HTTP-exposed
+ * contract member's input and output.
  */
 const cases = (() => {
-  const carriers = new Map<z.ZodType, z.ZodType>([
-    [contracts.entityListContract.ops.list.input, entityListInputSchema],
-    [
-      contracts.entityListContract.ops.list.output,
-      z.union(listEntities.map(getEntityListOutputSchema)),
-    ],
-    [contracts.entityDetailContract.ops.detail.input, entityDetailInputSchema],
-    [
-      contracts.entityDetailContract.ops.detail.output,
-      z.union(detailEntities.map(getEntityDetailOutputSchema)).nullable(),
-    ],
-    [
-      contracts.entityMutationContract.ops.mutate.input,
-      entityBrowserMutationCommandSchema,
-    ],
-    [
-      contracts.entityMutationContract.ops.mutate.output,
-      entityBrowserMutationResultSchema,
-    ],
-  ]);
   const seen = new Map<z.ZodType, WireCase>();
   for (const contract of Object.values(contracts)) {
     for (const [member, operation] of Object.entries(contract.ops)) {
-      if (operation.kind === "subscription") continue;
+      if (operation.kind === "subscription" || operation.http === false)
+        continue;
       const name = `${contract.domain}.${member}`;
-      const input = carriers.get(operation.input) ?? operation.input;
-      const output = carriers.get(operation.output) ?? operation.output;
+      const { input, output } = operation;
       if (!seen.has(input) && !(input instanceof z.ZodUndefined))
         seen.set(input, { name: `${name} input`, io: "input", schema: input });
       if (!seen.has(output))
@@ -293,7 +258,7 @@ const asRouterQuery = (search: URLSearchParams) => {
  */
 const flatQueries = Object.values(contracts).flatMap((contract) =>
   Object.entries(contract.ops).flatMap(([member, operation]) => {
-    if (operation.kind !== "query") return [];
+    if (operation.kind !== "query" || operation.http === false) return [];
     const { input } = operation;
     if (!(input instanceof z.ZodObject)) return [];
     if (!isFlatQueryInput(toWire(input, "input"))) return [];

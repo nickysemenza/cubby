@@ -92,11 +92,10 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
         },
       },
     });
-    const legacy = await page.request.get("/api/v1/entity/detail", {
+    const reread = await page.request.get(`/api/v1/recipes/${id}`, {
       headers: origin,
-      params: { entity: "recipe", shortcode: id },
     });
-    expect(await legacy.json()).toMatchObject({
+    expect(await reread.json()).toMatchObject({
       ok: true,
       data: { id, name: "Renamed resource" },
     });
@@ -254,15 +253,10 @@ test("typed resource and operation clients use the same generated request shapes
         ok: true,
         data: { items: [{ id: secondId }] },
       });
-      const operation = await client.entity.list({
-        query: {
-          entity: "recipe",
-          filters: { nameFilter: prefix },
-          pagination: { pageIndex: 1, pageSize: 1 },
-          sort: { orderBy: "name", direction: "asc" },
-        },
+      const secondPage = await client.resources.recipe.list({
+        query: { nameFilter: prefix, page: 2, pageSize: 1, sort: "name" },
       });
-      expect(operation.body).toMatchObject({
+      expect(secondPage.body).toMatchObject({
         ok: true,
         data: { items: [{ id: secondId }], meta: { pageIndex: 1 } },
       });

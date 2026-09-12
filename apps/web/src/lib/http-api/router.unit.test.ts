@@ -17,13 +17,23 @@ const rpc = routes.filter((route) => metadataOf(route).resource === undefined);
 
 describe("HTTP contract", () => {
   it("exposes every ordinary operation exactly once, queries as GET and mutations as POST", () => {
-    const expected = Object.entries(START_OPERATIONS)
-      .filter(([, { kind }]) => kind !== "subscription")
-      .map(([id]) => id)
+    const expected = Object.values(contracts)
+      .flatMap((contract) =>
+        Object.entries(contract.ops).flatMap(([member, operation]) =>
+          operation.kind === "subscription" || operation.http === false
+            ? []
+            : [`${contract.domain}.${member}`],
+        ),
+      )
       .sort();
     expect(rpc.map((route) => metadataOf(route).operation).sort()).toEqual(
       expected,
     );
+    // Opted out of HTTP, still a Start operation.
+    for (const excluded of ["entity.list", "entity.detail", "entity.mutate"]) {
+      expect(expected).not.toContain(excluded);
+      expect(START_OPERATIONS).toHaveProperty(excluded);
+    }
     for (const route of rpc) {
       const kind = z
         .enum(["query", "mutation", "subscription"])
@@ -68,22 +78,25 @@ describe("HTTP contract", () => {
       ]),
     );
     expect(carriers.get("dashboard.counts")).toBe("none");
-    expect(carriers.get("entity.detail")).toBe("object");
-    // A union of per-entity unions is still an object carrier (regression:
-    // the e2e mutate body was rejected as `{ input }`-wrapped).
-    expect(carriers.get("entity.mutate")).toBe("object");
-    const mutate = rpc.find(
-      (route) => metadataOf(route).operation === "entity.mutate",
+    expect(carriers.get("auditLog.list")).toBe("object");
+    // A resource body is the entity's own create input, never a command.
+    const create = routes.find(
+      (route) =>
+        metadataOf(route).entity === "vendor" &&
+        metadataOf(route).resource === "create",
     );
+    const createBody =
+      create && "body" in create && create.body instanceof z.ZodType
+        ? create.body
+        : undefined;
+    expect(createBody?.safeParse({ name: "Fixture" }).success).toBe(true);
     expect(
-      mutate && "body" in mutate && mutate.body instanceof z.ZodType
-        ? mutate.body.safeParse({
-            action: "create",
-            entity: "vendor",
-            data: { name: "Fixture" },
-          }).success
-        : "no body",
-    ).toBe(true);
+      createBody?.safeParse({
+        action: "create",
+        entity: "vendor",
+        data: { name: "Fixture" },
+      }).success,
+    ).toBe(false);
     const wrapped = rpcMutation("demo", "wrapped", {
       kind: "mutation",
       input: z.array(z.string()),
