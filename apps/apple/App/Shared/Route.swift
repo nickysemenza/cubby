@@ -1,4 +1,5 @@
 import CubbyKit
+import SwiftUI
 
 /// The typed navigation spine shared by the iOS tab stacks and the macOS split view.
 enum Route: Hashable {
@@ -31,4 +32,10 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .dev: "wrench.and.screwdriver"
         }
     }
+}
+
+extension EnvironmentValues {
+    /// Written by the shells (iOS tabs, macOS sidebar) so a shortcut on one screen can move the
+    /// top-level selection. Nil where there is no shell, which is what `#Preview` sees.
+    @Entry var sectionSelection: Binding<AppSection>?
 }

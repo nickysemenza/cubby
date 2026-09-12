@@ -14,6 +14,9 @@ struct RootTabsView: View {
                 }
             }
         }
+        // Today's shortcut tiles move the tab selection; without this they would have nothing to
+        // move and would render disabled.
+        .environment(\.sectionSelection, $selection)
     }
 }
 

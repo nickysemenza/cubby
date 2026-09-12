@@ -7,7 +7,14 @@ struct RootView: View {
     var body: some View {
         switch model.phase {
         case .restoring:
-            ProgressView("Checking sign-in…")
+            VStack(spacing: PorcelainTokens.Space.md) {
+                ProgressView()
+                Text("Checking sign-in…")
+                    .font(.porcelainBody)
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(PorcelainTokens.canvas)
         case .signedOut:
             LoginView()
         case .signedIn:

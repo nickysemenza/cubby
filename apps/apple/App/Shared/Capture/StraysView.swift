@@ -12,21 +12,58 @@ struct StraysView: View {
     var body: some View {
         NavigationStack {
             List {
+                if !session.strays.isEmpty {
+                    Eyebrow("\(session.strays.count) stocked elsewhere · swipe a row to skip it")
+                        .listRowBackground(PorcelainTokens.canvas)
+                        .listRowSeparator(.hidden)
+                }
                 ForEach(session.strays) { stray in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(stray.productName)
-                        ForEach(stray.rows) { row in
-                            Text("\(row.locationName)\(row.ambiguousQuantity ? " · more than one unit there" : "")")
-                                .font(.footnote)
+                    VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                        HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.sm) {
+                            Text(stray.productName)
+                                .font(.porcelainTitle)
+                                .foregroundStyle(PorcelainTokens.graphite)
+                                .lineLimit(2)
+                            Spacer(minLength: PorcelainTokens.Space.sm)
+                            Text(stray.productID.rawValue)
+                                .font(.porcelainCode)
                                 .foregroundStyle(PorcelainTokens.graphiteSecondary)
                         }
+                        ForEach(stray.rows) { row in
+                            HStack(spacing: PorcelainTokens.Space.sm) {
+                                DomainMark(.location)
+                                Text(row.locationName)
+                                    .font(.porcelainBody)
+                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    .lineLimit(1)
+                                if row.ambiguousQuantity {
+                                    StatusChip(text: "More than one unit", tone: .warning)
+                                }
+                            }
+                        }
                     }
+                    .padding(.vertical, PorcelainTokens.Space.xs)
+                    .porcelainListRow()
                     .swipeActions {
                         Button("Skip", role: .destructive) { session.dismissStray(stray.productID) }
                     }
                 }
                 if let summary {
-                    Section { Text(summary) }
+                    Text(summary)
+                        .font(.porcelainBody)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .porcelainListRow()
+                }
+            }
+            .listStyle(.plain)
+            .porcelainScreen()
+            .overlay {
+                if session.strays.isEmpty && summary == nil {
+                    ContentUnavailableView(
+                        "Nothing found elsewhere",
+                        systemImage: "tray",
+                        description: Text("Scans that turn up stocked in another location queue here.")
+                    )
                 }
             }
             .navigationTitle("Found elsewhere")
@@ -55,4 +92,8 @@ struct StraysView: View {
             summary = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
         }
     }
+}
+
+#Preview {
+    StraysView(session: ScanSession(service: PreviewFixtures.signedInModel().client))
 }

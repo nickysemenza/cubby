@@ -15,6 +15,7 @@ struct EntityListView: View {
 
     var body: some View {
         content
+            .porcelainScreen()
             .navigationTitle(descriptor.plural)
             .task(id: appModel.host) { await setup() }
             .refreshable { await reload() }
@@ -25,10 +26,10 @@ struct EntityListView: View {
         if let model {
             switch model.phase {
             case .idle:
-                ProgressView()
+                loading
             case .loading:
                 if loadedRows.isEmpty {
-                    ProgressView()
+                    loading
                 } else {
                     rowList(model: model)
                 }
@@ -52,16 +53,36 @@ struct EntityListView: View {
                 }
             }
         } else {
-            ProgressView()
+            loading
         }
+    }
+
+    private var loading: some View {
+        ProgressView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(PorcelainTokens.canvas)
     }
 
     private func rowList(model: GenericEntityListModel) -> some View {
         List {
+            if let meta = model.meta {
+                Eyebrow(countLabel(total: meta.totalCount))
+                    .padding(.top, PorcelainTokens.Space.md)
+                    .padding(.bottom, PorcelainTokens.Space.xs)
+                    .listRowInsets(
+                        EdgeInsets(
+                            top: 0, leading: PorcelainTokens.Space.lg,
+                            bottom: 0, trailing: PorcelainTokens.Space.lg
+                        )
+                    )
+                    .listRowBackground(PorcelainTokens.canvas)
+                    .listRowSeparator(.hidden)
+            }
             ForEach(loadedRows) { row in
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                    EntityRowView(row: row)
+                    EntityRowView(key: key, row: row)
                 }
+                .porcelainListRow()
             }
             if let meta = model.meta, meta.totalCount > loadedRows.count {
                 Button {
@@ -70,16 +91,28 @@ struct EntityListView: View {
                     HStack {
                         Spacer()
                         if model.phase == .loading {
-                            ProgressView()
+                            ProgressView().controlSize(.small)
                         } else {
-                            Text("Load more")
+                            Text("Load \(min(50, meta.totalCount - loadedRows.count)) more")
+                                .font(.porcelainTitle)
+                                .foregroundStyle(PorcelainTokens.cobalt)
                         }
                         Spacer()
                     }
+                    .frame(minHeight: PorcelainTokens.touchTarget)
                 }
+                .buttonStyle(.plain)
                 .disabled(model.phase == .loading)
+                .porcelainListRow()
+                .listRowSeparator(.hidden)
             }
         }
+        .listStyle(.plain)
+    }
+
+    private func countLabel(total: Int) -> String {
+        let noun = total == 1 ? descriptor.singular.lowercased() : descriptor.plural.lowercased()
+        return "\(total.formatted()) \(noun) · showing \(loadedRows.count.formatted())"
     }
 
     private func setup() async {
@@ -105,58 +138,54 @@ struct EntityListView: View {
 }
 
 /// Plain-data row rendering, shared by the real list and `#Preview`s so neither needs a network
-/// round trip to render.
+/// round trip to render. The trailing fact is read straight off `raw` — whatever this entity's
+/// list projection already carries, never an extra request.
 struct EntityRowView: View {
+    let key: EntityKey
     let row: EntityRow
 
     var body: some View {
-        HStack(spacing: PorcelainTokens.spacing * 1.5) {
-            thumbnail
+        HStack(spacing: PorcelainTokens.Space.md) {
+            Thumb(url: row.imageURL, size: 56, symbol: entitySymbol(for: key))
             VStack(alignment: .leading, spacing: 2) {
-                Text(row.title).lineLimit(1)
-                if let subtitle = row.subtitle {
+                Text(row.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(PorcelainTokens.graphite)
+                    .lineLimit(2)
+                if let subtitle = row.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.footnote)
+                        .font(.porcelainBody)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
                         .lineLimit(1)
                 }
             }
-        }
-    }
-
-    @ViewBuilder
-    private var thumbnail: some View {
-        if let url = row.imageURL {
-            AsyncImage(url: url) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().scaledToFill()
-                } else {
-                    placeholder
-                }
+            Spacer(minLength: PorcelainTokens.Space.sm)
+            if let fact = EntityFacts.trailing(key: key, row: row) {
+                Text(fact)
+                    .font(.porcelainData)
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .multilineTextAlignment(.trailing)
+                    .lineLimit(2)
+                    .layoutPriority(1)
             }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusSmall))
-        } else {
-            placeholder.frame(width: 44, height: 44)
         }
-    }
-
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: PorcelainTokens.radiusSmall)
-            .fill(PorcelainTokens.inset)
-            .overlay(Image(systemName: "photo").foregroundStyle(PorcelainTokens.graphiteSecondary))
+        .padding(.vertical, PorcelainTokens.Space.xs)
+        .frame(minHeight: 64)
     }
 }
 
-#Preview {
+#Preview("Rows") {
     NavigationStack {
         List {
             ForEach(PreviewFixtures.sampleRows) { row in
                 NavigationLink(value: Route.entityDetail(.product, id: row.id)) {
-                    EntityRowView(row: row)
+                    EntityRowView(key: .product, row: row)
                 }
+                .porcelainListRow()
             }
         }
+        .listStyle(.plain)
+        .porcelainScreen()
         .navigationTitle("Products")
     }
 }

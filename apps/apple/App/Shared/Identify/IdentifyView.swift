@@ -21,9 +21,10 @@ struct IdentifyView: View {
             if let identify {
                 IdentifyContent(identify: identify)
             } else {
-                ProgressView()
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .porcelainScreen()
         .navigationTitle("Identify")
         .task(id: model.host) {
             let identify = IdentifyModel(client: model.client)
@@ -47,24 +48,21 @@ private struct IdentifyContent: View {
     @State private var pickError: String?
 
     var body: some View {
-        List {
-            Section {
-                statusRow
+        ScrollView {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
+                statusPanel
+                photoSection
+                IdentifyResultsSection(
+                    matches: identify.candidates,
+                    probe: identify.probe,
+                    failure: failureMessage
+                )
             }
-            Section("Photo") {
-                photoSourceControls
-                if let pickError {
-                    Text(pickError)
-                        .font(.footnote)
-                        .foregroundStyle(PorcelainTokens.destructive)
-                }
-            }
-            IdentifyResultsSection(
-                matches: identify.candidates,
-                probe: identify.probe,
-                failure: failureMessage
-            )
+            .padding(PorcelainTokens.Space.lg)
+            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
+        .porcelainScreen()
         .toolbar {
             ToolbarItem {
                 Button("Rebuild index") {
@@ -97,21 +95,56 @@ private struct IdentifyContent: View {
         return nil
     }
 
+    private var statusPanel: some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            Eyebrow("On-device index")
+            Panel {
+                HStack(spacing: PorcelainTokens.Space.md) {
+                    statusText
+                    Spacer(minLength: PorcelainTokens.Space.sm)
+                    if case .indexing = identify.phase {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                .frame(minHeight: PorcelainTokens.touchTarget - 20)
+            }
+        }
+    }
+
     @ViewBuilder
-    private var statusRow: some View {
+    private var statusText: some View {
         switch identify.phase {
         case .idle:
-            Text("Starting…").foregroundStyle(PorcelainTokens.graphiteSecondary)
+            Text("Starting…")
+                .font(.porcelainBody)
+                .foregroundStyle(PorcelainTokens.graphiteSecondary)
         case .indexing(let done, let total):
-            HStack {
-                Text("Indexing \(done)/\(total)")
-                Spacer()
-                ProgressView()
-            }
+            Text("Indexing \(done) of \(total)")
+                .font(.porcelainData)
+                .foregroundStyle(PorcelainTokens.graphite)
         case .ready(let count):
-            Text("\(count) products indexed")
+            Text("\(count) covers indexed")
+                .font(.porcelainData)
+                .foregroundStyle(PorcelainTokens.graphite)
         case .failed:
-            Text("Index unavailable").foregroundStyle(PorcelainTokens.destructive)
+            Text("Index unavailable")
+                .font(.porcelainBody)
+                .foregroundStyle(PorcelainTokens.destructive)
+        }
+    }
+
+    private var photoSection: some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            Eyebrow("Photo")
+            LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
+                photoSourceControls
+            }
+            if let pickError {
+                Text(pickError)
+                    .font(.porcelainLabel)
+                    .foregroundStyle(PorcelainTokens.destructive)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -119,21 +152,27 @@ private struct IdentifyContent: View {
     private var photoSourceControls: some View {
         #if os(iOS)
         PhotosPicker(selection: $photoItem, matching: .images) {
-            Label("Choose photo", systemImage: "photo.on.rectangle")
+            ActionTile(title: "Choose photo", symbol: "photo.on.rectangle", detail: "From your library")
         }
+        .buttonStyle(.plain)
         if UIImagePickerController.isSourceTypeAvailable(.camera) {
             Button {
                 showingCamera = true
             } label: {
-                Label("Take photo", systemImage: "camera")
+                ActionTile(title: "Take photo", symbol: "camera", detail: "Use the camera")
             }
+            .buttonStyle(.plain)
+        } else {
+            ActionTile(title: "Take photo", symbol: "camera", detail: "No camera here")
+                .opacity(0.5)
         }
         #elseif os(macOS)
         Button {
             showingFileImporter = true
         } label: {
-            Label("Choose image…", systemImage: "photo.on.rectangle")
+            ActionTile(title: "Choose image…", symbol: "photo.on.rectangle", detail: "From a file")
         }
+        .buttonStyle(.plain)
         #endif
     }
 
@@ -171,36 +210,66 @@ private struct IdentifyContent: View {
     #endif
 }
 
-/// The probe thumbnail and ranked list, shared by the real screen and `#Preview`s so neither
+/// The probe thumbnail and the ranked list, shared by the real screen and `#Preview`s so neither
 /// needs a network round trip or a live `FeaturePrintIndex` to render.
+///
+/// This is closed-set matching — "which of MY products is this" — so the number shown is the raw
+/// feature-print distance. It is never dressed up as a percentage or a confidence.
 struct IdentifyResultsSection: View {
     let matches: [IdentificationCandidate]
     let probe: CGImage?
-    var failure: String? = nil
+    var failure: String?
 
     var body: some View {
-        if let probe {
-            Section("Probe") {
-                ProbeThumbnail(image: probe)
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
+            if let probe {
+                VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                    Eyebrow("Probe")
+                    Image(decorative: probe, scale: 1)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 160, height: 160)
+                        .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                                .strokeBorder(
+                                    PorcelainTokens.hairline,
+                                    lineWidth: PorcelainTokens.hairlineWidth
+                                )
+                        )
+                }
             }
-        }
-        Section("Matches") {
-            if let failure {
-                ContentUnavailableView(
-                    "Couldn't identify this photo",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(failure)
-                )
-            } else if matches.isEmpty {
-                ContentUnavailableView(
-                    "No matches yet",
-                    systemImage: "camera.viewfinder",
-                    description: Text("Choose or take a photo to rank it against your products.")
-                )
-            } else {
-                ForEach(Array(matches.enumerated()), id: \.element.id) { position, match in
-                    NavigationLink(value: Route.entityDetail(.product, id: match.productID.rawValue)) {
-                        CandidateRow(match: match, emphasized: position == 0)
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                Eyebrow("Matches")
+                if let failure {
+                    Panel {
+                        Text("Couldn't identify this photo")
+                            .font(.porcelainTitle)
+                            .foregroundStyle(PorcelainTokens.graphite)
+                        Text(failure)
+                            .font(.porcelainBody)
+                            .foregroundStyle(PorcelainTokens.destructive)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else if matches.isEmpty {
+                    Panel {
+                        Text("No matches yet")
+                            .font(.porcelainTitle)
+                            .foregroundStyle(PorcelainTokens.graphite)
+                        Text("Choose or take a photo to rank it against your own product covers.")
+                            .font(.porcelainBody)
+                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    Panel(padding: 0, spacing: 0) {
+                        ForEach(Array(matches.enumerated()), id: \.element.id) { position, match in
+                            if position > 0 { PanelDivider(inset: PorcelainTokens.Space.lg + 56) }
+                            NavigationLink(value: Route.entityDetail(.product, id: match.productID.rawValue)) {
+                                CandidateRow(match: match, best: position == 0)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                 }
             }
@@ -208,49 +277,35 @@ struct IdentifyResultsSection: View {
     }
 }
 
-private struct ProbeThumbnail: View {
-    let image: CGImage
-
-    var body: some View {
-        Image(decorative: image, scale: 1)
-            .resizable()
-            .scaledToFit()
-            .frame(maxWidth: 160, maxHeight: 160)
-            .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusMedium))
-    }
-}
-
 private struct CandidateRow: View {
     let match: IdentificationCandidate
-    let emphasized: Bool
+    let best: Bool
 
     var body: some View {
-        HStack(spacing: PorcelainTokens.spacing * 1.5) {
-            AsyncImage(url: match.imageURL) { phase in
-                if case .success(let image) = phase {
-                    image.resizable().scaledToFill()
-                } else {
-                    placeholder
+        HStack(spacing: PorcelainTokens.Space.md) {
+            Thumb(url: match.imageURL, size: 56, symbol: "shippingbox")
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                Text(match.name)
+                    .font(.body.weight(best ? .semibold : .regular))
+                    .foregroundStyle(PorcelainTokens.graphite)
+                    .lineLimit(2)
+                HStack(spacing: PorcelainTokens.Space.sm) {
+                    Text("distance \(String(format: "%.3f", match.distance))")
+                        .font(.porcelainData)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    if best {
+                        StatusChip(text: "Best match")
+                    }
                 }
             }
-            .frame(width: 44, height: 44)
-            .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusSmall))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(match.name)
-                    .font(emphasized ? .headline : .body)
-                    .lineLimit(1)
-                Text("distance \(String(format: "%.3f", match.distance))")
-                    .font(.footnote)
-                    .foregroundStyle(emphasized ? PorcelainTokens.cobalt : PorcelainTokens.graphiteSecondary)
-            }
+            Spacer(minLength: PorcelainTokens.Space.sm)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(PorcelainTokens.graphiteSecondary)
         }
-    }
-
-    private var placeholder: some View {
-        RoundedRectangle(cornerRadius: PorcelainTokens.radiusSmall)
-            .fill(PorcelainTokens.inset)
-            .overlay(Image(systemName: "photo").foregroundStyle(PorcelainTokens.graphiteSecondary))
+        .padding(.horizontal, PorcelainTokens.Space.md)
+        .padding(.vertical, PorcelainTokens.Space.md)
+        .contentShape(Rectangle())
     }
 }
 
@@ -300,27 +355,40 @@ private struct CameraPicker: UIViewControllerRepresentable {
 
 #Preview("Empty") {
     NavigationStack {
-        List {
+        ScrollView {
             IdentifyResultsSection(matches: [], probe: nil)
+                .padding(PorcelainTokens.Space.lg)
         }
+        .porcelainScreen()
         .navigationTitle("Identify")
     }
 }
 
 #Preview("Matches") {
     NavigationStack {
-        List {
-            IdentifyResultsSection(matches: PreviewFixtures.sampleCandidates, probe: PreviewFixtures.sampleProbeImage)
+        ScrollView {
+            IdentifyResultsSection(
+                matches: PreviewFixtures.sampleCandidates,
+                probe: PreviewFixtures.sampleProbeImage
+            )
+            .padding(PorcelainTokens.Space.lg)
         }
+        .porcelainScreen()
         .navigationTitle("Identify")
     }
 }
 
 #Preview("Failed") {
     NavigationStack {
-        List {
-            IdentifyResultsSection(matches: [], probe: PreviewFixtures.sampleProbeImage, failure: "Vision feature print request failed.")
+        ScrollView {
+            IdentifyResultsSection(
+                matches: [],
+                probe: PreviewFixtures.sampleProbeImage,
+                failure: "Vision feature print request failed."
+            )
+            .padding(PorcelainTokens.Space.lg)
         }
+        .porcelainScreen()
         .navigationTitle("Identify")
     }
 }
