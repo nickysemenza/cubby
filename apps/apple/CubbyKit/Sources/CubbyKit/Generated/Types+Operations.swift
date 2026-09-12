@@ -2989,6 +2989,10 @@ internal enum Operations {
                 internal var nameFilter: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/manufacturerExact`.
                 internal var manufacturerExact: [Swift.String]?
+                /// Filter by manufacturer
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/manufacturerFilter`.
+                internal var manufacturerFilter: Swift.String?
                 /// Filter by UPC/barcode — matches ANY of the product's barcodes
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/upcFilter`.
@@ -2997,6 +3001,13 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/modelFilter`.
                 internal var modelFilter: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/modelPresenceFilter`.
+                internal enum ModelPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/modelPresenceFilter`.
+                internal var modelPresenceFilter: Operations.Resources_product_list.Input.Query.ModelPresenceFilterPayload?
                 /// Product category
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/CategoryFilterPayload`.
@@ -3026,24 +3037,6 @@ internal enum Operations {
                 internal var expectedQuantityMax: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/notesFilter`.
                 internal var notesFilter: Swift.String?
-                /// Filter by manufacturer
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/manufacturerFilter`.
-                internal var manufacturerFilter: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/upcPresenceFilter`.
-                internal enum UpcPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/upcPresenceFilter`.
-                internal var upcPresenceFilter: Operations.Resources_product_list.Input.Query.UpcPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/modelPresenceFilter`.
-                internal enum ModelPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/modelPresenceFilter`.
-                internal var modelPresenceFilter: Operations.Resources_product_list.Input.Query.ModelPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/notesPresenceFilter`.
                 internal enum NotesPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -3051,6 +3044,26 @@ internal enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/notesPresenceFilter`.
                 internal var notesPresenceFilter: Operations.Resources_product_list.Input.Query.NotesPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/stockTrackedPresenceFilter`.
+                internal enum StockTrackedPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/stockTrackedPresenceFilter`.
+                internal var stockTrackedPresenceFilter: Operations.Resources_product_list.Input.Query.StockTrackedPresenceFilterPayload?
+                /// Match products carrying any of these tags
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/tagFilters`.
+                internal var tagFilters: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/upcPresenceFilter`.
+                internal enum UpcPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/upcPresenceFilter`.
+                internal var upcPresenceFilter: Operations.Resources_product_list.Input.Query.UpcPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/externalIdSource`.
                 internal var externalIdSource: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/externalIdPresenceFilter`.
@@ -3284,10 +3297,6 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/taskDueTo`.
                 internal var taskDueTo: Swift.String?
-                /// Match products carrying any of these tags
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/tagFilters`.
-                internal var tagFilters: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/tagsPresenceFilter`.
                 internal enum TagsPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -3397,15 +3406,6 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/componentPresenceFilter`.
                 internal var componentPresenceFilter: Operations.Resources_product_list.Input.Query.ComponentPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/stockTrackedPresenceFilter`.
-                internal enum StockTrackedPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/products/GET/query/stockTrackedPresenceFilter`.
-                internal var stockTrackedPresenceFilter: Operations.Resources_product_list.Input.Query.StockTrackedPresenceFilterPayload?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/page`.
@@ -3453,16 +3453,18 @@ internal enum Operations {
                 ///   - taskSearch:
                 ///   - nameFilter: Filter by product name
                 ///   - manufacturerExact:
+                ///   - manufacturerFilter: Filter by manufacturer
                 ///   - upcFilter: Filter by UPC/barcode — matches ANY of the product's barcodes
                 ///   - modelFilter: Filter by model number — a tool's real identity when the name is generic.
+                ///   - modelPresenceFilter:
                 ///   - categoryFilter: Filter by category
                 ///   - expectedQuantityMin:
                 ///   - expectedQuantityMax:
                 ///   - notesFilter:
-                ///   - manufacturerFilter: Filter by manufacturer
-                ///   - upcPresenceFilter:
-                ///   - modelPresenceFilter:
                 ///   - notesPresenceFilter:
+                ///   - stockTrackedPresenceFilter: Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).
+                ///   - tagFilters: Match products carrying any of these tags
+                ///   - upcPresenceFilter:
                 ///   - externalIdSource:
                 ///   - externalIdPresenceFilter:
                 ///   - dataStatus:
@@ -3481,7 +3483,6 @@ internal enum Operations {
                 ///   - taskOpenOnly:
                 ///   - taskDueFrom: Calendar day as "YYYY-MM-DD"
                 ///   - taskDueTo: Calendar day as "YYYY-MM-DD"
-                ///   - tagFilters: Match products carrying any of these tags
                 ///   - tagsPresenceFilter:
                 ///   - categoryPresenceFilter:
                 ///   - expenseCountMin:
@@ -3499,7 +3500,6 @@ internal enum Operations {
                 ///   - imagePresenceFilter: Filter to products that do / don't have at least one image (PDF manuals don't count).
                 ///   - unitMappingPresenceFilter: Filter to products that do / don't have at least one unit mapping (conversion edge).
                 ///   - componentPresenceFilter: Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product.
-                ///   - stockTrackedPresenceFilter: Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
@@ -3535,16 +3535,18 @@ internal enum Operations {
                     taskSearch: Swift.String? = nil,
                     nameFilter: Swift.String? = nil,
                     manufacturerExact: [Swift.String]? = nil,
+                    manufacturerFilter: Swift.String? = nil,
                     upcFilter: Swift.String? = nil,
                     modelFilter: Swift.String? = nil,
+                    modelPresenceFilter: Operations.Resources_product_list.Input.Query.ModelPresenceFilterPayload? = nil,
                     categoryFilter: Operations.Resources_product_list.Input.Query.CategoryFilterPayload? = nil,
                     expectedQuantityMin: Swift.Double? = nil,
                     expectedQuantityMax: Swift.Double? = nil,
                     notesFilter: Swift.String? = nil,
-                    manufacturerFilter: Swift.String? = nil,
-                    upcPresenceFilter: Operations.Resources_product_list.Input.Query.UpcPresenceFilterPayload? = nil,
-                    modelPresenceFilter: Operations.Resources_product_list.Input.Query.ModelPresenceFilterPayload? = nil,
                     notesPresenceFilter: Operations.Resources_product_list.Input.Query.NotesPresenceFilterPayload? = nil,
+                    stockTrackedPresenceFilter: Operations.Resources_product_list.Input.Query.StockTrackedPresenceFilterPayload? = nil,
+                    tagFilters: [Swift.String]? = nil,
+                    upcPresenceFilter: Operations.Resources_product_list.Input.Query.UpcPresenceFilterPayload? = nil,
                     externalIdSource: [Swift.String]? = nil,
                     externalIdPresenceFilter: Operations.Resources_product_list.Input.Query.ExternalIdPresenceFilterPayload? = nil,
                     dataStatus: Operations.Resources_product_list.Input.Query.DataStatusPayload? = nil,
@@ -3563,7 +3565,6 @@ internal enum Operations {
                     taskOpenOnly: Swift.Bool? = nil,
                     taskDueFrom: Swift.String? = nil,
                     taskDueTo: Swift.String? = nil,
-                    tagFilters: [Swift.String]? = nil,
                     tagsPresenceFilter: Operations.Resources_product_list.Input.Query.TagsPresenceFilterPayload? = nil,
                     categoryPresenceFilter: Operations.Resources_product_list.Input.Query.CategoryPresenceFilterPayload? = nil,
                     expenseCountMin: Swift.Int? = nil,
@@ -3581,7 +3582,6 @@ internal enum Operations {
                     imagePresenceFilter: Operations.Resources_product_list.Input.Query.ImagePresenceFilterPayload? = nil,
                     unitMappingPresenceFilter: Operations.Resources_product_list.Input.Query.UnitMappingPresenceFilterPayload? = nil,
                     componentPresenceFilter: Operations.Resources_product_list.Input.Query.ComponentPresenceFilterPayload? = nil,
-                    stockTrackedPresenceFilter: Operations.Resources_product_list.Input.Query.StockTrackedPresenceFilterPayload? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -3617,16 +3617,18 @@ internal enum Operations {
                     self.taskSearch = taskSearch
                     self.nameFilter = nameFilter
                     self.manufacturerExact = manufacturerExact
+                    self.manufacturerFilter = manufacturerFilter
                     self.upcFilter = upcFilter
                     self.modelFilter = modelFilter
+                    self.modelPresenceFilter = modelPresenceFilter
                     self.categoryFilter = categoryFilter
                     self.expectedQuantityMin = expectedQuantityMin
                     self.expectedQuantityMax = expectedQuantityMax
                     self.notesFilter = notesFilter
-                    self.manufacturerFilter = manufacturerFilter
-                    self.upcPresenceFilter = upcPresenceFilter
-                    self.modelPresenceFilter = modelPresenceFilter
                     self.notesPresenceFilter = notesPresenceFilter
+                    self.stockTrackedPresenceFilter = stockTrackedPresenceFilter
+                    self.tagFilters = tagFilters
+                    self.upcPresenceFilter = upcPresenceFilter
                     self.externalIdSource = externalIdSource
                     self.externalIdPresenceFilter = externalIdPresenceFilter
                     self.dataStatus = dataStatus
@@ -3645,7 +3647,6 @@ internal enum Operations {
                     self.taskOpenOnly = taskOpenOnly
                     self.taskDueFrom = taskDueFrom
                     self.taskDueTo = taskDueTo
-                    self.tagFilters = tagFilters
                     self.tagsPresenceFilter = tagsPresenceFilter
                     self.categoryPresenceFilter = categoryPresenceFilter
                     self.expenseCountMin = expenseCountMin
@@ -3663,7 +3664,6 @@ internal enum Operations {
                     self.imagePresenceFilter = imagePresenceFilter
                     self.unitMappingPresenceFilter = unitMappingPresenceFilter
                     self.componentPresenceFilter = componentPresenceFilter
-                    self.stockTrackedPresenceFilter = stockTrackedPresenceFilter
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -4598,12 +4598,12 @@ internal enum Operations {
                 internal var mealSearch: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/nameFilter`.
                 internal var nameFilter: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/tagFilters`.
+                internal var tagFilters: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/totalMinutesMin`.
                 internal var totalMinutesMin: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/totalMinutesMax`.
                 internal var totalMinutesMax: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/tagFilters`.
-                internal var tagFilters: [Swift.String]?
                 /// cookbook shortcode, e.g. CKB-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload`.
@@ -4749,9 +4749,9 @@ internal enum Operations {
                 ///   - mealPresenceFilter: Filter to recipes that have / haven't been planned on at least one live meal
                 ///   - mealSearch:
                 ///   - nameFilter:
+                ///   - tagFilters:
                 ///   - totalMinutesMin:
                 ///   - totalMinutesMax:
-                ///   - tagFilters:
                 ///   - cookbookId:
                 ///   - cookbookPresenceFilter:
                 ///   - tagsPresenceFilter:
@@ -4779,9 +4779,9 @@ internal enum Operations {
                     mealPresenceFilter: Operations.Resources_recipe_list.Input.Query.MealPresenceFilterPayload? = nil,
                     mealSearch: Swift.String? = nil,
                     nameFilter: Swift.String? = nil,
+                    tagFilters: [Swift.String]? = nil,
                     totalMinutesMin: Swift.Double? = nil,
                     totalMinutesMax: Swift.Double? = nil,
-                    tagFilters: [Swift.String]? = nil,
                     cookbookId: Operations.Resources_recipe_list.Input.Query.CookbookIdPayload? = nil,
                     cookbookPresenceFilter: Operations.Resources_recipe_list.Input.Query.CookbookPresenceFilterPayload? = nil,
                     tagsPresenceFilter: Operations.Resources_recipe_list.Input.Query.TagsPresenceFilterPayload? = nil,
@@ -4809,9 +4809,9 @@ internal enum Operations {
                     self.mealPresenceFilter = mealPresenceFilter
                     self.mealSearch = mealSearch
                     self.nameFilter = nameFilter
+                    self.tagFilters = tagFilters
                     self.totalMinutesMin = totalMinutesMin
                     self.totalMinutesMax = totalMinutesMax
-                    self.tagFilters = tagFilters
                     self.cookbookId = cookbookId
                     self.cookbookPresenceFilter = cookbookPresenceFilter
                     self.tagsPresenceFilter = tagsPresenceFilter
@@ -6737,6 +6737,15 @@ internal enum Operations {
                 internal var ingredientPresenceFilter: Operations.Resources_location_list.Input.Query.IngredientPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientSearch`.
                 internal var ingredientSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/aiDescriptionPresenceFilter`.
+                internal enum AiDescriptionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to locations that do / don't have an AI-generated description.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/aiDescriptionPresenceFilter`.
+                internal var aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload?
                 /// Filter by location name (substring)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/nameFilter`.
@@ -6921,15 +6930,6 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/childPresenceFilter`.
                 internal var childPresenceFilter: Operations.Resources_location_list.Input.Query.ChildPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/aiDescriptionPresenceFilter`.
-                internal enum AiDescriptionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to locations that do / don't have an AI-generated description.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/aiDescriptionPresenceFilter`.
-                internal var aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload?
                 /// Locations last recounted more than this many days ago, or never recounted.
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/lastBulkInventoryOlderThanDays`.
@@ -6966,6 +6966,7 @@ internal enum Operations {
                 ///   - ingredientId:
                 ///   - ingredientPresenceFilter:
                 ///   - ingredientSearch:
+                ///   - aiDescriptionPresenceFilter: Filter to locations that do / don't have an AI-generated description.
                 ///   - nameFilter: Filter by location name (substring)
                 ///   - itemTypeFilter:
                 ///   - productId:
@@ -6975,7 +6976,6 @@ internal enum Operations {
                 ///   - inventoryPresenceFilter: Filter to locations that do / don't hold at least one live inventory entry
                 ///   - imagePresenceFilter: Filter to locations that do / don't have at least one image (PDF attachments don't count).
                 ///   - childPresenceFilter: Filter to locations that do / don't have at least one live child location.
-                ///   - aiDescriptionPresenceFilter: Filter to locations that do / don't have an AI-generated description.
                 ///   - lastBulkInventoryOlderThanDays: Locations last recounted more than this many days ago, or never recounted.
                 ///   - directItemCountMin:
                 ///   - directItemCountMax:
@@ -6993,6 +6993,7 @@ internal enum Operations {
                     ingredientId: [Swift.String]? = nil,
                     ingredientPresenceFilter: Operations.Resources_location_list.Input.Query.IngredientPresenceFilterPayload? = nil,
                     ingredientSearch: Swift.String? = nil,
+                    aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload? = nil,
                     nameFilter: Swift.String? = nil,
                     itemTypeFilter: Operations.Resources_location_list.Input.Query.ItemTypeFilterPayload? = nil,
                     productId: Operations.Resources_location_list.Input.Query.ProductIdPayload? = nil,
@@ -7002,7 +7003,6 @@ internal enum Operations {
                     inventoryPresenceFilter: Operations.Resources_location_list.Input.Query.InventoryPresenceFilterPayload? = nil,
                     imagePresenceFilter: Operations.Resources_location_list.Input.Query.ImagePresenceFilterPayload? = nil,
                     childPresenceFilter: Operations.Resources_location_list.Input.Query.ChildPresenceFilterPayload? = nil,
-                    aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload? = nil,
                     lastBulkInventoryOlderThanDays: Swift.Int? = nil,
                     directItemCountMin: Swift.Int? = nil,
                     directItemCountMax: Swift.Int? = nil,
@@ -7020,6 +7020,7 @@ internal enum Operations {
                     self.ingredientId = ingredientId
                     self.ingredientPresenceFilter = ingredientPresenceFilter
                     self.ingredientSearch = ingredientSearch
+                    self.aiDescriptionPresenceFilter = aiDescriptionPresenceFilter
                     self.nameFilter = nameFilter
                     self.itemTypeFilter = itemTypeFilter
                     self.productId = productId
@@ -7029,7 +7030,6 @@ internal enum Operations {
                     self.inventoryPresenceFilter = inventoryPresenceFilter
                     self.imagePresenceFilter = imagePresenceFilter
                     self.childPresenceFilter = childPresenceFilter
-                    self.aiDescriptionPresenceFilter = aiDescriptionPresenceFilter
                     self.lastBulkInventoryOlderThanDays = lastBulkInventoryOlderThanDays
                     self.directItemCountMin = directItemCountMin
                     self.directItemCountMax = directItemCountMax
@@ -15817,18 +15817,33 @@ internal enum Operations {
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/updatedTo`.
                 internal var updatedTo: Swift.String?
-                /// Substring match on the human display label only
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/displayLabelSearch`.
-                internal var displayLabelSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/expenseTotalMin`.
-                internal var expenseTotalMin: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/expenseTotalMax`.
-                internal var expenseTotalMax: Swift.Double?
                 /// Substring match on order id or human display label
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/search`.
                 internal var search: Swift.String?
+                /// Substring match on the human display label only
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/displayLabelSearch`.
+                internal var displayLabelSearch: Swift.String?
+                /// Inclusive lower bound on purchase date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dateFrom`.
+                internal var dateFrom: Swift.String?
+                /// Inclusive upper bound on purchase date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dateTo`.
+                internal var dateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/statedTotalPresenceFilter`.
+                internal enum StatedTotalPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/statedTotalPresenceFilter`.
+                internal var statedTotalPresenceFilter: Operations.Resources_purchase_list.Input.Query.StatedTotalPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/expenseTotalMin`.
+                internal var expenseTotalMin: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/expenseTotalMax`.
+                internal var expenseTotalMax: Swift.Double?
                 /// vendor shortcode, e.g. VEN-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/VendorIdPayload`.
@@ -15941,13 +15956,6 @@ internal enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/orderIdPresenceFilter`.
                 internal var orderIdPresenceFilter: Operations.Resources_purchase_list.Input.Query.OrderIdPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/statedTotalPresenceFilter`.
-                internal enum StatedTotalPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/statedTotalPresenceFilter`.
-                internal var statedTotalPresenceFilter: Operations.Resources_purchase_list.Input.Query.StatedTotalPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/ExpenseStatusPayload`.
                 internal enum ExpenseStatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case empty = "empty"
@@ -16062,14 +16070,6 @@ internal enum Operations {
                 internal typealias DataGapPayload = [Operations.Resources_purchase_list.Input.Query.DataGapPayloadPayload]
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dataGap`.
                 internal var dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload?
-                /// Inclusive lower bound on purchase date
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dateFrom`.
-                internal var dateFrom: Swift.String?
-                /// Inclusive upper bound on purchase date
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/dateTo`.
-                internal var dateTo: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/purchases/GET/query/page`.
@@ -16091,10 +16091,13 @@ internal enum Operations {
                 ///   - createdTo: Calendar day as "YYYY-MM-DD"
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - search: Substring match on order id or human display label
                 ///   - displayLabelSearch: Substring match on the human display label only
+                ///   - dateFrom: Inclusive lower bound on purchase date
+                ///   - dateTo: Inclusive upper bound on purchase date
+                ///   - statedTotalPresenceFilter:
                 ///   - expenseTotalMin:
                 ///   - expenseTotalMax:
-                ///   - search: Substring match on order id or human display label
                 ///   - vendorId:
                 ///   - expenseId:
                 ///   - expensePresenceFilter:
@@ -16110,15 +16113,12 @@ internal enum Operations {
                 ///   - projectSearch:
                 ///   - orderId:
                 ///   - orderIdPresenceFilter:
-                ///   - statedTotalPresenceFilter:
                 ///   - expenseStatus:
                 ///   - reconciliation:
                 ///   - financialReconciliation:
                 ///   - documentPresenceFilter:
                 ///   - dataStatus:
                 ///   - dataGap:
-                ///   - dateFrom: Inclusive lower bound on purchase date
-                ///   - dateTo: Inclusive upper bound on purchase date
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
@@ -16128,10 +16128,13 @@ internal enum Operations {
                     createdTo: Swift.String? = nil,
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
+                    search: Swift.String? = nil,
                     displayLabelSearch: Swift.String? = nil,
+                    dateFrom: Swift.String? = nil,
+                    dateTo: Swift.String? = nil,
+                    statedTotalPresenceFilter: Operations.Resources_purchase_list.Input.Query.StatedTotalPresenceFilterPayload? = nil,
                     expenseTotalMin: Swift.Double? = nil,
                     expenseTotalMax: Swift.Double? = nil,
-                    search: Swift.String? = nil,
                     vendorId: Operations.Resources_purchase_list.Input.Query.VendorIdPayload? = nil,
                     expenseId: [Swift.String]? = nil,
                     expensePresenceFilter: Operations.Resources_purchase_list.Input.Query.ExpensePresenceFilterPayload? = nil,
@@ -16147,15 +16150,12 @@ internal enum Operations {
                     projectSearch: Swift.String? = nil,
                     orderId: [Swift.String]? = nil,
                     orderIdPresenceFilter: Operations.Resources_purchase_list.Input.Query.OrderIdPresenceFilterPayload? = nil,
-                    statedTotalPresenceFilter: Operations.Resources_purchase_list.Input.Query.StatedTotalPresenceFilterPayload? = nil,
                     expenseStatus: Operations.Resources_purchase_list.Input.Query.ExpenseStatusPayload? = nil,
                     reconciliation: Operations.Resources_purchase_list.Input.Query.ReconciliationPayload? = nil,
                     financialReconciliation: Operations.Resources_purchase_list.Input.Query.FinancialReconciliationPayload? = nil,
                     documentPresenceFilter: Operations.Resources_purchase_list.Input.Query.DocumentPresenceFilterPayload? = nil,
                     dataStatus: Operations.Resources_purchase_list.Input.Query.DataStatusPayload? = nil,
                     dataGap: Operations.Resources_purchase_list.Input.Query.DataGapPayload? = nil,
-                    dateFrom: Swift.String? = nil,
-                    dateTo: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -16165,10 +16165,13 @@ internal enum Operations {
                     self.createdTo = createdTo
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
+                    self.search = search
                     self.displayLabelSearch = displayLabelSearch
+                    self.dateFrom = dateFrom
+                    self.dateTo = dateTo
+                    self.statedTotalPresenceFilter = statedTotalPresenceFilter
                     self.expenseTotalMin = expenseTotalMin
                     self.expenseTotalMax = expenseTotalMax
-                    self.search = search
                     self.vendorId = vendorId
                     self.expenseId = expenseId
                     self.expensePresenceFilter = expensePresenceFilter
@@ -16184,15 +16187,12 @@ internal enum Operations {
                     self.projectSearch = projectSearch
                     self.orderId = orderId
                     self.orderIdPresenceFilter = orderIdPresenceFilter
-                    self.statedTotalPresenceFilter = statedTotalPresenceFilter
                     self.expenseStatus = expenseStatus
                     self.reconciliation = reconciliation
                     self.financialReconciliation = financialReconciliation
                     self.documentPresenceFilter = documentPresenceFilter
                     self.dataStatus = dataStatus
                     self.dataGap = dataGap
-                    self.dateFrom = dateFrom
-                    self.dateTo = dateTo
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -18191,6 +18191,10 @@ internal enum Operations {
                 internal var productPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ProductPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productSearch`.
                 internal var productSearch: Swift.String?
+                /// Substring match on merchant or raw description
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/search`.
+                internal var search: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/KindPayload`.
                 internal enum KindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case purchase = "purchase"
@@ -18228,8 +18232,18 @@ internal enum Operations {
                 internal var postedDateTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/merchant`.
                 internal var merchant: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/search`.
-                internal var search: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/transactionDateFrom`.
+                internal var transactionDateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/transactionDateTo`.
+                internal var transactionDateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMin`.
+                internal var amountMin: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMax`.
+                internal var amountMax: Swift.Double?
                 /// financialAccount shortcode, e.g. FAC-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload`.
@@ -18365,18 +18379,6 @@ internal enum Operations {
                 internal var source: [Swift.String]?
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/externalId`.
                 internal var externalId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMin`.
-                internal var amountMin: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMax`.
-                internal var amountMax: Swift.Double?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/transactionDateFrom`.
-                internal var transactionDateFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/transactionDateTo`.
-                internal var transactionDateTo: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/page`.
@@ -18407,22 +18409,22 @@ internal enum Operations {
                 ///   - productId:
                 ///   - productPresenceFilter:
                 ///   - productSearch:
+                ///   - search: Substring match on merchant or raw description
                 ///   - kind:
                 ///   - status:
                 ///   - postedDateFrom: Calendar day as "YYYY-MM-DD"
                 ///   - postedDateTo: Calendar day as "YYYY-MM-DD"
                 ///   - merchant:
-                ///   - search:
+                ///   - transactionDateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - transactionDateTo: Calendar day as "YYYY-MM-DD"
+                ///   - amountMin:
+                ///   - amountMax:
                 ///   - accountId:
                 ///   - purchaseId:
                 ///   - purchasePresenceFilter:
                 ///   - allocationIntegrity:
                 ///   - source:
                 ///   - externalId:
-                ///   - amountMin:
-                ///   - amountMax:
-                ///   - transactionDateFrom: Calendar day as "YYYY-MM-DD"
-                ///   - transactionDateTo: Calendar day as "YYYY-MM-DD"
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
@@ -18441,22 +18443,22 @@ internal enum Operations {
                     productId: [Swift.String]? = nil,
                     productPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ProductPresenceFilterPayload? = nil,
                     productSearch: Swift.String? = nil,
+                    search: Swift.String? = nil,
                     kind: Operations.Resources_financialTransaction_list.Input.Query.KindPayload? = nil,
                     status: Operations.Resources_financialTransaction_list.Input.Query.StatusPayload? = nil,
                     postedDateFrom: Swift.String? = nil,
                     postedDateTo: Swift.String? = nil,
                     merchant: Swift.String? = nil,
-                    search: Swift.String? = nil,
+                    transactionDateFrom: Swift.String? = nil,
+                    transactionDateTo: Swift.String? = nil,
+                    amountMin: Swift.Double? = nil,
+                    amountMax: Swift.Double? = nil,
                     accountId: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayload? = nil,
                     purchaseId: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayload? = nil,
                     purchasePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.PurchasePresenceFilterPayload? = nil,
                     allocationIntegrity: Operations.Resources_financialTransaction_list.Input.Query.AllocationIntegrityPayload? = nil,
                     source: [Swift.String]? = nil,
                     externalId: [Swift.String]? = nil,
-                    amountMin: Swift.Double? = nil,
-                    amountMax: Swift.Double? = nil,
-                    transactionDateFrom: Swift.String? = nil,
-                    transactionDateTo: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -18475,22 +18477,22 @@ internal enum Operations {
                     self.productId = productId
                     self.productPresenceFilter = productPresenceFilter
                     self.productSearch = productSearch
+                    self.search = search
                     self.kind = kind
                     self.status = status
                     self.postedDateFrom = postedDateFrom
                     self.postedDateTo = postedDateTo
                     self.merchant = merchant
-                    self.search = search
+                    self.transactionDateFrom = transactionDateFrom
+                    self.transactionDateTo = transactionDateTo
+                    self.amountMin = amountMin
+                    self.amountMax = amountMax
                     self.accountId = accountId
                     self.purchaseId = purchaseId
                     self.purchasePresenceFilter = purchasePresenceFilter
                     self.allocationIntegrity = allocationIntegrity
                     self.source = source
                     self.externalId = externalId
-                    self.amountMin = amountMin
-                    self.amountMax = amountMax
-                    self.transactionDateFrom = transactionDateFrom
-                    self.transactionDateTo = transactionDateTo
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
@@ -20392,6 +20394,14 @@ internal enum Operations {
                 internal var financialTransactionPresenceFilter: Operations.Resources_expense_list.Input.Query.FinancialTransactionPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionSearch`.
                 internal var financialTransactionSearch: Swift.String?
+                /// Inclusive lower bound on expense date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateFrom`.
+                internal var dateFrom: Swift.String?
+                /// Inclusive upper bound on expense date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateTo`.
+                internal var dateTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/CostTypePayload`.
                 internal enum CostTypePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case materials = "materials"
@@ -20453,6 +20463,30 @@ internal enum Operations {
                 internal var trade: Operations.Resources_expense_list.Input.Query.TradePayload?
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/future`.
                 internal var future: Swift.Bool?
+                /// Inclusive lower bound on expense cost, in dollars
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costMin`.
+                internal var costMin: Swift.Double?
+                /// Inclusive upper bound on expense cost, in dollars
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costMax`.
+                internal var costMax: Swift.Double?
+                /// Inclusive lower bound on recorded product quantity
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityMin`.
+                internal var productQuantityMin: Swift.Double?
+                /// Inclusive upper bound on recorded product quantity
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityMax`.
+                internal var productQuantityMax: Swift.Double?
+                /// Substring match on notes
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/notesSearch`.
+                internal var notesSearch: Swift.String?
+                /// Substring match on url
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/urlSearch`.
+                internal var urlSearch: Swift.String?
                 /// project shortcode, e.g. PRJ-4K7M
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload`.
@@ -20653,18 +20687,6 @@ internal enum Operations {
                 internal var vendorPresenceFilter: Operations.Resources_expense_list.Input.Query.VendorPresenceFilterPayload?
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/search`.
                 internal var search: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/notesSearch`.
-                internal var notesSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/urlSearch`.
-                internal var urlSearch: Swift.String?
-                /// Inclusive lower bound on expense date
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateFrom`.
-                internal var dateFrom: Swift.String?
-                /// Inclusive upper bound on expense date
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateTo`.
-                internal var dateTo: Swift.String?
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateRelative`.
                 internal enum DateRelativePayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case beforeToday = "beforeToday"
@@ -20672,14 +20694,6 @@ internal enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateRelative`.
                 internal var dateRelative: Operations.Resources_expense_list.Input.Query.DateRelativePayload?
-                /// Inclusive lower bound on expense cost, in dollars
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costMin`.
-                internal var costMin: Swift.Double?
-                /// Inclusive upper bound on expense cost, in dollars
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costMax`.
-                internal var costMax: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costPresenceFilter`.
                 internal enum CostPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -20708,14 +20722,6 @@ internal enum Operations {
                 }
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityPresenceFilter`.
                 internal var productQuantityPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductQuantityPresenceFilterPayload?
-                /// Inclusive lower bound on recorded product quantity
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityMin`.
-                internal var productQuantityMin: Swift.Double?
-                /// Inclusive upper bound on recorded product quantity
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityMax`.
-                internal var productQuantityMax: Swift.Double?
                 /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/orderIdPresenceFilter`.
                 internal enum OrderIdPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
@@ -20846,11 +20852,19 @@ internal enum Operations {
                 ///   - financialTransactionId:
                 ///   - financialTransactionPresenceFilter:
                 ///   - financialTransactionSearch:
+                ///   - dateFrom: Inclusive lower bound on expense date
+                ///   - dateTo: Inclusive upper bound on expense date
                 ///   - costType:
                 ///   - lineKind:
                 ///   - lineBasis:
                 ///   - trade:
                 ///   - future:
+                ///   - costMin: Inclusive lower bound on expense cost, in dollars
+                ///   - costMax: Inclusive upper bound on expense cost, in dollars
+                ///   - productQuantityMin: Inclusive lower bound on recorded product quantity
+                ///   - productQuantityMax: Inclusive upper bound on recorded product quantity
+                ///   - notesSearch: Substring match on notes
+                ///   - urlSearch: Substring match on url
                 ///   - projectId:
                 ///   - includeSubProjects:
                 ///   - projectPresenceFilter:
@@ -20859,19 +20873,11 @@ internal enum Operations {
                 ///   - vendorId:
                 ///   - vendorPresenceFilter:
                 ///   - search:
-                ///   - notesSearch:
-                ///   - urlSearch:
-                ///   - dateFrom: Inclusive lower bound on expense date
-                ///   - dateTo: Inclusive upper bound on expense date
                 ///   - dateRelative:
-                ///   - costMin: Inclusive lower bound on expense cost, in dollars
-                ///   - costMax: Inclusive upper bound on expense cost, in dollars
                 ///   - costPresenceFilter:
                 ///   - costSign:
                 ///   - disposalPurchasePresenceFilter:
                 ///   - productQuantityPresenceFilter:
-                ///   - productQuantityMin: Inclusive lower bound on recorded product quantity
-                ///   - productQuantityMax: Inclusive upper bound on recorded product quantity
                 ///   - orderIdPresenceFilter:
                 ///   - orderId:
                 ///   - purchaseId:
@@ -20894,11 +20900,19 @@ internal enum Operations {
                     financialTransactionId: [Swift.String]? = nil,
                     financialTransactionPresenceFilter: Operations.Resources_expense_list.Input.Query.FinancialTransactionPresenceFilterPayload? = nil,
                     financialTransactionSearch: Swift.String? = nil,
+                    dateFrom: Swift.String? = nil,
+                    dateTo: Swift.String? = nil,
                     costType: Operations.Resources_expense_list.Input.Query.CostTypePayload? = nil,
                     lineKind: Operations.Resources_expense_list.Input.Query.LineKindPayload? = nil,
                     lineBasis: Operations.Resources_expense_list.Input.Query.LineBasisPayload? = nil,
                     trade: Operations.Resources_expense_list.Input.Query.TradePayload? = nil,
                     future: Swift.Bool? = nil,
+                    costMin: Swift.Double? = nil,
+                    costMax: Swift.Double? = nil,
+                    productQuantityMin: Swift.Double? = nil,
+                    productQuantityMax: Swift.Double? = nil,
+                    notesSearch: Swift.String? = nil,
+                    urlSearch: Swift.String? = nil,
                     projectId: Operations.Resources_expense_list.Input.Query.ProjectIdPayload? = nil,
                     includeSubProjects: Swift.Bool? = nil,
                     projectPresenceFilter: Operations.Resources_expense_list.Input.Query.ProjectPresenceFilterPayload? = nil,
@@ -20907,19 +20921,11 @@ internal enum Operations {
                     vendorId: Operations.Resources_expense_list.Input.Query.VendorIdPayload? = nil,
                     vendorPresenceFilter: Operations.Resources_expense_list.Input.Query.VendorPresenceFilterPayload? = nil,
                     search: [Swift.String]? = nil,
-                    notesSearch: Swift.String? = nil,
-                    urlSearch: Swift.String? = nil,
-                    dateFrom: Swift.String? = nil,
-                    dateTo: Swift.String? = nil,
                     dateRelative: Operations.Resources_expense_list.Input.Query.DateRelativePayload? = nil,
-                    costMin: Swift.Double? = nil,
-                    costMax: Swift.Double? = nil,
                     costPresenceFilter: Operations.Resources_expense_list.Input.Query.CostPresenceFilterPayload? = nil,
                     costSign: Operations.Resources_expense_list.Input.Query.CostSignPayload? = nil,
                     disposalPurchasePresenceFilter: Operations.Resources_expense_list.Input.Query.DisposalPurchasePresenceFilterPayload? = nil,
                     productQuantityPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductQuantityPresenceFilterPayload? = nil,
-                    productQuantityMin: Swift.Double? = nil,
-                    productQuantityMax: Swift.Double? = nil,
                     orderIdPresenceFilter: Operations.Resources_expense_list.Input.Query.OrderIdPresenceFilterPayload? = nil,
                     orderId: [Swift.String]? = nil,
                     purchaseId: Operations.Resources_expense_list.Input.Query.PurchaseIdPayload? = nil,
@@ -20942,11 +20948,19 @@ internal enum Operations {
                     self.financialTransactionId = financialTransactionId
                     self.financialTransactionPresenceFilter = financialTransactionPresenceFilter
                     self.financialTransactionSearch = financialTransactionSearch
+                    self.dateFrom = dateFrom
+                    self.dateTo = dateTo
                     self.costType = costType
                     self.lineKind = lineKind
                     self.lineBasis = lineBasis
                     self.trade = trade
                     self.future = future
+                    self.costMin = costMin
+                    self.costMax = costMax
+                    self.productQuantityMin = productQuantityMin
+                    self.productQuantityMax = productQuantityMax
+                    self.notesSearch = notesSearch
+                    self.urlSearch = urlSearch
                     self.projectId = projectId
                     self.includeSubProjects = includeSubProjects
                     self.projectPresenceFilter = projectPresenceFilter
@@ -20955,19 +20969,11 @@ internal enum Operations {
                     self.vendorId = vendorId
                     self.vendorPresenceFilter = vendorPresenceFilter
                     self.search = search
-                    self.notesSearch = notesSearch
-                    self.urlSearch = urlSearch
-                    self.dateFrom = dateFrom
-                    self.dateTo = dateTo
                     self.dateRelative = dateRelative
-                    self.costMin = costMin
-                    self.costMax = costMax
                     self.costPresenceFilter = costPresenceFilter
                     self.costSign = costSign
                     self.disposalPurchasePresenceFilter = disposalPurchasePresenceFilter
                     self.productQuantityPresenceFilter = productQuantityPresenceFilter
-                    self.productQuantityMin = productQuantityMin
-                    self.productQuantityMax = productQuantityMax
                     self.orderIdPresenceFilter = orderIdPresenceFilter
                     self.orderId = orderId
                     self.purchaseId = purchaseId

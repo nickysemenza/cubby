@@ -22149,12 +22149,7 @@
             }
           }
         },
-        "required": [
-          "locationId",
-          "expectedInventoryEntryIds",
-          "snapshotUpdatedAt",
-          "resolutions"
-        ]
+        "required": ["locationId", "expectedInventoryEntryIds", "resolutions"]
       },
       "Isbn": {
         "type": "string"

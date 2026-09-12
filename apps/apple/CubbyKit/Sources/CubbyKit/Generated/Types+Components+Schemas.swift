@@ -3573,7 +3573,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value1`.
                 internal var value1: Components.Schemas.ProductFindOrCreateByCodeInput?
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value2`.
-                internal var value2: Components.Schemas.InputSchema137?
+                internal var value2: Components.Schemas.InputSchema140?
                 /// Creates a new `CodePayload`.
                 ///
                 /// - Parameters:
@@ -3581,7 +3581,7 @@ extension Components {
                 ///   - value2:
                 internal init(
                     value1: Components.Schemas.ProductFindOrCreateByCodeInput? = nil,
-                    value2: Components.Schemas.InputSchema137? = nil
+                    value2: Components.Schemas.InputSchema140? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -4603,23 +4603,23 @@ extension Components {
         internal typealias InputSchema43 = [Swift.String]
         /// - Remark: Generated from `#/components/schemas/input_schema52`.
         internal typealias InputSchema52 = [Components.Schemas.ImageShortcode]
-        /// - Remark: Generated from `#/components/schemas/input_schema137`.
-        internal struct InputSchema137: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema137/kind`.
+        /// - Remark: Generated from `#/components/schemas/input_schema140`.
+        internal struct InputSchema140: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema140/kind`.
             internal enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case product = "product"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema137/kind`.
-            internal var kind: Components.Schemas.InputSchema137.KindPayload
-            /// - Remark: Generated from `#/components/schemas/input_schema137/value`.
+            /// - Remark: Generated from `#/components/schemas/input_schema140/kind`.
+            internal var kind: Components.Schemas.InputSchema140.KindPayload
+            /// - Remark: Generated from `#/components/schemas/input_schema140/value`.
             internal var value: Components.Schemas.ProductShortcode
-            /// Creates a new `InputSchema137`.
+            /// Creates a new `InputSchema140`.
             ///
             /// - Parameters:
             ///   - kind:
             ///   - value:
             internal init(
-                kind: Components.Schemas.InputSchema137.KindPayload,
+                kind: Components.Schemas.InputSchema140.KindPayload,
                 value: Components.Schemas.ProductShortcode
             ) {
                 self.kind = kind

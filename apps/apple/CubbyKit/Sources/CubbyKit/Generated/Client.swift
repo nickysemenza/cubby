@@ -1692,6 +1692,13 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "manufacturerFilter",
+                    value: input.query.manufacturerFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "upcFilter",
                     value: input.query.upcFilter
                 )
@@ -1701,6 +1708,13 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "modelFilter",
                     value: input.query.modelFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "modelPresenceFilter",
+                    value: input.query.modelPresenceFilter
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -1734,8 +1748,22 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
-                    name: "manufacturerFilter",
-                    value: input.query.manufacturerFilter
+                    name: "notesPresenceFilter",
+                    value: input.query.notesPresenceFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "stockTrackedPresenceFilter",
+                    value: input.query.stockTrackedPresenceFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "tagFilters",
+                    value: input.query.tagFilters
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -1743,20 +1771,6 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "upcPresenceFilter",
                     value: input.query.upcPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "modelPresenceFilter",
-                    value: input.query.modelPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "notesPresenceFilter",
-                    value: input.query.notesPresenceFilter
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -1888,13 +1902,6 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
-                    name: "tagFilters",
-                    value: input.query.tagFilters
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
                     name: "tagsPresenceFilter",
                     value: input.query.tagsPresenceFilter
                 )
@@ -2009,13 +2016,6 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "componentPresenceFilter",
                     value: input.query.componentPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "stockTrackedPresenceFilter",
-                    value: input.query.stockTrackedPresenceFilter
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -2539,6 +2539,13 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "tagFilters",
+                    value: input.query.tagFilters
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "totalMinutesMin",
                     value: input.query.totalMinutesMin
                 )
@@ -2548,13 +2555,6 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "totalMinutesMax",
                     value: input.query.totalMinutesMax
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "tagFilters",
-                    value: input.query.tagFilters
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -3631,6 +3631,13 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "aiDescriptionPresenceFilter",
+                    value: input.query.aiDescriptionPresenceFilter
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "nameFilter",
                     value: input.query.nameFilter
                 )
@@ -3689,13 +3696,6 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "childPresenceFilter",
                     value: input.query.childPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "aiDescriptionPresenceFilter",
-                    value: input.query.aiDescriptionPresenceFilter
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -8293,8 +8293,36 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "search",
+                    value: input.query.search
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "displayLabelSearch",
                     value: input.query.displayLabelSearch
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "dateFrom",
+                    value: input.query.dateFrom
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "dateTo",
+                    value: input.query.dateTo
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "statedTotalPresenceFilter",
+                    value: input.query.statedTotalPresenceFilter
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -8309,13 +8337,6 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "expenseTotalMax",
                     value: input.query.expenseTotalMax
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "search",
-                    value: input.query.search
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -8426,13 +8447,6 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
-                    name: "statedTotalPresenceFilter",
-                    value: input.query.statedTotalPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
                     name: "expenseStatus",
                     value: input.query.expenseStatus
                 )
@@ -8470,20 +8484,6 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "dataGap",
                     value: input.query.dataGap
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dateFrom",
-                    value: input.query.dateFrom
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dateTo",
-                    value: input.query.dateTo
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -9602,6 +9602,13 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "search",
+                    value: input.query.search
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "kind",
                     value: input.query.kind
                 )
@@ -9637,8 +9644,29 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
-                    name: "search",
-                    value: input.query.search
+                    name: "transactionDateFrom",
+                    value: input.query.transactionDateFrom
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "transactionDateTo",
+                    value: input.query.transactionDateTo
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "amountMin",
+                    value: input.query.amountMin
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "amountMax",
+                    value: input.query.amountMax
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -9681,34 +9709,6 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "externalId",
                     value: input.query.externalId
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "amountMin",
-                    value: input.query.amountMin
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "amountMax",
-                    value: input.query.amountMax
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "transactionDateFrom",
-                    value: input.query.transactionDateFrom
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "transactionDateTo",
-                    value: input.query.transactionDateTo
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -10715,6 +10715,20 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
+                    name: "dateFrom",
+                    value: input.query.dateFrom
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "dateTo",
+                    value: input.query.dateTo
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
                     name: "costType",
                     value: input.query.costType
                 )
@@ -10745,6 +10759,48 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "future",
                     value: input.query.future
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "costMin",
+                    value: input.query.costMin
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "costMax",
+                    value: input.query.costMax
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "productQuantityMin",
+                    value: input.query.productQuantityMin
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "productQuantityMax",
+                    value: input.query.productQuantityMax
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "notesSearch",
+                    value: input.query.notesSearch
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "urlSearch",
+                    value: input.query.urlSearch
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -10806,50 +10862,8 @@ internal struct Client: APIProtocol {
                     in: &request,
                     style: .form,
                     explode: true,
-                    name: "notesSearch",
-                    value: input.query.notesSearch
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "urlSearch",
-                    value: input.query.urlSearch
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dateFrom",
-                    value: input.query.dateFrom
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "dateTo",
-                    value: input.query.dateTo
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
                     name: "dateRelative",
                     value: input.query.dateRelative
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "costMin",
-                    value: input.query.costMin
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "costMax",
-                    value: input.query.costMax
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,
@@ -10878,20 +10892,6 @@ internal struct Client: APIProtocol {
                     explode: true,
                     name: "productQuantityPresenceFilter",
                     value: input.query.productQuantityPresenceFilter
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "productQuantityMin",
-                    value: input.query.productQuantityMin
-                )
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "productQuantityMax",
-                    value: input.query.productQuantityMax
                 )
                 try converter.setQueryItemAsURI(
                     in: &request,

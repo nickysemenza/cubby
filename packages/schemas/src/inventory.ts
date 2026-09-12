@@ -455,7 +455,12 @@ export type InventorySessionResolution = z.infer<
 export const reconcileSessionPayload = z.object({
   locationId: locationShortcode,
   expectedInventoryEntryIds: z.array(inventoryShortcode),
-  snapshotUpdatedAt: z.coerce.date<Date | string>().nullable(),
+  // Nullish, not nullable: a generated client's synthesized encoder omits the
+  // key for an empty bin (no rows, so no snapshot), and that must still commit.
+  snapshotUpdatedAt: z.coerce
+    .date<Date | string>()
+    .nullish()
+    .transform((value) => value ?? null),
   resolutions: z.array(inventorySessionResolution),
 });
 
