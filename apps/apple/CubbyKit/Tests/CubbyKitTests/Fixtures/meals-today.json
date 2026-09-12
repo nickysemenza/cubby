@@ -1,0 +1,44 @@
+{
+  "items": [
+    {
+      "id": "MEL-2345",
+      "date": "2026-03-05",
+      "name": null,
+      "sortOrder": 0,
+      "mealType": "dinner",
+      "mealKind": "cooked",
+      "recipes": [
+        {
+          "id": "rcp-1",
+          "mealId": "MEL-2345",
+          "recipeId": "RCP-2345",
+          "recipe": {
+            "id": "RCP-2345",
+            "name": "Sample Recipe"
+          },
+          "scale": 1,
+          "sortOrder": 0,
+          "estimatedYieldGrams": null,
+          "actualYieldGrams": null,
+          "scaledTotals": {
+            "cost": { "status": "unavailable", "reason": "no_data" },
+            "nutrition": {}
+          },
+          "createdAt": "2026-03-05T00:00:00.000Z",
+          "updatedAt": "2026-03-05T00:00:00.000Z"
+        }
+      ],
+      "totals": {
+        "cost": { "status": "unavailable", "reason": "no_data" },
+        "nutrition": {}
+      },
+      "createdAt": "2026-03-05T00:00:00.000Z",
+      "updatedAt": "2026-03-05T00:00:00.000Z"
+    }
+  ],
+  "meta": {
+    "pageIndex": 0,
+    "pageSize": 20,
+    "totalCount": 1
+  }
+}

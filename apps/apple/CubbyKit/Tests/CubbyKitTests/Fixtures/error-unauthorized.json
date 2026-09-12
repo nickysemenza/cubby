@@ -1,9 +1,6 @@
 {
-  "ok": false,
-  "error": {
-    "code": "UNAUTHORIZED",
-    "message": "Sample unauthorized message",
-    "reason": "invalid_session",
-    "requestId": "req_sample123"
-  }
+  "code": "UNAUTHORIZED",
+  "message": "Sample unauthorized message",
+  "reason": "invalid_session",
+  "requestId": "req_sample123"
 }

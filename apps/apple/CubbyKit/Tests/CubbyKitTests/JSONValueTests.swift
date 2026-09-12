@@ -76,4 +76,30 @@ struct JSONValueTests {
         #expect(array == .array([.number(1), .string("two"), .bool(false)]))
         #expect(object == .object(["k": .string("v")]))
     }
+
+    /// The wire sends `null` for an absent optional; `init(encoding:)` re-derives `JSONValue` from
+    /// an already-decoded typed value, whose synthesized `Encodable` conformance omits a `nil`
+    /// Optional's key entirely instead of encoding `null`. `EntityRow.row(from:)` and friends treat
+    /// an absent key and `.null` alike, so this holds only for the one place it's non-obvious.
+    @Test("init(encoding:) drops an explicit nil to an absent key")
+    func encodingDropsNilsToAbsentKeys() throws {
+        struct Sample: Encodable {
+            let name: String
+            let notes: String?
+        }
+        let value = try JSONValue(encoding: Sample(name: "Widget", notes: nil))
+        #expect(value["name"] == "Widget")
+        #expect(value.objectValue?.keys.contains("notes") == false)
+    }
+
+    @Test("init(encoding:) round-trips nested arrays and objects")
+    func encodingRoundTripsNesting() throws {
+        struct Child: Encodable { let x: Int }
+        struct Sample: Encodable { let children: [Child]; let meta: [String: Int] }
+        let value = try JSONValue(encoding: Sample(children: [Child(x: 1), Child(x: 2)], meta: ["a": 1]))
+        #expect(value["children"]?.arrayValue?.count == 2)
+        #expect(value["children"]?[0]?["x"] == 1)
+        #expect(value["children"]?[1]?["x"] == 2)
+        #expect(value["meta"]?["a"] == 1)
+    }
 }

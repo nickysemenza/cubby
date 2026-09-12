@@ -1,0 +1,19 @@
+{
+  "product": 12,
+  "recipe": 3,
+  "ingredient": 40,
+  "cookbook": 2,
+  "location": 8,
+  "inventory": 25,
+  "meal": 5,
+  "project": 1,
+  "task": 4,
+  "vendor": 6,
+  "purchase": 9,
+  "expense": 14,
+  "financialAccount": 2,
+  "financialTransaction": 30,
+  "image": 11,
+  "wish": 3,
+  "usdaFoods": 7
+}

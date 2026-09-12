@@ -71,7 +71,7 @@ struct EntityDetailView: View {
     }
 
     private func setup() async {
-        let model = await GenericEntityDetailModel(descriptor: descriptor, client: appModel.client)
+        let model = GenericEntityDetailModel(descriptor: descriptor, client: appModel.client)
         self.model = model
         await model.load(id: id)
     }

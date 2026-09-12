@@ -6,7 +6,7 @@ import Testing
 @Suite("LocationTree")
 struct LocationTreeTests {
     static func tree() throws -> LocationTree {
-        LocationTree(roots: try Fixtures.decode(SuccessEnvelope<[LocationTreeNode]>.self, from: "location-tree.json").data)
+        LocationTree(roots: try Fixtures.decode([LocationTreeNode].self, from: "location-tree.json"))
     }
 
     @Test func decodesTheRecursiveNodeAndIndexesParents() throws {
