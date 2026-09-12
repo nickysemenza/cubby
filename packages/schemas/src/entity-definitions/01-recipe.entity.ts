@@ -64,12 +64,18 @@ export default defineEntity({
         key: "servings",
         kind: "number",
         nullable: true,
+        // The rendered column keeps its existing "yield" id (structured
+        // yield falls back to servings — see recipelist.tsx) and its
+        // existing "Yield" header, distinct from this field's own key.
+        label: "Yield",
         control: { kind: "number", section: "servings" },
         display: {
           list: true,
           detail: true,
           width: "xs",
           mobile: { slot: "subtitle", priority: 5, interactive: true },
+          columnId: "yield",
+          listOrder: 1,
         },
         validation: {
           read: recipeServings.nullable().optional(),
@@ -82,7 +88,7 @@ export default defineEntity({
         kind: "text-array",
         nullable: true,
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true },
+        display: { list: true, detail: true, listOrder: 0 },
         validation: {
           read: recipeTags.nullable().optional(),
           create: recipeTags.nullable().optional(),
@@ -95,12 +101,47 @@ export default defineEntity({
         nullable: true,
         description: "Optional. Supports Markdown.",
         control: { kind: "textarea" },
+        // Declared list: true (so the "Columns" menu can surface it), but
+        // never actually shown by default — recipelist.tsx keeps it out of
+        // `initialColumnVisibility`, matching its behavior before this
+        // field went through `createEntityDisplayColumns`.
         display: { list: true, detail: true },
         validation: {
           read: recipeNotes.nullable().optional(),
           create: recipeNotes.nullable().optional(),
           update: recipeNotes.nullable().optional(),
         },
+      },
+      {
+        key: "costTotal",
+        kind: "number",
+        nullable: true,
+        label: "Cost",
+        // Computed from `totals.cost` at read time — no column of its own
+        // in the list row, so column building requires the override
+        // recipelist.tsx supplies.
+        readKey: null,
+        display: { list: true, listOrder: 2 },
+      },
+      {
+        key: "caloriesTotal",
+        kind: "number",
+        nullable: true,
+        label: "Calories",
+        // Computed from `totals.nutrition.kcal` at read time; see costTotal.
+        readKey: null,
+        display: { list: true, listOrder: 3 },
+      },
+      {
+        key: "meals",
+        kind: "number",
+        label: "Meals",
+        // The list row carries this as `mealCount` (a live MealRecipe count,
+        // not a stored column); `reference` marks it as relation-derived so
+        // column building requires the override recipelist.tsx supplies.
+        readKey: "mealCount",
+        reference: { entity: "meal", multiple: true },
+        display: { list: true, listOrder: 6 },
       },
       {
         key: "sections",
@@ -181,9 +222,12 @@ export default defineEntity({
       },
       {
         key: "source",
-        kind: "text",
+        // Object-valued (a discriminated union of book/website/other
+        // sources) — not a text field. The list column always renders
+        // through recipelist.tsx's override (cookbook link or external URL).
+        kind: "json",
         nullable: true,
-        display: { list: true, detail: true },
+        display: { list: true, detail: true, listOrder: 5 },
         validation: {
           read: recipeSource.nullable().optional(),
           create: null,
@@ -230,7 +274,18 @@ export default defineEntity({
         readKey: null,
       },
       { key: "activeMinutes", kind: "number", nullable: true, readKey: null },
-      { key: "totalMinutes", kind: "number", nullable: true, readKey: null },
+      {
+        key: "totalMinutes",
+        kind: "number",
+        nullable: true,
+        label: "Time",
+        // No row scalar of its own — the list column prints the source's
+        // own time prose (recipe.meta.times.total) when there is one, which
+        // doesn't always imply a present totalMinutes count. Requires the
+        // override recipelist.tsx supplies.
+        readKey: null,
+        display: { list: true, listOrder: 4 },
+      },
     ],
     storage: [
       { key: "id", default: "generated", specialized: "primary-key:RecipeId" },
