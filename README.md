@@ -517,25 +517,34 @@ await fetch(`/api/v1/recipes?${query}`);
 
 Resource lists use 1-based `page` (default 1), `pageSize` (default 10, maximum 500),
 and comma-separated `sort` fields (`-` means descending; maximum 3 fields). Filters
-are individual query parameters encoded the way ts-rest's `jsonQuery` expects: a
-plain string stays literal and every other value is JSON, so arrays, objects,
-numbers, booleans and `null` are JSON-encoded, and a string that would parse as
-JSON (`123`, `true`, `null`, `[1,2]`) must be quoted (`nameFilter=%22123%22`). The
-typed client quotes numeric, boolean and null-looking strings automatically;
-quote array- or object-looking text yourself. `groupBy` retains its existing field name.
-Unknown parameters are rejected. The response envelope and zero-based pagination
-metadata are unchanged. For example: `/api/v1/recipes?page=1&pageSize=20&sort=name&nameFilter=Soup`.
+are ordinary query parameters (`style: form, explode: true`): text is literal,
+numbers and booleans are their plain text form, a list repeats its key
+(`tag=a&tag=b`; the bracketed `tag[]=a` and `tag[0]=a` spellings are folded onto
+that), and an object-valued filter is flattened onto prefixed scalar parameters
+(`projectScopeStatuses`, `projectScopeSearch`, …). Nothing on a URL is
+JSON-encoded and nothing needs quoting. `groupBy` retains its existing field
+name. Unknown parameters are rejected. Pagination metadata stays zero-based.
+For example: `/api/v1/recipes?page=1&pageSize=20&sort=name&nameFilter=Soup`.
 
-Every ordinary operation is one route: queries are `GET /api/v1/{domain}/{op}`
-and mutations are `POST /api/v1/{domain}/{op}`. An object input is the query
-parameters (JSON-encoded per `jsonQuery`) or the JSON body itself; a scalar or
-array input travels as `input`; a no-input operation takes `{}` or no
-parameters. Responses retain `{ok, data}` / `{ok, error}`, mutation metadata,
-HTTP error statuses, and ISO timestamps; wire validation failures return 400
-with `validationIssues`. Specialized workflows and bulk actions remain
-operation-shaped; streams are excluded. Scalar at `/api/v1/docs` uses the
-current browser session and supports explicit keys, which it forgets on reload.
-`/api/v1/openapi.json` describes both auth methods.
+Every ordinary operation is one route. A query whose input is flat (scalars,
+enums, ISO dates, lists of those) is `GET /api/v1/{domain}/{op}` with one
+query parameter per field; a query whose input is structured (nested objects,
+the analytics and inspector reads) is `POST /api/v1/{domain}/{op}` with the
+input as the JSON body; mutations are `POST` with the JSON body. A scalar
+input travels as `input`; a no-input operation takes no parameters. A 2xx body
+is the operation output itself and a 4xx/5xx body is the `ApiError` object
+(`code`, `message`, optional `reason`, `requestId`, `blockers`,
+`validationIssues`) — there is no `{ok, data}` envelope; a query whose output
+may be `null` answers 404 instead. Create returns 201 with a `Location`
+header. Timestamps are ISO strings. Specialized workflows and bulk actions
+remain operation-shaped; streams and the generic entity union operations are
+excluded (`http: false` on the contract member). Scalar at `/api/v1/docs` uses
+the current browser session and supports explicit keys, which it forgets on
+reload. `/api/v1/openapi.json` is an OpenAPI 3.1 document that describes every
+auth method, names components after the schema exports they come from
+(`ProductTopLevelOut`, `RecipeListPage`, `InventoryScanAtLocationInput`),
+spells nullability the way generated clients keep it, and carries a
+`discriminator` mapping for every discriminated union.
 
 The contract is a real ts-rest router (`apps/web/src/lib/generated/http-contract.gen.ts`,
 built from the operation contracts in `apps/web/src/contracts/` and the entity
@@ -543,10 +552,12 @@ resource table), served by `@ts-rest/serverless` and documented by
 `@ts-rest/open-api`. `createCubbyClient({ baseUrl, apiKey? })` in
 `apps/web/src/lib/http-api/client.ts` is a plain `initClient` over it with
 same-origin browser credentials: `client.dashboard.counts({ query: {} })`,
-`client.entity.mutate({ body: { action: "create", entity: "vendor", data: { name } } })`,
+`client.resources.vendor.create({ body: { name } })`,
 `client.resources.recipe.list({ query: { page: 1, pageSize: 20, sort: "name", nameFilter: "Soup" } })`,
 and `client.resources.recipe.update({ params: { id }, body: { notes: 'Updated' } })`.
-Run TS scripts with the web tsconfig so schema import aliases resolve.
+Run TS scripts with the web tsconfig so schema import aliases resolve. The
+native Apple app (`apps/apple`) generates its client from the committed
+document and is the API's consumer of record.
 
 After changing contracts, declarations or schemas, run `pnpm generate` (entity,
 start-operation, then HTTP OpenAPI generation) and `pnpm generate:check` before a
@@ -555,7 +566,10 @@ runtime schemas remain authoritative; new ordinary operations require no
 HTTP-specific edits. Wire schemas are derived from the domain schemas by
 `toWire` (`apps/web/src/lib/http-api/wire.ts`): Dates become ISO strings, output
 transforms must end in concrete schemas, timestamp inputs must accept ISO strings,
-and unsupported JSON representations fail at generation.
+query strings coerce numbers, booleans and lists from their text form, and
+unsupported JSON representations fail at generation. Component names come from
+the exports of `@cubby/schemas` (and the generated entity modules): export a
+schema to name it, or give it an explicit `.meta({ id })`.
 
 ### Connecting to the MCP server
 
