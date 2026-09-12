@@ -9,8 +9,7 @@ import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 
 import {
   buildSearchHitComboboxItem,
-  buildVendorNameComboboxItem,
-  buildVendorShortcodeComboboxItem,
+  buildVendorComboboxItem,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
 import {
@@ -56,7 +55,7 @@ export function WithVendorSearch({
   return (
     <WithEntitySearch<VendorName>
       entity="vendor"
-      build={buildVendorNameComboboxItem}
+      build={(row) => buildVendorComboboxItem(row, { itemId: "name" })}
       buildSearchHit={(hit) => {
         // Destructuring the real `id` here while the item's own `id` stays the
         // NAME (per this module's doc above) looks like a bug — it isn't. The
@@ -104,10 +103,13 @@ export function WithVendorShortcodeSearch({
       // `name` as optional; this is the ingress where the fresh vendor enters
       // branded-shortcode land, so parse the id for real instead of asserting,
       // and fall back to the name the vendor was created with.
-      return buildVendorShortcodeComboboxItem({
-        id: parseShortcodeFor("vendor", result.result.id),
-        name: result.result.name ?? name.trim(),
-      });
+      return buildVendorComboboxItem(
+        {
+          id: parseShortcodeFor("vendor", result.result.id),
+          name: result.result.name ?? name.trim(),
+        },
+        { itemId: "shortcode" },
+      );
     },
     [commands],
   );
@@ -115,7 +117,7 @@ export function WithVendorShortcodeSearch({
   return (
     <WithEntitySearch<VendorShortcode>
       entity="vendor"
-      build={buildVendorShortcodeComboboxItem}
+      build={(row) => buildVendorComboboxItem(row, { itemId: "shortcode" })}
       buildSearchHit={(hit) => buildSearchHitComboboxItem(hit, "vendor")}
       onCreateNew={onCreateNew}
     >
