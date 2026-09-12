@@ -37,7 +37,7 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
     }
 
     private func read() throws -> [String: CubbyCredential] {
-        guard FileManager.default.fileExists(atPath: fileURL.path()) else { return [:] }
+        guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else { return [:] }
         return try JSONDecoder().decode([String: CubbyCredential].self, from: Data(contentsOf: fileURL))
     }
 
@@ -46,6 +46,6 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let data = try JSONEncoder().encode(all)
         try data.write(to: fileURL, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path())
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path(percentEncoded: false))
     }
 }

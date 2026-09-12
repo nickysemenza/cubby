@@ -18,11 +18,10 @@ enum Fixtures {
         return try Data(contentsOf: url)
     }
 
-    /// Decodes with ISO-8601 dates, matching what the OpenAPI runtime configures for the real
-    /// client. A bare `JSONDecoder` would expect epoch seconds and reject every `createdAt`.
+    /// Decodes dates exactly as the generated client does (`Configuration.cubby`), so a fixture
+    /// that passes here also decodes in production. The product fixture deliberately mixes
+    /// fractional and plain timestamps.
     static func decode<T: Decodable>(_ type: T.Type, from filename: String) throws -> T {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return try decoder.decode(T.self, from: data(named: filename))
+        try JSONDecoder.cubby().decode(T.self, from: data(named: filename))
     }
 }

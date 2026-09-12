@@ -120,7 +120,7 @@ public actor FeaturePrintIndex {
     // MARK: Cache
 
     public func loadCache() throws -> Int {
-        guard let cacheURL, FileManager.default.fileExists(atPath: cacheURL.path()) else { return 0 }
+        guard let cacheURL, FileManager.default.fileExists(atPath: cacheURL.path(percentEncoded: false)) else { return 0 }
         let cached = try JSONDecoder().decode([FeaturePrintEntry].self, from: Data(contentsOf: cacheURL))
         for entry in cached { entries[entry.productID] = entry }
         return cached.count

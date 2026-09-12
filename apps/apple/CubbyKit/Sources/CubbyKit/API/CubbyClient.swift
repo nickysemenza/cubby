@@ -21,6 +21,7 @@ public actor CubbyClient {
         // The spec's `servers` entry is "/", so the base URL must always be supplied here.
         self.api = Client(
             serverURL: baseURL,
+            configuration: .cubby,
             transport: URLSessionTransport(configuration: .init(session: session)),
             middlewares: [CubbyAuthMiddleware(credentials: credentials)]
         )
