@@ -68,6 +68,33 @@ function toKebabCase(entityName: string): string {
  * real reason, not a placeholder) or be fixed at the source — see the
  * per-entity notes below for which is which.
  */
+// Shared one-line reasons for causes that recur across many keys, so
+// identical causes read identically instead of drifting in wording. Each is
+// verified against the actual export it's attached to (not assumed) — see
+// the per-entity comments below for specifics.
+const PARTIAL_REWRAP =
+  ".partial() rewraps every field of the generated update map into a new .optional() instance — a legitimate zod-combinator rewrap, not a per-field hand copy";
+const DERIVE_UPDATE_REWRAP =
+  "deriveUpdateData() rewraps every create field via z.optional() into a new instance — same class of legitimate combinator rewrap as .partial()";
+const HAND_WRITTEN_IMAGE_ID_ARRAY =
+  "update-only image/document-id array field (with its own .describe()), hand-written fresh rather than referencing the generated update map's instance for this key";
+const IMAGE_READ_FIELD_HAND_COPY =
+  "hand-copies generatedImageFieldSchemas.read.<key>'s shape into a bespoke response/summary schema instead of referencing it directly — real duplication, candidate for follow-up (see report)";
+const IMAGE_NO_GENERATED_CREATE =
+  "no generated create schema exists for image (generatedImageFieldSchemas.create is empty) — this describes client-supplied metadata for a not-yet-created row in the presigned-upload workflow, hand-validated independently";
+const RECIPE_TOP_LEVEL_FIELDS =
+  "sourced from the shared recipeTopLevelFields map (recipe-shared.ts) — a hand-declared object predating/paralleling generatedRecipeFieldSchemas.read, reused across recipeTopLevel/recipeGraphOut/recipeListItemOut/etc.; one shared root cause, not a per-export hand copy";
+const PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED =
+  "read/output shape (array of unitMappingOut, each with its own id); the generated create/update field is INPUT-shaped (unitMappingInput) — read code never references a create/update field for this key";
+const PROJECT_EXTERNAL_IDS_MCP_PROJECTION =
+  "MCP entity result strips the child row's own storage-only id (externalIdOut.omit({id:true})) — slimmer projection of the read field, not a per-field hand copy";
+const PROJECT_LOCATIONS_HAND_ARRAY =
+  "hand-written z.array(z.string()).optional() variant of project's own `locations` field (filter/scope/roster context), not a reference to generatedProjectFieldSchemas.{create,update,read}.locations";
+const TASK_EXPENSE_SHARED_MODULE_COLLISION =
+  "task/expense's own generated field — generatedTaskFieldSchemas/generatedExpenseFieldSchemas are composed inside project.ts (see the file header note above MODULE_OVERRIDES on shared-module collisions); this key already references its OWN entity's generated map correctly, it just coincidentally shares a name with project's generated field and this walk runs per canonical module";
+const PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE =
+  "re-declared by hand immediately after the initial ...generatedPurchaseFieldSchemas.read spread earlier in the same object literal, so this hand-written instance shadows (and makes dead) the generated one already spread in — real duplication, candidate for follow-up cleanup (see report)";
+
 const INTENTIONAL_RESPELLINGS = {
   // --- product.ts: reviewed and intentional -------------------------------
   "product::productQuickCreatePayload::name":
@@ -100,528 +127,588 @@ const INTENTIONAL_RESPELLINGS = {
   // `productQuickCreatePayload` and `productMcpFields` (see the task's
   // ownership rules) — every other export below is a pre-existing hand copy
   // this change does not touch, reported for follow-up the same as the
-  // other entities' below. Most of `productUpdateData`'s keys are flagged
-  // only because `.partial()` rewraps every field of
-  // `generatedProductFieldSchemas.update` into a new `.optional()` instance —
-  // a legitimate zod combinator, not a per-field hand copy — but the
-  // identity check can't tell the difference, so they land here too.
-  "product::productUpdateData::name":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::aliases":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::tags":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::upc":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::isbn":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::fdc_id":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::manufacturer":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::model":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::notes":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::expectedQuantity":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::category":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::ingredientId":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::price":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::externalIds":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::usdaUnavailable":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::stockTracked":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
-  "product::productUpdateData::pendingImageIds":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
+  // other entities' below. Verified against product.ts directly (read-only).
+  "product::productUpdateData::name": PARTIAL_REWRAP,
+  "product::productUpdateData::aliases": PARTIAL_REWRAP,
+  "product::productUpdateData::tags": PARTIAL_REWRAP,
+  "product::productUpdateData::upc": PARTIAL_REWRAP,
+  "product::productUpdateData::isbn": PARTIAL_REWRAP,
+  "product::productUpdateData::fdc_id": PARTIAL_REWRAP,
+  "product::productUpdateData::manufacturer": PARTIAL_REWRAP,
+  "product::productUpdateData::model": PARTIAL_REWRAP,
+  "product::productUpdateData::notes": PARTIAL_REWRAP,
+  "product::productUpdateData::expectedQuantity": PARTIAL_REWRAP,
+  "product::productUpdateData::category": PARTIAL_REWRAP,
+  "product::productUpdateData::ingredientId": PARTIAL_REWRAP,
+  "product::productUpdateData::price": PARTIAL_REWRAP,
+  "product::productUpdateData::unitMappings": PARTIAL_REWRAP,
+  "product::productUpdateData::externalIds": PARTIAL_REWRAP,
+  "product::productUpdateData::usdaUnavailable": PARTIAL_REWRAP,
+  "product::productUpdateData::stockTracked": PARTIAL_REWRAP,
+  "product::productUpdateData::pendingImageIds": PARTIAL_REWRAP,
   "product::productUpdateData::removeImageIds":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
+    ".partial().extend({removeImageIds: z.array(imageShortcode).optional()}) — the .extend() call OVERRIDES the already-.partial()'d generated key with a fresh array literal, not the generated instance",
   "product::productUpdateData::imageOrder":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — also: .partial() rewraps every field",
+    ".partial().extend({imageOrder: z.array(imageShortcode).optional()}) — the .extend() call OVERRIDES the already-.partial()'d generated key with a fresh array literal, not the generated instance",
   "product::productBulkStockTrackedInput::stockTracked":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "bulk-operation input applies one value across many product ids — hand-written z.boolean().nullable(), same meaning as generatedProductFieldSchemas.update.stockTracked but not a reference to it",
   "product::productApplyUpcInput::upc":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "takes the shared `upc` validator imported from @cubby/usda-schemas (used across USDA lookup flows), not generatedProductFieldSchemas.{create,update}.upc — same barcode format, different declared instance",
   "product::productFindOrCreateByUPCInput::upc":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "takes the shared `upc` validator imported from @cubby/usda-schemas (used across USDA lookup flows), not generatedProductFieldSchemas.{create,update}.upc — same barcode format, different declared instance",
   "product::productQuantityLedgerOut::expectedQuantity":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "derived ledger computation (acquiredUnits - exitedUnits, see repo/product/quantity-ledger.ts) — plain z.number() that can legitimately go negative, unlike the generated nullable-int field",
   "product::productLookupUpcOut::upc":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "the raw barcode string as looked up (may not resolve to anything) — plain z.string(), not the generated field's GTIN-shaped constraint",
   "product::productCookbookRefOut::id":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "coincidental key-name collision: this is the referenced COOKBOOK's own id (a lightweight cookbook reference embedded on a product), not the product's own id",
   "product::productCookbookRefOut::name":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "coincidental key-name collision: this is the referenced COOKBOOK's own title, not the product's own name",
   "product::productWithMappingsOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productWithMappingsAndFoodOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productWithMappingsMcpEntityOut::externalIds":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_EXTERNAL_IDS_MCP_PROJECTION,
   "product::productWithMappingsMcpEntityOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productWithMappingsAndFoodMcpEntityOut::externalIds":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_EXTERNAL_IDS_MCP_PROJECTION,
   "product::productWithMappingsAndFoodMcpEntityOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productPickerItemOut::name":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "picker-row projection (see file comment: same split as location's picker/roster items) — hand-copied name field, narrower row shape than the read schema",
   "product::productPickerItemOut::manufacturer":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "picker-row projection — hand-copied manufacturer field, narrower row shape than the read schema",
   "product::productPickerItemOut::category":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "picker-row projection — hand-copied category field, narrower row shape than the read schema",
   "product::productPickerItemOut::price":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "picker row deliberately constrains price to positiveMoneyNullable (see the file comment above it: 'kept as-is rather than silently loosened') — value-space narrowing over the generated plain moneyNullable read field",
   "product::productWithIngredientAndInventoryAndMappingsOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productListInventoryEntryOut::id":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "coincidental key-name collision: embeds the INVENTORY entry's own id (via productInventoryFields), not the product's own id",
   "product::productListInventoryEntryOut::createdAt":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "coincidental key-name collision: embeds the INVENTORY entry's own createdAt (via productInventoryFields/timestampedFields), not the product's own createdAt",
   "product::productListInventoryEntryOut::updatedAt":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "coincidental key-name collision: embeds the INVENTORY entry's own updatedAt (via productInventoryFields/timestampedFields), not the product's own updatedAt",
   "product::productListItemOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productListItemMcpEntityOut::externalIds":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_EXTERNAL_IDS_MCP_PROJECTION,
   "product::productListItemMcpEntityOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productWithFoodOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productWithFoodMcpEntityOut::externalIds":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_EXTERNAL_IDS_MCP_PROJECTION,
   "product::productWithFoodMcpEntityOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productTopLevelMcpEntityOut::externalIds":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_EXTERNAL_IDS_MCP_PROJECTION,
   "product::productWithFoodAndSideEffectsOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    PROJECT_UNIT_MAPPINGS_OUTPUT_TYPED,
   "product::productSummariesOut::images":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "batched multi-product summary map (productImageSummariesOut, keyed by product id for a bounded batch), not the single-product read field",
   "product::productSummariesOut::unitMappings":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "batched multi-product summary map (productUnitMappingSummariesOut, keyed by product id for a bounded batch), not the single-product read field",
   "product::productMcpImageOut::id":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "coincidental key-name collision: embeds the IMAGE's own imageShortcode id, not the product's own id",
   "product::productMcpImageOut::createdAt":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "coincidental key-name collision: embeds the IMAGE's own createdAt, not the product's own createdAt",
   "product::productMcpImageOut::updatedAt":
-    "unreviewed: pre-existing hand copy (out of ownership scope)",
+    "coincidental key-name collision: embeds the IMAGE's own updatedAt, not the product's own updatedAt",
   "product::productMcpDetailOut::images":
-    "unreviewed: pre-existing hand copy (out of ownership scope) — productMcpDetailOut's own `images` field, not part of productMcpFields",
+    "uses the MCP-projected productMcpImageOut shape (imageShortcode id, no raw uuid) rather than the generated read.images field's imageOut shape — productMcpDetailOut's own field, not part of productMcpFields",
 
   // --- pre-existing hand copies in OTHER entities' modules. NOT fixed here
   // (out of scope per this PR's file ownership — only product.ts is owned).
-  // Found by running this test and reading off every remaining failure;
-  // reported to the requester for follow-up cleanup. -----------------------
-  // --- cookbook: pre-existing hand copies ---
-  "cookbook::cookbookChapterSchema::id": "unreviewed: pre-existing hand copy",
-  "cookbook::cookbookRecipeSchema::id": "unreviewed: pre-existing hand copy",
+  // Found by running this test with the allowlist emptied and reading the
+  // actual export at each key (read-only); reported to the requester for
+  // follow-up cleanup. -----------------------------------------------------
+
+  // --- cookbook: parsed-EPUB book-tree shapes, coincidentally named the
+  // same as Cubby's own cookbook fields (generatedCookbookFieldSchemas.read
+  // has id/subjects for the Cubby entity; these are the SOURCE file's raw
+  // structure, captured before/around import) ---
+  "cookbook::cookbookChapterSchema::id":
+    "parsed EPUB book-tree chapter id (raw string from the source file), not Cubby's own cookbook shortcode id — coincidental key-name collision",
+  "cookbook::cookbookRecipeSchema::id":
+    "parsed EPUB book-tree recipe-item id (raw string from the source file), not Cubby's own cookbook shortcode id — coincidental key-name collision",
   "cookbook::cookbookSourceSchema::subjects":
-    "unreviewed: pre-existing hand copy",
-  // --- financialAccount: pre-existing hand copies ---
-  "financialAccount::financialAccountFiltersSchema::provisional":
-    "unreviewed: pre-existing hand copy",
+    "raw subjects array as extracted from the source EPUB's own metadata (copied into Cubby's own `subjects` read field at import time, but validated independently here) — coincidental key-name collision",
+
   // --- financialTransaction: pre-existing hand copies ---
   "financialTransaction::financialReconciliationSummary::status":
-    "unreviewed: pre-existing hand copy",
+    "financialReconciliationSummary is imported from ./financial-reconciliation, not financial-transaction.ts's own generated map — a settlement-evidence status enum, unrelated to financialTransaction's own generated `status` field",
   "financialTransaction::financialStatementImportPreviewRow::accountId":
-    "unreviewed: pre-existing hand copy",
+    "statement-import preview row references the FinancialAccount being imported into, hand-typed for the import-preview payload — not financialTransaction's own generated accountId instance",
   "financialTransaction::financialStatementImportPreviewRow::accountName":
-    "unreviewed: pre-existing hand copy",
+    "statement-import preview row's display label for the target account — no generated counterpart exists for this key",
   "financialTransaction::financialStatementImportPreviewRow::status":
-    "unreviewed: pre-existing hand copy",
+    "statement-import preview row's own per-row import status (e.g. would-create/would-skip), coincidentally named the same as financialTransaction's own generated status field but a different value set",
   "financialTransaction::financialStatementImportPreviewRow::vendorInference":
-    "unreviewed: pre-existing hand copy",
+    "statement-import preview row's inferred-vendor payload — no generated counterpart exists for this key",
   "financialTransaction::financialStatementImportRow::kind":
-    "unreviewed: pre-existing hand copy",
+    "raw statement-row input kind (as parsed from the imported file), hand-declared for the import boundary — not a reference to the generated create/update/read instance",
   "financialTransaction::financialStatementImportRow::merchant":
-    "unreviewed: pre-existing hand copy",
+    "raw statement-row input merchant string (as parsed from the imported file) — hand-declared for the import boundary, not the generated field instance",
   "financialTransaction::financialStatementImportRow::notes":
-    "unreviewed: pre-existing hand copy",
+    "raw statement-row input notes (as parsed from the imported file) — hand-declared for the import boundary, not the generated field instance",
   "financialTransaction::financialTransactionAllocationInput::amount":
-    "unreviewed: pre-existing hand copy",
+    "allocation sub-object's own amount (wholeCentAmount — a portion of a transaction split across purchases), not the same instance as the generated amount field, which validates the TRANSACTION's total signed amount (financialTransactionNonZeroAmount) — same underlying money type, different instance and a different quantity",
   "financialTransaction::financialTransactionAllocationInput::purchaseId":
-    "unreviewed: pre-existing hand copy",
+    "allocation sub-object requires a specific non-null purchaseId (bare purchaseShortcode) — splitting a transaction's amount across purchases needs a real target — while the transaction-level generated purchaseId field is nullable (a transaction need not be linked to any purchase)",
   "financialTransaction::financialTransactionAllocationOut::amount":
-    "unreviewed: pre-existing hand copy",
+    "same financialTransactionAllocation schema as financialTransactionAllocationInput::amount (aliased, not a separate declaration) — see that entry",
   "financialTransaction::financialTransactionAllocationOut::purchaseId":
-    "unreviewed: pre-existing hand copy",
+    "same financialTransactionAllocation schema as financialTransactionAllocationInput::purchaseId (aliased, not a separate declaration) — see that entry",
   "financialTransaction::financialTransactionFiltersSchema::accountId":
-    "unreviewed: pre-existing hand copy",
-  "financialTransaction::financialTransactionFiltersSchema::kind":
-    "unreviewed: pre-existing hand copy",
-  "financialTransaction::financialTransactionFiltersSchema::merchant":
-    "unreviewed: pre-existing hand copy",
+    "shortcode-list filter spelled as entityFilterList(financialAccountShortcode) over the generated scalar accountId field",
   "financialTransaction::financialTransactionFiltersSchema::purchaseId":
-    "unreviewed: pre-existing hand copy",
-  "financialTransaction::financialTransactionFiltersSchema::status":
-    "unreviewed: pre-existing hand copy",
+    "shortcode-list filter spelled as entityFilterList(purchaseShortcode) over the generated scalar purchaseId field",
   "financialTransaction::merchantVendorInferenceInput::merchant":
-    "unreviewed: pre-existing hand copy",
-  // --- image: pre-existing hand copies ---
-  "image::attachFileResponse::contentType":
-    "unreviewed: pre-existing hand copy",
-  "image::attachFileResponse::filename": "unreviewed: pre-existing hand copy",
-  "image::attachFileResponse::url": "unreviewed: pre-existing hand copy",
-  "image::createFileUploadInput::contentType":
-    "unreviewed: pre-existing hand copy",
-  "image::createFileUploadInput::filename":
-    "unreviewed: pre-existing hand copy",
-  "image::createFileUploadInput::size": "unreviewed: pre-existing hand copy",
-  "image::imageListFiltersSchema::status": "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::contentType":
-    "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::createdAt":
-    "unreviewed: pre-existing hand copy",
+    "standalone vendor-inference tool input (`{ merchant: z.string() }`) — a required plain string for a one-off lookup, not the generated filter/create field",
+
+  // --- image: see the shared IMAGE_* constants above for the recurring
+  // causes (no generated create schema exists at all; MCP-tool `.describe()`
+  // prose; full hand-copies of the read shape into bespoke response schemas) ---
+  "image::attachFileResponse::contentType": IMAGE_READ_FIELD_HAND_COPY,
+  "image::attachFileResponse::filename": IMAGE_READ_FIELD_HAND_COPY,
+  "image::attachFileResponse::url": IMAGE_READ_FIELD_HAND_COPY,
+  "image::createFileUploadInput::contentType": IMAGE_NO_GENERATED_CREATE,
+  "image::createFileUploadInput::filename": IMAGE_NO_GENERATED_CREATE,
+  "image::createFileUploadInput::size": IMAGE_NO_GENERATED_CREATE,
+  "image::imageWithEntitySchema::contentType": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::createdAt": IMAGE_READ_FIELD_HAND_COPY,
   "image::imageWithEntitySchema::detectedContentType":
-    "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::filename":
-    "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::height": "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::key": "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::renderStatus":
-    "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::size": "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::storageStatus":
-    "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::updatedAt":
-    "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::url": "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::verifiedAt":
-    "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::width": "unreviewed: pre-existing hand copy",
+    IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::filename": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::height": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::key": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::renderStatus": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::size": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::storageStatus": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::updatedAt": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::url": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::verifiedAt": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::width": IMAGE_READ_FIELD_HAND_COPY,
+  "image::imageWithEntitySchema::sha256": IMAGE_READ_FIELD_HAND_COPY,
   "image::importImageFromUrlResponseSchema::filename":
-    "unreviewed: pre-existing hand copy",
-  "image::importImageFromUrlResponseSchema::key":
-    "unreviewed: pre-existing hand copy",
-  "image::importImageFromUrlResponseSchema::url":
-    "unreviewed: pre-existing hand copy",
-  "image::importImageFromUrlSchema::url": "unreviewed: pre-existing hand copy",
-  "image::initiateDocumentUploadSchema::contentType":
-    "unreviewed: pre-existing hand copy",
-  "image::initiateDocumentUploadSchema::filename":
-    "unreviewed: pre-existing hand copy",
-  "image::initiateDocumentUploadSchema::size":
-    "unreviewed: pre-existing hand copy",
+    IMAGE_READ_FIELD_HAND_COPY,
+  "image::importImageFromUrlResponseSchema::key": IMAGE_READ_FIELD_HAND_COPY,
+  "image::importImageFromUrlResponseSchema::url": IMAGE_READ_FIELD_HAND_COPY,
+  "image::importImageFromUrlSchema::url":
+    "external-URL import input — a plain z.url() the server fetches from, not any generated field (image has no generated create schema)",
+  "image::initiateDocumentUploadSchema::contentType": IMAGE_NO_GENERATED_CREATE,
+  "image::initiateDocumentUploadSchema::filename": IMAGE_NO_GENERATED_CREATE,
+  "image::initiateDocumentUploadSchema::size": IMAGE_NO_GENERATED_CREATE,
   "image::initiateUploadWithoutEntityResponseSchema::key":
-    "unreviewed: pre-existing hand copy",
+    IMAGE_READ_FIELD_HAND_COPY,
   "image::initiateUploadWithoutEntityResponseSchema::url":
-    "unreviewed: pre-existing hand copy",
+    IMAGE_READ_FIELD_HAND_COPY,
   "image::initiateUploadWithoutEntitySchema::contentType":
-    "unreviewed: pre-existing hand copy",
+    IMAGE_NO_GENERATED_CREATE,
   "image::initiateUploadWithoutEntitySchema::filename":
-    "unreviewed: pre-existing hand copy",
-  "image::initiateUploadWithoutEntitySchema::size":
-    "unreviewed: pre-existing hand copy",
+    IMAGE_NO_GENERATED_CREATE,
+  "image::initiateUploadWithoutEntitySchema::size": IMAGE_NO_GENERATED_CREATE,
   "image::mcpAttachFileInput::contentType":
-    "unreviewed: pre-existing hand copy",
-  "image::mcpAttachFileInput::filename": "unreviewed: pre-existing hand copy",
-  "image::mcpAttachFileInput::url": "unreviewed: pre-existing hand copy",
-  "image::projectImageSummarySchema::filename":
-    "unreviewed: pre-existing hand copy",
-  "image::imageWithEntitySchema::sha256": "unreviewed: pre-existing hand copy",
-  "image::projectImageSummarySchema::url": "unreviewed: pre-existing hand copy",
-  // --- ingredient: pre-existing hand copies ---
-  "ingredient::ingredientFiltersSchema::usuallyOnHand":
-    "unreviewed: pre-existing hand copy",
+    "MCP attach_file tool input (attachFileFields) — its own .describe() MCP prose; no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
+  "image::mcpAttachFileInput::filename":
+    "MCP attach_file tool input (attachFileFields) — its own .describe() MCP prose; no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
+  "image::mcpAttachFileInput::url":
+    "MCP attach_file tool input (attachFileFields) — its own .describe() MCP prose ('exactly one of url/data/uploadId'); no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
+  "image::projectImageSummarySchema::filename": IMAGE_READ_FIELD_HAND_COPY,
+  "image::projectImageSummarySchema::url": IMAGE_READ_FIELD_HAND_COPY,
+
+  // --- ingredient ---
   "ingredient::ingredientMergeCandidateImpact::name":
-    "unreviewed: pre-existing hand copy",
+    "merge-candidate preview projection (id/name plus derived counts for the keeper picker) — plain z.string() label, not sourced from generatedIngredientFieldSchemas.read.name",
   "ingredient::ingredientResolveOrCreateResultOut::aliases":
-    "unreviewed: pre-existing hand copy",
+    "the resolved ingredient's own current aliases — hand-written z.array(z.string()) instead of referencing generatedIngredientFieldSchemas.read.aliases directly",
   "ingredient::ingredientResolveOrCreateResultOut::name":
-    "unreviewed: pre-existing hand copy",
-  // --- inventory: pre-existing hand copies ---
+    "echoes the caller's REQUESTED name (may differ from the resolved entity's own name — see the adjacent canonicalName field/comment), not the entity's own read `name` field",
+  "ingredient::ingredientNameFilterInput::nameFilter":
+    "standalone required-value input for a specific name-lookup tool (z.string(), not optional) — not the optional list filter generatedIngredientFilterFields.nameFilter",
+
+  // --- inventory: embedded PRODUCT/LOCATION references coincidentally
+  // share key names with inventory's own generated id/createdAt/updatedAt ---
   "inventory::inventoryDetailProductOut::createdAt":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the PRODUCT's own createdAt (via productInventoryEmbedFields/timestampedFields), not the inventory entry's own createdAt",
   "inventory::inventoryDetailProductOut::id":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the PRODUCT's own id (via productInventoryEmbedFields), not the inventory entry's own id",
   "inventory::inventoryDetailProductOut::updatedAt":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the PRODUCT's own updatedAt (via productInventoryEmbedFields/timestampedFields), not the inventory entry's own updatedAt",
   "inventory::inventoryListLocationOut::id":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the LOCATION's own id, not the inventory entry's own id",
   "inventory::inventoryListProductOut::id":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the PRODUCT's own id, not the inventory entry's own id",
   "inventory::inventoryLocationIdsInput::placement":
-    "unreviewed: pre-existing hand copy",
+    "accepts inventoryPlacementFilter (a multi-value placement set) for a bulk audit/session query, not the single-value placement validator generated for create/update/read",
   "inventory::productInventoryEmbedOut::createdAt":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the PRODUCT's own createdAt (via productInventoryEmbedFields/timestampedFields), not the inventory entry's own createdAt",
   "inventory::productInventoryEmbedOut::id":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the PRODUCT's own id (via productInventoryEmbedFields), not the inventory entry's own id",
   "inventory::productInventoryEmbedOut::updatedAt":
-    "unreviewed: pre-existing hand copy",
-  // --- ledgerParty: pre-existing hand copies ---
-  "ledgerParty::ledgerPartyFiltersSchema::kind":
-    "unreviewed: pre-existing hand copy",
-  // --- ledgerTransfer: pre-existing hand copies ---
+    "coincidental key-name collision: embeds the PRODUCT's own updatedAt (via productInventoryEmbedFields/timestampedFields), not the inventory entry's own updatedAt",
+
+  // --- ledgerTransfer ---
   "ledgerTransfer::ledgerSourceClaimOut::createdAt":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: each source claim's OWN audit timestamp (a linked purchase/expense join row), not the ledgerTransfer's own createdAt",
   "ledgerTransfer::ledgerSourceClaimOut::updatedAt":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: each source claim's OWN audit timestamp (a linked purchase/expense join row), not the ledgerTransfer's own updatedAt",
   "ledgerTransfer::ledgerTransferFiltersSchema::fromPartyId":
-    "unreviewed: pre-existing hand copy",
+    "multi-value filter (oneOrMany(ledgerPartyShortcode)) over the generated scalar fromPartyId field",
   "ledgerTransfer::ledgerTransferFiltersSchema::toPartyId":
-    "unreviewed: pre-existing hand copy",
-  // --- location: pre-existing hand copies ---
-  "location::locationAncestorOut::name": "unreviewed: pre-existing hand copy",
-  "location::locationAncestorOut::type": "unreviewed: pre-existing hand copy",
+    "multi-value filter (oneOrMany(ledgerPartyShortcode)) over the generated scalar toPartyId field",
+
+  // --- location: picker/breadcrumb/ancestor-roster projections of
+  // location's own name/type/aliases fields (see the file comments on each
+  // export — deliberately narrower than the read schema, same split as
+  // product's picker items), plus shortcode-list filters and a
+  // deriveUpdateData() rewrap ---
+  "location::locationAncestorOut::name":
+    "ancestor-chain breadcrumb row (see file comment above locationAncestorFields) — hand-copied name field, narrower than the read schema",
+  "location::locationAncestorOut::type":
+    "ancestor-chain breadcrumb row — hand-copied type field, narrower than the read schema",
   "location::locationBulkUpdateParentInput::parentId":
-    "unreviewed: pre-existing hand copy",
+    "bulk-reparent input's target parent id — a fresh optionalLocationShortcode reference for a bulk mutation, not generatedLocationFieldSchemas.{create,update}.parentId",
   "location::locationFiltersSchema::parentId":
-    "unreviewed: pre-existing hand copy",
+    "shortcode-list filter spelled as entityFilterList(locationShortcode) over the generated scalar parentId field",
   "location::locationFiltersSchema::productId":
-    "unreviewed: pre-existing hand copy",
+    "shortcode-list filter spelled as entityFilterList(productShortcode) over the generated scalar productId field",
   "location::locationIdentityProductOut::id":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the PRODUCT this location IS (identity link) — the product's own id, not the location's own id",
   "location::locationIdentityProductOut::name":
-    "unreviewed: pre-existing hand copy",
-  "location::locationListRefOut::name": "unreviewed: pre-existing hand copy",
-  "location::locationListRefOut::type": "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: embeds the PRODUCT this location IS — the product's own name, not the location's own name",
+  "location::locationListRefOut::name":
+    "roster/ref projection (id+name+type) — hand-copied name field, narrower than the read schema",
+  "location::locationListRefOut::type":
+    "roster/ref projection — hand-copied type field, narrower than the read schema",
   "location::locationOptionItemOut::aliases":
-    "unreviewed: pre-existing hand copy",
-  "location::locationOptionItemOut::name": "unreviewed: pre-existing hand copy",
-  "location::locationOptionItemOut::type": "unreviewed: pre-existing hand copy",
+    "breadcrumb-only roster row (see file comment: deliberately NOT the full list-item shape) — hand-copied aliases field",
+  "location::locationOptionItemOut::name":
+    "breadcrumb-only roster row — hand-copied name field",
+  "location::locationOptionItemOut::type":
+    "breadcrumb-only roster row — hand-copied type field",
   "location::locationParentOptionsOut::name":
-    "unreviewed: pre-existing hand copy",
-  "location::locationPathRefOut::name": "unreviewed: pre-existing hand copy",
-  "location::locationPathRefOut::type": "unreviewed: pre-existing hand copy",
+    "parent-picklist roster (see file comment: mirrors projectOptionsOut's role) — hand-copied name field",
+  "location::locationPathRefOut::name":
+    "path/breadcrumb ref projection — hand-copied name field, narrower than the read schema",
+  "location::locationPathRefOut::type":
+    "path/breadcrumb ref projection — hand-copied type field, narrower than the read schema",
   "location::locationPickerItemOut::aliases":
-    "unreviewed: pre-existing hand copy",
-  "location::locationPickerItemOut::name": "unreviewed: pre-existing hand copy",
-  "location::locationPickerItemOut::type": "unreviewed: pre-existing hand copy",
-  "location::locationUpdateData::aliases": "unreviewed: pre-existing hand copy",
+    "picker row (see file comment: adds a thumbnail over locationOptionItemOut) — hand-copied aliases field",
+  "location::locationPickerItemOut::name":
+    "picker row — hand-copied name field",
+  "location::locationPickerItemOut::type":
+    "picker row — hand-copied type field",
+  "location::locationUpdateData::aliases": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::name": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::parentId": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::pendingImageIds": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::productId": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::tags": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::type": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::imageOrder":
-    "unreviewed: pre-existing hand copy",
-  "location::locationUpdateData::name": "unreviewed: pre-existing hand copy",
-  "location::locationUpdateData::parentId":
-    "unreviewed: pre-existing hand copy",
-  "location::locationUpdateData::pendingImageIds":
-    "unreviewed: pre-existing hand copy",
-  "location::locationUpdateData::productId":
-    "unreviewed: pre-existing hand copy",
+    "deriveUpdateData's `extend` option supplies its own z.array(imageShortcode).optional().describe(...) for this update-only field — a fresh instance, not the generated one",
   "location::locationUpdateData::removeImageIds":
-    "unreviewed: pre-existing hand copy",
-  "location::locationUpdateData::tags": "unreviewed: pre-existing hand copy",
-  "location::locationUpdateData::type": "unreviewed: pre-existing hand copy",
-  // --- meal: pre-existing hand copies ---
-  "meal::getMealPreparationsOut::totals": "unreviewed: pre-existing hand copy",
-  "meal::mealAddRecipeInput::sortOrder": "unreviewed: pre-existing hand copy",
-  "meal::mealFiltersSchema::mealKind": "unreviewed: pre-existing hand copy",
-  "meal::mealFiltersSchema::mealType": "unreviewed: pre-existing hand copy",
-  "meal::mealMcpEntityOut::recipes": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeIdInput::id": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeInput::sortOrder": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeOut::createdAt": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeOut::id": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeOut::sortOrder": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeOut::updatedAt": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeSummary::id": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeSummary::name": "unreviewed: pre-existing hand copy",
-  "meal::mealRecipeSummary::totals": "unreviewed: pre-existing hand copy",
-  "meal::mealUpdateRecipeInput::id": "unreviewed: pre-existing hand copy",
+    "deriveUpdateData's `extend` option supplies its own z.array(imageShortcode).optional().describe(...) for this update-only field — a fresh instance, not the generated one",
+
+  // --- meal: the meal-recipe JOIN ROW's own fields (id/sortOrder/createdAt/
+  // updatedAt) and embedded RECIPE/ingredient fields (name/totals) coincide
+  // in key name with meal's own generated fields, since meal-recipe shapes
+  // live in meal.ts/meal-fields.ts alongside meal's own generated map ---
+  "meal::getMealPreparationsOut::totals":
+    "nested {confirmed, projected} nutrition-totals breakdown object — a different shape than meal's own scalar `totals` read field, coincidental key-name collision",
+  "meal::mealAddRecipeInput::sortOrder":
+    "the meal-recipe JOIN ROW's own sort position (its rank among recipes within one meal) — coincidental key-name collision with meal's own sortOrder (its rank among meals within a day)",
+  "meal::mealMcpEntityOut::recipes":
+    "recipes: z.array(mealRecipeOut.omit({id: true})) — MealRecipe rows have no public shortcode (see file comment), a deliberately slimmer projection of the generated `recipes` read field",
+  "meal::mealRecipeIdInput::id":
+    "the meal-recipe JOIN ROW's own workflow id (mealRecipeId, a raw non-shortcode id — see the MCP server's documented exception), coincidental key-name collision with meal's own shortcode id",
+  "meal::mealRecipeInput::sortOrder":
+    "the meal-recipe JOIN ROW's own sort position — coincidental key-name collision with meal's own sortOrder, see mealAddRecipeInput::sortOrder",
+  "meal::mealRecipeOut::createdAt":
+    "the meal-recipe JOIN ROW's own audit timestamp (when this recipe was added to the meal) — coincidental key-name collision with meal's own createdAt",
+  "meal::mealRecipeOut::id":
+    "the meal-recipe JOIN ROW's own workflow id (mealRecipeId) — coincidental key-name collision with meal's own shortcode id, see mealRecipeIdInput::id",
+  "meal::mealRecipeOut::sortOrder":
+    "the meal-recipe JOIN ROW's own sort position — coincidental key-name collision with meal's own sortOrder, see mealAddRecipeInput::sortOrder",
+  "meal::mealRecipeOut::updatedAt":
+    "the meal-recipe JOIN ROW's own audit timestamp — coincidental key-name collision with meal's own updatedAt",
+  "meal::mealRecipeSummary::id":
+    "coincidental key-name collision: the embedded RECIPE's own id (recipeShortcode), not the meal's own id",
+  "meal::mealRecipeSummary::name":
+    "coincidental key-name collision: the embedded RECIPE's own name, not the meal's own name",
+  "meal::mealRecipeSummary::totals":
+    "coincidental key-name collision: the embedded RECIPE's own totals (recipeTotals), not the meal's own totals",
+  "meal::mealUpdateRecipeInput::id":
+    "the meal-recipe JOIN ROW's own workflow id (mealRecipeId) — coincidental key-name collision with meal's own shortcode id, see mealRecipeIdInput::id",
   "meal::mealUpdateRecipeInput::sortOrder":
-    "unreviewed: pre-existing hand copy",
-  "meal::shoppingListItem::name": "unreviewed: pre-existing hand copy",
-  "meal::unexpandedSubRecipeOut::name": "unreviewed: pre-existing hand copy",
-  // --- project: pre-existing hand copies ---
+    "the meal-recipe JOIN ROW's own sort position — coincidental key-name collision with meal's own sortOrder, see mealAddRecipeInput::sortOrder",
+  "meal::shoppingListItem::name":
+    "coincidental key-name collision: aggregatedNeedOut's own ingredient/product name (a shopping-list line), not the meal's own name",
+  "meal::unexpandedSubRecipeOut::name":
+    "coincidental key-name collision: the blocked SUB-RECIPE's own name, not the meal's own name",
+
+  // --- project: task/expense's generated maps are composed inside
+  // project.ts (see MODULE_OVERRIDES comment above) — every task::*/
+  // expense::* entry below is that same coincidental shared-module
+  // collision, not an independent hand copy. Verified by reading each
+  // export directly (task/expenseCreateInput/UpdateData/Out all correctly
+  // reference generatedTaskFieldSchemas/generatedExpenseFieldSchemas). ---
   "project::actionableTaskOut::blockedByIds":
-    "unreviewed: pre-existing hand copy",
+    TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::actionableTaskOut::blockingIds":
-    "unreviewed: pre-existing hand copy",
-  "project::actionableTaskOut::createdAt": "unreviewed: pre-existing hand copy",
-  "project::actionableTaskOut::id": "unreviewed: pre-existing hand copy",
-  "project::actionableTaskOut::name": "unreviewed: pre-existing hand copy",
-  "project::actionableTaskOut::status": "unreviewed: pre-existing hand copy",
-  "project::actionableTaskOut::updatedAt": "unreviewed: pre-existing hand copy",
-  "project::blockedReasonSchema::kind": "unreviewed: pre-existing hand copy",
+    TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::actionableTaskOut::createdAt":
+    "re-declares taskOut's shape by hand rather than extending it (see the file comment above actionableTaskOut: 'kept in sync by hand') — createdAt comes from the shared timestampedFields utility, not generatedTaskFieldSchemas.read's own instance",
+  "project::actionableTaskOut::id": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::actionableTaskOut::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::actionableTaskOut::status": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::actionableTaskOut::updatedAt":
+    "re-declares taskOut's shape by hand rather than extending it (see the file comment above actionableTaskOut: 'kept in sync by hand') — updatedAt comes from the shared timestampedFields utility, not generatedTaskFieldSchemas.read's own instance",
+  "project::blockedReasonSchema::kind":
+    'the blocking-chain node\'s own discriminator ("manual"|"task"|"project"), not project\'s own generated `kind` field — coincidental key-name collision',
   "project::embeddedProjectScopeSchema::locations":
-    "unreviewed: pre-existing hand copy",
+    PROJECT_LOCATIONS_HAND_ARRAY,
   "project::expenseAnalyzeReadyOut::status":
-    "unreviewed: pre-existing hand copy",
+    'discriminant literal tag for the expense-analyze result union (z.literal("ready")), not any entity\'s own workflow status field — coincidental key-name collision',
   "project::expenseAnalyzeTooLargeOut::status":
-    "unreviewed: pre-existing hand copy",
-  "project::expenseCreateInput::name": "unreviewed: pre-existing hand copy",
-  "project::expenseCreateInput::notes": "unreviewed: pre-existing hand copy",
-  "project::expenseMatchCandidate::name": "unreviewed: pre-existing hand copy",
-  "project::expenseMatchCandidate::notes": "unreviewed: pre-existing hand copy",
+    'discriminant literal tag for the expense-analyze result union (z.literal("too_large")), not any entity\'s own workflow status field — coincidental key-name collision',
+  "project::expenseCreateInput::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseCreateInput::notes": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseMatchCandidate::name":
+    "expense-import-match preview row's own name (a candidate expense for import matching, not the persisted Expense) — hand-written, coincidentally colliding with project's generated name field since expense concepts live in project.ts",
+  "project::expenseMatchCandidate::notes":
+    "expense-import-match preview row's own notes — hand-written, coincidentally colliding with project's generated notes field since expense concepts live in project.ts",
   "project::expenseMatchPurchaseContext::id":
-    "unreviewed: pre-existing hand copy",
-  "project::expenseOut::createdAt": "unreviewed: pre-existing hand copy",
-  "project::expenseOut::id": "unreviewed: pre-existing hand copy",
-  "project::expenseOut::name": "unreviewed: pre-existing hand copy",
-  "project::expenseOut::notes": "unreviewed: pre-existing hand copy",
-  "project::expenseOut::updatedAt": "unreviewed: pre-existing hand copy",
-  "project::expenseUpdateData::name": "unreviewed: pre-existing hand copy",
-  "project::expenseUpdateData::notes": "unreviewed: pre-existing hand copy",
-  "project::expenseUpdateInput::id": "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: the referenced PURCHASE's own id (purchaseShortcode), not project's own id",
+  "project::expenseOut::createdAt": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseOut::id": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseOut::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseOut::notes": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseOut::updatedAt": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseUpdateData::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseUpdateData::notes": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseUpdateInput::id": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::projectDashboardFiltersSchema::locations":
-    "unreviewed: pre-existing hand copy",
+    "projectDashboardFilterFields hand-writes its own `search`-adjacent locations: z.array(z.string()).optional() rather than referencing generatedProjectFieldSchemas.{create,update,read}.locations — same-entity hand copy, real duplication",
   "project::projectFilterOptionsOut::locations":
-    "unreviewed: pre-existing hand copy",
-  "project::projectFiltersSchema::kind": "unreviewed: pre-existing hand copy",
+    "distinct-value roster of project location-name strings for filter option population — hand-written z.array(z.string()), not the generated locations field instance",
   "project::projectFiltersSchema::parentProjectId":
-    "unreviewed: pre-existing hand copy",
-  "project::projectFiltersSchema::status": "unreviewed: pre-existing hand copy",
-  "project::projectOptionsOut::icon": "unreviewed: pre-existing hand copy",
-  "project::projectOptionsOut::name": "unreviewed: pre-existing hand copy",
+    "shortcode-list filter spelled as entityFilterList(projectShortcode) over the generated scalar parentProjectId field",
+  "project::projectOptionsOut::icon":
+    "picklist roster row (see file comment: mirrors locationParentOptionsOut's role) — hand-copied icon field, narrower than the read schema",
+  "project::projectOptionsOut::name":
+    "picklist roster row — hand-copied name field, narrower than the read schema",
   "project::projectSharedWindowOut::endDate":
-    "unreviewed: pre-existing hand copy",
+    "computed shared usage-window bound (min/max across overlapping projects for the tool matrix) — a derived value, not project's own endDate override field, though same key name",
   "project::projectSharedWindowOut::startDate":
-    "unreviewed: pre-existing hand copy",
+    "computed shared usage-window bound (min/max across overlapping projects for the tool matrix) — a derived value, not project's own startDate override field, though same key name",
   "project::projectToolMatrixColumnOut::endDate":
-    "unreviewed: pre-existing hand copy",
+    "tool-matrix column header summarizing one project's own endDate (paired with endSource tracking override-vs-derived) — hand-copied read projection, not a reference to generatedProjectFieldSchemas.read.endDate",
   "project::projectToolMatrixColumnOut::icon":
-    "unreviewed: pre-existing hand copy",
+    "tool-matrix column header summarizing one project's own icon — hand-copied read projection, not a reference to generatedProjectFieldSchemas.read.icon",
   "project::projectToolMatrixColumnOut::kind":
-    "unreviewed: pre-existing hand copy",
+    "tool-matrix column header summarizing one project's own kind — hand-copied read projection, not a reference to generatedProjectFieldSchemas.read.kind",
   "project::projectToolMatrixColumnOut::startDate":
-    "unreviewed: pre-existing hand copy",
+    "tool-matrix column header summarizing one project's own startDate (paired with startSource tracking override-vs-derived) — hand-copied read projection, not a reference to generatedProjectFieldSchemas.read.startDate",
   "project::projectToolMatrixInput::locations":
-    "unreviewed: pre-existing hand copy",
-  "project::taskBoardMovePatch::status": "unreviewed: pre-existing hand copy",
-  "project::taskBulkStatusInput::status": "unreviewed: pre-existing hand copy",
-  "project::taskCreateInput::name": "unreviewed: pre-existing hand copy",
-  "project::taskCreateInput::status": "unreviewed: pre-existing hand copy",
-  "project::taskFiltersSchema::status": "unreviewed: pre-existing hand copy",
-  "project::taskOut::blockedByIds": "unreviewed: pre-existing hand copy",
-  "project::taskOut::blockingIds": "unreviewed: pre-existing hand copy",
-  "project::taskOut::createdAt": "unreviewed: pre-existing hand copy",
-  "project::taskOut::id": "unreviewed: pre-existing hand copy",
-  "project::taskOut::name": "unreviewed: pre-existing hand copy",
-  "project::taskOut::status": "unreviewed: pre-existing hand copy",
-  "project::taskOut::updatedAt": "unreviewed: pre-existing hand copy",
-  "project::taskTodayBriefingItemOut::id": "unreviewed: pre-existing hand copy",
+    "inherits projectDashboardFilterFields's hand-written locations field via spread — see projectDashboardFiltersSchema::locations",
+  "project::taskBoardMovePatch::status": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskBulkStatusInput::status": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskCreateInput::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskCreateInput::status": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskFiltersSchema::search":
+    "task's own generated search filter field (generatedTaskFilterFields.search, correctly referenced via taskFilterFields' spread) — coincidentally shares a name with project's own generated search filter field since both live in project.ts",
+  "project::taskFiltersSchema::status":
+    "task's own generated filter status field (generatedTaskFilterFields.status, correctly referenced via taskFilterFields' spread) — coincidentally shares a name with project's own generated status field since both live in project.ts",
+  "project::expenseFiltersSchema::search":
+    "expense's own hand-written search filter (oneOrMany(z.string()); expense has no generated search key — see the file comment on why notes gets its own field) — coincidentally shares a name with project's own generated search filter field",
+  "project::embeddedProjectScopeSchema::search":
+    "hand-written z.string().optional() duplicate of project's own generated search filter field, for the embeddable project-scope shape — same-entity hand copy, real duplication",
+  "project::projectDashboardFiltersSchema::search":
+    "hand-written z.string().optional() duplicate of project's own generated search filter field, for the dashboard-scoped filter shape — same-entity hand copy, real duplication",
+  "project::toolGalleryInput::search":
+    "value-space narrowing: z.string().trim().max(200).optional() bounds the tool-gallery search term more tightly than the generated field's plain z.string().optional()",
+  "project::toolGalleryInventoryEntryOut::location":
+    "coincidental key-name collision: an embedded location detail OBJECT ({id, name, ancestors}) on an inventory entry, entirely unrelated in shape to project's own generated `location` (oneOrMany(string)) exact-match filter field",
+  "project::projectToolMatrixInput::search":
+    "inherits projectDashboardFilterFields's hand-written search field via spread — see projectDashboardFiltersSchema::search",
+  "project::taskOut::blockedByIds": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskOut::blockingIds": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskOut::createdAt": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskOut::id": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskOut::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskOut::status": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskOut::updatedAt": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskTodayBriefingItemOut::id":
+    "compact Today-briefing projection of TASK's own id (see file comment: 'the compact ready-work projection') — coincidentally shares a name with project's generated field since task concepts live in project.ts",
   "project::taskTodayBriefingItemOut::name":
-    "unreviewed: pre-existing hand copy",
+    "compact Today-briefing projection of TASK's own name — coincidental key-name collision, see taskTodayBriefingItemOut::id",
   "project::taskTodayBriefingItemOut::status":
-    "unreviewed: pre-existing hand copy",
-  "project::taskUpdateData::blockedByIds": "unreviewed: pre-existing hand copy",
-  "project::taskUpdateData::name": "unreviewed: pre-existing hand copy",
-  "project::taskUpdateData::status": "unreviewed: pre-existing hand copy",
-  "project::taskUpdateInput::id": "unreviewed: pre-existing hand copy",
+    'compact Today-briefing projection narrows TASK\'s own status to the two active/visible states ("not_started"|"in_progress") for the Today view — coincidental key-name collision with project\'s status field, plus a real value-space narrowing versus task\'s own full status enum',
+  "project::taskUpdateData::blockedByIds": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskUpdateData::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskUpdateData::status": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskUpdateInput::id": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::toolGalleryInventoryEntryOut::id":
-    "unreviewed: pre-existing hand copy",
-  // --- purchase: pre-existing hand copies ---
+    "coincidental key-name collision: the embedded INVENTORY entry's own id, not project's own id",
+
+  // --- purchase: purchaseOut re-declares its own generated read fields by
+  // hand immediately after spreading them (see PURCHASE_OUT_SHADOWED_BY_
+  // HAND_REDECLARE) — a real, worth-fixing duplication; product-embedded
+  // purchase-history rows also hand-copy purchase's own fields; filters use
+  // entityFilterList/oneOrMany multi-value variants over generated scalars ---
   "purchase::productPurchaseOut::displayLabel":
-    "unreviewed: pre-existing hand copy",
-  "purchase::productPurchaseOut::orderId": "unreviewed: pre-existing hand copy",
+    "product-purchase-history row hand-copies purchase's own displayLabel field for a product-embedded projection, rather than referencing generatedPurchaseFieldSchemas.read directly",
+  "purchase::productPurchaseOut::orderId":
+    "product-purchase-history row hand-copies purchase's own orderId field for a product-embedded projection, rather than referencing generatedPurchaseFieldSchemas.read directly",
   "purchase::productPurchaseOut::vendorName":
-    "unreviewed: pre-existing hand copy",
+    "product-purchase-history row hand-copies purchase's own vendorName field for a product-embedded projection, rather than referencing generatedPurchaseFieldSchemas.read directly",
   "purchase::purchaseCreateInput::pendingImageIds":
-    "unreviewed: pre-existing hand copy",
+    "purchaseCreateFields hand-declares pendingImageIds fresh (see file comment on Image minting a shortcode at insert time) rather than referencing the generated create field's instance",
   "purchase::purchaseFiltersSchema::financialReconciliation":
-    "unreviewed: pre-existing hand copy",
+    'filter-only single-value enum (z.enum(["mismatch"])) over the read field\'s full financialReconciliationSummary object — same key name, entirely different shape (a filter predicate vs. the object it flags)',
   "purchase::purchaseFiltersSchema::orderId":
-    "unreviewed: pre-existing hand copy",
+    "multi-value filter (oneOrMany(z.string())) over the generated scalar orderId field",
   "purchase::purchaseFiltersSchema::reconciliation":
-    "unreviewed: pre-existing hand copy",
+    "multi-value filter (oneOrMany(purchaseReconciliation)) over the read field's single-value enum",
   "purchase::purchaseFiltersSchema::vendorId":
-    "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::createdAt": "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::documentCount": "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::expenseCount": "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::images": "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::orderUrl": "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::reconciliation": "unreviewed: pre-existing hand copy",
+    "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
+  "purchase::purchaseOut::createdAt": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseOut::documentCount":
+    PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseOut::expenseCount":
+    PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseOut::images": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseOut::orderUrl": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseOut::reconciliation":
+    PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
   "purchase::purchaseOut::unpricedExpenseCount":
-    "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::updatedAt": "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::vendorLogo": "unreviewed: pre-existing hand copy",
-  "purchase::purchaseOut::vendorName": "unreviewed: pre-existing hand copy",
-  "purchase::purchaseUpdateData::imageOrder":
-    "unreviewed: pre-existing hand copy",
-  "purchase::purchaseUpdateData::removeImageIds":
-    "unreviewed: pre-existing hand copy",
-  // --- recipe: pre-existing hand copies ---
-  "recipe::cookbookSummary::id": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeCreateInput::meta": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeCreateInput::name": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeCreateInput::notes": "unreviewed: pre-existing hand copy",
+    PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseOut::updatedAt": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseOut::vendorLogo": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseOut::vendorName": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
+  "purchase::purchaseUpdateData::imageOrder": HAND_WRITTEN_IMAGE_ID_ARRAY,
+  "purchase::purchaseUpdateData::removeImageIds": HAND_WRITTEN_IMAGE_ID_ARRAY,
+
+  // --- recipe: recipeTopLevelFields (recipe-shared.ts) is a hand-declared
+  // shared map predating the generator, reused across many exports (one
+  // root cause); section/usage/instruction sub-rows have their own ids
+  // distinct from the recipe's own shortcode id (coincidental collisions);
+  // MCP tool inputs add their own .describe() prose ---
+  "recipe::cookbookSummary::id":
+    "cookbookSummary = z.object(generatedCookbookFieldSchemas.read) — COOKBOOK's own generated read shape, correctly wired, embedded in recipe.ts because a recipe references its source cookbook; coincidentally shares the key name `id` with recipe's own generated field since this walk runs per canonical module",
+  "recipe::mcpRecipeCreateInput::meta": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::mcpRecipeCreateInput::name":
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field (see file comment: 'Descriptions surface to MCP clients...') — a distinct instance from generatedRecipeFieldSchemas.create",
+  "recipe::mcpRecipeCreateInput::notes":
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.create",
   "recipe::mcpRecipeCreateInput::sections":
-    "unreviewed: pre-existing hand copy",
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field (array of recipeSectionInput) — a distinct instance from generatedRecipeFieldSchemas.create",
   "recipe::mcpRecipeCreateInput::servings":
-    "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeCreateInput::tags": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeCreateInput::yield": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeUpdateInput::id": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeUpdateInput::meta": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeUpdateInput::name": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeUpdateInput::notes": "unreviewed: pre-existing hand copy",
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.create",
+  "recipe::mcpRecipeCreateInput::tags":
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.create",
+  "recipe::mcpRecipeCreateInput::yield":
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.create",
+  "recipe::mcpRecipeUpdateInput::id":
+    "MCP update tool's target-row id parameter — its own recipeShortcode reference (paired with recipeWritableFields' MCP prose fields), not generatedRecipeFieldSchemas.read.id's instance",
+  "recipe::mcpRecipeUpdateInput::meta": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::mcpRecipeUpdateInput::name":
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.update",
+  "recipe::mcpRecipeUpdateInput::notes":
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.update",
   "recipe::mcpRecipeUpdateInput::sections":
-    "unreviewed: pre-existing hand copy",
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.update",
   "recipe::mcpRecipeUpdateInput::servings":
-    "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeUpdateInput::tags": "unreviewed: pre-existing hand copy",
-  "recipe::mcpRecipeUpdateInput::yield": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::createdAt": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::name": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::notes": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::sections": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::servings": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::source": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::tags": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::totals": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::updatedAt": "unreviewed: pre-existing hand copy",
-  "recipe::recipeGraphOut::yield": "unreviewed: pre-existing hand copy",
-  "recipe::recipeInstructionInput::id": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::createdAt": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::images": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::name": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::notes": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::servings": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::source": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::tags": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::totals": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::updatedAt": "unreviewed: pre-existing hand copy",
-  "recipe::recipeListItemOut::yield": "unreviewed: pre-existing hand copy",
-  "recipe::recipeMcpEntityOut::sections": "unreviewed: pre-existing hand copy",
-  "recipe::recipeMcpListOut::meta": "unreviewed: pre-existing hand copy",
-  "recipe::recipeRefOut::name": "unreviewed: pre-existing hand copy",
-  "recipe::recipeSectionInput::id": "unreviewed: pre-existing hand copy",
-  "recipe::recipeSectionInput::name": "unreviewed: pre-existing hand copy",
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.update",
+  "recipe::mcpRecipeUpdateInput::tags":
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.update",
+  "recipe::mcpRecipeUpdateInput::yield":
+    "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.update",
+  "recipe::recipeGraphOut::createdAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::name": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::notes": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::sections":
+    "graph-shaped z.array(recipeSectionOut) (full output graph, ids included) vs. the generated create/update field's INPUT-shaped sections validator (array of recipeSectionInput)",
+  "recipe::recipeGraphOut::servings": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::source": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::tags": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::totals":
+    "recipe's own persisted totals, hand-declared fresh (recipeTotals.nullish()) rather than referencing generatedRecipeFieldSchemas.read.totals directly",
+  "recipe::recipeGraphOut::updatedAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::yield": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeInstructionInput::id":
+    "coincidental key-name collision: an instruction ROW's own optional edit-target uuid (id.optional()), not recipe's own shortcode id",
+  "recipe::recipeListItemOut::createdAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::images":
+    "list-row cover-image projection (z.array(imageOut), capped to the sortOrder-first cover per the file comment — the ~4.7s over-fetch fix) — hand-declared fresh, not the generated read.images instance",
+  "recipe::recipeListItemOut::name": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::notes": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::servings": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::source": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::tags": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::totals":
+    "recipe's own persisted totals, hand-declared fresh (recipeTotals.nullish()) — same cause as recipeGraphOut::totals",
+  "recipe::recipeListItemOut::updatedAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::yield": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeMcpEntityOut::sections":
+    "MCP entity result strips section/line storage-only ids (array of recipeSectionMcpEntityOut) — slimmer projection of the read field's sections, not a per-field hand copy",
+  "recipe::recipeMcpListOut::meta": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeRefOut::name":
+    "minimal recipe reference ({id, name} only) — picker/pointer projection, hand-written name instead of referencing generatedRecipeFieldSchemas.read.name",
+  "recipe::recipeSectionInput::id":
+    "coincidental key-name collision: a SECTION row's own optional edit-target uuid (id.optional()), not recipe's own shortcode id",
+  "recipe::recipeSectionInput::name":
+    "coincidental key-name collision: the SECTION's own optional name (min(2), nullable), not recipe's own name",
   "recipe::recipeSectionMcpEntityOut::createdAt":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: the SECTION row's own audit timestamp (via recipeSectionFields/timestampedFields), not recipe's own createdAt",
   "recipe::recipeSectionMcpEntityOut::name":
-    "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: the SECTION's own name, not recipe's own name",
   "recipe::recipeSectionMcpEntityOut::updatedAt":
-    "unreviewed: pre-existing hand copy",
-  "recipe::recipeSectionOut::createdAt": "unreviewed: pre-existing hand copy",
-  "recipe::recipeSectionOut::id": "unreviewed: pre-existing hand copy",
-  "recipe::recipeSectionOut::name": "unreviewed: pre-existing hand copy",
-  "recipe::recipeSectionOut::updatedAt": "unreviewed: pre-existing hand copy",
-  "recipe::recipeTopLevel::createdAt": "unreviewed: pre-existing hand copy",
-  "recipe::recipeTopLevel::name": "unreviewed: pre-existing hand copy",
-  "recipe::recipeTopLevel::notes": "unreviewed: pre-existing hand copy",
-  "recipe::recipeTopLevel::servings": "unreviewed: pre-existing hand copy",
-  "recipe::recipeTopLevel::source": "unreviewed: pre-existing hand copy",
-  "recipe::recipeTopLevel::tags": "unreviewed: pre-existing hand copy",
-  "recipe::recipeTopLevel::updatedAt": "unreviewed: pre-existing hand copy",
-  "recipe::recipeTopLevel::yield": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::imageOrder": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::meta": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::name": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::notes": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::pendingImageIds":
-    "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::removeImageIds":
-    "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::sections": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::servings": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::tags": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUpdateData::yield": "unreviewed: pre-existing hand copy",
-  "recipe::recipeUsageOut::id": "unreviewed: pre-existing hand copy",
-  "recipe::rowDiagnostic::id": "unreviewed: pre-existing hand copy",
-  "recipe::rowDiagnostic::name": "unreviewed: pre-existing hand copy",
-  // --- wish: pre-existing hand copies ---
-  "wish::wishCandidateOut::id": "unreviewed: pre-existing hand copy",
-  "wish::wishCandidateOut::name": "unreviewed: pre-existing hand copy",
-  "wish::wishFiltersSchema::acquired": "unreviewed: pre-existing hand copy",
+    "coincidental key-name collision: the SECTION row's own audit timestamp, not recipe's own updatedAt",
+  "recipe::recipeSectionOut::createdAt":
+    "coincidental key-name collision: the SECTION row's own audit timestamp (via recipeSectionFields/timestampedFields), not recipe's own createdAt",
+  "recipe::recipeSectionOut::id":
+    "coincidental key-name collision: the SECTION's own uuid (declared exception: section ids have no shortcode), not recipe's own shortcode id",
+  "recipe::recipeSectionOut::name":
+    "coincidental key-name collision: the SECTION's own name, not recipe's own name",
+  "recipe::recipeSectionOut::updatedAt":
+    "coincidental key-name collision: the SECTION row's own audit timestamp, not recipe's own updatedAt",
+  "recipe::recipeTopLevel::createdAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::name": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::notes": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::servings": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::source": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::tags": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::updatedAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::yield": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeUpdateData::imageOrder": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::meta": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::name": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::notes": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::pendingImageIds": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::removeImageIds": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::sections": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::servings": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::tags": PARTIAL_REWRAP,
+  "recipe::recipeUpdateData::yield": PARTIAL_REWRAP,
+  "recipe::recipeUsageOut::id":
+    "coincidental key-name collision: the usage ROW's own uuid (declared exception: a RecipeSectionIngredient usage row has no public shortcode), not recipe's own shortcode id",
+  "recipe::rowDiagnostic::id":
+    "costing-explain diagnostic row's generic id for EITHER an ingredient or a sub-recipe usage line (`kind` disambiguates) — plain z.string(), not recipe's own shortcode-typed id field",
+  "recipe::rowDiagnostic::name":
+    "costing-explain diagnostic row's generic name for either kind of usage line — plain z.string(), not recipe's own name field",
+
+  // --- wish ---
+  "wish::wishCandidateOut::id":
+    "coincidental key-name collision: the candidate PRODUCT's own id (productShortcode) being matched against the wish item, not the wish item's own id",
+  "wish::wishCandidateOut::name":
+    "coincidental key-name collision: the candidate PRODUCT's own name, not the wish item's own name",
 };
 
 type FieldMap = Record<string, z.ZodType>;
@@ -646,6 +733,14 @@ interface SkippedEntity {
 }
 const skipped: SkippedEntity[] = [];
 const drifts: string[] = [];
+/**
+ * Every `entity::export::key` the walk actually checked against
+ * INTENTIONAL_RESPELLINGS (i.e. found non-identical to its generated
+ * candidate schema(s)). An allowlist entry the walk never reaches this way
+ * is stale — the field it named was fixed, removed, or renamed — and is
+ * caught by the "no stale entries" test below instead of silently rotting.
+ */
+const consultedRespellingKeys = new Set<string>();
 
 interface EntityCase {
   entityName: string;
@@ -693,6 +788,22 @@ for (const { entityName, moduleName } of entityCases) {
     fieldSchemasExportName as string
   ] as GeneratedFieldSchemas;
 
+  // Filter field maps (generated<Entity>FilterFields) are optional per
+  // entity — cookbook/inventory/ledgerTransfer/usda-food have none — so
+  // finding zero is not a skip condition the way a missing FieldSchemas
+  // export is; every entity that HAS one composes it into a `<entity>
+  // FilterFields` object spread into a `z.object(...)` filters schema, which
+  // this walk already reaches as an ordinary exported ZodObject below.
+  const [filterFieldsExportName] = Object.keys(genModule).filter((key) =>
+    /^generated.*FilterFields$/.test(key),
+  );
+  let generatedFilterFields: FieldMap | undefined;
+  if (filterFieldsExportName) {
+    // SAFETY: filterFieldsExportName came from Object.keys(genModule) two
+    // lines above, so it is one of genModule's own keys.
+    generatedFilterFields = genModule[filterFieldsExportName] as FieldMap;
+  }
+
   let canonicalModuleNamespace: unknown;
   try {
     canonicalModuleNamespace = await import(
@@ -722,17 +833,19 @@ for (const { entityName, moduleName } of entityCases) {
         generatedFieldSchemas.create?.[key],
         generatedFieldSchemas.update?.[key],
         generatedFieldSchemas.read?.[key],
+        generatedFilterFields?.[key],
       ].filter((candidate): candidate is z.ZodType => candidate !== undefined);
-      if (generatedCandidates.length === 0) continue; // key not on the generated map at all
+      if (generatedCandidates.length === 0) continue; // key not on any generated map at all
 
       const isSameInstance = generatedCandidates.some((c) => c === schema);
       if (isSameInstance) continue;
 
       const respellingKey = `${entityName}::${exportName}::${key}`;
+      consultedRespellingKeys.add(respellingKey);
       if (respellingKey in INTENTIONAL_RESPELLINGS) continue;
 
       drifts.push(
-        `${moduleName}.ts export "${exportName}" key "${key}" (entity "${entityName}") is not the same instance as generated${entityName[0]?.toUpperCase()}${entityName.slice(1)}FieldSchemas.{create,update,read}.${key}. Reference the generated map directly, or register "${respellingKey}" in INTENTIONAL_RESPELLINGS with a reason.`,
+        `${moduleName}.ts export "${exportName}" key "${key}" (entity "${entityName}") is not the same instance as the generated schema in ${fieldSchemasExportName}.{create,update,read}${filterFieldsExportName ? ` or ${filterFieldsExportName}` : ""}. Reference the generated map directly, or register "${respellingKey}" in INTENTIONAL_RESPELLINGS with a reason.`,
       );
     }
   }
@@ -759,5 +872,18 @@ describe("generated field-map drift", () => {
   // above (add a fix or an INTENTIONAL_RESPELLINGS entry if this fails).
   it("reuses the generated field-schema instance for every shared key across every entity's canonical module", () => {
     expect(drifts).toEqual([]);
+  });
+
+  // A key listed here that the walk above never found non-identical is
+  // stale: the field was fixed, renamed, or removed since the entry was
+  // written, and the entry no longer documents anything real. Delete it
+  // instead of letting it linger — a stale entry hides a REGRESSION if the
+  // same key later drifts again for a different, unreviewed reason, because
+  // "in INTENTIONAL_RESPELLINGS" would silently swallow it again.
+  it("has no INTENTIONAL_RESPELLINGS entries the walk never consulted", () => {
+    const staleRespellingKeys = Object.keys(INTENTIONAL_RESPELLINGS).filter(
+      (key) => !consultedRespellingKeys.has(key),
+    );
+    expect(staleRespellingKeys).toEqual([]);
   });
 });
