@@ -44,6 +44,9 @@ targetTemplates:
       - path: App/${plat}
         excludes: ["Cubby.entitlements", "Info.plist"]
       - path: App/Assets.xcassets
+      # Layered Liquid Glass icon (Icon Composer format). Same name as the PNG AppIcon set in
+      # the asset catalog, which stays as the fallback for anything that cannot render layers.
+      - path: App/AppIcon.icon
     info:
       path: App/${plat}/Info.plist
       properties:
