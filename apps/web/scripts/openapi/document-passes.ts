@@ -448,10 +448,18 @@ export function nameJsonValues(components: Components): Components {
       ? node
       : { ...node, $ref: `${COMPONENT_PREFIX}${target}` };
   };
+  // The recursive union is more than a generated client keeps: a member
+  // typed `null` is dropped with a warning and the self-reference does not
+  // survive it. An empty schema is the same value space and generates as a
+  // free-form container.
+  const freeForm: JsonSchema = {
+    description:
+      "Any JSON value: a string, number, boolean, null, array or object.",
+  };
   return Object.fromEntries(
     Object.entries(components).map(([name, schema]) => [
       renames.get(name) ?? name,
-      mapSchemas(schema, visit),
+      renames.has(name) ? freeForm : mapSchemas(schema, visit),
     ]),
   );
 }

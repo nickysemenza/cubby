@@ -127,3 +127,15 @@ extension JSONValue: ExpressibleByDictionaryLiteral {
         self = .object(Dictionary(uniqueKeysWithValues: elements))
     }
 }
+
+// MARK: - Projection from typed values
+
+extension JSONValue {
+    /// Projects a decoded wire value into the dynamic tree `EntityRow.raw` exposes, using the
+    /// same date spelling the client decodes, so `EntityFacts` still parses timestamps. A typed
+    /// value's absent optionals become absent keys (the wire sent `null`; consumers treat the
+    /// two alike).
+    public init<T: Encodable>(encoding value: T) throws {
+        self = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder.cubby().encode(value))
+    }
+}

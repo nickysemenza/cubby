@@ -108,7 +108,6 @@ function* nodes(): Generator<[string, SchemaNode]> {
 
 /** Nullability the emitter deliberately leaves as a union (see the emitter). */
 const RESIDUAL_NULL_ALLOWLIST = new Set([
-  `${COMPONENT}JsonValue`,
   `${COMPONENT}ProductFoodSummariesOut/additionalProperties`,
 ]);
 
@@ -153,6 +152,14 @@ describe("generated HTTP OpenAPI document", () => {
     for (const keyword of ['"nullable"', '"$defs"', '"$id"', '"$schema"'])
       expect(text).not.toContain(keyword);
     expect(schemas).not.toHaveProperty("ErrorEnvelope");
+  });
+
+  it("documents z.json() as one free-form JsonValue", () => {
+    // A recursive anyOf with a null member is dropped by a generated client;
+    // the empty schema is the same value space and generates as a container.
+    expect(Object.keys(schemas.JsonValue ?? {})).toEqual(["description"]);
+    expect(schemas).not.toHaveProperty("JsonValue2");
+    expect(text).toContain(`"$ref":"${COMPONENT}JsonValue"`);
   });
 
   it("names components after their exports, with few positional survivors", () => {

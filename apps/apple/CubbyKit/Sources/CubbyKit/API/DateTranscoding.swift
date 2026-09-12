@@ -39,3 +39,17 @@ extension JSONDecoder {
         return decoder
     }
 }
+
+extension JSONEncoder {
+    /// An encoder that emits dates exactly as the API does (`…T00:00:00.000Z`), so a typed
+    /// value re-encoded into a `JSONValue` carries the same timestamp text the raw wire did.
+    public static func cubby() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        let transcoder = LenientISO8601DateTranscoder()
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var container = encoder.singleValueContainer()
+            try container.encode(try transcoder.encode(date))
+        }
+        return encoder
+    }
+}

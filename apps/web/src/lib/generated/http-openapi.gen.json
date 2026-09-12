@@ -27415,35 +27415,7 @@
         "additionalProperties": false
       },
       "JsonValue": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "number"
-          },
-          {
-            "type": "boolean"
-          },
-          {
-            "type": "null"
-          },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/JsonValue"
-            }
-          },
-          {
-            "type": "object",
-            "propertyNames": {
-              "type": "string"
-            },
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            }
-          }
-        ]
+        "description": "Any JSON value: a string, number, boolean, null, array or object."
       },
       "input_schema31": {
         "$ref": "#/components/schemas/PlainDate"
