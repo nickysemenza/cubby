@@ -27097,9 +27097,6 @@
           "ingredientId": {
             "$ref": "#/components/schemas/IngredientShortcode"
           },
-          "recipeId": {
-            "type": "null"
-          },
           "amounts": {
             "type": "array",
             "items": {
@@ -27118,7 +27115,8 @@
             "format": "uri"
           }
         },
-        "required": ["type", "ingredientId", "recipeId", "amounts"]
+        "required": ["type", "ingredientId", "amounts"],
+        "description": "Always null on the wire: recipeId."
       },
       "RecipeIngredientInputRecipe": {
         "type": "object",
@@ -27130,9 +27128,6 @@
           "recipeId": {
             "$ref": "#/components/schemas/RecipeShortcode"
           },
-          "ingredientId": {
-            "type": "null"
-          },
           "amounts": {
             "type": "array",
             "items": {
@@ -27151,7 +27146,8 @@
             "format": "uri"
           }
         },
-        "required": ["type", "recipeId", "ingredientId", "amounts"]
+        "required": ["type", "recipeId", "amounts"],
+        "description": "Always null on the wire: ingredientId."
       },
       "MealRecipePreparationChangeSet": {
         "type": "object",
@@ -47353,9 +47349,6 @@
             "type": "string",
             "const": "ingredient"
           },
-          "recipe": {
-            "type": "null"
-          },
           "ingredient": {
             "type": "object",
             "properties": {
@@ -47392,10 +47385,10 @@
           "createdAt",
           "updatedAt",
           "type",
-          "recipe",
           "ingredient"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Always null on the wire: recipe."
       },
       "RecipeSectionIngredientOutRecipe": {
         "type": "object",
@@ -47432,9 +47425,6 @@
           },
           "recipe": {
             "$ref": "#/components/schemas/RecipeTopLevel"
-          },
-          "ingredient": {
-            "type": "null"
           }
         },
         "required": [
@@ -47443,10 +47433,10 @@
           "createdAt",
           "updatedAt",
           "type",
-          "recipe",
-          "ingredient"
+          "recipe"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Always null on the wire: ingredient."
       },
       "MealPreparationYieldBasisActual": {
         "type": "object",
@@ -47473,16 +47463,11 @@
           "kind": {
             "type": "string",
             "const": "missing"
-          },
-          "lowerGrams": {
-            "type": "null"
-          },
-          "upperGrams": {
-            "type": "null"
           }
         },
-        "required": ["kind", "lowerGrams", "upperGrams"],
-        "additionalProperties": false
+        "required": ["kind"],
+        "additionalProperties": false,
+        "description": "Always null on the wire: lowerGrams, upperGrams."
       },
       "ProductPickerItemOutNone": {
         "type": "object",
@@ -47553,9 +47538,6 @@
             "type": "string",
             "const": "ingredient"
           },
-          "recipe": {
-            "type": "null"
-          },
           "ingredient": {
             "type": "object",
             "properties": {
@@ -47592,10 +47574,10 @@
           "createdAt",
           "updatedAt",
           "type",
-          "recipe",
           "ingredient"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Always null on the wire: recipe."
       },
       "SectionIngredientOutRecipe": {
         "type": "object",
@@ -47632,9 +47614,6 @@
           },
           "recipe": {
             "$ref": "#/components/schemas/RecipeTopLevel"
-          },
-          "ingredient": {
-            "type": "null"
           }
         },
         "required": [
@@ -47643,10 +47622,10 @@
           "createdAt",
           "updatedAt",
           "type",
-          "recipe",
-          "ingredient"
+          "recipe"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Always null on the wire: ingredient."
       },
       "RecipeFlowSourceUsage": {
         "type": "object",

@@ -478,3 +478,38 @@ export function dropRequiredWithoutProperties(
     ]),
   );
 }
+
+/**
+ * A property whose only value is `null` (a discriminated-union member that
+ * carries `ingredientId: null` to say "no ingredient") has no type a
+ * generated client can hold, so it leaves the document: the server still
+ * sends the null, which decodes as absent. Recorded on the parent's
+ * description so the omission is visible.
+ */
+export function dropNullOnlyProperties(components: Components): Components {
+  const visit = (node: JsonSchema): JsonSchema => {
+    if (!node.properties) return node;
+    const dropped = Object.entries(node.properties)
+      .filter(([, value]) => isObjectSchema(value) && value.type === "null")
+      .map(([key]) => key);
+    if (dropped.length === 0) return node;
+    const properties = Object.fromEntries(
+      Object.entries(node.properties).filter(([key]) => !dropped.includes(key)),
+    );
+    const note = `Always null on the wire: ${dropped.join(", ")}.`;
+    const copy: JsonSchema = {
+      ...node,
+      properties,
+      description: node.description ? `${node.description} ${note}` : note,
+    };
+    if (node.required !== undefined)
+      copy.required = node.required.filter((key) => !dropped.includes(key));
+    return copy;
+  };
+  return Object.fromEntries(
+    Object.entries(components).map(([name, schema]) => [
+      name,
+      mapSchemas(schema, visit),
+    ]),
+  );
+}

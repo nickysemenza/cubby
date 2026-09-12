@@ -10,6 +10,7 @@ import {
   isObjectSchema,
   type JsonSchema,
   collapseSingleAllOf,
+  dropNullOnlyProperties,
   dropRequiredWithoutProperties,
   fillDiscriminatorMappings,
   flattenNestedNullables,
@@ -310,6 +311,7 @@ const passes = [
   inlineNullableComponents,
   collapseNullableUnions,
   optionalNullableProperties,
+  dropNullOnlyProperties,
   dropRequiredWithoutProperties,
   fillDiscriminatorMappings,
 ];

@@ -168,7 +168,7 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
       (await page.request.get("/api/v1/recipes?filters=null")).status(),
     ).toBe(400);
     const many = await page.request.get("/api/v1/recipe/getManyByIDs", {
-      params: { ids: JSON.stringify([id]) },
+      params: { ids: id },
     });
     expect(many.status(), await many.text()).toBe(200);
   } finally {
