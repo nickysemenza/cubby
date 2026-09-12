@@ -129,7 +129,10 @@ export const buildLocationWithChildren = (
           )
       : [];
 
-  const directItemCount = x.directItemCount ?? 0;
+  // The count IS the loaded list's length — there is no separate count input,
+  // so a payload cannot report items it does not carry (see `stock-items.ts`).
+  const inventoryItems = x.inventoryItems ?? [];
+  const directItemCount = inventoryItems.length;
   const childrenTotalCount = sumBy(
     children,
     (child) => child.totalItemCount ?? 0,
@@ -156,7 +159,7 @@ export const buildLocationWithChildren = (
     childCount: x.childCount ?? children.length,
     directItemCount,
     totalItemCount: directItemCount + childrenTotalCount,
-    inventoryItems: x.inventoryItems ?? [],
+    inventoryItems,
     ...extractDbTimestampsFromDBRec(x),
   };
 };

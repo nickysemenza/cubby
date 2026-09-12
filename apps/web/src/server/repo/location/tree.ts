@@ -11,7 +11,6 @@ import {
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import {
   type InfLocation,
-  type InventoryItemForTree,
   type LocationAncestorOut,
   type LocationInventoryBreakdownOut,
   locationValuation,
@@ -41,6 +40,7 @@ import { parseLocationType } from "~/server/repo/location/parse-type";
 
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
+import { loadStockItemsByLocation } from "./stock-items";
 
 /** Depth cap shared by both recursive walks over the location tree. */
 const MAX_TREE_DEPTH = 10;
@@ -186,51 +186,9 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     imagesByLocationId.set(locImg.locationId, existing);
   }
 
-  // Batch fetch inventory entries with product names for all locations (excludes soft-deleted)
-  const loadInventoryEntries = () =>
-    locationIds.length > 0
-      ? getDb(db)
-          .select({
-            id: inventoryEntry.id,
-            shortcode: inventoryEntry.shortcode,
-            locationId: inventoryEntry.locationId,
-            amount: inventoryEntry.amount,
-            productId: inventoryEntry.productId,
-            productShortcode: product.shortcode,
-            productName: product.name,
-          })
-          .from(inventoryEntry)
-          .innerJoin(product, eq(inventoryEntry.productId, product.id))
-          .where(
-            and(
-              inArray(inventoryEntry.locationId, locationIds),
-              notDeleted(inventoryEntry),
-              // Installed fixtures aren't stock you can walk over and count —
-              // the audit-session root picker must not show "kitchen: 17"
-              // then offer 3 rows to count.
-              stockOnly(),
-            ),
-          )
-          .orderBy(product.name)
-      : Promise.resolve([]);
-  const allInventoryEntries = await loadInventoryEntries();
-
-  const inventoryByLocationId = new Map<LocationId, InventoryItemForTree[]>();
-  const countsByLocationId = new Map<LocationId, number>();
-  for (const entry of allInventoryEntries) {
-    const existing = inventoryByLocationId.get(entry.locationId) ?? [];
-    existing.push({
-      id: parseShortcodeFor("inventory", entry.shortcode),
-      amount: entry.amount,
-      productName: entry.productName,
-      productId: parseShortcodeFor("product", entry.productShortcode),
-    });
-    inventoryByLocationId.set(entry.locationId, existing);
-    countsByLocationId.set(
-      entry.locationId,
-      (countsByLocationId.get(entry.locationId) ?? 0) + 1,
-    );
-  }
+  // One loader for items and their count, so the tree's `directItemCount`
+  // and `inventoryItems` cannot disagree (see `stock-items.ts`).
+  const inventoryByLocationId = await loadStockItemsByLocation(db, locationIds);
 
   for (const loc of locationRows) {
     const locationWithRelations: LocationWithParentChild = {
@@ -239,7 +197,6 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
       parent: null,
       product: loc.productId ? (productsById.get(loc.productId) ?? null) : null,
       images: imagesByLocationId.get(loc.id) ?? [],
-      directItemCount: countsByLocationId.get(loc.id) ?? 0,
       inventoryItems: inventoryByLocationId.get(loc.id) ?? [],
     };
     locationsMap.set(loc.id, locationWithRelations);

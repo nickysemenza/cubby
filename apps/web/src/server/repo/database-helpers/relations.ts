@@ -486,17 +486,10 @@ export const relations = {
             },
           },
         },
-        // includes-installed: the detail page's Contents is an ownership and
-        // identity surface, not a browse/count one — a fixture wired into this
-        // room must stay listed as held here.
-        inventoryEntries: {
-          where: notDeleted(inventoryEntry),
-          with: {
-            product: {
-              with: { externalIds: { where: notDeleted(productExternalId) } },
-            },
-          },
-        },
+        // No `inventoryEntries` here: the detail payload's `inventoryItems`
+        // come from `location/stock-items.ts` so they share one query with
+        // `directItemCount`; the detail page's Contents table reads the
+        // inventory list (which includes installed fixtures) on its own.
         images: {
           where: notDeleted(locationImage),
           orderBy: imageOrder,

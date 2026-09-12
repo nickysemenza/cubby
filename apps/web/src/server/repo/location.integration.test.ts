@@ -10,13 +10,17 @@ import { describe, expect, it } from "vitest";
 
 import { location } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
-import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
+import type {
+  EntityMutationCommand,
+  EntityQueryCommand,
+} from "~/server/entity-kernel/contracts";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb } from "./database-helpers";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import {
+  buildLocationTree,
   bulkReparentLocations,
   createLocation,
   deleteLocations,
@@ -24,7 +28,13 @@ import {
   getLocationById,
 } from "./location";
 import { createProduct } from "./product";
-import { makeLocationInput, makeProductInput } from "./repo.fixtures";
+import {
+  createInventoryFixture,
+  createLocationFixture,
+  createProductFixture,
+  makeLocationInput,
+  makeProductInput,
+} from "./repo.fixtures";
 import { resolveLiveShortcode } from "./shortcode-resolver";
 
 describe("findOrCreateLocationByName", () => {
@@ -288,3 +298,112 @@ describe("deleteLocations hierarchy", () => {
  * exists (see `useLocationPhotoCapture`). These assert that sequence really
  * lands the new photo first.
  */
+
+/**
+ * The detail payload's `inventoryItems` and `directItemCount` are one query
+ * (`location/stock-items.ts`). They used to be two: the count came from its
+ * own GROUP BY while the item list was never mapped, so the HTTP resource
+ * detail (`GET /api/v1/locations/{id}`, the CLI's `entity get location`)
+ * reported `directItemCount: 12` next to `inventoryItems: []`. The web page
+ * never noticed because its Contents table reads the inventory list instead.
+ *
+ * Asserted through the kernel `get`, which is the path every non-browser
+ * client takes, directly on the repo loader, and on the tree builder, which
+ * shares the loader.
+ */
+describe("location detail — inventoryItems agree with directItemCount", () => {
+  const ctx = withTestDb();
+  const kernelContext = () =>
+    requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+
+  it("lists exactly the stock rows the count reports, for the root and its children", async () => {
+    const room = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Detail Parity Room" }),
+      ctx.actor,
+    );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Detail Parity Shelf", parentId: room.id }),
+      ctx.actor,
+    );
+    const [bolts, washers] = await Promise.all([
+      createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Detail Parity Bolts", upc: "800000000911" }),
+        ctx.actor,
+      ),
+      createProductFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Detail Parity Washers",
+          upc: "800000000928",
+        }),
+        ctx.actor,
+      ),
+    ]);
+    const each = { value: 1, unit: "each" } as const;
+    // Two stock rows in the room, one in the shelf, plus an installed fixture
+    // in the room that neither the count nor the list may include.
+    await createInventoryFixture(
+      ctx.db,
+      { productId: bolts.id, locationId: room.id, amount: each },
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      { productId: washers.id, locationId: room.id, amount: each },
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      { productId: bolts.id, locationId: shelf.id, amount: each },
+      ctx.actor,
+    );
+    await createInventoryFixture(
+      ctx.db,
+      {
+        productId: washers.id,
+        locationId: room.id,
+        amount: each,
+        placement: "installed",
+      },
+      ctx.actor,
+    );
+
+    const detail = await getLocationById(ctx.db, room.entityId);
+    expect(detail.directItemCount).toBe(2);
+    expect(detail.inventoryItems).toHaveLength(detail.directItemCount ?? -1);
+    expect(detail.inventoryItems?.map((item) => item.productId)).toEqual([
+      bolts.id,
+      washers.id,
+    ]);
+    expect(detail.totalItemCount).toBe(3);
+
+    const shelfNode = detail.children?.find((child) => child.id === shelf.id);
+    expect(shelfNode?.directItemCount).toBe(1);
+    expect(shelfNode?.inventoryItems).toHaveLength(1);
+
+    const command = {
+      action: "get",
+      entity: "location",
+      id: room.id,
+      missing: "error",
+    } satisfies EntityQueryCommand;
+    const result = await executeEntity(kernelContext(), command);
+    if (result.action !== "get" || result.entity !== "location") {
+      throw new Error("unreachable");
+    }
+    expect(result.item?.directItemCount).toBe(2);
+    expect(result.item?.inventoryItems).toHaveLength(2);
+
+    // Anchored at the room, the tree is its descendant forest: the shelf.
+    const [shelfInTree] = await buildLocationTree(ctx.db, room.entityId);
+    expect(shelfInTree?.id).toBe(shelf.id);
+    expect(shelfInTree?.directItemCount).toBe(1);
+    expect(shelfInTree?.inventoryItems).toHaveLength(1);
+    expect(shelfInTree?.inventoryItems?.[0]?.productId).toBe(bolts.id);
+  });
+});

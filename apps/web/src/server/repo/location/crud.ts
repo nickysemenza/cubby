@@ -112,6 +112,7 @@ import type {
   LocationFilters,
   LocationWithParentChild,
 } from "./internal-types";
+import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 
 export const LOCATION_DELETE_EDGE_POLICY = {
@@ -1318,19 +1319,16 @@ export const getLocationById = async (
   const childIds = activeChildren.map((c) => c.id);
 
   const childCountMap: Record<string, number> = {};
-  const inventoryCountMap: Record<string, number> = {};
 
   const dbClient = unwrapDb(db);
 
-  // The fetched location is counted alongside its children, not just the
+  // The fetched location is loaded alongside its children, not just the
   // children: `buildLocationWithChildren` derives totalItemCount from the
   // root's own directItemCount, so leaving the root out made every count
   // surface reading this payload (the location hovercard, the Contents
   // header's fallback) report 0 for a location that holds stock directly and
   // has no children to roll up.
-  const inventoryCountIds = [id, ...childIds];
-
-  const [childCountResults, inventoryCountResults] = await Promise.all([
+  const [childCountResults, stockItemsByLocationId] = await Promise.all([
     childIds.length > 0
       ? dbClient
           .select({
@@ -1343,31 +1341,13 @@ export const getLocationById = async (
           )
           .groupBy(location.parentId)
       : [],
-    dbClient
-      .select({
-        locationId: inventoryEntry.locationId,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(inventoryEntry)
-      .where(
-        and(
-          notDeleted(inventoryEntry),
-          inArray(inventoryEntry.locationId, inventoryCountIds),
-          // Feeds directItemCount, a browse/count surface — an installed
-          // fixture doesn't belong in an item count. Same predicate the
-          // persisted location.valuation rollup uses, so the hovercard and
-          // the location page's "N items" can't disagree.
-          stockOnly(),
-        ),
-      )
-      .groupBy(inventoryEntry.locationId),
+    // Items and count come from the same rows so the resource detail cannot
+    // report `directItemCount: 12` next to `inventoryItems: []` again.
+    loadStockItemsByLocation(db, [id, ...childIds]),
   ]);
 
   for (const row of childCountResults) {
     if (row.parentId) childCountMap[row.parentId] = row.count;
-  }
-  for (const row of inventoryCountResults) {
-    inventoryCountMap[row.locationId] = row.count;
   }
 
   // Attach counts to children
@@ -1375,7 +1355,7 @@ export const getLocationById = async (
     (child) => ({
       ...child,
       childCount: childCountMap[child.id] ?? 0,
-      directItemCount: inventoryCountMap[child.id] ?? 0,
+      inventoryItems: stockItemsByLocationId.get(child.id) ?? [],
     }),
   );
 
@@ -1383,7 +1363,7 @@ export const getLocationById = async (
     ...res,
     parent: parentChain,
     children: enrichedChildren,
-    directItemCount: inventoryCountMap[id] ?? 0,
+    inventoryItems: stockItemsByLocationId.get(id) ?? [],
     images: res.images,
   };
 

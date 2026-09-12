@@ -59,7 +59,7 @@ export type LocationWithParentChild = LocationSelect & {
     deletedAt?: Date | null;
   }>;
   childCount?: number;
-  directItemCount?: number;
+  /** Stock rows held directly; `directItemCount` is derived as its length. */
   inventoryItems?: InventoryItemForTree[];
 };
 
