@@ -28,8 +28,8 @@
 #
 # Content stamp: a sha256 over every file under cubby-ffi/src/, cubby-ffi's
 # Cargo.toml/Cargo.lock/uniffi.toml/build.rs (the latter two only if
-# present), this script itself, the resolved --profile/--targets, and `rustc
-# --version` — written to `.cubby-ffi.stamp` inside the (gitignored)
+# present), the committed cubby_ffi.swift bindings, this script itself, the
+# resolved --profile/--targets, and `rustc --version` — written to `.cubby-ffi.stamp` inside the (gitignored)
 # xcframework directory after a successful build. When a run starts and that
 # stamp matches the freshly computed one, and every slice the run requests is
 # already in the xcframework, the whole script (including a `--check` diff)
@@ -161,6 +161,10 @@ compute_stamp() {
   [[ -f "$ROOT/cubby-ffi/uniffi.toml" ]] && files+=("$ROOT/cubby-ffi/uniffi.toml")
   [[ -f "$ROOT/cubby-ffi/build.rs" ]] && files+=("$ROOT/cubby-ffi/build.rs")
   files+=("$SCRIPT_SELF")
+  # The committed bindings are an output, but hashing them too means a hand
+  # edit or a revert of cubby_ffi.swift stales the stamp, so a `--check` run
+  # cannot be short-circuited past a shim that no longer matches the build.
+  [[ -f "$SWIFT_SHIM_DEST" ]] && files+=("$SWIFT_SHIM_DEST")
 
   {
     for f in "${files[@]}"; do
@@ -303,6 +307,8 @@ xcodebuild -create-xcframework "${xcframework_args[@]}" -output "$XCFRAMEWORK_OU
 # Written only after a fully successful build, inside the gitignored
 # xcframework directory (never committed). A future run's early-exit check
 # above compares against this.
-printf '%s' "$NEW_STAMP" > "$STAMP_FILE"
+# Recomputed rather than reusing NEW_STAMP: the shim may have just been
+# rewritten above, and the stamp must describe the tree as it is now.
+printf '%s' "$(compute_stamp)" > "$STAMP_FILE"
 
 echo "==> cubby-ffi: done"
