@@ -484,6 +484,8 @@ const cullablePendingImageWhere = (db: Database, cutoffDate: Date) =>
  * still declared `softDeletedAt()`, so this closes a latent gap rather than
  * changing any observable result.
  */
+// Not on `listScaffold`: the predicate is built twice against two spellings
+// of the table (`outerImage`), and the scaffold binds one table per entity.
 export const buildImageWhere = (
   db: Database,
   filters: ImageListFilters,

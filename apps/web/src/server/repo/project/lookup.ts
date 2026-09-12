@@ -1,10 +1,5 @@
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProjectFilters,
   ProjectOptionsOut,
@@ -17,8 +12,6 @@ import type { Database } from "~/server/db";
 import { image, project, projectImage } from "~/server/db/schema";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
   getDb,
@@ -27,8 +20,8 @@ import {
   notDeleted,
   presenceCondition,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { resolveShortcodes } from "~/server/repo/shortcode-resolver";
 
@@ -48,6 +41,8 @@ import {
   type ProjectTree,
   projectCompletionYear,
 } from "./subtree";
+
+const projectScaffold = listScaffold("project", project);
 
 /**
  * Lightweight `{id, name, icon}` options for pickers/filter selects — no
@@ -215,31 +210,27 @@ export const buildProjectListQuery = async (
     )
     .where(and(notDeleted(projectImage), displayableImageWhere));
 
-  const whereClause = buildSearchConditions(
-    project,
-    [],
-    [
-      ...auditDateWhereConditions(project, filters),
-      ...relatedWhereConditions("project", filters, project.id),
-      // `search` (name ∪ notes ∪ locations), `status`, `kind` and `location`
-      // (an overlap over the `locations` array) are declared stored filters.
-      ...declaredFilterPredicates("project", project, filters),
-      dashboardProjectDateCondition(filters),
-      attentionCodes
-        ? attentionCodes.length
-          ? inArray(project.shortcode, attentionCodes)
-          : sql`false`
-        : undefined,
-      completionIds ? inArray(project.id, completionIds) : undefined,
-      filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
-      parentCondition,
-      idSetPresence(
-        project.id,
-        filters.imagePresenceFilter,
-        projectIdsWithImages,
-      ),
-    ],
-  );
+  // `search` (name ∪ notes ∪ locations), `status`, `kind` and `location` (an
+  // overlap over the `locations` array) are declared stored filters — applied
+  // by `projectScaffold.where` before the conditions below.
+  const whereClause = projectScaffold.where(filters, [
+    ...auditDateWhereConditions(project, filters),
+    ...relatedWhereConditions("project", filters, project.id),
+    dashboardProjectDateCondition(filters),
+    attentionCodes
+      ? attentionCodes.length
+        ? inArray(project.shortcode, attentionCodes)
+        : sql`false`
+      : undefined,
+    completionIds ? inArray(project.id, completionIds) : undefined,
+    filters.topLevelOnly ? isNull(project.parentProjectId) : undefined,
+    parentCondition,
+    idSetPresence(
+      project.id,
+      filters.imagePresenceFilter,
+      projectIdsWithImages,
+    ),
+  ]);
 
   // `startDate` is an override that is usually null now that the window is
   // derived, so sorting on the raw column would sink most of the table into a
@@ -283,15 +274,10 @@ export const buildProjectListQuery = async (
         `WHERE pu."projectId" = "project"."id" AND pu."deletedAt" IS NULL))) ` +
         `${direction === "asc" ? "asc" : "desc"} nulls last`,
     );
-  const orderByArray = buildOrderBy(
-    project,
-    sorts,
-    [...generatedEntitySort.project.fields],
-    {
-      resolve: (s) =>
-        s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,
-    },
-  );
+  const orderByArray = projectScaffold.orderBy(sorts, {
+    resolve: (s) =>
+      s.orderBy === "startDate" ? [effectiveStartSortSql(s.direction)] : null,
+  });
 
   return { tree: loadedTree, whereClause, orderByArray };
 };
@@ -361,7 +347,7 @@ export const projectList = async (
       sums: { costEstimate: 0 },
     };
   }
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = projectScaffold.page(pagination);
 
   const [{ data: rows, count }, sums] = await Promise.all([
     executeListQueryWithCount({

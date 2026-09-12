@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
   type ExternalIdKind,
@@ -83,8 +82,6 @@ import {
   assertNoDependents,
   associatePendingImages,
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   countWhere,
   eqAny,
   executeListQueryWithCount,
@@ -103,7 +100,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { patchEntityRows } from "~/server/repo/entity-patch";
@@ -118,6 +114,7 @@ import {
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
   relatedSortExpression,
@@ -289,8 +286,10 @@ const resolveProductSort = (sort: SortParams) => {
   return null;
 };
 
+const productScaffold = listScaffold("product", product);
+
 const productListOrderBy = (sorts: SortParams[], groupBy?: string) =>
-  buildOrderBy(product, sorts, [...generatedEntitySort.product.fields], {
+  productScaffold.orderBy(sorts, {
     groupBy,
     resolve: resolveProductSort,
     tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
@@ -690,11 +689,6 @@ export const buildProductWhere = async (
   const classificationConditions = () => [
     ...auditDateWhereConditions(product, filters),
     ...relatedWhereConditions("product", filters, product.id),
-    // name/model/notes/manufacturerFilter (text), category (multiselect +
-    // presence), manufacturerExact (multiselect), tags (overlap + presence)
-    // and the model/notes/stockTracked presence filters are declared stored
-    // filters.
-    ...declaredFilterPredicates("product", product, filters),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
       : or(
@@ -892,18 +886,17 @@ export const buildProductWhere = async (
         : undefined,
   ];
 
-  // Build where conditions - always filter out deleted items
-  const whereClause = buildSearchConditions(
-    product,
-    [],
-    [
-      ...classificationConditions(),
-      ...inventoryConditions(),
-      ...ledgerConditions(),
-      ...associationConditions(),
-      ...qualityConditions(),
-    ],
-  );
+  // name/model/notes/manufacturerFilter (text), category (multiselect +
+  // presence), manufacturerExact (multiselect), tags (overlap + presence) and
+  // the model/notes/stockTracked presence filters are declared stored
+  // filters — applied by `productScaffold.where` before the conditions below.
+  const whereClause = productScaffold.where(filters, [
+    ...classificationConditions(),
+    ...inventoryConditions(),
+    ...ledgerConditions(),
+    ...associationConditions(),
+    ...qualityConditions(),
+  ]);
   return whereClause;
 };
 
@@ -928,7 +921,7 @@ export const productList = async (
 
   const orderByArray = productListOrderBy(sorts, groupBy);
 
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = productScaffold.page(pagination);
   const skipAggregates = readIntent === "sample";
 
   const [{ data: results, count: totalCount }, aggregates, expenseAggregates] =

@@ -169,7 +169,11 @@ const reader = createEntityReader<
 
 export const getLedgerPartyByShortcode = reader.getByShortcode;
 
-/** The complete WHERE for this entity's list. */
+/**
+ * The complete WHERE for this entity's list. Not on `listScaffold`: the list
+ * takes one sort mapped by hand below and composes nothing beyond the
+ * declared predicates, so there is no boilerplate to fold.
+ */
 export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
   and(
     notDeleted(ledgerParty),

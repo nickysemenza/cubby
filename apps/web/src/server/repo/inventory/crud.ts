@@ -312,6 +312,9 @@ const inventoryListOrderBy = (sorts: SortParams[]) =>
  * is what makes this honest: rows, count, and the valuation aggregate all
  * narrow the same way, and a caller with no joins gets the same population.
  */
+// Not on `listScaffold`: the text searches run over the JOINED product and
+// location tables, not this entity's own columns, so no declared stored
+// predicate can express them.
 export const buildInventoryWhere = async (
   db: Database,
   filters: InventoryFilters,

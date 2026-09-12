@@ -1,6 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
@@ -12,11 +11,7 @@ import type {
   UpcomingMealSummaryOut,
 } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -31,7 +26,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
   countWhere,
   executeListQueryWithCount,
   getDb,
@@ -44,8 +38,8 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -149,6 +143,8 @@ export const getUpcomingMealSummary = async (
   });
 };
 
+const mealScaffold = listScaffold("meal", meal);
+
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildMealWhere = (
   db: Database,
@@ -169,23 +165,22 @@ export const buildMealWhere = (
       ),
     );
 
-  return and(
-    notDeleted(meal),
+  // `mealType` (OR-ed with its presence filter — "unslotted" is a value of the
+  // same picker, so selecting it alongside `dinner` means "dinner or
+  // unslotted") and `mealKind` are declared stored filters — applied by
+  // `mealScaffold.where` before the conditions below.
+  return mealScaffold.where(filters, [
     ...auditDateWhereConditions(meal, filters),
     // `mealFilterFields` spreads `mealRelatedFilterFields` (the recipe trio) and
     // the manifest renders its control — omitting this is the #588 drift, where
     // the UI sends a filter the server silently ignores.
     ...relatedWhereConditions("meal", filters, meal.id),
-    // `mealType` (OR-ed with its presence filter — "unslotted" is a value of
-    // the same picker, so selecting it alongside `dinner` means "dinner or
-    // unslotted") and `mealKind` are declared stored filters.
-    ...declaredFilterPredicates("meal", meal, filters),
     filters.from ? gte(meal.date, filters.from) : undefined,
     filters.to ? lte(meal.date, filters.to) : undefined,
     filters.recipeCostCoverage === "understated"
       ? inArray(meal.id, mealsWithUnderstatedRecipeCost)
       : undefined,
-  );
+  ]);
 };
 
 export const mealList = async (
@@ -212,19 +207,14 @@ export const mealList = async (
         : sql`${rank} desc nulls last`,
     ];
   };
-  const orderByArray = buildOrderBy(
-    meal,
-    sorts,
-    [...generatedEntitySort.meal.fields],
-    {
-      resolve: resolveMealSort,
-      // An unnamed meal displays as its date, so a name sort would otherwise
-      // dump every one of them into an arbitrarily-ordered NULL block. This
-      // orders that block the way its visible label reads.
-      tieBreaker: sql`${meal.date} desc`,
-    },
-  );
-  const { take, skip } = buildTakeSkip(pagination);
+  const orderByArray = mealScaffold.orderBy(sorts, {
+    resolve: resolveMealSort,
+    // An unnamed meal displays as its date, so a name sort would otherwise
+    // dump every one of them into an arbitrarily-ordered NULL block. This
+    // orders that block the way its visible label reads.
+    tieBreaker: sql`${meal.date} desc`,
+  });
+  const { take, skip } = mealScaffold.page(pagination);
 
   const whereCondition = buildMealWhere(db, filters);
 
