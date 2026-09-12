@@ -51,6 +51,11 @@ targetTemplates:
       path: App/${plat}/Info.plist
       properties:
         CFBundleDisplayName: Cubby
+        # Deep links (`cubby://entity/PRD-…`, capture, audit, today). `cubby-mobile://` is the auth
+        # Origin, not a scheme. Info.plist is generated from here; do not hand-edit it.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.nickysemenza.cubby
+            CFBundleURLSchemes: [cubby]
         NSCameraUsageDescription: Cubby scans barcodes to add items to a location.
         NSAppTransportSecurity:
           NSExceptionDomains:

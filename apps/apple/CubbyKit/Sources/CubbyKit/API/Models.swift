@@ -104,3 +104,16 @@ public struct AgentAnswer: Sendable, Hashable {
     public let answer: String
     public let sources: [Source]
 }
+
+/// A quantity as the API spells it everywhere: `{value, unit, upperValue?}`.
+public struct Amount: Codable, Sendable, Hashable {
+    public var value: Double
+    public var unit: String
+    public var upperValue: Double?
+
+    public init(value: Double, unit: String, upperValue: Double? = nil) {
+        self.value = value
+        self.unit = unit
+        self.upperValue = upperValue
+    }
+}

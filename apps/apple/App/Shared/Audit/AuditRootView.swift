@@ -1,0 +1,92 @@
+import CubbyKit
+import SwiftUI
+
+/// The walk-the-shelf audit: one `RecountSession` driving a scope picker, then a pass over every
+/// stocked bin, then a summary. `locationID` pre-scopes the walk when it arrives from a deep link
+/// or the Capture screen's shortcut.
+struct AuditRootView: View {
+    let locationID: LocationCode?
+
+    @Environment(AppModel.self) private var model
+    @State private var session: RecountSession?
+
+    var body: some View {
+        Group {
+            if let session {
+                AuditPhaseView(session: session)
+            } else {
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .porcelainScreen()
+        .navigationTitle("Walk the shelf")
+        .task(id: model.host) {
+            let session = RecountSession(service: model.client)
+            self.session = session
+            await session.loadTree()
+            if let locationID {
+                await session.start(scope: locationID)
+            }
+        }
+    }
+}
+
+/// Switches on the session's phase. Split out from `AuditRootView` so it — and each phase — stays
+/// previewable without a network-backed session.
+private struct AuditPhaseView: View {
+    let session: RecountSession
+
+    var body: some View {
+        Group {
+            switch session.phase {
+            case .loading:
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .choosingScope:
+                ScopePickerSheet(session: session)
+            case .bin:
+                BinView(session: session)
+            case .complete:
+                RecountSummaryView(session: session)
+            case .failed(let message):
+                AuditFailedPanel(message: message) { Task { await session.loadTree() } }
+            }
+        }
+    }
+}
+
+/// The error state: what went wrong reading the location tree, and a way to try again.
+private struct AuditFailedPanel: View {
+    let message: String
+    let retry: () -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                Panel {
+                    Text(message)
+                        .font(.porcelainBody)
+                        .foregroundStyle(PorcelainTokens.destructive)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Retry", action: retry)
+                        .buttonStyle(.borderedProminent)
+                        .tint(PorcelainTokens.cobalt)
+                }
+            }
+            .padding(PorcelainTokens.Space.lg)
+            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .porcelainScreen()
+    }
+}
+
+#Preview("Audit root") {
+    NavigationStack {
+        AuditRootView(locationID: nil)
+    }
+    .environment(PreviewFixtures.signedInModel())
+}
+
+#Preview("Audit — failed") {
+    AuditFailedPanel(message: "The server returned an error.") {}
+}

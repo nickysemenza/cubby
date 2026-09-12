@@ -34,6 +34,11 @@ final class CaptureModel {
         session.location = location?.id
     }
 
+    /// Selects by shortcode (deep links, intents). Unknown ids leave the selection alone.
+    func select(id: LocationCode) {
+        if let option = locations.first(where: { $0.id == id }) { select(option) }
+    }
+
     func loadLocations() async {
         guard !loadingLocations else { return }
         loadingLocations = true

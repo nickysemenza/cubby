@@ -18,11 +18,16 @@ struct RootView: View {
         case .signedOut:
             LoginView()
         case .signedIn:
-            #if os(iOS)
-            RootTabsView()
-            #else
-            RootSplitView()
-            #endif
+            Group {
+                #if os(iOS)
+                RootTabsView()
+                #else
+                RootSplitView()
+                #endif
+            }
+            .task(id: model.host) {
+                await model.spotlight.refreshIfNeeded(client: model.client, host: model.host)
+            }
         }
     }
 }

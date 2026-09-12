@@ -109,8 +109,7 @@ struct RawClientTests {
             }
         }
         let (client, _) = try makeClient()
-        let route = try #require(OperationRoute.known["inventory.scanAtLocation"])
-        let data = try await client.call(route, body: ["locationId": "LOC-2345", "code": ["kind": "barcode", "value": "0"]])
+        let data = try await client.call("inventory.scanAtLocation", body: ["locationId": "LOC-2345", "code": ["kind": "barcode", "value": "0"]])
         #expect(data["outcome"] == "added")
     }
 }

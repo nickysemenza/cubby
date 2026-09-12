@@ -21,6 +21,15 @@ public struct CubbyAPIError: Error, Sendable {
         status == 401
     }
 
+    /// `inventory.reconcileSession` refused because the bin changed since it was read: 409 with
+    /// `error.reason == "INVENTORY_STALE"` (the `code` is the generic `CONFLICT`).
+    public var isStaleInventory: Bool {
+        status == 409 && detail?.reason == "INVENTORY_STALE"
+    }
+
+    /// The envelope's `reason`, when the server sent one.
+    public var reason: String? { detail?.reason }
+
     public struct ErrorDetail: Decodable, Sendable {
         public let code: String
         public let message: String

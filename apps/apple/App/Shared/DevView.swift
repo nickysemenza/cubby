@@ -25,6 +25,7 @@ struct DevView: View {
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
                     Eyebrow("Rust ingredient parser (UniFFI)")
                     TextField("Ingredient line", text: $line)
+                    .keyboardDismissBar()
                         .font(.porcelainCode)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()

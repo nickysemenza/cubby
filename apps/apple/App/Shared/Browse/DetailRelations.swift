@@ -14,51 +14,13 @@ struct ProductGalleryImage: Identifiable, Hashable {
     let url: URL
 }
 
-/// One place a product is physically stocked, from `inventoryEntry`.
-struct ProductStockLocation: Identifiable, Hashable {
-    let id: String
-    let locationId: String
-    let locationName: String
-    let ancestorPath: String?
-    let amountText: String?
-    let placement: String?
-}
-
-/// Parses the relationship arrays a product detail payload carries alongside its scalar fields.
-enum ProductRelations {
+/// Parses the gallery a product detail payload carries; `stockedAt` lives in CubbyKit
+/// (`ProductRelations`) because the "where is" intent reads it too.
+enum ProductGallery {
     /// Images that finished uploading, in payload order. A `PENDING`/`FAILED` image never earns a
     /// gallery page — that failure state belongs to the ingredient workbench, not the detail screen.
-    static func gallery(from row: EntityRow) -> [ProductGalleryImage] {
-        guard let images = row.raw["images"]?.arrayValue else { return [] }
-        return images.compactMap { image in
-            guard image["status"]?.stringValue == "UPLOADED",
-                let id = image["id"]?.stringValue,
-                let urlString = image["url"]?.stringValue,
-                let url = URL(string: urlString)
-            else { return nil }
-            return ProductGalleryImage(id: id, url: url)
-        }
-    }
-
-    /// Every place this product is physically stocked, from `inventoryEntry`.
-    static func stockedAt(from row: EntityRow) -> [ProductStockLocation] {
-        guard let entries = row.raw["inventoryEntry"]?.arrayValue else { return [] }
-        return entries.compactMap { entry in
-            guard let id = entry["id"]?.stringValue,
-                let location = entry["location"],
-                let locationId = location["id"]?.stringValue
-            else { return nil }
-            let ancestorNames = location["ancestors"]?.arrayValue?.compactMap { $0["name"]?.stringValue }
-            let ancestorPath = (ancestorNames?.isEmpty == false) ? ancestorNames?.joined(separator: " › ") : nil
-            return ProductStockLocation(
-                id: id,
-                locationId: locationId,
-                locationName: location["name"]?.stringValue ?? locationId,
-                ancestorPath: ancestorPath,
-                amountText: EntityFacts.amount(entry["amount"]),
-                placement: entry["placement"]?.stringValue
-            )
-        }
+    static func images(from row: EntityRow) -> [ProductGalleryImage] {
+        ProductRelations.gallery(from: row).map { ProductGalleryImage(id: $0.id, url: $0.url) }
     }
 }
 
@@ -137,7 +99,7 @@ struct ProductStockedAtSection: View {
                 Panel(padding: 0, spacing: 0) {
                     ForEach(Array(locations.enumerated()), id: \.element.id) { index, location in
                         if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg) }
-                        NavigationLink(value: Route.entityDetail(.location, id: location.locationId)) {
+                        NavigationLink(value: Route.entityDetail(.location, id: location.locationID.rawValue)) {
                             ProductStockLocationRow(location: location)
                         }
                         .buttonStyle(.plain)
@@ -168,8 +130,8 @@ private struct ProductStockLocationRow: View {
             }
             Spacer(minLength: PorcelainTokens.Space.sm)
             VStack(alignment: .trailing, spacing: 4) {
-                if let amountText = location.amountText {
-                    Text(amountText)
+                if let amount = location.amount {
+                    Text(EntityFacts.amountText(amount))
                         .font(.porcelainData)
                         .foregroundStyle(PorcelainTokens.graphite)
                 }
@@ -366,12 +328,12 @@ private struct LocationChildRow: View {
         ScrollView {
             ProductStockedAtSection(locations: [
                 ProductStockLocation(
-                    id: "IE-1", locationId: "LOC-1001", locationName: "Pantry Shelf B",
-                    ancestorPath: "Kitchen › Pantry", amountText: "3 units", placement: "stock"
+                    id: "IE-1", locationID: LocationCode("LOC-1001"), locationName: "Pantry Shelf B",
+                    ancestorPath: "Kitchen › Pantry", amount: Amount(value: 3, unit: "units"), placement: "stock"
                 ),
                 ProductStockLocation(
-                    id: "IE-2", locationId: "LOC-1002", locationName: "Garage Cabinet",
-                    ancestorPath: "Garage", amountText: "1 unit", placement: "installed"
+                    id: "IE-2", locationID: LocationCode("LOC-1002"), locationName: "Garage Cabinet",
+                    ancestorPath: "Garage", amount: Amount(value: 1, unit: "unit"), placement: "installed"
                 ),
             ])
             .padding(PorcelainTokens.Space.lg)

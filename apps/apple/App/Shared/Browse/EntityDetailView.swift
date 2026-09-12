@@ -9,6 +9,7 @@ struct EntityDetailView: View {
 
     @Environment(AppModel.self) private var appModel
     @State private var model: GenericEntityDetailModel?
+    @State private var photoCapture: PhotoCaptureModel?
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -20,6 +21,27 @@ struct EntityDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             #endif
             .task(id: appModel.host) { await setup() }
+            .toolbar {
+                // Any entity whose update takes pendingImageIds can take a photo; the cover
+                // choice inside the sheet is product-only.
+                if descriptor.acceptsImages, let row = model?.row {
+                    ToolbarItem {
+                        Button {
+                            photoCapture = PhotoCaptureModel(
+                                client: appModel.client, entity: key, entityID: row.id, entityTitle: row.title,
+                                featurePrints: appModel.featurePrints
+                            )
+                        } label: {
+                            Label("Add photo", systemImage: "camera.badge.ellipsis")
+                        }
+                    }
+                }
+            }
+            .sheet(item: $photoCapture) { capture in
+                AddPhotoSheet(capture: capture) { _ in
+                    Task { await model?.load(id: id) }
+                }
+            }
     }
 
     @ViewBuilder
@@ -75,7 +97,7 @@ struct EntityDetailContent: View {
     // Relationship reads for the two hand-tuned entities. Empty/nil everywhere else, so the
     // generic path (every other entity) never pays for this.
     private var productGallery: [ProductGalleryImage] {
-        descriptor.key == .product ? ProductRelations.gallery(from: row) : []
+        descriptor.key == .product ? ProductGallery.images(from: row) : []
     }
     private var productStockedAt: [ProductStockLocation] {
         descriptor.key == .product ? ProductRelations.stockedAt(from: row) : []

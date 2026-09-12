@@ -2,13 +2,14 @@ import CubbyKit
 import SwiftUI
 
 struct RootTabsView: View {
-    @State private var selection: AppSection = .today
+    @Environment(AppModel.self) private var model
 
     var body: some View {
-        TabView(selection: $selection) {
+        @Bindable var navigator = model.navigator
+        TabView(selection: $navigator.section) {
             ForEach(AppSection.allCases) { section in
                 Tab(section.title, systemImage: section.symbol, value: section) {
-                    NavigationStack {
+                    NavigationStack(path: navigator.path(for: section)) {
                         SectionView(section: section)
                     }
                 }
@@ -16,7 +17,7 @@ struct RootTabsView: View {
         }
         // Today's shortcut tiles move the tab selection; without this they would have nothing to
         // move and would render disabled.
-        .environment(\.sectionSelection, $selection)
+        .environment(\.sectionSelection, $navigator.section)
     }
 }
 

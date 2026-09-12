@@ -2,30 +2,31 @@ import CubbyKit
 import SwiftUI
 
 struct RootSplitView: View {
-    @State private var selection: AppSection? = .today
-
-    /// Today's shortcuts want a non-optional selection; the sidebar's is optional because a
-    /// `NavigationSplitView` can have nothing selected.
-    private var sectionBinding: Binding<AppSection> {
-        Binding(get: { selection ?? .today }, set: { selection = $0 })
-    }
+    @Environment(AppModel.self) private var model
 
     var body: some View {
+        @Bindable var navigator = model.navigator
+        // The sidebar's selection is optional because a `NavigationSplitView` can have nothing
+        // selected; the navigator's is not, so a cleared sidebar falls back to Today.
+        let selection = Binding<AppSection?>(
+            get: { navigator.section },
+            set: { navigator.section = $0 ?? .today }
+        )
         NavigationSplitView {
             // Explicit tags: a List over Identifiable rows selects by `id` (a String), which
             // would never match an `AppSection?` binding and leaves the sidebar unclickable.
-            List(selection: $selection) {
+            List(selection: selection) {
                 ForEach(AppSection.allCases) { section in
                     SidebarRow(section: section).tag(section)
                 }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 208)
         } detail: {
-            NavigationStack {
-                SectionView(section: selection ?? .today)
+            NavigationStack(path: navigator.path(for: navigator.section)) {
+                SectionView(section: navigator.section)
             }
         }
-        .environment(\.sectionSelection, sectionBinding)
+        .environment(\.sectionSelection, $navigator.section)
         .frame(minWidth: 720, minHeight: 480)
     }
 }

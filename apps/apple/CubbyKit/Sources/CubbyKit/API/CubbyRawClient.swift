@@ -32,19 +32,58 @@ public actor CubbyRawClient {
         query["page"] = .number(Double(page))
         query["pageSize"] = .number(Double(pageSize))
         if let sort { query["sort"] = .string(sort) }
-        let value = try await call(
-            OperationRoute(operationID: "resources.\(basePath).list", method: .get, path: "/api/v1/\(basePath)"),
-            query: query
-        )
-        return try Self.reencode(value, as: ListPage<JSONValue>.self)
+        let route = try OperationRoute.lookup(method: .get, path: "/api/v1/\(basePath)")
+        return try await call(route, query: query, as: ListPage<JSONValue>.self)
     }
 
     /// `GET /api/v1/{basePath}/{id}`.
     public func get(basePath: String, id: String) async throws -> JSONValue {
-        try await call(
-            OperationRoute(operationID: "resources.\(basePath).get", method: .get, path: "/api/v1/\(basePath)/{id}"),
-            pathID: id
-        )
+        try await call(OperationRoute.lookup(method: .get, path: "/api/v1/\(basePath)/{id}"), pathID: id)
+    }
+
+    /// Any operation by id, looked up in the generated route table.
+    public func call(
+        _ operationID: String,
+        pathID: String? = nil,
+        query: [String: JSONValue] = [:],
+        body: JSONValue? = nil
+    ) async throws -> JSONValue {
+        try await call(OperationRoute.lookup(operationID), pathID: pathID, query: query, body: body)
+    }
+
+    /// Any operation by id, with the unwrapped `data` decoded into a hand-authored type.
+    public func call<T: Decodable & Sendable>(
+        _ operationID: String,
+        pathID: String? = nil,
+        query: [String: JSONValue] = [:],
+        body: JSONValue? = nil,
+        as type: T.Type
+    ) async throws -> T {
+        try await call(OperationRoute.lookup(operationID), pathID: pathID, query: query, body: body, as: type)
+    }
+
+    /// Any operation by id, with an `Encodable` body and a decoded result.
+    public func call<Body: Encodable & Sendable, T: Decodable & Sendable>(
+        _ operationID: String,
+        pathID: String? = nil,
+        query: [String: JSONValue] = [:],
+        body: Body,
+        as type: T.Type
+    ) async throws -> T {
+        let encoded = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(body))
+        return try await call(OperationRoute.lookup(operationID), pathID: pathID, query: query, body: encoded, as: type)
+    }
+
+    /// Any operation, with the unwrapped `data` decoded into a hand-authored type.
+    public func call<T: Decodable & Sendable>(
+        _ route: OperationRoute,
+        pathID: String? = nil,
+        query: [String: JSONValue] = [:],
+        body: JSONValue? = nil,
+        as type: T.Type
+    ) async throws -> T {
+        let value = try await call(route, pathID: pathID, query: query, body: body)
+        return try Self.reencode(value, as: type)
     }
 
     /// Any operation. Returns the unwrapped `data` of the success envelope.
@@ -89,9 +128,11 @@ public actor CubbyRawClient {
         return envelope.data
     }
 
+    /// Round-trips through JSON so hand-authored types decode with the lenient Cubby date
+    /// handling (`.000Z` timestamps) rather than Foundation's strict ISO-8601.
     private static func reencode<T: Decodable>(_ value: JSONValue, as type: T.Type) throws -> T {
         let data = try JSONEncoder().encode(value)
-        return try JSONDecoder().decode(type, from: data)
+        return try JSONDecoder.cubby().decode(type, from: data)
     }
 }
 

@@ -2,15 +2,18 @@ import ArgumentParser
 import CubbyKit
 import Foundation
 
-/// Calls any operation in `OperationRoute.known` by id — the escape hatch for anything the typed
-/// `CubbyClient` doesn't wrap yet.
+/// Calls any operation in the generated route table by id — the escape hatch for anything the
+/// typed `CubbyClient` doesn't wrap.
 struct Call: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Call a known operation by id.")
+    static let configuration = CommandConfiguration(abstract: "Call any operation by id.")
 
     @OptionGroup var global: GlobalOptions
 
     @Argument(help: "Operation id, e.g. resources.product.list, upc.lookup.")
-    var operationID: String
+    var operationID: String = ""
+
+    @Flag(name: .customLong("list"), help: "Print every operation id and exit.")
+    var listOperations = false
 
     @Option(name: .customLong("json-body"), help: "JSON request body, e.g. '{\"upc\":\"012345678905\"}'.")
     var jsonBodyString: String?
@@ -21,14 +24,23 @@ struct Call: AsyncParsableCommand {
     @Option(name: .customLong("query"), help: "A key=value query parameter. Repeatable.")
     var query: [String] = []
 
+    private var parsedQueryKeys: [String] {
+        query.compactMap { pair in pair.firstIndex(of: "=").map { String(pair[pair.startIndex..<$0]) } }
+    }
+
     func run() async throws {
-        guard let route = OperationRoute.known[operationID] else {
-            CLI.printError("Unknown operationId: \(operationID)")
-            CLI.printError("Known operation ids:")
-            for id in OperationRoute.known.keys.sorted() {
-                CLI.printError("  \(id)")
+        if listOperations {
+            for id in OperationRoute.all.keys.sorted() {
+                print(id)
             }
+            return
+        }
+        guard let route = OperationRoute.all[operationID] else {
+            CLI.printError("Unknown operationId: \(operationID) (use --list to print every id)")
             throw ExitCode.failure
+        }
+        for key in parsedQueryKeys where !route.queryParameters.contains(key) {
+            CLI.printError("warning: \(operationID) declares no query parameter named \(key)")
         }
 
         try await CLI.run {
