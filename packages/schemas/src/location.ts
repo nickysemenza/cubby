@@ -79,9 +79,6 @@ export const locationFilterFields = {
   childPresenceFilter: presenceFilter.describe(
     "Filter to locations that do / don't have at least one live child location.",
   ),
-  aiDescriptionPresenceFilter: presenceFilter.describe(
-    "Filter to locations that do / don't have an AI-generated description.",
-  ),
   /**
    * Locations whose last deliberate recount is older than N days — or that have
    * never been recounted at all.

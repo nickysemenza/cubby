@@ -2,7 +2,6 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type CookbookId,
   type ImageShortcode,
@@ -12,11 +11,7 @@ import {
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   RecipeCreateInput,
   RecipeGraphOut,
@@ -26,7 +21,6 @@ import type {
 import {
   type AnyColumn,
   and,
-  arrayOverlaps,
   asc,
   eq,
   inArray,
@@ -62,12 +56,9 @@ import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   associatePendingImages,
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   countWhere,
   eqAnyRequested,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   idSetPresence,
   imageJoinBindings,
@@ -82,10 +73,10 @@ import {
   withTransaction,
   withTransactionOn,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { recipeHasImages } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
@@ -360,7 +351,8 @@ export const getNotionRecipesForDiff = async (
 };
 
 /** A nullable tag array is empty when null or zero-length. */
-const TAGS_ARE_EMPTY = sql`(${recipe.tags} IS NULL OR cardinality(${recipe.tags}) = 0)`;
+
+const recipeScaffold = listScaffold("recipe", recipe);
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildRecipeWhere = async (
@@ -439,88 +431,46 @@ export const buildRecipeWhere = async (
       ? undefined
       : [filters.sourceTypeFilter].flat();
 
-  const pickerSearch = filters.nameFilter
-    ? or(
-        formatSearchTerm(recipe.name, filters.nameFilter),
-        formatSearchTerm(recipe.notes, filters.nameFilter),
-      )
-    : undefined;
-  return buildSearchConditions(
-    recipe,
-    [],
-    [
-      ...auditDateWhereConditions(recipe, filters),
-      ...relatedWhereConditions("recipe", filters, recipe.id),
-      pickerSearch,
-      // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
-      // the id half must distinguish "no cookbook filter" (unrestricted) from
-      // "a cookbook code that resolves to nothing" (match nothing), which the
-      // combined helper's `eqAny` cannot. The OR against the presence sentinel
-      // is unchanged — presence WIDENS the id filter (see `tagsPresenceFilter`).
-      or(
-        eqAnyRequested(recipe.cookbookId, cookbookIds),
-        presenceCondition(recipe.cookbookId, filters.cookbookPresenceFilter),
-      ),
-      // arrayOverlaps, not a hand-rolled `&&`: drizzle interpolates a JS array
-      // into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`), which isn't a
-      // text[] — the hand-rolled version failed for every tag count, one
-      // included. Semantics are unchanged (ANY-of / array overlap).
-      //
-      // OR-ed with the tag column's presence sentinel, so "quick or untagged"
-      // is one filter. `tags` is a nullable array, so untagged means NULL *or*
-      // zero-length: clearing a recipe's last tag writes `{}`, not NULL, and
-      // keying off IS NULL alone would hide those rows from the very view
-      // meant to find them. "has" is `not()` of the same predicate rather than
-      // a second hand-written one, so the two can never drift into a gap that
-      // hides a recipe from BOTH options.
-      or(
-        filters.tagFilters && filters.tagFilters.length > 0
-          ? arrayOverlaps(recipe.tags, filters.tagFilters)
-          : undefined,
-        presenceCondition(
-          recipe.tags,
-          filters.tagsPresenceFilter,
-          TAGS_ARE_EMPTY,
-        ),
-      ),
-      filters.excludeSubRecipes
-        ? notInArray(recipe.id, subRecipeIds)
-        : undefined,
-      idSetPresence(
-        recipe.id,
-        filters.mealPresenceFilter,
-        recipeIdsInLiveMeals,
-      ),
-      idSetPresence(
-        recipe.id,
-        filters.imagePresenceFilter,
-        recipeIdsWithImages,
-      ),
-      idSetPresence(
-        recipe.id,
-        filters.instructionsPresenceFilter,
-        recipeIdsWithInstructions,
-      ),
-      // Presence widens this filter; null is a valid legacy manual source.
-      or(
-        eqAnyRequested(recipe.SourceType, sourceTypes),
-        presenceCondition(recipe.SourceType, filters.sourceTypePresenceFilter),
-      ),
-      ...rangeConditions(
-        sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{cost,lower}')::numeric END`,
-        filters,
-        "costTotal",
-      ),
-      ...rangeConditions(
-        sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{nutrition,kcal,lower}')::numeric END`,
-        filters,
-        "caloriesTotal",
-      ),
-      // `totalMinutes` is a declared stored range filter over the real
-      // `Recipe.totalMinutes` column.
-      ...declaredFilterPredicates("recipe", recipe, filters),
-    ],
-  );
+  // `nameFilter` (name ∪ notes), `tagFilters` (an overlap over the nullable
+  // `tags` array, ORed with `tagsPresenceFilter`) and `totalMinutes` are
+  // declared stored filters — applied by `recipeScaffold.where` before the
+  // conditions below.
+  return recipeScaffold.where(filters, [
+    ...auditDateWhereConditions(recipe, filters),
+    ...relatedWhereConditions("recipe", filters, recipe.id),
+    // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
+    // the id half must distinguish "no cookbook filter" (unrestricted) from
+    // "a cookbook code that resolves to nothing" (match nothing), which the
+    // combined helper's `eqAny` cannot. The OR against the presence sentinel
+    // is unchanged — presence WIDENS the id filter (see `tagsPresenceFilter`).
+    or(
+      eqAnyRequested(recipe.cookbookId, cookbookIds),
+      presenceCondition(recipe.cookbookId, filters.cookbookPresenceFilter),
+    ),
+    filters.excludeSubRecipes ? notInArray(recipe.id, subRecipeIds) : undefined,
+    idSetPresence(recipe.id, filters.mealPresenceFilter, recipeIdsInLiveMeals),
+    idSetPresence(recipe.id, filters.imagePresenceFilter, recipeIdsWithImages),
+    idSetPresence(
+      recipe.id,
+      filters.instructionsPresenceFilter,
+      recipeIdsWithInstructions,
+    ),
+    // Presence widens this filter; null is a valid legacy manual source.
+    or(
+      eqAnyRequested(recipe.SourceType, sourceTypes),
+      presenceCondition(recipe.SourceType, filters.sourceTypePresenceFilter),
+    ),
+    ...rangeConditions(
+      sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{cost,lower}')::numeric END`,
+      filters,
+      "costTotal",
+    ),
+    ...rangeConditions(
+      sql`CASE WHEN ${recipe.totalsComputedAt} IS NOT NULL THEN (${recipe.totals} #>> '{nutrition,kcal,lower}')::numeric END`,
+      filters,
+      "caloriesTotal",
+    ),
+  ]);
 };
 
 export const recipeList = async (
@@ -568,17 +518,12 @@ export const recipeList = async (
       ];
     return null;
   };
-  const orderByClause = buildOrderBy(
-    recipe,
-    sorts,
-    [...generatedEntitySort.recipe.fields],
-    {
-      resolve: resolveRecipeSort,
-      tieBreaker: sql`${recipe.name} asc`,
-    },
-  );
+  const orderByClause = recipeScaffold.orderBy(sorts, {
+    resolve: resolveRecipeSort,
+    tieBreaker: sql`${recipe.name} asc`,
+  });
 
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = recipeScaffold.page(pagination);
 
   // List reads fetch flat rows, one cover, and scalar meal count; never full graphs.
   const { data: results, count: totalCount } = await executeListQueryWithCount({

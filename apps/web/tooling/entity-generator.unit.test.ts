@@ -611,6 +611,124 @@ describe("typed entity compiler", () => {
     ).toEqual(["createdAt", "updatedAt"]);
   });
 
+  it("carries display.listOrder and validates it", () => {
+    const withListOrder = (listOrder: number | undefined) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            fields: [
+              { key: "name", kind: "text", display: { list: true, listOrder } },
+            ],
+          },
+        },
+      ])[0]?.fieldModel.fields[0]?.display.listOrder;
+    expect(withListOrder(2)).toBe(2);
+    expect(withListOrder(undefined)).toBeNull();
+    expect(() => withListOrder(-1)).toThrow("Too small");
+    expect(() => withListOrder(1.5)).toThrow("expected int");
+  });
+
+  it("validates stored filter shapes against the storage model", () => {
+    const fields = [
+      { key: "name", kind: "text" },
+      { key: "tags", kind: "text-array", nullable: true },
+      { key: "flag", kind: "boolean" },
+      { key: "at", kind: "timestamp", nullable: true },
+      { key: "amount", kind: "number" },
+    ];
+    type RawDescriptor = EntityDeclaration["filters"]["descriptors"][number];
+    const stored = (
+      descriptor: Pick<RawDescriptor, "columnId" | "kind"> &
+        Partial<RawDescriptor>,
+    ) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            fields,
+            storage: ["name", "tags", "flag", "at", "amount"],
+          },
+          filters: {
+            descriptors: [
+              {
+                placeholder: "x",
+                deriveSchema: true,
+                stored: true,
+                ...descriptor,
+              },
+            ],
+          },
+        },
+      ])[0]?.filterDescriptors[0]?.stored;
+    expect(stored({ columnId: "name", kind: "text" })).toEqual({
+      columns: ["name"],
+      array: false,
+    });
+    expect(
+      stored({
+        columnId: "search",
+        kind: "text",
+        stored: { columns: ["name", "tags"] },
+      }),
+    ).toEqual({ columns: ["name", "tags"], array: false });
+    expect(
+      stored({
+        columnId: "tags",
+        kind: "multiselect",
+        optionsKey: "tags",
+        stored: { array: true },
+      }),
+    ).toEqual({ columns: ["tags"], array: true });
+    expect(stored({ columnId: "at", kind: "boolean" })).toEqual({
+      columns: ["at"],
+      array: false,
+    });
+    const rejected: Array<[Parameters<typeof stored>[0], string]> = [
+      [
+        { columnId: "name", kind: "text", deriveSchema: false },
+        "stored requires deriveSchema",
+      ],
+      [
+        { columnId: "name", kind: "text", stored: { columns: ["missing"] } },
+        "needs a stored model field missing",
+      ],
+      [
+        {
+          columnId: "flag",
+          kind: "boolean",
+          stored: { columns: ["flag", "name"] },
+        },
+        "several fields only for a text filter",
+      ],
+      [
+        { columnId: "tags", kind: "multiselect", optionsKey: "tags" },
+        "needs stored.array",
+      ],
+      [
+        {
+          columnId: "name",
+          kind: "multiselect",
+          optionsKey: "names",
+          stored: { array: true },
+        },
+        "applies only to a multiselect over a text-array field",
+      ],
+      [
+        { columnId: "amount", kind: "boolean" },
+        "reads as presence, so the field must be nullable",
+      ],
+      [
+        { columnId: "at", kind: "range", range: { finite: true } },
+        "range.int/finite apply only to numeric ranges",
+      ],
+    ];
+    for (const [descriptor, message] of rejected)
+      expect(() => stored(descriptor)).toThrow(message);
+  });
+
   it("requires route modules for generated browser destinations", () => {
     const entities = compileEntityDeclarations([
       { ...base, route: { basePath: "alphas", detailParam: "id" } },
@@ -678,6 +796,18 @@ describe("typed entity compiler", () => {
       'nameFilter":z.string().optional().describe(',
     );
     expect(filterFields).toContain('"usuallyOnHand":z.boolean().optional()');
+    // Declared ranges carry their numeric constraints and MCP prose through
+    // the shared min/max and from/to builders.
+    const expenseFilters = artifact("entity-field-schemas.expense.gen.ts");
+    expect(expenseFilters).toContain(
+      '...numericRangeFields("cost",{describe:{min:"Inclusive lower bound on expense cost, in dollars",max:"Inclusive upper bound on expense cost, in dollars"}})',
+    );
+    expect(expenseFilters).toContain(
+      '...dateRangeFields("date",{describe:{from:"Inclusive lower bound on expense date",to:"Inclusive upper bound on expense date"}})',
+    );
+    expect(
+      artifact("entity-field-schemas.financialTransaction.gen.ts"),
+    ).toContain('...numericRangeFields("amount",{finite:true})');
     expect(artifact("entity-field-model.gen.ts")).not.toContain("validation:");
     expect(artifact("entity-field-model.gen.ts")).not.toMatch(
       /^import .*entity-definitions\//m,

@@ -25,4 +25,17 @@ describe("buildLocationWhere", () => {
   it("still narrows by type (declared stored multiselect filter)", async () => {
     expect(await where({ itemTypeFilter: "shelf" })).toContain('"type"');
   });
+
+  it("reads AI description presence (declared stored presence filter)", async () => {
+    expect(await where({ aiDescriptionPresenceFilter: "has" })).toContain(
+      '"aiDescription" is not null',
+    );
+  });
+
+  it("matches name, AI description, and aliases by element (declared stored text filter)", async () => {
+    const rendered = await where({ nameFilter: "attic" });
+    expect(rendered).toContain('"name"');
+    expect(rendered).toContain('"aiDescription"');
+    expect(rendered).toContain('unnest("Location"."aliases")');
+  });
 });

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import CubbyKit
@@ -39,5 +40,36 @@ struct OperationRoutesTests {
         #expect(OperationRoute.imageAttachableEntities.contains("product"))
         #expect(OperationRoute.imageAttachableEntities.contains("purchase"))
         #expect(!OperationRoute.imageAttachableEntities.contains("task"))
+    }
+
+    /// `imageAttachableEntities` and `EntityDescriptor.acceptsImages` are meant to be the same
+    /// fact read two ways (`PhotoTests` exercises `acceptsImages` per entity); this checks the
+    /// correspondence holds across the whole catalog, not just the handful spot-checked above.
+    @Test func imageAttachableEntitiesMatchesAcceptsImagesAcrossTheCatalog() {
+        let accepting = Set(EntityCatalog.all.filter(\.acceptsImages).map { $0.key.rawValue })
+        #expect(accepting == OperationRoute.imageAttachableEntities)
+    }
+
+    /// `apps/apple/openapi/native-operations.json` is the hand-kept allowlist of RPC operation ids
+    /// (every `resources.*` id is generated automatically, per its own `$comment`) that feeds
+    /// `apps/web/scripts/generate-http-openapi.ts`. Every id it lists must have made it into the
+    /// generated table, or the config and the table have drifted apart.
+    @Test func everyNativeOperationHasAGeneratedRoute() throws {
+        struct Config: Decodable {
+            struct Operation: Decodable { let id: String }
+            let operations: [Operation]
+        }
+        // Tests/CubbyKitTests/OperationRoutesTests.swift -> apps/apple/openapi/native-operations.json
+        let configURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // CubbyKitTests/
+            .deletingLastPathComponent()  // Tests/
+            .deletingLastPathComponent()  // CubbyKit/
+            .deletingLastPathComponent()  // apple/
+            .appendingPathComponent("openapi/native-operations.json")
+        let config = try JSONDecoder().decode(Config.self, from: try Data(contentsOf: configURL))
+        #expect(!config.operations.isEmpty)
+        for operation in config.operations {
+            #expect(OperationRoute.all[operation.id] != nil, "missing generated route for \(operation.id)")
+        }
     }
 }

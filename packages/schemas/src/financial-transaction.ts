@@ -9,11 +9,7 @@ export type {
   FinancialReconciliationSummary,
 } from "./financial-reconciliation";
 import { financialTransactionRelatedFilterFields } from "./related-view";
-import {
-  auditDateFilterFields,
-  dateRangeFields,
-  numericRangeFields,
-} from "./base-entity";
+import { auditDateFilterFields } from "./base-entity";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
@@ -337,15 +333,12 @@ export const financialTransactionFilterFields = {
   ...auditDateFilterFields,
   ...financialTransactionRelatedFilterFields,
   ...generatedFinancialTransactionFilterFields,
-  search: z.string().optional(),
   accountId: entityFilterList(financialAccountShortcode).optional(),
   purchaseId: entityFilterList(purchaseShortcode).optional(),
   purchasePresenceFilter: presenceFilter,
   allocationIntegrity: z.enum(["defect"]).optional(),
   source: oneOrMany(z.string().min(1)).optional(),
   externalId: oneOrMany(z.string().min(1)).optional(),
-  ...numericRangeFields("amount", { finite: true }),
-  ...dateRangeFields("transactionDate"),
 };
 export const financialTransactionFiltersSchema = z.object(
   financialTransactionFilterFields,

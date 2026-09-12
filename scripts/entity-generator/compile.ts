@@ -141,6 +141,7 @@ const compileFieldModel = (
         format: field.display.format ?? null,
         mobile: field.display.mobile ?? null,
         detailOrder: field.display.detailOrder,
+        listOrder: field.display.listOrder,
         list: field.display.list,
         detail: field.display.detail,
       },
@@ -332,6 +333,21 @@ const validateDerivedFilter = (
     );
 };
 
+/** The range kind a model field implies, or null when it implies none. */
+const inferredRangeKind = (
+  modelField: EntityField | undefined,
+): "number" | "date" | null => {
+  switch (modelField?.kind) {
+    case "number":
+      return "number";
+    case "date":
+    case "timestamp":
+      return "date";
+    default:
+      return null;
+  }
+};
+
 const resolveFilterRange = (
   value: RawFilterDescriptor,
   kind: FilterDescriptor["kind"],
@@ -339,45 +355,85 @@ const resolveFilterRange = (
   context: string,
 ): FilterDescriptor["range"] => {
   if (!(value.deriveSchema ?? false) || kind !== "range") return null;
-  const inferred =
-    modelField?.kind === "number"
-      ? "number"
-      : modelField?.kind === "date" || modelField?.kind === "timestamp"
-        ? "date"
-        : null;
-  const rangeKind = value.range?.kind ?? inferred;
+  const options = value.range ?? {};
+  const rangeKind = options.kind ?? inferredRangeKind(modelField);
   if (rangeKind === null)
     throw new EntityDeclarationError(
       `${context} range needs range.kind or a numeric/date model field ${value.columnId}.`,
     );
+  const int = options.int ?? false;
+  const finite = options.finite ?? false;
+  if (rangeKind === "date" && (int || finite))
+    throw new EntityDeclarationError(
+      `${context} range.int/finite apply only to numeric ranges.`,
+    );
   return {
     kind: rangeKind,
-    int: value.range?.int ?? false,
-    nonnegative: value.range?.nonnegative ?? false,
+    int,
+    nonnegative: options.nonnegative ?? false,
+    finite,
+    describe: options.describe ?? null,
   };
 };
 
+/**
+ * A stored filter is composed by the repository from the declaration alone,
+ * so every shape it can take must be one the standard predicates handle:
+ * several columns only for a text search, `array` only for a multiselect
+ * over a `text-array` column (which in turn needs it), and a boolean filter
+ * over a column that is not boolean reads as presence (`true` is NOT NULL),
+ * which only means something on a nullable column.
+ */
 const validateStoredFilter = (
   value: RawFilterDescriptor,
-  storageKeys: ReadonlySet<string>,
+  kind: FilterDescriptor["kind"],
+  storage: readonly EntityStorageField[],
   context: string,
-): boolean => {
-  const stored = value.stored ?? false;
-  if (stored && !(value.deriveSchema ?? false))
+): FilterDescriptor["stored"] => {
+  const raw = value.stored ?? false;
+  if (raw === false) return null;
+  if (!(value.deriveSchema ?? false))
     throw new EntityDeclarationError(
       `${context} stored requires deriveSchema.`,
     );
-  if (stored && !storageKeys.has(value.columnId))
+  const columns =
+    raw === true ? [value.columnId] : (raw.columns ?? [value.columnId]);
+  const array = raw === true ? false : (raw.array ?? false);
+  const fields = columns.map((column) => {
+    const field = storage.find(({ key }) => key === column);
+    if (field === undefined)
+      throw new EntityDeclarationError(
+        `${context} stored needs a stored model field ${column}.`,
+      );
+    return field;
+  });
+  if (columns.length > 1 && kind !== "text")
     throw new EntityDeclarationError(
-      `${context} stored needs a stored model field ${value.columnId}.`,
+      `${context} stored columns span several fields only for a text filter.`,
     );
-  return stored;
+  const arrayColumn = fields.some((field) => field.kind === "text-array");
+  if (array && !(kind === "multiselect" && arrayColumn))
+    throw new EntityDeclarationError(
+      `${context} stored.array applies only to a multiselect over a text-array field.`,
+    );
+  if (arrayColumn && kind !== "text" && !array)
+    throw new EntityDeclarationError(
+      `${context} stored over a text-array field needs stored.array.`,
+    );
+  if (
+    kind === "boolean" &&
+    fields.some((field) => field.kind !== "boolean" && !field.nullable)
+  )
+    throw new EntityDeclarationError(
+      `${context} stored boolean over a non-boolean field reads as presence, so the field must be nullable.`,
+    );
+  return { columns, array };
 };
 
 const filterDescriptor = (
   value: RawFilterDescriptor,
   fields: readonly EntityField[],
-  storageKeys: ReadonlySet<string>,
+  storage: readonly EntityStorageField[],
   context: string,
 ): FilterDescriptor => {
   const parsedKind = filterKinds.find((candidate) => candidate === value.kind);
@@ -393,7 +449,7 @@ const filterDescriptor = (
   }
   const modelField = fields.find((field) => field.key === value.columnId);
   validateDerivedFilter(value, parsedKind, modelField, context);
-  const stored = validateStoredFilter(value, storageKeys, context);
+  const stored = validateStoredFilter(value, parsedKind, storage, context);
   return {
     columnId: value.columnId,
     field: value.field ?? null,
@@ -710,7 +766,7 @@ export const compileEntity = (
     filterDescriptor(
       value,
       fieldModel.fields,
-      new Set(fieldModel.storage.map(({ key }) => key)),
+      fieldModel.storage,
       `${context}.filters.descriptors[${index}]`,
     ),
   );
@@ -757,7 +813,7 @@ export const compileEntity = (
           schemaFromRead: false,
           brandRef: null,
           schemaRef: null,
-          stored: false,
+          stored: null,
           range: null,
           expandRef: {
             module: "~/entities/filter-behavior",
@@ -786,7 +842,7 @@ export const compileEntity = (
           schemaFromRead: false,
           brandRef: null,
           schemaRef: null,
-          stored: false,
+          stored: null,
           range: null,
           expandRef: {
             module: "~/entities/filter-behavior",

@@ -5,7 +5,6 @@ import type { ActorContext } from "@cubby/schemas/context";
  */
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ImageShortcode,
   type LocationId,
@@ -69,12 +68,10 @@ import {
   auditDateWhereConditions,
   buildOrderBy,
   buildPartialUpdateValues,
-  buildSearchConditions,
   countWhere,
   eqAny,
   eqAnyOrPresence,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   idSetPresence,
   imageJoinBindings,
@@ -84,17 +81,16 @@ import {
   mapImages,
   nextImageSortOrder,
   notDeleted,
-  presenceCondition,
   rangeConditions,
   relations,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { stockOnly } from "~/server/repo/inventory/placement";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { parseLocationType } from "~/server/repo/location/parse-type";
 import { loadProductPricing } from "~/server/repo/product/pricing";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -690,19 +686,7 @@ export const deleteLocations = async (
   });
 };
 
-/**
- * The free-text match behind both the location table's name filter and the
- * picker typeahead: name ∪ AI description ∪ aliases. Shared so the two surfaces
- * can't drift into disagreeing about what "matches" means.
- */
-const locationNameSearchCondition = (nameFilter: string | undefined) =>
-  nameFilter
-    ? or(
-        formatSearchTerm(location.name, nameFilter),
-        formatSearchTerm(location.aiDescription, nameFilter),
-        sql`EXISTS (SELECT 1 FROM unnest(${location.aliases}) AS alias WHERE alias ILIKE ${`%${nameFilter}%`})`,
-      )
-    : undefined;
+const locationScaffold = listScaffold("location", location);
 
 /**
  * "Which SKU is this location an instance of", plus the has/none presence
@@ -807,55 +791,46 @@ export const buildLocationWhere = async (
     .groupBy(inventoryEntry.locationId)
     .having(sql`count(*) > ${filters.directItemCountMax ?? 0}`);
 
-  return buildSearchConditions(
-    location,
-    [],
-    [
-      ...auditDateWhereConditions(location, filters),
-      ...relatedWhereConditions("location", filters, location.id),
-      locationNameSearchCondition(filters.nameFilter),
-      // `type` is a declared stored filter.
-      ...declaredFilterPredicates("location", location, filters),
-      parentCondition,
-      productCondition,
-      idSetPresence(
-        location.id,
-        filters.inventoryPresenceFilter,
-        locationIdsWithLiveInventory,
-      ),
-      idSetPresence(
-        location.id,
-        filters.imagePresenceFilter,
-        locationIdsWithImages,
-      ),
-      presenceCondition(
-        location.aiDescription,
-        filters.aiDescriptionPresenceFilter,
-      ),
-      idSetPresence(
-        location.id,
-        filters.childPresenceFilter,
-        locationIdsWithChildren,
-      ),
-      filters.lastBulkInventoryOlderThanDays !== undefined
-        ? or(
-            isNull(location.lastBulkInventory),
-            sql`${location.lastBulkInventory} < now() - make_interval(days => ${filters.lastBulkInventoryOlderThanDays})`,
-          )
-        : undefined,
-      filters.directItemCountMin !== undefined
-        ? inArray(location.id, locationIdsMeetingInventoryMinimum)
-        : undefined,
-      filters.directItemCountMax !== undefined
-        ? notInArray(location.id, locationIdsExceedingInventoryMaximum)
-        : undefined,
-      ...rangeConditions(
-        sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0)`,
-        filters,
-        "valuation",
-      ),
-    ],
-  );
+  // `nameFilter`, `type` and `aiDescriptionPresenceFilter` are declared stored
+  // filters — applied by `locationScaffold.where` before the conditions below.
+  return locationScaffold.where(filters, [
+    ...auditDateWhereConditions(location, filters),
+    ...relatedWhereConditions("location", filters, location.id),
+    parentCondition,
+    productCondition,
+    idSetPresence(
+      location.id,
+      filters.inventoryPresenceFilter,
+      locationIdsWithLiveInventory,
+    ),
+    idSetPresence(
+      location.id,
+      filters.imagePresenceFilter,
+      locationIdsWithImages,
+    ),
+    idSetPresence(
+      location.id,
+      filters.childPresenceFilter,
+      locationIdsWithChildren,
+    ),
+    filters.lastBulkInventoryOlderThanDays !== undefined
+      ? or(
+          isNull(location.lastBulkInventory),
+          sql`${location.lastBulkInventory} < now() - make_interval(days => ${filters.lastBulkInventoryOlderThanDays})`,
+        )
+      : undefined,
+    filters.directItemCountMin !== undefined
+      ? inArray(location.id, locationIdsMeetingInventoryMinimum)
+      : undefined,
+    filters.directItemCountMax !== undefined
+      ? notInArray(location.id, locationIdsExceedingInventoryMaximum)
+      : undefined,
+    ...rangeConditions(
+      sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0)`,
+      filters,
+      "valuation",
+    ),
+  ]);
 };
 
 export const locationList = async (
@@ -868,50 +843,45 @@ export const locationList = async (
 ) => {
   const whereClause = await buildLocationWhere(db, filters);
 
-  const orderByClause = buildOrderBy(
-    location,
-    sorts,
-    [...generatedEntitySort.location.fields],
-    {
-      groupBy,
-      // `valuation` is a persisted jsonb rollup; sort by direct value because
-      // that is what the list cell renders in compact mode.
-      resolve: (s) => {
-        const dirSql =
-          s.direction === "asc" ? "asc nulls last" : "desc nulls last";
-        if (s.orderBy === "valuation")
-          return [
-            s.direction === "asc"
-              ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
-              : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
-          ];
-        if (s.orderBy === "inventoryEntries")
-          return [
-            // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
-            // stockOnly() filter — otherwise sort and filter disagree on
-            // whether an installed fixture counts.
-            sql.raw(
-              `(SELECT count(*) FROM "InventoryEntry" ie ` +
-                `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
-                `WHERE ie."locationId" = "location"."id" AND ie."deletedAt" IS NULL ` +
-                `AND ie."placement" = 'stock') ${dirSql}`,
-            ),
-          ];
-        // Joined parent name — a correlated subquery keeps this a relational
-        // findMany. Soft-delete guarded, like the read path.
-        if (s.orderBy === "parent")
-          return [
-            sql.raw(
-              `(SELECT l."name" FROM "Location" l ` +
-                `WHERE l."id" = "location"."parentId" AND l."deletedAt" IS NULL) ${dirSql}`,
-            ),
-          ];
-        return null;
-      },
+  const orderByClause = locationScaffold.orderBy(sorts, {
+    groupBy,
+    // `valuation` is a persisted jsonb rollup; sort by direct value because
+    // that is what the list cell renders in compact mode.
+    resolve: (s) => {
+      const dirSql =
+        s.direction === "asc" ? "asc nulls last" : "desc nulls last";
+      if (s.orderBy === "valuation")
+        return [
+          s.direction === "asc"
+            ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
+            : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
+        ];
+      if (s.orderBy === "inventoryEntries")
+        return [
+          // Matches locationIdsMeetingInventoryMinimum/ExceedingMaximum's
+          // stockOnly() filter — otherwise sort and filter disagree on
+          // whether an installed fixture counts.
+          sql.raw(
+            `(SELECT count(*) FROM "InventoryEntry" ie ` +
+              `INNER JOIN "Product" p ON p."id" = ie."productId" AND p."deletedAt" IS NULL ` +
+              `WHERE ie."locationId" = "location"."id" AND ie."deletedAt" IS NULL ` +
+              `AND ie."placement" = 'stock') ${dirSql}`,
+          ),
+        ];
+      // Joined parent name — a correlated subquery keeps this a relational
+      // findMany. Soft-delete guarded, like the read path.
+      if (s.orderBy === "parent")
+        return [
+          sql.raw(
+            `(SELECT l."name" FROM "Location" l ` +
+              `WHERE l."id" = "location"."parentId" AND l."deletedAt" IS NULL) ${dirSql}`,
+          ),
+        ];
+      return null;
     },
-  );
+  });
 
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = locationScaffold.page(pagination);
 
   const { data: results, count: totalCount } = await executeListQueryWithCount({
     kind: readIntent,
@@ -1103,21 +1073,19 @@ const locationRosterPage = async (
 
   const productCondition = await locationProductCondition(db, filters);
 
-  const whereClause = buildSearchConditions(
-    location,
-    [],
-    [
-      locationNameSearchCondition(filters.nameFilter),
-      eqAny(location.type, filters.itemTypeFilter),
-      parentCondition,
-      productCondition,
-      idSetPresence(
-        location.id,
-        filters.inventoryPresenceFilter,
-        locationIdsWithLiveInventory,
-      ),
-    ],
-  );
+  // `nameFilter` is a declared stored filter — applied by
+  // `locationScaffold.where` before the conditions below (the same predicate
+  // `buildLocationWhere` gets, so the two surfaces cannot drift).
+  const whereClause = locationScaffold.where(filters, [
+    eqAny(location.type, filters.itemTypeFilter),
+    parentCondition,
+    productCondition,
+    idSetPresence(
+      location.id,
+      filters.inventoryPresenceFilter,
+      locationIdsWithLiveInventory,
+    ),
+  ]);
 
   const orderByClause = buildOrderBy(location, sorts, [
     ...locationPickerSortableFields,

@@ -71,7 +71,7 @@ export interface RecipeFilters {
   updatedFrom?: string;
   updatedTo?: string;
   nameFilter?: string;
-  tagFilters?: string[];
+  tagFilters?: string | string[];
   // The tag column's "(none)" / "Has tags" sentinel. "none" is untagged —
   // null OR an empty array — and it ORs with `tagFilters` rather than
   // narrowing it. See TAGS_ARE_EMPTY in ./crud.ts.

@@ -97,7 +97,7 @@ struct SubjectLiftTests {
 /// Records the exact call sequence; `failPut` makes the presigned PUT fail.
 final class StubPhotoService: PhotoService, Sendable {
     enum Call: Equatable, Sendable {
-        case create(String, Int, String, EntityKey), put(URL, String, Int), mark(ImageCode), attach([ImageCode], EntityKey, String), ids(ProductCode), order([ImageCode], ProductCode)
+        case create(String, Int, ImageEncoding.Format, EntityKey), put(URL, String, Int), mark(ImageCode), attach([ImageCode], EntityKey, String), ids(ProductCode), order([ImageCode], ProductCode)
     }
 
     let calls = Mutex<[Call]>([])
@@ -107,8 +107,8 @@ final class StubPhotoService: PhotoService, Sendable {
 
     func record(_ call: Call) { calls.withLock { $0.append(call) } }
 
-    func createUpload(filename: String, size: Int, contentType: String, entity: EntityKey) async throws -> ImageUpload {
-        record(.create(filename, size, contentType, entity))
+    func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey) async throws -> ImageUpload {
+        record(.create(filename, size, format, entity))
         return ImageUpload(uploadUrl: URL(string: "https://uploads.example/x")!, imageId: ImageCode("IMG-2345"), key: "k", url: URL(string: "https://images.example/x.jpg")!)
     }
 
@@ -140,14 +140,14 @@ struct PhotoUploaderTests {
         )
         let calls = service.calls.withLock { $0 }
         #expect(calls.count == 6)
-        guard case .create(let filename, let size, let type, let entity) = calls[0] else { Issue.record("expected create"); return }
+        guard case .create(let filename, let size, let format, let entity) = calls[0] else { Issue.record("expected create"); return }
         #expect(filename == "shelf.jpg")
-        #expect(type == "image/jpeg")
+        #expect(format == .jpeg)
         #expect(entity == .product)
         #expect(size == outcome.byteCount)
         guard case .put(_, let putType, let putSize) = calls[1] else { Issue.record("expected put"); return }
-        // The PUT carries exactly the bytes and type that were presigned.
-        #expect(putType == type)
+        // The PUT carries exactly the bytes and content type that were presigned.
+        #expect(putType == format.contentType)
         #expect(putSize == size)
         #expect(calls[2] == .mark(ImageCode("IMG-2345")))
         #expect(calls[3] == .attach([ImageCode("IMG-2345")], .product, "PRD-2345"))
@@ -182,7 +182,7 @@ struct PhotoUploaderTests {
     }
 
     @Test func imageUploadDecodes() throws {
-        let upload = try Fixtures.decode(SuccessEnvelope<ImageUpload>.self, from: "image-upload.json").data
+        let upload = try Fixtures.decode(ImageUpload.self, from: "image-upload.json")
         #expect(upload.imageId == ImageCode("IMG-2345"))
         #expect(upload.uploadUrl.host() == "uploads.example")
     }
@@ -194,41 +194,22 @@ struct PhotoUploaderTests {
     }
 }
 
-/// Its own protocol class, not `StubURLProtocol`: suites run in parallel, and a handler shared
-/// through one static would leak between this suite and the raw client's.
-final class PresignedStubProtocol: URLProtocol, @unchecked Sendable {
-    typealias Handler = @Sendable (URLRequest) -> (Int, Data)
-    static let handler = Mutex<Handler?>(nil)
-
+private final class PresignedStub: URLProtocol, @unchecked Sendable {
+    static let handler = Mutex<StubNetworking.Handler?>(nil)
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
     override func startLoading() {
-        guard let handler = Self.handler.withLock({ $0 }) else {
-            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
-            return
-        }
-        let (status, data) = handler(request)
-        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:])!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
-        client?.urlProtocolDidFinishLoading(self)
+        StubNetworking.startLoading(request, client: client, target: self, handler: Self.handler.withLock { $0 })
     }
-
     override func stopLoading() {}
-
-    static func session() -> URLSession {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [PresignedStubProtocol.self]
-        return URLSession(configuration: configuration)
-    }
+    static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
 @Suite("PresignedUpload", .serialized)
 struct PresignedUploadTests {
     @Test func putSendsOnlyContentTypeAndTheBytes() async throws {
         let seen = Mutex<(method: String?, headers: [String: String], length: Int)?>(nil)
-        PresignedStubProtocol.handler.withLock { handler in
+        PresignedStub.handler.withLock { handler in
             handler = { request in
                 var length = request.httpBody?.count ?? 0
                 if length == 0, let stream = request.httpBodyStream {
@@ -246,7 +227,7 @@ struct PresignedUploadTests {
             }
         }
         let bytes = Data(repeating: 7, count: 1234)
-        try await PresignedUpload.put(bytes, to: URL(string: "https://uploads.example/x")!, contentType: "image/jpeg", session: PresignedStubProtocol.session())
+        try await PresignedUpload.put(bytes, to: URL(string: "https://uploads.example/x")!, contentType: "image/jpeg", session: PresignedStub.session())
         let request = try #require(seen.withLock { $0 })
         #expect(request.method == "PUT")
         #expect(request.headers["Content-Type"] == "image/jpeg")
@@ -256,9 +237,9 @@ struct PresignedUploadTests {
     }
 
     @Test func rejectedPutThrowsWithTheStatus() async throws {
-        PresignedStubProtocol.handler.withLock { $0 = { _ in (403, Data("<xml>AccessDenied</xml>".utf8)) } }
+        PresignedStub.handler.withLock { $0 = { _ in (403, Data("<xml>AccessDenied</xml>".utf8)) } }
         do {
-            try await PresignedUpload.put(Data([1]), to: URL(string: "https://uploads.example/x")!, contentType: "image/png", session: PresignedStubProtocol.session())
+            try await PresignedUpload.put(Data([1]), to: URL(string: "https://uploads.example/x")!, contentType: "image/png", session: PresignedStub.session())
             Issue.record("expected a throw")
         } catch let error as CubbyAPIError {
             #expect(error.status == 403)

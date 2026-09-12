@@ -5,7 +5,6 @@ import type {
   ImpactItem,
   OperationDisposition,
 } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { inferExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseId,
@@ -18,11 +17,7 @@ import {
   parseShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { ExpenseOut } from "@cubby/schemas/project";
 import type {
   LinkExpensesToPurchaseInput,
@@ -86,14 +81,11 @@ import {
   applyImageOrder,
   associatePendingImages,
   auditDateWhereConditions,
-  buildOrderBy,
   buildPartialUpdateValues,
-  buildSearchConditions,
   correlated,
   countWhere,
   eqAny,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   imageJoinBindings,
   type ListReadIntent,
@@ -106,7 +98,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -127,6 +118,7 @@ import {
 import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   assertDistinctMergeTargets,
   finalizeMerge,
@@ -500,6 +492,8 @@ const documentPresenceCondition = (
       ? sql`${purchaseDocumentCount} = 0`
       : undefined;
 
+const purchaseScaffold = listScaffold("purchase", purchase);
+
 /**
  * The complete WHERE for a purchase list, filters and all.
  *
@@ -530,55 +524,38 @@ export const buildPurchaseWhereClause = async (
       ? eqAny(purchase.vendorId, vendorUuids)
       : sql`false`
     : undefined;
-  return buildSearchConditions(
-    purchase,
-    [],
-    [
-      filters.search
-        ? or(
-            formatSearchTerm(purchase.orderId, filters.search),
-            formatSearchTerm(purchase.displayLabel, filters.search),
-          )
-        : undefined,
-      ...auditDateWhereConditions(purchase, filters),
-      vendorCondition,
-      ...relatedWhereConditions("purchase", filters, purchase.id),
-      // `displayLabel` (text) is a declared stored filter.
-      ...declaredFilterPredicates("purchase", purchase, filters),
-      eqAny(purchase.orderId, filters.orderId),
-      presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
-      presenceCondition(
-        purchase.statedTotal,
-        filters.statedTotalPresenceFilter,
-      ),
-      expenseStatusCondition(filters.expenseStatus),
-      reconciliationCondition(filters.reconciliation),
-      filters.financialReconciliation === "mismatch"
-        ? sql.raw(purchaseFinancialMismatchSql('"Purchase"'))
-        : undefined,
-      documentPresenceCondition(filters.documentPresenceFilter),
-      filters.dataStatus === "needs_data"
-        ? purchaseNeedsDataCondition()
-        : filters.dataStatus === "defect"
-          ? purchaseDefectCondition()
-          : filters.dataStatus === "complete"
-            ? sql`NOT ${purchaseAnyDataGapCondition()}`
-            : undefined,
-      filters.dataGap
-        ? or(...[filters.dataGap].flat().map(purchaseDataGapCondition))
-        : undefined,
-      filters.expenseTotalMin !== undefined
-        ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} >= ${filters.expenseTotalMin}`
-        : undefined,
-      filters.expenseTotalMax !== undefined
-        ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} <= ${filters.expenseTotalMax}`
-        : undefined,
-      filters.dateFrom
-        ? sql`${purchase.date} >= ${filters.dateFrom}`
-        : undefined,
-      filters.dateTo ? sql`${purchase.date} <= ${filters.dateTo}` : undefined,
-    ],
-  );
+  // `search` (orderId ∪ displayLabel), `displayLabelSearch`, the
+  // `statedTotal` presence and the `date` bounds are declared stored
+  // filters — applied by `purchaseScaffold.where` before the conditions below.
+  return purchaseScaffold.where(filters, [
+    ...auditDateWhereConditions(purchase, filters),
+    vendorCondition,
+    ...relatedWhereConditions("purchase", filters, purchase.id),
+    eqAny(purchase.orderId, filters.orderId),
+    presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
+    expenseStatusCondition(filters.expenseStatus),
+    reconciliationCondition(filters.reconciliation),
+    filters.financialReconciliation === "mismatch"
+      ? sql.raw(purchaseFinancialMismatchSql('"Purchase"'))
+      : undefined,
+    documentPresenceCondition(filters.documentPresenceFilter),
+    filters.dataStatus === "needs_data"
+      ? purchaseNeedsDataCondition()
+      : filters.dataStatus === "defect"
+        ? purchaseDefectCondition()
+        : filters.dataStatus === "complete"
+          ? sql`NOT ${purchaseAnyDataGapCondition()}`
+          : undefined,
+    filters.dataGap
+      ? or(...[filters.dataGap].flat().map(purchaseDataGapCondition))
+      : undefined,
+    filters.expenseTotalMin !== undefined
+      ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} >= ${filters.expenseTotalMin}`
+      : undefined,
+    filters.expenseTotalMax !== undefined
+      ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} <= ${filters.expenseTotalMax}`
+      : undefined,
+  ]);
 };
 
 const resolvePurchaseSort = (sort: SortParams) => {
@@ -601,7 +578,7 @@ export const purchaseList = async (
   readIntent: ListReadIntent = "page",
 ): Promise<{ data: PurchaseOut[]; count: number }> => {
   const whereClause = await buildPurchaseWhereClause(db, filters);
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = purchaseScaffold.page(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount({
     kind: readIntent,
@@ -611,14 +588,7 @@ export const purchaseList = async (
         .from(purchase)
         .where(whereClause)
         .orderBy(
-          ...buildOrderBy(
-            purchase,
-            sorts,
-            [...generatedEntitySort.purchase.fields],
-            {
-              resolve: resolvePurchaseSort,
-            },
-          ),
+          ...purchaseScaffold.orderBy(sorts, { resolve: resolvePurchaseSort }),
         )
         .limit(take)
         .offset(skip),

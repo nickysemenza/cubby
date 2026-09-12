@@ -11,6 +11,7 @@ import type { AppErrorReason } from "@cubby/shared";
 import type { AnyColumn, SQL, SQLWrapper } from "drizzle-orm";
 import {
   and,
+  arrayOverlaps,
   asc,
   eq,
   getTableColumns,
@@ -121,6 +122,45 @@ export const formatSearchTerm = (
   }
   return ilike(column, `%${term}%`);
 };
+
+/**
+ * `formatSearchTerm` for a `text[]` column: any element matches the term.
+ * `unnest` rather than `array_to_string`, so a term cannot match across the
+ * boundary between two elements.
+ */
+export const textArrayMatches = (
+  column: AnyColumn,
+  term?: string,
+): SQL | undefined => {
+  if (term === undefined || term.trim() === "") return undefined;
+  return sql`EXISTS (SELECT 1 FROM unnest(${column}) AS element WHERE element ILIKE ${`%${term}%`})`;
+};
+
+/**
+ * `arrayOverlaps` OR the presence sentinel of a `text[]` column — the tag
+ * filter's contract: picked values widen with `(none)` exactly as
+ * `eqAnyOrPresence` does for a scalar. "Empty" is a NULL or zero-length
+ * array when the column is nullable and zero-length otherwise; the outer
+ * parens are load-bearing because `presenceCondition` negates the clause.
+ */
+export const arrayOverlapOrPresence = (
+  column: AnyColumn,
+  values: readonly string[] | undefined,
+  presence: PresenceFilter,
+  nullable: boolean,
+): SQL | undefined =>
+  or(
+    values !== undefined && values.length > 0
+      ? arrayOverlaps(column, [...values])
+      : undefined,
+    presenceCondition(
+      column,
+      presence,
+      nullable
+        ? sql`(${column} IS NULL OR cardinality(${column}) = 0)`
+        : sql`(cardinality(${column}) = 0)`,
+    ),
+  );
 
 export const notDeleted = <T extends { deletedAt: AnyColumn }>(table: T) =>
   isNull(table.deletedAt);

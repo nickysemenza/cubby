@@ -18,12 +18,12 @@ import {
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { presenceCellOptions } from "~/lib/select-options";
 
 import {
   createFilterableSelectColumn,
-  createTextColumn,
   renderOptionCell,
 } from "../_components/data-table/columnHelpers";
 import { EntityListPage } from "../_components/data-table/EntityListPage";
@@ -48,12 +48,22 @@ const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
 /**
  * Module-level: this feeds the merged-visibility `useMemo`, so an inline object
  * literal would rebuild the table's column visibility on every render.
+ *
+ * `merchant`, `possibleVendor` (`vendorInference`) and `source` (`sourceRefs`)
+ * were already hidden by default. `rawDescription`, `sourceCategory` and
+ * `notes` are also declared `list: true` on the entity (for the native
+ * catalog / the "Columns" menu), but were never a column on this page before
+ * this migration — kept hidden here rather than newly surfaced, same
+ * treatment as the three already-hidden ones.
  */
 export const FINANCIAL_TRANSACTION_INITIAL_COLUMN_VISIBILITY = {
   purchasePresence: false,
   merchant: false,
   possibleVendor: false,
   source: false,
+  rawDescription: false,
+  sourceCategory: false,
+  notes: false,
 };
 
 export function FinancialTransactionList() {
@@ -90,49 +100,11 @@ export function FinancialTransactionList() {
     () =>
       createCubbyColumnCollection<FinancialTransactionOut>((add) => {
         add(createFinancialTransactionIdentityColumn(helper));
-        add(createFinancialTransactionAccountColumn(helper));
-        // Through the factory, not a bare accessor: these were `createTextColumn`,
-        // which wires `meta.cellData` unconditionally, so hand-rolling the cell
-        // dropped them out of the range copy/paste engine (which reads cellData,
-        // never the rendered cell). `filterConfig: null` keeps `meta.filterConfig`
-        // undefined exactly as `createTextColumn` left it, so the manifest's
-        // multiselect control stays the one that attaches.
-        add(
-          createFilterableSelectColumn(helper, "kind", {
-            header: "Kind",
-            className: "w-32",
-            placeholder: "Filter by kind...",
-            selectOptions: financialTransactionKindOptions,
-            filterConfig: null,
-          }),
-        );
-        add(createFinancialTransactionStatusColumn(helper));
-        add(createFinancialTransactionAmountColumn(helper));
-        add(
-          helper.accessor("purchaseId", {
-            header: "Purchase",
-            meta: { className: "w-32" },
-            cell: (i) => {
-              const purchaseId = i.getValue();
-              return purchaseId ? (
-                <TableLink
-                  to={entities.purchase.routes.detail}
-                  params={entityDetailParams(purchaseId)}
-                  variant="mono"
-                >
-                  {purchaseId}
-                </TableLink>
-              ) : (
-                "—"
-              );
-            },
-          }),
-        );
-        add(createFinancialTransactionPostedDateColumn(helper));
-        // Hidden by default: these exist so `purchasePresence`, `merchant` and
-        // `source` are column-backed specs rather than URL-only ones. A urlOnly
-        // spec can never round-trip through a header control — see
-        // `manifestFilterConfig`.
+        // Hidden by default: exists so `purchasePresence` is a column-backed
+        // spec rather than a urlOnly one. A urlOnly spec can never round-trip
+        // through a header control — see `manifestFilterConfig`. Stays
+        // outside the declaration: it's derived from `purchaseId`'s presence,
+        // not a scalar of its own.
         add(
           helper.accessor((r) => r.purchaseId, {
             id: "purchasePresence",
@@ -146,38 +118,87 @@ export function FinancialTransactionList() {
               ),
           }),
         );
-        add(
-          createTextColumn(helper, "merchant", {
-            header: "Merchant",
-            className: "w-40",
-          }),
-        );
-        add(
-          helper.accessor("vendorInference", {
-            id: "possibleVendor",
-            header: "Possible vendor",
-            enableSorting: false,
-            meta: { className: "w-48", mobile: { slot: "hidden" } },
-            cell: (info) =>
-              info.getValue() ? (
-                <PossibleVendor inference={info.getValue()} compact />
-              ) : (
-                <NoneValue />
+        // Every column below is declared `list: true` on the financialTransaction
+        // entity but rendered specially here (linked ids, a select-with-filter,
+        // the vendor-inference badge, the joined source list), so each is an
+        // override matched by column id — `docs/entities.md`'s "declaration
+        // wins" column-building rule. `vendorInference` / `sourceRefs` keep
+        // their existing `possibleVendor` / `source` column ids via
+        // `display.columnId` (persisted layouts, filter bindings, and sort ids
+        // can't silently rename). `merchant` needed no override at all — its
+        // plain-text rendering is exactly what the generic path produces, so
+        // it flows straight from the declaration.
+        createEntityDisplayColumns(
+          "financialTransaction",
+          helper,
+          createCubbyColumnCollection<FinancialTransactionOut>((add) => {
+            add(createFinancialTransactionAccountColumn(helper));
+            // Through the factory, not a bare accessor: these were `createTextColumn`,
+            // which wires `meta.cellData` unconditionally, so hand-rolling the cell
+            // dropped them out of the range copy/paste engine (which reads cellData,
+            // never the rendered cell). `filterConfig: null` keeps `meta.filterConfig`
+            // undefined exactly as `createTextColumn` left it, so the manifest's
+            // multiselect control stays the one that attaches.
+            add(
+              createFilterableSelectColumn(helper, "kind", {
+                header: "Kind",
+                className: "w-32",
+                placeholder: "Filter by kind...",
+                selectOptions: financialTransactionKindOptions,
+                filterConfig: null,
+              }),
+            );
+            add(createFinancialTransactionStatusColumn(helper));
+            add(createFinancialTransactionAmountColumn(helper));
+            add(
+              helper.accessor("purchaseId", {
+                header: "Purchase",
+                meta: { className: "w-32" },
+                cell: (i) => {
+                  const purchaseId = i.getValue();
+                  return purchaseId ? (
+                    <TableLink
+                      to={entities.purchase.routes.detail}
+                      params={entityDetailParams(purchaseId)}
+                      variant="mono"
+                    >
+                      {purchaseId}
+                    </TableLink>
+                  ) : (
+                    "—"
+                  );
+                },
+              }),
+            );
+            add(createFinancialTransactionPostedDateColumn(helper));
+            add(
+              helper.accessor("vendorInference", {
+                id: "possibleVendor",
+                header: "Possible vendor",
+                enableSorting: false,
+                meta: { className: "w-48", mobile: { slot: "hidden" } },
+                cell: (info) =>
+                  info.getValue() ? (
+                    <PossibleVendor inference={info.getValue()} compact />
+                  ) : (
+                    <NoneValue />
+                  ),
+              }),
+            );
+            add(
+              helper.accessor(
+                (r) => r.sourceRefs.map((ref) => ref.source).join(", "),
+                {
+                  id: "source",
+                  header: "Source",
+                  enableSorting: false,
+                  meta: { className: "w-32" },
+                  cell: (i) => i.getValue() || <NoneValue />,
+                },
               ),
+            );
           }),
-        );
-        add(
-          helper.accessor(
-            (r) => r.sourceRefs.map((ref) => ref.source).join(", "),
-            {
-              id: "source",
-              header: "Source",
-              enableSorting: false,
-              meta: { className: "w-32" },
-              cell: (i) => i.getValue() || <NoneValue />,
-            },
-          ),
-        );
+        ).visit(add);
       }),
     [helper],
   );

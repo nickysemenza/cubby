@@ -34,7 +34,7 @@ import {
   buildRecipeComboboxItem,
   buildSearchHitComboboxItem,
   buildTaskComboboxItem,
-  buildVendorShortcodeComboboxItem,
+  buildVendorComboboxItem,
   type ProductPickerIntent,
 } from "./combobox-builders";
 import type { ComboboxItem } from "./combobox-types";
@@ -359,7 +359,7 @@ function EntitySearchCreateDialog<TId extends string, TDetail>({
 }
 
 /** Row shape shared by every vendor query (list, typed search, and exact-code detail all resolve to it). */
-type VendorRow = Parameters<typeof buildVendorShortcodeComboboxItem>[0];
+type VendorRow = Parameters<typeof buildVendorComboboxItem>[0];
 
 function useVendorListSource(_searchQuery: string, enabled: boolean) {
   const { data, isLoading } = useQuery({

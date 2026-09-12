@@ -74,11 +74,8 @@ final class IdentifyModel {
             var ids: [ProductCode] = []
             var page = 1
             while ids.count < maxProducts {
-                let result = try await client.raw.list(
-                    basePath: "products", page: page, pageSize: 100, sort: "-createdAt",
-                    filters: ["imagePresenceFilter": "has"]
-                )
-                ids += result.items.compactMap { $0["id"]?.stringValue.map { ProductCode($0) } }
+                let result = try await client.productIDsWithImages(page: page, pageSize: 100)
+                ids += result.items
                 if result.items.count < 100 { break }
                 page += 1
             }

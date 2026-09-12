@@ -1,4 +1,3 @@
-import { Validator } from "@cfworker/json-schema";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -17,26 +16,61 @@ const rpc = routes.filter((route) => metadataOf(route).resource === undefined);
 
 describe("HTTP contract", () => {
   it("exposes every ordinary operation exactly once, queries as GET and mutations as POST", () => {
-    const expected = Object.entries(START_OPERATIONS)
-      .filter(([, { kind }]) => kind !== "subscription")
-      .map(([id]) => id)
+    const expected = Object.values(contracts)
+      .flatMap((contract) =>
+        Object.entries(contract.ops).flatMap(([member, operation]) =>
+          operation.kind === "subscription" || operation.http === false
+            ? []
+            : [`${contract.domain}.${member}`],
+        ),
+      )
       .sort();
     expect(rpc.map((route) => metadataOf(route).operation).sort()).toEqual(
       expected,
     );
+    // Opted out of HTTP, still a Start operation.
+    for (const excluded of ["entity.list", "entity.detail", "entity.mutate"]) {
+      expect(expected).not.toContain(excluded);
+      expect(START_OPERATIONS).toHaveProperty(excluded);
+    }
+    const transports = { get: 0, post: 0, mutation: 0 };
+    const mismatches: string[] = [];
     for (const route of rpc) {
+      const metadata = metadataOf(route);
       const kind = z
         .enum(["query", "mutation", "subscription"])
         .parse(
           Object.entries(START_OPERATIONS).find(
-            ([id]) => id === metadataOf(route).operation,
+            ([id]) => id === metadata.operation,
           )?.[1].kind,
         );
-      expect(route.method).toBe(kind === "query" ? "GET" : "POST");
+      const transport = route.method === "GET" ? "get" : "post";
+      // A mutation is always POST with no transport tag; a query's method
+      // agrees with its transport tag.
+      const consistent =
+        kind === "mutation"
+          ? route.method === "POST" && metadata.transport === undefined
+          : metadata.transport === transport;
+      if (!consistent) mismatches.push(metadata.operation);
+      transports[kind === "mutation" ? "mutation" : transport] += 1;
       expect(route.path).toBe(
-        `/api/v1/${metadataOf(route).operation.replace(".", "/")}`,
+        `/api/v1/${metadata.operation.replace(".", "/")}`,
       );
     }
+    expect(mismatches).toEqual([]);
+    // Flat-input queries are GET; the structured ones travel as POST bodies.
+    expect(transports).toEqual({ get: 115, post: 31, mutation: 86 });
+    expect(Object.keys(document.paths)).toHaveLength(265);
+    const analytics = rpc.find(
+      (route) => metadataOf(route).operation === "expense.analytics",
+    );
+    expect(analytics).toMatchObject({ method: "POST" });
+    expect(analytics && "body" in analytics).toBe(true);
+    const flat = rpc.find(
+      (route) => metadataOf(route).operation === "auditLog.list",
+    );
+    expect(flat).toMatchObject({ method: "GET" });
+    expect(flat?.query instanceof z.ZodType).toBe(true);
     expect(Object.keys(document.paths).sort()).toEqual(
       [
         ...new Set(routes.map((route) => route.path.replace(":id", "{id}"))),
@@ -68,22 +102,34 @@ describe("HTTP contract", () => {
       ]),
     );
     expect(carriers.get("dashboard.counts")).toBe("none");
-    expect(carriers.get("entity.detail")).toBe("object");
-    // A union of per-entity unions is still an object carrier (regression:
-    // the e2e mutate body was rejected as `{ input }`-wrapped).
-    expect(carriers.get("entity.mutate")).toBe("object");
-    const mutate = rpc.find(
-      (route) => metadataOf(route).operation === "entity.mutate",
+    expect(carriers.get("auditLog.list")).toBe("object");
+    // A `z.null()` input takes no parameters and dispatches null.
+    expect(carriers.get("collection.list")).toBe("null");
+    const nullInput = rpc.find(
+      (route) => metadataOf(route).operation === "collection.list",
     );
+    const nullQuery =
+      nullInput?.query instanceof z.ZodType ? nullInput.query : undefined;
+    expect(nullQuery?.safeParse({}).success).toBe(true);
+    expect(nullQuery?.safeParse({ input: null }).success).toBe(false);
+    // A resource body is the entity's own create input, never a command.
+    const create = routes.find(
+      (route) =>
+        metadataOf(route).entity === "vendor" &&
+        metadataOf(route).resource === "create",
+    );
+    const createBody =
+      create && "body" in create && create.body instanceof z.ZodType
+        ? create.body
+        : undefined;
+    expect(createBody?.safeParse({ name: "Fixture" }).success).toBe(true);
     expect(
-      mutate && "body" in mutate && mutate.body instanceof z.ZodType
-        ? mutate.body.safeParse({
-            action: "create",
-            entity: "vendor",
-            data: { name: "Fixture" },
-          }).success
-        : "no body",
-    ).toBe(true);
+      createBody?.safeParse({
+        action: "create",
+        entity: "vendor",
+        data: { name: "Fixture" },
+      }).success,
+    ).toBe(false);
     const wrapped = rpcMutation("demo", "wrapped", {
       kind: "mutation",
       input: z.array(z.string()),
@@ -108,22 +154,22 @@ describe("HTTP contract", () => {
     const page = list.parameters.find((parameter) => parameter.name === "page");
     expect(page).toMatchObject({ in: "query" });
     expect(page).not.toHaveProperty("required", true);
-    const pageSchema =
-      page && "schema" in page
-        ? page.schema
-        : page?.content?.["application/json"]?.schema;
-    if (!pageSchema) throw new Error("page parameter has no schema");
-    const validator = new Validator(pageSchema, "4");
-    expect(validator.validate(1).valid).toBe(true);
-    expect(validator.validate(0).valid).toBe(false);
+    // Parameters carry a plain `schema`, never JSON `content`, and document
+    // the logical type the query projection coerces to.
+    expect(page).toMatchObject({
+      style: "form",
+      explode: true,
+      schema: { type: "integer", minimum: 1 },
+    });
+    expect(page).not.toHaveProperty("content");
     expect(document.paths["/api/v1/recipes/{id}"].get.parameters).toEqual([
       expect.objectContaining({ in: "path", name: "id", required: true }),
     ]);
   });
 
-  it("emits ISO timestamps and a shared error envelope", () => {
+  it("emits ISO timestamps and a shared error body", () => {
     expect(JSON.stringify(document)).toContain('"format":"date-time"');
-    expect(document.components.schemas.ErrorEnvelope).toBeDefined();
+    expect(document.components.schemas.ApiError).toBeDefined();
     const references = [
       ...JSON.stringify(document).matchAll(
         /"\$ref":"#\/components\/schemas\/([^"]+)"/gu,

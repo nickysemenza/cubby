@@ -23,7 +23,6 @@ import {
 import { imageOut } from "./image";
 import { imageUrlSummary } from "./image-summary";
 import {
-  createItemsResponseSchema,
   createPaginatedResponseSchema,
   entityFilterList,
   oneOrMany,
@@ -247,7 +246,6 @@ export const recipeFilterFields = {
   ...auditDateFilterFields,
   ...recipeRelatedFilterFields,
   ...generatedRecipeFilterFields,
-  tagFilters: z.array(z.string()).optional(),
   cookbookId: entityFilterList(cookbookShortcode).optional(),
   cookbookPresenceFilter: presenceFilter,
   /**
@@ -409,8 +407,3 @@ export const recipesUsingIngredientOut = z.object({
 });
 
 export const recipeIdOut = z.object({ id: recipeShortcode });
-
-export const recipeTagsListOut = createItemsResponseSchema(z.string());
-
-export const cookbookSummariesMcpOut =
-  createItemsResponseSchema(cookbookSummary);

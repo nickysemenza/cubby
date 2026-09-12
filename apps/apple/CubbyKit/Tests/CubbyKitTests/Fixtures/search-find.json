@@ -1,41 +1,38 @@
-{
-  "ok": true,
-  "data": [
-    {
-      "id": "PRD-2345",
-      "entityType": "product",
-      "title": "Sample Product",
-      "subtitle": "Sample Manufacturer",
-      "typeHint": null,
-      "imageUrl": "https://images.example/cover.jpg",
-      "matchKind": "prefix",
-      "matchField": "title",
-      "matchReason": "Title starts with \"sample\"",
-      "matchTerms": ["sample"]
-    },
-    {
-      "id": "LOC-5678",
-      "entityType": "location",
-      "title": "Bin 1",
-      "subtitle": "Home › Garage › Shelf A",
-      "typeHint": "box",
-      "imageUrl": null,
-      "matchKind": "fuzzy",
-      "matchField": "alias",
-      "matchReason": "Alias resembles \"sample\"",
-      "matchTerms": ["sample"]
-    },
-    {
-      "id": "XYZ-0000",
-      "entityType": "someday",
-      "title": "A kind the catalog does not know",
-      "subtitle": null,
-      "typeHint": null,
-      "imageUrl": null,
-      "matchKind": "semantic",
-      "matchField": "embedding",
-      "matchReason": "",
-      "matchTerms": []
-    }
-  ]
-}
+[
+  {
+    "id": "PRD-2345",
+    "entityType": "product",
+    "title": "Sample Product",
+    "subtitle": "Sample Manufacturer",
+    "typeHint": null,
+    "imageUrl": "https://images.example/cover.jpg",
+    "matchKind": "prefix",
+    "matchField": "title",
+    "matchReason": "Title starts with \"sample\"",
+    "matchTerms": ["sample"]
+  },
+  {
+    "id": "LOC-5678",
+    "entityType": "location",
+    "title": "Bin 1",
+    "subtitle": "Home › Garage › Shelf A",
+    "typeHint": "box",
+    "imageUrl": null,
+    "matchKind": "fuzzy",
+    "matchField": "alias",
+    "matchReason": "Alias resembles \"sample\"",
+    "matchTerms": ["sample"]
+  },
+  {
+    "id": "XYZ-0000",
+    "entityType": "someday",
+    "title": "A kind the catalog does not know",
+    "subtitle": null,
+    "typeHint": null,
+    "imageUrl": null,
+    "matchKind": "semantic",
+    "matchField": "embedding",
+    "matchReason": "",
+    "matchTerms": []
+  }
+]

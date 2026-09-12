@@ -1,16 +1,10 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import {
   and,
   gt,
-  gte,
   inArray,
   isNotNull,
   isNull,
@@ -28,8 +22,6 @@ import type { Database } from "~/server/db";
 import { expense, purchase } from "~/server/db/schema";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   countWhere,
   eqAny,
   executeListQueryWithCount,
@@ -38,10 +30,9 @@ import {
   type ListReadIntent,
   notDeleted,
   presenceCondition,
-  rangeConditions,
   relations,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { disposalPurchaseIds } from "~/server/repo/product/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
@@ -232,6 +223,8 @@ const loadExpenseFilterReferences = async (
   return { vendorIds, purchaseIds, productIds };
 };
 
+const expenseScaffold = listScaffold("expense", expense);
+
 // Shared by list and analytics so identical filter sets produce identical totals.
 export const buildExpenseWhereClause = async (
   db: Database,
@@ -268,105 +261,91 @@ export const buildExpenseWhereClause = async (
   const { vendorIds, purchaseIds, productIds } =
     await loadExpenseFilterReferences(db, filters);
 
-  // `notesSearch`/`urlSearch` DO belong in searchFilters: they are separate
-  // filters and ANDing them with each other and with the name search is the
-  // intended semantics. What must never happen is a second entry reusing
-  // `filters.search` itself — that would mean `name ILIKE q AND notes ILIKE q`,
-  // and most rows have no notes, which would silently zero out expense search.
-  return buildSearchConditions(
-    expense,
-    [
-      { column: expense.notes, term: filters.notesSearch },
-      { column: expense.url, term: filters.urlSearch },
-    ],
-    [
-      ...auditDateWhereConditions(expense, filters),
-      ...relatedWhereConditions("expense", filters, expense.id),
-      ...(options?.extraConditions ?? []),
-      nameSearch,
-      // `lineKind`, `lineBasis`, `costType`, `trade` (multiselect) and
-      // `future` (boolean) are declared stored filters.
-      ...declaredFilterPredicates("expense", expense, filters),
-      projectCondition,
-      scopedProjectIds
-        ? scopedProjectIds.length > 0
-          ? inArray(expense.projectId, scopedProjectIds)
-          : sql`false`
-        : undefined,
-      // `productIds.length === 0` is ambiguous by itself — it means either
-      // "no productId filter was supplied" (no constraint) or "a productId WAS
-      // supplied but didn't resolve to a live product" (must match nothing).
-      // `eqAny([])` can't tell those apart (it always drops the condition, by
-      // design — see its doc in database-helpers/query.ts), so the requested-
-      // but-unresolved case is handled explicitly here, same as
-      // the project/reference conditions above.
-      requestedReferenceCondition(
-        expense.productId,
-        filters.productId !== undefined,
-        productIds,
-      ),
-      // "linked" means productId IS NOT NULL — this deliberately includes
-      // expenses whose product was later soft-deleted (those read back with
-      // productId still set and productName null; see dbExpenseToAPI). The
-      // same column-null-only rule applies to the project presence above: a
-      // expense whose project was soft-deleted is NOT "(none)".
-      presenceCondition(expense.productId, filters.productPresenceFilter),
-      // Vendor is a joined entity now, so this matches vendor IDS through the
-      // charge instead of an exact string on the row. `(none)` still ORs in, same
-      // rule as project above — and because `purchase.vendorId` is NOT NULL, "no
-      // vendor" and "no Purchase" are one predicate: `purchaseId IS NULL`.
-      //
-      // Same requested-but-unresolved handling as `productId` above: a
-      // `filters.vendorId` that resolved to nothing contributes `sql\`false\``
-      // to the OR (not `undefined`, which would drop the vendor half entirely
-      // and let the presence filter alone decide — or, with no presence filter
-      // either, let the whole condition vanish and match every row).
-      vendorFilterCondition(db, filters, vendorIds),
-      filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
-      filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
-      relativeDateCondition(filters.dateRelative),
-      // `!== undefined`, NOT the truthiness guard the two date lines above use.
-      // `costMin: 0` is a meaningful bound ("actuals and credits, no free
-      // items") and `costMax: 0` is the credits-only worklist — a truthiness
-      // check would silently drop both. Follows `future`'s guard style instead.
-      //
-      // `cost` IS nullable — `cost IS NULL` is the Unclassified predicate — and
-      // those rows fall out of either bound by plain SQL comparison semantics;
-      // that's intended. `costPresenceFilter: "none"` is the filter for
-      // "no cost recorded".
-      ...rangeConditions(expense.cost, filters, "cost"),
-      presenceCondition(expense.cost, filters.costPresenceFilter),
-      filters.costSign === "negative" ? lt(expense.cost, 0) : undefined,
-      filters.costSign === "positive" ? gt(expense.cost, 0) : undefined,
-      disposalPurchaseCondition(db, filters.disposalPurchasePresenceFilter),
-      // Quantity is nullable evidence, never an inferred one-unit default.
-      // Bounds naturally exclude unknown rows; the presence filter is the
-      // explicit worklist for those receipts.
-      ...rangeConditions(expense.productQuantity, filters, "productQuantity"),
-      presenceCondition(
-        expense.productQuantity,
-        filters.productQuantityPresenceFilter,
-      ),
-      // `orderId` presence can't be a column-null check any more: it's a column
-      // on the CHARGE, and a row with a charge that has no order id is a
-      // different state from a row with no charge at all. Both read as "no order
-      // id" here, which is what the filter has always meant.
-      orderIdPresence(db, filters.orderIdPresenceFilter),
-      // Exact, not a substring — an order id is an identifier, not a search term.
-      // No longer needs pairing with a vendor to be a safe group key: it resolves
-      // through `purchaseId`, and `(vendorId, orderId)` is partial-unique, so a
-      // short id like Tool Nirvana's "#11325" can't drag in another retailer's.
-      chargeCondition(db, eqAny(purchase.orderId, filters.orderId)),
-      // Unlike `vendorId`/`orderId` above, `purchaseId` IS the column on
-      // `expense` — no `chargeCondition` sub-select hop needed. Same
-      // requested-but-unresolved handling as `productId`/`vendorId` above.
-      requestedReferenceCondition(
-        expense.purchaseId,
-        filters.purchaseId !== undefined,
-        purchaseIds,
-      ),
-    ],
-  );
+  // `notesSearch`/`urlSearch` are declared stored filters of their own, ANDed
+  // with the name search. What must never happen is a predicate reusing
+  // `filters.search` over notes — most rows have no notes, which would
+  // silently zero out expense search.
+  //
+  // `lineKind`, `lineBasis`, `costType`, `trade` (multiselect) and `future`
+  // (boolean) are also declared stored filters — applied by
+  // `expenseScaffold.where` before the conditions below.
+  return expenseScaffold.where(filters, [
+    ...auditDateWhereConditions(expense, filters),
+    ...relatedWhereConditions("expense", filters, expense.id),
+    ...(options?.extraConditions ?? []),
+    nameSearch,
+    projectCondition,
+    scopedProjectIds
+      ? scopedProjectIds.length > 0
+        ? inArray(expense.projectId, scopedProjectIds)
+        : sql`false`
+      : undefined,
+    // `productIds.length === 0` is ambiguous by itself — it means either
+    // "no productId filter was supplied" (no constraint) or "a productId WAS
+    // supplied but didn't resolve to a live product" (must match nothing).
+    // `eqAny([])` can't tell those apart (it always drops the condition, by
+    // design — see its doc in database-helpers/query.ts), so the requested-
+    // but-unresolved case is handled explicitly here, same as
+    // the project/reference conditions above.
+    requestedReferenceCondition(
+      expense.productId,
+      filters.productId !== undefined,
+      productIds,
+    ),
+    // "linked" means productId IS NOT NULL — this deliberately includes
+    // expenses whose product was later soft-deleted (those read back with
+    // productId still set and productName null; see dbExpenseToAPI). The
+    // same column-null-only rule applies to the project presence above: a
+    // expense whose project was soft-deleted is NOT "(none)".
+    presenceCondition(expense.productId, filters.productPresenceFilter),
+    // Vendor is a joined entity now, so this matches vendor IDS through the
+    // charge instead of an exact string on the row. `(none)` still ORs in, same
+    // rule as project above — and because `purchase.vendorId` is NOT NULL, "no
+    // vendor" and "no Purchase" are one predicate: `purchaseId IS NULL`.
+    //
+    // Same requested-but-unresolved handling as `productId` above: a
+    // `filters.vendorId` that resolved to nothing contributes `sql\`false\``
+    // to the OR (not `undefined`, which would drop the vendor half entirely
+    // and let the presence filter alone decide — or, with no presence filter
+    // either, let the whole condition vanish and match every row).
+    vendorFilterCondition(db, filters, vendorIds),
+    relativeDateCondition(filters.dateRelative),
+    // `date`, `cost` and `productQuantity` bounds are declared stored ranges
+    // (`costMin: 0` / `costMax: 0` are meaningful, and the declared predicate
+    // keys on `!== undefined`). `cost` IS nullable — `cost IS NULL` is the
+    // Unclassified predicate — and those rows fall out of either bound by
+    // plain SQL comparison semantics; `costPresenceFilter: "none"` is the
+    // filter for "no cost recorded".
+    presenceCondition(expense.cost, filters.costPresenceFilter),
+    filters.costSign === "negative" ? lt(expense.cost, 0) : undefined,
+    filters.costSign === "positive" ? gt(expense.cost, 0) : undefined,
+    disposalPurchaseCondition(db, filters.disposalPurchasePresenceFilter),
+    // Quantity is nullable evidence, never an inferred one-unit default.
+    // Bounds naturally exclude unknown rows; the presence filter is the
+    // explicit worklist for those receipts.
+    presenceCondition(
+      expense.productQuantity,
+      filters.productQuantityPresenceFilter,
+    ),
+    // `orderId` presence can't be a column-null check any more: it's a column
+    // on the CHARGE, and a row with a charge that has no order id is a
+    // different state from a row with no charge at all. Both read as "no order
+    // id" here, which is what the filter has always meant.
+    orderIdPresence(db, filters.orderIdPresenceFilter),
+    // Exact, not a substring — an order id is an identifier, not a search term.
+    // No longer needs pairing with a vendor to be a safe group key: it resolves
+    // through `purchaseId`, and `(vendorId, orderId)` is partial-unique, so a
+    // short id like Tool Nirvana's "#11325" can't drag in another retailer's.
+    chargeCondition(db, eqAny(purchase.orderId, filters.orderId)),
+    // Unlike `vendorId`/`orderId` above, `purchaseId` IS the column on
+    // `expense` — no `chargeCondition` sub-select hop needed. Same
+    // requested-but-unresolved handling as `productId`/`vendorId` above.
+    requestedReferenceCondition(
+      expense.purchaseId,
+      filters.purchaseId !== undefined,
+      purchaseIds,
+    ),
+  ]);
 };
 
 // Joined-name sorts stay correlated so the relational count query is untouched.
@@ -425,15 +404,10 @@ export const expenseList = async (
 ): Promise<{ data: ExpenseOut[]; count: number }> => {
   const whereClause = await buildExpenseWhereClause(db, filters);
 
-  const orderByArray = buildOrderBy(
-    expense,
-    sorts,
-    [...generatedEntitySort.expense.fields],
-    {
-      resolve: resolveExpenseSort,
-    },
-  );
-  const { take, skip } = buildTakeSkip(pagination);
+  const orderByArray = expenseScaffold.orderBy(sorts, {
+    resolve: resolveExpenseSort,
+  });
+  const { take, skip } = expenseScaffold.page(pagination);
 
   const { data: rows, count } = await executeListQueryWithCount({
     kind: readIntent,

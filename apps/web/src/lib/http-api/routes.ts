@@ -1,4 +1,9 @@
-import { isAppRoute, type AppRouter, type AppRoute } from "@ts-rest/core";
+import {
+  type AppRoute,
+  type AppRouter,
+  ContractNoBody,
+  isAppRoute,
+} from "@ts-rest/core";
 import { z } from "zod";
 
 import { httpMetadataSchema } from "./router";
@@ -43,5 +48,21 @@ export function checkHttpRoutes(router: AppRouter): void {
       }
     }
     routeMetadata(route);
+    checkCarriers(route, key);
   }
+}
+
+/** A route carries its input as query parameters or as a body, never both. */
+function checkCarriers(route: AppRoute, key: string): void {
+  const hasQuery = route.query instanceof z.ZodType;
+  const hasBody =
+    "body" in route &&
+    route.body !== ContractNoBody &&
+    route.body instanceof z.ZodType;
+  if (hasQuery && hasBody)
+    throw new Error(`HTTP route carries both query and body: ${key}`);
+  if (route.method === "GET" && hasBody)
+    throw new Error(`HTTP GET route with a body: ${key}`);
+  if (route.method !== "GET" && hasQuery)
+    throw new Error(`HTTP ${route.method} route with query parameters: ${key}`);
 }

@@ -6,7 +6,7 @@ import Testing
 @Suite("SearchHit")
 struct SearchHitTests {
     @Test func decodesHitsAndResolvesKnownKinds() throws {
-        let hits = try Fixtures.decode(SuccessEnvelope<[SearchHit]>.self, from: "search-find.json").data
+        let hits = try Fixtures.decode([SearchHit].self, from: "search-find.json")
         #expect(hits.count == 3)
         #expect(hits[0].key == .product)
         #expect(hits[0].imageURL?.host() == "images.example")

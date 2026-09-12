@@ -15,6 +15,7 @@ import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
@@ -94,6 +95,16 @@ function StuckTotalsCell({
     </Row>
   );
 }
+
+/**
+ * `notes` is declared `list: true` (so the "Columns" menu can surface it),
+ * but was never visible in this table before this migration — keep it that
+ * way. Module-level: this object sits in `useEntityList`'s merged-visibility
+ * memo, so an inline literal would rebuild it every render.
+ */
+const RECIPE_INITIAL_COLUMN_VISIBILITY = {
+  notes: false,
+};
 
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */
@@ -223,203 +234,222 @@ export function RecipeList({
         />
       );
     };
+    // All seven columns below are declared `list: true` on the recipe entity
+    // but rendered specially here (inline-editable tags/yield, computed
+    // cost/calories/time, a source link, a meal count), so each is an
+    // override matched by column id rather than a generic scalar —
+    // `docs/entities.md`'s "declaration wins" column-building rule. `yield`
+    // keeps its existing column id via `display.columnId` on `servings`
+    // (persisted layouts, filter bindings, and sort ids can't silently
+    // rename); the rest already share their column id with the field key.
     return createCubbyColumnCollection<RecipeListItem>((add) => {
-      // Tags column
-      add(
-        columnHelper.accessor("tags", {
-          id: "tags",
-          header: "Tags",
-          enableSorting: true,
-          meta: attachCubbyColumnMeta({
-            className: "w-48",
-            mobile: { slot: "subtitle", priority: 10 },
-            cellData: tagsCellDataDef,
-          }),
-          cell: (info) => {
-            const recipe = info.row.original;
-            return (
-              <EditableTagsCell
-                value={recipe.tags ?? null}
-                renderValue={renderTags}
-                clipboard={specFromCellData(tagsCellDataDef, recipe)}
-                onSave={(nextTags) => saveTags(recipe, nextTags)}
-              />
-            );
-          },
-        }),
-      );
-      // Yield column. Accessor (not display) so it sorts server-side; the
-      // accessorFn exposes `servings` (recipeList orders "yield" by it), while
-      // the cell still shows yield-or-servings.
-      add(
-        columnHelper.accessor((row) => row.servings ?? undefined, {
-          id: "yield",
-          header: "Yield",
-          meta: attachCubbyColumnMeta({
-            numeric: true,
-            className: "w-24",
-            // Mobile: yield/servings is the most useful at-a-glance datum, and
-            // recipe rows have no image — surface it as the row subtitle.
-            mobile: { slot: "subtitle", priority: 5, interactive: true },
-            cellData: servingsCellDataDef,
-          }),
-          cell: (info) => {
-            const recipe = info.row.original;
-            // A structured yield ("2 loaves") is authoritative and owned by the
-            // detail page's yield editor — read-only here. Only recipes with no
-            // structured yield fall back to the plain servings count, which is
-            // safe to edit inline.
-            if (recipe.yield) return formatYield(recipe.yield);
-            return (
-              <EditableCell
-                value={recipe.servings ?? null}
-                config={{ type: "number" }}
-                clipboard={specFromCellData(servingsCellDataDef, recipe)}
-                renderValue={(servings) =>
-                  servings == null ? <NoneValue /> : `${servings} servings`
-                }
-                onSave={(newValue) => saveServings(recipe, newValue)}
-              />
-            );
-          },
-        }),
-      );
-      for (const metric of ["cost", "kcal"] as const) {
-        const getEstimate = (row: RecipeListItem) =>
-          metric === "cost" ? row.totals?.cost : row.totals?.nutrition.kcal;
-        const format =
-          metric === "cost"
-            ? formatCurrency
-            : (value: number) => `${Math.round(value)} kcal`;
-        add(
-          columnHelper.accessor(
-            (row) => {
-              const estimate = getEstimate(row);
-              return estimate && hasKnownEstimate(estimate)
-                ? estimate.lower
-                : undefined;
-            },
-            {
-              id: metric === "cost" ? "costTotal" : "caloriesTotal",
-              header: metric === "cost" ? "Cost" : "Calories",
-              meta: {
-                numeric: true,
-                className: "w-32",
-                mobile: {
-                  slot: "trailing",
-                  priority: metric === "cost" ? 5 : 10,
-                },
-              },
-              sortUndefined: "last",
+      createEntityDisplayColumns(
+        "recipe",
+        columnHelper,
+        createCubbyColumnCollection<RecipeListItem>((add) => {
+          // Tags column
+          add(
+            columnHelper.accessor("tags", {
+              id: "tags",
+              header: "Tags",
+              enableSorting: true,
+              meta: attachCubbyColumnMeta({
+                className: "w-48",
+                mobile: { slot: "subtitle", priority: 10 },
+                cellData: tagsCellDataDef,
+              }),
               cell: (info) => {
                 const recipe = info.row.original;
-                const estimate = getEstimate(recipe);
-                if (!estimate || estimate.status === "pending")
-                  return totalsLookStuck(recipe) ? (
-                    <StuckTotalsCell
-                      recipe={recipe}
-                      withAction={metric === "cost"}
-                    />
-                  ) : (
-                    <span className="text-muted-foreground">Pending</span>
-                  );
-                const perItem = getServingBasis(recipe);
                 return (
-                  <Stack gap="xs">
-                    <span
-                      title={
-                        hasKnownEstimate(estimate)
-                          ? `${estimate.coverage.covered}/${estimate.coverage.total} ingredient rows covered`
-                          : undefined
-                      }
-                    >
-                      {formatEstimate(estimate, format)}
-                    </span>
-                    {perItem && hasKnownEstimate(estimate) && (
-                      <div className="text-2xs text-muted-foreground">
-                        {formatEstimate(
-                          scaleEstimate(estimate, 1 / perItem.divisor),
-                          format,
-                        )}{" "}
-                        {perUnitSuffix(perItem.noun, { short: true })}
-                      </div>
-                    )}
-                  </Stack>
+                  <EditableTagsCell
+                    value={recipe.tags ?? null}
+                    renderValue={renderTags}
+                    clipboard={specFromCellData(tagsCellDataDef, recipe)}
+                    onSave={(nextTags) => saveTags(recipe, nextTags)}
+                  />
                 );
               },
-            },
-          ),
-        );
-      }
-      // Total time — the weeknight axis. Accessor on `totalMinutes` so sorting
-      // and the range filter are the server's `Recipe.totalMinutes` column, but
-      // the cell prints the source's own prose whenever there is one: a present
-      // string does NOT imply a present count, and vice versa, so a recipe can
-      // show "about 1½ hours" here while sorting on nothing at all.
-      add(
-        columnHelper.accessor(
-          (row) => row.meta?.times?.totalMinutes ?? undefined,
-          {
-            id: "totalMinutes",
-            header: "Time",
-            meta: {
-              numeric: true,
-              className: "w-24",
-              mobile: { slot: "meta", priority: 25 },
-            },
-            sortUndefined: "last",
-            cell: (info) => {
-              const times = info.row.original.meta?.times;
-              const label = formatRecipeTime(times?.total, times?.totalMinutes);
-              return label ?? <NoneValue />;
-            },
-          },
-        ),
-      );
-      // Source column: cookbook link for book recipes, external URL for web
-      // recipes, nothing otherwise — via the shared RecipeSourceLink.
-      add(
-        columnHelper.accessor("source", {
-          header: "Source",
-          meta: {
-            className: "w-44",
-            mobile: { slot: "meta", priority: 30 },
-          },
-          cell: (info) => {
-            const source = info.getValue();
-            if (!sourceLabel(source)) return <NoneValue />;
-            return (
-              <RecipeSourceLink
-                source={source}
-                text="host"
-                onClick={(e) => e.stopPropagation()}
-              />
+            }),
+          );
+          // Yield column. Accessor (not display) so it sorts server-side; the
+          // accessorFn exposes `servings` (recipeList orders "yield" by it),
+          // while the cell still shows yield-or-servings.
+          add(
+            columnHelper.accessor((row) => row.servings ?? undefined, {
+              id: "yield",
+              header: "Yield",
+              meta: attachCubbyColumnMeta({
+                numeric: true,
+                className: "w-24",
+                // Mobile: yield/servings is the most useful at-a-glance
+                // datum, and recipe rows have no image — surface it as the
+                // row subtitle.
+                mobile: { slot: "subtitle", priority: 5, interactive: true },
+                cellData: servingsCellDataDef,
+              }),
+              cell: (info) => {
+                const recipe = info.row.original;
+                // A structured yield ("2 loaves") is authoritative and owned
+                // by the detail page's yield editor — read-only here. Only
+                // recipes with no structured yield fall back to the plain
+                // servings count, which is safe to edit inline.
+                if (recipe.yield) return formatYield(recipe.yield);
+                return (
+                  <EditableCell
+                    value={recipe.servings ?? null}
+                    config={{ type: "number" }}
+                    clipboard={specFromCellData(servingsCellDataDef, recipe)}
+                    renderValue={(servings) =>
+                      servings == null ? <NoneValue /> : `${servings} servings`
+                    }
+                    onSave={(newValue) => saveServings(recipe, newValue)}
+                  />
+                );
+              },
+            }),
+          );
+          for (const metric of ["cost", "kcal"] as const) {
+            const getEstimate = (row: RecipeListItem) =>
+              metric === "cost" ? row.totals?.cost : row.totals?.nutrition.kcal;
+            const format =
+              metric === "cost"
+                ? formatCurrency
+                : (value: number) => `${Math.round(value)} kcal`;
+            add(
+              columnHelper.accessor(
+                (row) => {
+                  const estimate = getEstimate(row);
+                  return estimate && hasKnownEstimate(estimate)
+                    ? estimate.lower
+                    : undefined;
+                },
+                {
+                  id: metric === "cost" ? "costTotal" : "caloriesTotal",
+                  header: metric === "cost" ? "Cost" : "Calories",
+                  meta: {
+                    numeric: true,
+                    className: "w-32",
+                    mobile: {
+                      slot: "trailing",
+                      priority: metric === "cost" ? 5 : 10,
+                    },
+                  },
+                  sortUndefined: "last",
+                  cell: (info) => {
+                    const recipe = info.row.original;
+                    const estimate = getEstimate(recipe);
+                    if (!estimate || estimate.status === "pending")
+                      return totalsLookStuck(recipe) ? (
+                        <StuckTotalsCell
+                          recipe={recipe}
+                          withAction={metric === "cost"}
+                        />
+                      ) : (
+                        <span className="text-muted-foreground">Pending</span>
+                      );
+                    const perItem = getServingBasis(recipe);
+                    return (
+                      <Stack gap="xs">
+                        <span
+                          title={
+                            hasKnownEstimate(estimate)
+                              ? `${estimate.coverage.covered}/${estimate.coverage.total} ingredient rows covered`
+                              : undefined
+                          }
+                        >
+                          {formatEstimate(estimate, format)}
+                        </span>
+                        {perItem && hasKnownEstimate(estimate) && (
+                          <div className="text-2xs text-muted-foreground">
+                            {formatEstimate(
+                              scaleEstimate(estimate, 1 / perItem.divisor),
+                              format,
+                            )}{" "}
+                            {perUnitSuffix(perItem.noun, { short: true })}
+                          </div>
+                        )}
+                      </Stack>
+                    );
+                  },
+                },
+              ),
             );
-          },
+          }
+          // Total time — the weeknight axis. Accessor on `totalMinutes` so
+          // sorting and the range filter are the server's
+          // `Recipe.totalMinutes` column, but the cell prints the source's
+          // own prose whenever there is one: a present string does NOT imply
+          // a present count, and vice versa, so a recipe can show "about 1½
+          // hours" here while sorting on nothing at all.
+          add(
+            columnHelper.accessor(
+              (row) => row.meta?.times?.totalMinutes ?? undefined,
+              {
+                id: "totalMinutes",
+                header: "Time",
+                meta: {
+                  numeric: true,
+                  className: "w-24",
+                  mobile: { slot: "meta", priority: 25 },
+                },
+                sortUndefined: "last",
+                cell: (info) => {
+                  const times = info.row.original.meta?.times;
+                  const label = formatRecipeTime(
+                    times?.total,
+                    times?.totalMinutes,
+                  );
+                  return label ?? <NoneValue />;
+                },
+              },
+            ),
+          );
+          // Source column: cookbook link for book recipes, external URL for
+          // web recipes, nothing otherwise — via the shared RecipeSourceLink.
+          add(
+            columnHelper.accessor("source", {
+              header: "Source",
+              meta: {
+                className: "w-44",
+                mobile: { slot: "meta", priority: 30 },
+              },
+              cell: (info) => {
+                const source = info.getValue();
+                if (!sourceLabel(source)) return <NoneValue />;
+                return (
+                  <RecipeSourceLink
+                    source={source}
+                    text="host"
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                );
+              },
+            }),
+          );
+          // Meals column: how many live meal plans use this recipe. A live
+          // MealRecipe under a soft-deleted Meal doesn't count (see
+          // liveMealCountForRecipeSql) — mirrors the "meals" presence filter.
+          add(
+            columnHelper.accessor("mealCount", {
+              id: "meals",
+              header: "Meals",
+              meta: {
+                numeric: true,
+                className: "w-20",
+                mobile: { slot: "meta", priority: 40 },
+              },
+              cell: (info) => {
+                const count = info.getValue();
+                return count ? (
+                  <span className="font-mono tabular-nums">{count}</span>
+                ) : (
+                  <NoneValue />
+                );
+              },
+            }),
+          );
         }),
-      );
-      // Meals column: how many live meal plans use this recipe. A live
-      // MealRecipe under a soft-deleted Meal doesn't count (see
-      // liveMealCountForRecipeSql) — mirrors the "meals" presence filter.
-      add(
-        columnHelper.accessor("mealCount", {
-          id: "meals",
-          header: "Meals",
-          meta: {
-            numeric: true,
-            className: "w-20",
-            mobile: { slot: "meta", priority: 40 },
-          },
-          cell: (info) => {
-            const count = info.getValue();
-            return count ? (
-              <span className="font-mono tabular-nums">{count}</span>
-            ) : (
-              <NoneValue />
-            );
-          },
-        }),
-      );
+      ).visit(add);
     });
     // oxlint-disable-next-line react/exhaustive-deps -- updateRecipeMutation changes every render but is functionally stable
   }, [columnHelper]);
@@ -439,6 +469,7 @@ export function RecipeList({
       scopeFilters={cookbookScope}
       filterOptions={filterOptions}
       columns={columns}
+      initialColumnVisibility={RECIPE_INITIAL_COLUMN_VISIBILITY}
       nameClassName="w-64"
       hiddenFilterColumns={hiddenFilterColumns}
       // Its own config, not the contract default: a recipe write from this

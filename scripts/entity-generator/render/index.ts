@@ -100,12 +100,22 @@ const derivedRangeEntry = (
     );
   if (range.kind === "date") {
     needs.date = true;
-    return `...dateRangeFields(${JSON.stringify(key)})`;
+    const describe =
+      range.describe === null
+        ? ""
+        : `,{describe:{from:${JSON.stringify(range.describe.lower)},to:${JSON.stringify(range.describe.upper)}}}`;
+    return `...dateRangeFields(${JSON.stringify(key)}${describe})`;
   }
   needs.numeric = true;
   const options = [
     ...(range.int ? ["int:true"] : []),
     ...(range.nonnegative ? ["nonnegative:true"] : []),
+    ...(range.finite ? ["finite:true"] : []),
+    ...(range.describe === null
+      ? []
+      : [
+          `describe:{min:${JSON.stringify(range.describe.lower)},max:${JSON.stringify(range.describe.upper)}}`,
+        ]),
   ];
   return `...numericRangeFields(${JSON.stringify(key)}${options.length ? `,{${options.join(",")}}` : ""})`;
 };
@@ -1141,7 +1151,7 @@ export const renderEntityArtifacts = (
         `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
         `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; detailSection: string; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "plainDate" | "timestamp" | "external-link" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; detailSection: string; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "plainDate" | "timestamp" | "external-link" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +
@@ -1252,7 +1262,7 @@ export const renderEntityArtifacts = (
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: boolean; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean } | null;\n' +
+        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +
@@ -1301,7 +1311,7 @@ export const renderEntityArtifacts = (
         generatedHeader +
         "// Generated schema aliases retain deterministic import order.\n" +
         `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
-        'import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";\n' +
+        'import { MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
@@ -1309,7 +1319,7 @@ export const renderEntityArtifacts = (
         'const entityListSortSchema = z.object({ orderBy: z.string().min(1), direction: z.enum(["asc", "desc"]) });\n' +
         "const entityListSortsSchema = z.union([entityListSortSchema, z.array(entityListSortSchema).min(1).max(MAX_SORTS)]);\n" +
         "const entityListPaginationSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE) });\n" +
-        "const entityListMetaSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE), totalCount: z.number().int().min(0), sums: z.record(z.string(), z.number()).optional() });\n\n" +
+        "// The one page-metadata schema every list shares (one OpenAPI component).\nconst entityListMetaSchema = paginatedMetaSchema;\n\n" +
         `${listFilterSchemas}\n\n` +
         "// One generated filter schema per list entity.\n// oxfmt-ignore\n" +
         `const ENTITY_LIST_FILTER_SCHEMAS = {\n${listFilterSchemaBindings}\n} as const;\n\n` +

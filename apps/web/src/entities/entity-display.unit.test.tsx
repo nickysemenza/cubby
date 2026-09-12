@@ -266,9 +266,13 @@ describe("declared entity displays", () => {
   });
 
   describe("declared width/format/mobile/sorting", () => {
-    // `product` is the one entity whose full `list: true` roster is plain
-    // scalars (nothing identifier/reference/json), so it builds with zero
-    // overrides — the cleanest surface for the generic mapping itself.
+    // Most of `product`'s `list: true` roster is plain scalars, exercised
+    // here with zero overrides — the cleanest surface for the generic
+    // mapping itself. Three fields still force an override regardless
+    // (`dataQuality` is `kind: "json"`; `servingAsLocations` and the
+    // `ledgerExpectedQuantity` field aliased to the "expectedQuantity"
+    // column id are both nested under `quantityLedger` on the list row, so
+    // `readKey: null`), matching `apps/web/src/app/products/productlist.tsx`.
     interface ProductRow {
       fdc_id: number | null;
       manufacturer: string;
@@ -294,6 +298,23 @@ describe("declared entity displays", () => {
       primaryGtin: null,
     };
 
+    // The three fields that force an override, minimally stood in (a plain
+    // `cell: () => null` display column) — same shape as the task fixture's
+    // required overrides above.
+    function buildProductOverrides<TRecord extends object>(
+      helper: ReturnType<typeof createCubbyColumnHelper<TRecord>>,
+    ) {
+      return createCubbyColumnCollection<TRecord>((add) => {
+        for (const id of [
+          "dataQuality",
+          "servingAsLocations",
+          "expectedQuantity",
+        ]) {
+          add(helper.display({ id, cell: () => null }));
+        }
+      });
+    }
+
     // Deliberately drops `cell` — a column's cell type is captured per-visit
     // against that column's own existentially-quantified `TValue` (see
     // `materializeCubbyColumns`'s doc in table-features.ts): carrying it out
@@ -301,9 +322,11 @@ describe("declared entity displays", () => {
     // longer type-checks as callable. Metadata (id/className/mobile/
     // enableSorting) isn't TValue-parameterized, so it survives the trip.
     function buildProductColumnMeta() {
+      const helper = createCubbyColumnHelper<ProductRow>();
       const columns = createEntityDisplayColumns(
         "product",
-        createCubbyColumnHelper<ProductRow>(),
+        helper,
+        buildProductOverrides(helper),
       );
       return columns.visit((column) => ({
         id: String(
@@ -320,9 +343,11 @@ describe("declared entity displays", () => {
      * column and invoked inside the same `.visit()` callback, so its `cell`
      * is used exactly where its `TValue` is still concrete. */
     function renderProductCell(columnId: string, row: ProductRow) {
+      const helper = createCubbyColumnHelper<ProductRow>();
       const columns = createEntityDisplayColumns(
         "product",
-        createCubbyColumnHelper<ProductRow>(),
+        helper,
+        buildProductOverrides(helper),
       );
       const matched = columns.filter(
         (column) =>
@@ -413,15 +438,10 @@ describe("declared entity displays", () => {
         "task",
         helper,
         createCubbyColumnCollection((add) => {
-          // Required: these are identifier/reference fields, which the
-          // auto-render path always rejects.
-          for (const id of [
-            "projectId",
-            "subjectProductId",
-            "parentTaskId",
-            "blockedByIds",
-            "blockingIds",
-          ]) {
+          // Required: these are reference fields, which the auto-render
+          // path always rejects. Their column ids are the declared
+          // `display.columnId` aliases, not the field keys.
+          for (const id of ["project", "subjectProduct", "parentTask"]) {
             add(helper.display({ id, cell: () => null }));
           }
           // "trade" IS in `generatedEntitySort.task.fields`, but this
@@ -460,9 +480,11 @@ describe("declared entity displays", () => {
         interactive: true,
       });
       expect(byId.dueDate?.enableSorting).toBe(true);
-      // Overrides for reference fields aren't in the roster at all — they
-      // still get filled in as unsortable (false), not left `undefined`.
-      expect(byId.projectId?.enableSorting).toBe(false);
+      // An override whose declared column id is a roster sort id sorts;
+      // one outside the roster is filled in as unsortable (false), not left
+      // `undefined`.
+      expect(byId.project?.enableSorting).toBe(true);
+      expect(byId.parentTask?.enableSorting).toBe(false);
       // The explicit override on "trade" survives despite the roster saying
       // true for that column id.
       expect(byId.trade?.enableSorting).toBe(false);

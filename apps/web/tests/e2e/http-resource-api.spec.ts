@@ -3,10 +3,7 @@ import { Pool } from "pg";
 import { createCubbyClient } from "~/lib/http-api/client";
 import { expect, test } from "./e2e-test";
 
-const createdSchema = z.object({
-  ok: z.literal(true),
-  data: z.object({ item: z.object({ id: z.string() }) }),
-});
+const createdSchema = z.object({ item: z.object({ id: z.string() }) });
 const sessionSchema = z.object({
   user: z.object({ id: z.string() }),
   session: z.object({ id: z.string(), token: z.string() }),
@@ -32,15 +29,16 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     },
   });
   expect(created.status(), await created.text()).toBe(201);
-  const id = createdSchema.parse(await created.json()).data.item.id;
+  const id = createdSchema.parse(await created.json()).item.id;
   const path = `/api/v1/recipes/${id}`;
   expect(created.headers().location).toBe(path);
   try {
     const addressBar = await page.goto(path);
     expect(addressBar?.status()).toBe(200);
     expect(await addressBar!.json()).toMatchObject({
-      ok: true,
-      data: { id, name, notes: "Keep this" },
+      id,
+      name,
+      notes: "Keep this",
     });
     expect(addressBar!.headers()["cache-control"]).toBe("no-store");
     const read = await page.evaluate(async () => {
@@ -53,9 +51,9 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     });
     expect(read).toMatchObject({
       status: 200,
-      body: { ok: true, data: { items: expect.any(Array) } },
+      body: { items: expect.any(Array) },
     });
-    expect(read.body.data.items).toHaveLength(1);
+    expect(read.body.items).toHaveLength(1);
     const filtered = await page.request.get("/api/v1/recipes", {
       params: {
         nameFilter: name,
@@ -66,7 +64,8 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     });
     expect(filtered.status(), await filtered.text()).toBe(200);
     expect(await filtered.json()).toMatchObject({
-      data: { items: [{ id }], meta: { totalCount: 1 } },
+      items: [{ id }],
+      meta: { totalCount: 1 },
     });
     const patch = await page.evaluate(
       async ({ path }) => {
@@ -82,42 +81,36 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     expect(patch).toMatchObject({
       status: 200,
       body: {
-        ok: true,
-        data: {
-          item: {
-            name: "Renamed resource",
-            notes: "Keep this",
-            tags: ["http-test"],
-          },
+        item: {
+          name: "Renamed resource",
+          notes: "Keep this",
+          tags: ["http-test"],
         },
       },
     });
-    const legacy = await page.request.get("/api/v1/entity/detail", {
+    const reread = await page.request.get(`/api/v1/recipes/${id}`, {
       headers: origin,
-      params: { entity: "recipe", shortcode: id },
     });
-    expect(await legacy.json()).toMatchObject({
-      ok: true,
-      data: { id, name: "Renamed resource" },
+    expect(await reread.json()).toMatchObject({
+      id,
+      name: "Renamed resource",
     });
     const audit = await page.request.get("/api/v1/auditLog/list", {
       params: { entityType: "recipe", entityId: id, source: "api" },
     });
     expect(await audit.json()).toMatchObject({
-      data: {
-        entries: expect.arrayContaining([
-          expect.objectContaining({
-            action: "create",
-            source: "api",
-            userId: session.user.id,
-          }),
-          expect.objectContaining({
-            action: "update",
-            source: "api",
-            userId: session.user.id,
-          }),
-        ]),
-      },
+      entries: expect.arrayContaining([
+        expect.objectContaining({
+          action: "create",
+          source: "api",
+          userId: session.user.id,
+        }),
+        expect.objectContaining({
+          action: "update",
+          source: "api",
+          userId: session.user.id,
+        }),
+      ]),
     });
     await expect
       .poll(
@@ -126,7 +119,7 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
             await (
               await page.request.get("/api/v1/calendar/inspectFeed")
             ).json()
-          ).data.dirty?.reason,
+          ).dirty?.reason,
       )
       .toBe("api.entity.mutate");
     for (const headers of [undefined, { Origin: "https://foreign.example" }]) {
@@ -175,7 +168,7 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
       (await page.request.get("/api/v1/recipes?filters=null")).status(),
     ).toBe(400);
     const many = await page.request.get("/api/v1/recipe/getManyByIDs", {
-      params: { ids: JSON.stringify([id]) },
+      params: { ids: id },
     });
     expect(many.status(), await many.text()).toBe(200);
   } finally {
@@ -207,12 +200,12 @@ test("typed resource and operation clients use the same generated request shapes
     });
     expect(created.status).toBe(201);
     if (created.status !== 201) throw new Error("Create failed");
-    const id = created.body.data.item.id;
+    const id = created.body.item.id;
     const second = await client.resources.recipe.create({
       body: { name: `${prefix} B`, meta: null, sections: [] },
     });
     if (second.status !== 201) throw new Error("Second create failed");
-    const secondId = second.body.data.item.id;
+    const secondId = second.body.item.id;
     try {
       expect(
         (
@@ -241,30 +234,19 @@ test("typed resource and operation clients use the same generated request shapes
         },
       });
       expect(pageTwo.body).toMatchObject({
-        ok: true,
-        data: {
-          items: [{ id: secondId }],
-          meta: { pageIndex: 1, pageSize: 1, totalCount: 2 },
-        },
+        items: [{ id: secondId }],
+        meta: { pageIndex: 1, pageSize: 1, totalCount: 2 },
       });
       const descending = await client.resources.recipe.list({
         query: { pageSize: 1, sort: "-name", nameFilter: prefix },
       });
-      expect(descending.body).toMatchObject({
-        ok: true,
-        data: { items: [{ id: secondId }] },
+      expect(descending.body).toMatchObject({ items: [{ id: secondId }] });
+      const secondPage = await client.resources.recipe.list({
+        query: { nameFilter: prefix, page: 2, pageSize: 1, sort: "name" },
       });
-      const operation = await client.entity.list({
-        query: {
-          entity: "recipe",
-          filters: { nameFilter: prefix },
-          pagination: { pageIndex: 1, pageSize: 1 },
-          sort: { orderBy: "name", direction: "asc" },
-        },
-      });
-      expect(operation.body).toMatchObject({
-        ok: true,
-        data: { items: [{ id: secondId }], meta: { pageIndex: 1 } },
+      expect(secondPage.body).toMatchObject({
+        items: [{ id: secondId }],
+        meta: { pageIndex: 1 },
       });
       await client.resources.recipe.update({
         params: { id },
@@ -273,10 +255,7 @@ test("typed resource and operation clients use the same generated request shapes
       const literalText = await client.resources.recipe.list({
         query: { nameFilter: '"123"' },
       });
-      expect(literalText.body).toMatchObject({
-        ok: true,
-        data: { items: [{ id }] },
-      });
+      expect(literalText.body).toMatchObject({ items: [{ id }] });
       expect(
         (await client.recipe.getManyByIDs({ query: { ids: [id] } })).status,
       ).toBe(200);
@@ -395,7 +374,7 @@ test("Scalar sends session-authenticated reads and writes without an API key", a
   const created = await write;
   expect((await created.request().allHeaders()).origin).toBe(baseURL);
   expect(created.status(), await created.text()).toBe(201);
-  const id = createdSchema.parse(await created.json()).data.item.id;
+  const id = createdSchema.parse(await created.json()).item.id;
   await page.request.delete(`/api/v1/vendors/${id}`, {
     headers: { Origin: baseURL! },
   });
@@ -414,8 +393,7 @@ test("resource deletion preserves domain blockers", async ({
     },
   );
   expect(accountResponse.status(), await accountResponse.text()).toBe(201);
-  const accountId = createdSchema.parse(await accountResponse.json()).data.item
-    .id;
+  const accountId = createdSchema.parse(await accountResponse.json()).item.id;
   const transactionResponse = await page.request.post(
     "/api/v1/financial-transactions",
     {
@@ -433,7 +411,7 @@ test("resource deletion preserves domain blockers", async ({
     201,
   );
   const transactionId = createdSchema.parse(await transactionResponse.json())
-    .data.item.id;
+    .item.id;
   try {
     const blocked = await page.request.delete(
       `/api/v1/financial-accounts/${accountId}`,
@@ -441,11 +419,8 @@ test("resource deletion preserves domain blockers", async ({
     );
     expect(blocked.status()).toBe(412);
     expect(await blocked.json()).toMatchObject({
-      ok: false,
-      error: {
-        reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
-        blockers: expect.any(Array),
-      },
+      reason: "FINANCIAL_ACCOUNT_HAS_TRANSACTIONS",
+      blockers: expect.any(Array),
     });
     expect(
       (

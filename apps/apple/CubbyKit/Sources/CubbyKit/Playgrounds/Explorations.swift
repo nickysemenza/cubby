@@ -22,15 +22,15 @@ import Playgrounds
 
 #Playground("Entity catalog") {
     for descriptor in EntityCatalog.all {
-        _ = (descriptor.key, descriptor.basePath, descriptor.actions.contains(.list), descriptor.fields.count)
+        _ = (descriptor.key, descriptor.basePath, descriptor.key.httpActions.contains(.list), descriptor.fields.count)
     }
 }
 
 #Playground("Call the API (needs a credential in the CLI token file)") {
-    let baseURL = URL(string: "https://cubby.nickysemenza.com")!
+    let baseURL = URL(string: "https://cubby.example.com")!
     let credentials = CredentialProvider(host: CubbyBaseURL.host(of: baseURL), store: FileSessionTokenStore.standard())
     let client = CubbyClient(baseURL: baseURL, credentials: credentials)
-    let page = try await client.raw.list(basePath: "locations", page: 1, pageSize: 5, sort: "name")
-    _ = page.items.compactMap { EntityCatalog[.location].row(from: $0)?.title }
+    let page = try await client.locationOptions(page: 1, pageSize: 5)
+    _ = page.items.map(\.name)
 }
 #endif

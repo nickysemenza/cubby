@@ -29,55 +29,32 @@ extension EntityDescriptor {
 
 /// The server calls behind adding a photo. `CubbyClient` conforms; tests stub it.
 public protocol PhotoService: Sendable {
-    func createUpload(filename: String, size: Int, contentType: String, entity: EntityKey) async throws -> ImageUpload
+    func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey) async throws -> ImageUpload
     /// Never skipped: an image left `PENDING` is culled by the server.
     func markUploaded(_ id: ImageCode) async throws
-    /// Attaches uploaded images to any entity whose update body takes `pendingImageIds`.
+    /// Attaches uploaded images to any entity whose update body takes `pendingImageIds`; throws
+    /// `EntityOperationError.unsupported` for one that does not.
     func attachImages(_ ids: [ImageCode], to entity: EntityKey, id: String) async throws
-    /// The product's uploaded image ids in display order.
+    /// The product's image ids in display order.
     func productImageIDs(_ product: ProductCode) async throws -> [ImageCode]
     func setImageOrder(_ order: [ImageCode], product: ProductCode) async throws
 }
 
-public enum PhotoServiceError: Error, Sendable, Hashable {
-    case entityDoesNotAcceptImages(EntityKey)
-}
-
 extension CubbyClient: PhotoService {
-    /// `image.uploadImage`'s `entityType` names the owning table for storage placement; entities
-    /// outside its enum upload untyped.
-    private static let uploadEntityTypes: [EntityKey: String] = [
-        .product: "PRODUCT", .recipe: "RECIPE", .cookbook: "COOKBOOK",
-        .location: "LOCATION", .project: "PROJECT", .purchase: "PURCHASE",
-    ]
-
-    public func createUpload(filename: String, size: Int, contentType: String, entity: EntityKey) async throws -> ImageUpload {
-        var body: [String: JSONValue] = [
-            "filename": .string(filename), "size": .number(Double(size)), "contentType": .string(contentType),
-        ]
-        if let type = Self.uploadEntityTypes[entity] { body["entityType"] = .string(type) }
-        return try await raw.call("image.uploadImage", body: .object(body), as: ImageUpload.self)
-    }
-
-    public func markUploaded(_ id: ImageCode) async throws {
-        _ = try await raw.call("image.markUploaded", body: ["id": .string(id.rawValue)])
+    public func createUpload(
+        filename: String,
+        size: Int,
+        format: ImageEncoding.Format,
+        entity: EntityKey
+    ) async throws -> ImageUpload {
+        try await uploadImage(filename: filename, size: size, format: format, entity: entity)
     }
 
     public func attachImages(_ ids: [ImageCode], to entity: EntityKey, id: String) async throws {
-        let descriptor = EntityCatalog[entity]
-        guard descriptor.acceptsImages else { throw PhotoServiceError.entityDoesNotAcceptImages(entity) }
-        let route = try OperationRoute.lookup(method: .patch, path: "/api/v1/\(descriptor.basePath)/{id}")
-        _ = try await raw.call(route, pathID: id, body: ["pendingImageIds": .array(ids.map { .string($0.rawValue) })])
-    }
-
-    public func productImageIDs(_ product: ProductCode) async throws -> [ImageCode] {
-        let object = try await raw.get(basePath: EntityCatalog[.product].basePath, id: product.rawValue)
-        guard let row = EntityCatalog[.product].row(from: object) else { return [] }
-        return ProductRelations.gallery(from: row).map { ImageCode($0.id) }
+        try await attachImages(ids, to: EntityCatalog[entity], id: id)
     }
 
     public func setImageOrder(_ order: [ImageCode], product: ProductCode) async throws {
-        let route = try OperationRoute.lookup(method: .patch, path: "/api/v1/\(EntityCatalog[.product].basePath)/{id}")
-        _ = try await raw.call(route, pathID: product.rawValue, body: ["imageOrder": .array(order.map { .string($0.rawValue) })])
+        try await setImageOrder(order, on: EntityCatalog[.product], id: product.rawValue)
     }
 }

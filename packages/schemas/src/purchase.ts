@@ -24,7 +24,6 @@ import { imageUrlSummary } from "./image-summary";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
-  createItemsResponseSchema,
   createPaginatedResponseSchema,
   entityFilterList,
   oneOrMany,
@@ -127,16 +126,11 @@ export const primaryPurchaseDocumentKinds = [
 export const purchaseFilterFields = {
   ...auditDateFilterFields,
   ...generatedPurchaseFilterFields,
-  search: z
-    .string()
-    .optional()
-    .describe("Substring match on order id or human display label"),
   vendorId: entityFilterList(vendorShortcode).optional(),
   ...purchaseRelatedFilterFields,
   orderId: oneOrMany(z.string()).optional(),
   /** `"none"` matches purchases with no order id — the ~40% the vendor never issued one for. */
   orderIdPresenceFilter: presenceFilter,
-  statedTotalPresenceFilter: presenceFilter,
   expenseStatus: oneOrMany(purchaseExpenseStatus).optional(),
   /** Shared soft verdict over statedTotal versus SUM(expense.cost). */
   reconciliation: oneOrMany(purchaseReconciliation).optional(),
@@ -144,17 +138,6 @@ export const purchaseFilterFields = {
   documentPresenceFilter: presenceFilter,
   dataStatus: dataQualityStatus.optional(),
   dataGap: oneOrMany(dataCheck).optional(),
-  /**
-   * Inclusive bounds on SUM(expense.cost), in dollars. Bounds only apply to
-   * Purchases with at least one priced Expense, so empty or unpriced-only Purchases do
-   * not masquerade as zero-dollar credits.
-   */
-  dateFrom: plainDate
-    .optional()
-    .describe("Inclusive lower bound on purchase date"),
-  dateTo: plainDate
-    .optional()
-    .describe("Inclusive upper bound on purchase date"),
 };
 export const purchaseFiltersSchema = z.object(purchaseFilterFields);
 export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
@@ -457,9 +440,6 @@ export const purchaseProductOut = z.object({
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
 export const purchaseProductsOut = z.array(purchaseProductOut);
-
-export const purchaseProductsMcpOut =
-  createItemsResponseSchema(purchaseProductOut);
 
 export const productPurchaseOut = z.object({
   purchaseId: purchaseShortcode,

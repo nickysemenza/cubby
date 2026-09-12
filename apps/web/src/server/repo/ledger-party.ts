@@ -38,7 +38,6 @@ import {
   buildPartialUpdateValues,
   countWhere,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   notDeleted,
   unwrapDb,
@@ -170,16 +169,16 @@ const reader = createEntityReader<
 
 export const getLedgerPartyByShortcode = reader.getByShortcode;
 
-/** The complete WHERE for this entity's list. */
+/**
+ * The complete WHERE for this entity's list. Not on `listScaffold`: the list
+ * takes one sort mapped by hand below and composes nothing beyond the
+ * declared predicates, so there is no boilerplate to fold.
+ */
 export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
   and(
     notDeleted(ledgerParty),
     ...auditDateWhereConditions(ledgerParty, filters),
-    // `name`/`search` stays hand-written: it trims the term before matching,
-    // which `declaredFilterPredicates`'s plain `formatSearchTerm` does not —
-    // a real (if narrow) behavior difference, not just an alternate spelling.
-    formatSearchTerm(ledgerParty.name, filters.search?.trim()),
-    // `kind` is a declared stored filter.
+    // `search` (trimmed, over name) and `kind` are declared stored filters.
     ...declaredFilterPredicates("ledgerParty", ledgerParty, filters),
   );
 

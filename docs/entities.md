@@ -188,7 +188,22 @@ second standard-column roster in the browser registry.
 
 `display.detailOrder` optionally orders detail facts independently of model and
 list order; it must be a nonnegative integer. Unspecified facts retain model
-order after explicitly ordered facts. Detail overrides may provide a dynamic
+order after explicitly ordered facts. `display.listOrder` does the same for
+generated list columns (model order also drives form field order, so it cannot
+be re-sequenced), and `display.columnId` keeps a persisted column id when the
+field key differs — ids are saved layouts, filter bindings, sort ids and
+saved-view keys, so a rename is never free.
+
+Every list column falls in one of three buckets. A generic column is a
+declared `list: true` scalar rendered by `createEntityDisplayColumns` with no
+code. A declared column with an override is one the entity declares but a
+page renders specially (a badge, a link, a relation label); the override is
+matched by column id and takes the declared label and sort. An explicit
+`add()` outside the declaration is reserved for client-hydrated data, relation
+projections, a second projection that hosts a filter control, and the
+synthetic identity column. A `list: true` field with `readKey: null` needs an
+override; column compilation fails otherwise. Hidden-by-default columns use
+the page's `initialColumnVisibility`, not the declaration. Detail overrides may provide a dynamic
 label when the value changes its meaning, such as ISBN versus UPC. Static labels
 remain declared. `EntityBasicInfo.afterFields` anchors computed facts after a
 declared detail field without inventing persisted fields or API contracts.
@@ -322,7 +337,19 @@ contract cases. Static and deferred controls still live in the explicit filter
 catalog; compound presets retain explicit codecs and option loaders. SQL
 predicates remain repository behavior and are checked through the real-query
 differential matrix—the compiler does not infer database behavior from a URL
-key.
+key, except for descriptors declared `stored`.
+
+A `stored` descriptor names the standard predicate over stored columns, and
+`declaredFilterPredicates` composes it for the repository: `stored: true`
+reads the column named by `columnId`; `stored: { columns }` lists one or more
+stored fields when the descriptor id is virtual (`search`) or a text match
+spans columns (ORed, a `text[]` column matched by element); `stored: { array:
+true }` marks a multiselect over a `text[]` column as an overlap. Enum filters
+OR their declared `nullable` presence in, a boolean over a nullable
+non-boolean column reads as presence (`true` is NOT NULL), and ranges are
+inclusive bounds. The compiler rejects every other shape. Predicates that
+join, OR across filters, or resolve ids stay hand-written next to the spread,
+with a comment saying why.
 
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection

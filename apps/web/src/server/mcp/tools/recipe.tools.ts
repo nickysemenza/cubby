@@ -4,17 +4,17 @@ import {
   scrapeRecipeInput,
 } from "@cubby/schemas/import-recipe";
 import {
-  cookbookSummariesMcpOut,
   recipeAvailabilityMcpOut,
   recipeCostingExplainMcpOut,
   recipesUsingIngredientOut,
-  recipeTagsListOut,
   scrapeRecipeMcpOut,
 } from "@cubby/schemas/mcp";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
+import { cookbookContract } from "~/contracts/cookbook.contract";
+import { recipeContract } from "~/contracts/recipe.contract";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { listCookbooks } from "~/server/repo/cookbook";
 
@@ -28,6 +28,17 @@ import {
   slimRecipe,
   WRITE_CLOSED,
 } from "./_shared";
+import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
+
+/** `{items}` over `cookbook.list`'s own output — see `mcpItemsEnvelope`. */
+const cookbookSummariesMcpOut = mcpItemsEnvelope(
+  fromContract(cookbookContract.ops.list),
+);
+
+/** `{items}` over `recipe.getAllTags`'s own output — see `mcpItemsEnvelope`. */
+const recipeTagsListOut = mcpItemsEnvelope(
+  fromContract(recipeContract.ops.getAllTags),
+);
 
 export function registerRecipeTools(server: McpServer) {
   registerRouterTool(server, {

@@ -44,7 +44,7 @@ describe("FinancialTransactionDetail", () => {
       wrapper: harness.wrapper,
     });
     expect(screen.getByText("Settles")).toBeVisible();
-    expect(screen.getByText("References")).toBeVisible();
+    expect(screen.getByText("Source")).toBeVisible();
     expect(screen.queryByText("Statement description")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "PUR-4K7M" })).toHaveAttribute(
       "href",

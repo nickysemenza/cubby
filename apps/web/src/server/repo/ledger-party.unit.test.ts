@@ -21,7 +21,8 @@ describe("buildLedgerPartyWhere", () => {
     expect(where({ kind: "member" })).toContain('"kind"');
   });
 
-  it("still narrows by name (hand-written: trims the search term)", () => {
-    expect(where({ search: "Nicky" })).toContain('"name"');
+  it("still narrows by name and trims the search term (declared stored filter)", () => {
+    expect(where({ search: "Alex" })).toContain('"name"');
+    expect(where({ search: "   " })).toBe(where());
   });
 });

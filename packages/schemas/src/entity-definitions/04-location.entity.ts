@@ -399,6 +399,10 @@ export default defineEntity({
         field: "aiDescriptionPresenceFilter",
         kind: "presence",
         placeholder: "Filter descriptions...",
+        deriveSchema: true,
+        schemaDescription:
+          "Filter to locations that do / don't have an AI-generated description.",
+        stored: true,
         options: [
           { value: "has", label: "Has description", meta: true },
           { value: "none", label: "(none)", meta: true },
@@ -411,6 +415,7 @@ export default defineEntity({
         placeholder: "Filter by location name...",
         deriveSchema: true,
         schemaDescription: "Filter by location name (substring)",
+        stored: { columns: ["name", "aiDescription", "aliases"] },
       },
       {
         columnId: "type",

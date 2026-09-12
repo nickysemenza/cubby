@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type {
   FinancialTransactionCreateInput,
   FinancialTransactionFilters,
@@ -19,11 +18,7 @@ import {
   type FinancialTransactionShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -38,9 +33,7 @@ import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import { touchDataQualityTargets } from "~/server/repo/data-quality";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
   buildPartialUpdateValues,
-  buildSearchConditions,
   countWhere,
   eqAny,
   executeListQueryWithCount,
@@ -51,7 +44,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { allocationIntegrityDefectSql } from "~/server/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/repo/financial-evidence";
@@ -65,6 +57,7 @@ import {
   resolveAllocationInputs,
   writeAllocationSet,
 } from "~/server/repo/financial-transaction-allocations";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { enrichFinancialTransactionsWithVendorInference } from "~/server/repo/merchant-vendor-inference";
 import { cents } from "~/server/repo/money";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -244,6 +237,11 @@ async function toIds(
   return resolveAllPresent(db, entity, codes);
 }
 
+const financialTransactionScaffold = listScaffold(
+  "financialTransaction",
+  financialTransaction,
+);
+
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export async function buildFinancialTransactionWhere(
   db: Database,
@@ -263,58 +261,35 @@ export async function buildFinancialTransactionWhere(
   // ids, the semantic result is an empty set; eqAny([], by design) means "no
   // constraint" and would otherwise expose the entire transaction roster.
   if (accountIds?.length === 0 || purchaseIds?.length === 0) return sql`false`;
-  return buildSearchConditions(
-    financialTransaction,
-    [
-      { column: financialTransaction.merchant, term: filters.search },
-      { column: financialTransaction.rawDescription, term: filters.search },
-    ],
-    [
-      ...auditDateWhereConditions(financialTransaction, filters),
-      ...relatedWhereConditions(
-        "financialTransaction",
-        filters,
-        financialTransaction.id,
-      ),
-      eqAny(financialTransaction.accountId, accountIds),
-      // Allocations, not the mirror column: a transaction split across two
-      // purchases has a NULL mirror, so filtering on it would hide the split
-      // row from BOTH purchases — including the linked-transactions table on
-      // each purchase's detail page, which is exactly where it must appear.
-      purchaseIds ? allocatedToAny(purchaseIds) : undefined,
-      filters.purchasePresenceFilter === "has"
-        ? hasAnyAllocation()
-        : filters.purchasePresenceFilter === "none"
-          ? sql`NOT ${hasAnyAllocation()}`
-          : undefined,
-      filters.allocationIntegrity === "defect"
-        ? allocationIntegrityDefectSql('"FinancialTransaction"')
+  // `kind`, `status`, `merchant`, and `postedDate` are declared stored
+  // filters — applied by `financialTransactionScaffold.where` before the
+  // conditions below.
+  return financialTransactionScaffold.where(filters, [
+    ...auditDateWhereConditions(financialTransaction, filters),
+    ...relatedWhereConditions(
+      "financialTransaction",
+      filters,
+      financialTransaction.id,
+    ),
+    eqAny(financialTransaction.accountId, accountIds),
+    // Allocations, not the mirror column: a transaction split across two
+    // purchases has a NULL mirror, so filtering on it would hide the split
+    // row from BOTH purchases — including the linked-transactions table on
+    // each purchase's detail page, which is exactly where it must appear.
+    purchaseIds ? allocatedToAny(purchaseIds) : undefined,
+    filters.purchasePresenceFilter === "has"
+      ? hasAnyAllocation()
+      : filters.purchasePresenceFilter === "none"
+        ? sql`NOT ${hasAnyAllocation()}`
         : undefined,
-      // `kind`, `status`, `merchant`, and `postedDate` are declared stored
-      // filters.
-      ...declaredFilterPredicates(
-        "financialTransaction",
-        financialTransaction,
-        filters,
-      ),
-      refsCondition(
-        filters.source ? [filters.source].flat() : undefined,
-        filters.externalId ? [filters.externalId].flat() : undefined,
-      ),
-      filters.amountMin === undefined
-        ? undefined
-        : sql`${financialTransaction.amount} >= ${filters.amountMin}`,
-      filters.amountMax === undefined
-        ? undefined
-        : sql`${financialTransaction.amount} <= ${filters.amountMax}`,
-      filters.transactionDateFrom
-        ? sql`${financialTransaction.transactionDate} >= ${filters.transactionDateFrom}`
-        : undefined,
-      filters.transactionDateTo
-        ? sql`${financialTransaction.transactionDate} <= ${filters.transactionDateTo}`
-        : undefined,
-    ],
-  );
+    filters.allocationIntegrity === "defect"
+      ? allocationIntegrityDefectSql('"FinancialTransaction"')
+      : undefined,
+    refsCondition(
+      filters.source ? [filters.source].flat() : undefined,
+      filters.externalId ? [filters.externalId].flat() : undefined,
+    ),
+  ]);
 }
 
 export async function listFinancialTransactions(
@@ -325,7 +300,7 @@ export async function listFinancialTransactions(
   readIntent: ListReadIntent = "page",
 ) {
   const where = await buildFinancialTransactionWhere(db, filters);
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = financialTransactionScaffold.page(pagination);
   const { data: rows, count } = await executeListQueryWithCount({
     kind: readIntent,
     rows: () =>
@@ -334,21 +309,16 @@ export async function listFinancialTransactions(
         .from(financialTransaction)
         .where(where)
         .orderBy(
-          ...buildOrderBy(
-            financialTransaction,
-            sorts,
-            [...generatedEntitySort.financialTransaction.fields],
-            {
-              resolve: (sort) =>
-                sort.orderBy === "merchant"
-                  ? [
-                      (sort.direction === "asc" ? asc : desc)(
-                        financialTransaction.merchant,
-                      ),
-                    ]
-                  : null,
-            },
-          ),
+          ...financialTransactionScaffold.orderBy(sorts, {
+            resolve: (sort) =>
+              sort.orderBy === "merchant"
+                ? [
+                    (sort.direction === "asc" ? asc : desc)(
+                      financialTransaction.merchant,
+                    ),
+                  ]
+                : null,
+          }),
         )
         .limit(take)
         .offset(skip),

@@ -5,6 +5,7 @@ import {
   httpRouterOptions,
   rpcMutation,
   rpcQuery,
+  rpcQueryPost,
   resourceCreate,
   resourceDelete,
   resourceGet,
@@ -187,7 +188,7 @@ export const httpContract = httpContractBuilder.router(
         "create",
         contracts.collectionContract.ops["create"],
       ),
-      detail: rpcQuery(
+      detail: rpcQueryPost(
         "collection",
         "detail",
         contracts.collectionContract.ops["detail"],
@@ -197,7 +198,7 @@ export const httpContract = httpContractBuilder.router(
         "list",
         contracts.collectionContract.ops["list"],
       ),
-      matrix: rpcQuery(
+      matrix: rpcQueryPost(
         "collection",
         "matrix",
         contracts.collectionContract.ops["matrix"],
@@ -207,12 +208,12 @@ export const httpContract = httpContractBuilder.router(
         "set",
         contracts.collectionContract.ops["set"],
       ),
-      smartDetail: rpcQuery(
+      smartDetail: rpcQueryPost(
         "collection",
         "smartDetail",
         contracts.collectionContract.ops["smartDetail"],
       ),
-      smartList: rpcQuery(
+      smartList: rpcQueryPost(
         "collection",
         "smartList",
         contracts.collectionContract.ops["smartList"],
@@ -238,22 +239,17 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     entity: {
-      detail: rpcQuery(
-        "entity",
-        "detail",
-        contracts.entityDetailContract.ops["detail"],
-      ),
       filterOptions: rpcQuery(
         "entity",
         "filterOptions",
         contracts.entityFilterOptionsContract.ops["filterOptions"],
       ),
-      graph: rpcQuery(
+      graph: rpcQueryPost(
         "entity",
         "graph",
         contracts.entityGraphContract.ops["graph"],
       ),
-      graphPaths: rpcQuery(
+      graphPaths: rpcQueryPost(
         "entity",
         "graphPaths",
         contracts.entityGraphContract.ops["graphPaths"],
@@ -262,16 +258,6 @@ export const httpContract = httpContractBuilder.router(
         "entity",
         "inspectorHealth",
         contracts.entityInspectorHealthContract.ops["inspectorHealth"],
-      ),
-      list: rpcQuery(
-        "entity",
-        "list",
-        contracts.entityListContract.ops["list"],
-      ),
-      mutate: rpcMutation(
-        "entity",
-        "mutate",
-        contracts.entityMutationContract.ops["mutate"],
       ),
     },
     entityIntegrity: {
@@ -282,12 +268,12 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     expense: {
-      analytics: rpcQuery(
+      analytics: rpcQueryPost(
         "expense",
         "analytics",
         contracts.expenseContract.ops["analytics"],
       ),
-      analyze: rpcQuery(
+      analyze: rpcQueryPost(
         "expense",
         "analyze",
         contracts.expenseContract.ops["analyze"],
@@ -297,17 +283,17 @@ export const httpContract = httpContractBuilder.router(
         "chargeContext",
         contracts.expenseContract.ops["chargeContext"],
       ),
-      chartData: rpcQuery(
+      chartData: rpcQueryPost(
         "expense",
         "chartData",
         contracts.expenseContract.ops["chartData"],
       ),
-      facetCounts: rpcQuery(
+      facetCounts: rpcQueryPost(
         "expense",
         "facetCounts",
         contracts.expenseContract.ops["facetCounts"],
       ),
-      monthlySummary: rpcQuery(
+      monthlySummary: rpcQueryPost(
         "expense",
         "monthlySummary",
         contracts.expenseContract.ops["monthlySummary"],
@@ -375,7 +361,7 @@ export const httpContract = httpContractBuilder.router(
         "importFromUrl",
         contracts.imageUploadContract.ops["importFromUrl"],
       ),
-      list: rpcQuery("image", "list", contracts.imageContract.ops["list"]),
+      list: rpcQueryPost("image", "list", contracts.imageContract.ops["list"]),
       markUploaded: rpcMutation(
         "image",
         "markUploaded",
@@ -403,7 +389,7 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     ingredient: {
-      enrichmentWorkbench: rpcQuery(
+      enrichmentWorkbench: rpcQueryPost(
         "ingredient",
         "enrichmentWorkbench",
         contracts.ingredientContract.ops["enrichmentWorkbench"],
@@ -534,7 +520,7 @@ export const httpContract = httpContractBuilder.router(
         "recomputeValuations",
         contracts.locationContract.ops["recomputeValuations"],
       ),
-      search: rpcQuery(
+      search: rpcQueryPost(
         "location",
         "search",
         contracts.locationContract.ops["search"],
@@ -779,7 +765,7 @@ export const httpContract = httpContractBuilder.router(
         "merge",
         contracts.productContract.ops["merge"],
       ),
-      movementTimeline: rpcQuery(
+      movementTimeline: rpcQueryPost(
         "product",
         "movementTimeline",
         contracts.productContract.ops["movementTimeline"],
@@ -804,7 +790,7 @@ export const httpContract = httpContractBuilder.router(
         "quickCreate",
         contracts.productContract.ops["quickCreate"],
       ),
-      search: rpcQuery(
+      search: rpcQueryPost(
         "product",
         "search",
         contracts.productContract.ops["search"],
@@ -846,7 +832,7 @@ export const httpContract = httpContractBuilder.router(
         "detachResources",
         contracts.projectContract.ops["detachResources"],
       ),
-      getDependencyGraph: rpcQuery(
+      getDependencyGraph: rpcQueryPost(
         "project",
         "getDependencyGraph",
         contracts.projectContract.ops["getDependencyGraph"],
@@ -871,7 +857,7 @@ export const httpContract = httpContractBuilder.router(
         "setToolUsage",
         contracts.projectContract.ops["setToolUsage"],
       ),
-      toolGallery: rpcQuery(
+      toolGallery: rpcQueryPost(
         "project",
         "toolGallery",
         contracts.projectContract.ops["toolGallery"],
@@ -886,7 +872,11 @@ export const httpContract = httpContractBuilder.router(
         "toolSuggestions",
         contracts.projectContract.ops["toolSuggestions"],
       ),
-      tree: rpcQuery("project", "tree", contracts.projectContract.ops["tree"]),
+      tree: rpcQueryPost(
+        "project",
+        "tree",
+        contracts.projectContract.ops["tree"],
+      ),
     },
     purchase: {
       attachProducts: rpcMutation(
@@ -971,7 +961,7 @@ export const httpContract = httpContractBuilder.router(
         "getCookbookSource",
         contracts.recipeContract.ops["getCookbookSource"],
       ),
-      getDependencyGraph: rpcQuery(
+      getDependencyGraph: rpcQueryPost(
         "recipe",
         "getDependencyGraph",
         contracts.recipeContract.ops["getDependencyGraph"],
@@ -981,12 +971,12 @@ export const httpContract = httpContractBuilder.router(
         "getFlow",
         contracts.recipeContract.ops["getFlow"],
       ),
-      getIngredientCooccurrence: rpcQuery(
+      getIngredientCooccurrence: rpcQueryPost(
         "recipe",
         "getIngredientCooccurrence",
         contracts.recipeContract.ops["getIngredientCooccurrence"],
       ),
-      getIngredientUsage: rpcQuery(
+      getIngredientUsage: rpcQueryPost(
         "recipe",
         "getIngredientUsage",
         contracts.recipeContract.ops["getIngredientUsage"],
@@ -1085,7 +1075,7 @@ export const httpContract = httpContractBuilder.router(
         "previews",
         contracts.relatedDataContract.ops["previews"],
       ),
-      summary: rpcQuery(
+      summary: rpcQueryPost(
         "relatedData",
         "summary",
         contracts.relatedDataContract.ops["summary"],
@@ -1143,12 +1133,12 @@ export const httpContract = httpContractBuilder.router(
         "imports",
         contracts.statementRowContract.ops["imports"],
       ),
-      list: rpcQuery(
+      list: rpcQueryPost(
         "statementRow",
         "list",
         contracts.statementRowContract.ops["list"],
       ),
-      summary: rpcQuery(
+      summary: rpcQueryPost(
         "statementRow",
         "summary",
         contracts.statementRowContract.ops["summary"],
@@ -1167,18 +1157,18 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     task: {
-      board: rpcQuery("task", "board", contracts.taskContract.ops["board"]),
+      board: rpcQueryPost("task", "board", contracts.taskContract.ops["board"]),
       bulkReorder: rpcMutation(
         "task",
         "bulkReorder",
         contracts.taskContract.ops["bulkReorder"],
       ),
-      chartData: rpcQuery(
+      chartData: rpcQueryPost(
         "task",
         "chartData",
         contracts.taskContract.ops["chartData"],
       ),
-      listActionable: rpcQuery(
+      listActionable: rpcQueryPost(
         "task",
         "listActionable",
         contracts.taskContract.ops["listActionable"],
@@ -1188,7 +1178,7 @@ export const httpContract = httpContractBuilder.router(
         "summary",
         contracts.taskContract.ops["summary"],
       ),
-      timeline: rpcQuery(
+      timeline: rpcQueryPost(
         "task",
         "timeline",
         contracts.taskContract.ops["timeline"],
@@ -1203,7 +1193,7 @@ export const httpContract = httpContractBuilder.router(
       lookup: rpcQuery("upc", "lookup", contracts.upcContract.ops["lookup"]),
     },
     "usda-food": {
-      alternateId: rpcQuery(
+      alternateId: rpcQueryPost(
         "usda-food",
         "alternateId",
         contracts.usdaFoodContract.ops["alternateId"],
@@ -1213,7 +1203,7 @@ export const httpContract = httpContractBuilder.router(
         "detail",
         contracts.usdaFoodContract.ops["detail"],
       ),
-      list: rpcQuery(
+      list: rpcQueryPost(
         "usda-food",
         "list",
         contracts.usdaFoodContract.ops["list"],

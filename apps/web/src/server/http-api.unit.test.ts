@@ -165,7 +165,17 @@ describe("HTTP boundary", () => {
     expect(ports.dispatch).not.toHaveBeenCalled();
   });
   it.each([
-    ["recipe/getManyByIDs?ids=%5B%22RCP-ABCD%22%5D", { ids: ["RCP-ABCD"] }],
+    ["recipe/getManyByIDs?ids=RCP-ABCD", { ids: ["RCP-ABCD"] }],
+    [
+      "recipe/getManyByIDs?ids=RCP-ABCD&ids=RCP-EFGH",
+      { ids: ["RCP-ABCD", "RCP-EFGH"] },
+    ],
+    // ts-rest's own client spells lists with brackets; the handler folds them.
+    [
+      "recipe/getManyByIDs?ids%5B0%5D=RCP-ABCD&ids%5B1%5D=RCP-EFGH",
+      { ids: ["RCP-ABCD", "RCP-EFGH"] },
+    ],
+    ["recipe/getManyByIDs?ids%5B%5D=RCP-ABCD", { ids: ["RCP-ABCD"] }],
     ["dashboard/counts", undefined],
     [
       "recipes?page=1&pageSize=5",

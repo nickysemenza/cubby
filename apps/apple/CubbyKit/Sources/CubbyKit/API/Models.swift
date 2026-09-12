@@ -105,6 +105,65 @@ public struct AgentAnswer: Sendable, Hashable {
     public let sources: [Source]
 }
 
+/// What `upc.lookup` knows about a barcode, from the cache or the upstream catalog.
+public struct UPCLookup: Sendable, Hashable {
+    public let upc: String
+    public let name: String
+    public let manufacturer: String?
+    public let category: String?
+    public let priceDollars: Double?
+    public let imageURL: URL?
+    /// `manual` (someone typed it into Cubby) or `upcitemdb`.
+    public let source: String
+    public let cached: Bool
+
+    public init(
+        upc: String,
+        name: String,
+        manufacturer: String?,
+        category: String?,
+        priceDollars: Double?,
+        imageURL: URL?,
+        source: String,
+        cached: Bool
+    ) {
+        self.upc = upc
+        self.name = name
+        self.manufacturer = manufacturer
+        self.category = category
+        self.priceDollars = priceDollars
+        self.imageURL = imageURL
+        self.source = source
+        self.cached = cached
+    }
+}
+
+/// One pickable location: the shortcode, its name, and its parent's name when it has one.
+public struct LocationOption: Sendable, Hashable, Identifiable {
+    public let id: LocationCode
+    public let name: String
+    public let path: String?
+
+    public init(id: LocationCode, name: String, path: String?) {
+        self.id = id
+        self.name = name
+        self.path = path
+    }
+}
+
+/// Row counts from `dashboard.counts`, keyed by `EntityKey.rawValue`.
+public struct DashboardCounts: Sendable, Hashable {
+    public let byEntityKey: [String: Int]
+
+    public init(byEntityKey: [String: Int]) {
+        self.byEntityKey = byEntityKey
+    }
+
+    public func count(for key: EntityKey) -> Int? {
+        byEntityKey[key.rawValue]
+    }
+}
+
 /// A quantity as the API spells it everywhere: `{value, unit, upperValue?}`.
 public struct Amount: Codable, Sendable, Hashable {
     public var value: Double

@@ -22,7 +22,7 @@ import type {
   VendorOut,
   VendorUpdateData,
 } from "@cubby/schemas/vendor";
-import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -40,7 +40,6 @@ import {
   auditDateWhereConditions,
   correlated,
   countWhere,
-  formatSearchTerm,
   getDb,
   type ListReadIntent,
   lockAndValidateForDelete,
@@ -49,6 +48,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import { reapUnreferencedImages } from "~/server/repo/image";
 import {
@@ -250,13 +250,8 @@ export const buildVendorWhereClause = (filters: VendorFilters) =>
         ? sql`NOT ${vendorHasDisplayableLogo}`
         : undefined,
     ...relatedWhereConditions("vendor", filters, vendor.id),
-    filters.search
-      ? or(
-          formatSearchTerm(vendor.name, filters.search),
-          formatSearchTerm(vendor.notes, filters.search),
-          formatSearchTerm(vendor.website, filters.search),
-        )
-      : undefined,
+    // `search` is a declared stored text filter over name, notes and website.
+    ...declaredFilterPredicates("vendor", vendor, filters),
   ]);
 
 const resolveVendorSort = (sort: SortParams) => {

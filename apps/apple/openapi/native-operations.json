@@ -1,0 +1,22 @@
+{
+  "$comment": "RPC operation ids CubbyKit calls. Every resources.* operation is generated automatically; list only RPC ids here, sorted. apps/web/scripts/generate-http-openapi.ts rejects an unknown id, a resources.* id, a duplicate or an unsorted list, and writes openapi-generator-config.yaml from this file.",
+  "operations": [
+    { "id": "agent.ask", "why": "Ask sheet" },
+    { "id": "dashboard.counts", "why": "Browse row counts" },
+    { "id": "image.markUploaded", "why": "PhotoService" },
+    { "id": "image.uploadImage", "why": "PhotoService" },
+    { "id": "inventory.findDuplicates", "why": "Audit duplicate badge" },
+    { "id": "inventory.getByLocationIds", "why": "Audit bin rows" },
+    { "id": "inventory.reconcileSession", "why": "Audit reconcile" },
+    { "id": "inventory.resolveScanStrays", "why": "Strays sheet" },
+    { "id": "inventory.scanAtLocation", "why": "Capture" },
+    { "id": "location.bulkUpdateParent", "why": "Audit adopt" },
+    { "id": "location.ensureGlobalUnknown", "why": "Audit relocate target" },
+    { "id": "location.makeTree", "why": "Audit scope picker" },
+    { "id": "problems.getCounts", "why": "Today problems tile" },
+    { "id": "product.findOrCreateByUPC", "why": "Capture unknown barcode" },
+    { "id": "search.find", "why": "Search and intents" },
+    { "id": "task.todayBriefing", "why": "Today tasks" },
+    { "id": "upc.lookup", "why": "Capture barcode lookup" }
+  ]
+}

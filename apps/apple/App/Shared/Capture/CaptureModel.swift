@@ -44,15 +44,8 @@ final class CaptureModel {
         loadingLocations = true
         defer { loadingLocations = false }
         do {
-            let page = try await client.raw.list(basePath: "locations", page: 1, pageSize: 200, sort: "name")
-            locations = page.items.compactMap { row in
-                guard let id = row["id"]?.stringValue else { return nil }
-                return LocationOption(
-                    id: LocationCode(id),
-                    name: row["name"]?.stringValue ?? id,
-                    path: row["path"]?.stringValue ?? row["parentName"]?.stringValue
-                )
-            }
+            let page = try await client.locationOptions(page: 1, pageSize: 200)
+            locations = page.items.map { LocationOption(id: $0.id, name: $0.name, path: $0.path) }
             locationError = nil
         } catch {
             locationError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)

@@ -20,7 +20,16 @@ mkdir -p "$OUT"
 # Only the generator's own outputs are replaced; EntityCatalog.swift (from
 # `pnpm entity:generate`) lives in the same directory and is left alone.
 rm -f "$OUT"/Types*.swift "$OUT"/Client.swift
+# The generator only warns when it silently drops a schema (a nullable union
+# member, an unsupported keyword), so any warning is a hole in the client.
+LOG="$(mktemp)"
+trap 'rm -f "$LOG"' EXIT
 "$BIN" generate --mode types --mode client \
   --config "$CONFIG" \
   --output-directory "$OUT" \
-  "$SPEC" >/dev/null
+  "$SPEC" >/dev/null 2>"$LOG"
+if grep -q 'warning' "$LOG"; then
+  echo "swift-openapi-generator emitted warnings; the document must not lose schemas:" >&2
+  grep 'warning' "$LOG" >&2
+  exit 1
+fi

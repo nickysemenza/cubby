@@ -63,11 +63,13 @@ export type FilterDescriptor = Readonly<{
   brandRef: IdentifierRef | null;
   expandRef: SourceRef | null;
   schemaRef: SourceRef | null;
-  stored: boolean;
+  stored: Readonly<{ columns: readonly string[]; array: boolean }> | null;
   range: Readonly<{
     kind: "number" | "date";
     int: boolean;
     nonnegative: boolean;
+    finite: boolean;
+    describe: Readonly<{ lower: string; upper: string }> | null;
   }> | null;
   urlOnly: boolean;
   nullable: Readonly<{ field: string; label: string }> | null;
@@ -113,6 +115,7 @@ export type EntityField = Readonly<{
     columnId: string | null;
     standard: "name" | "image" | null;
     detailOrder: number | null;
+    listOrder: number | null;
     detailSection: string;
     width: "xs" | "sm" | "md" | "lg" | null;
     format: "currency" | "plainDate" | "timestamp" | "external-link" | null;

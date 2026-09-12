@@ -44,45 +44,47 @@ struct Call: AsyncParsableCommand {
         }
 
         try await CLI.run {
+            // `CubbyClient` wraps every operation the app needs; `CubbyDebugClient` is the
+            // loosely-typed escape hatch this command exists for — it shares the same credential
+            // provider and `CubbyAPIError` handling, so the two behave identically on failure.
             let context = try CLIContext.make(from: global)
+            let debugClient = CubbyDebugClient(baseURL: context.baseURL, credentials: context.credentials)
             let parsedQuery = try Self.parseQuery(query)
             let body = try Self.parseBody(jsonBodyString)
 
-            let result = try await context.client.raw.call(route, pathID: pathID, query: parsedQuery, body: body)
-            print(try CLI.prettyJSON(result))
+            let data = try await debugClient.call(route, pathID: pathID, query: parsedQuery, body: body)
+            if let json = try? JSONDecoder().decode(JSONValue.self, from: data) {
+                print(try CLI.prettyJSON(json))
+            } else {
+                print(String(decoding: data, as: UTF8.self))
+            }
         }
     }
 
-    private static func parseQuery(_ pairs: [String]) throws -> [String: JSONValue] {
-        var query: [String: JSONValue] = [:]
-        for pair in pairs {
+    /// `CubbyDebugClient.call` takes query values literally (a repeated key is how the API spells
+    /// an array), so pairs travel as plain strings — no JSON-typing here, unlike the request body.
+    private static func parseQuery(_ pairs: [String]) throws -> [(String, String)] {
+        try pairs.map { pair in
             guard let separator = pair.firstIndex(of: "=") else {
                 throw CLIError.message("Invalid --query entry (expected key=value): \(pair)")
             }
             let key = String(pair[pair.startIndex..<separator])
             let value = String(pair[pair.index(after: separator)...])
-            // A value that parses as JSON (2, true, null, {…}, […]) is sent typed, which is what
-            // numeric controls like pageSize need; anything else travels as a plain string.
-            if let data = value.data(using: .utf8),
-                let json = try? JSONDecoder().decode(JSONValue.self, from: data)
-            {
-                query[key] = json
-            } else {
-                query[key] = .string(value)
-            }
+            return (key, value)
         }
-        return query
     }
 
-    private static func parseBody(_ jsonBodyString: String?) throws -> JSONValue? {
+    private static func parseBody(_ jsonBodyString: String?) throws -> Data? {
         guard let jsonBodyString else { return nil }
         guard let data = jsonBodyString.data(using: .utf8) else {
             throw CLIError.message("--json-body is not valid UTF-8.")
         }
         do {
-            return try JSONDecoder().decode(JSONValue.self, from: data)
+            // Validated, not decoded: `CubbyDebugClient.call` sends the raw bytes on.
+            _ = try JSONDecoder().decode(JSONValue.self, from: data)
         } catch {
             throw CLIError.message("--json-body is not valid JSON: \(error)")
         }
+        return data
     }
 }

@@ -172,6 +172,7 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter by status...",
         deriveSchema: true,
+        stored: { columns: ["acquiredAt"] },
         options: [
           { value: "false", label: "Wanted" },
           { value: "true", label: "Acquired" },

@@ -10,9 +10,10 @@ extension HTTPField.Name {
 
 /// The one place credentials are attached and errors are decoded for the typed client.
 ///
-/// Every error body in the API shares the `ErrorEnvelope` shape, so a single middleware can turn
-/// any status >= 400 into a `CubbyAPIError` and per-operation code never sees the `ok: false`
-/// branch. A 401 also invalidates the credential so the app returns to LoginView.
+/// Every error status in the API carries the same `ApiError` body, so a single middleware can
+/// turn any status >= 400 into a `CubbyAPIError` and per-operation code never has to reach for
+/// the generated `default` response. A 401 also invalidates the credential so the app returns to
+/// LoginView.
 public struct CubbyAuthMiddleware: ClientMiddleware {
     public static let maxErrorBodyBytes = 1 << 20
 
@@ -45,7 +46,8 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
         throw CubbyAPIError.decode(status: response.status.code, operationID: operationID, body: data)
     }
 
-    /// Shared with `CubbyRawClient`, which does not go through OpenAPIRuntime.
+    /// Shared with `CubbyDebugClient` and `PresignedUpload`, which do not go through
+    /// OpenAPIRuntime.
     static func apply(_ credential: CubbyCredential?, to fields: inout HTTPFields) {
         switch credential {
         case .bearer(let token): fields[.authorization] = "Bearer \(token)"

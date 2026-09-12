@@ -57,7 +57,7 @@ nonisolated struct CubbyEntityQuery: EntityStringQuery {
 
     func entities(matching string: String) async throws -> [CubbyEntity] {
         let client = try await IntentContext.client()
-        return try await client.raw.search(string, limit: 10).compactMap(CubbyEntity.init(hit:))
+        return try await client.search(string, limit: 10).compactMap(CubbyEntity.init(hit:))
     }
 
     func suggestedEntities() async throws -> [CubbyEntity] {

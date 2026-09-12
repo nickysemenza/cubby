@@ -226,7 +226,16 @@ struct RecountSessionTests {
         let body = try #require(service.state.withLock { $0.lastReconcile })
         #expect(body.snapshotUpdatedAt == "2026-03-03T10:00:00.000Z")
         #expect(body.expectedInventoryEntryIds.map(\.rawValue) == ["INV-2345", "INV-3456"])
-        #expect(body.resolutions.map(\.kind) == ["verify", "remove"])
+        #expect(
+            body.resolutions.map { resolution -> String in
+                switch resolution.resolution {
+                case .verify: "verify"
+                case .adjust: "adjust"
+                case .remove: "remove"
+                case .relocate: "relocate"
+                }
+            } == ["verify", "remove"]
+        )
         #expect(service.calls.contains(.adopt([LocationCode("LOC-89AB")], bin1)))
         // Adoption happens after the reconcile, never before.
         let reconcileIndex = try #require(service.calls.firstIndex { if case .reconcile = $0 { true } else { false } })

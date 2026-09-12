@@ -11,90 +11,8 @@ enum TodaySectionState<Value> {
     case failed(String)
 }
 
-/// One row from `task.todayBriefing`'s `next` array: an actionable task, already filtered and
-/// capped (max 4) by the server.
-struct TodayTask: Identifiable, Sendable {
-    let id: String
-    let name: String
-    let status: String
-    let dueDate: String?
-    let dueEndDate: String?
-    let projectId: String?
-    let projectName: String?
-
-    init?(_ value: JSONValue) {
-        guard let id = value["id"]?.stringValue, let name = value["name"]?.stringValue else { return nil }
-        self.id = id
-        self.name = name
-        self.status = value["status"]?.stringValue ?? "not_started"
-        self.dueDate = value["dueDate"]?.stringValue
-        self.dueEndDate = value["dueEndDate"]?.stringValue
-        self.projectId = value["projectId"]?.stringValue
-        self.projectName = value["projectName"]?.stringValue
-    }
-
-    /// Memberwise, for previews — the JSON-decoding initializer above is for live rows only.
-    init(
-        id: String, name: String, status: String, dueDate: String? = nil, dueEndDate: String? = nil,
-        projectId: String? = nil, projectName: String? = nil
-    ) {
-        self.id = id
-        self.name = name
-        self.status = status
-        self.dueDate = dueDate
-        self.dueEndDate = dueEndDate
-        self.projectId = projectId
-        self.projectName = projectName
-    }
-}
-
-/// One row from `GET /api/v1/meals?from=&to=`, scoped to today: the meal itself plus the names of
-/// any recipes attached to it.
-struct TodayMeal: Identifiable, Sendable {
-    let id: String
-    let name: String
-    let mealType: String?
-    let mealKind: String
-    let recipeNames: [String]
-
-    init?(_ value: JSONValue) {
-        guard let id = value["id"]?.stringValue, let name = value["name"]?.stringValue else { return nil }
-        self.id = id
-        self.name = name
-        self.mealType = value["mealType"]?.stringValue
-        self.mealKind = value["mealKind"]?.stringValue ?? "other"
-        self.recipeNames = value["recipes"]?.arrayValue?.compactMap { $0["recipe"]?["name"]?.stringValue } ?? []
-    }
-
-    init(
-        id: String, name: String, mealType: String? = nil, mealKind: String = "cooked",
-        recipeNames: [String] = []
-    ) {
-        self.id = id
-        self.name = name
-        self.mealType = mealType
-        self.mealKind = mealKind
-        self.recipeNames = recipeNames
-    }
-}
-
-/// `GET /api/v1/problems/getCounts`, trimmed to the two figures Today shows.
-struct TodayProblemCounts: Sendable {
-    let total: Int
-    let coverageTotal: Int
-
-    init?(_ value: JSONValue) {
-        guard let total = value["total"]?.doubleValue, let coverageTotal = value["coverageTotal"]?.doubleValue
-        else { return nil }
-        self.total = Int(total)
-        self.coverageTotal = Int(coverageTotal)
-    }
-
-    init(total: Int, coverageTotal: Int) {
-        self.total = total
-        self.coverageTotal = coverageTotal
-    }
-}
+// `TodayTask`, `TodayMeal`, and `TodayProblemCounts` live in CubbyKit (`Today/TodayModels.swift`)
+// now — the widget and App Intents read the same briefing shapes.
 
 /// Screen state for Today: the briefing, problem counts, and today's meals, each loaded
 /// independently so one failing endpoint doesn't blank the rest of the screen. Created per client
@@ -106,15 +24,6 @@ final class TodayModel {
     private(set) var problems: TodaySectionState<TodayProblemCounts> = .loading
 
     private let client: CubbyClient
-
-    /// `yyyy-MM-dd` in the device's own calendar and time zone — "today" means the day the user is
-    /// currently in, not a UTC day that might already have rolled over.
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
 
     init(client: CubbyClient) {
         self.client = client
@@ -133,9 +42,7 @@ final class TodayModel {
 
     private func fetchTasks() async -> TodaySectionState<[TodayTask]> {
         do {
-            let data = try await client.raw.call("task.todayBriefing")
-            let tasks = data["next"]?.arrayValue?.compactMap(TodayTask.init) ?? []
-            return .loaded(tasks)
+            return .loaded(try await client.todayBriefing())
         } catch {
             return .failed(message(for: error))
         }
@@ -143,12 +50,7 @@ final class TodayModel {
 
     private func fetchMeals() async -> TodaySectionState<[TodayMeal]> {
         do {
-            let today = Self.dayFormatter.string(from: .now)
-            let page = try await client.raw.list(
-                basePath: "meals", page: 1, pageSize: 10, sort: "date",
-                filters: ["from": .string(today), "to": .string(today)]
-            )
-            return .loaded(page.items.compactMap(TodayMeal.init))
+            return .loaded(try await client.meals(on: .now))
         } catch {
             return .failed(message(for: error))
         }
@@ -156,11 +58,7 @@ final class TodayModel {
 
     private func fetchProblems() async -> TodaySectionState<TodayProblemCounts> {
         do {
-            let data = try await client.raw.call("problems.getCounts")
-            guard let counts = TodayProblemCounts(data) else {
-                return .failed("Unexpected response shape")
-            }
-            return .loaded(counts)
+            return .loaded(try await client.problemCounts())
         } catch {
             return .failed(message(for: error))
         }

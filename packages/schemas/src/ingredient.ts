@@ -347,7 +347,3 @@ export type IngredientMcpOut = z.infer<typeof ingredientMcpOut>;
 
 export const ingredientMcpListOut =
   createPaginatedResponseSchema(ingredientMcpOut);
-
-export const ingredientResolveOrCreateResponseOut = z.object({
-  results: ingredientResolveOrCreateOut,
-});

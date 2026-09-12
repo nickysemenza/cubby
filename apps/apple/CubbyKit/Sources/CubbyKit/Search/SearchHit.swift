@@ -15,6 +15,26 @@ public struct SearchHit: Sendable, Hashable, Identifiable, Decodable {
 
     public var key: EntityKey? { EntityKey(rawValue: entityType) }
 
+    public init(
+        id: String,
+        entityType: String,
+        title: String,
+        subtitle: String? = nil,
+        typeHint: String? = nil,
+        imageURL: URL? = nil,
+        matchKind: String,
+        matchReason: String
+    ) {
+        self.id = id
+        self.entityType = entityType
+        self.title = title
+        self.subtitle = subtitle
+        self.typeHint = typeHint
+        self.imageURL = imageURL
+        self.matchKind = matchKind
+        self.matchReason = matchReason
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, entityType, title, subtitle, typeHint, imageUrl, matchKind, matchReason
     }
@@ -32,17 +52,8 @@ public struct SearchHit: Sendable, Hashable, Identifiable, Decodable {
     }
 }
 
-extension CubbyRawClient {
-    /// `GET /api/v1/search/find`. `kinds` narrows to those entity types; `nil` searches every
-    /// intent-exposed entity. The query is capped at the server's 100 characters.
-    public func search(_ text: String, kinds: [EntityKey]? = nil, limit: Int = 10) async throws -> [SearchHit] {
-        let query = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(100))
-        guard !query.isEmpty else { return [] }
-        let types = (kinds ?? EntityCatalog.intentExposed.map(\.key)).map { JSONValue.string($0.rawValue) }
-        return try await call(
-            "search.find",
-            query: ["query": .string(query), "entityTypes": .array(types), "limit": .number(Double(min(max(limit, 1), 50)))],
-            as: [SearchHit].self
-        )
-    }
+/// The server's cap on a `search.find` query string.
+extension SearchHit {
+    public static let maxQueryLength = 100
+    public static let maxLimit = 50
 }

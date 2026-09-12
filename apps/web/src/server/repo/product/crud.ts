@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   displayGtin,
   type ExternalIdKind,
@@ -36,7 +35,6 @@ import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
-  arrayOverlaps,
   asc,
   eq,
   inArray,
@@ -84,8 +82,6 @@ import {
   assertNoDependents,
   associatePendingImages,
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   countWhere,
   eqAny,
   executeListQueryWithCount,
@@ -104,7 +100,6 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
 import { patchEntityRows } from "~/server/repo/entity-patch";
@@ -119,6 +114,7 @@ import {
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { syncInventoryValuationsForProduct } from "~/server/repo/inventory/crud";
 import { resolveEstablishedManufacturer } from "~/server/repo/label-canonical";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import { loadLocationAncestorsWithIds } from "~/server/repo/location/tree";
 import {
   relatedSortExpression,
@@ -290,8 +286,10 @@ const resolveProductSort = (sort: SortParams) => {
   return null;
 };
 
+const productScaffold = listScaffold("product", product);
+
 const productListOrderBy = (sorts: SortParams[], groupBy?: string) =>
-  buildOrderBy(product, sorts, [...generatedEntitySort.product.fields], {
+  productScaffold.orderBy(sorts, {
     groupBy,
     resolve: resolveProductSort,
     tieBreaker: sql`${product.name} ASC, ${product.shortcode} ASC`,
@@ -688,14 +686,9 @@ export const buildProductWhere = async (
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."deletedAt" IS NULL))`;
 
-  const NO_TAGS = sql`(cardinality(${product.tags}) = 0)`;
-
   const classificationConditions = () => [
     ...auditDateWhereConditions(product, filters),
     ...relatedWhereConditions("product", filters, product.id),
-    // name/model/notes (text), category (multiselect + presence), and
-    // manufacturerExact (multiselect) are declared stored filters.
-    ...declaredFilterPredicates("product", product, filters),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
       : or(
@@ -864,11 +857,8 @@ export const buildProductWhere = async (
         (externalSources && externalSources.length > 0 ? "has" : undefined),
       productIdsWithExternalIds,
     ),
-    presenceCondition(product.model, filters.modelPresenceFilter),
     idSetPresence(product.id, filters.upcPresenceFilter, productIdsWithGtin),
     filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
-    presenceCondition(product.notes, filters.notesPresenceFilter),
-    presenceCondition(product.stockTracked, filters.stockTrackedPresenceFilter),
   ];
 
   const qualityConditions = () => [
@@ -894,29 +884,19 @@ export const buildProductWhere = async (
             sql`${derivedPriceFilterSql(product.id)} IS NOT NULL`,
           )
         : undefined,
-    // Tags are not-null arrays, so the empty sentinel is cardinality zero.
-    // `arrayOverlaps` is required because interpolating a JS array emits a row
-    // constructor rather than a Postgres text array.
-    or(
-      filters.tagFilters && filters.tagFilters.length > 0
-        ? arrayOverlaps(product.tags, filters.tagFilters)
-        : undefined,
-      presenceCondition(product.tags, filters.tagsPresenceFilter, NO_TAGS),
-    ),
   ];
 
-  // Build where conditions - always filter out deleted items
-  const whereClause = buildSearchConditions(
-    product,
-    [{ column: product.manufacturer, term: filters.manufacturerFilter }],
-    [
-      ...classificationConditions(),
-      ...inventoryConditions(),
-      ...ledgerConditions(),
-      ...associationConditions(),
-      ...qualityConditions(),
-    ],
-  );
+  // name/model/notes/manufacturerFilter (text), category (multiselect +
+  // presence), manufacturerExact (multiselect), tags (overlap + presence) and
+  // the model/notes/stockTracked presence filters are declared stored
+  // filters — applied by `productScaffold.where` before the conditions below.
+  const whereClause = productScaffold.where(filters, [
+    ...classificationConditions(),
+    ...inventoryConditions(),
+    ...ledgerConditions(),
+    ...associationConditions(),
+    ...qualityConditions(),
+  ]);
   return whereClause;
 };
 
@@ -941,7 +921,7 @@ export const productList = async (
 
   const orderByArray = productListOrderBy(sorts, groupBy);
 
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = productScaffold.page(pagination);
   const skipAggregates = readIntent === "sample";
 
   const [{ data: results, count: totalCount }, aggregates, expenseAggregates] =

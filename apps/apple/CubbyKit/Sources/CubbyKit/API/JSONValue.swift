@@ -1,8 +1,10 @@
 import Foundation
 
-/// A dynamically-typed JSON value, used at the boundary for endpoints CubbyKit does not model
-/// with generated types (see `CubbyRawClient`). Never surface `Components.Schemas.*_schemaNN`
-/// types in hand-written Swift — this is the alternative for shapes that aren't worth a struct.
+/// A dynamically-typed JSON value: the projection behind `EntityRow.raw`, so one generic Browse
+/// screen can render any of the catalog's entities without a per-entity Swift type. It is always
+/// produced from a *decoded* typed payload (`JSONValue(encoding:)`), never from response bytes.
+/// Never surface a positional `Components.Schemas.InputSchemaNN` type in hand-written Swift —
+/// this is the alternative for shapes that aren't worth a struct.
 public indirect enum JSONValue: Sendable, Hashable {
     case null
     case bool(Bool)
@@ -125,5 +127,17 @@ extension JSONValue: ExpressibleByArrayLiteral {
 extension JSONValue: ExpressibleByDictionaryLiteral {
     public init(dictionaryLiteral elements: (String, JSONValue)...) {
         self = .object(Dictionary(uniqueKeysWithValues: elements))
+    }
+}
+
+// MARK: - Projection from typed values
+
+extension JSONValue {
+    /// Projects a decoded wire value into the dynamic tree `EntityRow.raw` exposes, using the
+    /// same date spelling the client decodes, so `EntityFacts` still parses timestamps. A typed
+    /// value's absent optionals become absent keys (the wire sent `null`; consumers treat the
+    /// two alike).
+    public init<T: Encodable>(encoding value: T) throws {
+        self = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder.cubby().encode(value))
     }
 }

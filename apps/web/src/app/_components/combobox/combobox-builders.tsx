@@ -449,35 +449,44 @@ export const buildTaskComboboxItem = (task: {
   };
 };
 
-export const buildVendorNameComboboxItem = (vendor: {
+type VendorPickerInput = {
   id: VendorShortcode;
   name: string;
   count?: number;
   logo?: { url: string } | null;
-}): ComboboxItem<string> => ({
-  id: vendor.name,
-  shortcode: vendor.id,
-  name: vendor.name,
-  presentation:
-    vendor.count == null
-      ? undefined
-      : {
-          facts: [
-            `${vendor.count} ${vendor.count === 1 ? "purchase" : "purchases"}`,
-          ],
-        },
-  icon: (
-    <VendorMark vendor={vendor.name} vendorId={vendor.id} logo={vendor.logo} />
-  ),
-});
+};
 
-export const buildVendorShortcodeComboboxItem = (vendor: {
-  id: VendorShortcode;
-  name: string;
-  count?: number;
-  logo?: { url: string } | null;
-}): ComboboxItem<VendorShortcode> => ({
-  id: vendor.id,
+/**
+ * One vendor row, two identities. `itemId: "shortcode"` is for persisted
+ * vendor relations (purchase writes keep `VendorShortcode`); `itemId: "name"`
+ * is for the expense vendor field, which resolves server-side by exact,
+ * case-sensitive name match through `findOrCreateVendor` (see the doc on
+ * `WithVendorSearch` in `with-vendor-search.tsx`) and so must key its
+ * combobox item on the name, not the id.
+ */
+export function buildVendorComboboxItem(
+  vendor: VendorPickerInput,
+  options: { itemId: "shortcode" },
+): ComboboxItem<VendorShortcode>;
+export function buildVendorComboboxItem(
+  vendor: VendorPickerInput,
+  options: { itemId: "name" },
+): ComboboxItem<string>;
+export function buildVendorComboboxItem(
+  vendor: VendorPickerInput,
+  options: { itemId: "name" | "shortcode" },
+): ComboboxItem<string> {
+  return options.itemId === "shortcode"
+    ? vendorComboboxItem(vendor, vendor.id)
+    : vendorComboboxItem(vendor, vendor.name);
+}
+
+/** The one vendor item body; the id's type follows the identity the caller picked. */
+const vendorComboboxItem = <Id extends string>(
+  vendor: VendorPickerInput,
+  id: Id,
+): ComboboxItem<Id> => ({
+  id,
   shortcode: vendor.id,
   name: vendor.name,
   presentation:

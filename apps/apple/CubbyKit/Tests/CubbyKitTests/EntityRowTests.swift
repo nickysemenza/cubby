@@ -53,7 +53,10 @@ struct EntityRowTests {
         #expect(row?.imageURL == URL(string: "https://images.example/cover.jpg"))
     }
 
-    @Test func imageURLFallsBackToFirstReadyImage() {
+    /// Every payload's `images` field is now `[ImageShortcode]` (bare ids), not `[{id,url,status}]`
+    /// — there is no URL left to fall back to, even when a test object still shapes `images` the
+    /// old way. Only `coverImageUrl` (present on `resources.product.get`) supplies `imageURL`.
+    @Test func imageURLIsNilWithoutACoverRegardlessOfImages() {
         let object: JSONValue = [
             "id": "PRD-2345",
             "name": "Sample",
@@ -63,7 +66,7 @@ struct EntityRowTests {
             ],
         ]
         let row = product.row(from: object)
-        #expect(row?.imageURL == URL(string: "https://images.example/ready.jpg"))
+        #expect(row?.imageURL == nil)
     }
 
     @Test func imageURLNilWhenNoCoverAndNoReadyImage() {

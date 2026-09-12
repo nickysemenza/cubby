@@ -8,7 +8,7 @@ public final class GenericEntityDetailModel {
         case idle
         case loading
         case loaded
-        /// The descriptor has no `.get` action.
+        /// The HTTP document exposes no detail route for this entity.
         case unavailable(String)
         case failed(String)
     }
@@ -17,25 +17,24 @@ public final class GenericEntityDetailModel {
     public private(set) var row: EntityRow?
     public private(set) var phase: Phase = .idle
 
-    private let client: CubbyRawClient
+    private let client: CubbyClient
 
-    public init(descriptor: EntityDescriptor, client: CubbyRawClient) {
+    public init(descriptor: EntityDescriptor, client: CubbyClient) {
         self.descriptor = descriptor
         self.client = client
     }
 
-    /// Loads one row by id. Never issues a request for a descriptor without `.get` — the phase
-    /// goes straight to `.unavailable` instead.
+    /// Loads one row by id. Never issues a request for an entity the document has no `get` route
+    /// for — see `GenericEntityListModel.load` on why `httpActions` is the authority.
     public func load(id: String) async {
-        guard descriptor.actions.contains(.get) else {
+        guard descriptor.key.httpActions.contains(.get) else {
             phase = .unavailable("No detail route for \(descriptor.singular)")
             return
         }
         phase = .loading
         do {
-            let object = try await client.get(basePath: descriptor.basePath, id: id)
-            row = descriptor.row(from: object)
-            phase = .loaded
+            row = try await client.row(descriptor, id: id)
+            phase = row == nil ? .failed("No \(descriptor.singular) called \(id)") : .loaded
         } catch {
             phase = .failed(GenericEntityListModel.describe(error))
         }

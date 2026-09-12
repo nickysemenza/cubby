@@ -15,6 +15,8 @@ export const entityListContract = defineContract("entity", {
     // server handler; the HTTP router substitutes the real wire schema.
     input: z.custom<EntityListInputByEntity[ListEntity]>(),
     output: z.custom<EntityListResultByEntity[ListEntity]>(),
+    // HTTP serves these as the per-entity resource routes instead.
+    http: false,
     observability: { entities: listEntities },
   }),
 });

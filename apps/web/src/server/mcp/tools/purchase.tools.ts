@@ -25,7 +25,6 @@ import {
   linkExpensesToPurchaseInput,
   purchaseOut,
   purchaseProductsInput,
-  purchaseProductsMcpOut,
   reclassifyPurchaseDocumentInput,
   splitExpenseDelta,
   splitExpenseInput,
@@ -33,17 +32,18 @@ import {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
+import { purchaseContract } from "~/contracts/purchase.contract";
 import { executeEntity } from "~/server/entity-kernel";
 
 import { READ_ONLY_CLOSED, registerRouterTool, WRITE_CLOSED } from "./_shared";
+import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
 
 /**
- * `purchase.split` returns the created parts as a bare array; every other
- * array-shaped MCP output in this codebase wraps in `{ items }` so the
- * advertised JSON Schema is object-shaped (a top-level `z.array` has no
- * `properties` key, which trips the "advertises real JSON Schema properties"
- * regression guard in catalog schema guard). Mirrors `expenseBulkMcpOut` in
- * project.tools.ts.
+ * `{items}` over `purchase.split`'s own output — see `mcpItemsEnvelope`. Every
+ * other array-shaped MCP output in this codebase wraps the same way, since a
+ * bare array root has no JSON Schema `properties` key (trips the "advertises
+ * real JSON Schema properties" regression guard in catalog schema guard).
+ * Mirrors `expenseBulkMcpOut` in project.tools.ts.
  *
  * `originalCost`/`partsSum`/`delta` close the gap the web dialog doesn't have:
  * a human sees the "$X over/under" warning live as they type, but an MCP
@@ -53,8 +53,9 @@ import { READ_ONLY_CLOSED, registerRouterTool, WRITE_CLOSED } from "./_shared";
  * legitimately makes the parts disagree with the original, and that is
  * expected, not an error — nothing here rejects it.
  */
-export const splitExpenseMcpOut = z.object({
-  items: z.array(expenseOut),
+export const splitExpenseMcpOut = mcpItemsEnvelope(
+  fromContract(purchaseContract.ops.split),
+).extend({
   originalCost: z
     .number()
     .nullable()
@@ -71,6 +72,13 @@ export const splitExpenseMcpOut = z.object({
       "partsSum minus originalCost, in dollars. A CUE, never a gate — a non-zero delta is not rejected and is not back-computed into any part's cost. Null when originalCost is null (nothing to compare against).",
     ),
 });
+
+/**
+ * `{items}` over `purchase.products`'s own output — see `mcpItemsEnvelope`.
+ */
+const purchaseProductsMcpOut = mcpItemsEnvelope(
+  fromContract(purchaseContract.ops.products),
+);
 
 export function registerPurchaseTools(server: McpServer) {
   registerRouterTool(server, {

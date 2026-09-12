@@ -11,8 +11,7 @@ import {
   buildRecipeComboboxItem,
   buildSearchHitComboboxItem,
   buildTaskComboboxItem,
-  buildVendorNameComboboxItem,
-  buildVendorShortcodeComboboxItem,
+  buildVendorComboboxItem,
 } from "./combobox-builders";
 
 function locationSearchHit(overrides: Partial<SearchHit> = {}): SearchHit {
@@ -88,15 +87,34 @@ describe("entity picker value adapters", () => {
       shortcode: task,
     });
     expect(
-      buildVendorShortcodeComboboxItem({ id: vendor, name: "Acme" }),
+      buildVendorComboboxItem(
+        { id: vendor, name: "Acme" },
+        { itemId: "shortcode" },
+      ),
     ).toMatchObject({ id: vendor, shortcode: vendor });
   });
 
   it("keeps the expense vendor adapter name-valued", () => {
     const vendor = testShortcode("vendor", "VEN-9ABC");
     expect(
-      buildVendorNameComboboxItem({ id: vendor, name: "Acme" }),
+      buildVendorComboboxItem({ id: vendor, name: "Acme" }, { itemId: "name" }),
     ).toMatchObject({ id: "Acme", shortcode: vendor, name: "Acme" });
+  });
+
+  it("agrees on everything except the id between the two vendor item-id modes", () => {
+    const vendor = testShortcode("vendor", "VEN-9ABC");
+    const input = { id: vendor, name: "Acme", count: 3 };
+    const byName = buildVendorComboboxItem(input, { itemId: "name" });
+    const byShortcode = buildVendorComboboxItem(input, {
+      itemId: "shortcode",
+    });
+
+    expect({ ...byName, id: undefined }).toEqual({
+      ...byShortcode,
+      id: undefined,
+    });
+    expect(byName.id).toBe("Acme");
+    expect(byShortcode.id).toBe(vendor);
   });
 
   it("uses the project's custom mark in picker rows", () => {

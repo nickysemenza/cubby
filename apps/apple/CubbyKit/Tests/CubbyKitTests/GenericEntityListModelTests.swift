@@ -4,61 +4,35 @@ import Testing
 
 @testable import CubbyKit
 
-/// A `URLProtocol` stub scoped to this file, mirroring `RawClientTests.StubURLProtocol` but with
-/// its own static handler state. Swift Testing schedules independent `@Suite` types concurrently
-/// even when each is individually `.serialized`, so sharing one static handler across suites
-/// (confirmed empirically while writing these tests) intermittently answers one suite's request
-/// with another's stubbed response. A dedicated type per suite removes the shared mutable state
-/// entirely instead of relying on ordering.
-private final class ListStubURLProtocol: URLProtocol, @unchecked Sendable {
-    typealias Handler = @Sendable (URLRequest) -> (Int, Data)
-    static let handler = Mutex<Handler?>(nil)
-
+private final class ListStub: URLProtocol, @unchecked Sendable {
+    static let handler = Mutex<StubNetworking.Handler?>(nil)
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-
     override func startLoading() {
-        guard let handler = Self.handler.withLock({ $0 }) else {
-            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
-            return
-        }
-        let (status, data) = handler(request)
-        let response = HTTPURLResponse(
-            url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
-            headerFields: ["Content-Type": "application/json"]
-        )!
-        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
-        client?.urlProtocolDidFinishLoading(self)
+        StubNetworking.startLoading(request, client: client, target: self, handler: Self.handler.withLock { $0 })
     }
-
     override func stopLoading() {}
-
-    static func session() -> URLSession {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [ListStubURLProtocol.self]
-        return URLSession(configuration: configuration)
-    }
+    static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
 @Suite("GenericEntityListModel", .serialized)
 @MainActor
 struct GenericEntityListModelTests {
-    private func makeClient(credential: CubbyCredential = .bearer("tok")) throws -> CubbyRawClient {
+    private func makeClient(credential: CubbyCredential = .bearer("tok")) throws -> CubbyClient {
         let store = InMemorySessionTokenStore()
         try store.save(credential, for: "localhost:3000")
         let credentials = CredentialProvider(host: "localhost:3000", store: store)
-        return CubbyRawClient(
+        return CubbyClient(
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: credentials,
-            session: ListStubURLProtocol.session()
+            session: ListStub.session()
         )
     }
 
     @Test func loadsProductsIntoRows() async throws {
-        defer { ListStubURLProtocol.handler.withLock { $0 = nil } }
+        defer { ListStub.handler.withLock { $0 = nil } }
         let payload = try Fixtures.data(named: "products-list.json")
-        ListStubURLProtocol.handler.withLock { handler in
+        ListStub.handler.withLock { handler in
             handler = { _ in (200, payload) }
         }
         let model = GenericEntityListModel(descriptor: EntityCatalog[.product], client: try makeClient())
@@ -70,18 +44,21 @@ struct GenericEntityListModelTests {
         #expect(model.meta?.totalCount == 1)
     }
 
-    @Test func unavailableForADescriptorWithoutListNeverHitsTheNetwork() async throws {
-        defer { ListStubURLProtocol.handler.withLock { $0 = nil } }
-        ListStubURLProtocol.handler.withLock { handler in
+    /// `image` is exactly the case the guard exists for: the kernel roster grants it `.list`
+    /// (`EntityCatalog[.image].actions.contains(.list)` is true), but the HTTP document has no
+    /// `resources.image.list` route. `GenericEntityListModel.load()` must defer to
+    /// `EntityKey.httpActions`, not the kernel roster, or it would fire a request that 404s.
+    @Test func unavailableForADescriptorWithoutAnHTTPListRouteNeverHitsTheNetwork() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        ListStub.handler.withLock { handler in
             handler = { _ in
-                Issue.record("unexpected network call for a descriptor with no .list action")
+                Issue.record("unexpected network call for a descriptor with no HTTP .list route")
                 return (500, Data())
             }
         }
-        // usda-food's kernel contract carries no actions at all (see EntityCatalog.swift), so it's
-        // a stable "definitely has no .list" fixture.
-        let descriptor = EntityCatalog[.usdaFood]
-        #expect(!descriptor.actions.contains(.list))
+        let descriptor = EntityCatalog[.image]
+        #expect(descriptor.actions.contains(.list))
+        #expect(!descriptor.key.httpActions.contains(.list))
 
         let model = GenericEntityListModel(descriptor: descriptor, client: try makeClient())
         await model.load()

@@ -22,7 +22,6 @@ import {
   projectOut,
   projectPortfolioAnalyticsOut,
   projectResourceProjectInput,
-  projectResourcesMcpOut,
   projectTaskStatusBreakdown,
   projectToolSuggestionsOut,
   repointProjectUsesInput,
@@ -34,12 +33,20 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { sumBy } from "es-toolkit";
 import { z } from "zod";
 
+import { projectContract } from "~/contracts/project.contract";
+
 import {
   READ_ONLY_CLOSED,
   registerRouterTool,
   strictFilterInput,
   WRITE_CLOSED,
 } from "./_shared";
+import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
+
+/** `{items}` over `project.resources`'s own output — see `mcpItemsEnvelope`. */
+const projectResourcesMcpOut = mcpItemsEnvelope(
+  fromContract(projectContract.ops.resources),
+);
 
 // Synthesis-read / bulk-write projections
 //

@@ -65,7 +65,7 @@ public actor PhotoUploader {
         progress?(.presigning)
         let filename = "\(request.filenameBase).\(request.format.fileExtension)"
         let upload = try await service.createUpload(
-            filename: filename, size: data.count, contentType: request.format.contentType, entity: request.entity
+            filename: filename, size: data.count, format: request.format, entity: request.entity
         )
 
         progress?(.uploading)

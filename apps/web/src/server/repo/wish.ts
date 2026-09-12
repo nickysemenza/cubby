@@ -1,18 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   type ProductId,
   parseShortcodeFor,
   type WishId,
   type WishShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  buildTakeSkip,
-  type PaginationParams,
-  type SortParams,
-} from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   WishCreateInput,
   WishFilters,
@@ -29,8 +24,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { computeChanges, logAuditEntry } from "~/server/repo/audit-log";
 import {
   auditDateWhereConditions,
-  buildOrderBy,
-  buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
   formatSearchTerm,
@@ -41,6 +34,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -201,6 +195,8 @@ const resolveWishSort = (sort: SortParams) => {
   ];
 };
 
+const wishScaffold = listScaffold("wish", wish);
+
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildWishWhere = async (
   db: Database | DrizzleTransaction,
@@ -258,29 +254,21 @@ export const buildWishWhere = async (
       )
     : undefined;
   // The name/notes/candidate search is an OR across columns (see `search`
-  // above), not the per-column AND `buildSearchConditions`' own `searchFilters`
-  // would apply — so it goes in via `extraConditions` instead, alongside
-  // notDeleted (which the helper adds itself).
-  return buildSearchConditions(
-    wish,
-    [],
-    [
-      filters.acquired === undefined
-        ? undefined
-        : filters.acquired
-          ? sql`${wish.acquiredAt} IS NOT NULL`
-          : sql`${wish.acquiredAt} IS NULL`,
-      candidateFilter,
-      search,
-      // `wishFilterFields` spreads both of these, and the manifest renders their
-      // controls — so omitting either here is the same manifest/server drift this
-      // entity's UI work set out to remove, just pointing the other way (the UI
-      // sends a filter the server silently ignores). Every other related-view
-      // source repo applies both.
-      ...auditDateWhereConditions(wish, filters),
-      ...relatedWhereConditions("wish", filters, wish.id),
-    ],
-  );
+  // above), not the per-column AND a declared stored predicate would apply —
+  // so it goes in via `computed` instead, alongside `acquired` (a declared
+  // stored boolean over the nullable `acquiredAt`, applied by
+  // `wishScaffold.where` before the conditions below).
+  return wishScaffold.where(filters, [
+    candidateFilter,
+    search,
+    // `wishFilterFields` spreads both of these, and the manifest renders their
+    // controls — so omitting either here is the same manifest/server drift this
+    // entity's UI work set out to remove, just pointing the other way (the UI
+    // sends a filter the server silently ignores). Every other related-view
+    // source repo applies both.
+    ...auditDateWhereConditions(wish, filters),
+    ...relatedWhereConditions("wish", filters, wish.id),
+  ]);
 };
 
 export const wishList = async (
@@ -294,7 +282,7 @@ export const wishList = async (
   sums: { priceLow: number; priceHigh: number };
 }> => {
   const where = await buildWishWhere(db, filters);
-  const { take, skip } = buildTakeSkip(pagination);
+  const { take, skip } = wishScaffold.page(pagination);
   // Footer totals over the WHOLE filtered set, not the loaded page. Summing the
   // returned rows instead would quietly under-report the moment the wishlist
   // outgrows one page — a wrong number is worse than no number.
@@ -304,11 +292,7 @@ export const wishList = async (
         .select()
         .from(wish)
         .where(where)
-        .orderBy(
-          ...buildOrderBy(wish, sorts, [...generatedEntitySort.wish.fields], {
-            resolve: resolveWishSort,
-          }),
-        )
+        .orderBy(...wishScaffold.orderBy(sorts, { resolve: resolveWishSort }))
         .limit(take)
         .offset(skip),
       countWhere(db, wish, where),
