@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { plainDate } from "@cubby/schemas/base-entity";
 import { dataQuality } from "@cubby/schemas/data-quality";
 import {
   externalIdInputs,
@@ -12,6 +13,7 @@ import {
 } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
 import { isbn } from "@cubby/schemas/isbn";
+import { money } from "@cubby/schemas/money";
 import {
   moneyNullable,
   positiveMoneyNullable,
@@ -69,7 +71,7 @@ export default defineEntity({
         key: "tags",
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true, detailOrder: 10 },
+        display: { list: true, listOrder: 16, detail: true, detailOrder: 10 },
         validation: {
           read: z.array(z.string()),
           create: z.array(z.string()).default([]),
@@ -104,10 +106,13 @@ export default defineEntity({
         key: "fdc_id",
         kind: "number",
         nullable: true,
-        label: "USDA FDC ID",
+        // Was "USDA FDC ID"; the list column has always headed this "FDC" —
+        // declaration wins, so the detail label follows the list now too.
+        label: "FDC",
         control: { kind: "number" },
         display: {
           list: true,
+          listOrder: 3,
           detail: true,
           detailOrder: 7,
           width: "sm",
@@ -125,6 +130,7 @@ export default defineEntity({
         control: { kind: "text", section: "manufacturer" },
         display: {
           list: true,
+          listOrder: 1,
           detail: true,
           detailOrder: 2,
           width: "md",
@@ -141,7 +147,13 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text", section: "identity-model" },
-        display: { list: true, detail: true, detailOrder: 3, width: "md" },
+        display: {
+          list: true,
+          listOrder: 4,
+          detail: true,
+          detailOrder: 3,
+          width: "md",
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -153,7 +165,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea", section: "notes" },
-        display: { list: true, width: "md" },
+        display: { list: true, listOrder: 5, width: "md" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -165,7 +177,10 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number" },
-        display: { list: true },
+        // The list now shows the ledger's computed expectedQuantity
+        // (`ledgerExpectedQuantity`, aliased to this same "expectedQuantity"
+        // column id) instead of this raw stored override — this field stays
+        // create/update-only.
         validation: {
           read: z.number().nullable(),
           create: z.number().nullable(),
@@ -179,6 +194,7 @@ export default defineEntity({
         control: { kind: "select" },
         display: {
           list: true,
+          listOrder: 0,
           detail: true,
           detailOrder: 5,
           width: "sm",
@@ -209,10 +225,22 @@ export default defineEntity({
         key: "price",
         kind: "number",
         nullable: true,
+        // Stays "Valuation price": the detail page's `EntityBasicInfo`
+        // override for this field supplies no label of its own (unlike
+        // `primaryGtin`'s dynamic ISBN/UPC label), so this declared label is
+        // still its detail label — asserted by
+        // product-basic-info-filter.unit.test.tsx, a file outside this
+        // migration's ownership. The list column has always headed this
+        // "Price" instead; since an override's plain-string header is always
+        // replaced by this label, productlist.tsx's override supplies a
+        // header FUNCTION for this one column to opt out of that
+        // substitution and keep "Price" on the list without touching the
+        // detail label.
         label: "Valuation price",
         control: { kind: "number", renderer: "money" },
         display: {
           list: true,
+          listOrder: 9,
           detail: true,
           detailOrder: 4,
           format: "currency",
@@ -241,7 +269,7 @@ export default defineEntity({
         kind: "text-array",
         label: "External IDs",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { detail: true, detailOrder: 9 },
+        display: { list: true, listOrder: 8, detail: true, detailOrder: 9 },
         validation: {
           read: z.array(externalIdOut),
           create: externalIdInputs.default([]),
@@ -253,7 +281,10 @@ export default defineEntity({
         kind: "boolean",
         nullable: true,
         control: { kind: "checkbox" },
-        display: { list: true },
+        // Hidden by default via the page's `initialColumnVisibility` — this
+        // was already declared `list: true` before this migration, but the
+        // page never wired `createEntityDisplayColumns` up to render it.
+        display: { list: true, listOrder: 18 },
         validation: {
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
@@ -264,8 +295,11 @@ export default defineEntity({
         key: "stockTracked",
         kind: "boolean",
         nullable: true,
+        // Default label would be "Stock Tracked"; the list column has always
+        // headed this "Stock tracking".
+        label: "Stock tracking",
         control: { kind: "checkbox" },
-        display: { list: true, width: "sm" },
+        display: { list: true, listOrder: 6, width: "sm" },
         validation: {
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
@@ -324,9 +358,13 @@ export default defineEntity({
         key: "primaryGtin",
         kind: "text",
         nullable: true,
-        label: "UPC",
+        // Was "UPC" — the list column has always headed this "Barcode /
+        // ISBN" (it edits either an ISBN or a UPC). The detail page's own
+        // "UPC"/"ISBN-13" label is a dynamic override, so it is unaffected.
+        label: "Barcode / ISBN",
         display: {
           list: true,
+          listOrder: 2,
           detail: true,
           detailOrder: 6,
           width: "sm",
@@ -359,8 +397,110 @@ export default defineEntity({
       {
         key: "dataQuality",
         kind: "json",
+        // Default label would be "Data Quality"; the list column has always
+        // headed this "Data quality".
+        label: "Data quality",
+        display: { list: true, listOrder: 7 },
         validation: {
           read: dataQuality,
+          create: null,
+          update: null,
+        },
+      },
+      // Read-only, list-only computed values carried on `ProductListItem`
+      // (never a stored `Product` column) — each needs the override
+      // `productlist.tsx` supplies, per docs/entities.md's "declaration
+      // wins" rule.
+      {
+        key: "expenseTotal",
+        kind: "number",
+        label: "Net basis",
+        display: { list: true, listOrder: 10 },
+        validation: {
+          read: money,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "componentCount",
+        kind: "number",
+        label: "Components",
+        display: { list: true, listOrder: 12, columnId: "components" },
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "servingAsLocations",
+        kind: "number",
+        label: "In service",
+        // Nested under `quantityLedger.locationCount` on the list row — no
+        // flat readKey can reach it, so this needs the override
+        // `productlist.tsx` supplies.
+        readKey: null,
+        display: { list: true, listOrder: 11 },
+      },
+      {
+        key: "ledgerExpectedQuantity",
+        kind: "number",
+        label: "Expected",
+        // Nested under `quantityLedger.expectedQuantity` on the list row.
+        // Aliased to the "expectedQuantity" column id — the stored
+        // `expectedQuantity` field above no longer renders a list column, so
+        // this is the sole claimant of that (persisted) column id now.
+        readKey: null,
+        display: { list: true, listOrder: 13, columnId: "expectedQuantity" },
+      },
+      {
+        key: "quantityVariance",
+        kind: "number",
+        nullable: true,
+        label: "Variance",
+        display: { list: true, listOrder: 14 },
+        validation: {
+          read: z.number().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "purchaseDate",
+        kind: "date",
+        nullable: true,
+        // Default label would be "Purchase Date"; the list column has
+        // always headed this "Purchase date".
+        label: "Purchase date",
+        display: { list: true, listOrder: 15 },
+        validation: {
+          read: plainDate.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "expenseCount",
+        kind: "number",
+        label: "Expenses",
+        display: { list: true, listOrder: 17, columnId: "expenses" },
+        validation: {
+          read: z.number().int(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        // Never its own column before this migration — a plain, generic,
+        // hidden-by-default addition (same shape as the task entity's
+        // `dueEndDate`/`sortOrder`), not part of the read-only cluster above.
+        key: "onHandUnits",
+        kind: "number",
+        nullable: true,
+        display: { list: true, listOrder: 19 },
+        validation: {
+          read: z.number().nullable(),
           create: null,
           update: null,
         },
