@@ -16188,11 +16188,53 @@
             "explode": true
           },
           {
+            "name": "search",
+            "in": "query",
+            "description": "Substring match on order id or human display label",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "displayLabelSearch",
             "in": "query",
             "description": "Substring match on the human display label only",
             "schema": {
               "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "description": "Inclusive lower bound on purchase date",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "description": "Inclusive upper bound on purchase date",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "statedTotalPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
             },
             "style": "form",
             "explode": true
@@ -16211,16 +16253,6 @@
             "in": "query",
             "schema": {
               "type": "number"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "search",
-            "in": "query",
-            "description": "Substring match on order id or human display label",
-            "schema": {
-              "type": "string"
             },
             "style": "form",
             "explode": true
@@ -16405,16 +16437,6 @@
             "explode": true
           },
           {
-            "name": "statedTotalPresenceFilter",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": ["has", "none"]
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
             "name": "expenseStatus",
             "in": "query",
             "schema": {
@@ -16504,28 +16526,6 @@
                   }
                 ]
               }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "dateFrom",
-            "in": "query",
-            "description": "Inclusive lower bound on purchase date",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "dateTo",
-            "in": "query",
-            "description": "Inclusive upper bound on purchase date",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "style": "form",
             "explode": true
@@ -17469,6 +17469,46 @@
             "explode": true
           },
           {
+            "name": "transactionDateFrom",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "transactionDateTo",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "amountMin",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "amountMax",
+            "in": "query",
+            "schema": {
+              "type": "number"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "accountId",
             "in": "query",
             "schema": {
@@ -17560,46 +17600,6 @@
                 "type": "string",
                 "minLength": 1
               }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "amountMin",
-            "in": "query",
-            "schema": {
-              "type": "number"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "amountMax",
-            "in": "query",
-            "schema": {
-              "type": "number"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "transactionDateFrom",
-            "in": "query",
-            "description": "Calendar day as \"YYYY-MM-DD\"",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "transactionDateTo",
-            "in": "query",
-            "description": "Calendar day as \"YYYY-MM-DD\"",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "style": "form",
             "explode": true
@@ -18285,6 +18285,28 @@
             "explode": true
           },
           {
+            "name": "dateFrom",
+            "in": "query",
+            "description": "Inclusive lower bound on expense date",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "description": "Inclusive upper bound on expense date",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "costType",
             "in": "query",
             "schema": {
@@ -18369,6 +18391,66 @@
             "in": "query",
             "schema": {
               "type": "boolean"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "costMin",
+            "in": "query",
+            "description": "Inclusive lower bound on expense cost, in dollars",
+            "schema": {
+              "type": "number"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "costMax",
+            "in": "query",
+            "description": "Inclusive upper bound on expense cost, in dollars",
+            "schema": {
+              "type": "number"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "productQuantityMin",
+            "in": "query",
+            "description": "Inclusive lower bound on recorded product quantity",
+            "schema": {
+              "type": "number"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "productQuantityMax",
+            "in": "query",
+            "description": "Inclusive upper bound on recorded product quantity",
+            "schema": {
+              "type": "number"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "notesSearch",
+            "in": "query",
+            "description": "Substring match on notes",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "urlSearch",
+            "in": "query",
+            "description": "Substring match on url",
+            "schema": {
+              "type": "string"
             },
             "style": "form",
             "explode": true
@@ -18497,71 +18579,11 @@
             "explode": true
           },
           {
-            "name": "notesSearch",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "urlSearch",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "dateFrom",
-            "in": "query",
-            "description": "Inclusive lower bound on expense date",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "dateTo",
-            "in": "query",
-            "description": "Inclusive upper bound on expense date",
-            "schema": {
-              "type": "string",
-              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
             "name": "dateRelative",
             "in": "query",
             "schema": {
               "type": "string",
               "enum": ["beforeToday", "onOrBeforeToday"]
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "costMin",
-            "in": "query",
-            "description": "Inclusive lower bound on expense cost, in dollars",
-            "schema": {
-              "type": "number"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "costMax",
-            "in": "query",
-            "description": "Inclusive upper bound on expense cost, in dollars",
-            "schema": {
-              "type": "number"
             },
             "style": "form",
             "explode": true
@@ -18602,26 +18624,6 @@
             "schema": {
               "type": "string",
               "enum": ["has", "none"]
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "productQuantityMin",
-            "in": "query",
-            "description": "Inclusive lower bound on recorded product quantity",
-            "schema": {
-              "type": "number"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "productQuantityMax",
-            "in": "query",
-            "description": "Inclusive upper bound on recorded product quantity",
-            "schema": {
-              "type": "number"
             },
             "style": "form",
             "explode": true
@@ -24146,6 +24148,14 @@
           "financialTransactionSearch": {
             "type": "string"
           },
+          "dateFrom": {
+            "description": "Inclusive lower bound on expense date",
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "dateTo": {
+            "description": "Inclusive upper bound on expense date",
+            "$ref": "#/components/schemas/PlainDate"
+          },
           "costType": {
             "anyOf": [
               {
@@ -24201,15 +24211,39 @@
           "future": {
             "type": "boolean"
           },
+          "costMin": {
+            "type": "number",
+            "description": "Inclusive lower bound on expense cost, in dollars"
+          },
+          "costMax": {
+            "type": "number",
+            "description": "Inclusive upper bound on expense cost, in dollars"
+          },
+          "productQuantityMin": {
+            "type": "number",
+            "description": "Inclusive lower bound on recorded product quantity"
+          },
+          "productQuantityMax": {
+            "type": "number",
+            "description": "Inclusive upper bound on recorded product quantity"
+          },
+          "notesSearch": {
+            "type": "string",
+            "description": "Substring match on notes"
+          },
+          "urlSearch": {
+            "type": "string",
+            "description": "Substring match on url"
+          },
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema103"
+                "$ref": "#/components/schemas/input_schema107"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema103"
+                  "$ref": "#/components/schemas/input_schema107"
                 }
               }
             ]
@@ -24240,12 +24274,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema106"
+                "$ref": "#/components/schemas/input_schema110"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema106"
+                  "$ref": "#/components/schemas/input_schema110"
                 }
               }
             ]
@@ -24266,30 +24300,8 @@
               }
             ]
           },
-          "notesSearch": {
-            "type": "string"
-          },
-          "urlSearch": {
-            "type": "string"
-          },
-          "dateFrom": {
-            "description": "Inclusive lower bound on expense date",
-            "$ref": "#/components/schemas/PlainDate"
-          },
-          "dateTo": {
-            "description": "Inclusive upper bound on expense date",
-            "$ref": "#/components/schemas/PlainDate"
-          },
           "dateRelative": {
             "$ref": "#/components/schemas/RelativeDateFilter"
-          },
-          "costMin": {
-            "type": "number",
-            "description": "Inclusive lower bound on expense cost, in dollars"
-          },
-          "costMax": {
-            "type": "number",
-            "description": "Inclusive upper bound on expense cost, in dollars"
           },
           "costPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
@@ -24303,14 +24315,6 @@
           },
           "productQuantityPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
-          },
-          "productQuantityMin": {
-            "type": "number",
-            "description": "Inclusive lower bound on recorded product quantity"
-          },
-          "productQuantityMax": {
-            "type": "number",
-            "description": "Inclusive upper bound on recorded product quantity"
           },
           "orderIdPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
@@ -24331,12 +24335,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema112"
+                "$ref": "#/components/schemas/input_schema114"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema112"
+                  "$ref": "#/components/schemas/input_schema114"
                 }
               }
             ]
@@ -24745,12 +24749,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema103"
+                "$ref": "#/components/schemas/input_schema107"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema103"
+                  "$ref": "#/components/schemas/input_schema107"
                 }
               }
             ]
@@ -25113,12 +25117,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema126"
+                "$ref": "#/components/schemas/input_schema128"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema126"
+                  "$ref": "#/components/schemas/input_schema128"
                 }
               }
             ]
@@ -25161,12 +25165,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema103"
+                "$ref": "#/components/schemas/input_schema107"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema103"
+                  "$ref": "#/components/schemas/input_schema107"
                 }
               }
             ]
@@ -26166,7 +26170,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema138"
+                "$ref": "#/components/schemas/input_schema140"
               }
             ],
             "description": "The scanned code."
@@ -26208,7 +26212,7 @@
           },
           "entityTypes": {
             "description": "Restrict results to these searchable entity types.",
-            "$ref": "#/components/schemas/input_schema139"
+            "$ref": "#/components/schemas/input_schema141"
           },
           "limit": {
             "default": 5,
@@ -27494,7 +27498,7 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema103": {
+      "input_schema107": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -27508,7 +27512,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema106": {
+      "input_schema110": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -27522,7 +27526,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema112": {
+      "input_schema114": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -27536,7 +27540,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema126": {
+      "input_schema128": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -27550,7 +27554,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema138": {
+      "input_schema140": {
         "type": "object",
         "properties": {
           "kind": {
@@ -27563,7 +27567,7 @@
         },
         "required": ["kind", "value"]
       },
-      "input_schema139": {
+      "input_schema141": {
         "minItems": 1,
         "maxItems": 15,
         "type": "array",

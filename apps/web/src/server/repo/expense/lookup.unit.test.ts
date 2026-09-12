@@ -18,6 +18,18 @@ describe("buildExpenseWhereClause", () => {
     expect(await where()).toBeDefined();
   });
 
+  it("bounds date, cost and quantity, and searches notes and url (declared stored filters)", async () => {
+    expect(await where({ dateFrom: "2026-01-01" })).toContain('"date" >=');
+    // Zero is a meaningful bound: `costMax: 0` is the credits-only worklist.
+    expect(await where({ costMax: 0 })).toContain('"cost" <=');
+    expect(await where({ costMin: 0 })).toContain('"cost" >=');
+    expect(await where({ productQuantityMax: -1 })).toContain(
+      '"productQuantity" <=',
+    );
+    expect(await where({ notesSearch: "refund" })).toContain('"notes" ilike');
+    expect(await where({ urlSearch: "example" })).toContain('"url" ilike');
+  });
+
   it("still narrows by lineKind, lineBasis, costType, trade, and future (declared stored filters)", async () => {
     expect(await where({ lineKind: "tax" })).toContain('"lineKind"');
     expect(await where({ lineBasis: "item_line" })).toContain('"lineBasis"');

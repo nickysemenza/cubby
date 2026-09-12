@@ -701,6 +701,10 @@ describe("typed entity compiler", () => {
         { columnId: "amount", kind: "boolean" },
         "reads as presence, so the field must be nullable",
       ],
+      [
+        { columnId: "at", kind: "range", range: { finite: true } },
+        "range.int/finite apply only to numeric ranges",
+      ],
     ];
     for (const [descriptor, message] of rejected)
       expect(() => stored(descriptor)).toThrow(message);
@@ -773,6 +777,18 @@ describe("typed entity compiler", () => {
       'nameFilter":z.string().optional().describe(',
     );
     expect(filterFields).toContain('"usuallyOnHand":z.boolean().optional()');
+    // Declared ranges carry their numeric constraints and MCP prose through
+    // the shared min/max and from/to builders.
+    const expenseFilters = artifact("entity-field-schemas.expense.gen.ts");
+    expect(expenseFilters).toContain(
+      '...numericRangeFields("cost",{describe:{min:"Inclusive lower bound on expense cost, in dollars",max:"Inclusive upper bound on expense cost, in dollars"}})',
+    );
+    expect(expenseFilters).toContain(
+      '...dateRangeFields("date",{describe:{from:"Inclusive lower bound on expense date",to:"Inclusive upper bound on expense date"}})',
+    );
+    expect(
+      artifact("entity-field-schemas.financialTransaction.gen.ts"),
+    ).toContain('...numericRangeFields("amount",{finite:true})');
     expect(artifact("entity-field-model.gen.ts")).not.toContain("validation:");
     expect(artifact("entity-field-model.gen.ts")).not.toMatch(
       /^import .*entity-definitions\//m,

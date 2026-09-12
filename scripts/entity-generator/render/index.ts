@@ -100,12 +100,22 @@ const derivedRangeEntry = (
     );
   if (range.kind === "date") {
     needs.date = true;
-    return `...dateRangeFields(${JSON.stringify(key)})`;
+    const describe =
+      range.describe === null
+        ? ""
+        : `,{describe:{from:${JSON.stringify(range.describe.lower)},to:${JSON.stringify(range.describe.upper)}}}`;
+    return `...dateRangeFields(${JSON.stringify(key)}${describe})`;
   }
   needs.numeric = true;
   const options = [
     ...(range.int ? ["int:true"] : []),
     ...(range.nonnegative ? ["nonnegative:true"] : []),
+    ...(range.finite ? ["finite:true"] : []),
+    ...(range.describe === null
+      ? []
+      : [
+          `describe:{min:${JSON.stringify(range.describe.lower)},max:${JSON.stringify(range.describe.upper)}}`,
+        ]),
   ];
   return `...numericRangeFields(${JSON.stringify(key)}${options.length ? `,{${options.join(",")}}` : ""})`;
 };
@@ -1252,7 +1262,7 @@ export const renderEntityArtifacts = (
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean } | null;\n' +
+        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean; finite: boolean; describe: { lower: string; upper: string } | null } | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +

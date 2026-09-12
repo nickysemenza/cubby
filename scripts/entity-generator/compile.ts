@@ -332,6 +332,21 @@ const validateDerivedFilter = (
     );
 };
 
+/** The range kind a model field implies, or null when it implies none. */
+const inferredRangeKind = (
+  modelField: EntityField | undefined,
+): "number" | "date" | null => {
+  switch (modelField?.kind) {
+    case "number":
+      return "number";
+    case "date":
+    case "timestamp":
+      return "date";
+    default:
+      return null;
+  }
+};
+
 const resolveFilterRange = (
   value: RawFilterDescriptor,
   kind: FilterDescriptor["kind"],
@@ -339,21 +354,24 @@ const resolveFilterRange = (
   context: string,
 ): FilterDescriptor["range"] => {
   if (!(value.deriveSchema ?? false) || kind !== "range") return null;
-  const inferred =
-    modelField?.kind === "number"
-      ? "number"
-      : modelField?.kind === "date" || modelField?.kind === "timestamp"
-        ? "date"
-        : null;
-  const rangeKind = value.range?.kind ?? inferred;
+  const options = value.range ?? {};
+  const rangeKind = options.kind ?? inferredRangeKind(modelField);
   if (rangeKind === null)
     throw new EntityDeclarationError(
       `${context} range needs range.kind or a numeric/date model field ${value.columnId}.`,
     );
+  const int = options.int ?? false;
+  const finite = options.finite ?? false;
+  if (rangeKind === "date" && (int || finite))
+    throw new EntityDeclarationError(
+      `${context} range.int/finite apply only to numeric ranges.`,
+    );
   return {
     kind: rangeKind,
-    int: value.range?.int ?? false,
-    nonnegative: value.range?.nonnegative ?? false,
+    int,
+    nonnegative: options.nonnegative ?? false,
+    finite,
+    describe: options.describe ?? null,
   };
 };
 

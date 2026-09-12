@@ -298,18 +298,6 @@ export async function buildFinancialTransactionWhere(
         filters.source ? [filters.source].flat() : undefined,
         filters.externalId ? [filters.externalId].flat() : undefined,
       ),
-      filters.amountMin === undefined
-        ? undefined
-        : sql`${financialTransaction.amount} >= ${filters.amountMin}`,
-      filters.amountMax === undefined
-        ? undefined
-        : sql`${financialTransaction.amount} <= ${filters.amountMax}`,
-      filters.transactionDateFrom
-        ? sql`${financialTransaction.transactionDate} >= ${filters.transactionDateFrom}`
-        : undefined,
-      filters.transactionDateTo
-        ? sql`${financialTransaction.transactionDate} <= ${filters.transactionDateTo}`
-        : undefined,
     ],
   );
 }

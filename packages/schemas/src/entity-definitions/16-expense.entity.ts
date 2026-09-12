@@ -606,6 +606,14 @@ export default defineEntity({
         columnId: "date",
         kind: "range",
         placeholder: "Filter by date...",
+        deriveSchema: true,
+        stored: true,
+        range: {
+          describe: {
+            lower: "Inclusive lower bound on expense date",
+            upper: "Inclusive upper bound on expense date",
+          },
+        },
         options: [
           { value: "30d", label: "Last 30 days" },
           { value: "90d", label: "Last 90 days" },
@@ -732,6 +740,15 @@ export default defineEntity({
         columnId: "cost",
         kind: "range",
         placeholder: "Filter by cost...",
+        deriveSchema: true,
+        stored: true,
+        // Signed money: `costMax: 0` is the credits-only worklist.
+        range: {
+          describe: {
+            lower: "Inclusive lower bound on expense cost, in dollars",
+            upper: "Inclusive upper bound on expense cost, in dollars",
+          },
+        },
         options: [
           { value: "has", label: "Has cost", meta: true },
           { value: "none", label: "(none)", meta: true },
@@ -773,6 +790,16 @@ export default defineEntity({
         columnId: "productQuantity",
         kind: "range",
         placeholder: "Filter by quantity...",
+        deriveSchema: true,
+        stored: true,
+        // Signed, like cost: a negative quantity is a real $0 discard, and
+        // `productQuantityMax: -1` is the "everything written off" worklist.
+        range: {
+          describe: {
+            lower: "Inclusive lower bound on recorded product quantity",
+            upper: "Inclusive upper bound on recorded product quantity",
+          },
+        },
         options: [
           { value: "has", label: "Has quantity", meta: true },
           { value: "none", label: "(none)", meta: true },
@@ -798,16 +825,25 @@ export default defineEntity({
         urlOnly: true,
       },
       {
+        // Its own field, never folded into `search`: notes carry an import's
+        // provenance, and most rows have none, so ANDing it into the name
+        // search would zero out expense search.
         columnId: "notesSearch",
         kind: "text",
         placeholder: "Search notes...",
         urlOnly: true,
+        deriveSchema: true,
+        schemaDescription: "Substring match on notes",
+        stored: { columns: ["notes"] },
       },
       {
         columnId: "urlSearch",
         kind: "text",
         placeholder: "Search url...",
         urlOnly: true,
+        deriveSchema: true,
+        schemaDescription: "Substring match on url",
+        stored: { columns: ["url"] },
       },
       {
         columnId: "project",

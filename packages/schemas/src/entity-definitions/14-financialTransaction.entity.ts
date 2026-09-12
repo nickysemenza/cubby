@@ -597,9 +597,20 @@ export default defineEntity({
         stored: true,
       },
       {
+        columnId: "transactionDate",
+        kind: "range",
+        placeholder: "Filter by transaction date...",
+        urlOnly: true,
+        deriveSchema: true,
+        stored: true,
+      },
+      {
         columnId: "amount",
         kind: "range",
         placeholder: "Filter by amount...",
+        deriveSchema: true,
+        stored: true,
+        range: { finite: true },
         options: [
           { value: "gte1000", label: "$1,000 and up" },
           { value: "gte250", label: "$250 and up" },

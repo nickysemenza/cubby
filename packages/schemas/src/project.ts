@@ -17,7 +17,6 @@ import { mutationSideEffectsSchema } from "./background-jobs";
 import {
   auditDateFilterFields,
   dateRangeFields,
-  numericRangeFields,
   plainDate,
   timestampedFields,
 } from "./base-entity";
@@ -549,22 +548,7 @@ export const expenseFilterFields = {
    * refund documentation, legacy `"<Vendor> order <ID>"` prose), so this is how
    * you find the rows a previous pass touched.
    */
-  notesSearch: z.string().optional(),
-  urlSearch: z.string().optional(),
-  dateFrom: plainDate
-    .optional()
-    .describe("Inclusive lower bound on expense date"),
-  dateTo: plainDate
-    .optional()
-    .describe("Inclusive upper bound on expense date"),
   dateRelative: relativeDateFilter.optional(),
-  /** Inclusive cost bounds are money filters; preserve coercion and decimal semantics at the schema boundary. */
-  ...numericRangeFields("cost", {
-    describe: {
-      min: "Inclusive lower bound on expense cost, in dollars",
-      max: "Inclusive upper bound on expense cost, in dollars",
-    },
-  }),
   /**
    * `"none"` matches expenses with a null `cost`; `"has"` matches expenses
    * with a non-null `cost`. Combined with `trade: "other"`, `"none"` is the
@@ -590,12 +574,6 @@ export const expenseFilterFields = {
    * "everything written off" worklist.
    */
   productQuantityPresenceFilter: presenceFilter,
-  ...numericRangeFields("productQuantity", {
-    describe: {
-      min: "Inclusive lower bound on recorded product quantity",
-      max: "Inclusive upper bound on recorded product quantity",
-    },
-  }),
   /**
    * `"none"` matches expenses with a null `orderId`; `"has"` matches
    * expenses that carry one. Same shape as `costPresenceFilter` — there's no

@@ -10,7 +10,6 @@ import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
 import {
   and,
   gt,
-  gte,
   inArray,
   isNotNull,
   isNull,
@@ -38,7 +37,6 @@ import {
   type ListReadIntent,
   notDeleted,
   presenceCondition,
-  rangeConditions,
   relations,
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
@@ -268,17 +266,13 @@ export const buildExpenseWhereClause = async (
   const { vendorIds, purchaseIds, productIds } =
     await loadExpenseFilterReferences(db, filters);
 
-  // `notesSearch`/`urlSearch` DO belong in searchFilters: they are separate
-  // filters and ANDing them with each other and with the name search is the
-  // intended semantics. What must never happen is a second entry reusing
-  // `filters.search` itself — that would mean `name ILIKE q AND notes ILIKE q`,
-  // and most rows have no notes, which would silently zero out expense search.
+  // `notesSearch`/`urlSearch` are declared stored filters of their own, ANDed
+  // with the name search. What must never happen is a predicate reusing
+  // `filters.search` over notes — most rows have no notes, which would
+  // silently zero out expense search.
   return buildSearchConditions(
     expense,
-    [
-      { column: expense.notes, term: filters.notesSearch },
-      { column: expense.url, term: filters.urlSearch },
-    ],
+    [],
     [
       ...auditDateWhereConditions(expense, filters),
       ...relatedWhereConditions("expense", filters, expense.id),
@@ -322,19 +316,13 @@ export const buildExpenseWhereClause = async (
       // and let the presence filter alone decide — or, with no presence filter
       // either, let the whole condition vanish and match every row).
       vendorFilterCondition(db, filters, vendorIds),
-      filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
-      filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
       relativeDateCondition(filters.dateRelative),
-      // `!== undefined`, NOT the truthiness guard the two date lines above use.
-      // `costMin: 0` is a meaningful bound ("actuals and credits, no free
-      // items") and `costMax: 0` is the credits-only worklist — a truthiness
-      // check would silently drop both. Follows `future`'s guard style instead.
-      //
-      // `cost` IS nullable — `cost IS NULL` is the Unclassified predicate — and
-      // those rows fall out of either bound by plain SQL comparison semantics;
-      // that's intended. `costPresenceFilter: "none"` is the filter for
-      // "no cost recorded".
-      ...rangeConditions(expense.cost, filters, "cost"),
+      // `date`, `cost` and `productQuantity` bounds are declared stored ranges
+      // (`costMin: 0` / `costMax: 0` are meaningful, and the declared predicate
+      // keys on `!== undefined`). `cost` IS nullable — `cost IS NULL` is the
+      // Unclassified predicate — and those rows fall out of either bound by
+      // plain SQL comparison semantics; `costPresenceFilter: "none"` is the
+      // filter for "no cost recorded".
       presenceCondition(expense.cost, filters.costPresenceFilter),
       filters.costSign === "negative" ? lt(expense.cost, 0) : undefined,
       filters.costSign === "positive" ? gt(expense.cost, 0) : undefined,
@@ -342,7 +330,6 @@ export const buildExpenseWhereClause = async (
       // Quantity is nullable evidence, never an inferred one-unit default.
       // Bounds naturally exclude unknown rows; the presence filter is the
       // explicit worklist for those receipts.
-      ...rangeConditions(expense.productQuantity, filters, "productQuantity"),
       presenceCondition(
         expense.productQuantity,
         filters.productQuantityPresenceFilter,

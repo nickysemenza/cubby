@@ -28,6 +28,14 @@ describe("buildFinancialTransactionWhere", () => {
     );
   });
 
+  it("bounds amount and transaction date (declared stored ranges)", async () => {
+    expect(await where({ amountMin: 0 })).toContain('"amount" >=');
+    expect(await where({ amountMax: 0 })).toContain('"amount" <=');
+    expect(await where({ transactionDateFrom: "2026-01-01" })).toContain(
+      '"transactionDate" >=',
+    );
+  });
+
   it("still narrows by kind, status, merchant, and posted date (declared stored filters)", async () => {
     expect(await where({ kind: "purchase" })).toContain('"kind"');
     expect(await where({ status: "posted" })).toContain('"status"');

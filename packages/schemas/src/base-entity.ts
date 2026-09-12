@@ -41,22 +41,22 @@ type DateRangeFields<Prefix extends string> = {
  * factory — specialized to the date-range-pair pattern instead of the
  * relation-filter-triple one.
  *
- * Only covers the plain, undecorated pair: `plainDate.optional()` on both
- * ends, nothing else. A pair that also carries a `.describe()` (several
- * filter fields do, for MCP tool prose) or that isn't optional (an output
- * shape's resolved range, not a filter) is a deliberate divergence, not an
- * oversight — leave those hand-declared rather than forcing them through
- * this generator and losing the description or the optionality.
+ * Covers the optional pair, with `opts.describe` for the MCP prose each
+ * bound carries. A pair that isn't optional (an output shape's resolved
+ * range, not a filter) is a deliberate divergence, not an oversight — leave
+ * it hand-declared rather than forcing it through this generator.
  */
 export const dateRangeFields = <Prefix extends string>(
   prefix: Prefix,
+  opts?: { describe?: { from: string; to: string } },
 ): DateRangeFields<Prefix> => {
   const bound = plainDate.optional();
+  const describe = opts?.describe;
   // SAFETY: the two computed keys are derived from the same Prefix used by the
   // return type, and both values are the shared optional plain-date schema.
   return {
-    [`${prefix}From`]: bound,
-    [`${prefix}To`]: bound,
+    [`${prefix}From`]: describe ? bound.describe(describe.from) : bound,
+    [`${prefix}To`]: describe ? bound.describe(describe.to) : bound,
   } as DateRangeFields<Prefix>;
 };
 

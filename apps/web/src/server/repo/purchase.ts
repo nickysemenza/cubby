@@ -93,7 +93,6 @@ import {
   countWhere,
   eqAny,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   imageJoinBindings,
   type ListReadIntent,
@@ -534,23 +533,15 @@ export const buildPurchaseWhereClause = async (
     purchase,
     [],
     [
-      filters.search
-        ? or(
-            formatSearchTerm(purchase.orderId, filters.search),
-            formatSearchTerm(purchase.displayLabel, filters.search),
-          )
-        : undefined,
       ...auditDateWhereConditions(purchase, filters),
       vendorCondition,
       ...relatedWhereConditions("purchase", filters, purchase.id),
-      // `displayLabel` (text) is a declared stored filter.
+      // `search` (orderId ∪ displayLabel), `displayLabelSearch`, the
+      // `statedTotal` presence and the `date` bounds are declared stored
+      // filters.
       ...declaredFilterPredicates("purchase", purchase, filters),
       eqAny(purchase.orderId, filters.orderId),
       presenceCondition(purchase.orderId, filters.orderIdPresenceFilter),
-      presenceCondition(
-        purchase.statedTotal,
-        filters.statedTotalPresenceFilter,
-      ),
       expenseStatusCondition(filters.expenseStatus),
       reconciliationCondition(filters.reconciliation),
       filters.financialReconciliation === "mismatch"
@@ -573,10 +564,6 @@ export const buildPurchaseWhereClause = async (
       filters.expenseTotalMax !== undefined
         ? sql`${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} AND ${purchaseExpenseTotal} <= ${filters.expenseTotalMax}`
         : undefined,
-      filters.dateFrom
-        ? sql`${purchase.date} >= ${filters.dateFrom}`
-        : undefined,
-      filters.dateTo ? sql`${purchase.date} <= ${filters.dateTo}` : undefined,
     ],
   );
 };

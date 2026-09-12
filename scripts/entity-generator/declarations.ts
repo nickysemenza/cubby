@@ -68,6 +68,8 @@ export type FilterDescriptor = Readonly<{
     kind: "number" | "date";
     int: boolean;
     nonnegative: boolean;
+    finite: boolean;
+    describe: Readonly<{ lower: string; upper: string }> | null;
   }> | null;
   urlOnly: boolean;
   nullable: Readonly<{ field: string; label: string }> | null;

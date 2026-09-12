@@ -424,6 +424,9 @@ export default defineEntity({
         urlKey: "q",
         kind: "text",
         placeholder: "Search order id or label...",
+        deriveSchema: true,
+        schemaDescription: "Substring match on order id or human display label",
+        stored: { columns: ["orderId", "displayLabel"] },
       },
       {
         columnId: "displayLabel",
@@ -457,6 +460,14 @@ export default defineEntity({
         columnId: "date",
         kind: "range",
         placeholder: "Filter by date...",
+        deriveSchema: true,
+        stored: true,
+        range: {
+          describe: {
+            lower: "Inclusive lower bound on purchase date",
+            upper: "Inclusive upper bound on purchase date",
+          },
+        },
         options: [
           { value: "30d", label: "Last 30 days" },
           { value: "90d", label: "Last 90 days" },
@@ -473,6 +484,8 @@ export default defineEntity({
         field: "statedTotalPresenceFilter",
         kind: "presence",
         placeholder: "Filter by stated total...",
+        deriveSchema: true,
+        stored: true,
         options: [
           { value: "has", label: "Has stated total", meta: true },
           { value: "none", label: "(none)", meta: true },
