@@ -18,6 +18,21 @@ describe("buildRecipeWhere", () => {
     expect(await where()).toBeDefined();
   });
 
+  it("matches name or notes (declared stored text filter)", async () => {
+    const rendered = await where({ nameFilter: "soup" });
+    expect(rendered).toContain('"name"');
+    expect(rendered).toContain('"notes"');
+  });
+
+  it("overlaps tags and ORs the untagged sentinel (declared stored array filter)", async () => {
+    expect(await where({ tagFilters: ["quick"] })).toContain('"tags" &&');
+    expect(await where({ tagFilters: "quick" })).toContain('"tags" &&');
+    // `tags` is nullable, so untagged means NULL or zero-length.
+    expect(await where({ tagsPresenceFilter: "none" })).toContain(
+      '"tags" IS NULL OR cardinality("Recipe"."tags") = 0',
+    );
+  });
+
   it("still narrows by totalMinutes (declared stored numeric range filter)", async () => {
     expect(await where({ totalMinutesMin: 10 })).toContain('"totalMinutes"');
     expect(await where({ totalMinutesMax: 60 })).toContain('"totalMinutes"');

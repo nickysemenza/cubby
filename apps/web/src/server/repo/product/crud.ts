@@ -36,7 +36,6 @@ import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
-  arrayOverlaps,
   asc,
   eq,
   inArray,
@@ -688,13 +687,13 @@ export const buildProductWhere = async (
       AND pei."source" = ${GTIN_SOURCE}
       AND pei."deletedAt" IS NULL))`;
 
-  const NO_TAGS = sql`(cardinality(${product.tags}) = 0)`;
-
   const classificationConditions = () => [
     ...auditDateWhereConditions(product, filters),
     ...relatedWhereConditions("product", filters, product.id),
-    // name/model/notes (text), category (multiselect + presence), and
-    // manufacturerExact (multiselect) are declared stored filters.
+    // name/model/notes/manufacturerFilter (text), category (multiselect +
+    // presence), manufacturerExact (multiselect), tags (overlap + presence)
+    // and the model/notes/stockTracked presence filters are declared stored
+    // filters.
     ...declaredFilterPredicates("product", product, filters),
     requestedIngredientCodes.length > 0 && selectedIngredientIds.length === 0
       ? sql`false`
@@ -864,11 +863,8 @@ export const buildProductWhere = async (
         (externalSources && externalSources.length > 0 ? "has" : undefined),
       productIdsWithExternalIds,
     ),
-    presenceCondition(product.model, filters.modelPresenceFilter),
     idSetPresence(product.id, filters.upcPresenceFilter, productIdsWithGtin),
     filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
-    presenceCondition(product.notes, filters.notesPresenceFilter),
-    presenceCondition(product.stockTracked, filters.stockTrackedPresenceFilter),
   ];
 
   const qualityConditions = () => [
@@ -894,21 +890,12 @@ export const buildProductWhere = async (
             sql`${derivedPriceFilterSql(product.id)} IS NOT NULL`,
           )
         : undefined,
-    // Tags are not-null arrays, so the empty sentinel is cardinality zero.
-    // `arrayOverlaps` is required because interpolating a JS array emits a row
-    // constructor rather than a Postgres text array.
-    or(
-      filters.tagFilters && filters.tagFilters.length > 0
-        ? arrayOverlaps(product.tags, filters.tagFilters)
-        : undefined,
-      presenceCondition(product.tags, filters.tagsPresenceFilter, NO_TAGS),
-    ),
   ];
 
   // Build where conditions - always filter out deleted items
   const whereClause = buildSearchConditions(
     product,
-    [{ column: product.manufacturer, term: filters.manufacturerFilter }],
+    [],
     [
       ...classificationConditions(),
       ...inventoryConditions(),

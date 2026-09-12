@@ -41,6 +41,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import {
   effectiveProductPriceSql,
   loadProductPricing,
@@ -265,11 +266,8 @@ export const buildWishWhere = async (
     wish,
     [],
     [
-      filters.acquired === undefined
-        ? undefined
-        : filters.acquired
-          ? sql`${wish.acquiredAt} IS NOT NULL`
-          : sql`${wish.acquiredAt} IS NULL`,
+      // `acquired` is a declared stored boolean over the nullable `acquiredAt`.
+      ...declaredFilterPredicates("wish", wish, filters),
       candidateFilter,
       search,
       // `wishFilterFields` spreads both of these, and the manifest renders their

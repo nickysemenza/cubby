@@ -74,7 +74,6 @@ import {
   eqAny,
   eqAnyOrPresence,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   idSetPresence,
   imageJoinBindings,
@@ -84,7 +83,6 @@ import {
   mapImages,
   nextImageSortOrder,
   notDeleted,
-  presenceCondition,
   rangeConditions,
   relations,
   unwrapDb,
@@ -691,18 +689,12 @@ export const deleteLocations = async (
 };
 
 /**
- * The free-text match behind both the location table's name filter and the
- * picker typeahead: name ∪ AI description ∪ aliases. Shared so the two surfaces
- * can't drift into disagreeing about what "matches" means.
+ * The free-text match behind the picker typeahead: the declared `nameFilter`
+ * (name ∪ AI description ∪ aliases), the same predicate the list gets from its
+ * full `declaredFilterPredicates` spread, so the two surfaces cannot drift.
  */
 const locationNameSearchCondition = (nameFilter: string | undefined) =>
-  nameFilter
-    ? or(
-        formatSearchTerm(location.name, nameFilter),
-        formatSearchTerm(location.aiDescription, nameFilter),
-        sql`EXISTS (SELECT 1 FROM unnest(${location.aliases}) AS alias WHERE alias ILIKE ${`%${nameFilter}%`})`,
-      )
-    : undefined;
+  and(...declaredFilterPredicates("location", location, { nameFilter }));
 
 /**
  * "Which SKU is this location an instance of", plus the has/none presence
@@ -813,8 +805,8 @@ export const buildLocationWhere = async (
     [
       ...auditDateWhereConditions(location, filters),
       ...relatedWhereConditions("location", filters, location.id),
-      locationNameSearchCondition(filters.nameFilter),
-      // `type` is a declared stored filter.
+      // `nameFilter`, `type` and `aiDescriptionPresenceFilter` are declared
+      // stored filters.
       ...declaredFilterPredicates("location", location, filters),
       parentCondition,
       productCondition,
@@ -827,10 +819,6 @@ export const buildLocationWhere = async (
         location.id,
         filters.imagePresenceFilter,
         locationIdsWithImages,
-      ),
-      presenceCondition(
-        location.aiDescription,
-        filters.aiDescriptionPresenceFilter,
       ),
       idSetPresence(
         location.id,

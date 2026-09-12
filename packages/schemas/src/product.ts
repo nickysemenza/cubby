@@ -190,10 +190,7 @@ export const productFilterFields = {
   ...auditDateFilterFields,
   ...productRelatedFilterFields,
   ...generatedProductFilterFields,
-  manufacturerFilter: z.string().optional().describe("Filter by manufacturer"),
   upcPresenceFilter: presenceFilter,
-  modelPresenceFilter: presenceFilter,
-  notesPresenceFilter: presenceFilter,
   externalIdSource: oneOrMany(externalIdSource).optional(),
   externalIdPresenceFilter: presenceFilter,
   dataStatus: dataQualityStatus.optional(),
@@ -253,10 +250,6 @@ export const productFilterFields = {
   taskStatusFilter: oneOrMany(taskStatusSchema).optional(),
   taskOpenOnly: z.boolean().optional(),
   ...dateRangeFields("taskDue"),
-  tagFilters: z
-    .array(z.string())
-    .optional()
-    .describe("Match products carrying any of these tags"),
   /**
    * `"none"` is the untagged worklist. Unlike `recipe.tags`, `product.tags` is
    * `notNull` with a `'{}'` default, so empty is the only untagged state —
@@ -340,9 +333,6 @@ export const productFilterFields = {
    * `false`/`true` = reviewed either way. `"none"` is the undecided worklist;
    * `"has"` means reviewed, regardless of which way it was decided.
    */
-  stockTrackedPresenceFilter: presenceFilter.describe(
-    "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).",
-  ),
 };
 
 export const productFiltersSchema = z.object(productFilterFields);

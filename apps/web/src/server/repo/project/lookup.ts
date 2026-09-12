@@ -11,17 +11,7 @@ import type {
   ProjectOut,
 } from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
-import {
-  and,
-  arrayOverlaps,
-  asc,
-  eq,
-  inArray,
-  isNull,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { image, project, projectImage } from "~/server/db/schema";
@@ -31,7 +21,6 @@ import {
   buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   idSetPresence,
   type ListReadIntent,
@@ -213,14 +202,6 @@ export const buildProjectListQuery = async (
       )
     : null;
 
-  const pickerSearch = filters.search
-    ? or(
-        formatSearchTerm(project.name, filters.search),
-        formatSearchTerm(project.notes, filters.search),
-        sql`EXISTS (SELECT 1 FROM unnest(${project.locations}) AS location_name WHERE location_name ILIKE ${`%${filters.search}%`})`,
-      )
-    : undefined;
-
   // Joins Image so this matches what the thumbnail cell actually renders —
   // `getImagesByProjectIds` (which feeds the column) applies the same
   // `displayableImageWhere` gate, and Image is separately soft-deletable from
@@ -240,15 +221,9 @@ export const buildProjectListQuery = async (
     [
       ...auditDateWhereConditions(project, filters),
       ...relatedWhereConditions("project", filters, project.id),
-      pickerSearch,
-      // `status` and `kind` are declared stored filters. `location` is NOT:
-      // `project.locations` is an array column, and the standard multiselect
-      // predicate is a scalar `eqAny`/`inArray`, not `arrayOverlaps` — the
-      // wrong shape for an array column — so it stays hand-written below.
+      // `search` (name ∪ notes ∪ locations), `status`, `kind` and `location`
+      // (an overlap over the `locations` array) are declared stored filters.
       ...declaredFilterPredicates("project", project, filters),
-      filters.location
-        ? arrayOverlaps(project.locations, [filters.location].flat())
-        : undefined,
       dashboardProjectDateCondition(filters),
       attentionCodes
         ? attentionCodes.length

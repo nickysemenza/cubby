@@ -503,6 +503,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by project name...",
         deriveSchema: true,
+        stored: { columns: ["name", "notes", "locations"] },
       },
       {
         columnId: "status",
@@ -572,6 +573,7 @@ export default defineEntity({
         deriveSchema: true,
         schemaDescription: "Any exact match against locations[]",
         optionsKey: "projectLocations",
+        stored: { array: true },
       },
       {
         columnId: "dateRange",

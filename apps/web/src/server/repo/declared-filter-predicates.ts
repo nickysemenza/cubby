@@ -27,7 +27,10 @@ const optionalText = z.string().optional();
 const optionalNumber = z.number().optional();
 const optionalDate = z.string().optional();
 const optionalBoolean = z.boolean().optional();
-const optionalTextList = z.array(z.string()).optional();
+const optionalTextList = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .transform((value) => (value === undefined ? undefined : [value].flat()));
 
 /** The descriptor facets this helper reads, independent of the literal roster. */
 interface StoredDescriptorView {

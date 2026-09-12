@@ -500,6 +500,9 @@ export default defineEntity({
         urlKey: "q",
         kind: "text",
         placeholder: "Search transactions...",
+        deriveSchema: true,
+        schemaDescription: "Substring match on merchant or raw description",
+        stored: { columns: ["merchant", "rawDescription"] },
       },
       {
         columnId: "kind",

@@ -20,6 +20,14 @@ describe("buildFinancialTransactionWhere", () => {
     expect(await where()).toBeDefined();
   });
 
+  it("matches merchant OR raw description (declared stored text filter)", async () => {
+    // Regression: the hand-written version ANDed the two columns, so a term
+    // had to appear in both to match.
+    expect(await where({ search: "coffee" })).toMatch(
+      /"merchant" ilike \$\d+ or "FinancialTransaction"\."rawDescription" ilike/u,
+    );
+  });
+
   it("still narrows by kind, status, merchant, and posted date (declared stored filters)", async () => {
     expect(await where({ kind: "purchase" })).toContain('"kind"');
     expect(await where({ status: "posted" })).toContain('"status"');

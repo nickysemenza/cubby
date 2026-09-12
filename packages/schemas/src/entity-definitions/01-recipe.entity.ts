@@ -338,6 +338,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Filter by recipe name...",
         deriveSchema: true,
+        stored: { columns: ["name", "notes"] },
       },
       {
         columnId: "tags",
@@ -345,6 +346,8 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by tag...",
         optionsKey: "tags",
+        deriveSchema: true,
+        stored: { array: true },
         nullable: { field: "tagsPresenceFilter", label: "tags" },
       },
       {

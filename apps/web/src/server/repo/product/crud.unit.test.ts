@@ -31,6 +31,23 @@ describe("buildProductWhere", () => {
     );
   });
 
+  it("overlaps tags with a cardinality sentinel and reads presence filters (declared stored)", async () => {
+    expect(await where({ tagFilters: ["tool"] })).toContain('"tags" &&');
+    // `tags` is NOT NULL with a `{}` default, so untagged is zero-length only.
+    expect(await where({ tagsPresenceFilter: "none" })).toContain(
+      '(cardinality("Product"."tags") = 0)',
+    );
+    expect(await where({ modelPresenceFilter: "has" })).toContain(
+      '"model" is not null',
+    );
+    expect(await where({ notesPresenceFilter: "none" })).toContain(
+      '"notes" is null',
+    );
+    expect(await where({ stockTrackedPresenceFilter: "none" })).toContain(
+      '"stockTracked" is null',
+    );
+  });
+
   it("still narrows by manufacturerExact (declared stored multiselect)", async () => {
     expect(await where({ manufacturerExact: "DeWalt" })).toContain(
       '"manufacturer"',

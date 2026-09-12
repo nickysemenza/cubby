@@ -10517,6 +10517,16 @@
             "explode": true
           },
           {
+            "name": "manufacturerFilter",
+            "in": "query",
+            "description": "Filter by manufacturer",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "upcFilter",
             "in": "query",
             "description": "Filter by UPC/barcode — matches ANY of the product's barcodes",
@@ -10532,6 +10542,16 @@
             "description": "Filter by model number — a tool's real identity when the name is generic.",
             "schema": {
               "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "modelPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
             },
             "style": "form",
             "explode": true
@@ -10592,37 +10612,41 @@
             "explode": true
           },
           {
-            "name": "manufacturerFilter",
+            "name": "notesPresenceFilter",
             "in": "query",
-            "description": "Filter by manufacturer",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "stockTrackedPresenceFilter",
+            "in": "query",
+            "description": "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "tagFilters",
+            "in": "query",
+            "description": "Match products carrying any of these tags",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
             },
             "style": "form",
             "explode": true
           },
           {
             "name": "upcPresenceFilter",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": ["has", "none"]
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "modelPresenceFilter",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": ["has", "none"]
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "notesPresenceFilter",
             "in": "query",
             "schema": {
               "type": "string",
@@ -10872,19 +10896,6 @@
             "explode": true
           },
           {
-            "name": "tagFilters",
-            "in": "query",
-            "description": "Match products carrying any of these tags",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
             "name": "tagsPresenceFilter",
             "in": "query",
             "schema": {
@@ -11057,17 +11068,6 @@
             "name": "componentPresenceFilter",
             "in": "query",
             "description": "Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product.",
-            "schema": {
-              "type": "string",
-              "enum": ["has", "none"]
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "stockTrackedPresenceFilter",
-            "in": "query",
-            "description": "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).",
             "schema": {
               "type": "string",
               "enum": ["has", "none"]
@@ -11442,6 +11442,18 @@
             "explode": true
           },
           {
+            "name": "tagFilters",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "totalMinutesMin",
             "in": "query",
             "schema": {
@@ -11455,18 +11467,6 @@
             "in": "query",
             "schema": {
               "type": "number"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "tagFilters",
-            "in": "query",
-            "schema": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
             },
             "style": "form",
             "explode": true
@@ -12267,6 +12267,17 @@
             "explode": true
           },
           {
+            "name": "aiDescriptionPresenceFilter",
+            "in": "query",
+            "description": "Filter to locations that do / don't have an AI-generated description.",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "nameFilter",
             "in": "query",
             "description": "Filter by location name (substring)",
@@ -12398,17 +12409,6 @@
             "name": "childPresenceFilter",
             "in": "query",
             "description": "Filter to locations that do / don't have at least one live child location.",
-            "schema": {
-              "type": "string",
-              "enum": ["has", "none"]
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "aiDescriptionPresenceFilter",
-            "in": "query",
-            "description": "Filter to locations that do / don't have an AI-generated description.",
             "schema": {
               "type": "string",
               "enum": ["has", "none"]
@@ -17392,6 +17392,16 @@
             "explode": true
           },
           {
+            "name": "search",
+            "in": "query",
+            "description": "Substring match on merchant or raw description",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "kind",
             "in": "query",
             "schema": {
@@ -17451,15 +17461,6 @@
           },
           {
             "name": "merchant",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "search",
             "in": "query",
             "schema": {
               "type": "string"
@@ -22451,6 +22452,11 @@
           "ingredientSearch": {
             "type": "string"
           },
+          "aiDescriptionPresenceFilter": {
+            "type": "string",
+            "enum": ["has", "none"],
+            "description": "Filter to locations that do / don't have an AI-generated description."
+          },
           "nameFilter": {
             "type": "string",
             "description": "Filter by location name (substring)"
@@ -22516,11 +22522,6 @@
             "type": "string",
             "enum": ["has", "none"],
             "description": "Filter to locations that do / don't have at least one live child location."
-          },
-          "aiDescriptionPresenceFilter": {
-            "type": "string",
-            "enum": ["has", "none"],
-            "description": "Filter to locations that do / don't have an AI-generated description."
           },
           "lastBulkInventoryOlderThanDays": {
             "type": "integer",
@@ -23298,6 +23299,10 @@
               }
             ]
           },
+          "manufacturerFilter": {
+            "type": "string",
+            "description": "Filter by manufacturer"
+          },
           "upcFilter": {
             "type": "string",
             "description": "Filter by UPC/barcode — matches ANY of the product's barcodes"
@@ -23305,6 +23310,9 @@
           "modelFilter": {
             "type": "string",
             "description": "Filter by model number — a tool's real identity when the name is generic."
+          },
+          "modelPresenceFilter": {
+            "$ref": "#/components/schemas/PresenceFilter"
           },
           "categoryFilter": {
             "type": ["string", "null"],
@@ -23320,17 +23328,20 @@
           "notesFilter": {
             "type": "string"
           },
-          "manufacturerFilter": {
+          "notesPresenceFilter": {
+            "$ref": "#/components/schemas/PresenceFilter"
+          },
+          "stockTrackedPresenceFilter": {
             "type": "string",
-            "description": "Filter by manufacturer"
+            "enum": ["has", "none"],
+            "description": "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has)."
+          },
+          "tagFilters": {
+            "type": ["string", "null"],
+            "format": "uri",
+            "description": "Match products carrying any of these tags"
           },
           "upcPresenceFilter": {
-            "$ref": "#/components/schemas/PresenceFilter"
-          },
-          "modelPresenceFilter": {
-            "$ref": "#/components/schemas/PresenceFilter"
-          },
-          "notesPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
           },
           "externalIdSource": {
@@ -23417,12 +23428,12 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema89"
+                "$ref": "#/components/schemas/input_schema91"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema89"
+                  "$ref": "#/components/schemas/input_schema91"
                 }
               }
             ]
@@ -23448,10 +23459,6 @@
           },
           "taskDueTo": {
             "$ref": "#/components/schemas/input_schema31"
-          },
-          "tagFilters": {
-            "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema43"
           },
           "tagsPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
@@ -23525,11 +23532,6 @@
             "type": "string",
             "enum": ["has", "none"],
             "description": "Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product."
-          },
-          "stockTrackedPresenceFilter": {
-            "type": "string",
-            "enum": ["has", "none"],
-            "description": "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has)."
           }
         }
       },
@@ -24202,12 +24204,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema102"
+                "$ref": "#/components/schemas/input_schema103"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema102"
+                  "$ref": "#/components/schemas/input_schema103"
                 }
               }
             ]
@@ -24238,12 +24240,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema105"
+                "$ref": "#/components/schemas/input_schema106"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema105"
+                  "$ref": "#/components/schemas/input_schema106"
                 }
               }
             ]
@@ -24329,12 +24331,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema111"
+                "$ref": "#/components/schemas/input_schema112"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema111"
+                  "$ref": "#/components/schemas/input_schema112"
                 }
               }
             ]
@@ -24743,12 +24745,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema102"
+                "$ref": "#/components/schemas/input_schema103"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema102"
+                  "$ref": "#/components/schemas/input_schema103"
                 }
               }
             ]
@@ -25111,12 +25113,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema125"
+                "$ref": "#/components/schemas/input_schema126"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema125"
+                  "$ref": "#/components/schemas/input_schema126"
                 }
               }
             ]
@@ -25159,12 +25161,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema102"
+                "$ref": "#/components/schemas/input_schema103"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema102"
+                  "$ref": "#/components/schemas/input_schema103"
                 }
               }
             ]
@@ -26164,7 +26166,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema137"
+                "$ref": "#/components/schemas/input_schema138"
               }
             ],
             "description": "The scanned code."
@@ -26206,7 +26208,7 @@
           },
           "entityTypes": {
             "description": "Restrict results to these searchable entity types.",
-            "$ref": "#/components/schemas/input_schema138"
+            "$ref": "#/components/schemas/input_schema139"
           },
           "limit": {
             "default": 5,
@@ -27478,7 +27480,7 @@
         "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "location shortcode, e.g. LOC-4K7M"
       },
-      "input_schema89": {
+      "input_schema91": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -27492,7 +27494,7 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema102": {
+      "input_schema103": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -27506,7 +27508,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema105": {
+      "input_schema106": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -27520,7 +27522,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema111": {
+      "input_schema112": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -27534,7 +27536,7 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema125": {
+      "input_schema126": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -27548,7 +27550,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema137": {
+      "input_schema138": {
         "type": "object",
         "properties": {
           "kind": {
@@ -27561,7 +27563,7 @@
         },
         "required": ["kind", "value"]
       },
-      "input_schema138": {
+      "input_schema139": {
         "minItems": 1,
         "maxItems": 15,
         "type": "array",

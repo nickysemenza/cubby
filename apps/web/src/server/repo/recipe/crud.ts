@@ -26,7 +26,6 @@ import type {
 import {
   type AnyColumn,
   and,
-  arrayOverlaps,
   asc,
   eq,
   inArray,
@@ -67,7 +66,6 @@ import {
   countWhere,
   eqAnyRequested,
   executeListQueryWithCount,
-  formatSearchTerm,
   getDb,
   idSetPresence,
   imageJoinBindings,
@@ -360,7 +358,6 @@ export const getNotionRecipesForDiff = async (
 };
 
 /** A nullable tag array is empty when null or zero-length. */
-const TAGS_ARE_EMPTY = sql`(${recipe.tags} IS NULL OR cardinality(${recipe.tags}) = 0)`;
 
 /** The complete WHERE for this entity's list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
 export const buildRecipeWhere = async (
@@ -439,19 +436,12 @@ export const buildRecipeWhere = async (
       ? undefined
       : [filters.sourceTypeFilter].flat();
 
-  const pickerSearch = filters.nameFilter
-    ? or(
-        formatSearchTerm(recipe.name, filters.nameFilter),
-        formatSearchTerm(recipe.notes, filters.nameFilter),
-      )
-    : undefined;
   return buildSearchConditions(
     recipe,
     [],
     [
       ...auditDateWhereConditions(recipe, filters),
       ...relatedWhereConditions("recipe", filters, recipe.id),
-      pickerSearch,
       // `eqAnyRequested` + `presenceCondition` rather than `eqAnyOrPresence`:
       // the id half must distinguish "no cookbook filter" (unrestricted) from
       // "a cookbook code that resolves to nothing" (match nothing), which the
@@ -460,28 +450,6 @@ export const buildRecipeWhere = async (
       or(
         eqAnyRequested(recipe.cookbookId, cookbookIds),
         presenceCondition(recipe.cookbookId, filters.cookbookPresenceFilter),
-      ),
-      // arrayOverlaps, not a hand-rolled `&&`: drizzle interpolates a JS array
-      // into raw SQL as a ROW CONSTRUCTOR (`&& ($1, $2)`), which isn't a
-      // text[] — the hand-rolled version failed for every tag count, one
-      // included. Semantics are unchanged (ANY-of / array overlap).
-      //
-      // OR-ed with the tag column's presence sentinel, so "quick or untagged"
-      // is one filter. `tags` is a nullable array, so untagged means NULL *or*
-      // zero-length: clearing a recipe's last tag writes `{}`, not NULL, and
-      // keying off IS NULL alone would hide those rows from the very view
-      // meant to find them. "has" is `not()` of the same predicate rather than
-      // a second hand-written one, so the two can never drift into a gap that
-      // hides a recipe from BOTH options.
-      or(
-        filters.tagFilters && filters.tagFilters.length > 0
-          ? arrayOverlaps(recipe.tags, filters.tagFilters)
-          : undefined,
-        presenceCondition(
-          recipe.tags,
-          filters.tagsPresenceFilter,
-          TAGS_ARE_EMPTY,
-        ),
       ),
       filters.excludeSubRecipes
         ? notInArray(recipe.id, subRecipeIds)
@@ -516,8 +484,9 @@ export const buildRecipeWhere = async (
         filters,
         "caloriesTotal",
       ),
-      // `totalMinutes` is a declared stored range filter over the real
-      // `Recipe.totalMinutes` column.
+      // `nameFilter` (name ∪ notes), `tagFilters` (an overlap over the nullable
+      // `tags` array, ORed with `tagsPresenceFilter`) and `totalMinutes` are
+      // declared stored filters.
       ...declaredFilterPredicates("recipe", recipe, filters),
     ],
   );

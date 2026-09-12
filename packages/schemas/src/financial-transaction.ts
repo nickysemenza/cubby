@@ -337,7 +337,6 @@ export const financialTransactionFilterFields = {
   ...auditDateFilterFields,
   ...financialTransactionRelatedFilterFields,
   ...generatedFinancialTransactionFilterFields,
-  search: z.string().optional(),
   accountId: entityFilterList(financialAccountShortcode).optional(),
   purchaseId: entityFilterList(purchaseShortcode).optional(),
   purchasePresenceFilter: presenceFilter,

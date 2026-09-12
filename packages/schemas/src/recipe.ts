@@ -246,7 +246,6 @@ export const recipeFilterFields = {
   ...auditDateFilterFields,
   ...recipeRelatedFilterFields,
   ...generatedRecipeFilterFields,
-  tagFilters: z.array(z.string()).optional(),
   cookbookId: entityFilterList(cookbookShortcode).optional(),
   cookbookPresenceFilter: presenceFilter,
   /**

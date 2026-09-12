@@ -265,10 +265,7 @@ export async function buildFinancialTransactionWhere(
   if (accountIds?.length === 0 || purchaseIds?.length === 0) return sql`false`;
   return buildSearchConditions(
     financialTransaction,
-    [
-      { column: financialTransaction.merchant, term: filters.search },
-      { column: financialTransaction.rawDescription, term: filters.search },
-    ],
+    [],
     [
       ...auditDateWhereConditions(financialTransaction, filters),
       ...relatedWhereConditions(

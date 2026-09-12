@@ -23,7 +23,14 @@ describe("buildProjectWhere", () => {
     expect(await where({ kind: "furniture" })).toContain('"kind"');
   });
 
-  it("still narrows by location (hand-written: array-overlap, not eqAny)", async () => {
-    expect(await where({ location: "Garage" })).toContain('"locations"');
+  it("still narrows by location as an array overlap (declared stored array filter)", async () => {
+    expect(await where({ location: "Garage" })).toContain('"locations" &&');
+  });
+
+  it("matches name, notes, and locations by element (declared stored text filter)", async () => {
+    const rendered = await where({ search: "shed" });
+    expect(rendered).toContain('"name"');
+    expect(rendered).toContain('"notes"');
+    expect(rendered).toContain('unnest("Project"."locations")');
   });
 });

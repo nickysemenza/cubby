@@ -226,6 +226,7 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search vendors...",
         deriveSchema: true,
+        stored: { columns: ["name", "notes", "website"] },
       },
       {
         columnId: "purchaseCount",

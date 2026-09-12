@@ -612,6 +612,9 @@ export default defineEntity({
         kind: "text",
         placeholder: "Search manufacturer...",
         urlOnly: true,
+        deriveSchema: true,
+        schemaDescription: "Filter by manufacturer",
+        stored: { columns: ["manufacturer"] },
       },
       {
         columnId: "primaryGtin",
@@ -637,6 +640,8 @@ export default defineEntity({
         field: "modelPresenceFilter",
         kind: "presence",
         placeholder: "Filter model presence...",
+        deriveSchema: true,
+        stored: { columns: ["model"] },
         options: [
           { value: "has", label: "Has model", meta: true },
           { value: "none", label: "(none)", meta: true },
@@ -773,6 +778,8 @@ export default defineEntity({
         field: "notesPresenceFilter",
         kind: "presence",
         placeholder: "Filter notes presence...",
+        deriveSchema: true,
+        stored: { columns: ["notes"] },
         options: [
           { value: "has", label: "Has notes", meta: true },
           { value: "none", label: "(none)", meta: true },
@@ -923,6 +930,10 @@ export default defineEntity({
         field: "stockTrackedPresenceFilter",
         kind: "presence",
         placeholder: "Filter stock tracking...",
+        deriveSchema: true,
+        schemaDescription:
+          "Filter to products whose stockTracked decision is undecided (none) or has been made either way (has).",
+        stored: true,
         options: [
           { value: "none", label: "Undecided" },
           { value: "has", label: "Reviewed" },
@@ -944,6 +955,9 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by tag...",
         optionsKey: "tags",
+        deriveSchema: true,
+        schemaDescription: "Match products carrying any of these tags",
+        stored: { array: true },
         nullable: { field: "tagsPresenceFilter", label: "tags" },
       },
       {
