@@ -176,6 +176,18 @@ struct TodayContent: View {
                 }
                 .buttonStyle(.plain)
 
+                Button {
+                    model.navigator.section = .browse
+                    model.navigator.paths[.browse] = [.needsPhoto(locationID: nil)]
+                } label: {
+                    ActionTile(
+                        title: "Needs a photo",
+                        symbol: "camera.badge.ellipsis",
+                        detail: "Work down the backlog"
+                    )
+                }
+                .buttonStyle(.plain)
+
                 shortcut(
                     to: .identify,
                     title: "Identify",
