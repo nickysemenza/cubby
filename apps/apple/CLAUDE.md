@@ -98,7 +98,17 @@ generated shape.
 - `xcodegen generate --spec apps/apple/project.yml` (only once `project.yml` exists)
 - Full app build needs the xcframework from `build-rust.sh` first; that script and its inputs
   belong to W1.
+- `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
+  `scripts/ci-scope.ts`'s `runAppleCheck`) gates formatting; run
+  `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
+
+### Debugging on device
+
+Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white screen on
+device. Use the `Cubby-iOS-NoDebugger` / `Cubby-macOS-NoDebugger` schemes for fast UI iteration;
+for the regular debugger schemes, copy `apps/apple/lldbinit-Xcode.example` to
+`~/.lldbinit-Xcode` to enable LLDB on-demand symbol loading.
 
 Do not run root `pnpm` scripts from here — `apps/apple/**` and `cubby-ffi/**` are excluded from
-oxfmt/oxlint until W1's tooling change lands, and running them early can rewrite Swift-adjacent
-JSON fixtures.
+oxfmt/oxlint (Swift is covered by its own `swift-format` gate above, not oxfmt/oxlint), and
+running root pnpm scripts early can rewrite Swift-adjacent JSON fixtures.

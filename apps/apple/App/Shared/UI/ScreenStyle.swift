@@ -88,17 +88,17 @@ private struct KeyboardDismissBar: ViewModifier {
 
     func body(content: Content) -> some View {
         #if os(iOS)
-        content
-            .focused($focused)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { focused = false }
-                        .font(.porcelainBody.weight(.semibold))
+            content
+                .focused($focused)
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Done") { focused = false }
+                            .font(.porcelainBody.weight(.semibold))
+                    }
                 }
-            }
         #else
-        content
+            content
         #endif
     }
 }

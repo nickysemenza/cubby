@@ -18,7 +18,7 @@ struct EntityDetailView: View {
             .porcelainScreen()
             .navigationTitle(model?.row?.title ?? descriptor.singular)
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+                .navigationBarTitleDisplayMode(.inline)
             #endif
             .task(id: appModel.host) { await setup() }
             .toolbar {
@@ -28,7 +28,8 @@ struct EntityDetailView: View {
                     ToolbarItem {
                         Button {
                             photoCapture = PhotoCaptureModel(
-                                client: appModel.client, entity: key, entityID: row.id, entityTitle: row.title,
+                                client: appModel.client, entity: key, entityID: row.id,
+                                entityTitle: row.title,
                                 featurePrints: appModel.featurePrints
                             )
                         } label: {
@@ -87,9 +88,9 @@ struct EntityDetailContent: View {
     @State private var showingRaw = false
 
     #if os(macOS)
-    private let heroMaxHeight: CGFloat = 360
+        private let heroMaxHeight: CGFloat = 360
     #else
-    private let heroMaxHeight: CGFloat = 280
+        private let heroMaxHeight: CGFloat = 280
     #endif
 
     private var stats: [EntityStat] { EntityFacts.stats(descriptor: descriptor, row: row) }
@@ -133,7 +134,8 @@ struct EntityDetailContent: View {
                 if !stats.isEmpty {
                     LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
                         ForEach(stats) { stat in
-                            StatTile(label: stat.label, value: stat.value, detail: stat.detail, mono: stat.mono)
+                            StatTile(
+                                label: stat.label, value: stat.value, detail: stat.detail, mono: stat.mono)
                         }
                     }
                 }
@@ -380,7 +382,8 @@ struct EntityDetailContent: View {
             ]),
         ]),
     ])
-    let row = EntityRow(id: "PRD-2345", title: "Cast Iron Skillet", subtitle: "Lodge", imageURL: nil, raw: raw)
+    let row = EntityRow(
+        id: "PRD-2345", title: "Cast Iron Skillet", subtitle: "Lodge", imageURL: nil, raw: raw)
     return NavigationStack {
         EntityDetailContent(descriptor: EntityCatalog[.product], row: row)
             .navigationTitle("Cast Iron Skillet")
@@ -400,16 +403,21 @@ struct EntityDetailContent: View {
         "parent": .object(["id": .string("LOC-1"), "name": .string("Kitchen Pantry")]),
         "inventoryItems": .array([
             .object([
-                "id": .string("INV-1"), "productId": .string("PRD-2345"), "productName": .string("Cast Iron Skillet"),
+                "id": .string("INV-1"), "productId": .string("PRD-2345"),
+                "productName": .string("Cast Iron Skillet"),
                 "amount": .object(["value": .number(1), "unit": .string("units")]),
             ]),
             .object([
-                "id": .string("INV-2"), "productId": .string("PRD-2346"), "productName": .string("Enameled Dutch Oven"),
+                "id": .string("INV-2"), "productId": .string("PRD-2346"),
+                "productName": .string("Enameled Dutch Oven"),
                 "amount": .object(["value": .number(1), "unit": .string("units")]),
             ]),
         ]),
         "children": .array([
-            .object(["id": .string("LOC-1002"), "name": .string("Shelf B, left bin"), "directItemCount": .number(3)]),
+            .object([
+                "id": .string("LOC-1002"), "name": .string("Shelf B, left bin"),
+                "directItemCount": .number(3),
+            ])
         ]),
     ])
     let row = EntityRow(id: "LOC-1001", title: "Pantry Shelf B", subtitle: nil, imageURL: nil, raw: raw)

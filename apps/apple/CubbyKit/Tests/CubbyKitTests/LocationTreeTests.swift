@@ -22,8 +22,14 @@ struct LocationTreeTests {
 
     @Test func ancestorsAndBreadcrumb() throws {
         let tree = try Self.tree()
-        #expect(tree.ancestors(of: LocationCode("LOC-6789")).map(\.name) == ["Bin 1", "Shelf A", "Garage", "Home"])
-        #expect(tree.breadcrumb(of: LocationCode("LOC-6789")).map(\.name) == ["Home", "Garage", "Shelf A", "Bin 1", "Bin 2"])
+        #expect(
+            tree.ancestors(of: LocationCode("LOC-6789")).map(\.name) == [
+                "Bin 1", "Shelf A", "Garage", "Home",
+            ])
+        #expect(
+            tree.breadcrumb(of: LocationCode("LOC-6789")).map(\.name) == [
+                "Home", "Garage", "Shelf A", "Bin 1", "Bin 2",
+            ])
         #expect(tree.isDescendant(LocationCode("LOC-6789"), of: LocationCode("LOC-3456")))
         #expect(!tree.isDescendant(LocationCode("LOC-3456"), of: LocationCode("LOC-6789")))
         #expect(tree.breadcrumb(of: LocationCode("LOC-ZZZZ")).isEmpty)
@@ -32,7 +38,8 @@ struct LocationTreeTests {
     /// Shelf A holds nothing directly, so it is not a stop; its stocked descendants are.
     @Test func auditableBinsAreStockedNodesDepthFirst() throws {
         let tree = try Self.tree()
-        #expect(tree.auditableBins(under: LocationCode("LOC-3456")).map(\.name) == ["Garage", "Bin 1", "Bin 2"])
+        #expect(
+            tree.auditableBins(under: LocationCode("LOC-3456")).map(\.name) == ["Garage", "Bin 1", "Bin 2"])
         #expect(tree.auditableBins(under: LocationCode("LOC-4567")).map(\.name) == ["Bin 1", "Bin 2"])
         #expect(tree.auditableBins(under: LocationCode("LOC-9ABC")).isEmpty)
     }
@@ -40,7 +47,10 @@ struct LocationTreeTests {
     @Test func scopeCandidatesSkipTheEmptyUnknown() throws {
         let tree = try Self.tree()
         let candidates = tree.scopeCandidates()
-        #expect(candidates.map(\.node.name) == ["Home", "Garage", "Shelf A", "Bin 1", "Bin 2", "Kitchen", "Bin 9"])
+        #expect(
+            candidates.map(\.node.name) == [
+                "Home", "Garage", "Shelf A", "Bin 1", "Bin 2", "Kitchen", "Bin 9",
+            ])
         #expect(candidates.map(\.depth) == [0, 1, 2, 3, 4, 1, 2])
     }
 }

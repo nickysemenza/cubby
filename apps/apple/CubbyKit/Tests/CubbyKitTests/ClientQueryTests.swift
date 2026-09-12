@@ -11,7 +11,8 @@ private final class QueryStub: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        StubNetworking.startLoading(request, client: client, target: self, handler: Self.handler.withLock { $0 })
+        StubNetworking.startLoading(
+            request, client: client, target: self, handler: Self.handler.withLock { $0 })
     }
     override func stopLoading() {}
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
@@ -28,10 +29,14 @@ struct ClientQueryTests {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")
         let credentials = CredentialProvider(host: "localhost:3000", store: store)
-        return CubbyClient(baseURL: URL(string: "http://localhost:3000")!, credentials: credentials, session: QueryStub.session())
+        return CubbyClient(
+            baseURL: URL(string: "http://localhost:3000")!, credentials: credentials,
+            session: QueryStub.session())
     }
 
-    private func capture(returning payload: Data, _ body: (CubbyClient) async throws -> Void) async throws -> URLRequest {
+    private func capture(returning payload: Data, _ body: (CubbyClient) async throws -> Void) async throws
+        -> URLRequest
+    {
         defer { QueryStub.handler.withLock { $0 = nil } }
         let seen = Mutex<URLRequest?>(nil)
         QueryStub.handler.withLock { handler in

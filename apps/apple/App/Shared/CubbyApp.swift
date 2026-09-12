@@ -33,11 +33,11 @@ struct CubbyApp: App {
                 }
         }
         #if os(macOS)
-        Settings {
-            SettingsView()
-                .environment(model)
-                .frame(width: 420)
-        }
+            Settings {
+                SettingsView()
+                    .environment(model)
+                    .frame(width: 420)
+            }
         #endif
     }
 }

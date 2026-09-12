@@ -5,10 +5,15 @@ import Foundation
 /// Options every subcommand accepts: which server to talk to, an optional static API key, and
 /// output shape.
 struct GlobalOptions: ParsableArguments {
-    @Option(name: .customLong("base-url"), help: "Cubby server base URL. Defaults to $CUBBY_BASE_URL, else https://cubby.nickysemenza.com.")
-    var baseURLString: String = ProcessInfo.processInfo.environment["CUBBY_BASE_URL"] ?? "https://cubby.nickysemenza.com"
+    @Option(
+        name: .customLong("base-url"),
+        help: "Cubby server base URL. Defaults to $CUBBY_BASE_URL, else https://cubby.nickysemenza.com.")
+    var baseURLString: String =
+        ProcessInfo.processInfo.environment["CUBBY_BASE_URL"] ?? "https://cubby.nickysemenza.com"
 
-    @Option(name: .customLong("api-key"), help: "Static API key. Defaults to $CUBBY_API_KEY. Never written to Keychain.")
+    @Option(
+        name: .customLong("api-key"),
+        help: "Static API key. Defaults to $CUBBY_API_KEY. Never written to Keychain.")
     var apiKeyString: String = ""
 
     @Flag(name: .customLong("json"), help: "Print raw JSON instead of a table.")
@@ -20,7 +25,8 @@ struct GlobalOptions: ParsableArguments {
     /// property can't be `String?` with a default — ArgumentParser deprecates that combination —
     /// so the empty string doubles as "not passed on the command line".)
     var apiKey: String? {
-        let value = apiKeyString.isEmpty ? (ProcessInfo.processInfo.environment["CUBBY_API_KEY"] ?? "") : apiKeyString
+        let value =
+            apiKeyString.isEmpty ? (ProcessInfo.processInfo.environment["CUBBY_API_KEY"] ?? "") : apiKeyString
         return value.isEmpty ? nil : value
     }
 

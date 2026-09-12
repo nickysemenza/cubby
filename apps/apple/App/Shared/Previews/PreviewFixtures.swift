@@ -22,7 +22,9 @@ enum PreviewFixtures {
     static let sampleLocation = LocationCode("LOC-2345")
 
     static let sampleRows: [EntityRow] = [
-        EntityRow(id: "PRD-2345", title: "Sample Product", subtitle: "Sample Manufacturer", imageURL: nil, raw: .object([:])),
+        EntityRow(
+            id: "PRD-2345", title: "Sample Product", subtitle: "Sample Manufacturer", imageURL: nil,
+            raw: .object([:])),
         EntityRow(id: "PRD-3456", title: "Another Product", subtitle: nil, imageURL: nil, raw: .object([:])),
     ]
 
@@ -46,9 +48,15 @@ enum PreviewFixtures {
 
     /// Ranked candidates for `IdentifyResultsSection` previews; distances are illustrative only.
     static let sampleCandidates: [IdentificationCandidate] = [
-        IdentificationCandidate(productID: ProductCode("PRD-1001"), name: "Cast Iron Skillet", imageURL: URL(string: "https://example.invalid/covers/skillet.jpg")!, distance: 0.412),
-        IdentificationCandidate(productID: ProductCode("PRD-1002"), name: "Enameled Dutch Oven", imageURL: URL(string: "https://example.invalid/covers/dutch-oven.jpg")!, distance: 0.877),
-        IdentificationCandidate(productID: ProductCode("PRD-1003"), name: "Carbon Steel Wok", imageURL: URL(string: "https://example.invalid/covers/wok.jpg")!, distance: 1.203),
+        IdentificationCandidate(
+            productID: ProductCode("PRD-1001"), name: "Cast Iron Skillet",
+            imageURL: URL(string: "https://example.invalid/covers/skillet.jpg")!, distance: 0.412),
+        IdentificationCandidate(
+            productID: ProductCode("PRD-1002"), name: "Enameled Dutch Oven",
+            imageURL: URL(string: "https://example.invalid/covers/dutch-oven.jpg")!, distance: 0.877),
+        IdentificationCandidate(
+            productID: ProductCode("PRD-1003"), name: "Carbon Steel Wok",
+            imageURL: URL(string: "https://example.invalid/covers/wok.jpg")!, distance: 1.203),
     ]
 
     /// A synthesized solid-color image so the probe thumbnail has something to render in

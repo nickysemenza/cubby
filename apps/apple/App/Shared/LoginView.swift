@@ -39,8 +39,8 @@ struct LoginView: View {
                                     .autocorrectionDisabled()
                                     .focused($focused, equals: .email)
                                     #if os(iOS)
-                                    .keyboardType(.emailAddress)
-                                    .textInputAutocapitalization(.never)
+                                        .keyboardType(.emailAddress)
+                                        .textInputAutocapitalization(.never)
                                     #endif
                                     .onSubmit { focused = .password }
                             }

@@ -3,9 +3,9 @@ import CubbyKit
 import Foundation
 
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #elseif canImport(Glibc)
-import Glibc
+    import Glibc
 #endif
 
 /// A CLI-local error with a plain-text message, printed as-is (no "HTTP ..." framing).

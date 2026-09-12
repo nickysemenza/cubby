@@ -66,7 +66,8 @@ public actor FeaturePrintIndex {
 
     public func add(productID: ProductCode, name: String, imageURL: URL, image: CGImage) async throws {
         let print = try await Self.featurePrint(of: image)
-        entries[productID] = FeaturePrintEntry(productID: productID, name: name, imageURL: imageURL, print: print)
+        entries[productID] = FeaturePrintEntry(
+            productID: productID, name: name, imageURL: imageURL, print: print)
     }
 
     /// Adds every product that has a cover, downloading with bounded concurrency. Products already
@@ -96,7 +97,8 @@ public actor FeaturePrintIndex {
             for await result in group {
                 done += 1
                 if let (product, print) = result, let url = product.coverImageURL {
-                    entries[product.id] = FeaturePrintEntry(productID: product.id, name: product.name, imageURL: url, print: print)
+                    entries[product.id] = FeaturePrintEntry(
+                        productID: product.id, name: product.name, imageURL: url, print: print)
                     added += 1
                 }
                 progress?(done, pending.count)
@@ -117,7 +119,9 @@ public actor FeaturePrintIndex {
         entries.values
             .compactMap { entry -> IdentificationCandidate? in
                 guard let distance = try? query.distance(to: entry.print) else { return nil }
-                return IdentificationCandidate(productID: entry.productID, name: entry.name, imageURL: entry.imageURL, distance: distance)
+                return IdentificationCandidate(
+                    productID: entry.productID, name: entry.name, imageURL: entry.imageURL, distance: distance
+                )
             }
             .sorted { $0.distance < $1.distance }
             .prefix(limit)
@@ -127,7 +131,8 @@ public actor FeaturePrintIndex {
     // MARK: Cache
 
     public func loadCache() throws -> Int {
-        guard let cacheURL, FileManager.default.fileExists(atPath: cacheURL.path(percentEncoded: false)) else { return 0 }
+        guard let cacheURL, FileManager.default.fileExists(atPath: cacheURL.path(percentEncoded: false))
+        else { return 0 }
         let cached = try JSONDecoder().decode([FeaturePrintEntry].self, from: Data(contentsOf: cacheURL))
         for entry in cached { entries[entry.productID] = entry }
         return cached.count
@@ -135,7 +140,8 @@ public actor FeaturePrintIndex {
 
     public func saveCache() throws {
         guard let cacheURL else { return }
-        try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder().encode(Array(entries.values)).write(to: cacheURL, options: .atomic)
     }
 

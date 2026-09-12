@@ -87,7 +87,9 @@ public enum Shortcode {
         let prefix = String(normalized[...dash])
         let body = String(normalized[normalized.index(after: dash)...])
         guard body.count == 4, body.allSatisfy({ alphabet.contains($0) }) else { return nil }
-        guard let descriptor = EntityCatalog.all.first(where: { $0.shortcodePrefix == prefix }) else { return nil }
+        guard let descriptor = EntityCatalog.all.first(where: { $0.shortcodePrefix == prefix }) else {
+            return nil
+        }
         return Parsed(key: descriptor.key, singular: descriptor.singular, code: prefix + body)
     }
 

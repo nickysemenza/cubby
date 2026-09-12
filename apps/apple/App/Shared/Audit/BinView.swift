@@ -1,7 +1,8 @@
 import CubbyKit
 import SwiftUI
+
 #if os(iOS)
-import VisionKit
+    import VisionKit
 #endif
 
 /// The working screen of a walk: one bin's expected rows, a scanner/manual-entry pair for finding
@@ -22,7 +23,7 @@ struct BinView: View {
                     .listRowSeparator(.hidden)
             }
             #if os(iOS)
-            scannerRow
+                scannerRow
             #endif
             manualEntryRow
             chipsRows
@@ -44,26 +45,26 @@ struct BinView: View {
     }
 
     #if os(iOS)
-    /// The same `DataScannerView` usage as `CaptureView`, minus its own "no camera" explanation:
-    /// on the simulator (unsupported) and on macOS (compiled out entirely) the manual entry field
-    /// below is the only way in, with nothing else competing for the eye.
-    @ViewBuilder
-    private var scannerRow: some View {
-        if DataScannerViewController.isSupported {
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                .fill(PorcelainTokens.inset)
-                .aspectRatio(4.0 / 3.0, contentMode: .fit)
-                .frame(maxWidth: .infinity, maxHeight: 300)
-                .overlay { ScannerSlot { code in session.submit(code) } }
-                .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
-                .overlay(
-                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
-                )
-                .listRowBackground(PorcelainTokens.canvas)
-                .listRowSeparator(.hidden)
+        /// The same `DataScannerView` usage as `CaptureView`, minus its own "no camera" explanation:
+        /// on the simulator (unsupported) and on macOS (compiled out entirely) the manual entry field
+        /// below is the only way in, with nothing else competing for the eye.
+        @ViewBuilder
+        private var scannerRow: some View {
+            if DataScannerViewController.isSupported {
+                RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                    .fill(PorcelainTokens.inset)
+                    .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: 300)
+                    .overlay { ScannerSlot { code in session.submit(code) } }
+                    .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                    )
+                    .listRowBackground(PorcelainTokens.canvas)
+                    .listRowSeparator(.hidden)
+            }
         }
-    }
     #endif
 
     private var manualEntryRow: some View {
@@ -76,8 +77,8 @@ struct BinView: View {
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     #if os(iOS)
-                    .keyboardType(.asciiCapable)
-                    .textInputAutocapitalization(.characters)
+                        .keyboardType(.asciiCapable)
+                        .textInputAutocapitalization(.characters)
                     #endif
                     .onSubmit(submitManualEntry)
                     .padding(.horizontal, PorcelainTokens.Space.md)
@@ -135,8 +136,11 @@ struct BinView: View {
                 .listRowSeparator(.hidden)
         } else {
             ForEach(session.rows) { state in
-                BinRowView(session: session, row: state.row, resolution: state.resolution, isDuplicate: state.isDuplicate)
-                    .porcelainListRow()
+                BinRowView(
+                    session: session, row: state.row, resolution: state.resolution,
+                    isDuplicate: state.isDuplicate
+                )
+                .porcelainListRow()
             }
         }
     }
@@ -168,11 +172,13 @@ struct BinView: View {
     private var stalePanelRow: some View {
         switch session.stale {
         case .refetched:
-            Text("This bin changed since you loaded it. Your decisions were kept — check the rows and press Done again.")
-                .font(.porcelainBody)
-                .foregroundStyle(PorcelainTokens.warning)
-                .listRowBackground(PorcelainTokens.canvas)
-                .listRowSeparator(.hidden)
+            Text(
+                "This bin changed since you loaded it. Your decisions were kept — check the rows and press Done again."
+            )
+            .font(.porcelainBody)
+            .foregroundStyle(PorcelainTokens.warning)
+            .listRowBackground(PorcelainTokens.canvas)
+            .listRowSeparator(.hidden)
         case .needsReload:
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
                 Text("This bin changed twice in a row. Reload to try again.")

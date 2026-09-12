@@ -22,20 +22,28 @@ enum TestImages {
             let radius = Double(min(width, height)) / 4
             let center = CGPoint(x: Double(width) / 2, y: Double(height) / 2)
             context.saveGState()
-            context.setShadow(offset: CGSize(width: radius / 6, height: -radius / 6), blur: radius / 3, color: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.45))
+            context.setShadow(
+                offset: CGSize(width: radius / 6, height: -radius / 6), blur: radius / 3,
+                color: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.45))
             context.setFillColor(CGColor(srgbRed: 0.15, green: 0.2, blue: 0.5, alpha: 1))
-            context.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+            context.fillEllipse(
+                in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
             context.restoreGState()
             let gradient = CGGradient(
                 colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-                colors: [CGColor(srgbRed: 0.55, green: 0.62, blue: 0.95, alpha: 1), CGColor(srgbRed: 0.05, green: 0.08, blue: 0.3, alpha: 1)] as CFArray,
+                colors: [
+                    CGColor(srgbRed: 0.55, green: 0.62, blue: 0.95, alpha: 1),
+                    CGColor(srgbRed: 0.05, green: 0.08, blue: 0.3, alpha: 1),
+                ] as CFArray,
                 locations: [0, 1]
             )!
             context.saveGState()
-            context.addEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+            context.addEllipse(
+                in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
             context.clip()
             context.drawRadialGradient(
-                gradient, startCenter: CGPoint(x: center.x - radius / 3, y: center.y + radius / 3), startRadius: 0,
+                gradient, startCenter: CGPoint(x: center.x - radius / 3, y: center.y + radius / 3),
+                startRadius: 0,
                 endCenter: center, endRadius: radius * 1.2, options: []
             )
             context.restoreGState()
@@ -90,14 +98,17 @@ struct SubjectLiftTests {
         let image = TestImages.canvas(width: 600, height: 600, subject: true)
         let lifted = try await SubjectLift.lift(image, background: .transparent, cropToSubject: false)
         #expect(lifted.foundSubject)
-        #expect(lifted.image.alphaInfo != .none && lifted.image.alphaInfo != .noneSkipLast && lifted.image.alphaInfo != .noneSkipFirst)
+        #expect(
+            lifted.image.alphaInfo != .none && lifted.image.alphaInfo != .noneSkipLast
+                && lifted.image.alphaInfo != .noneSkipFirst)
     }
 }
 
 /// Records the exact call sequence; `failPut` makes the presigned PUT fail.
 final class StubPhotoService: PhotoService, Sendable {
     enum Call: Equatable, Sendable {
-        case create(String, Int, ImageEncoding.Format, EntityKey), put(URL, String, Int), mark(ImageCode), attach([ImageCode], EntityKey, String), ids(ProductCode), order([ImageCode], ProductCode)
+        case create(String, Int, ImageEncoding.Format, EntityKey), put(URL, String, Int), mark(ImageCode),
+            attach([ImageCode], EntityKey, String), ids(ProductCode), order([ImageCode], ProductCode)
     }
 
     let calls = Mutex<[Call]>([])
@@ -107,21 +118,29 @@ final class StubPhotoService: PhotoService, Sendable {
 
     func record(_ call: Call) { calls.withLock { $0.append(call) } }
 
-    func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey) async throws -> ImageUpload {
+    func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey)
+        async throws -> ImageUpload
+    {
         record(.create(filename, size, format, entity))
-        return ImageUpload(uploadUrl: URL(string: "https://uploads.example/x")!, imageId: ImageCode("IMG-2345"), key: "k", url: URL(string: "https://images.example/x.jpg")!)
+        return ImageUpload(
+            uploadUrl: URL(string: "https://uploads.example/x")!, imageId: ImageCode("IMG-2345"), key: "k",
+            url: URL(string: "https://images.example/x.jpg")!)
     }
 
     func markUploaded(_ id: ImageCode) async throws { record(.mark(id)) }
 
-    func attachImages(_ ids: [ImageCode], to entity: EntityKey, id: String) async throws { record(.attach(ids, entity, id)) }
+    func attachImages(_ ids: [ImageCode], to entity: EntityKey, id: String) async throws {
+        record(.attach(ids, entity, id))
+    }
 
     func productImageIDs(_ product: ProductCode) async throws -> [ImageCode] {
         record(.ids(product))
         return existing
     }
 
-    func setImageOrder(_ order: [ImageCode], product: ProductCode) async throws { record(.order(order, product)) }
+    func setImageOrder(_ order: [ImageCode], product: ProductCode) async throws {
+        record(.order(order, product))
+    }
 }
 
 @Suite("PhotoUploader")
@@ -135,12 +154,16 @@ struct PhotoUploaderTests {
         }
         let steps = Mutex<[PhotoUploader.Step]>([])
         let outcome = try await uploader.upload(
-            .init(image: image, format: .jpeg, entity: .product, entityID: "PRD-2345", makeCover: true, filenameBase: "shelf"),
+            .init(
+                image: image, format: .jpeg, entity: .product, entityID: "PRD-2345", makeCover: true,
+                filenameBase: "shelf"),
             progress: { step in steps.withLock { $0.append(step) } }
         )
         let calls = service.calls.withLock { $0 }
         #expect(calls.count == 6)
-        guard case .create(let filename, let size, let format, let entity) = calls[0] else { Issue.record("expected create"); return }
+        guard case .create(let filename, let size, let format, let entity) = calls[0] else {
+            Issue.record("expected create"); return
+        }
         #expect(filename == "shelf.jpg")
         #expect(format == .jpeg)
         #expect(entity == .product)
@@ -199,7 +222,8 @@ private final class PresignedStub: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        StubNetworking.startLoading(request, client: client, target: self, handler: Self.handler.withLock { $0 })
+        StubNetworking.startLoading(
+            request, client: client, target: self, handler: Self.handler.withLock { $0 })
     }
     override func stopLoading() {}
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
@@ -227,7 +251,9 @@ struct PresignedUploadTests {
             }
         }
         let bytes = Data(repeating: 7, count: 1234)
-        try await PresignedUpload.put(bytes, to: URL(string: "https://uploads.example/x")!, contentType: "image/jpeg", session: PresignedStub.session())
+        try await PresignedUpload.put(
+            bytes, to: URL(string: "https://uploads.example/x")!, contentType: "image/jpeg",
+            session: PresignedStub.session())
         let request = try #require(seen.withLock { $0 })
         #expect(request.method == "PUT")
         #expect(request.headers["Content-Type"] == "image/jpeg")
@@ -239,7 +265,9 @@ struct PresignedUploadTests {
     @Test func rejectedPutThrowsWithTheStatus() async throws {
         PresignedStub.handler.withLock { $0 = { _ in (403, Data("<xml>AccessDenied</xml>".utf8)) } }
         do {
-            try await PresignedUpload.put(Data([1]), to: URL(string: "https://uploads.example/x")!, contentType: "image/png", session: PresignedStub.session())
+            try await PresignedUpload.put(
+                Data([1]), to: URL(string: "https://uploads.example/x")!, contentType: "image/png",
+                session: PresignedStub.session())
             Issue.record("expected a throw")
         } catch let error as CubbyAPIError {
             #expect(error.status == 403)

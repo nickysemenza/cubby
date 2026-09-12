@@ -82,7 +82,8 @@ final class IdentifyModel {
             let targetIDs = Array(ids.prefix(maxProducts))
 
             let client = self.client
-            let products = await withTaskGroup(of: ProductSummary?.self, returning: [ProductSummary].self) { group in
+            let products = await withTaskGroup(of: ProductSummary?.self, returning: [ProductSummary].self) {
+                group in
                 var iterator = targetIDs.makeIterator()
                 func enqueue() {
                     guard let id = iterator.next() else { return }

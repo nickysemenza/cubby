@@ -26,7 +26,10 @@ struct SearchHitTests {
                     "id": "INV-2345",
                     "amount": ["value": 3, "unit": "each"],
                     "placement": "stock",
-                    "location": ["id": "LOC-5678", "name": "Bin 1", "ancestors": [["name": "Home"], ["name": "Garage"]]],
+                    "location": [
+                        "id": "LOC-5678", "name": "Bin 1",
+                        "ancestors": [["name": "Home"], ["name": "Garage"]],
+                    ],
                 ],
                 ["id": "INV-3456", "location": ["id": "LOC-9ABC", "name": "Unknown", "ancestors": []]],
             ],

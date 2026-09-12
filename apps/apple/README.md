@@ -42,3 +42,11 @@ Both are committed; hand-editing either fails the relevant `--check` gate.
 - `xcodegen generate --spec apps/apple/project.yml` then
   `xcodebuild -project apps/apple/Cubby.xcodeproj -scheme Cubby-iOS -destination 'generic/platform=iOS Simulator' build`
   for the app targets (needs the xcframework from step 1 first)
+
+## Debugging on device
+
+Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white screen on
+device. Use the `Cubby-iOS-NoDebugger` / `Cubby-macOS-NoDebugger` schemes for fast UI iteration
+when you don't need breakpoints. When you do need the debugger, copy
+`apps/apple/lldbinit-Xcode.example` to `~/.lldbinit-Xcode` first — it enables LLDB's on-demand
+symbol loading, which cuts attach time on the regular schemes.

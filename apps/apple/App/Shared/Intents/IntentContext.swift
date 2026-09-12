@@ -18,7 +18,9 @@ nonisolated enum IntentContext {
     }
 
     static func client() async throws -> CubbyClient {
-        guard let client = await MainActor.run(body: { AppModel.active?.client }) else { throw Failure.signedOut }
+        guard let client = await MainActor.run(body: { AppModel.active?.client }) else {
+            throw Failure.signedOut
+        }
         return client
     }
 
@@ -32,7 +34,9 @@ nonisolated enum IntentContext {
         guard let descriptor = EntityCatalog.descriptor(forShortcode: id), descriptor.isIntentExposed else {
             throw Failure.notFound("item called \(id)")
         }
-        guard let row = try await client.row(descriptor, id: id) else { throw Failure.notFound("item called \(id)") }
+        guard let row = try await client.row(descriptor, id: id) else {
+            throw Failure.notFound("item called \(id)")
+        }
         return CubbyEntity(row: row, kind: descriptor.key)
     }
 }

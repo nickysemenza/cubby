@@ -50,7 +50,10 @@ struct BrowseRootView: View {
         }
         .padding(.top, PorcelainTokens.Space.lg)
         .padding(.bottom, PorcelainTokens.Space.sm)
-        .listRowInsets(EdgeInsets(top: 0, leading: PorcelainTokens.Space.lg, bottom: 0, trailing: PorcelainTokens.Space.lg))
+        .listRowInsets(
+            EdgeInsets(
+                top: 0, leading: PorcelainTokens.Space.lg, bottom: 0, trailing: PorcelainTokens.Space.lg)
+        )
         .background(PorcelainTokens.canvas)
     }
 
@@ -95,7 +98,8 @@ struct BrowseRootView: View {
     private func descriptors(in domain: AppDomain) -> (rows: [EntityDescriptor], unlisted: [String]) {
         let matches = descriptorsMatchingQuery.filter { $0.key.domain == domain }
         let rows = matches.filter { $0.key.httpActions.contains(.list) }.sorted { $0.plural < $1.plural }
-        let unlisted = matches.filter { !$0.key.httpActions.contains(.list) }.sorted { $0.plural < $1.plural }.map(\.plural)
+        let unlisted = matches.filter { !$0.key.httpActions.contains(.list) }.sorted { $0.plural < $1.plural }
+            .map(\.plural)
         return (rows, unlisted)
     }
 }

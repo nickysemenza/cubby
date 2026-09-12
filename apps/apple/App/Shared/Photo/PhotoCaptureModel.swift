@@ -34,7 +34,10 @@ final class PhotoCaptureModel {
     private let uploader: PhotoUploader
     private let featurePrints: FeaturePrintIndex
 
-    init(client: CubbyClient, entity: EntityKey, entityID: String, entityTitle: String, featurePrints: FeaturePrintIndex) {
+    init(
+        client: CubbyClient, entity: EntityKey, entityID: String, entityTitle: String,
+        featurePrints: FeaturePrintIndex
+    ) {
         self.entity = entity
         self.entityID = entityID
         self.entityTitle = entityTitle
@@ -72,7 +75,9 @@ final class PhotoCaptureModel {
         phase = .uploading(.encoding)
         do {
             let outcome = try await uploader.upload(
-                .init(image: image, format: format, entity: entity, entityID: entityID, makeCover: makeCover && canMakeCover, filenameBase: entityID.lowercased())
+                .init(
+                    image: image, format: format, entity: entity, entityID: entityID,
+                    makeCover: makeCover && canMakeCover, filenameBase: entityID.lowercased())
             ) { step in
                 Task { @MainActor [weak self] in
                     if case .uploading = self?.phase { self?.phase = .uploading(step) }
@@ -80,7 +85,8 @@ final class PhotoCaptureModel {
             }
             if entity == .product {
                 // Index the new photo right away so Identify can match it before the next rebuild.
-                try? await featurePrints.add(productID: ProductCode(entityID), name: entityTitle, imageURL: outcome.url, image: image)
+                try? await featurePrints.add(
+                    productID: ProductCode(entityID), name: entityTitle, imageURL: outcome.url, image: image)
                 try? await featurePrints.saveCache()
             }
             phase = .done(outcome.imageID)

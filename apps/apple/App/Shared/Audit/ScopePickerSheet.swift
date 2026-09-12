@@ -44,8 +44,8 @@ struct ScopePickerSheet: View {
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     #if os(iOS)
-                    .keyboardType(.asciiCapable)
-                    .textInputAutocapitalization(.characters)
+                        .keyboardType(.asciiCapable)
+                        .textInputAutocapitalization(.characters)
                     #endif
                     .onSubmit(submitCode)
                     .padding(.horizontal, PorcelainTokens.Space.md)

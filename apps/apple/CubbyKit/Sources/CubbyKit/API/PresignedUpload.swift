@@ -7,7 +7,9 @@ import Foundation
 public enum PresignedUpload {
     public typealias Put = @Sendable (_ data: Data, _ url: URL, _ contentType: String) async throws -> Void
 
-    public static func put(_ data: Data, to url: URL, contentType: String, session: URLSession = .cubbyShared) async throws {
+    public static func put(_ data: Data, to url: URL, contentType: String, session: URLSession = .cubbyShared)
+        async throws
+    {
         var request = URLRequest(url: url)
         request.httpMethod = "PUT"
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")

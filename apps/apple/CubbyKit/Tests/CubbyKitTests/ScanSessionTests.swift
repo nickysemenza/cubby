@@ -34,17 +34,22 @@ final class StubScanService: ScanService, Sendable {
         StrayResolution(moved: moves.count, skipped: [])
     }
 
-    static func result(_ outcome: ScanOutcome, id: String = "PRD-2345", name: String = "Sample", strays: [Stray] = []) -> ScanResult {
+    static func result(
+        _ outcome: ScanOutcome, id: String = "PRD-2345", name: String = "Sample", strays: [Stray] = []
+    ) -> ScanResult {
         ScanResult(
             outcome: outcome,
-            product: ScannedProduct(id: ProductCode(id), name: name, created: false, manufacturer: nil, hasPrice: true),
+            product: ScannedProduct(
+                id: ProductCode(id), name: name, created: false, manufacturer: nil, hasPrice: true),
             strays: strays
         )
     }
 }
 
 private func stray(_ entry: String, ambiguous: Bool = false) -> Stray {
-    Stray(entryId: InventoryEntryCode(entry), locationId: LocationCode("LOC-9999"), locationName: "Elsewhere", ambiguousQuantity: ambiguous)
+    Stray(
+        entryId: InventoryEntryCode(entry), locationId: LocationCode("LOC-9999"), locationName: "Elsewhere",
+        ambiguousQuantity: ambiguous)
 }
 
 /// Waits until the session has nothing pending, or fails after a bounded time.

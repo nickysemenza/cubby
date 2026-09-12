@@ -29,7 +29,9 @@ import Synchronization
 enum StubNetworking {
     typealias Handler = @Sendable (URLRequest) -> (Int, Data)
 
-    static func startLoading(_ request: URLRequest, client: URLProtocolClient?, target: URLProtocol, handler: Handler?) {
+    static func startLoading(
+        _ request: URLRequest, client: URLProtocolClient?, target: URLProtocol, handler: Handler?
+    ) {
         guard let handler else {
             client?.urlProtocol(target, didFailWithError: URLError(.badServerResponse))
             return

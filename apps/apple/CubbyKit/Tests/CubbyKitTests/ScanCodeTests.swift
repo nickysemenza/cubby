@@ -7,7 +7,9 @@ struct ScanCodeTests {
     @Test func productShortcodeRawOrAsLabelURL() throws {
         #expect(try ScanCode.classify("PRD-2345").get() == .product(ProductCode("PRD-2345")))
         #expect(try ScanCode.classify(" prd-2345 ").get() == .product(ProductCode("PRD-2345")))
-        #expect(try ScanCode.classify("https://cubby.example/PRD-2345").get() == .product(ProductCode("PRD-2345")))
+        #expect(
+            try ScanCode.classify("https://cubby.example/PRD-2345").get() == .product(ProductCode("PRD-2345"))
+        )
     }
 
     @Test func otherLabelsAreWrongKind() {

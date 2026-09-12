@@ -1,0 +1,4 @@
+# Copy to ~/.lldbinit-Xcode. Large Swift modules (CubbyKit) make LLDB's attach slow;
+# on-demand symbol loading defers indexing until a symbol is actually needed.
+settings set symbols.load-on-demand true
+settings set target.preload-symbols false

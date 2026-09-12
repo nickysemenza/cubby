@@ -20,9 +20,9 @@ struct RootView: View {
         case .signedIn:
             Group {
                 #if os(iOS)
-                RootTabsView()
+                    RootTabsView()
                 #else
-                RootSplitView()
+                    RootSplitView()
                 #endif
             }
             .task(id: model.host) {

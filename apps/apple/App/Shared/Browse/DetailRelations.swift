@@ -32,7 +32,8 @@ struct ProductStockedAtSection: View {
                 Panel(padding: 0, spacing: 0) {
                     ForEach(Array(locations.enumerated()), id: \.element.id) { index, location in
                         if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg) }
-                        NavigationLink(value: Route.entityDetail(.location, id: location.locationID.rawValue)) {
+                        NavigationLink(value: Route.entityDetail(.location, id: location.locationID.rawValue))
+                        {
                             ProductStockLocationRow(location: location)
                         }
                         .buttonStyle(.plain)
@@ -252,7 +253,8 @@ private struct LocationChildRow: View {
             ProductStockedAtSection(locations: [
                 ProductStockLocation(
                     id: "IE-1", locationID: LocationCode("LOC-1001"), locationName: "Pantry Shelf B",
-                    ancestorPath: "Kitchen › Pantry", amount: Amount(value: 3, unit: "units"), placement: "stock"
+                    ancestorPath: "Kitchen › Pantry", amount: Amount(value: 3, unit: "units"),
+                    placement: "stock"
                 ),
                 ProductStockLocation(
                     id: "IE-2", locationID: LocationCode("LOC-1002"), locationName: "Garage Cabinet",

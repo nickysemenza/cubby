@@ -29,7 +29,8 @@ extension EntityDescriptor {
 
 /// The server calls behind adding a photo. `CubbyClient` conforms; tests stub it.
 public protocol PhotoService: Sendable {
-    func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey) async throws -> ImageUpload
+    func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey)
+        async throws -> ImageUpload
     /// Never skipped: an image left `PENDING` is culled by the server.
     func markUploaded(_ id: ImageCode) async throws
     /// Attaches uploaded images to any entity whose update body takes `pendingImageIds`; throws

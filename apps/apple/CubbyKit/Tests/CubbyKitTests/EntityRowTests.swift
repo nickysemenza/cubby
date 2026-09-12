@@ -80,7 +80,9 @@ struct EntityRowTests {
     }
 
     @Test func subtitlePrefersManufacturerThenCategory() {
-        let withManufacturer: JSONValue = ["id": "PRD-2345", "name": "Sample", "manufacturer": "Acme", "category": "tools"]
+        let withManufacturer: JSONValue = [
+            "id": "PRD-2345", "name": "Sample", "manufacturer": "Acme", "category": "tools",
+        ]
         #expect(product.row(from: withManufacturer)?.subtitle == "Acme")
 
         let categoryOnly: JSONValue = ["id": "PRD-2345", "name": "Sample", "category": "tools"]

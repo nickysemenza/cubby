@@ -12,7 +12,8 @@ struct CaptureView: View {
     var body: some View {
         Group {
             if let capture {
-                CaptureContent(capture: capture, pickingLocation: $pickingLocation, showingStrays: $showingStrays)
+                CaptureContent(
+                    capture: capture, pickingLocation: $pickingLocation, showingStrays: $showingStrays)
             } else {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -53,7 +54,7 @@ private struct CaptureContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
                 #if os(iOS)
-                scannerSlot
+                    scannerSlot
                 #endif
                 locationRow
                 manualEntry
@@ -84,38 +85,38 @@ private struct CaptureContent: View {
     }
 
     #if os(iOS)
-    /// A 4:3 slot. On hardware this is the live scanner; on the simulator `ScannerSlot` renders its
-    /// own explanation, and the inset tone keeps it reading as a disabled instrument, not an error.
-    ///
-    /// With no location chosen the slot stays a placeholder: the camera must not start before
-    /// there is somewhere to put what it reads.
-    private var scannerSlot: some View {
-        RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-            .fill(PorcelainTokens.inset)
-            .aspectRatio(4.0 / 3.0, contentMode: .fit)
-            .frame(maxWidth: .infinity, maxHeight: 300)
-            .overlay {
-                if capture.session.location == nil {
-                    VStack(spacing: PorcelainTokens.Space.sm) {
-                        Image(systemName: "barcode.viewfinder")
-                            .font(.system(size: 32, weight: .light))
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        Text("Pick a location to start the scanner")
-                            .font(.porcelainBody)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                            .multilineTextAlignment(.center)
+        /// A 4:3 slot. On hardware this is the live scanner; on the simulator `ScannerSlot` renders its
+        /// own explanation, and the inset tone keeps it reading as a disabled instrument, not an error.
+        ///
+        /// With no location chosen the slot stays a placeholder: the camera must not start before
+        /// there is somewhere to put what it reads.
+        private var scannerSlot: some View {
+            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                .fill(PorcelainTokens.inset)
+                .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: 300)
+                .overlay {
+                    if capture.session.location == nil {
+                        VStack(spacing: PorcelainTokens.Space.sm) {
+                            Image(systemName: "barcode.viewfinder")
+                                .font(.system(size: 32, weight: .light))
+                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            Text("Pick a location to start the scanner")
+                                .font(.porcelainBody)
+                                .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(PorcelainTokens.Space.lg)
+                    } else {
+                        ScannerSlot { code in capture.submit(code) }
                     }
-                    .padding(PorcelainTokens.Space.lg)
-                } else {
-                    ScannerSlot { code in capture.submit(code) }
                 }
-            }
-            .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
-            .overlay(
-                RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                    .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
-            )
-    }
+                .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                .overlay(
+                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                )
+        }
     #endif
 
     private var locationRow: some View {
@@ -180,8 +181,8 @@ private struct CaptureContent: View {
                     .textFieldStyle(.plain)
                     .autocorrectionDisabled()
                     #if os(iOS)
-                    .keyboardType(.asciiCapable)
-                    .textInputAutocapitalization(.characters)
+                        .keyboardType(.asciiCapable)
+                        .textInputAutocapitalization(.characters)
                     #endif
                     .onSubmit(capture.submitManualEntry)
                     .padding(.horizontal, PorcelainTokens.Space.md)
@@ -234,12 +235,12 @@ private struct CaptureContent: View {
                 }
             } else {
                 #if os(macOS)
-                // No scanner slot on the Mac, so this is the only place that can ask.
-                Panel {
-                    Text("Pick a location to start sweeping.")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                }
+                    // No scanner slot on the Mac, so this is the only place that can ask.
+                    Panel {
+                        Text("Pick a location to start sweeping.")
+                            .font(.porcelainBody)
+                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    }
                 #endif
             }
         } else {

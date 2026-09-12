@@ -39,7 +39,9 @@ actor SpotlightIndexer {
             // the set the HTTP document actually routes (see `GenericEntityListModel.load`).
             for descriptor in EntityCatalog.intentExposed where descriptor.key.httpActions.contains(.list) {
                 let items = try await Self.items(for: descriptor, client: client)
-                try await index.deleteSearchableItems(withDomainIdentifiers: ["cubby.\(descriptor.key.rawValue)"])
+                try await index.deleteSearchableItems(withDomainIdentifiers: [
+                    "cubby.\(descriptor.key.rawValue)"
+                ])
                 if !items.isEmpty { try await index.indexSearchableItems(items) }
             }
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.stampKey(host))
@@ -53,12 +55,15 @@ actor SpotlightIndexer {
     func wipe() async {
         guard CSSearchableIndex.isIndexingAvailable() else { return }
         try? await CSSearchableIndex.default().deleteAllSearchableItems()
-        for key in UserDefaults.standard.dictionaryRepresentation().keys where key.hasPrefix("cubby.spotlight.refreshed.") {
+        for key in UserDefaults.standard.dictionaryRepresentation().keys
+        where key.hasPrefix("cubby.spotlight.refreshed.") {
             UserDefaults.standard.removeObject(forKey: key)
         }
     }
 
-    private static func items(for descriptor: EntityDescriptor, client: CubbyClient) async throws -> [CSSearchableItem] {
+    private static func items(for descriptor: EntityDescriptor, client: CubbyClient) async throws
+        -> [CSSearchableItem]
+    {
         var items: [CSSearchableItem] = []
         var page = 1
         while items.count < maxPerKind {

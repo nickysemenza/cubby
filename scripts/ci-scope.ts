@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { readdirSync } from "node:fs";
 
 const inertExact = new Set(["LICENSE", "cubby.code-workspace"]);
 
@@ -361,6 +362,25 @@ const runRustCheck = () => {
   }
 };
 
+// swift-format's --recursive can't exclude a subdirectory, and
+// CubbyKit/Sources/CubbyKit/Generated is emitter-owned (see apps/apple/CLAUDE.md) and must never
+// be reformatted or linted. List that directory's other children instead of hand-maintaining
+// them, so a newly added sibling is picked up without touching this file.
+const swiftFormatTargets = () => {
+  const cubbyKitDir = "apps/apple/CubbyKit/Sources/CubbyKit";
+  const siblingsOfGenerated = readdirSync(cubbyKitDir, { withFileTypes: true })
+    .filter(
+      (entry) => entry.name !== "Generated" && !entry.name.startsWith("."),
+    )
+    .map((entry) => `${cubbyKitDir}/${entry.name}`);
+  return [
+    ...siblingsOfGenerated,
+    "apps/apple/App",
+    "apps/apple/CubbyKit/Sources/cubby",
+    "apps/apple/CubbyKit/Tests",
+  ];
+};
+
 const runAppleCheck = () => {
   const xcodeSelect = spawnSync("xcode-select", ["-p"]);
   if (xcodeSelect.error || xcodeSelect.status !== 0) {
@@ -371,6 +391,15 @@ const runAppleCheck = () => {
   }
   run("apps/apple/scripts/build-rust.sh", ["--check"]);
   run("xcodegen", ["generate", "--spec", "apps/apple/project.yml"]);
+  run("swift", [
+    "format",
+    "lint",
+    "--strict",
+    "--configuration",
+    "apps/apple/.swift-format",
+    "--recursive",
+    ...swiftFormatTargets(),
+  ]);
   run("swift", ["test", "--package-path", "apps/apple/CubbyKit"]);
   run("apps/apple/scripts/check-openapi-drift.sh", []);
   run("xcodebuild", [

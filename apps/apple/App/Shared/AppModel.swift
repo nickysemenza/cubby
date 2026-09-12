@@ -50,7 +50,8 @@ final class AppModel {
 
     init(store: any SessionTokenStore = KeychainSessionTokenStore(), baseURL: URL? = nil) {
         self.store = store
-        let url = baseURL
+        let url =
+            baseURL
             ?? UserDefaults.standard.string(forKey: Self.baseURLKey).flatMap(URL.init(string:))
             ?? Self.defaultBaseURL
         self.baseURL = url
