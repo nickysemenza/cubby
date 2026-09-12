@@ -10,7 +10,7 @@ public final class GenericEntityListModel {
         case idle
         case loading
         case loaded
-        /// The descriptor has no `.list` action (cookbook, usda-food, image today).
+        /// The HTTP document exposes no list route for this entity (cookbook, usda-food, image).
         case unavailable(String)
         case failed(String)
     }
@@ -21,27 +21,29 @@ public final class GenericEntityListModel {
     public private(set) var phase: Phase = .idle
     public private(set) var page: Int = 1
 
-    private let client: CubbyRawClient
+    private let client: CubbyClient
     private let pageSize: Int
 
-    public init(descriptor: EntityDescriptor, client: CubbyRawClient, pageSize: Int = 50) {
+    public init(descriptor: EntityDescriptor, client: CubbyClient, pageSize: Int = 50) {
         self.descriptor = descriptor
         self.client = client
         self.pageSize = pageSize
     }
 
-    /// Loads one page of rows. Never issues a request for a descriptor without `.list` — the
-    /// phase goes straight to `.unavailable` instead.
+    /// Loads one page of rows. Never issues a request for an entity the document does not list —
+    /// the phase goes straight to `.unavailable` instead. `EntityKey.httpActions` is the
+    /// authority here, not `descriptor.actions`: the kernel roster can declare an action the
+    /// HTTP document has no route for (`image` has `list` there but not here).
     public func load(page: Int = 1) async {
-        guard descriptor.actions.contains(.list) else {
+        guard descriptor.key.httpActions.contains(.list) else {
             phase = .unavailable("No list route for \(descriptor.plural)")
             return
         }
         phase = .loading
         do {
-            let result = try await client.list(basePath: descriptor.basePath, page: page, pageSize: pageSize)
+            let result = try await client.list(descriptor, page: page, pageSize: pageSize)
             self.page = page
-            rows = result.items.compactMap(descriptor.row(from:))
+            rows = result.items
             meta = result.meta
             phase = .loaded
         } catch {

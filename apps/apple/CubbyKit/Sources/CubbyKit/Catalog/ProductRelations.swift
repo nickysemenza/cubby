@@ -43,17 +43,12 @@ public enum ProductRelations {
         }
     }
 
-    /// Uploaded product images, in payload order. A `PENDING`/`FAILED` image has no fetchable file.
-    public static func gallery(from row: EntityRow) -> [(id: String, url: URL)] {
+    /// The product's image ids, in display order — which is the order `setImageOrder` rewrites.
+    /// The payload carries shortcodes only: there is no per-image url or status to read, so a
+    /// gallery cannot be rendered from a detail row alone.
+    public static func imageIDs(from row: EntityRow) -> [ImageCode] {
         guard let images = row.raw["images"]?.arrayValue else { return [] }
-        return images.compactMap { image in
-            guard image["status"]?.stringValue == "UPLOADED",
-                let id = image["id"]?.stringValue,
-                let urlString = image["url"]?.stringValue,
-                let url = URL(string: urlString)
-            else { return nil }
-            return (id, url)
-        }
+        return images.compactMap { value in value.stringValue.map { ImageCode($0) } }
     }
 
     private static func amount(_ value: JSONValue?) -> Amount? {

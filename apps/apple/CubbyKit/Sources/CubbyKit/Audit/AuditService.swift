@@ -19,39 +19,19 @@ public protocol AuditService: Sendable {
 public typealias RecountService = AuditService & ScanService
 
 extension CubbyClient: AuditService {
-    public func locationTree() async throws -> LocationTree {
-        LocationTree(roots: try await raw.call("location.makeTree", as: [LocationTreeNode].self))
-    }
-
     public func ensureGlobalUnknown() async throws -> LocationCode {
-        struct Created: Decodable { let id: LocationCode }
-        return try await raw.call("location.ensureGlobalUnknown", body: .object([:]), as: Created.self).id
+        try await ensureGlobalUnknownLocation()
     }
 
     public func stockRows(at location: LocationCode) async throws -> [RecountRow] {
-        try await raw.call(
-            "inventory.getByLocationIds",
-            query: ["locationIds": .array([.string(location.rawValue)]), "placement": .string("stock")],
-            as: [RecountRow].self
-        )
+        try await inventory(atLocations: [location])
     }
 
     public func duplicateProductIDs() async throws -> Set<ProductCode> {
-        struct Duplicate: Decodable { let id: ProductCode }
-        return Set(try await raw.call("inventory.findDuplicates", as: [Duplicate].self).map(\.id))
-    }
-
-    public func reconcile(_ body: ReconcileBody) async throws -> [RecountRow] {
-        struct Result: Decodable { let items: [RecountRow] }
-        return try await raw.call("inventory.reconcileSession", body: body, as: Result.self).items
+        try await findDuplicates()
     }
 
     public func adopt(_ bins: [LocationCode], into parent: LocationCode) async throws -> Int {
-        struct Updated: Decodable { let updated: Int }
-        let body: JSONValue = [
-            "ids": .array(bins.map { .string($0.rawValue) }),
-            "parentId": .string(parent.rawValue),
-        ]
-        return try await raw.call("location.bulkUpdateParent", body: body, as: Updated.self).updated
+        try await bulkUpdateParent(bins, to: parent)
     }
 }

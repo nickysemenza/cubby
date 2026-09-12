@@ -1,8 +1,10 @@
 import Foundation
 
-/// A dynamically-typed JSON value, used at the boundary for endpoints CubbyKit does not model
-/// with generated types (see `CubbyRawClient`). Never surface `Components.Schemas.*_schemaNN`
-/// types in hand-written Swift — this is the alternative for shapes that aren't worth a struct.
+/// A dynamically-typed JSON value: the projection behind `EntityRow.raw`, so one generic Browse
+/// screen can render any of the catalog's entities without a per-entity Swift type. It is always
+/// produced from a *decoded* typed payload (`JSONValue(encoding:)`), never from response bytes.
+/// Never surface a positional `Components.Schemas.InputSchemaNN` type in hand-written Swift —
+/// this is the alternative for shapes that aren't worth a struct.
 public indirect enum JSONValue: Sendable, Hashable {
     case null
     case bool(Bool)

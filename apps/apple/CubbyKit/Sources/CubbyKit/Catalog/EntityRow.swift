@@ -42,22 +42,12 @@ extension EntityDescriptor {
         )
     }
 
-    /// Cover images are public R2 URLs. Prefer the resolved `coverImageUrl` (present on
-    /// `resources.product.get`); otherwise fall back to the first `images[]` entry that finished
-    /// uploading.
+    /// The resolved `coverImageUrl` — a public R2 URL — and nothing else: every payload's
+    /// `images` is an array of image shortcodes, not of image objects, so there is no URL to
+    /// fall back to. Only `resources.product.get` derives a cover, so every other entity's row
+    /// has no image.
     private static func imageURL(from object: JSONValue) -> URL? {
-        if let cover = object["coverImageUrl"]?.stringValue, let url = URL(string: cover) {
-            return url
-        }
-        guard let images = object["images"]?.arrayValue else { return nil }
-        for image in images {
-            // Wire values are PENDING / UPLOADED / FAILED; only an uploaded file has a fetchable URL.
-            guard image["status"]?.stringValue == "UPLOADED",
-                let urlString = image["url"]?.stringValue,
-                let url = URL(string: urlString)
-            else { continue }
-            return url
-        }
-        return nil
+        guard let cover = object["coverImageUrl"]?.stringValue else { return nil }
+        return URL(string: cover)
     }
 }
