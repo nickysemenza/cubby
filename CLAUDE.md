@@ -56,6 +56,8 @@ roadmap context.
   [DESIGN.md](apps/web/DESIGN.md).
 - **Entity genericization, the manifest/binding spine, or new-entity work:**
   [docs/entities.md](docs/entities.md).
+- **iOS/macOS native app, `CubbyKit`, `cubby-ffi`, or UniFFI:**
+  [apps/apple/CLAUDE.md](apps/apple/CLAUDE.md).
 
 Open PRs ready for review unless the work is intentionally incomplete or the
 user asks for a draft.

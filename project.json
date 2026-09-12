@@ -15,6 +15,8 @@
       "cache": true,
       "inputs": [
         "default",
+        "!{workspaceRoot}/apps/apple/**",
+        "!{workspaceRoot}/cubby-ffi/**",
         {
           "runtime": "git hash-object packages/wasm/package.json packages/wasm/*.d.ts"
         }
@@ -29,7 +31,9 @@
         "!{workspaceRoot}/**/*.mdx",
         "!{workspaceRoot}/**/*.rs",
         "!{workspaceRoot}/**/*.toml",
-        "!{workspaceRoot}/**/*.lock"
+        "!{workspaceRoot}/**/*.lock",
+        "!{workspaceRoot}/apps/apple/**",
+        "!{workspaceRoot}/cubby-ffi/**"
       ]
     },
     "format": {
@@ -41,7 +45,9 @@
         "!{workspaceRoot}/**/*.mdx",
         "!{workspaceRoot}/**/*.rs",
         "!{workspaceRoot}/**/*.toml",
-        "!{workspaceRoot}/**/*.lock"
+        "!{workspaceRoot}/**/*.lock",
+        "!{workspaceRoot}/apps/apple/**",
+        "!{workspaceRoot}/cubby-ffi/**"
       ]
     },
     "soft-delete": {

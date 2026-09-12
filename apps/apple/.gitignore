@@ -1,0 +1,6 @@
+Cubby.xcodeproj/
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
+CubbyKit/Frameworks/

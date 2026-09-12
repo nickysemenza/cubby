@@ -52,7 +52,11 @@ const upcPrefixes = [
   "packages/worker-tracing/",
 ];
 
-const rustPrefixes = ["recipebridge/"];
+const rustPrefixes = ["recipebridge/", "cubby-ffi/"];
+// Only recipebridge feeds the WASM package the web app consumes; cubby-ffi is
+// a separate UniFFI target that never touches `packages/wasm`.
+const wasmPrefixes = ["recipebridge/"];
+const applePrefixes = ["apps/apple/", "cubby-ffi/"];
 
 const postgresPrefixes = [
   "apps/web/drizzle/",
@@ -136,6 +140,7 @@ const isKnownCodePath = (path: string) =>
     ...auxTestPrefixes,
     "packages/worker-tracing/",
     ...rustPrefixes,
+    ...applePrefixes,
   ]) ||
   path === "rust-toolchain.toml" ||
   path === "packages/tsconfig.package.json" ||
@@ -188,6 +193,14 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
       (path) =>
         path === "rust-toolchain.toml" || startsWithAny(path, rustPrefixes),
     );
+  const wasm =
+    unknown ||
+    active.some(
+      (path) =>
+        path === "rust-toolchain.toml" || startsWithAny(path, wasmPrefixes),
+    );
+  const apple =
+    unknown || active.some((path) => startsWithAny(path, applePrefixes));
 
   const postgres =
     unknown ||
@@ -219,6 +232,8 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
     inert: active.length === 0,
     web,
     rust,
+    wasm,
+    apple,
     aux,
     usda,
     upc,
@@ -239,7 +254,8 @@ export type PushCheck =
   | "e2e"
   | "cloudflare"
   | "aux"
-  | "rust";
+  | "rust"
+  | "apple";
 
 export function selectPushChecks(
   paths: readonly string[],
@@ -247,7 +263,7 @@ export function selectPushChecks(
 ): readonly PushCheck[] {
   const scope = classifyPaths(paths);
   if (forceFull || scope.highRisk)
-    return ["rust", "aux", "cloudflare", "all-tests"];
+    return ["rust", "aux", "cloudflare", "all-tests", "apple"];
   if (scope.inert) return [];
 
   return [
@@ -260,6 +276,7 @@ export function selectPushChecks(
     ...(scope.e2e || scope.highRisk ? (["e2e"] as const) : []),
     ...(scope.aux ? (["aux"] as const) : []),
     ...(scope.rust ? (["rust"] as const) : []),
+    ...(scope.apple ? (["apple"] as const) : []),
   ];
 }
 
@@ -308,6 +325,86 @@ const requireCommittedCode = () => {
   }
 };
 
+const runAuxCheck = (full: boolean) => {
+  if (!full)
+    run("pnpm", [
+      "-r",
+      "--no-sort",
+      "--workspace-concurrency=4",
+      "--no-bail",
+      "--filter",
+      "!@cubby/web",
+      "--if-present",
+      "run",
+      "test",
+    ]);
+  run("pnpm", ["--filter", "@cubby/usda-api", "build"]);
+  run("pnpm", ["--filter", "@cubby/upc-lookup", "build"]);
+};
+
+const runRustCheck = () => {
+  // Two independent manifests (no shared workspace): recipebridge feeds
+  // the WASM package, cubby-ffi is the native UniFFI target. Same gates,
+  // run once per manifest.
+  for (const manifest of ["recipebridge/Cargo.toml", "cubby-ffi/Cargo.toml"]) {
+    run("cargo", ["fmt", "--manifest-path", manifest, "--check"]);
+    run("cargo", [
+      "clippy",
+      "--manifest-path",
+      manifest,
+      "--all-targets",
+      "--",
+      "-D",
+      "warnings",
+    ]);
+    run("cargo", ["test", "--manifest-path", manifest]);
+  }
+};
+
+const runAppleCheck = () => {
+  const xcodeSelect = spawnSync("xcode-select", ["-p"]);
+  if (xcodeSelect.error || xcodeSelect.status !== 0) {
+    process.stdout.write(
+      "[pre-push] Skipping apple checks: Xcode not installed (xcode-select -p failed).\n",
+    );
+    return;
+  }
+  run("apps/apple/scripts/build-rust.sh", ["--check"]);
+  run("xcodegen", ["generate", "--spec", "apps/apple/project.yml"]);
+  run("swift", ["test", "--package-path", "apps/apple/CubbyKit"]);
+  run("apps/apple/scripts/check-openapi-drift.sh", []);
+  run("xcodebuild", [
+    "-project",
+    "apps/apple/Cubby.xcodeproj",
+    "-scheme",
+    "Cubby-iOS",
+    "-destination",
+    "generic/platform=iOS Simulator",
+    "build",
+  ]);
+};
+
+const runPushCheck = (check: PushCheck, base: string, full: boolean) => {
+  switch (check) {
+    case "all-tests":
+      return run("pnpm", ["test:all"]);
+    case "web-tests":
+      return run("pnpm", ["test:changed", base]);
+    case "postgres":
+      return run("pnpm", ["test:changed:postgres", base]);
+    case "e2e":
+      return run("pnpm", ["test:e2e"]);
+    case "cloudflare":
+      return run("pnpm", ["--filter", "@cubby/web", "run", "build:cf"]);
+    case "aux":
+      return runAuxCheck(full);
+    case "rust":
+      return runRustCheck();
+    case "apple":
+      return runAppleCheck();
+  }
+};
+
 const verifyPush = () => {
   requireCommittedCode();
   const base = resolveBase();
@@ -329,59 +426,14 @@ const verifyPush = () => {
     `[pre-push] ${paths.length} changed paths from ${base}; running ${checks.join(", ")}.\n`,
   );
 
-  if (full || scope.rust || scope.dependencies) {
+  if (full || scope.wasm || scope.dependencies) {
     run("pnpm", ["wasm"]);
     run("pnpm", ["install", "--frozen-lockfile"]);
   }
   run("pnpm", [full ? "check:all" : "check"]);
   if (full || scope.dependencies) run("pnpm", ["dedupe:check"]);
 
-  for (const check of checks) {
-    if (check === "all-tests") run("pnpm", ["test:all"]);
-    if (check === "web-tests") {
-      run("pnpm", ["test:changed", base]);
-    }
-    if (check === "postgres") {
-      run("pnpm", ["test:changed:postgres", base]);
-    }
-    if (check === "e2e") run("pnpm", ["test:e2e"]);
-    if (check === "cloudflare")
-      run("pnpm", ["--filter", "@cubby/web", "run", "build:cf"]);
-    if (check === "aux" && !full)
-      run("pnpm", [
-        "-r",
-        "--no-sort",
-        "--workspace-concurrency=4",
-        "--no-bail",
-        "--filter",
-        "!@cubby/web",
-        "--if-present",
-        "run",
-        "test",
-      ]);
-    if (check === "aux") {
-      run("pnpm", ["--filter", "@cubby/usda-api", "build"]);
-      run("pnpm", ["--filter", "@cubby/upc-lookup", "build"]);
-    }
-    if (check === "rust") {
-      run("cargo", [
-        "fmt",
-        "--manifest-path",
-        "recipebridge/Cargo.toml",
-        "--check",
-      ]);
-      run("cargo", [
-        "clippy",
-        "--manifest-path",
-        "recipebridge/Cargo.toml",
-        "--all-targets",
-        "--",
-        "-D",
-        "warnings",
-      ]);
-      run("cargo", ["test", "--manifest-path", "recipebridge/Cargo.toml"]);
-    }
-  }
+  for (const check of checks) runPushCheck(check, base, full);
 };
 
 if (import.meta.main) verifyPush();

@@ -104,9 +104,10 @@ const document = generateOpenApi(
           in: "cookie",
           name: getCookies({}).sessionToken.name,
         },
+        bearerAuth: { type: "http", scheme: "bearer" },
       },
     },
-    security: [{ apiKey: [] }, { sessionCookie: [] }],
+    security: [{ apiKey: [] }, { sessionCookie: [] }, { bearerAuth: [] }],
   },
   {
     setOperationId: "concatenated-path",

@@ -1,0 +1,57 @@
+[package]
+name = "cubby-ffi"
+version = "0.1.0"
+# Matches recipebridge's floor: the pinned upstream ingredient-parser crates
+# require Rust 1.88, and this crate depends on recipebridge directly.
+edition = "2024"
+rust-version = "1.88"
+
+[lib]
+name = "cubby_ffi"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+recipebridge = { path = "../recipebridge" }
+uniffi = "0.32"
+
+# `cli` pulls in `uniffi_bindgen` + `clap`, needed only by the `uniffi-bindgen`
+# binary below. Gating it behind a feature (off by default) keeps the three
+# release cross-builds (aarch64-apple-ios, -ios-sim, -darwin) from compiling
+# the entire bindgen toolchain for every target — measured, that cost one
+# target 16+ minutes it didn't need. Only the host build that generates
+# bindings turns this feature on.
+[features]
+cli = ["uniffi/cli"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["cli"]
+
+# Mirrors recipebridge's clippy gate: a panic at the FFI boundary is a hard
+# Swift-side crash (well, UniFFI's own catch_unwind turns it into a thrown
+# Swift error instead, but only if we never call panic!/unwrap!/expect!
+# directly — deny them so that safety net is never the first line of defense).
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+uninlined_format_args = "warn"
+
+# Plain release: fast inner-loop builds while iterating on the Swift side
+# (`build-rust.sh` default). No `panic = "abort"` here or in `dist` below:
+# UniFFI's generated scaffolding wraps every export in `catch_unwind`, which
+# requires unwinding to turn a Rust panic into a thrown Swift error instead
+# of a hard abort.
+[profile.release]
+strip = "debuginfo"
+
+# Shipped-binary tuning (`build-rust.sh --profile dist`): LTO + one codegen
+# unit let the linker drop cross-crate dead code, `opt-level = "s"` favors
+# binary size over compile speed. Use this for the xcframework that actually
+# ships, not for every local rebuild.
+[profile.dist]
+inherits = "release"
+opt-level = "s"
+lto = true
+codegen-units = 1

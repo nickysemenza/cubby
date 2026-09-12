@@ -14,7 +14,11 @@
         "scripts/entity-generator/main.ts!"
       ],
       "project": ["scripts/**/*.ts!"],
-      "ignoreDependencies": ["vitest", "vite"]
+      "ignoreDependencies": ["vitest", "vite"],
+      // Used by ci-scope.ts's `apple` push check to detect a machine without
+      // Xcode installed (so it can skip, not fail); a macOS-only system tool,
+      // never an npm dependency.
+      "ignoreBinaries": ["xcode-select"]
     },
     "apps/web": {
       "entry": [

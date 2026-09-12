@@ -701,5 +701,11 @@ describe("typed entity compiler", () => {
     expect(artifact("entity-lists.gen.ts")).toContain(
       "ENTITY_LIST_FILTER_SCHEMAS",
     );
+    const swiftCatalog = artifact("EntityCatalog.swift");
+    expect(swiftCatalog).toContain("public enum EntityKey");
+    const entityKeyBody = swiftCatalog
+      .split("public enum EntityKey")[1]!
+      .split("\n}\n")[0]!;
+    expect(entityKeyBody.match(/^ {2}case /gmu)).toHaveLength(19);
   });
 });

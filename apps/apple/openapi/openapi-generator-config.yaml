@@ -1,0 +1,19 @@
+generate:
+  - types
+  - client
+accessModifier: public
+namingStrategy: idiomatic
+# Only body-carrying operations and plain-path GETs are generated. Every GET
+# with query parameters in this API encodes them as JSON (`content:
+# application/json`), which swift-openapi-generator 1.13 emits as
+# `setQueryItemAsJSON` — an API no tagged swift-openapi-runtime provides yet.
+# Query-string operations (resource lists, upc.lookup, image.list, search.find)
+# go through CubbyRawClient instead. Revisit when the runtime ships it.
+filter:
+  operations:
+    - resources.product.get
+    - resources.inventory.create
+    - inventory.scanAtLocation
+    - inventory.resolveScanStrays
+    - product.findOrCreateByUPC
+    - agent.ask

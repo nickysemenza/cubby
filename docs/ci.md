@@ -27,6 +27,17 @@ unexpected skipped test without freezing the suite to a hand-maintained count.
 Browser verification always follows the current web build. Pre-commit still
 runs `pnpm check`.
 
+A change under `apps/apple/` or `cubby-ffi/` additionally selects the `apple`
+push check: `apps/apple/scripts/build-rust.sh --check`, `xcodegen generate`,
+`swift test --package-path apps/apple/CubbyKit`,
+`apps/apple/scripts/check-openapi-drift.sh`, then an `xcodebuild` simulator
+build. It skips itself (with a message, not a failure) when `xcode-select -p`
+fails, so a machine without Xcode still passes `pnpm verify:local`. `rust`
+gates loop both Rust manifests (`recipebridge/Cargo.toml`,
+`cubby-ffi/Cargo.toml`) for fmt/clippy/test. There is no hosted macOS runner
+yet — the `apple` push check only runs locally; a `workflow_dispatch` job
+behind a `run_ios` input is a possible follow-up, not implemented.
+
 ## Optional hosted suite
 
 Once this workflow is on the default branch, request full verification with:

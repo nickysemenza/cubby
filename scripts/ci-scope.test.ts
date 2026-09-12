@@ -7,6 +7,8 @@ test("agent, documentation, and editor-only changes are inert", () => {
     inert: true,
     web: false,
     rust: false,
+    wasm: false,
+    apple: false,
     aux: false,
     usda: false,
     upc: false,
@@ -29,6 +31,8 @@ test("a web-only change runs web CI without auxiliary or Rust work", () => {
     inert: false,
     web: true,
     rust: false,
+    wasm: false,
+    apple: false,
     aux: false,
     usda: false,
     upc: false,
@@ -67,11 +71,29 @@ test("shared packages select web and auxiliary consumers", () => {
 test("Rust and generated WASM paths have distinct scopes", () => {
   const rust = classifyPaths(["recipebridge/src/lib.rs"]);
   assert.equal(rust.rust, true);
+  assert.equal(rust.wasm, true);
   assert.equal(rust.web, true);
 
   const wasmPackage = classifyPaths(["packages/wasm/package.json"]);
   assert.equal(wasmPackage.rust, false);
   assert.equal(wasmPackage.web, true);
+});
+
+test("apps/apple and cubby-ffi paths select the apple scope without tripping unknown", () => {
+  const swiftOnly = classifyPaths([
+    "apps/apple/CubbyKit/Sources/CubbyKit/RootView.swift",
+  ]);
+  assert.equal(swiftOnly.apple, true);
+  assert.equal(swiftOnly.unknown, false);
+  assert.equal(swiftOnly.web, false);
+  assert.equal(swiftOnly.rust, false);
+  assert.equal(swiftOnly.wasm, false);
+
+  const ffi = classifyPaths(["cubby-ffi/src/lib.rs"]);
+  assert.equal(ffi.rust, true);
+  assert.equal(ffi.apple, true);
+  assert.equal(ffi.wasm, false);
+  assert.equal(ffi.unknown, false);
 });
 
 test("dependency and CI configuration changes fail safe across JS workspaces", () => {
@@ -95,6 +117,8 @@ test("a novel path fails safe to every suite and worker", () => {
     inert: false,
     web: true,
     rust: true,
+    wasm: true,
+    apple: true,
     aux: true,
     usda: true,
     upc: true,
@@ -166,7 +190,7 @@ test("database changes upgrade affected tests to PostgreSQL", () => {
 test("high-risk and routing changes add browser verification", () => {
   assert.deepEqual(
     selectPushChecks(["apps/web/src/server/repo/inventory/update.ts"]),
-    ["rust", "aux", "cloudflare", "all-tests"],
+    ["rust", "aux", "cloudflare", "all-tests", "apple"],
   );
   assert.deepEqual(
     selectPushChecks(["apps/web/src/routes/_authenticated/products.tsx"]),
@@ -180,6 +204,7 @@ test("unknown paths fail safe across all implementation stacks", () => {
     "aux",
     "cloudflare",
     "all-tests",
+    "apple",
   ]);
 });
 
@@ -189,5 +214,20 @@ test("explicit full verification includes every stack even for inert changes", (
     "aux",
     "cloudflare",
     "all-tests",
+    "apple",
+  ]);
+});
+
+test("a Swift-only change selects only the apple push check", () => {
+  assert.deepEqual(
+    selectPushChecks(["apps/apple/CubbyKit/Sources/CubbyKit/RootView.swift"]),
+    ["apple"],
+  );
+});
+
+test("a cubby-ffi change selects rust and apple push checks", () => {
+  assert.deepEqual(selectPushChecks(["cubby-ffi/src/lib.rs"]), [
+    "rust",
+    "apple",
   ]);
 });
