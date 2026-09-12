@@ -1301,7 +1301,7 @@ export const renderEntityArtifacts = (
         generatedHeader +
         "// Generated schema aliases retain deterministic import order.\n" +
         `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
-        'import { MAX_PAGE_SIZE, MAX_SORTS } from "@cubby/schemas/pagination";\n' +
+        'import { MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
@@ -1309,7 +1309,7 @@ export const renderEntityArtifacts = (
         'const entityListSortSchema = z.object({ orderBy: z.string().min(1), direction: z.enum(["asc", "desc"]) });\n' +
         "const entityListSortsSchema = z.union([entityListSortSchema, z.array(entityListSortSchema).min(1).max(MAX_SORTS)]);\n" +
         "const entityListPaginationSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE) });\n" +
-        "const entityListMetaSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE), totalCount: z.number().int().min(0), sums: z.record(z.string(), z.number()).optional() });\n\n" +
+        "// The one page-metadata schema every list shares (one OpenAPI component).\nconst entityListMetaSchema = paginatedMetaSchema;\n\n" +
         `${listFilterSchemas}\n\n` +
         "// One generated filter schema per list entity.\n// oxfmt-ignore\n" +
         `const ENTITY_LIST_FILTER_SCHEMAS = {\n${listFilterSchemaBindings}\n} as const;\n\n` +

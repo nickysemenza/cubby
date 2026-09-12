@@ -3,10 +3,22 @@ import { spawnSync } from "node:child_process";
 import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
 import { getCookies } from "better-auth/cookies";
-import { httpContract } from "../src/lib/generated/http-contract.gen";
-import { httpMetadataSchema } from "../src/lib/http-api/router";
-import { checkHttpRoutes } from "../src/lib/http-api/routes";
-import { wireRegistry } from "../src/lib/http-api/wire";
+import type { HttpMetadata } from "../src/lib/http-api/router";
+import {
+  foldPositionalDuplicates,
+  inlinePrimitiveComponents,
+  mapSchemas,
+} from "./openapi/document-passes";
+import { pascal, registerSchemaNames } from "./openapi/schema-names";
+
+// Component names come from the schema exports, so every exported schema is
+// registered before the contract (and with it the wire projections) loads.
+const named = await registerSchemaNames(new URL("../src/", import.meta.url));
+const { httpContract } = await import("../src/lib/generated/http-contract.gen");
+const { httpMetadataSchema } = await import("../src/lib/http-api/router");
+const { checkHttpRoutes } = await import("../src/lib/http-api/routes");
+const { wireProjection, wireRegistry } =
+  await import("../src/lib/http-api/wire");
 
 checkHttpRoutes(httpContract);
 
@@ -18,18 +30,43 @@ const registries = {
   input: z.registry<{ id: string }>(),
   output: z.registry<{ id: string }>(),
 };
-const responseStatus = (route: { responses: object }, schema: z.ZodType) =>
-  Object.entries(route.responses).find(([, value]) => value === schema)?.[0];
+
+// A named domain schema's wire projections are components under the export
+// name, so a nested reference resolves to `#/components/schemas/<Name>`
+// directly. A scalar projects to the same instance on both sides and keeps
+// one name; an object that serves both sides gets an `Input` twin.
+for (const [name, domain] of named) {
+  const output = wireProjection(domain, "output");
+  const input = wireProjection(domain, "input");
+  // A pass-through projection is the domain instance itself; it can be
+  // reached from either side, so it is one component on both.
+  if (output === domain || input === domain) {
+    for (const registry of [registries.input, registries.output])
+      if (!registry.has(domain)) registry.add(domain, { id: name });
+    continue;
+  }
+  if (output && !registries.output.has(output))
+    registries.output.add(output, { id: name });
+  if (input && !registries.input.has(input))
+    registries.input.add(input, {
+      id:
+        output === undefined
+          ? name
+          : `${name}${name.endsWith("Input") ? "Request" : "Input"}`,
+    });
+}
 
 /** Every route schema is real Zod, so the JSON Schema comes straight from it. */
 const inlineSchema = (schema: z.ZodType, io: "input" | "output") =>
-  z.toJSONSchema(schema, {
-    target: "openapi-3.0",
-    io,
-    reused: "inline",
-    unrepresentable: "any",
-    override: stripMockHints,
-  });
+  inlineDefinitions(
+    z.toJSONSchema(schema, {
+      target: "openapi-3.0",
+      io,
+      reused: "inline",
+      unrepresentable: "any",
+      override: stripMockHints,
+    }),
+  );
 
 const stripMockHints: NonNullable<
   Parameters<typeof z.toJSONSchema>[1]
@@ -45,6 +82,51 @@ const stripMockHints: NonNullable<
     ];
   }
 };
+
+/**
+ * Parameters cannot reference components, and a registered leaf (a shortcode
+ * schema, say) is extracted to `definitions` even when the emission is
+ * inline: put every definition back where it is referenced.
+ */
+function inlineDefinitions(schema: JsonSchema): JsonSchema {
+  const definitions: Record<string, JsonSchema | boolean> = {};
+  for (const source of [schema.definitions, schema.$defs])
+    Object.assign(definitions, source ?? {});
+  const { definitions: _definitions, $defs: _defs, ...root } = schema;
+  const local = /^#\/(?:definitions|\$defs)\/(?<name>.+)$/u;
+  const resolve = (node: JsonSchema): JsonSchema => {
+    const name =
+      node.$ref === undefined ? undefined : local.exec(node.$ref)?.groups?.name;
+    const target = name === undefined ? undefined : definitions[name];
+    if (target !== undefined && isObjectSchema(target)) {
+      const { $ref: _ref, ...rest } = node;
+      return { ...resolve(target), ...rest };
+    }
+    const copy: JsonSchema = { ...node };
+    if (copy.properties)
+      copy.properties = Object.fromEntries(
+        Object.entries(copy.properties).map(([key, value]) => [
+          key,
+          isObjectSchema(value) ? resolve(value) : value,
+        ]),
+      );
+    if (
+      copy.items !== undefined &&
+      !Array.isArray(copy.items) &&
+      isObjectSchema(copy.items)
+    )
+      copy.items = resolve(copy.items);
+    for (const keyword of ["anyOf", "oneOf", "allOf"] as const) {
+      const members = copy[keyword];
+      if (members)
+        copy[keyword] = members.map((member) =>
+          isObjectSchema(member) ? resolve(member) : member,
+        );
+    }
+    return copy;
+  };
+  return resolve(root);
+}
 
 /**
  * Query parameters must be listed individually, so a query schema is inlined
@@ -91,6 +173,34 @@ function parameterObject(schema: JsonSchema): JsonSchema {
 const asSchemaObject = (schema: JsonSchema) =>
   schema as NonNullable<ReturnType<SchemaTransformerSync>>;
 
+/**
+ * The component name of a route-level schema that is not a named export:
+ * resource routes name their bodies and results after the entity, RPC routes
+ * after the operation.
+ */
+const routeComponentId = (
+  metadata: HttpMetadata,
+  type: "body" | "response",
+): string => {
+  if (metadata.resource !== undefined) {
+    const entity = pascal(metadata.entity ?? "");
+    switch (metadata.resource) {
+      case "list":
+        return `${entity}ListPage`;
+      case "get":
+        return `${entity}Detail`;
+      case "create":
+        return `${entity}Create${type === "body" ? "Body" : "Result"}`;
+      case "update":
+        return `${entity}Update${type === "body" ? "Body" : "Result"}`;
+      case "delete":
+        return `${entity}DeleteResult`;
+    }
+  }
+  const operation = metadata.operation.split(".").map(pascal).join("");
+  return `${operation}${type === "response" ? "Output" : "Input"}`;
+};
+
 const document = generateOpenApi(
   httpContract,
   {
@@ -130,28 +240,45 @@ const document = generateOpenApi(
       }
       return operation;
     },
-    schemaTransformer: ({ schema, appRoute, concatenatedPath, type }) => {
-      if (!(schema instanceof z.ZodType)) return null;
+    schemaTransformer: ({ schema, appRoute, type }) => {
+      if (!(schema instanceof z.ZodType) || type === "header") return null;
       if (type === "query" || type === "path")
         return asSchemaObject(parameterObject(inlineSchema(schema, "input")));
       const io = type === "response" ? "output" : "input";
       const registry = registries[io];
-      const suffix =
-        type === "response" ? `_${responseStatus(appRoute, schema) ?? ""}` : "";
-      // Names: a wire schema derived from a `.meta({ id })` domain schema, a
-      // schema that carries its own `.meta({ id })`, or the route position.
+      // Names: a named export's projection, a schema carrying its own
+      // `.meta({ id })`, or the route position.
       const id =
         registry.get(schema)?.id ??
         wireRegistry.get(schema)?.id ??
         z.globalRegistry.get(schema)?.id ??
-        `${io}_${concatenatedPath}_${type}${suffix}`;
+        routeComponentId(httpMetadataSchema.parse(appRoute.metadata), type);
       if (!registry.has(schema)) registry.add(schema, { id });
       return { $ref: `#/components/schemas/${id}` };
     },
   },
 );
 
-const components: Record<string, JsonSchema> = {};
+/** `…/input___shared#/definitions/schema0` -> `…/input_schema0`. */
+const nameSharedDefinitions = (schemas: Record<string, JsonSchema>) =>
+  Object.fromEntries(
+    Object.entries(schemas).map(([name, schema]) => [
+      name,
+      mapSchemas(schema, (node) =>
+        node.$ref === undefined
+          ? node
+          : {
+              ...node,
+              $ref: node.$ref.replace(
+                /(input|output)___shared#\/definitions\//u,
+                "$1_",
+              ),
+            },
+      ),
+    ]),
+  );
+
+const emitted: Record<string, JsonSchema> = {};
 for (const io of ["input", "output"] as const) {
   const { schemas } = z.toJSONSchema(registries[io], {
     target: "openapi-3.0",
@@ -165,10 +292,16 @@ for (const io of ["input", "output"] as const) {
   for (const [id, schema] of Object.entries(schemas)) {
     if (id === "__shared") {
       for (const [name, definition] of Object.entries(schema.definitions ?? {}))
-        components[`${io}_${name}`] = definition;
-    } else components[id] = schema;
+        emitted[`${io}_${name}`] = definition;
+    } else emitted[id] = schema;
   }
 }
+// What the export walk could not name: shared instances a module never
+// exported. Bare primitives are inlined; bodies equal to a named component
+// (a `.describe()` clone) fold onto it.
+const components = foldPositionalDuplicates(
+  inlinePrimitiveComponents(nameSharedDefinitions(emitted)),
+);
 
 const serialized = `${JSON.stringify(
   { ...document, components: { ...document.components, schemas: components } },
@@ -272,10 +405,20 @@ if (
   new Set(swiftRoutes.map((entry) => entry.id)).size !== swiftRoutes.length
 )
   throw new Error("Every operation needs a unique operationId");
+const componentRef = z.object({ $ref: z.string() });
+const requestBodyRef = (route: string) =>
+  componentRef
+    .safeParse(
+      document.paths[route]?.patch?.requestBody?.content?.["application/json"]
+        ?.schema,
+    )
+    .data?.$ref.replace("#/components/schemas/", "");
 const imageAttachable = swiftRoutes
   .flatMap((entry) => {
     const match = /^resources\.([^.]+)\.update$/u.exec(entry.id);
-    const body = match && components[`input_${entry.id}_body`];
+    const ref = match && requestBodyRef(entry.route);
+    const body =
+      ref === undefined || ref === null ? undefined : components[ref];
     return match &&
       body &&
       isObjectSchema(body) &&

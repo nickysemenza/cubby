@@ -242,12 +242,15 @@ export function buildPaginatedResponse<T>(
   };
 }
 
-const paginatedMetaSchema = z.object({
-  pageIndex: z.number().int().nonnegative(),
-  pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
-  totalCount: z.number().int().nonnegative(),
-  sums: z.record(z.string(), z.number()).optional(),
-});
+/** One page's metadata; a single component every list page shares. */
+export const paginatedMetaSchema = z
+  .object({
+    pageIndex: z.number().int().nonnegative(),
+    pageSize: z.number().int().positive().max(MAX_PAGE_SIZE),
+    totalCount: z.number().int().nonnegative(),
+    sums: z.record(z.string(), z.number()).optional(),
+  })
+  .meta({ id: "ListPageMeta" });
 
 export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
   entrySchema: Entry,

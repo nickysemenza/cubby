@@ -585,3 +585,13 @@ export function toWire(
   // coercions still admit the JSON form the static type spells.
   return walk(schema, io, [], options);
 }
+
+/**
+ * The wire projection `toWire` already built for a domain schema, if any.
+ * Read by the OpenAPI emitter to name components after the exports the
+ * projections came from.
+ */
+export const wireProjection = (
+  schema: z.ZodType,
+  io: WireIo,
+): z.ZodType | undefined => memo.get(schema)?.[io];
