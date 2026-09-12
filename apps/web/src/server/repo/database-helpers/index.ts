@@ -31,6 +31,7 @@ export { dependencyIdsFor, replaceDependencyEdges } from "./dependency-edges";
 export type { ListReadIntent } from "./query";
 // Query helpers
 export {
+  arrayOverlapOrPresence,
   assertNoDependents,
   auditDateWhereConditions,
   buildOrderBy,
@@ -49,6 +50,7 @@ export {
   notDeleted,
   presenceCondition,
   rangeConditions,
+  textArrayMatches,
   uuidArrayParam,
 } from "./query";
 // Relation loaders

@@ -1252,7 +1252,7 @@ export const renderEntityArtifacts = (
         "type EntityFilterDescriptorMetadata = {\n" +
         "  columnId: string; field: string | null; urlKey: string; kind: string; placeholder: string;\n" +
         "  options: readonly EntityInspectorOption[] | null; optionsRef: EntityPortSourceRef | null; optionsKey: string | null;\n" +
-        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: boolean; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean } | null;\n' +
+        '  label: string | null; schemaDescription: string | null; deriveSchema: boolean; schemaFromRead: boolean; brandRef: { entity: string; kind: "id" | "shortcode" } | null; expandRef: EntityPortSourceRef | null; schemaRef: EntityPortSourceRef | null; stored: { columns: readonly string[]; array: boolean } | null; range: { kind: "number" | "date"; int: boolean; nonnegative: boolean } | null;\n' +
         "  urlOnly: boolean; nullable: { field: string; label: string } | null;\n" +
         "};\n" +
         "type EntityPortSourceRoster = {\n" +

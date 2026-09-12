@@ -63,7 +63,7 @@ export type FilterDescriptor = Readonly<{
   brandRef: IdentifierRef | null;
   expandRef: SourceRef | null;
   schemaRef: SourceRef | null;
-  stored: boolean;
+  stored: Readonly<{ columns: readonly string[]; array: boolean }> | null;
   range: Readonly<{
     kind: "number" | "date";
     int: boolean;

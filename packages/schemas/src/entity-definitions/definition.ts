@@ -313,10 +313,24 @@ const metadataSchemas = () => {
       /** A named schema for select/multiselect values (an enum export). */
       schemaRef: sourceRefMetadataSchema.nullable().optional(),
       /**
-       * The filter is the standard predicate over the stored column named by
-       * `columnId`, so the repository composes it from the declaration.
+       * The filter is the standard predicate over stored columns, so the
+       * repository composes it from the declaration. `true` reads the column
+       * named by `columnId`; `columns` names one or more stored fields when
+       * the descriptor id is virtual (`search`) or the match spans columns;
+       * `array` marks a multiselect over a `text-array` column (overlap, not
+       * membership).
        */
-      stored: z.boolean({ error: "must be a boolean" }).optional(),
+      stored: z
+        .union([
+          z.boolean({ error: "must be a boolean" }),
+          z
+            .object({
+              columns: z.array(nonEmptyString()).min(1).optional(),
+              array: z.boolean({ error: "must be a boolean" }).optional(),
+            })
+            .strict(),
+        ])
+        .optional(),
       /** Range bounds; `kind` is inferred from the model field when omitted. */
       range: z
         .object({

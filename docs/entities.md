@@ -322,7 +322,19 @@ contract cases. Static and deferred controls still live in the explicit filter
 catalog; compound presets retain explicit codecs and option loaders. SQL
 predicates remain repository behavior and are checked through the real-query
 differential matrix—the compiler does not infer database behavior from a URL
-key.
+key, except for descriptors declared `stored`.
+
+A `stored` descriptor names the standard predicate over stored columns, and
+`declaredFilterPredicates` composes it for the repository: `stored: true`
+reads the column named by `columnId`; `stored: { columns }` lists one or more
+stored fields when the descriptor id is virtual (`search`) or a text match
+spans columns (ORed, a `text[]` column matched by element); `stored: { array:
+true }` marks a multiselect over a `text[]` column as an overlap. Enum filters
+OR their declared `nullable` presence in, a boolean over a nullable
+non-boolean column reads as presence (`true` is NOT NULL), and ranges are
+inclusive bounds. The compiler rejects every other shape. Predicates that
+join, OR across filters, or resolve ids stay hand-written next to the spread,
+with a comment saying why.
 
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection
