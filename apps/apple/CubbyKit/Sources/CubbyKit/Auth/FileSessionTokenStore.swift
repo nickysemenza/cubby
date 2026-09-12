@@ -15,9 +15,7 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
 
     /// `~/Library/Application Support/Cubby/credentials.json`.
     public static func standard() -> FileSessionTokenStore {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support")
-        return FileSessionTokenStore(fileURL: base.appending(path: "Cubby/credentials.json"))
+        FileSessionTokenStore(fileURL: URL.applicationSupportDirectory.appending(path: "Cubby/credentials.json"))
     }
 
     public func load(for host: String) throws -> CubbyCredential? {
