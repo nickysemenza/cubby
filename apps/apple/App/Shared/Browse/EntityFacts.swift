@@ -173,6 +173,10 @@ enum EntityFacts {
         return nil
     }
 
+    static func amountText(_ amount: Amount) -> String {
+        amount.unit.isEmpty ? format(amount.value) : "\(format(amount.value)) \(amount.unit)"
+    }
+
     static func format(_ value: Double) -> String {
         value == value.rounded() && abs(value) < 1e15
             ? Int(value).formatted()

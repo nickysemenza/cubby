@@ -41,6 +41,7 @@ struct TodayContent: View {
     let onRefresh: () async -> Void
 
     @Environment(\.sectionSelection) private var sectionSelection
+    @Environment(AppModel.self) private var model
 
     var body: some View {
         ScrollView {
@@ -162,6 +163,19 @@ struct TodayContent: View {
                     symbol: "barcode.viewfinder",
                     detail: "Sweep a location"
                 )
+
+                Button {
+                    model.navigator.section = .capture
+                    model.navigator.paths[.capture] = [.audit(locationID: nil)]
+                } label: {
+                    ActionTile(
+                        title: "Walk the shelf",
+                        symbol: "checklist",
+                        detail: "Recount a bin"
+                    )
+                }
+                .buttonStyle(.plain)
+
                 shortcut(
                     to: .identify,
                     title: "Identify",

@@ -9,6 +9,11 @@ import Vision
 public struct LiftedImage: Sendable {
     public let image: CGImage
     public let foundSubject: Bool
+
+    public init(image: CGImage, foundSubject: Bool) {
+        self.image = image
+        self.foundSubject = foundSubject
+    }
 }
 
 /// Foreground-instance lifting with the Swift Vision API, the same effect as pressing and

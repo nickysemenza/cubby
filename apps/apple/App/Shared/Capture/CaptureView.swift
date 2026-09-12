@@ -67,6 +67,11 @@ private struct CaptureContent: View {
         .porcelainScreen()
         .toolbar {
             ToolbarItem {
+                NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
+                    Label("Walk the shelf", systemImage: "checklist")
+                }
+            }
+            ToolbarItem {
                 Button {
                     showingStrays = true
                 } label: {

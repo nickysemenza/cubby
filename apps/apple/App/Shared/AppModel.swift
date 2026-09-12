@@ -25,14 +25,24 @@ final class AppModel {
     private(set) var auth: AuthFlow
     private(set) var credentials: CredentialProvider
     let navigator = Navigator()
+    let spotlight = SpotlightIndexer()
+    /// One on-device index of product covers, shared by Identify and by Add photo (which indexes
+    /// a new photo the moment it lands, so it matches before the next rebuild).
+    let featurePrints = FeaturePrintIndex()
     var lastError: String?
+
+    /// The app's model, for App Intents (which run in-process). Set once in `CubbyApp.init`.
+    static weak var active: AppModel?
 
     var baseURL: URL {
         didSet {
             guard baseURL != oldValue else { return }
             UserDefaults.standard.set(baseURL.absoluteString, forKey: Self.baseURLKey)
             rebindClients()
-            Task { await restoreSession() }
+            Task {
+                await spotlight.wipe()
+                await restoreSession()
+            }
         }
     }
 
@@ -81,6 +91,7 @@ final class AppModel {
         }
         credential = nil
         phase = .signedOut
+        await spotlight.wipe()
     }
 
     /// Called by any screen that receives a `CubbyAPIError`: a 401 means the middleware already

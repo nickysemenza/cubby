@@ -1,13 +1,6 @@
 import CubbyKit
 import SwiftUI
 
-#if os(iOS)
-import PhotosUI
-import UIKit
-#elseif os(macOS)
-import UniformTypeIdentifiers
-#endif
-
 /// Ranks a photo against the household's own product covers using on-device Vision feature
 /// prints (`FeaturePrintIndex`). This is closed-set matching only — "which of MY products is
 /// this" — never an open-world guess, so results are always shown as a raw distance, never a
@@ -27,7 +20,7 @@ struct IdentifyView: View {
         .porcelainScreen()
         .navigationTitle("Identify")
         .task(id: model.host) {
-            let identify = IdentifyModel(client: model.client)
+            let identify = IdentifyModel(client: model.client, index: model.featurePrints)
             self.identify = identify
             await identify.prepare()
         }
@@ -38,14 +31,6 @@ struct IdentifyView: View {
 /// `IdentifyView` so the model is guaranteed non-nil here, matching `CaptureView`/`CaptureContent`.
 private struct IdentifyContent: View {
     @Bindable var identify: IdentifyModel
-
-    #if os(iOS)
-    @State private var photoItem: PhotosPickerItem?
-    @State private var showingCamera = false
-    #elseif os(macOS)
-    @State private var showingFileImporter = false
-    #endif
-    @State private var pickError: String?
 
     var body: some View {
         ScrollView {
@@ -70,21 +55,6 @@ private struct IdentifyContent: View {
                 }
             }
         }
-        #if os(iOS)
-        .onChange(of: photoItem) { _, newItem in
-            Task { await loadPicked(newItem) }
-        }
-        .fullScreenCover(isPresented: $showingCamera) {
-            CameraPicker { image in
-                Task { await identify.identify(image) }
-            }
-            .ignoresSafeArea()
-        }
-        #elseif os(macOS)
-        .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.image]) { result in
-            handleFileImport(result)
-        }
-        #endif
     }
 
     /// `phase` covers both the index build and the last ranking attempt, so a failure here might
@@ -136,78 +106,11 @@ private struct IdentifyContent: View {
     private var photoSection: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
             Eyebrow("Photo")
-            LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
-                photoSourceControls
-            }
-            if let pickError {
-                Text(pickError)
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.destructive)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var photoSourceControls: some View {
-        #if os(iOS)
-        PhotosPicker(selection: $photoItem, matching: .images) {
-            ActionTile(title: "Choose photo", symbol: "photo.on.rectangle", detail: "From your library")
-        }
-        .buttonStyle(.plain)
-        if UIImagePickerController.isSourceTypeAvailable(.camera) {
-            Button {
-                showingCamera = true
-            } label: {
-                ActionTile(title: "Take photo", symbol: "camera", detail: "Use the camera")
-            }
-            .buttonStyle(.plain)
-        } else {
-            ActionTile(title: "Take photo", symbol: "camera", detail: "No camera here")
-                .opacity(0.5)
-        }
-        #elseif os(macOS)
-        Button {
-            showingFileImporter = true
-        } label: {
-            ActionTile(title: "Choose image…", symbol: "photo.on.rectangle", detail: "From a file")
-        }
-        .buttonStyle(.plain)
-        #endif
-    }
-
-    #if os(iOS)
-    private func loadPicked(_ item: PhotosPickerItem?) async {
-        guard let item else { return }
-        pickError = nil
-        do {
-            guard let data = try await item.loadTransferable(type: Data.self) else { return }
-            let image = try CoverImageLoader.decode(data)
-            await identify.identify(image)
-        } catch {
-            pickError = String(describing: error)
-        }
-        photoItem = nil
-    }
-    #elseif os(macOS)
-    private func handleFileImport(_ result: Result<URL, any Error>) {
-        pickError = nil
-        switch result {
-        case .success(let url):
-            let accessing = url.startAccessingSecurityScopedResource()
-            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-            do {
-                let data = try Data(contentsOf: url)
-                let image = try CoverImageLoader.decode(data)
+            PhotoSourceButtons { image in
                 Task { await identify.identify(image) }
-            } catch {
-                pickError = String(describing: error)
             }
-        case .failure(let error):
-            pickError = String(describing: error)
         }
     }
-    #endif
 }
 
 /// The probe thumbnail and the ranked list, shared by the real screen and `#Preview`s so neither
@@ -308,50 +211,6 @@ private struct CandidateRow: View {
         .contentShape(Rectangle())
     }
 }
-
-#if os(iOS)
-/// Wraps `UIImagePickerController`'s camera source. Only presented when
-/// `isSourceTypeAvailable(.camera)` is true (never on the simulator), so `PhotosPicker` is the
-/// path that always works during development.
-private struct CameraPicker: UIViewControllerRepresentable {
-    let onCapture: (CGImage) -> Void
-    @Environment(\.dismiss) private var dismiss
-
-    func makeUIViewController(context: Context) -> UIImagePickerController {
-        let controller = UIImagePickerController()
-        controller.sourceType = .camera
-        controller.delegate = context.coordinator
-        return controller
-    }
-
-    func updateUIViewController(_ controller: UIImagePickerController, context: Context) {}
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onCapture: onCapture, dismiss: dismiss)
-    }
-
-    final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let onCapture: (CGImage) -> Void
-        let dismiss: DismissAction
-
-        init(onCapture: @escaping (CGImage) -> Void, dismiss: DismissAction) {
-            self.onCapture = onCapture
-            self.dismiss = dismiss
-        }
-
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
-            if let image = info[.originalImage] as? UIImage, let cgImage = image.cgImage {
-                onCapture(cgImage)
-            }
-            dismiss()
-        }
-
-        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            dismiss()
-        }
-    }
-}
-#endif
 
 #Preview("Empty") {
     NavigationStack {
