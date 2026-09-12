@@ -183,11 +183,16 @@ extension LocationTreeNode {
         self.init(
             id: LocationCode(out.id),
             name: out.name,
-            type: out._type,
+            type: out._type?.rawValue,
             directItemCount: out.directItemCount ?? 0,
             totalItemCount: out.totalItemCount ?? 0,
             children: (out.children ?? []).map(LocationTreeNode.init),
-            lastBulkInventoryRaw: out.lastBulkInventory
+            // The generated payload decodes `lastBulkInventory` to a `Date`, so the verbatim wire
+            // string is gone by the time it reaches here; re-spelling it with the same transcoder
+            // the client decodes with is lossless (kept verbatim for display only, see the field).
+            lastBulkInventoryRaw: out.lastBulkInventory.flatMap {
+                try? LenientISO8601DateTranscoder().encode($0)
+            }
         )
     }
 }
@@ -236,7 +241,9 @@ extension ReconcileInput {
         self.init(
             locationId: body.locationId.rawValue,
             expectedInventoryEntryIds: body.expectedInventoryEntryIds.map(\.rawValue),
-            snapshotUpdatedAt: body.snapshotUpdatedAt.flatMap { try? LenientISO8601DateTranscoder().decode($0) },
+            snapshotUpdatedAt: body.snapshotUpdatedAt.flatMap {
+                try? LenientISO8601DateTranscoder().decode($0)
+            },
             resolutions: body.resolutions.map { entry in
                 let id = entry.inventoryEntryId.rawValue
                 // Each arm carries only its own keys; an unexpected key fails validation.
@@ -248,7 +255,8 @@ extension ReconcileInput {
                 case .remove:
                     return .remove(.init(kind: .remove, inventoryEntryId: id))
                 case .relocate(let target, _):
-                    return .relocate(.init(kind: .relocate, inventoryEntryId: id, targetLocationId: target.rawValue))
+                    return .relocate(
+                        .init(kind: .relocate, inventoryEntryId: id, targetLocationId: target.rawValue))
                 }
             }
         )

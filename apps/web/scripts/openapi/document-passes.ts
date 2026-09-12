@@ -129,12 +129,34 @@ export function inlinePrimitiveComponents(components: Components): Components {
 }
 
 /**
+ * Deep-stable JSON: object keys sorted at every nesting depth, arrays kept in
+ * order, primitives unchanged. `JSON.stringify(value, keys)` looks like it
+ * does this when `keys` is an array, but that second argument is actually a
+ * property ALLOWLIST applied at every depth, not just the top — so nested
+ * objects with different keys (or different key sets nested under `anyOf`)
+ * both collapse to `{}` and compare equal even though their shapes differ.
+ */
+type JsonBody = z.core.util.JSONType;
+const jsonRecord = z.record(z.string(), z.json());
+const stable = (value: JsonBody): JsonBody => {
+  if (Array.isArray(value)) return value.map(stable);
+  const record = jsonRecord.safeParse(value);
+  return record.success
+    ? Object.fromEntries(
+        Object.entries(record.data)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([key, member]) => [key, stable(member)]),
+      )
+    : value;
+};
+
+/**
  * A body's identity up to its own name: a recursive schema references itself
  * by component name, so the name is replaced before comparing.
  */
 const canonical = (name: string, schema: JsonSchema): string => {
   const { description: _description, $id: _id, ...rest } = schema;
-  return JSON.stringify(rest, Object.keys(rest).sort()).replaceAll(
+  return JSON.stringify(stable(z.json().parse(rest))).replaceAll(
     `"${COMPONENT_PREFIX}${name}"`,
     '"#self"',
   );

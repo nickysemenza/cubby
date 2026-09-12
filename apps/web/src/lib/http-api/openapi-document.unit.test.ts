@@ -168,8 +168,12 @@ describe("generated HTTP OpenAPI document", () => {
     for (const name of named) expect(name).toMatch(/^[A-Z][A-Za-z0-9]*$/u);
     expect(named.length).toBeGreaterThan(900);
     // Unexported module-private schemas keep a positional name; each one
-    // that appears here is a candidate for an export.
-    expect(positional.length).toBeLessThanOrEqual(40);
+    // that appears here is a candidate for an export. This bound rose from
+    // 40 once `foldPositionalDuplicates`'s canonicalization bug was fixed
+    // (see the fold-bug regression test below): the old replacer-array
+    // allowlist erased distinct nested shapes down to `{}`, so it had been
+    // incorrectly folding distinct positionals together and undercounting.
+    expect(positional.length).toBeLessThanOrEqual(60);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
@@ -301,6 +305,33 @@ describe("generated HTTP OpenAPI document", () => {
       }
     }
     expect(count).toBeGreaterThanOrEqual(30);
+  });
+
+  it("does not fold distinct positional schemas onto each other (PR #1024's fold bug)", () => {
+    // `foldPositionalDuplicates` used to canonicalize a schema with
+    // `JSON.stringify(rest, Object.keys(rest).sort())`, whose array second
+    // argument is a property ALLOWLIST applied at *every* nesting depth, not
+    // just the top. Distinct anyOf members (a nullable number vs. a nullable
+    // string with a uri format) and distinct property types both erased down
+    // to `{}` and compared equal, folding unrelated schemas together: 242
+    // properties across the document ended up wrongly typed as a nullable
+    // string with format "uri". Guard both the specific known casualties and
+    // the aggregate count.
+    const valuationRef = schemaNode.parse(
+      schemas.InventoryListItemOut?.properties?.valuation,
+    ).$ref;
+    expect(resolve(valuationRef ?? "").schema).toMatchObject({
+      type: "number",
+    });
+    expect(schemas.ProductListItemOut?.properties?.stockTracked).toMatchObject({
+      type: expect.arrayContaining(["boolean"]),
+    });
+    const uriPropertyCount = Object.values(schemas)
+      .flatMap((schema) => Object.values(schema.properties ?? {}))
+      .filter(
+        (value) => schemaNode.safeParse(value).data?.format === "uri",
+      ).length;
+    expect(uriPropertyCount).toBeLessThanOrEqual(50);
   });
 
   it("shares one ListPageMeta across every list page", () => {
