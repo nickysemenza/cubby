@@ -17,6 +17,10 @@ porting. See `/Users/nicky/.claude/plans/moonlit-juggling-finch.md` for the full
 If you see the literal error text `artifact of binary target 'CubbyFFIBinary' not found`, the
 xcframework hasn't been built yet — run step 1 (`build-rust.sh`) first.
 
+`build-rust.sh` stamps its inputs (Rust sources, manifest/lockfile, the script, flags, `rustc
+--version`) and skips the whole build, including `--check`, when nothing has changed since the
+last successful run — pass `--force` to rebuild anyway.
+
 ## Ownership
 
 Another agent/workstream (W1) owns `apps/apple/scripts/build-rust.sh`,

@@ -10,7 +10,8 @@
 #                         committed copy instead of overwriting it, exiting
 #                         non-zero if they differ. Still builds and assembles
 #                         the xcframework (needed for `swift build`/`swift
-#                         test` to succeed locally).
+#                         test` to succeed locally). Skipped entirely (like
+#                         everything else) when the content stamp is fresh.
 #   --profile release|dist   Default `release` (plain, fast inner-loop build).
 #                         `dist` is the size-tuned profile (LTO, one codegen
 #                         unit) meant for a framework that actually ships —
@@ -21,11 +22,28 @@
 #                         built, which is fine for local simulator/Mac
 #                         iteration but not for a real device or App Store
 #                         archive — run `--targets all` before either.
+#   --force              Rebuild even if the content stamp (see below)
+#                         matches and every requested slice is already
+#                         present in the xcframework.
+#
+# Content stamp: a sha256 over every file under cubby-ffi/src/, cubby-ffi's
+# Cargo.toml/Cargo.lock/uniffi.toml/build.rs (the latter two only if
+# present), this script itself, the resolved --profile/--targets, and `rustc
+# --version` — written to `.cubby-ffi.stamp` inside the (gitignored)
+# xcframework directory after a successful build. When a run starts and that
+# stamp matches the freshly computed one, and every slice the run requests is
+# already in the xcframework, the whole script (including a `--check` diff)
+# is a no-op: this is what makes repeat pre-push `--check` runs fast. Pass
+# --force to rebuild anyway.
 #
 # Bindgen always runs from a host (macOS, no --target) build regardless of
 # --targets: the generated Swift API surface is architecture-independent, so
 # introspecting one cdylib is enough, and the host is the one guaranteed to
-# both build and run locally.
+# both build and run locally. On Apple Silicon that host build is pinned to
+# `--target aarch64-apple-darwin` — the same triple the `mac` slice below
+# uses — so cargo treats them as the same build graph and reuses every
+# dependency artifact between them instead of compiling twice; see the "host
+# (bindgen)" section further down. Intel keeps the old untargeted host build.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
@@ -34,6 +52,8 @@ APPLE_ROOT="$ROOT/apps/apple"
 CUBBYKIT_ROOT="$APPLE_ROOT/CubbyKit"
 XCFRAMEWORK_OUT="$CUBBYKIT_ROOT/Frameworks/CubbyFFI.xcframework"
 SWIFT_SHIM_DEST="$CUBBYKIT_ROOT/Sources/CubbyFFI/cubby_ffi.swift"
+STAMP_FILE="$XCFRAMEWORK_OUT/.cubby-ffi.stamp"
+SCRIPT_SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
 CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$HOME/.cache/cubby/cubby-ffi-target}"
 export CARGO_TARGET_DIR
@@ -41,6 +61,7 @@ export CARGO_TARGET_DIR
 CHECK=0
 PROFILE="release"
 TARGETS_ARG="all"
+FORCE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,6 +83,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --targets=*)
       TARGETS_ARG="${1#*=}"
+      shift
+      ;;
+    --force)
+      FORCE=1
       shift
       ;;
     *)
@@ -100,6 +125,69 @@ case "$TARGETS_ARG" in
     ;;
 esac
 
+# Maps a --targets key to the library-identifier directory name
+# `xcodebuild -create-xcframework` gives that slice, so the skip check below
+# can confirm a requested slice actually made it into the xcframework (a
+# `--targets sim` run followed by `--targets mac` should not report the mac
+# slice as already present just because the stamp happens to match).
+slice_dir_for() {
+  case "$1" in
+    sim) echo "ios-arm64-simulator" ;;
+    device) echo "ios-arm64" ;;
+    mac) echo "macos-arm64" ;;
+  esac
+}
+
+slice_present() {
+  local dir
+  dir="$(slice_dir_for "$1")"
+  [[ -n "$dir" && -d "$XCFRAMEWORK_OUT/$dir" ]]
+}
+
+# Content stamp: hashes every input that can change what this script
+# produces (Rust sources, manifest/lockfile/uniffi config, this script, the
+# resolved flags, and the compiler version) so an unchanged rerun can be
+# skipped outright. File paths are sorted so the hash is deterministic
+# regardless of filesystem iteration order; `shasum -a 256` is macOS's stock
+# sha256 tool, matching the rest of this script's macOS-only assumptions.
+compute_stamp() {
+  local files=()
+  if [[ -d "$ROOT/cubby-ffi/src" ]]; then
+    while IFS= read -r f; do
+      files+=("$f")
+    done < <(find "$ROOT/cubby-ffi/src" -type f | LC_ALL=C sort)
+  fi
+  files+=("$CUBBY_FFI_MANIFEST" "$ROOT/cubby-ffi/Cargo.lock")
+  [[ -f "$ROOT/cubby-ffi/uniffi.toml" ]] && files+=("$ROOT/cubby-ffi/uniffi.toml")
+  [[ -f "$ROOT/cubby-ffi/build.rs" ]] && files+=("$ROOT/cubby-ffi/build.rs")
+  files+=("$SCRIPT_SELF")
+
+  {
+    for f in "${files[@]}"; do
+      shasum -a 256 "$f"
+    done
+    printf 'profile=%s\n' "$PROFILE"
+    printf 'targets=%s\n' "$TARGETS_ARG"
+    printf 'rustc=%s\n' "$(rustc --version)"
+  } | shasum -a 256 | awk '{print $1}'
+}
+
+NEW_STAMP="$(compute_stamp)"
+
+if [[ "$FORCE" -eq 0 && -f "$STAMP_FILE" && "$(cat "$STAMP_FILE")" == "$NEW_STAMP" ]]; then
+  all_present=1
+  for key in "${SELECTED_KEYS[@]}"; do
+    if ! slice_present "$key"; then
+      all_present=0
+      break
+    fi
+  done
+  if [[ "$all_present" -eq 1 ]]; then
+    echo "build-rust.sh: inputs unchanged, skipping (--force to rebuild)"
+    exit 0
+  fi
+fi
+
 echo "==> cubby-ffi: profile=$PROFILE targets=$TARGETS_ARG"
 
 # No `--features cli` on any of these: that feature pulls in `uniffi_bindgen`
@@ -114,17 +202,30 @@ for key in "${SELECTED_KEYS[@]}"; do
   echo "==> cubby-ffi: $key ($triple, $PROFILE) built in ${elapsed}s"
 done
 
-# The bindgen introspection target: always a host build (no --target), run
-# unconditionally even when `mac` is not among --targets. On Apple Silicon
-# this is architecturally identical to the aarch64-apple-darwin slice above,
-# but cargo does not share build products between a `--target`-qualified
-# build and an implicit host build, so this is a second, separate compile.
+# The bindgen introspection target: always a host build, run unconditionally
+# even when `mac` is not among --targets. On Apple Silicon this is
+# architecturally identical to the aarch64-apple-darwin slice above, but
+# cargo does not share build products between a `--target`-qualified build
+# and a plain untargeted one even on the same hardware — so without an
+# explicit --target here, this would be a second, separate compile. Pinning
+# it to the same `--target aarch64-apple-darwin` triple as the mac slice
+# makes cargo treat both as the same build graph: every shared dependency
+# artifact is reused, and only cubby-ffi itself needs to recompile for the
+# `cli` feature this step enables. Intel has no such shared slice, so it
+# keeps the old implicit host build.
+HOST_TARGET_ARGS=()
+HOST_TARGET_DIR=""
+if [[ "$(uname -m)" == "arm64" ]]; then
+  HOST_TARGET_ARGS=(--target aarch64-apple-darwin)
+  HOST_TARGET_DIR="aarch64-apple-darwin/"
+fi
+
 start=$(date +%s)
-cargo build --manifest-path "$CUBBY_FFI_MANIFEST" --profile "$PROFILE"
+cargo build --manifest-path "$CUBBY_FFI_MANIFEST" --profile "$PROFILE" "${HOST_TARGET_ARGS[@]}"
 elapsed=$(($(date +%s) - start))
 echo "==> cubby-ffi: host (bindgen) ($PROFILE) built in ${elapsed}s"
 
-HOST_DYLIB="$CARGO_TARGET_DIR/$PROFILE/libcubby_ffi.dylib"
+HOST_DYLIB="$CARGO_TARGET_DIR/${HOST_TARGET_DIR}$PROFILE/libcubby_ffi.dylib"
 if [[ ! -f "$HOST_DYLIB" ]]; then
   echo "error: expected host cdylib at $HOST_DYLIB (did the cdylib crate-type build?)" >&2
   exit 1
@@ -141,7 +242,7 @@ echo "==> cubby-ffi: generating Swift bindings from the host build"
 # scoped to a subshell so it doesn't change this script's own directory.
 (
   cd "$ROOT/cubby-ffi"
-  cargo run --profile "$PROFILE" --features cli --bin uniffi-bindgen -- \
+  cargo run --profile "$PROFILE" "${HOST_TARGET_ARGS[@]}" --features cli --bin uniffi-bindgen -- \
     generate --library "$HOST_DYLIB" --language swift --out-dir "$BINDINGS_DIR"
 )
 
@@ -198,5 +299,10 @@ done
 
 echo "==> cubby-ffi: creating $XCFRAMEWORK_OUT (${SELECTED_KEYS[*]})"
 xcodebuild -create-xcframework "${xcframework_args[@]}" -output "$XCFRAMEWORK_OUT"
+
+# Written only after a fully successful build, inside the gitignored
+# xcframework directory (never committed). A future run's early-exit check
+# above compares against this.
+printf '%s' "$NEW_STAMP" > "$STAMP_FILE"
 
 echo "==> cubby-ffi: done"
