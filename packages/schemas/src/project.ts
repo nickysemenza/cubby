@@ -51,7 +51,6 @@ import {
   vendorShortcode,
 } from "./identifiers";
 import {
-  createItemsResponseSchema,
   createPaginatedResponseSchemaWithContext,
   createPaginatedResponseSchema,
   entityFilter,
@@ -1188,9 +1187,6 @@ export const projectResourceOut = z.object({
 });
 export type ProjectResourceOut = z.infer<typeof projectResourceOut>;
 export const projectResourcesOut = z.array(projectResourceOut);
-
-export const projectResourcesMcpOut =
-  createItemsResponseSchema(projectResourceOut);
 
 export const projectToolSuggestionLane = z.enum([
   "purchased_here",

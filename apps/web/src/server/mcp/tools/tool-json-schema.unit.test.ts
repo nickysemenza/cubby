@@ -1,0 +1,124 @@
+import { describe, expect, it } from "vitest";
+import { type JSONType, z } from "zod";
+
+import { toWire } from "~/lib/http-api/wire";
+
+import { createMcpServer } from "../server";
+import {
+  type DeclaredToolSchemas,
+  listDeclaredToolSchemas,
+} from "./tool-catalog";
+import { advertisedJsonSchema } from "./tool-json-schema";
+
+type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
+
+function isJsonObject(value: JSONType): value is JsonObject {
+  return value !== null && !Array.isArray(value) && typeof value === "object";
+}
+
+/** Every `{ format: "date" }` leaf in a JSON Schema tree, as a dotted path. */
+function collectBareDateFormats(
+  node: JSONType,
+  path: string,
+  hits: string[],
+): void {
+  if (Array.isArray(node)) {
+    node.forEach((child, index) =>
+      collectBareDateFormats(child, `${path}[${index}]`, hits),
+    );
+    return;
+  }
+  if (!isJsonObject(node)) return;
+  if (node.format === "date") hits.push(path);
+  for (const [key, value] of Object.entries(node)) {
+    collectBareDateFormats(value, `${path}.${key}`, hits);
+  }
+}
+
+function requireZodType(
+  schema: z.core.$ZodType | undefined,
+  label: string,
+): z.ZodType {
+  if (!(schema instanceof z.ZodType)) {
+    throw new Error(`${label}: expected a registered Zod schema`);
+  }
+  return schema;
+}
+
+function requireTool(
+  tools: readonly DeclaredToolSchemas[],
+  name: string,
+): DeclaredToolSchemas {
+  const tool = tools.find((candidate) => candidate.name === name);
+  if (!tool) throw new Error(`${name} is not a registered MCP tool`);
+  return tool;
+}
+
+/** Walks a JSON Schema by draft-7 `properties`/`items` path segments. */
+function jsonAt(node: JSONType, ...path: string[]): JSONType {
+  let current = node;
+  for (const segment of path) {
+    if (!isJsonObject(current)) {
+      throw new Error(`Expected an object schema before "${segment}"`);
+    }
+    current = current[segment] ?? null;
+  }
+  return current;
+}
+
+describe("MCP tool JSON Schema — toWire parity", () => {
+  const server = createMcpServer();
+  const tools = listDeclaredToolSchemas(server);
+
+  it("registers more than 50 tools", () => {
+    expect(tools.length).toBeGreaterThan(50);
+  });
+
+  it("declares an input and an output schema for every registered tool", () => {
+    const incomplete = tools
+      .filter((tool) => !tool.inputSchema || !tool.outputSchema)
+      .map((tool) => tool.name);
+    expect(incomplete).toEqual([]);
+  });
+
+  it.each(tools.map((tool) => [tool.name, tool] as const))(
+    "%s: input and output schema pass through toWire without throwing",
+    (name, tool) => {
+      const input = requireZodType(tool.inputSchema, `${name} input`);
+      const output = requireZodType(tool.outputSchema, `${name} output`);
+      expect(() => toWire(input, "input")).not.toThrow();
+      expect(() => toWire(output, "output")).not.toThrow();
+    },
+  );
+
+  it("documents list_statement_rows' nested createdAt as date-time", () => {
+    const tool = requireTool(tools, "list_statement_rows");
+    const schema = advertisedJsonSchema(tool.name, tool.outputSchema, "output");
+    const createdAt = jsonAt(
+      schema,
+      "properties",
+      "data",
+      "items",
+      "properties",
+      "createdAt",
+    );
+    if (!isJsonObject(createdAt)) throw new Error("Expected an object schema");
+    expect(createdAt.type).toBe("string");
+    expect(createdAt.format).toBe("date-time");
+  });
+
+  it("advertises no bare `format: date` anywhere in the catalog", () => {
+    const hits: string[] = [];
+    for (const tool of tools) {
+      const input = advertisedJsonSchema(tool.name, tool.inputSchema, "input");
+      const output = advertisedJsonSchema(
+        tool.name,
+        tool.outputSchema,
+        "output",
+      );
+      collectBareDateFormats(input, `${tool.name}.input`, hits);
+      collectBareDateFormats(output, `${tool.name}.output`, hits);
+    }
+    expect(hits).toEqual([]);
+  });
+});

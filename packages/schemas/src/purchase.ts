@@ -24,7 +24,6 @@ import { imageUrlSummary } from "./image-summary";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
-  createItemsResponseSchema,
   createPaginatedResponseSchema,
   entityFilterList,
   oneOrMany,
@@ -457,9 +456,6 @@ export const purchaseProductOut = z.object({
 });
 export type PurchaseProductOut = z.infer<typeof purchaseProductOut>;
 export const purchaseProductsOut = z.array(purchaseProductOut);
-
-export const purchaseProductsMcpOut =
-  createItemsResponseSchema(purchaseProductOut);
 
 export const productPurchaseOut = z.object({
   purchaseId: purchaseShortcode,

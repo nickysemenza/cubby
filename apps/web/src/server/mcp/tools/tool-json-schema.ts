@@ -1,6 +1,8 @@
 import { normalizeObjectSchema } from "@modelcontextprotocol/sdk/server/zod-compat.js";
 import { type JSONType, z } from "zod";
 
+import { toWire } from "~/lib/http-api/wire";
+
 type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
 
 const EMPTY_OBJECT_JSON_SCHEMA = {
@@ -58,16 +60,17 @@ function safeToJsonSchema(
   io: "input" | "output",
 ): JsonObject {
   try {
-    const converted = z.toJSONSchema(schema, {
+    if (!(schema instanceof z.ZodType)) {
+      throw new Error("Expected a Zod schema instance for the wire walker");
+    }
+    // `toWire` already turns every `z.date()` into `z.iso.datetime()`
+    // (`format: "date-time"`), so there is no separate date override here —
+    // one walk decides the wire shape for both the HTTP contract and the
+    // MCP-advertised JSON Schema.
+    const converted = z.toJSONSchema(toWire(schema, io), {
       target: "draft-7",
       io,
       unrepresentable: "any",
-      override: (ctx) => {
-        if (ctx.zodSchema._zod.def.type === "date") {
-          ctx.jsonSchema.type = "string";
-          ctx.jsonSchema.format = "date-time";
-        }
-      },
     });
     const parsed = z.json().parse(converted);
     if (!isJsonObject(parsed)) {

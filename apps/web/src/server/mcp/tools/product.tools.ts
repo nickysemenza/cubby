@@ -6,13 +6,12 @@ import {
   productMcpDetailOut,
   productMcpOut,
 } from "@cubby/schemas/product";
-import {
-  productComponentsInput,
-  productComponentsMcpOut,
-} from "@cubby/schemas/product-components";
+import { productComponentsInput } from "@cubby/schemas/product-components";
 import { upc } from "@cubby/usda-schemas";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+
+import { productContract } from "~/contracts/product.contract";
 
 import {
   getCaller,
@@ -28,6 +27,7 @@ import {
   slimProductDetail,
   WRITE_CLOSED,
 } from "./_shared";
+import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
 
 /**
  * `lookup_upc` over the slim product projection.
@@ -41,6 +41,11 @@ import {
 const lookupUpcMcpOut = productLookupUpcOut.extend({
   localProduct: productMcpOut.nullable(),
 });
+
+/** `{items}` over `product.components`'s own output — see `mcpItemsEnvelope`. */
+const productComponentsMcpOut = mcpItemsEnvelope(
+  fromContract(productContract.ops.components),
+);
 
 export function registerProductTools(server: McpServer) {
   registerMcpTool(server, {
