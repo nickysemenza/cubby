@@ -64,6 +64,9 @@ targetTemplates:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         LSMinimumSystemVersion: "26.0"
+        # Only HTTPS via URLSession (exempt); answers App Store Connect's export-compliance
+        # question at upload so every TestFlight build skips the prompt.
+        ITSAppUsesNonExemptEncryption: false
     dependencies:
       - package: CubbyKit
         product: CubbyKit
