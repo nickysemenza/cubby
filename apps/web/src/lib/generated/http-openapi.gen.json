@@ -39463,7 +39463,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -39501,10 +39509,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -40478,10 +40493,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -41291,7 +41313,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -46355,7 +46385,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -46413,7 +46451,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -47367,7 +47413,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -47378,7 +47432,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -47471,14 +47533,17 @@
             }
           },
           {
-            "name": "projectScope",
+            "name": "projectScopeStatuses",
             "in": "query",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statuses": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": ["planning", "not_started", "in_progress", "done"]
+                    },
+                    {
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -47489,8 +47554,31 @@
                           "done"
                         ]
                       }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeKinds",
+            "in": "query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "furniture",
+                        "workshop",
+                        "household",
+                        "renovation",
+                        "garden",
+                        "trip"
+                      ]
                     },
-                    "kinds": {
+                    {
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -47503,31 +47591,78 @@
                           "trip"
                         ]
                       }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeLocations",
+            "in": "query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "string"
                     },
-                    "locations": {
+                    {
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
-                    },
-                    "search": {
-                      "type": "string"
-                    },
-                    "dateFrom": {
-                      "type": "string",
-                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-                      "description": "Calendar day as \"YYYY-MM-DD\""
-                    },
-                    "dateTo": {
-                      "type": "string",
-                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-                      "description": "Calendar day as \"YYYY-MM-DD\""
-                    },
-                    "completionYear": {
-                      "type": "string",
-                      "pattern": "^\\d{4}$"
                     }
-                  }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeSearch",
+            "in": "query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeDateFrom",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeDateTo",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeCompletionYear",
+            "in": "query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d{4}$"
                 }
               }
             }
@@ -50381,7 +50516,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -52240,7 +52383,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -53078,7 +53229,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -53136,7 +53295,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "boolean"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string",
+                      "enum": ["true", "false"]
+                    }
+                  ]
                 }
               }
             }
@@ -53506,14 +53673,17 @@
             }
           },
           {
-            "name": "projectScope",
+            "name": "projectScopeStatuses",
             "in": "query",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "statuses": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": ["planning", "not_started", "in_progress", "done"]
+                    },
+                    {
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -53524,8 +53694,31 @@
                           "done"
                         ]
                       }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeKinds",
+            "in": "query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "furniture",
+                        "workshop",
+                        "household",
+                        "renovation",
+                        "garden",
+                        "trip"
+                      ]
                     },
-                    "kinds": {
+                    {
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -53538,31 +53731,78 @@
                           "trip"
                         ]
                       }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeLocations",
+            "in": "query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "string"
                     },
-                    "locations": {
+                    {
                       "type": "array",
                       "items": {
                         "type": "string"
                       }
-                    },
-                    "search": {
-                      "type": "string"
-                    },
-                    "dateFrom": {
-                      "type": "string",
-                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-                      "description": "Calendar day as \"YYYY-MM-DD\""
-                    },
-                    "dateTo": {
-                      "type": "string",
-                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-                      "description": "Calendar day as \"YYYY-MM-DD\""
-                    },
-                    "completionYear": {
-                      "type": "string",
-                      "pattern": "^\\d{4}$"
                     }
-                  }
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeSearch",
+            "in": "query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeDateFrom",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeDateTo",
+            "in": "query",
+            "description": "Calendar day as \"YYYY-MM-DD\"",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                }
+              }
+            }
+          },
+          {
+            "name": "projectScopeCompletionYear",
+            "in": "query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^\\d{4}$"
                 }
               }
             }

@@ -14,6 +14,7 @@ import { httpContract } from "~/lib/generated/http-contract.gen";
 import { type StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import {
   resourceListInputFrom,
+  resourceQueryNesting,
   resourceQueryValues,
 } from "~/lib/http-api/resource-query";
 import { type HttpMetadata, httpMetadataSchema } from "~/lib/http-api/router";
@@ -128,7 +129,12 @@ function requestInput(
     switch (metadata.resource) {
       case "list":
         return {
-          ...resourceListInputFrom(resourceQueryValues.parse(payload)),
+          ...resourceListInputFrom(
+            resourceQueryValues.parse(payload),
+            route.query instanceof z.ZodType
+              ? resourceQueryNesting(route.query)
+              : new Map(),
+          ),
           entity,
         };
       case "get":

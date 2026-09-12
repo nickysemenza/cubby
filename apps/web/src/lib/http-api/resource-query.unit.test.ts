@@ -1,8 +1,11 @@
-import { encodeQueryParamsJson, parseJsonQueryObject } from "@ts-rest/core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { resourceListInputFrom, resourceListQuery } from "./resource-query";
+import {
+  resourceListInputFrom,
+  resourceListQuery,
+  resourceQueryNesting,
+} from "./resource-query";
 
 const schema = resourceListQuery(
   z.object({
@@ -11,15 +14,36 @@ const schema = resourceListQuery(
     active: z.boolean().optional(),
     minimum: z.number().optional(),
     tags: z.array(z.string()).optional(),
-    range: z.object({ min: z.number(), max: z.number() }).optional(),
+    scope: z
+      .object({
+        statuses: z.array(z.enum(["open", "done"])).optional(),
+        search: z.string().optional(),
+        year: z
+          .string()
+          .regex(/^\d{4}$/u)
+          .optional(),
+      })
+      .optional(),
   }),
 );
-/** What the server sees: ts-rest's jsonQuery decoding, then the wire schema. */
+
+/** What the router hands the route: a string per key, an array for repeats. */
+const asRouterQuery = (query: string) => {
+  const search = new URLSearchParams(query);
+  const values: Record<string, string | string[]> = {};
+  for (const key of new Set(search.keys())) {
+    const all = search.getAll(key);
+    const [single] = all;
+    values[key] = all.length === 1 && single !== undefined ? single : all;
+  }
+  return values;
+};
+
+/** What the server sees: the wire schema over the router's query object. */
 const decode = (query: string) =>
   resourceListInputFrom(
-    schema.parse(
-      parseJsonQueryObject(Object.fromEntries(new URLSearchParams(query))),
-    ),
+    schema.parse(asRouterQuery(query)),
+    resourceQueryNesting(schema),
   );
 
 describe("resource list query", () => {
@@ -47,52 +71,44 @@ describe("resource list query", () => {
     });
     expect(decode("")).toEqual({ filters: {} });
   });
-  it("decodes booleans, numbers, and JSON values using their schemas", () => {
+
+  it("reads booleans, numbers and repeated keys from their text form", () => {
+    expect(decode("active=false&minimum=12&tags=a&tags=b")).toEqual({
+      filters: { active: false, minimum: 12, tags: ["a", "b"] },
+    });
+    expect(decode("tags=only")).toEqual({ filters: { tags: ["only"] } });
+  });
+
+  it("flattens an object filter onto prefixed parameters and re-nests it", () => {
+    expect(resourceQueryNesting(schema).get("scopeStatuses")).toEqual([
+      "scope",
+      "statuses",
+    ]);
     expect(
-      decode(
-        new URLSearchParams({
-          active: "false",
-          minimum: "12",
-          tags: '["a","b"]',
-          range: '{"min":1,"max":5}',
-        }).toString(),
-      ),
+      decode("scopeStatuses=open&scopeStatuses=done&scopeSearch=deck"),
     ).toEqual({
-      filters: {
-        active: false,
-        minimum: 12,
-        tags: ["a", "b"],
-        range: { min: 1, max: 5 },
-      },
+      filters: { scope: { statuses: ["open", "done"], search: "deck" } },
+    });
+    expect(decode("scopeYear=2026")).toEqual({
+      filters: { scope: { year: "2026" } },
     });
   });
-  it.each(["123", "001", "true", "false", "null", "a&b+c"])(
-    "round-trips literal text %s through the typed client encoding",
+
+  it.each(["123", "001", "true", "false", "null", "[1,2]", "a&b+c"])(
+    "keeps text literal: %s",
     (text) => {
-      // The client quotes numeric/boolean/null-looking strings, so the server
-      // reads them back as the same text; a hand-typed URL must quote them
-      // the same way.
-      const query = encodeQueryParamsJson({ nameFilter: text });
+      const query = new URLSearchParams({ nameFilter: text }).toString();
       expect(decode(query)).toEqual({ filters: { nameFilter: text } });
     },
   );
-  it("reads array- and object-looking text as JSON unless it is quoted", () => {
-    // ts-rest's jsonQuery only quotes scalars; a string like "[1,2]" must be
-    // quoted by the caller to stay text, otherwise it decodes as JSON and fails
-    // the string filter.
-    expect(() => decode("nameFilter=%5B1%2C2%5D")).toThrow(/./u);
-    expect(decode("nameFilter=%22%5B1%2C2%5D%22")).toEqual({
-      filters: { nameFilter: "[1,2]" },
-    });
-  });
-  it("preserves JSON null and quoted strings for nullable filters", () => {
+
+  it("treats a nullable filter as optional text", () => {
     expect(decode("nullableName=null")).toEqual({
-      filters: { nullableName: null },
-    });
-    expect(decode("nullableName=%22null%22")).toEqual({
       filters: { nullableName: "null" },
     });
+    expect(decode("")).toEqual({ filters: {} });
   });
+
   it.each([
     "page=0",
     "page=-1",
@@ -106,16 +122,34 @@ describe("resource list query", () => {
     "sort=a,b,c,d",
     "active=maybe",
     "minimum=no",
-    "range=bad",
+    "scopeStatuses=nope",
+    "scopeYear=26",
+    "scope=bad",
     "unknown=1",
     "pagination={}",
     "filters={}",
   ])("rejects malformed query %s", (query) => {
     expect(() => decode(query)).toThrow(/./u);
   });
-  it("rejects filter names colliding with resource controls", () => {
+
+  it("rejects filter names colliding with resource controls or each other", () => {
     expect(() => resourceListQuery(z.object({ page: z.number() }))).toThrow(
       "collision",
     );
+    expect(() =>
+      resourceListQuery(
+        z.object({
+          scopeSearch: z.string().optional(),
+          scope: z.object({ search: z.string().optional() }).optional(),
+        }),
+      ),
+    ).toThrow("collision");
+    expect(() =>
+      resourceListQuery(
+        z.object({
+          scope: z.object({ inner: z.object({ a: z.string() }) }).optional(),
+        }),
+      ),
+    ).toThrow("too deep");
   });
 });
