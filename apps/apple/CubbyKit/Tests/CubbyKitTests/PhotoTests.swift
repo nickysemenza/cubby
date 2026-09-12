@@ -1,0 +1,268 @@
+import CoreGraphics
+import Foundation
+import Synchronization
+import Testing
+
+@testable import CubbyKit
+
+/// A solid-colour canvas with an optional dark square in the middle: the simplest picture that
+/// has an unambiguous foreground for Vision, or none at all.
+enum TestImages {
+    static func canvas(width: Int, height: Int, subject: Bool, alpha: Bool = false) -> CGImage {
+        let context = CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: (alpha ? CGImageAlphaInfo.premultipliedLast : CGImageAlphaInfo.noneSkipLast).rawValue
+        )!
+        context.setFillColor(CGColor(srgbRed: 0.96, green: 0.96, blue: 0.95, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        if subject {
+            // A shaded sphere with a soft shadow reads as an object to the foreground model,
+            // where a flat square reads as pattern.
+            let radius = Double(min(width, height)) / 4
+            let center = CGPoint(x: Double(width) / 2, y: Double(height) / 2)
+            context.saveGState()
+            context.setShadow(offset: CGSize(width: radius / 6, height: -radius / 6), blur: radius / 3, color: CGColor(srgbRed: 0, green: 0, blue: 0, alpha: 0.45))
+            context.setFillColor(CGColor(srgbRed: 0.15, green: 0.2, blue: 0.5, alpha: 1))
+            context.fillEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+            context.restoreGState()
+            let gradient = CGGradient(
+                colorsSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+                colors: [CGColor(srgbRed: 0.55, green: 0.62, blue: 0.95, alpha: 1), CGColor(srgbRed: 0.05, green: 0.08, blue: 0.3, alpha: 1)] as CFArray,
+                locations: [0, 1]
+            )!
+            context.saveGState()
+            context.addEllipse(in: CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+            context.clip()
+            context.drawRadialGradient(
+                gradient, startCenter: CGPoint(x: center.x - radius / 3, y: center.y + radius / 3), startRadius: 0,
+                endCenter: center, endRadius: radius * 1.2, options: []
+            )
+            context.restoreGState()
+        }
+        return context.makeImage()!
+    }
+}
+
+@Suite("ImageEncoding")
+struct ImageEncodingTests {
+    @Test func downscalesTheLongerSideAndKeepsAspect() throws {
+        let image = TestImages.canvas(width: 4000, height: 3000, subject: false)
+        let scaled = try ImageEncoding.downscaled(image, maxPixelSize: 2048)
+        #expect(scaled.width == 2048)
+        #expect(scaled.height == 1536)
+        let small = TestImages.canvas(width: 640, height: 480, subject: false)
+        #expect(try ImageEncoding.downscaled(small, maxPixelSize: 2048) === small)
+    }
+
+    @Test func encodesJPEGAndPNGWithTheDeclaredTypes() throws {
+        let image = TestImages.canvas(width: 320, height: 200, subject: true)
+        let jpeg = try ImageEncoding.encode(image, as: .jpeg)
+        let png = try ImageEncoding.encode(image, as: .png)
+        #expect(jpeg.prefix(3) == Data([0xFF, 0xD8, 0xFF]))
+        #expect(png.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]))
+        #expect(ImageEncoding.pixelSize(of: jpeg)! == (320, 200))
+        #expect(ImageEncoding.Format.jpeg.contentType == "image/jpeg")
+        #expect(ImageEncoding.Format.png.fileExtension == "png")
+    }
+}
+
+@Suite("SubjectLift")
+struct SubjectLiftTests {
+    @Test func liftsADarkSquareOffAPaleCanvas() async throws {
+        let image = TestImages.canvas(width: 600, height: 600, subject: true)
+        let lifted = try await SubjectLift.lift(image, background: .white, cropToSubject: true)
+        #expect(lifted.foundSubject)
+        // Cropped to the subject's extent, so strictly smaller than the canvas.
+        #expect(lifted.image.width < image.width)
+        #expect(lifted.image.height < image.height)
+        #expect(lifted.image.width > 0)
+    }
+
+    @Test func uniformCanvasHasNoSubjectAndComesBackUntouched() async throws {
+        let image = TestImages.canvas(width: 400, height: 300, subject: false)
+        let lifted = try await SubjectLift.lift(image)
+        #expect(!lifted.foundSubject)
+        #expect(lifted.image === image)
+    }
+
+    @Test func transparentBackgroundCarriesAlpha() async throws {
+        let image = TestImages.canvas(width: 600, height: 600, subject: true)
+        let lifted = try await SubjectLift.lift(image, background: .transparent, cropToSubject: false)
+        #expect(lifted.foundSubject)
+        #expect(lifted.image.alphaInfo != .none && lifted.image.alphaInfo != .noneSkipLast && lifted.image.alphaInfo != .noneSkipFirst)
+    }
+}
+
+/// Records the exact call sequence; `failPut` makes the presigned PUT fail.
+final class StubPhotoService: PhotoService, Sendable {
+    enum Call: Equatable, Sendable {
+        case create(String, Int, String, EntityKey), put(URL, String, Int), mark(ImageCode), attach([ImageCode], EntityKey, String), ids(ProductCode), order([ImageCode], ProductCode)
+    }
+
+    let calls = Mutex<[Call]>([])
+    let existing: [ImageCode]
+
+    init(existing: [ImageCode] = []) { self.existing = existing }
+
+    func record(_ call: Call) { calls.withLock { $0.append(call) } }
+
+    func createUpload(filename: String, size: Int, contentType: String, entity: EntityKey) async throws -> ImageUpload {
+        record(.create(filename, size, contentType, entity))
+        return ImageUpload(uploadUrl: URL(string: "https://uploads.example/x")!, imageId: ImageCode("IMG-2345"), key: "k", url: URL(string: "https://images.example/x.jpg")!)
+    }
+
+    func markUploaded(_ id: ImageCode) async throws { record(.mark(id)) }
+
+    func attachImages(_ ids: [ImageCode], to entity: EntityKey, id: String) async throws { record(.attach(ids, entity, id)) }
+
+    func productImageIDs(_ product: ProductCode) async throws -> [ImageCode] {
+        record(.ids(product))
+        return existing
+    }
+
+    func setImageOrder(_ order: [ImageCode], product: ProductCode) async throws { record(.order(order, product)) }
+}
+
+@Suite("PhotoUploader")
+struct PhotoUploaderTests {
+    let image = TestImages.canvas(width: 3000, height: 1500, subject: true)
+
+    @Test func uploadsInTheServerOrderAndOrdersTheCoverSecond() async throws {
+        let service = StubPhotoService(existing: [ImageCode("IMG-0001"), ImageCode("IMG-2345")])
+        let uploader = PhotoUploader(service: service) { data, url, contentType in
+            service.record(.put(url, contentType, data.count))
+        }
+        let steps = Mutex<[PhotoUploader.Step]>([])
+        let outcome = try await uploader.upload(
+            .init(image: image, format: .jpeg, entity: .product, entityID: "PRD-2345", makeCover: true, filenameBase: "shelf"),
+            progress: { step in steps.withLock { $0.append(step) } }
+        )
+        let calls = service.calls.withLock { $0 }
+        #expect(calls.count == 6)
+        guard case .create(let filename, let size, let type, let entity) = calls[0] else { Issue.record("expected create"); return }
+        #expect(filename == "shelf.jpg")
+        #expect(type == "image/jpeg")
+        #expect(entity == .product)
+        #expect(size == outcome.byteCount)
+        guard case .put(_, let putType, let putSize) = calls[1] else { Issue.record("expected put"); return }
+        // The PUT carries exactly the bytes and type that were presigned.
+        #expect(putType == type)
+        #expect(putSize == size)
+        #expect(calls[2] == .mark(ImageCode("IMG-2345")))
+        #expect(calls[3] == .attach([ImageCode("IMG-2345")], .product, "PRD-2345"))
+        #expect(calls[4] == .ids(ProductCode("PRD-2345")))
+        // New first, existing after, the new id not repeated.
+        #expect(calls[5] == .order([ImageCode("IMG-2345"), ImageCode("IMG-0001")], ProductCode("PRD-2345")))
+        #expect(steps.withLock { $0 } == PhotoUploader.Step.allCases)
+        #expect(outcome.imageID == ImageCode("IMG-2345"))
+        // 3000 px wide goes down to 2048.
+        #expect(outcome.byteCount > 0)
+    }
+
+    @Test func withoutMakeCoverThereIsOnePatch() async throws {
+        let service = StubPhotoService()
+        let uploader = PhotoUploader(service: service) { _, _, _ in }
+        _ = try await uploader.upload(.init(image: image, entity: .purchase, entityID: "PUR-2345"))
+        let calls = service.calls.withLock { $0 }
+        #expect(calls.count == 3)
+        #expect(calls[1] == .mark(ImageCode("IMG-2345")))
+        #expect(calls[2] == .attach([ImageCode("IMG-2345")], .purchase, "PUR-2345"))
+    }
+
+    @Test func aFailedPutStopsBeforeMarking() async throws {
+        let service = StubPhotoService()
+        let uploader = PhotoUploader(service: service) { _, _, _ in
+            throw CubbyAPIError(status: 403, operationID: "presigned.put", detail: nil)
+        }
+        await #expect(throws: CubbyAPIError.self) {
+            _ = try await uploader.upload(.init(image: image, entity: .product, entityID: "PRD-2345"))
+        }
+        #expect(service.calls.withLock { $0 }.count == 1)
+    }
+
+    @Test func imageUploadDecodes() throws {
+        let upload = try Fixtures.decode(SuccessEnvelope<ImageUpload>.self, from: "image-upload.json").data
+        #expect(upload.imageId == ImageCode("IMG-2345"))
+        #expect(upload.uploadUrl.host() == "uploads.example")
+    }
+
+    @Test func acceptsImagesFollowsTheGeneratedTable() {
+        #expect(EntityCatalog[.product].acceptsImages)
+        #expect(EntityCatalog[.purchase].acceptsImages)
+        #expect(!EntityCatalog[.task].acceptsImages)
+    }
+}
+
+/// Its own protocol class, not `StubURLProtocol`: suites run in parallel, and a handler shared
+/// through one static would leak between this suite and the raw client's.
+final class PresignedStubProtocol: URLProtocol, @unchecked Sendable {
+    typealias Handler = @Sendable (URLRequest) -> (Int, Data)
+    static let handler = Mutex<Handler?>(nil)
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        guard let handler = Self.handler.withLock({ $0 }) else {
+            client?.urlProtocol(self, didFailWithError: URLError(.badServerResponse))
+            return
+        }
+        let (status, data) = handler(request)
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: "HTTP/1.1", headerFields: [:])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+
+    static func session() -> URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [PresignedStubProtocol.self]
+        return URLSession(configuration: configuration)
+    }
+}
+
+@Suite("PresignedUpload", .serialized)
+struct PresignedUploadTests {
+    @Test func putSendsOnlyContentTypeAndTheBytes() async throws {
+        let seen = Mutex<(method: String?, headers: [String: String], length: Int)?>(nil)
+        PresignedStubProtocol.handler.withLock { handler in
+            handler = { request in
+                var length = request.httpBody?.count ?? 0
+                if length == 0, let stream = request.httpBodyStream {
+                    stream.open()
+                    var buffer = [UInt8](repeating: 0, count: 4096)
+                    while stream.hasBytesAvailable {
+                        let read = stream.read(&buffer, maxLength: buffer.count)
+                        if read <= 0 { break }
+                        length += read
+                    }
+                    stream.close()
+                }
+                seen.withLock { $0 = (request.httpMethod, request.allHTTPHeaderFields ?? [:], length) }
+                return (200, Data())
+            }
+        }
+        let bytes = Data(repeating: 7, count: 1234)
+        try await PresignedUpload.put(bytes, to: URL(string: "https://uploads.example/x")!, contentType: "image/jpeg", session: PresignedStubProtocol.session())
+        let request = try #require(seen.withLock { $0 })
+        #expect(request.method == "PUT")
+        #expect(request.headers["Content-Type"] == "image/jpeg")
+        #expect(request.headers["Authorization"] == nil)
+        #expect(request.headers["x-api-key"] == nil)
+        #expect(request.length == 1234)
+    }
+
+    @Test func rejectedPutThrowsWithTheStatus() async throws {
+        PresignedStubProtocol.handler.withLock { $0 = { _ in (403, Data("<xml>AccessDenied</xml>".utf8)) } }
+        do {
+            try await PresignedUpload.put(Data([1]), to: URL(string: "https://uploads.example/x")!, contentType: "image/png", session: PresignedStubProtocol.session())
+            Issue.record("expected a throw")
+        } catch let error as CubbyAPIError {
+            #expect(error.status == 403)
+            #expect(error.detail == nil)
+        }
+    }
+}

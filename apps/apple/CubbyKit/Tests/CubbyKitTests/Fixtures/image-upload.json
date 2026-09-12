@@ -1,0 +1,9 @@
+{
+  "ok": true,
+  "data": {
+    "uploadUrl": "https://uploads.example/bucket/products/IMG-2345?X-Amz-Signature=sample",
+    "imageId": "IMG-2345",
+    "key": "products/IMG-2345.jpg",
+    "url": "https://images.example/products/IMG-2345.jpg"
+  }
+}
