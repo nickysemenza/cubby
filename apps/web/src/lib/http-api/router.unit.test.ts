@@ -1,4 +1,3 @@
-import { Validator } from "@cfworker/json-schema";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -155,14 +154,14 @@ describe("HTTP contract", () => {
     const page = list.parameters.find((parameter) => parameter.name === "page");
     expect(page).toMatchObject({ in: "query" });
     expect(page).not.toHaveProperty("required", true);
-    const pageSchema =
-      page && "schema" in page
-        ? page.schema
-        : page?.content?.["application/json"]?.schema;
-    if (!pageSchema) throw new Error("page parameter has no schema");
-    const validator = new Validator(pageSchema, "4");
-    expect(validator.validate(1).valid).toBe(true);
-    expect(validator.validate(0).valid).toBe(false);
+    // Parameters carry a plain `schema`, never JSON `content`, and document
+    // the logical type the query projection coerces to.
+    expect(page).toMatchObject({
+      style: "form",
+      explode: true,
+      schema: { type: "integer", minimum: 1 },
+    });
+    expect(page).not.toHaveProperty("content");
     expect(document.paths["/api/v1/recipes/{id}"].get.parameters).toEqual([
       expect.objectContaining({ in: "path", name: "id", required: true }),
     ]);

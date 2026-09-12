@@ -4,10 +4,22 @@ import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
 import { getCookies } from "better-auth/cookies";
 import type { HttpMetadata } from "../src/lib/http-api/router";
+import { discriminatorOf } from "../src/lib/http-api/wire";
 import {
+  collapseNullableUnions,
+  isObjectSchema,
+  type JsonSchema,
+  collapseSingleAllOf,
+  dropRequiredWithoutProperties,
+  fillDiscriminatorMappings,
+  flattenNestedNullables,
   foldPositionalDuplicates,
+  inlineNullableComponents,
   inlinePrimitiveComponents,
   mapSchemas,
+  nameJsonValues,
+  optionalNullableProperties,
+  residualNullPointers,
 } from "./openapi/document-passes";
 import { pascal, registerSchemaNames } from "./openapi/schema-names";
 
@@ -22,10 +34,6 @@ const { wireProjection, wireRegistry } =
 
 checkHttpRoutes(httpContract);
 
-type JsonSchema = z.core.JSONSchema.JSONSchema;
-// JSON Schema allows bare booleans; OpenAPI parameters need object schemas.
-const isObjectSchema = (value: JsonSchema | boolean): value is JsonSchema =>
-  value !== true && value !== false;
 const registries = {
   input: z.registry<{ id: string }>(),
   output: z.registry<{ id: string }>(),
@@ -60,7 +68,7 @@ for (const [name, domain] of named) {
 const inlineSchema = (schema: z.ZodType, io: "input" | "output") =>
   inlineDefinitions(
     z.toJSONSchema(schema, {
-      target: "openapi-3.0",
+      target: "draft-2020-12",
       io,
       reused: "inline",
       unrepresentable: "any",
@@ -70,17 +78,14 @@ const inlineSchema = (schema: z.ZodType, io: "input" | "output") =>
 
 const stripMockHints: NonNullable<
   Parameters<typeof z.toJSONSchema>[1]
->["override"] = ({ jsonSchema }) => {
+>["override"] = ({ zodSchema, jsonSchema }) => {
   delete jsonSchema.mock;
   delete jsonSchema.mockValue;
-  if (jsonSchema.nullable && !jsonSchema.type) {
-    const { nullable: _nullable, ...inner } = jsonSchema;
-    for (const key of Object.keys(jsonSchema)) delete jsonSchema[key];
-    jsonSchema.anyOf = [
-      inner,
-      { type: "string", nullable: true, enum: [null] },
-    ];
-  }
+  // Zod emits `oneOf` for a discriminated union but no discriminator; the
+  // mapping is filled once every member is a named component.
+  const key = discriminatorOf(zodSchema);
+  if (key !== undefined && jsonSchema.oneOf !== undefined)
+    jsonSchema.discriminator = { propertyName: key };
 };
 
 /**
@@ -129,46 +134,20 @@ function inlineDefinitions(schema: JsonSchema): JsonSchema {
 }
 
 /**
- * Query parameters must be listed individually, so a query schema is inlined
- * as one object; a union of objects (the entity list) merges its variants into
- * a single object whose members are required only when every variant needs
- * them.
+ * Query and path parameters are listed individually, so their schema must be
+ * one object: the query projection guarantees that for every GET route.
  */
 function parameterObject(schema: JsonSchema): JsonSchema {
-  const variants = (schema.oneOf ?? schema.anyOf ?? [schema]).map((variant) =>
-    isObjectSchema(variant) ? variant : {},
-  );
-  if (variants.some((variant) => variant.type !== "object"))
-    throw new Error("HTTP query parameters must be objects");
-  const names = new Set(
-    variants.flatMap((variant) => Object.keys(variant.properties ?? {})),
-  );
+  if (schema.type !== "object" || schema.anyOf || schema.oneOf)
+    throw new Error("HTTP parameters must be one object schema");
   return {
     type: "object",
-    required: [...names].filter((name) =>
-      variants.every((variant) => variant.required?.includes(name)),
-    ),
-    properties: Object.fromEntries(
-      [...names].map((name) => {
-        const schemas = variants.flatMap((variant) => {
-          const property = variant.properties?.[name];
-          return property !== undefined && isObjectSchema(property)
-            ? [property]
-            : [];
-        });
-        const [single] = schemas;
-        return [
-          name,
-          schemas.length === 1 && single !== undefined
-            ? single
-            : { anyOf: schemas },
-        ];
-      }),
-    ),
+    required: schema.required ?? [],
+    properties: schema.properties ?? {},
   };
 }
 
-// SAFETY: Zod emits OpenAPI 3.0 schemas; its broader JSON Schema type also
+// SAFETY: Zod emits JSON Schema 2020-12 objects; its broader type also
 // permits booleans, which no route schema produces.
 const asSchemaObject = (schema: JsonSchema) =>
   schema as NonNullable<ReturnType<SchemaTransformerSync>>;
@@ -221,13 +200,28 @@ const document = generateOpenApi(
   },
   {
     setOperationId: "concatenated-path",
-    jsonQuery: true,
     operationMapper: (operation, route) => {
       const metadata = httpMetadataSchema.parse(route.metadata);
       operation.tags = [metadata.entity ?? metadata.operation.split(".")[0]!];
+      // Query parameters are plain form values: repeat a key for a list.
+      for (const parameter of operation.parameters ?? [])
+        if (!("$ref" in parameter) && parameter.in === "query")
+          Object.assign(parameter, { style: "form", explode: true });
+      // One `default` error response instead of seven numeric ones: a client
+      // that treats any status >= 400 as a failure needs one error type, and
+      // per-status cases cost a generated client a case each. The server
+      // still returns the real status codes (405 too, with the same body).
+      const errors = Object.entries(operation.responses).filter(
+        ([status]) => Number(status) >= 400,
+      );
+      const [, first] = errors[0] ?? [];
+      if (first !== undefined) {
+        for (const [status] of errors) delete operation.responses[status];
+        operation.responses.default = { ...first, description: "Error" };
+      }
       if (metadata.resource === "list")
         operation.description =
-          "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters; plain strings stay literal and every other value is JSON-encoded. Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.";
+          "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.";
       if (metadata.resource === "create") {
         const response = operation.responses[201];
         if (response && !("$ref" in response))
@@ -242,8 +236,15 @@ const document = generateOpenApi(
     },
     schemaTransformer: ({ schema, appRoute, type }) => {
       if (!(schema instanceof z.ZodType) || type === "header") return null;
+      // A query schema is the coercing projection: emitted on its output
+      // side so a parameter documents the logical type (integer, boolean,
+      // array) rather than the text it accepts.
       if (type === "query" || type === "path")
-        return asSchemaObject(parameterObject(inlineSchema(schema, "input")));
+        return asSchemaObject(
+          parameterObject(
+            inlineSchema(schema, type === "query" ? "output" : "input"),
+          ),
+        );
       const io = type === "response" ? "output" : "input";
       const registry = registries[io];
       // Names: a named export's projection, a schema carrying its own
@@ -270,7 +271,7 @@ const nameSharedDefinitions = (schemas: Record<string, JsonSchema>) =>
           : {
               ...node,
               $ref: node.$ref.replace(
-                /(input|output)___shared#\/definitions\//u,
+                /(input|output)___shared#\/\$defs\//u,
                 "$1_",
               ),
             },
@@ -281,7 +282,7 @@ const nameSharedDefinitions = (schemas: Record<string, JsonSchema>) =>
 const emitted: Record<string, JsonSchema> = {};
 for (const io of ["input", "output"] as const) {
   const { schemas } = z.toJSONSchema(registries[io], {
-    target: "openapi-3.0",
+    target: "draft-2020-12",
     io,
     reused: "ref",
     unrepresentable: "any",
@@ -291,7 +292,7 @@ for (const io of ["input", "output"] as const) {
   });
   for (const [id, schema] of Object.entries(schemas)) {
     if (id === "__shared") {
-      for (const [name, definition] of Object.entries(schema.definitions ?? {}))
+      for (const [name, definition] of Object.entries(schema.$defs ?? {}))
         emitted[`${io}_${name}`] = definition;
     } else emitted[id] = schema;
   }
@@ -299,19 +300,52 @@ for (const io of ["input", "output"] as const) {
 // What the export walk could not name: shared instances a module never
 // exported. Bare primitives are inlined; bodies equal to a named component
 // (a `.describe()` clone) fold onto it.
-const components = foldPositionalDuplicates(
-  inlinePrimitiveComponents(nameSharedDefinitions(emitted)),
+const passes = [
+  nameSharedDefinitions,
+  inlinePrimitiveComponents,
+  foldPositionalDuplicates,
+  nameJsonValues,
+  collapseSingleAllOf,
+  flattenNestedNullables,
+  inlineNullableComponents,
+  collapseNullableUnions,
+  optionalNullableProperties,
+  dropRequiredWithoutProperties,
+  fillDiscriminatorMappings,
+];
+const components = passes.reduce((current, pass) => pass(current), emitted);
+/**
+ * Nullability the passes above could not express in a form a generated
+ * client keeps. Each pointer here is a decision, not a bucket.
+ */
+const RESIDUAL_NULL_ALLOWLIST = new Set<string>([
+  // `z.json()`: null is one of the values a JSON value may be.
+  "#/components/schemas/JsonValue",
+  // A map whose values may be null; a generated client reads the map type
+  // and drops the value nullability, which the product summaries tolerate.
+  "#/components/schemas/ProductFoodSummariesOut/additionalProperties",
+]);
+const residual = residualNullPointers(components).filter(
+  (pointer) => !RESIDUAL_NULL_ALLOWLIST.has(pointer),
 );
+if (residual.length > 0)
+  throw new Error(
+    `Nullable schema a generated client would drop:\n${residual.join("\n")}`,
+  );
 
 const serialized = `${JSON.stringify(
-  { ...document, components: { ...document.components, schemas: components } },
+  {
+    ...document,
+    openapi: "3.1.0",
+    components: { ...document.components, schemas: components },
+  },
   (key, value) => {
-    if (key === "$id") return undefined;
+    if (key === "$id" || key === "$schema") return undefined;
     if (key === "$ref")
       return z
         .string()
         .parse(value)
-        .replace(/(input|output)___shared#\/definitions\//u, "$1_");
+        .replace(/(input|output)___shared#\/\$defs\//u, "$1_");
     return value;
   },
   2,

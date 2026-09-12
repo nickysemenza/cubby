@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 
+import { childSchemas, discriminatorOf } from "../../src/lib/http-api/wire";
+
 /**
  * OpenAPI components are named after the Zod schemas the packages export:
  * `productTopLevelOut` becomes `ProductTopLevelOut`. Every exported schema
@@ -110,5 +112,67 @@ export async function registerSchemaNames(
       z.globalRegistry.add(value, { ...z.globalRegistry.get(value), id });
     }
   }
+  const seen = new Set<z.ZodType>();
+  for (const [id, schema] of named)
+    nameUnionMembers(schema, id, [], seen, named, claim);
   return named;
+}
+
+/** The constant a member's tag property carries, read off its JSON Schema. */
+const literalTag = (option: z.ZodType, key: string): string | undefined => {
+  const tag = childSchemas(option).find(([segment]) => segment === key)?.[1];
+  if (tag === undefined) return undefined;
+  const json = z.toJSONSchema(tag, { unrepresentable: "any" });
+  const value = z
+    .union([z.string(), z.number(), z.boolean()])
+    .safeParse(json.const ?? json.enum?.[0]).data;
+  return value === undefined ? undefined : String(value);
+};
+
+const structuralSegment = /^(?:innerType|\[|\||&|in$|out$|\(\))/u;
+
+/**
+ * A discriminated union's members must be components for the document's
+ * `discriminator.mapping` to reference them, so an unnamed member is named
+ * after the nearest named ancestor and its tag: `Source` + `url` gives
+ * `SourceUrl`. When two unnamed unions share that ancestor, the property
+ * path from it (`trail`) tells them apart. Walks every named export once.
+ */
+function nameUnionMembers(
+  schema: z.ZodType,
+  parent: string,
+  trail: readonly string[],
+  seen: Set<z.ZodType>,
+  named: ReadonlyMap<string, z.ZodType>,
+  claim: (id: string, schema: z.ZodType, source: string) => void,
+): void {
+  if (seen.has(schema)) return;
+  seen.add(schema);
+  const key = discriminatorOf(schema);
+  for (const [segment, child] of childSchemas(schema)) {
+    if (key !== undefined && z.globalRegistry.get(child)?.id === undefined) {
+      const tag = literalTag(child, key);
+      if (tag !== undefined) {
+        const bare = `${parent}${pascal(tag)}`;
+        const taken = named.get(bare);
+        const id =
+          taken === undefined || taken === child
+            ? bare
+            : `${parent}${trail.map(pascal).join("")}${pascal(tag)}`;
+        claim(id, child, `${parent}${trail.join(".")}${segment}`);
+        z.globalRegistry.add(child, { ...z.globalRegistry.get(child), id });
+      }
+    }
+    const childId = z.globalRegistry.get(child)?.id;
+    nameUnionMembers(
+      child,
+      childId ?? parent,
+      childId !== undefined || structuralSegment.test(segment)
+        ? []
+        : [...trail, segment],
+      seen,
+      named,
+      claim,
+    );
+  }
 }

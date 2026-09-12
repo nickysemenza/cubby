@@ -149,6 +149,7 @@ interface WalkableDef extends z.core.$ZodTypeDef {
   in?: z.ZodType;
   out?: z.ZodType;
   coerce?: boolean;
+  discriminator?: string;
   values?: readonly (
     | string
     | number
@@ -595,3 +596,43 @@ export const wireProjection = (
   schema: z.ZodType,
   io: WireIo,
 ): z.ZodType | undefined => memo.get(schema)?.[io];
+
+/**
+ * The direct child schemas of a node, by path segment, in walker order. Used
+ * by the OpenAPI emitter to reach discriminated-union members without
+ * re-implementing the def layout.
+ */
+export const childSchemas = (
+  schema: z.ZodType,
+): readonly (readonly [string, z.ZodType])[] => {
+  const def = defOf(schema);
+  const entries: (readonly [string, z.ZodType])[] = [];
+  const push = (segment: string, value: z.ZodType | null | undefined) => {
+    if (value instanceof z.ZodType) entries.push([segment, value]);
+  };
+  push("innerType", def.innerType);
+  push("[]", def.element);
+  for (const [key, value] of Object.entries(def.shape ?? {})) push(key, value);
+  push("[catchall]", def.catchall);
+  (def.items ?? []).forEach((item, index) => push(`[${index}]`, item));
+  push("[rest]", def.rest);
+  push("[key]", def.keyType);
+  push("[value]", def.valueType);
+  (def.options ?? []).forEach((option, index) => push(`|${index}`, option));
+  push("&left", def.left);
+  push("&right", def.right);
+  push("in", def.in);
+  push("out", def.out);
+  if (def.getter) push("()", def.getter());
+  return entries;
+};
+
+/** The discriminator key of a `z.discriminatedUnion`, if the node is one. */
+export const discriminatorOf = (
+  schema: z.core.$ZodType,
+): string | undefined => {
+  // SAFETY: same def read as `defOf`, on the core type the JSON Schema
+  // override hands over; only `type` and `discriminator` are consulted.
+  const def = schema._zod.def as WalkableDef;
+  return def.type === "union" ? def.discriminator : undefined;
+};

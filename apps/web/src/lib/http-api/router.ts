@@ -37,6 +37,8 @@ export const httpMetadataSchema = z.object({
   operation: z.string(),
   input: z.enum(["object", "wrapped", "none", "null"]).optional(),
   transport: z.enum(["get", "post"]).optional(),
+  /** The operation answers `null` for "no such thing"; HTTP answers 404. */
+  nullableOutput: z.boolean().optional(),
   entity: z.string().optional(),
   resource: z.enum(["list", "get", "create", "update", "delete"]).optional(),
 });
@@ -109,6 +111,22 @@ const rpcInput = <I extends z.ZodTypeAny>(input: I, io: "query" | "input") => {
 const rpcPath = (domain: string, member: string) => `/${domain}/${member}`;
 
 /**
+ * A query whose output is `X | null` documents `X` and turns null into a 404,
+ * as the resource detail routes do: a response body that may be `null` is
+ * something generated clients cannot express.
+ */
+const rpcOutput = <O extends z.ZodTypeAny>(output: O) => {
+  const inner = output instanceof z.ZodNullable ? output.unwrap() : undefined;
+  const concrete = inner instanceof z.ZodType ? inner : output;
+  // SAFETY: the response is the output with null removed; the handler maps a
+  // null result to 404 before any body is written.
+  const response = toWire(concrete, "output") as z.ZodType<
+    Json<NonNullable<z.output<O>>>
+  >;
+  return { nullable: inner !== undefined, response };
+};
+
+/**
  * A flat-input `query` contract member as `GET /<domain>/<member>` with one
  * query parameter per field. The registry generator picks this helper with
  * `isFlatQueryInput`; the assertion keeps a hand-written route honest.
@@ -124,15 +142,17 @@ export const rpcQuery = <I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
   )
     throw new Error(`${domain}.${member} needs a POST body: use rpcQueryPost`);
   const { carrier, wire } = rpcInput(operation.input, "query");
+  const { nullable, response } = rpcOutput(operation.output);
   return {
     method: "GET" as const,
     path: rpcPath(domain, member),
     query: wire,
-    responses: { 200: toWire(operation.output, "output") },
+    responses: { 200: response },
     metadata: {
       operation: `${domain}.${member}`,
       input: carrier,
       transport: "get",
+      nullableOutput: nullable,
     } satisfies HttpMetadata,
   };
 };
@@ -148,15 +168,17 @@ export const rpcQueryPost = <I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
   operation: QueryContract<I, O>,
 ) => {
   const { carrier, wire } = rpcInput(operation.input, "input");
+  const { nullable, response } = rpcOutput(operation.output);
   return {
     method: "POST" as const,
     path: rpcPath(domain, member),
     body: wire,
-    responses: { 200: toWire(operation.output, "output") },
+    responses: { 200: response },
     metadata: {
       operation: `${domain}.${member}`,
       input: carrier,
       transport: "post",
+      nullableOutput: nullable,
     } satisfies HttpMetadata,
   };
 };

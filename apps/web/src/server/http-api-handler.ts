@@ -282,7 +282,10 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
           status: errorStatus.parse(statuses.get(result.error.code)),
           body: result.error,
         };
-      if (metadata.resource === "get" && result.data === null)
+      if (
+        (metadata.resource === "get" || metadata.nullableOutput === true) &&
+        result.data === null
+      )
         return {
           status: StatusCodes.NOT_FOUND,
           body: errorBody("NOT_FOUND", "Resource not found"),
