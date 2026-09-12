@@ -104,6 +104,18 @@ const metadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /**
+       * Orders generated list columns independently of model order (which
+       * also drives form field order, so it cannot be re-sequenced). Ordered
+       * columns come first, ascending; the rest keep model order.
+       */
+      listOrder: z
+        .number()
+        .int()
+        .nonnegative()
+        .nullable()
+        .optional()
+        .default(null),
       detailSection: nonEmptyString().optional().default("overview"),
       /** List column width bucket; the shared table maps it to a class. */
       width: z

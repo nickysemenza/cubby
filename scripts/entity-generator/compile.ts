@@ -141,6 +141,7 @@ const compileFieldModel = (
         format: field.display.format ?? null,
         mobile: field.display.mobile ?? null,
         detailOrder: field.display.detailOrder,
+        listOrder: field.display.listOrder,
         list: field.display.list,
         detail: field.display.detail,
       },

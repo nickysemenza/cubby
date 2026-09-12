@@ -611,6 +611,25 @@ describe("typed entity compiler", () => {
     ).toEqual(["createdAt", "updatedAt"]);
   });
 
+  it("carries display.listOrder and validates it", () => {
+    const withListOrder = (listOrder: number | undefined) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          model: {
+            ...model,
+            fields: [
+              { key: "name", kind: "text", display: { list: true, listOrder } },
+            ],
+          },
+        },
+      ])[0]?.fieldModel.fields[0]?.display.listOrder;
+    expect(withListOrder(2)).toBe(2);
+    expect(withListOrder(undefined)).toBeNull();
+    expect(() => withListOrder(-1)).toThrow("Too small");
+    expect(() => withListOrder(1.5)).toThrow("expected int");
+  });
+
   it("validates stored filter shapes against the storage model", () => {
     const fields = [
       { key: "name", kind: "text" },

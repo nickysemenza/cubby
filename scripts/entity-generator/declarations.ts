@@ -115,6 +115,7 @@ export type EntityField = Readonly<{
     columnId: string | null;
     standard: "name" | "image" | null;
     detailOrder: number | null;
+    listOrder: number | null;
     detailSection: string;
     width: "xs" | "sm" | "md" | "lg" | null;
     format: "currency" | "plainDate" | "timestamp" | "external-link" | null;

@@ -36,6 +36,18 @@ type DisplaySurface = "list" | "detail";
 const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
   entityFieldModels[entity].fields.filter((field) => field.display[surface]);
 
+/** Declared `listOrder` first, ascending; unordered fields keep model order. */
+const orderedListFields = (entity: Entity): DisplayField[] =>
+  entityDisplayFields(entity, "list")
+    .map((field, index) => ({ field, index }))
+    .sort(
+      (left, right) =>
+        (left.field.display.listOrder ?? Number.MAX_SAFE_INTEGER) -
+          (right.field.display.listOrder ?? Number.MAX_SAFE_INTEGER) ||
+        left.index - right.index,
+    )
+    .map(({ field }) => field);
+
 /**
  * Buckets a declared `display.width` into the shared table's fixed-layout
  * class. Four buckets can't reproduce every hand-tuned pixel width in the app
@@ -295,7 +307,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
   const sortableColumnIds: readonly string[] = sortRoster?.fields ?? [];
   return createCubbyColumnCollection<TRecord>((add) => {
     const usedOverrides = new Set<string>();
-    for (const field of entityDisplayFields(entity, "list")) {
+    for (const field of orderedListFields(entity)) {
       if (field.display.standard) continue;
       const columnId = field.display.columnId ?? field.key;
       const defaultEnableSorting = sortableColumnIds.includes(columnId);
@@ -327,6 +339,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
       });
       if (overridden) continue;
       if (
+        field.readKey === null ||
         field.reference ||
         field.kind === "json" ||
         field.kind === "identifier"
