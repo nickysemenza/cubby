@@ -23,13 +23,24 @@ struct CaptureView: View {
             let capture = CaptureModel(client: model.client)
             self.capture = capture
             await capture.loadLocations()
+            applyPendingLocation()
         }
+        .onChange(of: model.navigator.pendingCaptureLocation) { applyPendingLocation() }
         .sheet(isPresented: $pickingLocation) {
             if let capture { LocationPickerSheet(capture: capture) }
         }
         .sheet(isPresented: $showingStrays) {
             if let capture { StraysView(session: capture.session) }
         }
+    }
+}
+
+extension CaptureView {
+    /// A `cubby://capture?location=` link lands here; it only applies once the options are
+    /// loaded, so a link that arrives first waits for the load above.
+    fileprivate func applyPendingLocation() {
+        guard let capture, !capture.locations.isEmpty else { return }
+        if let id = model.navigator.takeCaptureLocation() { capture.select(id: id) }
     }
 }
 

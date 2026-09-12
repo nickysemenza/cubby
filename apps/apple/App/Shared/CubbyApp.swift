@@ -14,6 +14,9 @@ struct CubbyApp: App {
                 // system chrome never goes dark over a porcelain canvas; dark tokens come later.
                 .preferredColorScheme(.light)
                 .task { await model.restoreSession() }
+                .onOpenURL { url in
+                    if let link = CubbyLink(url: url) { model.navigator.open(link) }
+                }
         }
         #if os(macOS)
         Settings {

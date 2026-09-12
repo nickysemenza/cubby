@@ -20,6 +20,8 @@ struct SectionView: View {
             switch route {
             case .entityList(let key): EntityListView(key: key)
             case .entityDetail(let key, let id): EntityDetailView(key: key, id: id)
+            case .audit(let locationID): AuditRootView(locationID: locationID)
+            case .needsPhoto(let locationID): NeedsPhotoView(locationID: locationID)
             }
         }
     }

@@ -24,6 +24,7 @@ final class AppModel {
     private(set) var client: CubbyClient
     private(set) var auth: AuthFlow
     private(set) var credentials: CredentialProvider
+    let navigator = Navigator()
     var lastError: String?
 
     var baseURL: URL {
