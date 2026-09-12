@@ -18,6 +18,7 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 
@@ -47,6 +48,18 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
   ) : undefined;
 
 const tasksRoute = getRouteApi("/_authenticated/tasks/");
+
+/**
+ * `dueEndDate` and `sortOrder` are declared `list: true` (so column building
+ * has somewhere to point them and the "Columns" menu can surface them), but
+ * neither was ever visible in this table before this migration — keep it
+ * that way. Module-level: this object sits in `useEntityList`'s merged-
+ * visibility memo, so an inline literal would rebuild it every render.
+ */
+const TASK_INITIAL_COLUMN_VISIBILITY = {
+  dueEndDate: false,
+  sortOrder: false,
+};
 interface TaskListProps {
   /** Actions to display in the table toolbar (e.g., the "New Task" button). */
   actions?: ReactNode;
@@ -81,87 +94,102 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
   // The status / due / trade columns come from the shared factories in
   // `~/app/projects/shared.tsx`, also used by the embedded `TaskList` on the
   // project detail page — so the two can't drift. This page passes its own
-  // mobile projections; the project + name columns stay inline here.
+  // mobile projections; the name column stays standard.
+  //
+  // All six are declared `list: true` on the task entity but rendered
+  // specially here (inline-editable selects/dates, linked relation labels),
+  // so each is an override matched by column id rather than a generic
+  // scalar — `docs/entities.md`'s "declaration wins" column-building rule.
+  // `project` / `subjectProduct` / `parentTask` keep those existing column
+  // ids via `display.columnId` on `projectId` / `subjectProductId` /
+  // `parentTaskId` (persisted layouts, filter bindings, and sort ids can't
+  // silently rename).
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<TaskOut>((add) => {
-        add(
-          taskStatusColumn(
-            columnHelper,
-            async (status, task) => {
-              await updateTaskMutation.mutateAsync({
-                id: task.id,
-                data: { status },
-              });
-            },
-            { mobile: { slot: "subtitle", priority: 10 } },
-          ),
-        );
-        add(
-          createProjectLinkColumn(columnHelper, {
-            className: "w-40",
-            mobile: { slot: "meta", priority: 30, interactive: true },
-            editable: {
-              onSave: async (newProjectId, task) => {
-                await updateTaskMutation.mutateAsync({
-                  id: task.id,
-                  data: { projectId: newProjectId },
-                });
-              },
-            },
-          }),
-        );
-        add(
-          createSubjectProductLinkColumn(columnHelper, {
-            className: "w-40",
-            mobile: { slot: "meta", priority: 35, interactive: true },
-            editable: {
-              onSave: async (subjectProductId, task) => {
-                await updateTaskMutation.mutateAsync({
-                  id: task.id,
-                  data: { subjectProductId },
-                });
-              },
-            },
-          }),
-        );
-        add(
-          createParentLinkColumn(
-            columnHelper,
-            "task",
-            "parentTaskId",
-            "parentTaskName",
-            {
-              filterConfig: manifestFilterConfig("task", "parentTask", {
-                parentTask: parentOptions,
+        createEntityDisplayColumns(
+          "task",
+          columnHelper,
+          createCubbyColumnCollection<TaskOut>((add) => {
+            add(
+              taskStatusColumn(
+                columnHelper,
+                async (status, task) => {
+                  await updateTaskMutation.mutateAsync({
+                    id: task.id,
+                    data: { status },
+                  });
+                },
+                { mobile: { slot: "subtitle", priority: 10 } },
+              ),
+            );
+            add(
+              createProjectLinkColumn(columnHelper, {
+                className: "w-40",
+                mobile: { slot: "meta", priority: 30, interactive: true },
+                editable: {
+                  onSave: async (newProjectId, task) => {
+                    await updateTaskMutation.mutateAsync({
+                      id: task.id,
+                      data: { projectId: newProjectId },
+                    });
+                  },
+                },
               }),
-            },
-          ),
-        );
-        add(
-          taskDueColumn(
-            columnHelper,
-            async (dueDate, task) => {
-              await updateTaskMutation.mutateAsync({
-                id: task.id,
-                data: { dueDate },
-              });
-            },
-            { mobile: { slot: "meta", priority: 40, interactive: true } },
-          ),
-        );
-        add(
-          taskTradeColumn(
-            columnHelper,
-            async (trade, task) => {
-              await updateTaskMutation.mutateAsync({
-                id: task.id,
-                data: { trade },
-              });
-            },
-            { mobile: { slot: "meta", priority: 50 } },
-          ),
-        );
+            );
+            add(
+              createSubjectProductLinkColumn(columnHelper, {
+                className: "w-40",
+                mobile: { slot: "meta", priority: 35, interactive: true },
+                editable: {
+                  onSave: async (subjectProductId, task) => {
+                    await updateTaskMutation.mutateAsync({
+                      id: task.id,
+                      data: { subjectProductId },
+                    });
+                  },
+                },
+              }),
+            );
+            add(
+              createParentLinkColumn(
+                columnHelper,
+                "task",
+                "parentTaskId",
+                "parentTaskName",
+                {
+                  filterConfig: manifestFilterConfig("task", "parentTask", {
+                    parentTask: parentOptions,
+                  }),
+                },
+              ),
+            );
+            add(
+              taskDueColumn(
+                columnHelper,
+                async (dueDate, task) => {
+                  await updateTaskMutation.mutateAsync({
+                    id: task.id,
+                    data: { dueDate },
+                  });
+                },
+                { mobile: { slot: "meta", priority: 40, interactive: true } },
+              ),
+            );
+            add(
+              taskTradeColumn(
+                columnHelper,
+                async (trade, task) => {
+                  await updateTaskMutation.mutateAsync({
+                    id: task.id,
+                    data: { trade },
+                  });
+                },
+                { mobile: { slot: "meta", priority: 50 } },
+              ),
+            );
+          }),
+        ).visit(add);
       }),
     // oxlint-disable-next-line react/exhaustive-deps -- The mutation wrapper changes identity while its operation contract remains stable.
     [columnHelper, parentOptions],
@@ -206,6 +234,7 @@ export function TaskList({ actions, initialSearch }: TaskListProps) {
       queryOptions={entityListFor("task").listQueryPlan}
       filterOptions={projectFilterOptions}
       columns={columns}
+      initialColumnVisibility={TASK_INITIAL_COLUMN_VISIBILITY}
       nameEditable={nameEditable}
       nameSuffix={subtaskCountSuffix}
       tableStateOptions={tableStateOptions}

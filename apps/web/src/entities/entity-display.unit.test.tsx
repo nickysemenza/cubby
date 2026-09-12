@@ -413,15 +413,10 @@ describe("declared entity displays", () => {
         "task",
         helper,
         createCubbyColumnCollection((add) => {
-          // Required: these are identifier/reference fields, which the
-          // auto-render path always rejects.
-          for (const id of [
-            "projectId",
-            "subjectProductId",
-            "parentTaskId",
-            "blockedByIds",
-            "blockingIds",
-          ]) {
+          // Required: these are reference fields, which the auto-render
+          // path always rejects. Their column ids are the declared
+          // `display.columnId` aliases, not the field keys.
+          for (const id of ["project", "subjectProduct", "parentTask"]) {
             add(helper.display({ id, cell: () => null }));
           }
           // "trade" IS in `generatedEntitySort.task.fields`, but this
@@ -460,9 +455,11 @@ describe("declared entity displays", () => {
         interactive: true,
       });
       expect(byId.dueDate?.enableSorting).toBe(true);
-      // Overrides for reference fields aren't in the roster at all — they
-      // still get filled in as unsortable (false), not left `undefined`.
-      expect(byId.projectId?.enableSorting).toBe(false);
+      // An override whose declared column id is a roster sort id sorts;
+      // one outside the roster is filled in as unsortable (false), not left
+      // `undefined`.
+      expect(byId.project?.enableSorting).toBe(true);
+      expect(byId.parentTask?.enableSorting).toBe(false);
       // The explicit override on "trade" survives despite the roster saying
       // true for that column id.
       expect(byId.trade?.enableSorting).toBe(false);

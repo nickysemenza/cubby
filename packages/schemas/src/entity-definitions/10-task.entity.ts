@@ -51,7 +51,12 @@ export default defineEntity({
         label: "Project",
         reference: { entity: "project" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, detailOrder: 5 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 5,
+          columnId: "project",
+        },
         validation: {
           read: projectShortcode.nullable(),
           create: projectShortcode.nullable().default(null),
@@ -65,7 +70,12 @@ export default defineEntity({
         label: "For",
         reference: { entity: "product" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true, detail: true, detailOrder: 6 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 6,
+          columnId: "subjectProduct",
+        },
         validation: {
           read: productShortcode.nullable(),
           create: productShortcode.nullable().default(null),
@@ -76,10 +86,10 @@ export default defineEntity({
         key: "parentTaskId",
         kind: "identifier",
         nullable: true,
-        label: "Parent Task ID",
+        label: "Parent Task",
         reference: { entity: "task" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: true },
+        display: { list: true, columnId: "parentTask" },
         validation: {
           read: taskShortcode.nullable(),
           create: taskShortcode.nullable().default(null),
@@ -90,6 +100,7 @@ export default defineEntity({
         key: "dueDate",
         kind: "date",
         nullable: true,
+        label: "Due",
         control: { kind: "date", section: "schedule" },
         display: {
           list: true,
@@ -158,7 +169,6 @@ export default defineEntity({
         label: "Blocked By IDs",
         reference: { entity: "task", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
-        display: { list: true },
         validation: {
           read: z.array(taskShortcode),
           create: null,
@@ -178,7 +188,6 @@ export default defineEntity({
         key: "projectName",
         kind: "text",
         nullable: true,
-        display: { list: true },
         validation: {
           read: z.string().nullable(),
           create: null,
@@ -189,7 +198,6 @@ export default defineEntity({
         key: "subjectProductName",
         kind: "text",
         nullable: true,
-        display: { list: true },
         validation: {
           read: z.string().nullable(),
           create: null,
@@ -200,7 +208,6 @@ export default defineEntity({
         key: "parentTaskName",
         kind: "text",
         nullable: true,
-        display: { list: true },
         validation: {
           read: z.string().nullable(),
           create: null,
@@ -212,7 +219,6 @@ export default defineEntity({
         kind: "identifier",
         label: "Blocking IDs",
         reference: { entity: "task", multiple: true },
-        display: { list: true },
         validation: {
           read: z.array(taskShortcode),
           create: null,
@@ -222,7 +228,6 @@ export default defineEntity({
       {
         key: "subtaskCount",
         kind: "number",
-        display: { list: true },
         validation: {
           read: z.number().int(),
           create: null,
@@ -232,7 +237,6 @@ export default defineEntity({
       {
         key: "doneSubtaskCount",
         kind: "number",
-        display: { list: true },
         validation: {
           read: z.number().int(),
           create: null,
