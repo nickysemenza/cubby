@@ -1,0 +1,101 @@
+# XcodeGen spec for the Cubby native app. `xcodegen generate --spec apps/apple/project.yml`
+# writes Cubby.xcodeproj (gitignored). Two app targets share one template: App/Shared is common,
+# App/iOS and App/macOS hold the platform chrome. All shared logic lives in the local CubbyKit
+# package; the app targets are chrome.
+#
+# The targets are spelled out (not `platform: [iOS, macOS]`) because entitlements differ per
+# platform and must be hand-written files: the macOS sandbox keys are invalid on iOS, and an iOS
+# simulator app carrying them fails to spawn with no error (a hanging `simctl launch`, black screen).
+name: Cubby
+options:
+  bundleIdPrefix: com.nickysemenza
+  createIntermediateGroups: true
+  groupSortPosition: top
+  deploymentTarget:
+    iOS: "26.0"
+    macOS: "26.0"
+  xcodeVersion: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
+    # The xcframework and generated sources come from outside the Xcode build graph.
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    # build-rust.sh produces Apple-silicon slices only (no x86_64 simulator), so a
+    # `generic/platform=iOS Simulator` build must not try to link an Intel slice.
+    "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: Y9A97FXT63
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+packages:
+  CubbyKit:
+    path: CubbyKit
+
+targetTemplates:
+  CubbyApp:
+    type: application
+    sources:
+      - path: App/Shared
+      - path: App/${plat}
+        excludes: ["Cubby.entitlements", "Info.plist"]
+      - path: App/Assets.xcassets
+    info:
+      path: App/${plat}/Info.plist
+      properties:
+        CFBundleDisplayName: Cubby
+        NSCameraUsageDescription: Cubby scans barcodes to add items to a location.
+        NSAppTransportSecurity:
+          NSExceptionDomains:
+            localhost:
+              NSExceptionAllowsInsecureHTTPLoads: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        LSMinimumSystemVersion: "26.0"
+    dependencies:
+      - package: CubbyKit
+        product: CubbyKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby
+        PRODUCT_NAME: Cubby
+        # Hand-written per platform; see the header comment.
+        CODE_SIGN_ENTITLEMENTS: App/${plat}/Cubby.entitlements
+        # App code is MainActor by default (Swift 6.2); CubbyKit deliberately is not.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SUPPORTS_MACCATALYST: NO
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG"
+
+targets:
+  Cubby-iOS:
+    templates: [CubbyApp]
+    templateAttributes:
+      plat: iOS
+    platform: iOS
+  Cubby-macOS:
+    templates: [CubbyApp]
+    templateAttributes:
+      plat: macOS
+    platform: macOS
+
+schemes:
+  Cubby-iOS:
+    build:
+      targets:
+        Cubby-iOS: all
+    run:
+      config: Debug
+  Cubby-macOS:
+    build:
+      targets:
+        Cubby-macOS: all
+    run:
+      config: Debug

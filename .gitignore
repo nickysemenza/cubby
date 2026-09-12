@@ -83,3 +83,12 @@ lcov.info
 
 # Nx project graph and local task metadata
 .nx/
+
+# iOS/macOS native app (apps/apple/) build artifacts
+apps/apple/**/.build/
+apps/apple/**/.swiftpm/
+apps/apple/**/*.xcodeproj/
+apps/apple/**/xcuserdata/
+*.xcuserstate
+apps/apple/.build/
+apps/apple/CubbyKit/Frameworks/

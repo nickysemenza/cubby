@@ -115,6 +115,15 @@ history is the archive. Permanent product constraints live in the
 
 ## Triggered
 
+- **Native iOS/macOS app beyond the proof of concept** — Promote screen porting,
+  App Intents, widgets, and TestFlight once the `apps/apple` vertical slice
+  proves its four unknowns: bearer sign-in against Better Auth, generated
+  `swift-openapi-generator` client sources against Cubby's OpenAPI doc,
+  `cubby-ffi` (UniFFI) ingredient parsing on-device, and VisionKit/Vision
+  barcode + cover-image scanning. See [apps/apple/README.md](../apps/apple/README.md)
+  for build order and ownership; removing the React scanner/PWA share target
+  waits for the native audit flow to reach parity.
+
 - **Exact nutrition source tracing** — Resume when upstream conversion work is in
   scope. Extend `ingredient-parser` reports to retain actual mapping identities,
   directions, and competing mappings from the selected calculation path. Then

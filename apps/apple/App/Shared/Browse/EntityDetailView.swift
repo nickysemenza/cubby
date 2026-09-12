@@ -1,0 +1,406 @@
+import CubbyKit
+import SwiftUI
+
+/// One entity's detail screen. Owns a `GenericEntityDetailModel` created per host, mirroring
+/// `EntityListView`/`CaptureView`.
+struct EntityDetailView: View {
+    let key: EntityKey
+    let id: String
+
+    @Environment(AppModel.self) private var appModel
+    @State private var model: GenericEntityDetailModel?
+
+    private var descriptor: EntityDescriptor { EntityCatalog[key] }
+
+    var body: some View {
+        content
+            .porcelainScreen()
+            .navigationTitle(model?.row?.title ?? descriptor.singular)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .task(id: appModel.host) { await setup() }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let model {
+            switch model.phase {
+            case .idle, .loading:
+                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .unavailable(let message):
+                ContentUnavailableView(message, systemImage: entitySymbol(for: key))
+            case .failed(let message):
+                ContentUnavailableView(
+                    "Couldn't load \(descriptor.singular)",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(message)
+                )
+            case .loaded:
+                if let row = model.row {
+                    EntityDetailContent(descriptor: descriptor, row: row)
+                } else {
+                    ContentUnavailableView("Not found", systemImage: "questionmark.folder")
+                }
+            }
+        } else {
+            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private func setup() async {
+        let model = await GenericEntityDetailModel(descriptor: descriptor, client: appModel.client.raw)
+        self.model = model
+        await model.load(id: id)
+    }
+}
+
+/// Plain-data detail rendering, shared by the real screen and `#Preview`s so neither needs a
+/// network round trip to render. Reading order is the web inspector's: identity, then the truth
+/// already in the payload, then everything else, then the raw record.
+struct EntityDetailContent: View {
+    let descriptor: EntityDescriptor
+    let row: EntityRow
+
+    @State private var showingRaw = false
+
+    #if os(macOS)
+    private let heroMaxHeight: CGFloat = 360
+    #else
+    private let heroMaxHeight: CGFloat = 280
+    #endif
+
+    private var stats: [EntityStat] { EntityFacts.stats(descriptor: descriptor, row: row) }
+
+    // Relationship reads for the two hand-tuned entities. Empty/nil everywhere else, so the
+    // generic path (every other entity) never pays for this.
+    private var productGallery: [ProductGalleryImage] {
+        descriptor.key == .product ? ProductRelations.gallery(from: row) : []
+    }
+    private var productStockedAt: [ProductStockLocation] {
+        descriptor.key == .product ? ProductRelations.stockedAt(from: row) : []
+    }
+    private var locationParent: LocationParentRef? {
+        descriptor.key == .location ? LocationRelations.parent(from: row) : nil
+    }
+    private var locationType: String? {
+        descriptor.key == .location ? row.raw["type"]?.stringValue : nil
+    }
+    private var locationAiDescription: String? {
+        guard descriptor.key == .location, let text = row.raw["aiDescription"]?.stringValue, !text.isEmpty
+        else { return nil }
+        return text
+    }
+    private var locationInventoryItems: [LocationInventoryItem] {
+        descriptor.key == .location ? LocationRelations.inventoryItems(from: row) : []
+    }
+    private var locationChildren: [LocationChildSummary] {
+        descriptor.key == .location ? LocationRelations.children(from: row) : []
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
+                hero
+                identity
+                if let locationAiDescription {
+                    Text(locationAiDescription)
+                        .font(.porcelainBody)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if !stats.isEmpty {
+                    LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
+                        ForEach(stats) { stat in
+                            StatTile(label: stat.label, value: stat.value, detail: stat.detail, mono: stat.mono)
+                        }
+                    }
+                }
+                if descriptor.key == .product {
+                    ProductStockedAtSection(locations: productStockedAt)
+                }
+                if descriptor.key == .location {
+                    LocationContentsSection(items: locationInventoryItems)
+                    LocationSubLocationsSection(children: locationChildren)
+                }
+                if !detailRows.isEmpty {
+                    VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                        Eyebrow("Details")
+                        Panel(padding: 0, spacing: 0) {
+                            ForEach(Array(detailRows.enumerated()), id: \.element.field.key) { index, entry in
+                                if index > 0 { PanelDivider() }
+                                LabeledRow(
+                                    label: entry.field.label,
+                                    value: entry.value,
+                                    data: entry.field.kind == .number || entry.field.kind == .date
+                                        || entry.field.kind == .timestamp,
+                                    mono: entry.field.kind == .identifier
+                                )
+                            }
+                        }
+                    }
+                }
+                rawDisclosure
+            }
+            .padding(PorcelainTokens.Space.lg)
+            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
+        }
+        .porcelainScreen()
+    }
+
+    @ViewBuilder
+    private var hero: some View {
+        if descriptor.key == .product, productGallery.count > 1 {
+            ProductGalleryHero(images: productGallery, maxHeight: heroMaxHeight)
+        } else if let url = row.imageURL {
+            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                .fill(PorcelainTokens.inset)
+                .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: heroMaxHeight)
+                .overlay {
+                    AsyncImage(url: url) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().scaledToFill()
+                        } else if case .failure = phase {
+                            symbolTile
+                        } else {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                .overlay(
+                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                )
+        } else {
+            symbolTile
+                .frame(width: 96, height: 96)
+                .background(
+                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel).fill(PorcelainTokens.inset)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                )
+        }
+    }
+
+    private var symbolTile: some View {
+        Image(systemName: entitySymbol(for: descriptor.key))
+            .font(.system(size: 32, weight: .light))
+            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var identity: some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            if let parent = locationParent {
+                NavigationLink(value: Route.entityDetail(.location, id: parent.id)) {
+                    HStack(spacing: PorcelainTokens.Space.xs) {
+                        Image(systemName: "chevron.left")
+                            .font(.porcelainLabel.weight(.semibold))
+                        Text(parent.name)
+                            .font(.porcelainLabel)
+                    }
+                    .foregroundStyle(PorcelainTokens.cobalt)
+                }
+                .buttonStyle(.plain)
+            }
+            Text(row.title)
+                .font(.title.weight(.semibold))
+                .tracking(-0.4)
+                .foregroundStyle(PorcelainTokens.graphite)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+            if let subtitle = subtitleLine {
+                Text(subtitle)
+                    .font(.porcelainBody)
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: PorcelainTokens.Space.sm) {
+                DomainMark(descriptor.key)
+                Text(row.id)
+                    .font(.porcelainCode)
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .textSelection(.enabled)
+                Text(descriptor.singular)
+                    .font(.porcelainLabel)
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                if let locationType {
+                    Text("· \(locationType.capitalized)")
+                        .font(.porcelainLabel)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                }
+            }
+        }
+    }
+
+    /// Manufacturer then category, minus whatever the stats grid already claims — repeating
+    /// "supplies" two inches apart is noise, not hierarchy.
+    private var subtitleLine: String? {
+        let claimed = Set(stats.map(\.value))
+        let parts = [row.raw["manufacturer"]?.stringValue, row.raw["category"]?.stringValue]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty && !claimed.contains($0) }
+        if parts.isEmpty { return claimed.contains(row.subtitle ?? "") ? nil : row.subtitle }
+        return parts.joined(separator: " · ")
+    }
+
+    private var rawDisclosure: some View {
+        Panel(padding: PorcelainTokens.Space.md) {
+            DisclosureGroup(isExpanded: $showingRaw) {
+                Text(prettyJSON(row.raw))
+                    .font(.porcelainCode)
+                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, PorcelainTokens.Space.sm)
+            } label: {
+                Eyebrow("Raw record")
+            }
+            .tint(PorcelainTokens.graphiteSecondary)
+        }
+    }
+
+    /// `showInDetail` fields that carry a value, minus the ones the identity block and the stats
+    /// grid already show. A detail screen that repeats its own title is a form, not a record.
+    private var detailRows: [(field: FieldDescriptor, value: String)] {
+        let claimedLabels = Set(stats.map(\.label))
+        var identityKeys: Set<String> = ["id", "shortcode", descriptor.titleField]
+        if descriptor.key == .location {
+            // Shown instead by the identity breadcrumb (`parentId`/`type`) and the quiet paragraph
+            // (`aiDescription`) above — repeating them here would be the same fact twice.
+            identityKeys.formUnion(["type", "parentId", "aiDescription"])
+        }
+        return
+            descriptor.fields
+            .filter(\.showInDetail)
+            .sorted { ($0.detailOrder ?? Int.max) < ($1.detailOrder ?? Int.max) }
+            .compactMap { field in
+                guard !identityKeys.contains(field.key), !claimedLabels.contains(field.label),
+                    let value = displayValue(for: field)
+                else { return nil }
+                return (field, value)
+            }
+    }
+
+    /// Formats `row.raw[field.key]` per `field.kind`. Returns `nil` (skip the row) for a missing
+    /// key or a JSON `null`.
+    private func displayValue(for field: FieldDescriptor) -> String? {
+        guard let value = row.raw[field.key] else { return nil }
+        switch value {
+        case .null:
+            return nil
+        case .string(let string):
+            if string.isEmpty { return nil }
+            if field.kind == .date || field.kind == .timestamp {
+                return EntityFacts.formattedDate(string) ?? string
+            }
+            return string
+        case .number(let number):
+            return EntityFacts.format(number)
+        case .bool(let bool):
+            return bool ? "Yes" : "No"
+        case .array(let items):
+            if items.isEmpty { return nil }
+            if items.allSatisfy({ $0.stringValue != nil }) {
+                return items.compactMap(\.stringValue).joined(separator: ", ")
+            }
+            return "\(items.count) item\(items.count == 1 ? "" : "s")"
+        case .object:
+            return "{…}"
+        }
+    }
+
+    private func prettyJSON(_ value: JSONValue) -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(value), let string = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
+        return string
+    }
+}
+
+#Preview {
+    NavigationStack {
+        EntityDetailContent(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow)
+            .navigationTitle("Cast Iron Skillet")
+    }
+}
+
+/// A product with more than one uploaded photo and multiple `inventoryEntry` rows, so the gallery
+/// swap and "Stocked at" panel both render. Private to this file — no network, no `PreviewFixtures`.
+#Preview("Product with gallery + stock") {
+    let raw: JSONValue = .object([
+        "id": .string("PRD-2345"),
+        "name": .string("Cast Iron Skillet"),
+        "manufacturer": .string("Lodge"),
+        "category": .string("Cookware"),
+        "primaryGtin": .string("00075536010014"),
+        "onHandUnits": .number(3),
+        "pricing": .object(["effectivePrice": .number(24.95), "source": .string("derived")]),
+        "images": .array([
+            .object(["id": .string("IMG-1"), "status": .string("UPLOADED"), "url": .string("https://images.cubby.invalid/skillet-1.jpg")]),
+            .object(["id": .string("IMG-2"), "status": .string("UPLOADED"), "url": .string("https://images.cubby.invalid/skillet-2.jpg")]),
+            .object(["id": .string("IMG-3"), "status": .string("PENDING"), "url": .string("https://images.cubby.invalid/skillet-3.jpg")]),
+        ]),
+        "inventoryEntry": .array([
+            .object([
+                "id": .string("IE-1"),
+                "amount": .object(["value": .number(2), "unit": .string("units")]),
+                "placement": .string("stock"),
+                "location": .object([
+                    "id": .string("LOC-1001"), "name": .string("Pantry Shelf B"),
+                    "ancestors": .array([.object(["id": .string("LOC-1"), "name": .string("Kitchen")])]),
+                ]),
+            ]),
+            .object([
+                "id": .string("IE-2"),
+                "amount": .object(["value": .number(1), "unit": .string("units")]),
+                "placement": .string("installed"),
+                "location": .object(["id": .string("LOC-1002"), "name": .string("Garage Cabinet"), "ancestors": .array([])]),
+            ]),
+        ]),
+    ])
+    let row = EntityRow(id: "PRD-2345", title: "Cast Iron Skillet", subtitle: "Lodge", imageURL: nil, raw: raw)
+    return NavigationStack {
+        EntityDetailContent(descriptor: EntityCatalog[.product], row: row)
+            .navigationTitle("Cast Iron Skillet")
+    }
+}
+
+/// A location with a parent, direct inventory, and sub-locations, so the breadcrumb, "Contents",
+/// and "Sub-locations" panels all render.
+#Preview("Location with parent + contents") {
+    let raw: JSONValue = .object([
+        "id": .string("LOC-1001"),
+        "name": .string("Pantry Shelf B"),
+        "type": .string("shelf"),
+        "aiDescription": .string("Dry goods and cast iron, middle shelf of the pantry."),
+        "directItemCount": .number(2),
+        "totalItemCount": .number(5),
+        "parent": .object(["id": .string("LOC-1"), "name": .string("Kitchen Pantry")]),
+        "inventoryItems": .array([
+            .object([
+                "id": .string("INV-1"), "productId": .string("PRD-2345"), "productName": .string("Cast Iron Skillet"),
+                "amount": .object(["value": .number(1), "unit": .string("units")]),
+            ]),
+            .object([
+                "id": .string("INV-2"), "productId": .string("PRD-2346"), "productName": .string("Enameled Dutch Oven"),
+                "amount": .object(["value": .number(1), "unit": .string("units")]),
+            ]),
+        ]),
+        "children": .array([
+            .object(["id": .string("LOC-1002"), "name": .string("Shelf B, left bin"), "directItemCount": .number(3)]),
+        ]),
+    ])
+    let row = EntityRow(id: "LOC-1001", title: "Pantry Shelf B", subtitle: nil, imageURL: nil, raw: raw)
+    return NavigationStack {
+        EntityDetailContent(descriptor: EntityCatalog[.location], row: row)
+            .navigationTitle("Pantry Shelf B")
+    }
+}

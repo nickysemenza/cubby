@@ -1,0 +1,3 @@
+# Local builds without CARGO_TARGET_DIR land here; build-rust.sh uses
+# ~/.cache/cubby/cubby-ffi-target instead. Cargo.lock IS committed for this crate.
+target

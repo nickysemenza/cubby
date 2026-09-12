@@ -54345,6 +54345,10 @@
         "type": "apiKey",
         "in": "cookie",
         "name": "better-auth.session_token"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
       }
     },
     "schemas": {
@@ -92489,6 +92493,9 @@
     },
     {
       "sessionCookie": []
+    },
+    {
+      "bearerAuth": []
     }
   ]
 }

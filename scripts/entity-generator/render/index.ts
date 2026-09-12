@@ -18,6 +18,7 @@ import type {
 } from "../declarations.ts";
 import { renderEntityColumnsArtifact } from "./columns.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
+import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 
 type ContractEntity = CompiledEntity & {
   contract: NonNullable<CompiledEntity["contract"]>;
@@ -1391,6 +1392,7 @@ export const renderEntityArtifacts = (
         "// oxfmt-ignore\n" +
         `export const HTTP_RESOURCES = {\n${httpResources}\n} as const satisfies Record<string, { basePath: string; verbs: readonly ("list" | "get" | "create" | "update" | "delete")[] }>;\n`,
     },
+    renderSwiftEntityCatalog(entities, kernelContractCases),
     {
       relativePath: "apps/web/src/server/generated/entity-bindings.gen.ts",
       source:

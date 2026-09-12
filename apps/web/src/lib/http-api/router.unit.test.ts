@@ -42,7 +42,11 @@ describe("HTTP contract", () => {
         ...new Set(routes.map((route) => route.path.replace(":id", "{id}"))),
       ].sort(),
     );
-    expect(document.security).toEqual([{ apiKey: [] }, { sessionCookie: [] }]);
+    expect(document.security).toEqual([
+      { apiKey: [] },
+      { sessionCookie: [] },
+      { bearerAuth: [] },
+    ]);
   });
 
   it("rejects route collisions and reserved paths", () => {

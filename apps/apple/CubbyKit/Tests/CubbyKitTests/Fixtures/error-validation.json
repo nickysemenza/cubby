@@ -1,0 +1,14 @@
+{
+  "ok": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Sample validation message",
+    "validationIssues": [
+      {
+        "code": "invalid_type",
+        "path": ["name"],
+        "message": "Sample field error"
+      }
+    ]
+  }
+}

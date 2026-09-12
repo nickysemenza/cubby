@@ -138,6 +138,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 | [apps/web](apps/web) | `@cubby/web` | Main app — TanStack Start + Entity Kernel + Drizzle | Cloudflare Workers | Worker `cubby` · DB via **Hyperdrive** → Postgres |
 | [apps/upc-lookup](apps/upc-lookup) | `@cubby/upc-lookup` | UPC barcode lookup API — Hono + D1 | Cloudflare Workers | Worker `upc-lookup` · <https://upc-lookup.nicky.workers.dev> |
 | [apps/usda-api](apps/usda-api) | `@cubby/usda-api` | USDA FoodData Central API — Hono + D1/R2 bundles | Cloudflare Workers | Worker `usda-api` · <https://usda-api.nicky.workers.dev> · D1 search index + R2 NDJSON payload bundles |
+| [apps/apple](apps/apple) | (no package.json) | Native proof-of-concept iOS + macOS app, `CubbyKit` Swift package, `cubby` CLI harness | iOS 26 / macOS 26 (SwiftUI, Swift 6 strict concurrency) | Local install (Xcode / simulator / device); no hosted deploy |
 
 ### Packages (internal, not deployed)
 
@@ -153,6 +154,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 | [packages/design-tokens](packages/design-tokens) | `@cubby/design-tokens` | Shared brand CSS (palette, type stacks) | `web`, `mcp-apps` |
 | [apps/mcp-apps](apps/mcp-apps) | `@cubby/mcp-apps` | Interactive MCP-hosted UIs — its own build target, inlined into `web`'s server rather than deployed on its own; see [MCP Apps](#mcp-apps-interactive-uis-in-the-conversation) | `web` (inlined at build) |
 | [recipebridge/](recipebridge) | (Rust source) | Source for the ingredient-parser WASM shim | Built into `packages/wasm` |
+| [cubby-ffi/](cubby-ffi) | (Rust source) | UniFFI boundary exposing `recipebridge`'s ingredient parser to Swift (same Rust source as the WASM build) | Built into `apps/apple`'s `CubbyFFI.xcframework` via `apps/apple/scripts/build-rust.sh` |
 
 ## 🏗️ Architecture
 

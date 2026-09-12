@@ -1,0 +1,73 @@
+import CubbyKit
+import Foundation
+import Observation
+
+/// Screen state for Capture: which location is being swept, the locations to pick from, and the
+/// `ScanSession` doing the work. Created per client, so a base URL change gets a fresh one.
+@Observable
+final class CaptureModel {
+    struct LocationOption: Identifiable, Hashable {
+        let id: LocationCode
+        let name: String
+        let path: String?
+    }
+
+    let session: ScanSession
+    private(set) var locations: [LocationOption] = []
+    private(set) var loadingLocations = false
+    var manualEntry = ""
+    var locationError: String?
+
+    private let client: CubbyClient
+
+    init(client: CubbyClient) {
+        self.client = client
+        self.session = ScanSession(service: client)
+    }
+
+    var location: LocationOption? {
+        guard let code = session.location else { return nil }
+        return locations.first { $0.id == code } ?? LocationOption(id: code, name: code.rawValue, path: nil)
+    }
+
+    func select(_ location: LocationOption?) {
+        session.location = location?.id
+    }
+
+    func loadLocations() async {
+        guard !loadingLocations else { return }
+        loadingLocations = true
+        defer { loadingLocations = false }
+        do {
+            let page = try await client.raw.list(basePath: "locations", page: 1, pageSize: 200, sort: "name")
+            locations = page.items.compactMap { row in
+                guard let id = row["id"]?.stringValue else { return nil }
+                return LocationOption(
+                    id: LocationCode(id),
+                    name: row["name"]?.stringValue ?? id,
+                    path: row["path"]?.stringValue ?? row["parentName"]?.stringValue
+                )
+            }
+            locationError = nil
+        } catch {
+            locationError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+        }
+    }
+
+    /// Manual entry and the camera both land here. A location label switches the sweep target
+    /// instead of being scanned as stock, which is what the web sweep's bin path does too.
+    func submit(_ raw: String) {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        if let label = Shortcode.extract(from: value), label.key == .location {
+            select(LocationOption(id: LocationCode(label.code), name: label.code, path: nil))
+            return
+        }
+        session.submit(value)
+    }
+
+    func submitManualEntry() {
+        submit(manualEntry)
+        manualEntry = ""
+    }
+}

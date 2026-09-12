@@ -52,6 +52,8 @@
     "apps/web/src/components/ui/**",
     "apps/web/src/routeTree.gen.ts",
     "apps/web/wasm/**",
-    "**/worker-configuration.d.ts"
+    "**/worker-configuration.d.ts",
+    "apps/apple/**",
+    "cubby-ffi/**"
   ]
 }

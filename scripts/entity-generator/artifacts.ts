@@ -15,6 +15,10 @@ export const compactLiteral = <T>(value: T) =>
   );
 
 const formatSource = (root: string, artifact: EntityArtifacts): string => {
+  // oxfmt only understands the JS/TS family; it returns the literal string
+  // "Unsupported file type for stdin-filepath" for anything else (e.g. the
+  // generated Swift catalog). Non-.ts artifacts pass through unformatted.
+  if (!artifact.relativePath.endsWith(".ts")) return artifact.source;
   const result = execFileSync(
     "pnpm",
     ["exec", "oxfmt", "--stdin-filepath", artifact.relativePath],
@@ -41,7 +45,7 @@ export const sealArtifact = (
 };
 
 const generatedName =
-  /^(?:entity-literal-.+|entity-manifest-data|entity-field-model|entity-field-schemas(?:\.[^.]+)?|entity-sort|entity-edit-intents|entity-field-schema-maps|entity-columns|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry|shortcode-tables)\.gen\.ts$/;
+  /^(?:entity-literal-.+|entity-manifest-data|entity-field-model|entity-field-schemas(?:\.[^.]+)?|entity-sort|entity-edit-intents|entity-field-schema-maps|entity-columns|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry|shortcode-tables)\.gen\.ts$|^EntityCatalog\.swift$/;
 
 const findExtraArtifacts = async (
   root: string,

@@ -1,0 +1,8 @@
+[bindings.swift]
+module_name = "CubbyFFI"
+# Verified against https://mozilla.github.io/uniffi-rs/latest/swift/configuration.html
+# for uniffi 0.32: the C module (FFI declarations) key is `ffi_module_name`,
+# not `c_module_name`. Default would be "CubbyFFIFFI"; underscore it for
+# legibility in Xcode's generated headers.
+ffi_module_name = "CubbyFFI_FFI"
+generate_module_map = true

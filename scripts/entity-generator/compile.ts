@@ -40,7 +40,7 @@ const entityPorts = (
   };
 };
 
-const filterKinds = [
+export const filterKinds = [
   "text",
   "select",
   "multiselect",
