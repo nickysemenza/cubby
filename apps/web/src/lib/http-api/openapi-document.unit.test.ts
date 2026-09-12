@@ -4,8 +4,9 @@ import document from "~/lib/generated/http-openapi.gen.json";
 
 interface SchemaObject {
   $ref?: string;
+  required?: string[];
   enum?: unknown[];
-  properties?: Record<string, { enum?: unknown[]; $ref?: string }>;
+  properties?: Record<string, { $ref?: string; enum?: unknown[] }>;
 }
 type Responses = Record<
   string,
@@ -14,7 +15,7 @@ type Responses = Record<
 type Operation = { responses?: Responses };
 
 // SAFETY: the generated document is emitted by generate-http-openapi.ts from
-// the contract; only the `$ref`/`properties.ok.enum` facets asserted below
+// the contract; only the `$ref`/`required`/`properties` facets asserted below
 // are read, and every access is optional-chained.
 const schemas = document.components.schemas as Record<string, SchemaObject>;
 // SAFETY: same document; operations are read only for their responses.
@@ -33,37 +34,28 @@ function responseSchemaRef(response: Responses[string]): string | undefined {
   return response?.content?.["application/json"]?.schema?.$ref;
 }
 
-// `reused: "ref"` may extract a shared literal into its own component.
-function okEnum(schema: SchemaObject): unknown[] | undefined {
+/**
+ * The old `{ ok: true, data }` envelope, as distinct from a domain output
+ * that happens to carry a boolean `ok` (a cancel or dismiss result).
+ */
+function isSuccessEnvelope(schema: SchemaObject): boolean {
   const ok = schema.properties?.ok;
-  if (!ok) return undefined;
-  return ok.$ref === undefined ? ok.enum : resolveRef(ok.$ref).schema.enum;
+  if (!ok || !schema.properties?.data) return false;
+  const values =
+    ok.$ref === undefined ? ok.enum : resolveRef(ok.$ref).schema.enum;
+  return Array.isArray(values) && values.length === 1 && values[0] === true;
 }
 
-function isFailureEnvelope(schema: SchemaObject): boolean {
-  const ok = okEnum(schema);
-  return Array.isArray(ok) && ok.length === 1 && ok[0] === false;
-}
-
-// Regression for the generate-http-openapi.ts schemaTransformer fallback-id
-// collision: the fallback used to omit the status code, so every response of
-// one route (200 and its 400/401/403/404/409/412/500 siblings) shared a
-// single component id. The shared `failure` schema (contract.ts) then
-// clobbered whichever route's real success schema landed on that id in the
-// emitted `components.schemas` map — see generate-http-openapi.ts for the
-// fix (a fixed `ErrorEnvelope` id for `failure`, plus a status-suffixed
-// fallback id for every other response).
 describe("generated HTTP OpenAPI document", () => {
-  it("never resolves a 200/201 response to the shared failure envelope", () => {
+  it("returns every success body without an envelope", () => {
     const offenders: string[] = [];
     for (const [path, methods] of Object.entries(paths)) {
       for (const [method, operation] of Object.entries(methods)) {
-        const responses = operation.responses ?? {};
         for (const status of ["200", "201"]) {
-          const ref = responseSchemaRef(responses[status]);
+          const ref = responseSchemaRef(operation.responses?.[status]);
           if (!ref) continue;
           const { name, schema } = resolveRef(ref);
-          if (isFailureEnvelope(schema))
+          if (isSuccessEnvelope(schema) || name === "ApiError")
             offenders.push(`${method.toUpperCase()} ${path} -> ${name}`);
         }
       }
@@ -71,32 +63,26 @@ describe("generated HTTP OpenAPI document", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("recovers agent.ask's real success schema", () => {
-    const ref = responseSchemaRef(
-      paths["/api/v1/agent/ask"]?.post?.responses?.["200"],
+  it("routes every error response through one ApiError component", () => {
+    const apiError = schemas.ApiError;
+    expect(apiError).toBeDefined();
+    expect(apiError?.required).toEqual(
+      expect.arrayContaining(["code", "message"]),
     );
-    if (!ref) throw new Error("agent.ask 200 response has no $ref");
-    const { schema } = resolveRef(ref);
-    expect(okEnum(schema)).toEqual([true]);
-    expect(schema.properties).toHaveProperty("data");
-  });
-
-  it("routes every error response through one ErrorEnvelope component", () => {
-    const errorEnvelope = schemas.ErrorEnvelope;
-    expect(errorEnvelope).toBeDefined();
-    if (!errorEnvelope) throw new Error("ErrorEnvelope is missing");
-    expect(okEnum(errorEnvelope)).toEqual([false]);
+    expect(apiError?.properties).not.toHaveProperty("ok");
+    expect(schemas).not.toHaveProperty("ErrorEnvelope");
 
     let errorResponseCount = 0;
     for (const methods of Object.values(paths)) {
       for (const operation of Object.values(methods)) {
-        const responses = operation.responses ?? {};
-        for (const [status, response] of Object.entries(responses)) {
+        for (const [status, response] of Object.entries(
+          operation.responses ?? {},
+        )) {
           if (status === "200" || status === "201") continue;
           const ref = responseSchemaRef(response);
           if (!ref) continue;
           errorResponseCount += 1;
-          expect(resolveRef(ref).name).toBe("ErrorEnvelope");
+          expect(resolveRef(ref).name).toBe("ApiError");
         }
       }
     }

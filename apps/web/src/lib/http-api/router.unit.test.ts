@@ -34,19 +34,44 @@ describe("HTTP contract", () => {
       expect(expected).not.toContain(excluded);
       expect(START_OPERATIONS).toHaveProperty(excluded);
     }
+    const transports = { get: 0, post: 0, mutation: 0 };
+    const mismatches: string[] = [];
     for (const route of rpc) {
+      const metadata = metadataOf(route);
       const kind = z
         .enum(["query", "mutation", "subscription"])
         .parse(
           Object.entries(START_OPERATIONS).find(
-            ([id]) => id === metadataOf(route).operation,
+            ([id]) => id === metadata.operation,
           )?.[1].kind,
         );
-      expect(route.method).toBe(kind === "query" ? "GET" : "POST");
+      const transport = route.method === "GET" ? "get" : "post";
+      // A mutation is always POST with no transport tag; a query's method
+      // agrees with its transport tag.
+      const consistent =
+        kind === "mutation"
+          ? route.method === "POST" && metadata.transport === undefined
+          : metadata.transport === transport;
+      if (!consistent) mismatches.push(metadata.operation);
+      transports[kind === "mutation" ? "mutation" : transport] += 1;
       expect(route.path).toBe(
-        `/api/v1/${metadataOf(route).operation.replace(".", "/")}`,
+        `/api/v1/${metadata.operation.replace(".", "/")}`,
       );
     }
+    expect(mismatches).toEqual([]);
+    // Flat-input queries are GET; the structured ones travel as POST bodies.
+    expect(transports).toEqual({ get: 115, post: 31, mutation: 86 });
+    expect(Object.keys(document.paths)).toHaveLength(265);
+    const analytics = rpc.find(
+      (route) => metadataOf(route).operation === "expense.analytics",
+    );
+    expect(analytics).toMatchObject({ method: "POST" });
+    expect(analytics && "body" in analytics).toBe(true);
+    const flat = rpc.find(
+      (route) => metadataOf(route).operation === "auditLog.list",
+    );
+    expect(flat).toMatchObject({ method: "GET" });
+    expect(flat?.query instanceof z.ZodType).toBe(true);
     expect(Object.keys(document.paths).sort()).toEqual(
       [
         ...new Set(routes.map((route) => route.path.replace(":id", "{id}"))),
@@ -79,6 +104,15 @@ describe("HTTP contract", () => {
     );
     expect(carriers.get("dashboard.counts")).toBe("none");
     expect(carriers.get("auditLog.list")).toBe("object");
+    // A `z.null()` input takes no parameters and dispatches null.
+    expect(carriers.get("collection.list")).toBe("null");
+    const nullInput = rpc.find(
+      (route) => metadataOf(route).operation === "collection.list",
+    );
+    const nullQuery =
+      nullInput?.query instanceof z.ZodType ? nullInput.query : undefined;
+    expect(nullQuery?.safeParse({}).success).toBe(true);
+    expect(nullQuery?.safeParse({ input: null }).success).toBe(false);
     // A resource body is the entity's own create input, never a command.
     const create = routes.find(
       (route) =>
@@ -134,9 +168,9 @@ describe("HTTP contract", () => {
     ]);
   });
 
-  it("emits ISO timestamps and a shared error envelope", () => {
+  it("emits ISO timestamps and a shared error body", () => {
     expect(JSON.stringify(document)).toContain('"format":"date-time"');
-    expect(document.components.schemas.ErrorEnvelope).toBeDefined();
+    expect(document.components.schemas.ApiError).toBeDefined();
     const references = [
       ...JSON.stringify(document).matchAll(
         /"\$ref":"#\/components\/schemas\/([^"]+)"/gu,

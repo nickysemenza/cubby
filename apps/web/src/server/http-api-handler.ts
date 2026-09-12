@@ -73,11 +73,12 @@ const errorStatus = z
   .min(400)
   .max(599)
   .catch(StatusCodes.INTERNAL_SERVER_ERROR);
-const failureBody = (
+/** An error response body: the public operation error, nothing around it. */
+const errorBody = (
   code: keyof typeof StatusCodes,
   message: string,
   extra: Partial<PublicStartOperationError> = {},
-) => ({ ok: false as const, error: { code, message, ...extra } });
+) => ({ code, message, ...extra });
 const failure = (
   code: keyof typeof StatusCodes,
   message: string,
@@ -85,10 +86,11 @@ const failure = (
 ) =>
   new TsRestHttpError(
     errorStatus.parse(statuses.get(code)),
-    failureBody(code, message, extra),
+    errorBody(code, message, extra),
   );
 const createdSchema = z.object({ item: z.object({ id: z.string() }) });
-const envelopeBody = z.object({ ok: z.literal(false) });
+/** Tells a route's own error body from the adapter's bare 404. */
+const apiErrorBody = z.object({ code: z.string(), message: z.string() });
 /**
  * The adapter's request-validation error, read structurally: the fetch entry
  * exports only the deprecated Zod-typed class while the router throws the
@@ -148,9 +150,39 @@ function requestInput(
     }
   }
   if (metadata.input === "none") return undefined;
+  if (metadata.input === "null") return null;
   if (metadata.input === "wrapped") return wrappedSchema.parse(payload).input;
   return payload;
 }
+
+const bracketedKey = /^(?<name>[^[\]]+)\[\d*\]$/u;
+
+/**
+ * Lists travel as repeated keys (`?tag=a&tag=b`), which is what the routes
+ * validate. A qs-style client such as ts-rest's own sends `tag[]=a` or
+ * `tag[0]=a&tag[1]=b` instead; both fold onto the repeated-key form here so
+ * either spelling reaches the same list.
+ */
+const normalizeQueryLists = (request: TsRestRequest): void => {
+  const folded: Record<string, string | string[]> = {};
+  for (const [key, value] of Object.entries(routerQuery.parse(request.query))) {
+    const name = bracketedKey.exec(key)?.groups?.name ?? key;
+    const existing = folded[name];
+    folded[name] =
+      existing === undefined && name === key
+        ? value
+        : [
+            ...(existing === undefined ? [] : [existing].flat()),
+            ...[value].flat(),
+          ];
+  }
+  request.query = folded;
+};
+
+const routerQuery = z.record(
+  z.string(),
+  z.union([z.string(), z.array(z.string())]),
+);
 
 /** Method-not-allowed needs the route table; the adapter only knows 404. */
 function methodTable(router: AppRouter) {
@@ -248,21 +280,21 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
       if (!result.ok)
         return {
           status: errorStatus.parse(statuses.get(result.error.code)),
-          body: result,
+          body: result.error,
         };
       if (metadata.resource === "get" && result.data === null)
         return {
           status: StatusCodes.NOT_FOUND,
-          body: failureBody("NOT_FOUND", "Resource not found"),
+          body: errorBody("NOT_FOUND", "Resource not found"),
         };
       if (metadata.resource === "create") {
         responseHeaders.set(
           "Location",
           `${url.pathname}/${encodeURIComponent(createdSchema.parse(result.data).item.id)}`,
         );
-        return { status: StatusCodes.CREATED, body: result };
+        return { status: StatusCodes.CREATED, body: result.data };
       }
-      return { status: StatusCodes.OK, body: result };
+      return { status: StatusCodes.OK, body: result.data };
     },
   });
 
@@ -306,7 +338,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
       const { pathParamsError, ...rest } = validation.data;
       if (pathParamsError && Object.values(rest).every((part) => part === null))
         return TsRestResponse.fromJson(
-          failureBody("NOT_FOUND", "Invalid resource identifier"),
+          errorBody("NOT_FOUND", "Invalid resource identifier"),
           { status: StatusCodes.NOT_FOUND },
         );
       const issues = Object.values(validation.data).flatMap(
@@ -322,7 +354,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
           })) ?? [],
       );
       return TsRestResponse.fromJson(
-        failureBody("BAD_REQUEST", "Invalid request input", {
+        errorBody("BAD_REQUEST", "Invalid request input", {
           reason: "INVALID_INPUT",
           validationIssues: issues,
         }),
@@ -332,25 +364,25 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
     if (error instanceof TsRestHttpError) {
       const body =
         error.statusCode === StatusCodes.NOT_FOUND &&
-        !envelopeBody.safeParse(error.body).success
-          ? failureBody("NOT_FOUND", "Unknown endpoint")
+        !apiErrorBody.safeParse(error.body).success
+          ? errorBody("NOT_FOUND", "Unknown endpoint")
           : error.body;
       return TsRestResponse.fromJson(body, { status: error.statusCode });
     }
     if (error instanceof SyntaxError)
       return TsRestResponse.fromJson(
-        failureBody("BAD_REQUEST", "Invalid request input"),
+        errorBody("BAD_REQUEST", "Invalid request input"),
         { status: StatusCodes.BAD_REQUEST },
       );
     // Malformed percent-encoding in a path segment (`/recipes/%ZZ`).
     if (error instanceof URIError)
       return TsRestResponse.fromJson(
-        failureBody("NOT_FOUND", "Invalid resource identifier"),
+        errorBody("NOT_FOUND", "Invalid resource identifier"),
         { status: StatusCodes.NOT_FOUND },
       );
     console.error("HTTP API failed", request.method, request.url, error);
     return TsRestResponse.fromJson(
-      failureBody(
+      errorBody(
         "INTERNAL_SERVER_ERROR",
         "The operation could not be completed",
       ),
@@ -368,7 +400,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
       !matching.some((entry) => entry.methods.has(request.method))
     )
       return Response.json(
-        failureBody("METHOD_NOT_ALLOWED", "Unsupported method"),
+        errorBody("METHOD_NOT_ALLOWED", "Unsupported method"),
         {
           status: StatusCodes.METHOD_NOT_ALLOWED,
           headers: {
@@ -384,8 +416,8 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
       contract: httpContract,
       router,
       options: {
-        jsonQuery: true,
         responseValidation: false,
+        requestMiddleware: [normalizeQueryLists],
         errorHandler,
         responseHandlers: [
           (response) => {

@@ -9,10 +9,7 @@ const keyResult = z.object({
   key: z.string(),
   referenceId: z.string(),
 });
-const entityCreated = z.object({
-  ok: z.literal(true),
-  data: z.object({ item: z.object({ id: z.string() }) }),
-});
+const entityCreated = z.object({ item: z.object({ id: z.string() }) });
 
 test("API keys execute typed operations, preserve validation, and revoke immediately", async ({
   page,
@@ -81,7 +78,7 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
     const counts = await client.dashboard.counts({ query: {} });
     expect(counts.status).toBe(200);
     if (counts.status !== 200) throw new Error("Dashboard failed");
-    expect(counts.body.ok).toBe(true);
+    expect(Object.keys(counts.body).length).toBeGreaterThan(0);
     const created = await page.request.post("/api/v1/vendors", {
       headers,
       data: { name: `HTTP fixture ${Date.now()}` },
@@ -92,7 +89,7 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
       .poll(async () => {
         const calendar = await client.calendar.inspectFeed({ query: {} });
         return calendar.status === 200
-          ? calendar.body.data.dirty?.reason
+          ? calendar.body.dirty?.reason
           : undefined;
       })
       .toBe("api.entity.mutate");
@@ -101,25 +98,21 @@ test("API keys execute typed operations, preserve validation, and revoke immedia
       data: { name: "Missing" },
     });
     expect(domainError.status()).toBe(404);
-    expect(await domainError.json()).toMatchObject({
-      ok: false,
-      error: { code: "NOT_FOUND" },
+    expect(await domainError.json()).toMatchObject({ code: "NOT_FOUND" });
+    const detail = await page.request.get(`/api/v1/vendors/${result.item.id}`, {
+      headers,
     });
-    const detail = await page.request.get(
-      `/api/v1/vendors/${result.data.item.id}`,
-      { headers },
-    );
     expect(detail.status()).toBe(200);
     const audit = await client.auditLog.list({
       query: {
         entityType: "vendor",
-        entityId: result.data.item.id,
+        entityId: result.item.id,
         source: "api",
       },
     });
     expect(audit.status).toBe(200);
     if (audit.status !== 200) throw new Error("Audit failed");
-    expect(audit.body.data.entries).toEqual([
+    expect(audit.body.entries).toEqual([
       expect.objectContaining({
         source: "api",
         action: "create",
@@ -344,7 +337,7 @@ test("bearer tokens authenticate a cookie-less native client", async ({
       params: { page: "1", pageSize: "1" },
     });
     expect(read.status(), await read.text()).toBe(200);
-    expect(await read.json()).toMatchObject({ ok: true });
+    expect(await read.json()).toMatchObject({ items: expect.any(Array) });
 
     const created = await native.post("/api/v1/recipes", {
       headers: bearer,
@@ -355,7 +348,7 @@ test("bearer tokens authenticate a cookie-less native client", async ({
       },
     });
     expect(created.status(), await created.text()).toBe(201);
-    const id = entityCreated.parse(await created.json()).data.item.id;
+    const id = entityCreated.parse(await created.json()).item.id;
     expect(
       (
         await native.delete(`/api/v1/recipes/${id}`, { headers: bearer })
