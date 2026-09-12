@@ -20,6 +20,13 @@ public struct IdentificationCandidate: Sendable, Identifiable, Hashable {
     /// Vision's feature-print distance: lower is closer. There is no documented scale, so this
     /// is shown as a rank and a raw number, never as a percentage.
     public let distance: Double
+
+    public init(productID: ProductCode, name: String, imageURL: URL, distance: Double) {
+        self.productID = productID
+        self.name = name
+        self.imageURL = imageURL
+        self.distance = distance
+    }
 }
 
 /// Nearest-neighbour lookup of a camera frame against the household's own product covers, using

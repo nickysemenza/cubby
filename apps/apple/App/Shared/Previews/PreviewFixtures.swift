@@ -1,3 +1,4 @@
+import CoreGraphics
 import CubbyKit
 import Foundation
 
@@ -42,4 +43,25 @@ enum PreviewFixtures {
             "tags": .array([.string("kitchen"), .string("cast-iron")]),
         ])
     )
+
+    /// Ranked candidates for `IdentifyResultsSection` previews; distances are illustrative only.
+    static let sampleCandidates: [IdentificationCandidate] = [
+        IdentificationCandidate(productID: ProductCode("PRD-1001"), name: "Cast Iron Skillet", imageURL: URL(string: "https://example.invalid/covers/skillet.jpg")!, distance: 0.412),
+        IdentificationCandidate(productID: ProductCode("PRD-1002"), name: "Enameled Dutch Oven", imageURL: URL(string: "https://example.invalid/covers/dutch-oven.jpg")!, distance: 0.877),
+        IdentificationCandidate(productID: ProductCode("PRD-1003"), name: "Carbon Steel Wok", imageURL: URL(string: "https://example.invalid/covers/wok.jpg")!, distance: 1.203),
+    ]
+
+    /// A synthesized solid-color image so the probe thumbnail has something to render in
+    /// `#Preview`s without decoding a real photo.
+    static let sampleProbeImage: CGImage = {
+        let size = 160
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let context = CGContext(
+            data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
+            space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        )!
+        context.setFillColor(CGColor(red: 0.85, green: 0.87, blue: 0.91, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: size, height: size))
+        return context.makeImage()!
+    }()
 }
