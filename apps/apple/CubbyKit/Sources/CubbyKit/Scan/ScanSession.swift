@@ -25,18 +25,9 @@ public struct ScanRead: Sendable, Hashable, Identifiable {
     }
 }
 
-/// The state behind a location sweep: a serialized scan queue and the strays it turns up.
-///
-/// Mirrors `useLocationSweep.ts` and keeps its two load-bearing properties:
-///
-/// **Serialization.** The camera keeps firing while a lookup is in flight, and the same-code
-/// debounce only compares the last raw value, so two encodings of one product would both observe
-/// "not stocked here" if run concurrently. Scans drain one at a time in the order they were read.
-///
-/// **Location anchoring.** Every read carries the location it was read at. `reset()` empties the
-/// queue but cannot abort a lookup in flight, so a late result whose anchor is no longer the
-/// current location is discarded outright. A stray queued against one shelf must never commit
-/// against the next.
+/// The state behind a location sweep: chips, tally, and the strays it turns up, over a
+/// `ScanDrain` that provides the serialization and location anchoring `useLocationSweep.ts`
+/// relies on. A stray queued against one shelf must never commit against the next.
 @MainActor
 @Observable
 public final class ScanSession {
@@ -70,49 +61,53 @@ public final class ScanSession {
         public var confirmed = 0
     }
 
+    /// What one read turned into, before the anchor gate.
+    enum Event: Sendable {
+        case scanned(ScanResult)
+        case failed(String)
+    }
+
     public private(set) var chips: [Chip] = []
     public private(set) var strays: [QueuedStray] = []
     public private(set) var tally = Tally()
-    public private(set) var pendingCount = 0
     public private(set) var lastError: String?
+    public var pendingCount: Int { drain.pendingCount }
 
     public var location: LocationCode? {
-        didSet { if location != oldValue { reset() } }
+        didSet {
+            if location != oldValue {
+                drain.anchor = location
+                reset()
+            }
+        }
     }
 
     private let service: any ScanService
-    private var queue: [(read: ScanRead, chip: UUID)] = []
-    private var draining = false
-    private var lastAccepted: (raw: String, at: Date)?
+    private let drain: ScanDrain<Event>
 
     public init(service: any ScanService, location: LocationCode? = nil) {
         self.service = service
         self.location = location
+        drain = ScanDrain(anchor: location, debounceInterval: Self.debounceInterval) { read in
+            await Self.perform(read, service: service)
+        }
+        drain.onSettle = { [weak self] token, event in self?.settle(token, event) }
     }
 
     /// Accepts a raw scanner or keyboard value. Returns `false` when it was a debounced repeat.
     @discardableResult
     public func submit(_ raw: String, at date: Date = .now) -> Bool {
-        guard let location else { return false }
-        if let last = lastAccepted, last.raw == raw, date.timeIntervalSince(last.at) < Self.debounceInterval {
-            return false
-        }
-        lastAccepted = (raw, date)
-        let chip = Chip(id: UUID(), label: raw, status: .pending)
+        guard let token = drain.submit(raw, at: date) else { return false }
+        let chip = Chip(id: token, label: raw, status: .pending)
         chips = Array(([chip] + chips).prefix(Self.recentLimit))
-        pendingCount += 1
-        queue.append((ScanRead(raw: raw, anchor: location, at: date), chip.id))
-        Task { await drain() }
         return true
     }
 
     public func reset() {
-        queue.removeAll()
+        drain.reset()
         chips.removeAll()
         strays.removeAll()
         tally = Tally()
-        pendingCount = 0
-        lastAccepted = nil
         lastError = nil
     }
 
@@ -132,36 +127,28 @@ public final class ScanSession {
         return resolution
     }
 
-    private func drain() async {
-        if draining { return }
-        draining = true
-        defer { draining = false }
-        while !queue.isEmpty {
-            let (read, chipID) = queue.removeFirst()
-            let code: ScanCode
-            switch ScanCode.classify(read.raw) {
-            case .success(let classified): code = classified
-            case .failure(let error):
-                settle(read) { self.fail(chipID, error.message) }
-                continue
-            }
-            do {
-                let result = try await service.scan(code, at: read.anchor)
-                settle(read) { self.apply(result, to: chipID) }
-            } catch let error as CubbyAPIError {
-                settle(read) { self.fail(chipID, error.detail?.message ?? "HTTP \(error.status)") }
-            } catch {
-                settle(read) { self.fail(chipID, String(describing: error)) }
-            }
+    /// Classifies and scans one read. Static so the drain's work closure captures the service,
+    /// not the session.
+    private static func perform(_ read: ScanRead, service: any ScanService) async -> Event {
+        let code: ScanCode
+        switch ScanCode.classify(read.raw) {
+        case .success(let classified): code = classified
+        case .failure(let error): return .failed(error.message)
+        }
+        do {
+            return .scanned(try await service.scan(code, at: read.anchor))
+        } catch let error as CubbyAPIError {
+            return .failed(error.detail?.message ?? "HTTP \(error.status)")
+        } catch {
+            return .failed(String(describing: error))
         }
     }
 
-    /// The anchor gate: a result for a location we have since walked away from is dropped, and
-    /// its pending decrement with it, because `reset()` already zeroed the count.
-    private func settle(_ read: ScanRead, _ apply: () -> Void) {
-        guard read.anchor == location else { return }
-        apply()
-        pendingCount = max(0, pendingCount - 1)
+    private func settle(_ chipID: UUID, _ event: Event) {
+        switch event {
+        case .scanned(let result): apply(result, to: chipID)
+        case .failed(let message): fail(chipID, message)
+        }
     }
 
     private func fail(_ chipID: UUID, _ message: String) {

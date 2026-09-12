@@ -4,4 +4,8 @@
 # Only react to branch checkouts/rebases — refresh the gitignored WASM binary if
 # the new tree's recipebridge/ (or a local path-dep) differs from the built one.
 [ "$3" = "1" ] || exit 0
-node "$(git rev-parse --show-toplevel)/scripts/ensure-wasm.ts"
+ROOT="$(git rev-parse --show-toplevel)"
+node "$ROOT/scripts/ensure-wasm.ts"
+# Cubby.xcodeproj is generated and gitignored; after a branch switch it can
+# reference files the new tree lacks (actool then dies on a nil object).
+. "$ROOT/scripts/ensure-xcodeproj.sh"

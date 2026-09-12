@@ -106,9 +106,7 @@ final class BrowseCountsModel {
 
     func load(client: CubbyClient) async {
         do {
-            let data = try await client.raw.call(
-                OperationRoute(operationID: "dashboard.counts", method: .get, path: "/api/v1/dashboard/counts")
-            )
+            let data = try await client.raw.call("dashboard.counts")
             counts = data.objectValue?.compactMapValues { $0.doubleValue.map(Int.init) }
         } catch {
             counts = nil

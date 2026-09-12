@@ -1,7 +1,7 @@
-/// A hand-written (method, path) table for the operations the raw client and the CLI `call`
-/// command can reach by operationId. Deliberately small: the typed generated client covers the
-/// body-carrying operations, and the generic entity paths come from `EntityCatalog.basePath`.
-/// Grow this from the spec with a script only once the hand-written list is actually limiting.
+/// One HTTP operation from the OpenAPI document: method, path template, and what it accepts.
+/// The table itself (`OperationRoute.all`) is generated into `Generated/OperationRoutes.swift`
+/// by `apps/web/scripts/generate-http-openapi.ts`, so every operation the server exposes is
+/// reachable from the raw client and the CLI without a hand-kept list.
 public struct OperationRoute: Sendable, Hashable {
     public enum Method: String, Sendable {
         case get = "GET"
@@ -14,26 +14,48 @@ public struct OperationRoute: Sendable, Hashable {
     public let method: Method
     /// Path relative to the base URL. `{id}` is substituted by `CubbyRawClient`.
     public let path: String
+    /// Names of the `{…}` placeholders in `path` (only `id` today).
+    public let pathParameters: [String]
+    /// Query parameter names the operation declares; every value is JSON-encoded on the wire.
+    public let queryParameters: [String]
+    public let hasBody: Bool
 
-    public init(operationID: String, method: Method, path: String) {
+    public init(
+        operationID: String,
+        method: Method,
+        path: String,
+        pathParameters: [String] = [],
+        queryParameters: [String] = [],
+        hasBody: Bool = false
+    ) {
         self.operationID = operationID
         self.method = method
         self.path = path
+        self.pathParameters = pathParameters
+        self.queryParameters = queryParameters
+        self.hasBody = hasBody
     }
 
-    public static let known: [String: OperationRoute] = Dictionary(
-        uniqueKeysWithValues: [
-            OperationRoute(operationID: "resources.location.list", method: .get, path: "/api/v1/locations"),
-            OperationRoute(operationID: "resources.product.list", method: .get, path: "/api/v1/products"),
-            OperationRoute(operationID: "resources.product.get", method: .get, path: "/api/v1/products/{id}"),
-            OperationRoute(operationID: "resources.inventory.create", method: .post, path: "/api/v1/inventory"),
-            OperationRoute(operationID: "inventory.scanAtLocation", method: .post, path: "/api/v1/inventory/scanAtLocation"),
-            OperationRoute(operationID: "inventory.resolveScanStrays", method: .post, path: "/api/v1/inventory/resolveScanStrays"),
-            OperationRoute(operationID: "product.findOrCreateByUPC", method: .post, path: "/api/v1/product/findOrCreateByUPC"),
-            OperationRoute(operationID: "upc.lookup", method: .get, path: "/api/v1/upc/lookup"),
-            OperationRoute(operationID: "image.list", method: .get, path: "/api/v1/image/list"),
-            OperationRoute(operationID: "search.find", method: .get, path: "/api/v1/search/find"),
-            OperationRoute(operationID: "agent.ask", method: .post, path: "/api/v1/agent/ask"),
-        ].map { ($0.operationID, $0) }
+    /// The route for an operationId, or a status-0 `CubbyAPIError` naming the id when the
+    /// document has no such operation.
+    public static func lookup(_ operationID: String) throws -> OperationRoute {
+        guard let route = all[operationID] else {
+            throw CubbyAPIError(status: 0, operationID: operationID, detail: nil)
+        }
+        return route
+    }
+
+    /// The route serving `method path`, for callers that know an entity's `basePath` but not its
+    /// key (operationIds use the singular key, `resources.product.list`; paths use the plural
+    /// base path, `/api/v1/products`).
+    public static func lookup(method: Method, path: String) throws -> OperationRoute {
+        guard let route = byMethodAndPath["\(method.rawValue) \(path)"] else {
+            throw CubbyAPIError(status: 0, operationID: "\(method.rawValue) \(path)", detail: nil)
+        }
+        return route
+    }
+
+    private static let byMethodAndPath: [String: OperationRoute] = Dictionary(
+        uniqueKeysWithValues: all.values.map { ("\($0.method.rawValue) \($0.path)", $0) }
     )
 }

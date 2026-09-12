@@ -133,9 +133,7 @@ final class TodayModel {
 
     private func fetchTasks() async -> TodaySectionState<[TodayTask]> {
         do {
-            let data = try await client.raw.call(
-                OperationRoute(operationID: "task.todayBriefing", method: .get, path: "/api/v1/task/todayBriefing")
-            )
+            let data = try await client.raw.call("task.todayBriefing")
             let tasks = data["next"]?.arrayValue?.compactMap(TodayTask.init) ?? []
             return .loaded(tasks)
         } catch {
@@ -158,9 +156,7 @@ final class TodayModel {
 
     private func fetchProblems() async -> TodaySectionState<TodayProblemCounts> {
         do {
-            let data = try await client.raw.call(
-                OperationRoute(operationID: "problems.getCounts", method: .get, path: "/api/v1/problems/getCounts")
-            )
+            let data = try await client.raw.call("problems.getCounts")
             guard let counts = TodayProblemCounts(data) else {
                 return .failed("Unexpected response shape")
             }
