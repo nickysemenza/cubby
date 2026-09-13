@@ -332,6 +332,2734 @@ package enum Operations {
             }
         }
     }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/expenses`.
+    /// - Remark: Generated from `#/paths//api/v1/expenses/get(resources.expense.list)`.
+    package enum Resources_expense_list {
+        package static let id: Swift.String = "resources.expense.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionId`.
+                package var financialTransactionId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionPresenceFilter`.
+                @frozen package enum FinancialTransactionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionPresenceFilter`.
+                package var financialTransactionPresenceFilter: Operations.Resources_expense_list.Input.Query.FinancialTransactionPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionSearch`.
+                package var financialTransactionSearch: Swift.String?
+                /// Inclusive lower bound on expense date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateFrom`.
+                package var dateFrom: Swift.String?
+                /// Inclusive upper bound on expense date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateTo`.
+                package var dateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/CostTypePayload`.
+                @frozen package enum CostTypePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case materials = "materials"
+                    case tools = "tools"
+                    case services = "services"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costType`.
+                package typealias CostTypePayload = [Operations.Resources_expense_list.Input.Query.CostTypePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costType`.
+                package var costType: Operations.Resources_expense_list.Input.Query.CostTypePayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/LineKindPayload`.
+                @frozen package enum LineKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case principal = "principal"
+                    case tax = "tax"
+                    case shipping = "shipping"
+                    case discount = "discount"
+                    case fee = "fee"
+                    case tip = "tip"
+                    case otherAdjustment = "other_adjustment"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/lineKind`.
+                package typealias LineKindPayload = [Operations.Resources_expense_list.Input.Query.LineKindPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/lineKind`.
+                package var lineKind: Operations.Resources_expense_list.Input.Query.LineKindPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/LineBasisPayload`.
+                @frozen package enum LineBasisPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case itemLine = "item_line"
+                    case allocation = "allocation"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/lineBasis`.
+                package typealias LineBasisPayload = [Operations.Resources_expense_list.Input.Query.LineBasisPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/lineBasis`.
+                package var lineBasis: Operations.Resources_expense_list.Input.Query.LineBasisPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/TradePayload`.
+                @frozen package enum TradePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case planning = "planning"
+                    case demolition = "demolition"
+                    case building = "building"
+                    case drywall = "drywall"
+                    case electrical = "electrical"
+                    case plumbing = "plumbing"
+                    case mechanical = "mechanical"
+                    case cabinetry = "cabinetry"
+                    case countertop = "countertop"
+                    case flooring = "flooring"
+                    case millwork = "millwork"
+                    case finishes = "finishes"
+                    case appliances = "appliances"
+                    case landscaping = "landscaping"
+                    case logistics = "logistics"
+                    case metalworking = "metalworking"
+                    case crafts = "crafts"
+                    case auto = "auto"
+                    case other = "other"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/trade`.
+                package typealias TradePayload = [Operations.Resources_expense_list.Input.Query.TradePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/trade`.
+                package var trade: Operations.Resources_expense_list.Input.Query.TradePayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/future`.
+                package var future: Swift.Bool?
+                /// Inclusive lower bound on expense cost, in dollars
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costMin`.
+                package var costMin: Swift.Double?
+                /// Inclusive upper bound on expense cost, in dollars
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costMax`.
+                package var costMax: Swift.Double?
+                /// Inclusive lower bound on recorded product quantity
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityMin`.
+                package var productQuantityMin: Swift.Double?
+                /// Inclusive upper bound on recorded product quantity
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityMax`.
+                package var productQuantityMax: Swift.Double?
+                /// Substring match on notes
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/notesSearch`.
+                package var notesSearch: Swift.String?
+                /// Substring match on url
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/urlSearch`.
+                package var urlSearch: Swift.String?
+                /// project shortcode, e.g. PRJ-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload`.
+                package struct ProjectIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// project shortcode, e.g. PRJ-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload/value2`.
+                    package var value2: Operations.Resources_expense_list.Input.Query.ProjectIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ProjectIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: project shortcode, e.g. PRJ-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_expense_list.Input.Query.ProjectIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectId`.
+                package typealias ProjectIdPayload = [Operations.Resources_expense_list.Input.Query.ProjectIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectId`.
+                package var projectId: Operations.Resources_expense_list.Input.Query.ProjectIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/includeSubProjects`.
+                package var includeSubProjects: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectPresenceFilter`.
+                @frozen package enum ProjectPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectPresenceFilter`.
+                package var projectPresenceFilter: Operations.Resources_expense_list.Input.Query.ProjectPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId`.
+                package struct ProductIdPayload: Codable, Hashable, Sendable {
+                    /// product shortcode, e.g. PRD-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId/value2`.
+                    package var value2: Operations.Resources_expense_list.Input.Query.ProductIdPayload.Value2Payload?
+                    /// Creates a new `ProductIdPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: product shortcode, e.g. PRD-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_expense_list.Input.Query.ProductIdPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// product shortcode, e.g. PRD-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId`.
+                package var productId: Operations.Resources_expense_list.Input.Query.ProductIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productPresenceFilter`.
+                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productPresenceFilter`.
+                package var productPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductPresenceFilterPayload?
+                /// vendor shortcode, e.g. VEN-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/VendorIdPayload`.
+                package struct VendorIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// vendor shortcode, e.g. VEN-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/VendorIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/VendorIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/VendorIdPayload/value2`.
+                    package var value2: Operations.Resources_expense_list.Input.Query.VendorIdPayloadPayload.Value2Payload?
+                    /// Creates a new `VendorIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: vendor shortcode, e.g. VEN-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_expense_list.Input.Query.VendorIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/vendorId`.
+                package typealias VendorIdPayload = [Operations.Resources_expense_list.Input.Query.VendorIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/vendorId`.
+                package var vendorId: Operations.Resources_expense_list.Input.Query.VendorIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/vendorPresenceFilter`.
+                @frozen package enum VendorPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/vendorPresenceFilter`.
+                package var vendorPresenceFilter: Operations.Resources_expense_list.Input.Query.VendorPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/search`.
+                package var search: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateRelative`.
+                @frozen package enum DateRelativePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case beforeToday = "beforeToday"
+                    case onOrBeforeToday = "onOrBeforeToday"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateRelative`.
+                package var dateRelative: Operations.Resources_expense_list.Input.Query.DateRelativePayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costPresenceFilter`.
+                @frozen package enum CostPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costPresenceFilter`.
+                package var costPresenceFilter: Operations.Resources_expense_list.Input.Query.CostPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costSign`.
+                @frozen package enum CostSignPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case negative = "negative"
+                    case positive = "positive"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costSign`.
+                package var costSign: Operations.Resources_expense_list.Input.Query.CostSignPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/disposalPurchasePresenceFilter`.
+                @frozen package enum DisposalPurchasePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/disposalPurchasePresenceFilter`.
+                package var disposalPurchasePresenceFilter: Operations.Resources_expense_list.Input.Query.DisposalPurchasePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityPresenceFilter`.
+                @frozen package enum ProductQuantityPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityPresenceFilter`.
+                package var productQuantityPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductQuantityPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/orderIdPresenceFilter`.
+                @frozen package enum OrderIdPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/orderIdPresenceFilter`.
+                package var orderIdPresenceFilter: Operations.Resources_expense_list.Input.Query.OrderIdPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/orderId`.
+                package var orderId: [Swift.String]?
+                /// purchase shortcode, e.g. PUR-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/PurchaseIdPayload`.
+                package struct PurchaseIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// purchase shortcode, e.g. PUR-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/PurchaseIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/PurchaseIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/PurchaseIdPayload/value2`.
+                    package var value2: Operations.Resources_expense_list.Input.Query.PurchaseIdPayloadPayload.Value2Payload?
+                    /// Creates a new `PurchaseIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: purchase shortcode, e.g. PUR-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_expense_list.Input.Query.PurchaseIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/purchaseId`.
+                package typealias PurchaseIdPayload = [Operations.Resources_expense_list.Input.Query.PurchaseIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/purchaseId`.
+                package var purchaseId: Operations.Resources_expense_list.Input.Query.PurchaseIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectScopeStatusesPayload`.
+                @frozen package enum ProjectScopeStatusesPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case planning = "planning"
+                    case notStarted = "not_started"
+                    case inProgress = "in_progress"
+                    case done = "done"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeStatuses`.
+                package typealias ProjectScopeStatusesPayload = [Operations.Resources_expense_list.Input.Query.ProjectScopeStatusesPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeStatuses`.
+                package var projectScopeStatuses: Operations.Resources_expense_list.Input.Query.ProjectScopeStatusesPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectScopeKindsPayload`.
+                @frozen package enum ProjectScopeKindsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case furniture = "furniture"
+                    case workshop = "workshop"
+                    case household = "household"
+                    case renovation = "renovation"
+                    case garden = "garden"
+                    case trip = "trip"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeKinds`.
+                package typealias ProjectScopeKindsPayload = [Operations.Resources_expense_list.Input.Query.ProjectScopeKindsPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeKinds`.
+                package var projectScopeKinds: Operations.Resources_expense_list.Input.Query.ProjectScopeKindsPayload?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeLocations`.
+                package var projectScopeLocations: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeSearch`.
+                package var projectScopeSearch: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeDateFrom`.
+                package var projectScopeDateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeDateTo`.
+                package var projectScopeDateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeCompletionYear`.
+                package var projectScopeCompletionYear: Swift.String?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - financialTransactionId:
+                ///   - financialTransactionPresenceFilter:
+                ///   - financialTransactionSearch:
+                ///   - dateFrom: Inclusive lower bound on expense date
+                ///   - dateTo: Inclusive upper bound on expense date
+                ///   - costType:
+                ///   - lineKind:
+                ///   - lineBasis:
+                ///   - trade:
+                ///   - future:
+                ///   - costMin: Inclusive lower bound on expense cost, in dollars
+                ///   - costMax: Inclusive upper bound on expense cost, in dollars
+                ///   - productQuantityMin: Inclusive lower bound on recorded product quantity
+                ///   - productQuantityMax: Inclusive upper bound on recorded product quantity
+                ///   - notesSearch: Substring match on notes
+                ///   - urlSearch: Substring match on url
+                ///   - projectId:
+                ///   - includeSubProjects:
+                ///   - projectPresenceFilter:
+                ///   - productId: product shortcode, e.g. PRD-4K7M
+                ///   - productPresenceFilter:
+                ///   - vendorId:
+                ///   - vendorPresenceFilter:
+                ///   - search:
+                ///   - dateRelative:
+                ///   - costPresenceFilter:
+                ///   - costSign:
+                ///   - disposalPurchasePresenceFilter:
+                ///   - productQuantityPresenceFilter:
+                ///   - orderIdPresenceFilter:
+                ///   - orderId:
+                ///   - purchaseId:
+                ///   - projectScopeStatuses:
+                ///   - projectScopeKinds:
+                ///   - projectScopeLocations:
+                ///   - projectScopeSearch:
+                ///   - projectScopeDateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - projectScopeDateTo: Calendar day as "YYYY-MM-DD"
+                ///   - projectScopeCompletionYear:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    financialTransactionId: [Swift.String]? = nil,
+                    financialTransactionPresenceFilter: Operations.Resources_expense_list.Input.Query.FinancialTransactionPresenceFilterPayload? = nil,
+                    financialTransactionSearch: Swift.String? = nil,
+                    dateFrom: Swift.String? = nil,
+                    dateTo: Swift.String? = nil,
+                    costType: Operations.Resources_expense_list.Input.Query.CostTypePayload? = nil,
+                    lineKind: Operations.Resources_expense_list.Input.Query.LineKindPayload? = nil,
+                    lineBasis: Operations.Resources_expense_list.Input.Query.LineBasisPayload? = nil,
+                    trade: Operations.Resources_expense_list.Input.Query.TradePayload? = nil,
+                    future: Swift.Bool? = nil,
+                    costMin: Swift.Double? = nil,
+                    costMax: Swift.Double? = nil,
+                    productQuantityMin: Swift.Double? = nil,
+                    productQuantityMax: Swift.Double? = nil,
+                    notesSearch: Swift.String? = nil,
+                    urlSearch: Swift.String? = nil,
+                    projectId: Operations.Resources_expense_list.Input.Query.ProjectIdPayload? = nil,
+                    includeSubProjects: Swift.Bool? = nil,
+                    projectPresenceFilter: Operations.Resources_expense_list.Input.Query.ProjectPresenceFilterPayload? = nil,
+                    productId: Operations.Resources_expense_list.Input.Query.ProductIdPayload? = nil,
+                    productPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductPresenceFilterPayload? = nil,
+                    vendorId: Operations.Resources_expense_list.Input.Query.VendorIdPayload? = nil,
+                    vendorPresenceFilter: Operations.Resources_expense_list.Input.Query.VendorPresenceFilterPayload? = nil,
+                    search: [Swift.String]? = nil,
+                    dateRelative: Operations.Resources_expense_list.Input.Query.DateRelativePayload? = nil,
+                    costPresenceFilter: Operations.Resources_expense_list.Input.Query.CostPresenceFilterPayload? = nil,
+                    costSign: Operations.Resources_expense_list.Input.Query.CostSignPayload? = nil,
+                    disposalPurchasePresenceFilter: Operations.Resources_expense_list.Input.Query.DisposalPurchasePresenceFilterPayload? = nil,
+                    productQuantityPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductQuantityPresenceFilterPayload? = nil,
+                    orderIdPresenceFilter: Operations.Resources_expense_list.Input.Query.OrderIdPresenceFilterPayload? = nil,
+                    orderId: [Swift.String]? = nil,
+                    purchaseId: Operations.Resources_expense_list.Input.Query.PurchaseIdPayload? = nil,
+                    projectScopeStatuses: Operations.Resources_expense_list.Input.Query.ProjectScopeStatusesPayload? = nil,
+                    projectScopeKinds: Operations.Resources_expense_list.Input.Query.ProjectScopeKindsPayload? = nil,
+                    projectScopeLocations: [Swift.String]? = nil,
+                    projectScopeSearch: Swift.String? = nil,
+                    projectScopeDateFrom: Swift.String? = nil,
+                    projectScopeDateTo: Swift.String? = nil,
+                    projectScopeCompletionYear: Swift.String? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.financialTransactionId = financialTransactionId
+                    self.financialTransactionPresenceFilter = financialTransactionPresenceFilter
+                    self.financialTransactionSearch = financialTransactionSearch
+                    self.dateFrom = dateFrom
+                    self.dateTo = dateTo
+                    self.costType = costType
+                    self.lineKind = lineKind
+                    self.lineBasis = lineBasis
+                    self.trade = trade
+                    self.future = future
+                    self.costMin = costMin
+                    self.costMax = costMax
+                    self.productQuantityMin = productQuantityMin
+                    self.productQuantityMax = productQuantityMax
+                    self.notesSearch = notesSearch
+                    self.urlSearch = urlSearch
+                    self.projectId = projectId
+                    self.includeSubProjects = includeSubProjects
+                    self.projectPresenceFilter = projectPresenceFilter
+                    self.productId = productId
+                    self.productPresenceFilter = productPresenceFilter
+                    self.vendorId = vendorId
+                    self.vendorPresenceFilter = vendorPresenceFilter
+                    self.search = search
+                    self.dateRelative = dateRelative
+                    self.costPresenceFilter = costPresenceFilter
+                    self.costSign = costSign
+                    self.disposalPurchasePresenceFilter = disposalPurchasePresenceFilter
+                    self.productQuantityPresenceFilter = productQuantityPresenceFilter
+                    self.orderIdPresenceFilter = orderIdPresenceFilter
+                    self.orderId = orderId
+                    self.purchaseId = purchaseId
+                    self.projectScopeStatuses = projectScopeStatuses
+                    self.projectScopeKinds = projectScopeKinds
+                    self.projectScopeLocations = projectScopeLocations
+                    self.projectScopeSearch = projectScopeSearch
+                    self.projectScopeDateFrom = projectScopeDateFrom
+                    self.projectScopeDateTo = projectScopeDateTo
+                    self.projectScopeCompletionYear = projectScopeCompletionYear
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_expense_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/expenses/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_expense_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_expense_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_expense_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_expense_list.Input.Query = .init(),
+                headers: Operations.Resources_expense_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ExpenseListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ExpenseListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_expense_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_expense_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/expenses/get(resources.expense.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_expense_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_expense_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_expense_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_expense_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/expenses/get(resources.expense.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_expense_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_expense_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/expenses/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)`.
+    package enum Resources_expense_get {
+        package static let id: Swift.String = "resources.expense.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// expense shortcode, e.g. EXP-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: expense shortcode, e.g. EXP-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_expense_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_expense_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_expense_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_expense_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_expense_get.Input.Path,
+                headers: Operations.Resources_expense_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.ExpenseOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ExpenseOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_expense_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_expense_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_expense_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_expense_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_expense_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_expense_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_expense_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_expense_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/financial-accounts`.
+    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/get(resources.financialAccount.list)`.
+    package enum Resources_financialAccount_list {
+        package static let id: Swift.String = "resources.financialAccount.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/financialTransactionId`.
+                package var financialTransactionId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/financialTransactionPresenceFilter`.
+                @frozen package enum FinancialTransactionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/financialTransactionPresenceFilter`.
+                package var financialTransactionPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.FinancialTransactionPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/financialTransactionSearch`.
+                package var financialTransactionSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/purchaseId`.
+                package var purchaseId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/purchasePresenceFilter`.
+                @frozen package enum PurchasePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/purchasePresenceFilter`.
+                package var purchasePresenceFilter: Operations.Resources_financialAccount_list.Input.Query.PurchasePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/purchaseSearch`.
+                package var purchaseSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorId`.
+                package var vendorId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorPresenceFilter`.
+                @frozen package enum VendorPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorPresenceFilter`.
+                package var vendorPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.VendorPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorSearch`.
+                package var vendorSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/search`.
+                package var search: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/provisional`.
+                package var provisional: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/IdentityKindPayload`.
+                @frozen package enum IdentityKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case creditCard = "credit_card"
+                    case bankAccount = "bank_account"
+                    case storedValue = "stored_value"
+                    case cash = "cash"
+                    case other = "other"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/identityKind`.
+                package typealias IdentityKindPayload = [Operations.Resources_financialAccount_list.Input.Query.IdentityKindPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/identityKind`.
+                package var identityKind: Operations.Resources_financialAccount_list.Input.Query.IdentityKindPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/last4`.
+                package var last4: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/source`.
+                package var source: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/externalAccountId`.
+                package var externalAccountId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/sourceAliasPresenceFilter`.
+                @frozen package enum SourceAliasPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/sourceAliasPresenceFilter`.
+                package var sourceAliasPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.SourceAliasPresenceFilterPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - financialTransactionId:
+                ///   - financialTransactionPresenceFilter:
+                ///   - financialTransactionSearch:
+                ///   - purchaseId:
+                ///   - purchasePresenceFilter:
+                ///   - purchaseSearch:
+                ///   - vendorId:
+                ///   - vendorPresenceFilter:
+                ///   - vendorSearch:
+                ///   - search:
+                ///   - provisional:
+                ///   - identityKind:
+                ///   - last4:
+                ///   - source:
+                ///   - externalAccountId:
+                ///   - sourceAliasPresenceFilter:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    financialTransactionId: [Swift.String]? = nil,
+                    financialTransactionPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.FinancialTransactionPresenceFilterPayload? = nil,
+                    financialTransactionSearch: Swift.String? = nil,
+                    purchaseId: [Swift.String]? = nil,
+                    purchasePresenceFilter: Operations.Resources_financialAccount_list.Input.Query.PurchasePresenceFilterPayload? = nil,
+                    purchaseSearch: Swift.String? = nil,
+                    vendorId: [Swift.String]? = nil,
+                    vendorPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.VendorPresenceFilterPayload? = nil,
+                    vendorSearch: Swift.String? = nil,
+                    search: Swift.String? = nil,
+                    provisional: Swift.Bool? = nil,
+                    identityKind: Operations.Resources_financialAccount_list.Input.Query.IdentityKindPayload? = nil,
+                    last4: Swift.String? = nil,
+                    source: [Swift.String]? = nil,
+                    externalAccountId: [Swift.String]? = nil,
+                    sourceAliasPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.SourceAliasPresenceFilterPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.financialTransactionId = financialTransactionId
+                    self.financialTransactionPresenceFilter = financialTransactionPresenceFilter
+                    self.financialTransactionSearch = financialTransactionSearch
+                    self.purchaseId = purchaseId
+                    self.purchasePresenceFilter = purchasePresenceFilter
+                    self.purchaseSearch = purchaseSearch
+                    self.vendorId = vendorId
+                    self.vendorPresenceFilter = vendorPresenceFilter
+                    self.vendorSearch = vendorSearch
+                    self.search = search
+                    self.provisional = provisional
+                    self.identityKind = identityKind
+                    self.last4 = last4
+                    self.source = source
+                    self.externalAccountId = externalAccountId
+                    self.sourceAliasPresenceFilter = sourceAliasPresenceFilter
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_financialAccount_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialAccount_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialAccount_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_financialAccount_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_financialAccount_list.Input.Query = .init(),
+                headers: Operations.Resources_financialAccount_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.FinancialAccountListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.FinancialAccountListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_financialAccount_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_financialAccount_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/financial-accounts/get(resources.financialAccount.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_financialAccount_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_financialAccount_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_financialAccount_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_financialAccount_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/financial-accounts/get(resources.financialAccount.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_financialAccount_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_financialAccount_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/financial-accounts/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/get(resources.financialAccount.get)`.
+    package enum Resources_financialAccount_get {
+        package static let id: Swift.String = "resources.financialAccount.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// financialAccount shortcode, e.g. FAC-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: financialAccount shortcode, e.g. FAC-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_financialAccount_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialAccount_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialAccount_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_financialAccount_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_financialAccount_get.Input.Path,
+                headers: Operations.Resources_financialAccount_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.FinancialAccountOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.FinancialAccountOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_financialAccount_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_financialAccount_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/get(resources.financialAccount.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_financialAccount_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_financialAccount_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_financialAccount_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_financialAccount_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/get(resources.financialAccount.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_financialAccount_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_financialAccount_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/financial-transactions`.
+    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/get(resources.financialTransaction.list)`.
+    package enum Resources_financialTransaction_list {
+        package static let id: Swift.String = "resources.financialTransaction.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/vendorId`.
+                package var vendorId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/vendorPresenceFilter`.
+                @frozen package enum VendorPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/vendorPresenceFilter`.
+                package var vendorPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.VendorPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/vendorSearch`.
+                package var vendorSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/expenseId`.
+                package var expenseId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/expensePresenceFilter`.
+                @frozen package enum ExpensePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/expensePresenceFilter`.
+                package var expensePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ExpensePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/expenseSearch`.
+                package var expenseSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productId`.
+                package var productId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productPresenceFilter`.
+                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productPresenceFilter`.
+                package var productPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ProductPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productSearch`.
+                package var productSearch: Swift.String?
+                /// Substring match on merchant or raw description
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/search`.
+                package var search: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/KindPayload`.
+                @frozen package enum KindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case purchase = "purchase"
+                    case refund = "refund"
+                    case accountTransfer = "account_transfer"
+                    case creditCardPayment = "credit_card_payment"
+                    case fee = "fee"
+                    case interest = "interest"
+                    case income = "income"
+                    case adjustment = "adjustment"
+                    case other = "other"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/kind`.
+                package typealias KindPayload = [Operations.Resources_financialTransaction_list.Input.Query.KindPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/kind`.
+                package var kind: Operations.Resources_financialTransaction_list.Input.Query.KindPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/StatusPayload`.
+                @frozen package enum StatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case expected = "expected"
+                    case pending = "pending"
+                    case posted = "posted"
+                    case void = "void"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/status`.
+                package typealias StatusPayload = [Operations.Resources_financialTransaction_list.Input.Query.StatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/status`.
+                package var status: Operations.Resources_financialTransaction_list.Input.Query.StatusPayload?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/postedDateFrom`.
+                package var postedDateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/postedDateTo`.
+                package var postedDateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/merchant`.
+                package var merchant: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/transactionDateFrom`.
+                package var transactionDateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/transactionDateTo`.
+                package var transactionDateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMin`.
+                package var amountMin: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMax`.
+                package var amountMax: Swift.Double?
+                /// financialAccount shortcode, e.g. FAC-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload`.
+                package struct AccountIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// financialAccount shortcode, e.g. FAC-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload/value2`.
+                    package var value2: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayloadPayload.Value2Payload?
+                    /// Creates a new `AccountIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: financialAccount shortcode, e.g. FAC-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/accountId`.
+                package typealias AccountIdPayload = [Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/accountId`.
+                package var accountId: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayload?
+                /// purchase shortcode, e.g. PUR-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/PurchaseIdPayload`.
+                package struct PurchaseIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// purchase shortcode, e.g. PUR-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/PurchaseIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/PurchaseIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/PurchaseIdPayload/value2`.
+                    package var value2: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayloadPayload.Value2Payload?
+                    /// Creates a new `PurchaseIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: purchase shortcode, e.g. PUR-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/purchaseId`.
+                package typealias PurchaseIdPayload = [Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/purchaseId`.
+                package var purchaseId: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/purchasePresenceFilter`.
+                @frozen package enum PurchasePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/purchasePresenceFilter`.
+                package var purchasePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.PurchasePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/allocationIntegrity`.
+                @frozen package enum AllocationIntegrityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case defect = "defect"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/allocationIntegrity`.
+                package var allocationIntegrity: Operations.Resources_financialTransaction_list.Input.Query.AllocationIntegrityPayload?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/source`.
+                package var source: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/externalId`.
+                package var externalId: [Swift.String]?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - vendorId:
+                ///   - vendorPresenceFilter:
+                ///   - vendorSearch:
+                ///   - expenseId:
+                ///   - expensePresenceFilter:
+                ///   - expenseSearch:
+                ///   - productId:
+                ///   - productPresenceFilter:
+                ///   - productSearch:
+                ///   - search: Substring match on merchant or raw description
+                ///   - kind:
+                ///   - status:
+                ///   - postedDateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - postedDateTo: Calendar day as "YYYY-MM-DD"
+                ///   - merchant:
+                ///   - transactionDateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - transactionDateTo: Calendar day as "YYYY-MM-DD"
+                ///   - amountMin:
+                ///   - amountMax:
+                ///   - accountId:
+                ///   - purchaseId:
+                ///   - purchasePresenceFilter:
+                ///   - allocationIntegrity:
+                ///   - source:
+                ///   - externalId:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    vendorId: [Swift.String]? = nil,
+                    vendorPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.VendorPresenceFilterPayload? = nil,
+                    vendorSearch: Swift.String? = nil,
+                    expenseId: [Swift.String]? = nil,
+                    expensePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ExpensePresenceFilterPayload? = nil,
+                    expenseSearch: Swift.String? = nil,
+                    productId: [Swift.String]? = nil,
+                    productPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ProductPresenceFilterPayload? = nil,
+                    productSearch: Swift.String? = nil,
+                    search: Swift.String? = nil,
+                    kind: Operations.Resources_financialTransaction_list.Input.Query.KindPayload? = nil,
+                    status: Operations.Resources_financialTransaction_list.Input.Query.StatusPayload? = nil,
+                    postedDateFrom: Swift.String? = nil,
+                    postedDateTo: Swift.String? = nil,
+                    merchant: Swift.String? = nil,
+                    transactionDateFrom: Swift.String? = nil,
+                    transactionDateTo: Swift.String? = nil,
+                    amountMin: Swift.Double? = nil,
+                    amountMax: Swift.Double? = nil,
+                    accountId: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayload? = nil,
+                    purchaseId: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayload? = nil,
+                    purchasePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.PurchasePresenceFilterPayload? = nil,
+                    allocationIntegrity: Operations.Resources_financialTransaction_list.Input.Query.AllocationIntegrityPayload? = nil,
+                    source: [Swift.String]? = nil,
+                    externalId: [Swift.String]? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.vendorId = vendorId
+                    self.vendorPresenceFilter = vendorPresenceFilter
+                    self.vendorSearch = vendorSearch
+                    self.expenseId = expenseId
+                    self.expensePresenceFilter = expensePresenceFilter
+                    self.expenseSearch = expenseSearch
+                    self.productId = productId
+                    self.productPresenceFilter = productPresenceFilter
+                    self.productSearch = productSearch
+                    self.search = search
+                    self.kind = kind
+                    self.status = status
+                    self.postedDateFrom = postedDateFrom
+                    self.postedDateTo = postedDateTo
+                    self.merchant = merchant
+                    self.transactionDateFrom = transactionDateFrom
+                    self.transactionDateTo = transactionDateTo
+                    self.amountMin = amountMin
+                    self.amountMax = amountMax
+                    self.accountId = accountId
+                    self.purchaseId = purchaseId
+                    self.purchasePresenceFilter = purchasePresenceFilter
+                    self.allocationIntegrity = allocationIntegrity
+                    self.source = source
+                    self.externalId = externalId
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_financialTransaction_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialTransaction_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialTransaction_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_financialTransaction_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_financialTransaction_list.Input.Query = .init(),
+                headers: Operations.Resources_financialTransaction_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.FinancialTransactionListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.FinancialTransactionListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_financialTransaction_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_financialTransaction_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/financial-transactions/get(resources.financialTransaction.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_financialTransaction_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_financialTransaction_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_financialTransaction_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_financialTransaction_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/financial-transactions/get(resources.financialTransaction.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_financialTransaction_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_financialTransaction_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/financial-transactions/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/get(resources.financialTransaction.get)`.
+    package enum Resources_financialTransaction_get {
+        package static let id: Swift.String = "resources.financialTransaction.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// financialTransaction shortcode, e.g. FTX-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: financialTransaction shortcode, e.g. FTX-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_financialTransaction_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialTransaction_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialTransaction_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_financialTransaction_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_financialTransaction_get.Input.Path,
+                headers: Operations.Resources_financialTransaction_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.FinancialTransactionOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.FinancialTransactionOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_financialTransaction_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_financialTransaction_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/get(resources.financialTransaction.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_financialTransaction_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_financialTransaction_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_financialTransaction_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_financialTransaction_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/get(resources.financialTransaction.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_financialTransaction_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_financialTransaction_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/garden-entries`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/get(resources.gardenEntry.list)`.
+    package enum Resources_gardenEntry_list {
+        package static let id: Swift.String = "resources.gardenEntry.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_gardenEntry_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_gardenEntry_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_gardenEntry_list.Input.Query = .init(),
+                headers: Operations.Resources_gardenEntry_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GardenEntryListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GardenEntryListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_gardenEntry_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_gardenEntry_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden-entries/get(resources.gardenEntry.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_gardenEntry_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_gardenEntry_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_gardenEntry_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_gardenEntry_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden-entries/get(resources.gardenEntry.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_gardenEntry_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_gardenEntry_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/garden-entries/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/get(resources.gardenEntry.get)`.
+    package enum Resources_gardenEntry_get {
+        package static let id: Swift.String = "resources.gardenEntry.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// gardenEntry shortcode, e.g. GDE-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: gardenEntry shortcode, e.g. GDE-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_gardenEntry_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_gardenEntry_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_gardenEntry_get.Input.Path,
+                headers: Operations.Resources_gardenEntry_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GardenEntryOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GardenEntryOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_gardenEntry_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_gardenEntry_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/get(resources.gardenEntry.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_gardenEntry_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_gardenEntry_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_gardenEntry_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_gardenEntry_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/get(resources.gardenEntry.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_gardenEntry_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_gardenEntry_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PATCH /api/v1/garden-entries/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/patch(resources.gardenEntry.update)`.
+    package enum Resources_gardenEntry_update {
+        package static let id: Swift.String = "resources.gardenEntry.update"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/path`.
+            package struct Path: Sendable, Hashable {
+                /// gardenEntry shortcode, e.g. GDE-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: gardenEntry shortcode, e.g. GDE-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_gardenEntry_update.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_update.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_update.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_gardenEntry_update.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/requestBody`.
+            @frozen package enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.GardenEntryUpdateData)
+            }
+            package var body: Operations.Resources_gardenEntry_update.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            package init(
+                path: Operations.Resources_gardenEntry_update.Input.Path,
+                headers: Operations.Resources_gardenEntry_update.Input.Headers = .init(),
+                body: Operations.Resources_gardenEntry_update.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_gardenEntry_update.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_gardenEntry_update.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/patch(resources.gardenEntry.update)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_gardenEntry_update.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_gardenEntry_update.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_gardenEntry_update.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_gardenEntry_update.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/patch(resources.gardenEntry.update)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_gardenEntry_update.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_gardenEntry_update.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/garden/correctLocationDates`.
     /// - Remark: Generated from `#/paths//api/v1/garden/correctLocationDates/post(garden.correctLocationDates)`.
     package enum Garden_correctLocationDates {
@@ -2842,6 +5570,1473 @@ package enum Operations {
             }
         }
     }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/ingredients`.
+    /// - Remark: Generated from `#/paths//api/v1/ingredients/get(resources.ingredient.list)`.
+    package enum Resources_ingredient_list {
+        package static let id: Swift.String = "resources.ingredient.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// Filter by ingredient name (substring)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/nameFilter`.
+                package var nameFilter: Swift.String?
+                /// Filter by ingredients usually kept on hand
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/usuallyOnHand`.
+                package var usuallyOnHand: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/productPresenceFilter`.
+                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/productPresenceFilter`.
+                package var productPresenceFilter: Operations.Resources_ingredient_list.Input.Query.ProductPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/ownRecipePresenceFilter`.
+                @frozen package enum OwnRecipePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to ingredients that are / aren't used by at least one live recipe of your own (excludes cookbook imports).
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/ownRecipePresenceFilter`.
+                package var ownRecipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.OwnRecipePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/recipePresenceFilter`.
+                @frozen package enum RecipePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to ingredients that are / aren't used by at least one live recipe
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/recipePresenceFilter`.
+                package var recipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.RecipePresenceFilterPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - nameFilter: Filter by ingredient name (substring)
+                ///   - usuallyOnHand: Filter by ingredients usually kept on hand
+                ///   - productPresenceFilter:
+                ///   - ownRecipePresenceFilter: Filter to ingredients that are / aren't used by at least one live recipe of your own (excludes cookbook imports).
+                ///   - recipePresenceFilter: Filter to ingredients that are / aren't used by at least one live recipe
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    nameFilter: Swift.String? = nil,
+                    usuallyOnHand: Swift.Bool? = nil,
+                    productPresenceFilter: Operations.Resources_ingredient_list.Input.Query.ProductPresenceFilterPayload? = nil,
+                    ownRecipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.OwnRecipePresenceFilterPayload? = nil,
+                    recipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.RecipePresenceFilterPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.nameFilter = nameFilter
+                    self.usuallyOnHand = usuallyOnHand
+                    self.productPresenceFilter = productPresenceFilter
+                    self.ownRecipePresenceFilter = ownRecipePresenceFilter
+                    self.recipePresenceFilter = recipePresenceFilter
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_ingredient_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_ingredient_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_ingredient_list.Input.Query = .init(),
+                headers: Operations.Resources_ingredient_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.IngredientListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.IngredientListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ingredient_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ingredient_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ingredients/get(resources.ingredient.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_ingredient_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_ingredient_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ingredient_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ingredient_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ingredients/get(resources.ingredient.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_ingredient_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_ingredient_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/ingredients/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)`.
+    package enum Resources_ingredient_get {
+        package static let id: Swift.String = "resources.ingredient.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// ingredient shortcode, e.g. ING-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: ingredient shortcode, e.g. ING-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_ingredient_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_ingredient_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_ingredient_get.Input.Path,
+                headers: Operations.Resources_ingredient_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.IngredientWithFoodOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.IngredientWithFoodOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ingredient_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ingredient_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_ingredient_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_ingredient_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ingredient_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ingredient_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_ingredient_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_ingredient_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PATCH /api/v1/ingredients/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)`.
+    package enum Resources_ingredient_update {
+        package static let id: Swift.String = "resources.ingredient.update"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/path`.
+            package struct Path: Sendable, Hashable {
+                /// ingredient shortcode, e.g. ING-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: ingredient shortcode, e.g. ING-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_ingredient_update.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_update.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_update.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_ingredient_update.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/requestBody`.
+            @frozen package enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.IngredientUpdateData)
+            }
+            package var body: Operations.Resources_ingredient_update.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            package init(
+                path: Operations.Resources_ingredient_update.Input.Path,
+                headers: Operations.Resources_ingredient_update.Input.Headers = .init(),
+                body: Operations.Resources_ingredient_update.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultIngredient)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultIngredient {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ingredient_update.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ingredient_update.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_ingredient_update.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_ingredient_update.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ingredient_update.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ingredient_update.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_ingredient_update.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_ingredient_update.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/inventory`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/get(resources.inventory.list)`.
+    package enum Resources_inventory_list {
+        package static let id: Swift.String = "resources.inventory.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientId`.
+                package var ingredientId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientPresenceFilter`.
+                @frozen package enum IngredientPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientPresenceFilter`.
+                package var ingredientPresenceFilter: Operations.Resources_inventory_list.Input.Query.IngredientPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientSearch`.
+                package var ingredientSearch: Swift.String?
+                /// Filter by product name (substring)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productNameFilter`.
+                package var productNameFilter: Swift.String?
+                /// Filter by location name (substring)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationNameFilter`.
+                package var locationNameFilter: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter`.
+                package struct LocationIdFilterPayload: Codable, Hashable, Sendable {
+                    /// location shortcode, e.g. LOC-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter/value2`.
+                    package var value2: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload.Value2Payload?
+                    /// Creates a new `LocationIdFilterPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: location shortcode, e.g. LOC-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// Filter by exact location ID
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter`.
+                package var locationIdFilter: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter`.
+                package struct ProductIdFilterPayload: Codable, Hashable, Sendable {
+                    /// product shortcode, e.g. PRD-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter/value2`.
+                    package var value2: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload.Value2Payload?
+                    /// Creates a new `ProductIdFilterPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: product shortcode, e.g. PRD-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// Filter by exact product ID
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter`.
+                package var productIdFilter: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload?
+                /// Filter by product manufacturer (substring)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/manufacturerFilter`.
+                package var manufacturerFilter: Swift.String?
+                /// Product category
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/CategoryFilterPayload`.
+                @frozen package enum CategoryFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case food = "food"
+                    case tools = "tools"
+                    case toolConsumables = "tool-consumables"
+                    case toolAccessories = "tool-accessories"
+                    case storage = "storage"
+                    case hardware = "hardware"
+                    case electronics = "electronics"
+                    case software = "software"
+                    case books = "books"
+                    case household = "household"
+                    case supplies = "supplies"
+                    case apparel = "apparel"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/categoryFilter`.
+                package typealias CategoryFilterPayload = [Operations.Resources_inventory_list.Input.Query.CategoryFilterPayloadPayload]
+                /// Filter by product category
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/categoryFilter`.
+                package var categoryFilter: Operations.Resources_inventory_list.Input.Query.CategoryFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/placementFilter`.
+                @frozen package enum PlacementFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case stock = "stock"
+                    case installed = "installed"
+                    case all = "all"
+                }
+                /// Filter by placement. Omitted defaults to 'stock' (movable stock only); 'installed' returns fixtures; 'all' returns both.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/placementFilter`.
+                package var placementFilter: Operations.Resources_inventory_list.Input.Query.PlacementFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationRole`.
+                @frozen package enum LocationRolePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case globalUnknown = "global_unknown"
+                }
+                /// Filter by a stable household location role.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationRole`.
+                package var locationRole: Operations.Resources_inventory_list.Input.Query.LocationRolePayload?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedPresenceFilter`.
+                @frozen package enum VerifiedPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedPresenceFilter`.
+                package var verifiedPresenceFilter: Operations.Resources_inventory_list.Input.Query.VerifiedPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/valuationStatus`.
+                @frozen package enum ValuationStatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case valued = "valued"
+                    case missing = "missing"
+                    case missingWithPricedProduct = "missing_with_priced_product"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/valuationStatus`.
+                package var valuationStatus: Operations.Resources_inventory_list.Input.Query.ValuationStatusPayload?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedFrom`.
+                package var verifiedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedTo`.
+                package var verifiedTo: Swift.String?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - ingredientId:
+                ///   - ingredientPresenceFilter:
+                ///   - ingredientSearch:
+                ///   - productNameFilter: Filter by product name (substring)
+                ///   - locationNameFilter: Filter by location name (substring)
+                ///   - locationIdFilter: Filter by exact location ID
+                ///   - productIdFilter: Filter by exact product ID
+                ///   - manufacturerFilter: Filter by product manufacturer (substring)
+                ///   - categoryFilter: Filter by product category
+                ///   - placementFilter: Filter by placement. Omitted defaults to 'stock' (movable stock only); 'installed' returns fixtures; 'all' returns both.
+                ///   - locationRole: Filter by a stable household location role.
+                ///   - verifiedPresenceFilter:
+                ///   - valuationStatus:
+                ///   - verifiedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - verifiedTo: Calendar day as "YYYY-MM-DD"
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    ingredientId: [Swift.String]? = nil,
+                    ingredientPresenceFilter: Operations.Resources_inventory_list.Input.Query.IngredientPresenceFilterPayload? = nil,
+                    ingredientSearch: Swift.String? = nil,
+                    productNameFilter: Swift.String? = nil,
+                    locationNameFilter: Swift.String? = nil,
+                    locationIdFilter: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload? = nil,
+                    productIdFilter: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload? = nil,
+                    manufacturerFilter: Swift.String? = nil,
+                    categoryFilter: Operations.Resources_inventory_list.Input.Query.CategoryFilterPayload? = nil,
+                    placementFilter: Operations.Resources_inventory_list.Input.Query.PlacementFilterPayload? = nil,
+                    locationRole: Operations.Resources_inventory_list.Input.Query.LocationRolePayload? = nil,
+                    verifiedPresenceFilter: Operations.Resources_inventory_list.Input.Query.VerifiedPresenceFilterPayload? = nil,
+                    valuationStatus: Operations.Resources_inventory_list.Input.Query.ValuationStatusPayload? = nil,
+                    verifiedFrom: Swift.String? = nil,
+                    verifiedTo: Swift.String? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.ingredientId = ingredientId
+                    self.ingredientPresenceFilter = ingredientPresenceFilter
+                    self.ingredientSearch = ingredientSearch
+                    self.productNameFilter = productNameFilter
+                    self.locationNameFilter = locationNameFilter
+                    self.locationIdFilter = locationIdFilter
+                    self.productIdFilter = productIdFilter
+                    self.manufacturerFilter = manufacturerFilter
+                    self.categoryFilter = categoryFilter
+                    self.placementFilter = placementFilter
+                    self.locationRole = locationRole
+                    self.verifiedPresenceFilter = verifiedPresenceFilter
+                    self.valuationStatus = valuationStatus
+                    self.verifiedFrom = verifiedFrom
+                    self.verifiedTo = verifiedTo
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_inventory_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/inventory/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_inventory_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_inventory_list.Input.Query = .init(),
+                headers: Operations.Resources_inventory_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.InventoryListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.InventoryListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_inventory_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_inventory_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/get(resources.inventory.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_inventory_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_inventory_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_inventory_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_inventory_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/get(resources.inventory.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_inventory_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_inventory_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/inventory`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/post(resources.inventory.create)`.
+    package enum Resources_inventory_create {
+        package static let id: Swift.String = "resources.inventory.create"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/inventory/POST/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_create.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_create.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_inventory_create.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/inventory/POST/requestBody`.
+            @frozen package enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.InventoryCreatePayloadData)
+            }
+            package var body: Operations.Resources_inventory_create.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            package init(
+                headers: Operations.Resources_inventory_create.Input.Headers = .init(),
+                body: Operations.Resources_inventory_create.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/201/headers`.
+                package struct Headers: Sendable, Hashable {
+                    /// Created resource URL
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/201/headers/Location`.
+                    package var location: Swift.String?
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - location: Created resource URL
+                    package init(location: Swift.String? = nil) {
+                        self.location = location
+                    }
+                }
+                /// Received HTTP response headers
+                package var headers: Operations.Resources_inventory_create.Output.Created.Headers
+                /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/201/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationCreateResultInventory)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GeneratedEntityMutationCreateResultInventory {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_inventory_create.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                ///   - body: Received HTTP response body
+                package init(
+                    headers: Operations.Resources_inventory_create.Output.Created.Headers = .init(),
+                    body: Operations.Resources_inventory_create.Output.Created.Body
+                ) {
+                    self.headers = headers
+                    self.body = body
+                }
+            }
+            /// 201
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/post(resources.inventory.create)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.Resources_inventory_create.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            package var created: Operations.Resources_inventory_create.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_inventory_create.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_inventory_create.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/post(resources.inventory.create)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_inventory_create.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_inventory_create.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/inventory/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/get(resources.inventory.get)`.
+    package enum Resources_inventory_get {
+        package static let id: Swift.String = "resources.inventory.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// inventory shortcode, e.g. INV-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: inventory shortcode, e.g. INV-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_inventory_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_inventory_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_inventory_get.Input.Path,
+                headers: Operations.Resources_inventory_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.InventoryWithLocationAndProductOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.InventoryWithLocationAndProductOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_inventory_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_inventory_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/get(resources.inventory.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_inventory_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_inventory_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_inventory_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_inventory_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/get(resources.inventory.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_inventory_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_inventory_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `GET /api/v1/inventory/findDuplicates`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/findDuplicates/get(inventory.findDuplicates)`.
     package enum Inventory_findDuplicates {
@@ -3701,6 +7896,850 @@ package enum Operations {
             }
         }
     }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/ledger-parties`.
+    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/get(resources.ledgerParty.list)`.
+    package enum Resources_ledgerParty_list {
+        package static let id: Swift.String = "resources.ledgerParty.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/search`.
+                package var search: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/KindPayload`.
+                @frozen package enum KindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case member = "member"
+                    case guest = "guest"
+                    case household = "household"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/kind`.
+                package typealias KindPayload = [Operations.Resources_ledgerParty_list.Input.Query.KindPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/kind`.
+                package var kind: Operations.Resources_ledgerParty_list.Input.Query.KindPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - search:
+                ///   - kind:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    search: Swift.String? = nil,
+                    kind: Operations.Resources_ledgerParty_list.Input.Query.KindPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.search = search
+                    self.kind = kind
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_ledgerParty_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerParty_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerParty_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_ledgerParty_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_ledgerParty_list.Input.Query = .init(),
+                headers: Operations.Resources_ledgerParty_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.LedgerPartyListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.LedgerPartyListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ledgerParty_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ledgerParty_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ledger-parties/get(resources.ledgerParty.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_ledgerParty_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_ledgerParty_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ledgerParty_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ledgerParty_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ledger-parties/get(resources.ledgerParty.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_ledgerParty_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_ledgerParty_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/ledger-parties/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/get(resources.ledgerParty.get)`.
+    package enum Resources_ledgerParty_get {
+        package static let id: Swift.String = "resources.ledgerParty.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// ledgerParty shortcode, e.g. LPY-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: ledgerParty shortcode, e.g. LPY-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_ledgerParty_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerParty_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerParty_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_ledgerParty_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_ledgerParty_get.Input.Path,
+                headers: Operations.Resources_ledgerParty_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.LedgerPartyOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.LedgerPartyOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ledgerParty_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ledgerParty_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/get(resources.ledgerParty.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_ledgerParty_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_ledgerParty_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ledgerParty_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ledgerParty_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/get(resources.ledgerParty.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_ledgerParty_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_ledgerParty_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/ledger-transfers`.
+    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/get(resources.ledgerTransfer.list)`.
+    package enum Resources_ledgerTransfer_list {
+        package static let id: Swift.String = "resources.ledgerTransfer.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/fromPartyId`.
+                package var fromPartyId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/toPartyId`.
+                package var toPartyId: [Swift.String]?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dateFrom`.
+                package var dateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dateTo`.
+                package var dateTo: Swift.String?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - fromPartyId:
+                ///   - toPartyId:
+                ///   - dateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - dateTo: Calendar day as "YYYY-MM-DD"
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    fromPartyId: [Swift.String]? = nil,
+                    toPartyId: [Swift.String]? = nil,
+                    dateFrom: Swift.String? = nil,
+                    dateTo: Swift.String? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.fromPartyId = fromPartyId
+                    self.toPartyId = toPartyId
+                    self.dateFrom = dateFrom
+                    self.dateTo = dateTo
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_ledgerTransfer_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerTransfer_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerTransfer_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_ledgerTransfer_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_ledgerTransfer_list.Input.Query = .init(),
+                headers: Operations.Resources_ledgerTransfer_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.LedgerTransferListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.LedgerTransferListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ledgerTransfer_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ledgerTransfer_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/get(resources.ledgerTransfer.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_ledgerTransfer_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_ledgerTransfer_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ledgerTransfer_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ledgerTransfer_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/get(resources.ledgerTransfer.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_ledgerTransfer_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_ledgerTransfer_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/ledger-transfers/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/get(resources.ledgerTransfer.get)`.
+    package enum Resources_ledgerTransfer_get {
+        package static let id: Swift.String = "resources.ledgerTransfer.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// ledgerTransfer shortcode, e.g. LTR-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: ledgerTransfer shortcode, e.g. LTR-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_ledgerTransfer_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerTransfer_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerTransfer_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_ledgerTransfer_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_ledgerTransfer_get.Input.Path,
+                headers: Operations.Resources_ledgerTransfer_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.LedgerTransferOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.LedgerTransferOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ledgerTransfer_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ledgerTransfer_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/get(resources.ledgerTransfer.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_ledgerTransfer_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_ledgerTransfer_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_ledgerTransfer_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_ledgerTransfer_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/get(resources.ledgerTransfer.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_ledgerTransfer_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_ledgerTransfer_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/location/bulkUpdateParent`.
     /// - Remark: Generated from `#/paths//api/v1/location/bulkUpdateParent/post(location.bulkUpdateParent)`.
     package enum Location_bulkUpdateParent {
@@ -4188,6 +9227,2092 @@ package enum Operations {
             }
         }
     }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/locations`.
+    /// - Remark: Generated from `#/paths//api/v1/locations/get(resources.location.list)`.
+    package enum Resources_location_list {
+        package static let id: Swift.String = "resources.location.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/locations/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientId`.
+                package var ingredientId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientPresenceFilter`.
+                @frozen package enum IngredientPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientPresenceFilter`.
+                package var ingredientPresenceFilter: Operations.Resources_location_list.Input.Query.IngredientPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientSearch`.
+                package var ingredientSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/aiDescriptionPresenceFilter`.
+                @frozen package enum AiDescriptionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to locations that do / don't have an AI-generated description.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/aiDescriptionPresenceFilter`.
+                package var aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload?
+                /// Filter by location name (substring)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/nameFilter`.
+                package var nameFilter: Swift.String?
+                /// type of location (room, container, etc)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ItemTypeFilterPayload`.
+                @frozen package enum ItemTypeFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case house = "house"
+                    case room = "room"
+                    case area = "area"
+                    case bag = "bag"
+                    case box = "box"
+                    case shelf = "shelf"
+                    case table = "table"
+                    case drawer = "drawer"
+                    case cart = "cart"
+                    case cabinet = "cabinet"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/itemTypeFilter`.
+                package typealias ItemTypeFilterPayload = [Operations.Resources_location_list.Input.Query.ItemTypeFilterPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/itemTypeFilter`.
+                package var itemTypeFilter: Operations.Resources_location_list.Input.Query.ItemTypeFilterPayload?
+                /// product shortcode, e.g. PRD-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload`.
+                package struct ProductIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// product shortcode, e.g. PRD-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload/value2`.
+                    package var value2: Operations.Resources_location_list.Input.Query.ProductIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ProductIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: product shortcode, e.g. PRD-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_location_list.Input.Query.ProductIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/productId`.
+                package typealias ProductIdPayload = [Operations.Resources_location_list.Input.Query.ProductIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/productId`.
+                package var productId: Operations.Resources_location_list.Input.Query.ProductIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/productPresenceFilter`.
+                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to locations that are / aren't an instance of a Product. "has" is the vessel set (totes, bins, racks); "none" is rooms, areas and drawers.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/productPresenceFilter`.
+                package var productPresenceFilter: Operations.Resources_location_list.Input.Query.ProductPresenceFilterPayload?
+                /// location shortcode, e.g. LOC-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ParentIdPayload`.
+                package struct ParentIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// location shortcode, e.g. LOC-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ParentIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ParentIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ParentIdPayload/value2`.
+                    package var value2: Operations.Resources_location_list.Input.Query.ParentIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ParentIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: location shortcode, e.g. LOC-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_location_list.Input.Query.ParentIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/parentId`.
+                package typealias ParentIdPayload = [Operations.Resources_location_list.Input.Query.ParentIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/parentId`.
+                package var parentId: Operations.Resources_location_list.Input.Query.ParentIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/parentPresenceFilter`.
+                @frozen package enum ParentPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/parentPresenceFilter`.
+                package var parentPresenceFilter: Operations.Resources_location_list.Input.Query.ParentPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/inventoryPresenceFilter`.
+                @frozen package enum InventoryPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to locations that do / don't hold at least one live inventory entry
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/inventoryPresenceFilter`.
+                package var inventoryPresenceFilter: Operations.Resources_location_list.Input.Query.InventoryPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/imagePresenceFilter`.
+                @frozen package enum ImagePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to locations that do / don't have at least one image (PDF attachments don't count).
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/imagePresenceFilter`.
+                package var imagePresenceFilter: Operations.Resources_location_list.Input.Query.ImagePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/childPresenceFilter`.
+                @frozen package enum ChildPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to locations that do / don't have at least one live child location.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/childPresenceFilter`.
+                package var childPresenceFilter: Operations.Resources_location_list.Input.Query.ChildPresenceFilterPayload?
+                /// Locations last recounted more than this many days ago, or never recounted.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/lastBulkInventoryOlderThanDays`.
+                package var lastBulkInventoryOlderThanDays: Swift.Int?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/directItemCountMin`.
+                package var directItemCountMin: Swift.Int?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/directItemCountMax`.
+                package var directItemCountMax: Swift.Int?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/valuationMin`.
+                package var valuationMin: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/valuationMax`.
+                package var valuationMax: Swift.Double?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - ingredientId:
+                ///   - ingredientPresenceFilter:
+                ///   - ingredientSearch:
+                ///   - aiDescriptionPresenceFilter: Filter to locations that do / don't have an AI-generated description.
+                ///   - nameFilter: Filter by location name (substring)
+                ///   - itemTypeFilter:
+                ///   - productId:
+                ///   - productPresenceFilter: Filter to locations that are / aren't an instance of a Product. "has" is the vessel set (totes, bins, racks); "none" is rooms, areas and drawers.
+                ///   - parentId:
+                ///   - parentPresenceFilter:
+                ///   - inventoryPresenceFilter: Filter to locations that do / don't hold at least one live inventory entry
+                ///   - imagePresenceFilter: Filter to locations that do / don't have at least one image (PDF attachments don't count).
+                ///   - childPresenceFilter: Filter to locations that do / don't have at least one live child location.
+                ///   - lastBulkInventoryOlderThanDays: Locations last recounted more than this many days ago, or never recounted.
+                ///   - directItemCountMin:
+                ///   - directItemCountMax:
+                ///   - valuationMin:
+                ///   - valuationMax:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    ingredientId: [Swift.String]? = nil,
+                    ingredientPresenceFilter: Operations.Resources_location_list.Input.Query.IngredientPresenceFilterPayload? = nil,
+                    ingredientSearch: Swift.String? = nil,
+                    aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload? = nil,
+                    nameFilter: Swift.String? = nil,
+                    itemTypeFilter: Operations.Resources_location_list.Input.Query.ItemTypeFilterPayload? = nil,
+                    productId: Operations.Resources_location_list.Input.Query.ProductIdPayload? = nil,
+                    productPresenceFilter: Operations.Resources_location_list.Input.Query.ProductPresenceFilterPayload? = nil,
+                    parentId: Operations.Resources_location_list.Input.Query.ParentIdPayload? = nil,
+                    parentPresenceFilter: Operations.Resources_location_list.Input.Query.ParentPresenceFilterPayload? = nil,
+                    inventoryPresenceFilter: Operations.Resources_location_list.Input.Query.InventoryPresenceFilterPayload? = nil,
+                    imagePresenceFilter: Operations.Resources_location_list.Input.Query.ImagePresenceFilterPayload? = nil,
+                    childPresenceFilter: Operations.Resources_location_list.Input.Query.ChildPresenceFilterPayload? = nil,
+                    lastBulkInventoryOlderThanDays: Swift.Int? = nil,
+                    directItemCountMin: Swift.Int? = nil,
+                    directItemCountMax: Swift.Int? = nil,
+                    valuationMin: Swift.Double? = nil,
+                    valuationMax: Swift.Double? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.ingredientId = ingredientId
+                    self.ingredientPresenceFilter = ingredientPresenceFilter
+                    self.ingredientSearch = ingredientSearch
+                    self.aiDescriptionPresenceFilter = aiDescriptionPresenceFilter
+                    self.nameFilter = nameFilter
+                    self.itemTypeFilter = itemTypeFilter
+                    self.productId = productId
+                    self.productPresenceFilter = productPresenceFilter
+                    self.parentId = parentId
+                    self.parentPresenceFilter = parentPresenceFilter
+                    self.inventoryPresenceFilter = inventoryPresenceFilter
+                    self.imagePresenceFilter = imagePresenceFilter
+                    self.childPresenceFilter = childPresenceFilter
+                    self.lastBulkInventoryOlderThanDays = lastBulkInventoryOlderThanDays
+                    self.directItemCountMin = directItemCountMin
+                    self.directItemCountMax = directItemCountMax
+                    self.valuationMin = valuationMin
+                    self.valuationMax = valuationMax
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_location_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/locations/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_location_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_location_list.Input.Query = .init(),
+                headers: Operations.Resources_location_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.LocationListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.LocationListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_location_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_location_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/locations/get(resources.location.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_location_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_location_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_location_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_location_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/locations/get(resources.location.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_location_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_location_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `POST /api/v1/locations`.
+    /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)`.
+    package enum Resources_location_create {
+        package static let id: Swift.String = "resources.location.create"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/locations/POST/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_create.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_create.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_location_create.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/locations/POST/requestBody`.
+            @frozen package enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.LocationCreateInput)
+            }
+            package var body: Operations.Resources_location_create.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            package init(
+                headers: Operations.Resources_location_create.Input.Headers = .init(),
+                body: Operations.Resources_location_create.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/201/headers`.
+                package struct Headers: Sendable, Hashable {
+                    /// Created resource URL
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/201/headers/Location`.
+                    package var location: Swift.String?
+                    /// Creates a new `Headers`.
+                    ///
+                    /// - Parameters:
+                    ///   - location: Created resource URL
+                    package init(location: Swift.String? = nil) {
+                        self.location = location
+                    }
+                }
+                /// Received HTTP response headers
+                package var headers: Operations.Resources_location_create.Output.Created.Headers
+                /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/201/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationCreateResultLocation)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GeneratedEntityMutationCreateResultLocation {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_location_create.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - headers: Received HTTP response headers
+                ///   - body: Received HTTP response body
+                package init(
+                    headers: Operations.Resources_location_create.Output.Created.Headers = .init(),
+                    body: Operations.Resources_location_create.Output.Created.Body
+                ) {
+                    self.headers = headers
+                    self.body = body
+                }
+            }
+            /// 201
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.Resources_location_create.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            package var created: Operations.Resources_location_create.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_location_create.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_location_create.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_location_create.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_location_create.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/locations/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/locations/{id}/get(resources.location.get)`.
+    package enum Resources_location_get {
+        package static let id: Swift.String = "resources.location.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// location shortcode, e.g. LOC-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: location shortcode, e.g. LOC-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_location_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_location_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_location_get.Input.Path,
+                headers: Operations.Resources_location_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.InfLocation)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.InfLocation {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_location_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_location_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/locations/{id}/get(resources.location.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_location_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_location_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_location_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_location_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/locations/{id}/get(resources.location.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_location_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_location_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PATCH /api/v1/locations/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)`.
+    package enum Resources_location_update {
+        package static let id: Swift.String = "resources.location.update"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/path`.
+            package struct Path: Sendable, Hashable {
+                /// location shortcode, e.g. LOC-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: location shortcode, e.g. LOC-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_location_update.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_update.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_update.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_location_update.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/requestBody`.
+            @frozen package enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.LocationUpdateData)
+            }
+            package var body: Operations.Resources_location_update.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            package init(
+                path: Operations.Resources_location_update.Input.Path,
+                headers: Operations.Resources_location_update.Input.Headers = .init(),
+                body: Operations.Resources_location_update.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultLocation)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultLocation {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_location_update.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_location_update.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_location_update.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_location_update.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_location_update.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_location_update.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_location_update.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_location_update.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/meals`.
+    /// - Remark: Generated from `#/paths//api/v1/meals/get(resources.meal.list)`.
+    package enum Resources_meal_list {
+        package static let id: Swift.String = "resources.meal.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/meals/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/MealTypePayload`.
+                @frozen package enum MealTypePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case breakfast = "breakfast"
+                    case brunch = "brunch"
+                    case lunch = "lunch"
+                    case snack = "snack"
+                    case dinner = "dinner"
+                    case dessert = "dessert"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealType`.
+                package typealias MealTypePayload = [Operations.Resources_meal_list.Input.Query.MealTypePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealType`.
+                package var mealType: Operations.Resources_meal_list.Input.Query.MealTypePayload?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/MealKindPayload`.
+                @frozen package enum MealKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case cooked = "cooked"
+                    case leftovers = "leftovers"
+                    case eatingOut = "eating_out"
+                    case takeout = "takeout"
+                    case other = "other"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealKind`.
+                package typealias MealKindPayload = [Operations.Resources_meal_list.Input.Query.MealKindPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealKind`.
+                package var mealKind: Operations.Resources_meal_list.Input.Query.MealKindPayload?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealTypePresenceFilter`.
+                @frozen package enum MealTypePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealTypePresenceFilter`.
+                package var mealTypePresenceFilter: Operations.Resources_meal_list.Input.Query.MealTypePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipeCostCoverage`.
+                @frozen package enum RecipeCostCoveragePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case understated = "understated"
+                }
+                /// Meals with a live recipe whose priced ingredients are incomplete.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipeCostCoverage`.
+                package var recipeCostCoverage: Operations.Resources_meal_list.Input.Query.RecipeCostCoveragePayload?
+                /// Only meals on or after this day
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/from`.
+                package var from: Swift.String?
+                /// Only meals on or before this day
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/to`.
+                package var to: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipeId`.
+                package var recipeId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipePresenceFilter`.
+                @frozen package enum RecipePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipePresenceFilter`.
+                package var recipePresenceFilter: Operations.Resources_meal_list.Input.Query.RecipePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipeSearch`.
+                package var recipeSearch: Swift.String?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - mealType:
+                ///   - mealKind:
+                ///   - mealTypePresenceFilter:
+                ///   - recipeCostCoverage: Meals with a live recipe whose priced ingredients are incomplete.
+                ///   - from: Only meals on or after this day
+                ///   - to: Only meals on or before this day
+                ///   - recipeId:
+                ///   - recipePresenceFilter:
+                ///   - recipeSearch:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    mealType: Operations.Resources_meal_list.Input.Query.MealTypePayload? = nil,
+                    mealKind: Operations.Resources_meal_list.Input.Query.MealKindPayload? = nil,
+                    mealTypePresenceFilter: Operations.Resources_meal_list.Input.Query.MealTypePresenceFilterPayload? = nil,
+                    recipeCostCoverage: Operations.Resources_meal_list.Input.Query.RecipeCostCoveragePayload? = nil,
+                    from: Swift.String? = nil,
+                    to: Swift.String? = nil,
+                    recipeId: [Swift.String]? = nil,
+                    recipePresenceFilter: Operations.Resources_meal_list.Input.Query.RecipePresenceFilterPayload? = nil,
+                    recipeSearch: Swift.String? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.mealType = mealType
+                    self.mealKind = mealKind
+                    self.mealTypePresenceFilter = mealTypePresenceFilter
+                    self.recipeCostCoverage = recipeCostCoverage
+                    self.from = from
+                    self.to = to
+                    self.recipeId = recipeId
+                    self.recipePresenceFilter = recipePresenceFilter
+                    self.recipeSearch = recipeSearch
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_meal_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/meals/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_meal_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_meal_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_meal_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_meal_list.Input.Query = .init(),
+                headers: Operations.Resources_meal_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/meals/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.MealListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.MealListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_meal_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_meal_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/meals/get(resources.meal.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_meal_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_meal_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/meals/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/meals/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_meal_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_meal_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/meals/get(resources.meal.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_meal_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_meal_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/meals/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)`.
+    package enum Resources_meal_get {
+        package static let id: Swift.String = "resources.meal.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// meal shortcode, e.g. MEL-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: meal shortcode, e.g. MEL-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_meal_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_meal_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_meal_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_meal_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_meal_get.Input.Path,
+                headers: Operations.Resources_meal_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.MealOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.MealOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_meal_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_meal_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_meal_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_meal_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_meal_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_meal_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_meal_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_meal_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/plantings`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/get(resources.planting.list)`.
+    package enum Resources_planting_list {
+        package static let id: Swift.String = "resources.planting.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_planting_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/plantings/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_planting_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_planting_list.Input.Query = .init(),
+                headers: Operations.Resources_planting_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/plantings/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PlantingListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.PlantingListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_planting_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_planting_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/plantings/get(resources.planting.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_planting_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_planting_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/plantings/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_planting_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_planting_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/plantings/get(resources.planting.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_planting_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_planting_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/plantings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/get(resources.planting.get)`.
+    package enum Resources_planting_get {
+        package static let id: Swift.String = "resources.planting.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// planting shortcode, e.g. PLT-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: planting shortcode, e.g. PLT-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_planting_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_planting_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_planting_get.Input.Path,
+                headers: Operations.Resources_planting_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.PlantingOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.PlantingOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_planting_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_planting_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/get(resources.planting.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_planting_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_planting_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_planting_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_planting_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/get(resources.planting.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_planting_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_planting_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PATCH /api/v1/plantings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/patch(resources.planting.update)`.
+    package enum Resources_planting_update {
+        package static let id: Swift.String = "resources.planting.update"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/path`.
+            package struct Path: Sendable, Hashable {
+                /// planting shortcode, e.g. PLT-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: planting shortcode, e.g. PLT-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_planting_update.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_update.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_update.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_planting_update.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/requestBody`.
+            @frozen package enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.PlantingUpdateData)
+            }
+            package var body: Operations.Resources_planting_update.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            package init(
+                path: Operations.Resources_planting_update.Input.Path,
+                headers: Operations.Resources_planting_update.Input.Headers = .init(),
+                body: Operations.Resources_planting_update.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultPlanting)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultPlanting {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_planting_update.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_planting_update.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/patch(resources.planting.update)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_planting_update.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_planting_update.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_planting_update.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_planting_update.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/patch(resources.planting.update)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_planting_update.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_planting_update.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `GET /api/v1/problems/getCounts`.
     /// - Remark: Generated from `#/paths//api/v1/problems/getCounts/get(problems.getCounts)`.
     package enum Problems_getCounts {
@@ -4470,543 +11595,6 @@ package enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             package var `default`: Operations.Product_findOrCreateByUPC.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/search/find`.
-    /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)`.
-    package enum Search_find {
-        package static let id: Swift.String = "search.find"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/query`.
-                package var query: Swift.String
-                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/EntityTypesPayload`.
-                @frozen package enum EntityTypesPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case product = "product"
-                    case recipe = "recipe"
-                    case ingredient = "ingredient"
-                    case cookbook = "cookbook"
-                    case location = "location"
-                    case inventory = "inventory"
-                    case meal = "meal"
-                    case project = "project"
-                    case task = "task"
-                    case vendor = "vendor"
-                    case purchase = "purchase"
-                    case financialAccount = "financialAccount"
-                    case financialTransaction = "financialTransaction"
-                    case wish = "wish"
-                    case expense = "expense"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/entityTypes`.
-                package typealias EntityTypesPayload = [Operations.Search_find.Input.Query.EntityTypesPayloadPayload]
-                /// Restrict results to these searchable entity types.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/entityTypes`.
-                package var entityTypes: Operations.Search_find.Input.Query.EntityTypesPayload?
-                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/limit`.
-                package var limit: Swift.Int?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - query:
-                ///   - entityTypes: Restrict results to these searchable entity types.
-                ///   - limit:
-                package init(
-                    query: Swift.String,
-                    entityTypes: Operations.Search_find.Input.Query.EntityTypesPayload? = nil,
-                    limit: Swift.Int? = nil
-                ) {
-                    self.query = query
-                    self.entityTypes = entityTypes
-                    self.limit = limit
-                }
-            }
-            package var query: Operations.Search_find.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/search/find/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Search_find.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Search_find.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Search_find.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Search_find.Input.Query,
-                headers: Operations.Search_find.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/search/find/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.SearchHitsOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.SearchHitsOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Search_find.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Search_find.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Search_find.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Search_find.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/search/find/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Search_find.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Search_find.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Search_find.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Search_find.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/task/todayBriefing`.
-    /// - Remark: Generated from `#/paths//api/v1/task/todayBriefing/get(task.todayBriefing)`.
-    package enum Task_todayBriefing {
-        package static let id: Swift.String = "task.todayBriefing"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Task_todayBriefing.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Task_todayBriefing.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Task_todayBriefing.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - headers:
-            package init(headers: Operations.Task_todayBriefing.Input.Headers = .init()) {
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.TaskTodayBriefingOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.TaskTodayBriefingOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Task_todayBriefing.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Task_todayBriefing.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/task/todayBriefing/get(task.todayBriefing)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Task_todayBriefing.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Task_todayBriefing.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Task_todayBriefing.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Task_todayBriefing.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/task/todayBriefing/get(task.todayBriefing)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Task_todayBriefing.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Task_todayBriefing.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/upc/lookup`.
-    /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)`.
-    package enum Upc_lookup {
-        package static let id: Swift.String = "upc.lookup"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/query/upc`.
-                package var upc: Swift.String
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - upc: EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode
-                package init(upc: Swift.String) {
-                    self.upc = upc
-                }
-            }
-            package var query: Operations.Upc_lookup.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Upc_lookup.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Upc_lookup.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Upc_lookup.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Upc_lookup.Input.Query,
-                headers: Operations.Upc_lookup.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.UpcLookupOutput)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.UpcLookupOutput {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Upc_lookup.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Upc_lookup.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Upc_lookup.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Upc_lookup.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Upc_lookup.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Upc_lookup.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Upc_lookup.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Upc_lookup.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -6365,4643 +12953,6 @@ package enum Operations {
     }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
-    /// - Remark: HTTP `GET /api/v1/recipes`.
-    /// - Remark: Generated from `#/paths//api/v1/recipes/get(resources.recipe.list)`.
-    package enum Resources_recipe_list {
-        package static let id: Swift.String = "resources.recipe.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/ingredientId`.
-                package var ingredientId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/ingredientPresenceFilter`.
-                @frozen package enum IngredientPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/ingredientPresenceFilter`.
-                package var ingredientPresenceFilter: Operations.Resources_recipe_list.Input.Query.IngredientPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/ingredientSearch`.
-                package var ingredientSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/mealId`.
-                package var mealId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/mealPresenceFilter`.
-                @frozen package enum MealPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to recipes that have / haven't been planned on at least one live meal
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/mealPresenceFilter`.
-                package var mealPresenceFilter: Operations.Resources_recipe_list.Input.Query.MealPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/mealSearch`.
-                package var mealSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/nameFilter`.
-                package var nameFilter: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/tagFilters`.
-                package var tagFilters: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/totalMinutesMin`.
-                package var totalMinutesMin: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/totalMinutesMax`.
-                package var totalMinutesMax: Swift.Double?
-                /// cookbook shortcode, e.g. CKB-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload`.
-                package struct CookbookIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// cookbook shortcode, e.g. CKB-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload/value2`.
-                    package var value2: Operations.Resources_recipe_list.Input.Query.CookbookIdPayloadPayload.Value2Payload?
-                    /// Creates a new `CookbookIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: cookbook shortcode, e.g. CKB-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_recipe_list.Input.Query.CookbookIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/cookbookId`.
-                package typealias CookbookIdPayload = [Operations.Resources_recipe_list.Input.Query.CookbookIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/cookbookId`.
-                package var cookbookId: Operations.Resources_recipe_list.Input.Query.CookbookIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/cookbookPresenceFilter`.
-                @frozen package enum CookbookPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/cookbookPresenceFilter`.
-                package var cookbookPresenceFilter: Operations.Resources_recipe_list.Input.Query.CookbookPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/tagsPresenceFilter`.
-                @frozen package enum TagsPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/tagsPresenceFilter`.
-                package var tagsPresenceFilter: Operations.Resources_recipe_list.Input.Query.TagsPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/imagePresenceFilter`.
-                @frozen package enum ImagePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to recipes that do / don't have at least one image (PDFs don't count)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/imagePresenceFilter`.
-                package var imagePresenceFilter: Operations.Resources_recipe_list.Input.Query.ImagePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/instructionsPresenceFilter`.
-                @frozen package enum InstructionsPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to recipes that do / don't have any written instructions.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/instructionsPresenceFilter`.
-                package var instructionsPresenceFilter: Operations.Resources_recipe_list.Input.Query.InstructionsPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/SourceTypeFilterPayload`.
-                @frozen package enum SourceTypeFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case book = "Book"
-                    case website = "Website"
-                    case other = "Other"
-                    case notion = "Notion"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sourceTypeFilter`.
-                package typealias SourceTypeFilterPayload = [Operations.Resources_recipe_list.Input.Query.SourceTypeFilterPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sourceTypeFilter`.
-                package var sourceTypeFilter: Operations.Resources_recipe_list.Input.Query.SourceTypeFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sourceTypePresenceFilter`.
-                @frozen package enum SourceTypePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sourceTypePresenceFilter`.
-                package var sourceTypePresenceFilter: Operations.Resources_recipe_list.Input.Query.SourceTypePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/costTotalMin`.
-                package var costTotalMin: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/costTotalMax`.
-                package var costTotalMax: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/caloriesTotalMin`.
-                package var caloriesTotalMin: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/caloriesTotalMax`.
-                package var caloriesTotalMax: Swift.Double?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - ingredientId:
-                ///   - ingredientPresenceFilter:
-                ///   - ingredientSearch:
-                ///   - mealId:
-                ///   - mealPresenceFilter: Filter to recipes that have / haven't been planned on at least one live meal
-                ///   - mealSearch:
-                ///   - nameFilter:
-                ///   - tagFilters:
-                ///   - totalMinutesMin:
-                ///   - totalMinutesMax:
-                ///   - cookbookId:
-                ///   - cookbookPresenceFilter:
-                ///   - tagsPresenceFilter:
-                ///   - imagePresenceFilter: Filter to recipes that do / don't have at least one image (PDFs don't count)
-                ///   - instructionsPresenceFilter: Filter to recipes that do / don't have any written instructions.
-                ///   - sourceTypeFilter:
-                ///   - sourceTypePresenceFilter:
-                ///   - costTotalMin:
-                ///   - costTotalMax:
-                ///   - caloriesTotalMin:
-                ///   - caloriesTotalMax:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    ingredientId: [Swift.String]? = nil,
-                    ingredientPresenceFilter: Operations.Resources_recipe_list.Input.Query.IngredientPresenceFilterPayload? = nil,
-                    ingredientSearch: Swift.String? = nil,
-                    mealId: [Swift.String]? = nil,
-                    mealPresenceFilter: Operations.Resources_recipe_list.Input.Query.MealPresenceFilterPayload? = nil,
-                    mealSearch: Swift.String? = nil,
-                    nameFilter: Swift.String? = nil,
-                    tagFilters: [Swift.String]? = nil,
-                    totalMinutesMin: Swift.Double? = nil,
-                    totalMinutesMax: Swift.Double? = nil,
-                    cookbookId: Operations.Resources_recipe_list.Input.Query.CookbookIdPayload? = nil,
-                    cookbookPresenceFilter: Operations.Resources_recipe_list.Input.Query.CookbookPresenceFilterPayload? = nil,
-                    tagsPresenceFilter: Operations.Resources_recipe_list.Input.Query.TagsPresenceFilterPayload? = nil,
-                    imagePresenceFilter: Operations.Resources_recipe_list.Input.Query.ImagePresenceFilterPayload? = nil,
-                    instructionsPresenceFilter: Operations.Resources_recipe_list.Input.Query.InstructionsPresenceFilterPayload? = nil,
-                    sourceTypeFilter: Operations.Resources_recipe_list.Input.Query.SourceTypeFilterPayload? = nil,
-                    sourceTypePresenceFilter: Operations.Resources_recipe_list.Input.Query.SourceTypePresenceFilterPayload? = nil,
-                    costTotalMin: Swift.Double? = nil,
-                    costTotalMax: Swift.Double? = nil,
-                    caloriesTotalMin: Swift.Double? = nil,
-                    caloriesTotalMax: Swift.Double? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.ingredientId = ingredientId
-                    self.ingredientPresenceFilter = ingredientPresenceFilter
-                    self.ingredientSearch = ingredientSearch
-                    self.mealId = mealId
-                    self.mealPresenceFilter = mealPresenceFilter
-                    self.mealSearch = mealSearch
-                    self.nameFilter = nameFilter
-                    self.tagFilters = tagFilters
-                    self.totalMinutesMin = totalMinutesMin
-                    self.totalMinutesMax = totalMinutesMax
-                    self.cookbookId = cookbookId
-                    self.cookbookPresenceFilter = cookbookPresenceFilter
-                    self.tagsPresenceFilter = tagsPresenceFilter
-                    self.imagePresenceFilter = imagePresenceFilter
-                    self.instructionsPresenceFilter = instructionsPresenceFilter
-                    self.sourceTypeFilter = sourceTypeFilter
-                    self.sourceTypePresenceFilter = sourceTypePresenceFilter
-                    self.costTotalMin = costTotalMin
-                    self.costTotalMax = costTotalMax
-                    self.caloriesTotalMin = caloriesTotalMin
-                    self.caloriesTotalMax = caloriesTotalMax
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_recipe_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/recipes/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_recipe_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_recipe_list.Input.Query = .init(),
-                headers: Operations.Resources_recipe_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.RecipeListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.RecipeListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_recipe_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_recipe_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/recipes/get(resources.recipe.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_recipe_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_recipe_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_recipe_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_recipe_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/recipes/get(resources.recipe.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_recipe_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_recipe_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/recipes/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/get(resources.recipe.get)`.
-    package enum Resources_recipe_get {
-        package static let id: Swift.String = "resources.recipe.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// recipe shortcode, e.g. RCP-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: recipe shortcode, e.g. RCP-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_recipe_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_recipe_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_recipe_get.Input.Path,
-                headers: Operations.Resources_recipe_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.RecipeDetailMcpOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.RecipeDetailMcpOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_recipe_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_recipe_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/get(resources.recipe.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_recipe_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_recipe_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_recipe_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_recipe_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/get(resources.recipe.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_recipe_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_recipe_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `PATCH /api/v1/recipes/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/patch(resources.recipe.update)`.
-    package enum Resources_recipe_update {
-        package static let id: Swift.String = "resources.recipe.update"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/path`.
-            package struct Path: Sendable, Hashable {
-                /// recipe shortcode, e.g. RCP-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: recipe shortcode, e.g. RCP-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_recipe_update.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_update.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_update.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_recipe_update.Input.Headers
-            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/requestBody`.
-            @frozen package enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/requestBody/content/application\/json`.
-                case json(Components.Schemas.RecipeUpdateData)
-            }
-            package var body: Operations.Resources_recipe_update.Input.Body?
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            ///   - body:
-            package init(
-                path: Operations.Resources_recipe_update.Input.Path,
-                headers: Operations.Resources_recipe_update.Input.Headers = .init(),
-                body: Operations.Resources_recipe_update.Input.Body? = nil
-            ) {
-                self.path = path
-                self.headers = headers
-                self.body = body
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/responses/200/content/application\/json`.
-                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultRecipe)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultRecipe {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_recipe_update.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_recipe_update.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/patch(resources.recipe.update)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_recipe_update.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_recipe_update.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_recipe_update.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_recipe_update.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/patch(resources.recipe.update)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_recipe_update.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_recipe_update.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/ingredients`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/get(resources.ingredient.list)`.
-    package enum Resources_ingredient_list {
-        package static let id: Swift.String = "resources.ingredient.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// Filter by ingredient name (substring)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/nameFilter`.
-                package var nameFilter: Swift.String?
-                /// Filter by ingredients usually kept on hand
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/usuallyOnHand`.
-                package var usuallyOnHand: Swift.Bool?
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/productPresenceFilter`.
-                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/productPresenceFilter`.
-                package var productPresenceFilter: Operations.Resources_ingredient_list.Input.Query.ProductPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/ownRecipePresenceFilter`.
-                @frozen package enum OwnRecipePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to ingredients that are / aren't used by at least one live recipe of your own (excludes cookbook imports).
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/ownRecipePresenceFilter`.
-                package var ownRecipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.OwnRecipePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/recipePresenceFilter`.
-                @frozen package enum RecipePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to ingredients that are / aren't used by at least one live recipe
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/recipePresenceFilter`.
-                package var recipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.RecipePresenceFilterPayload?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - nameFilter: Filter by ingredient name (substring)
-                ///   - usuallyOnHand: Filter by ingredients usually kept on hand
-                ///   - productPresenceFilter:
-                ///   - ownRecipePresenceFilter: Filter to ingredients that are / aren't used by at least one live recipe of your own (excludes cookbook imports).
-                ///   - recipePresenceFilter: Filter to ingredients that are / aren't used by at least one live recipe
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    nameFilter: Swift.String? = nil,
-                    usuallyOnHand: Swift.Bool? = nil,
-                    productPresenceFilter: Operations.Resources_ingredient_list.Input.Query.ProductPresenceFilterPayload? = nil,
-                    ownRecipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.OwnRecipePresenceFilterPayload? = nil,
-                    recipePresenceFilter: Operations.Resources_ingredient_list.Input.Query.RecipePresenceFilterPayload? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.nameFilter = nameFilter
-                    self.usuallyOnHand = usuallyOnHand
-                    self.productPresenceFilter = productPresenceFilter
-                    self.ownRecipePresenceFilter = ownRecipePresenceFilter
-                    self.recipePresenceFilter = recipePresenceFilter
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_ingredient_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_ingredient_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_ingredient_list.Input.Query = .init(),
-                headers: Operations.Resources_ingredient_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.IngredientListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.IngredientListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ingredient_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ingredient_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ingredients/get(resources.ingredient.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_ingredient_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_ingredient_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ingredients/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ingredient_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ingredient_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ingredients/get(resources.ingredient.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_ingredient_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_ingredient_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/ingredients/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)`.
-    package enum Resources_ingredient_get {
-        package static let id: Swift.String = "resources.ingredient.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// ingredient shortcode, e.g. ING-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: ingredient shortcode, e.g. ING-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_ingredient_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_ingredient_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_ingredient_get.Input.Path,
-                headers: Operations.Resources_ingredient_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.IngredientWithFoodOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.IngredientWithFoodOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ingredient_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ingredient_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_ingredient_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_ingredient_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ingredient_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ingredient_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_ingredient_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_ingredient_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `PATCH /api/v1/ingredients/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)`.
-    package enum Resources_ingredient_update {
-        package static let id: Swift.String = "resources.ingredient.update"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/path`.
-            package struct Path: Sendable, Hashable {
-                /// ingredient shortcode, e.g. ING-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: ingredient shortcode, e.g. ING-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_ingredient_update.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_update.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ingredient_update.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_ingredient_update.Input.Headers
-            /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/requestBody`.
-            @frozen package enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/requestBody/content/application\/json`.
-                case json(Components.Schemas.IngredientUpdateData)
-            }
-            package var body: Operations.Resources_ingredient_update.Input.Body?
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            ///   - body:
-            package init(
-                path: Operations.Resources_ingredient_update.Input.Path,
-                headers: Operations.Resources_ingredient_update.Input.Headers = .init(),
-                body: Operations.Resources_ingredient_update.Input.Body? = nil
-            ) {
-                self.path = path
-                self.headers = headers
-                self.body = body
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/responses/200/content/application\/json`.
-                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultIngredient)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultIngredient {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ingredient_update.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ingredient_update.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_ingredient_update.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_ingredient_update.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/PATCH/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ingredient_update.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ingredient_update.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_ingredient_update.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_ingredient_update.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/locations`.
-    /// - Remark: Generated from `#/paths//api/v1/locations/get(resources.location.list)`.
-    package enum Resources_location_list {
-        package static let id: Swift.String = "resources.location.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/locations/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientId`.
-                package var ingredientId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientPresenceFilter`.
-                @frozen package enum IngredientPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientPresenceFilter`.
-                package var ingredientPresenceFilter: Operations.Resources_location_list.Input.Query.IngredientPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ingredientSearch`.
-                package var ingredientSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/aiDescriptionPresenceFilter`.
-                @frozen package enum AiDescriptionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to locations that do / don't have an AI-generated description.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/aiDescriptionPresenceFilter`.
-                package var aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload?
-                /// Filter by location name (substring)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/nameFilter`.
-                package var nameFilter: Swift.String?
-                /// type of location (room, container, etc)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ItemTypeFilterPayload`.
-                @frozen package enum ItemTypeFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case house = "house"
-                    case room = "room"
-                    case area = "area"
-                    case bag = "bag"
-                    case box = "box"
-                    case shelf = "shelf"
-                    case table = "table"
-                    case drawer = "drawer"
-                    case cart = "cart"
-                    case cabinet = "cabinet"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/itemTypeFilter`.
-                package typealias ItemTypeFilterPayload = [Operations.Resources_location_list.Input.Query.ItemTypeFilterPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/itemTypeFilter`.
-                package var itemTypeFilter: Operations.Resources_location_list.Input.Query.ItemTypeFilterPayload?
-                /// product shortcode, e.g. PRD-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload`.
-                package struct ProductIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// product shortcode, e.g. PRD-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ProductIdPayload/value2`.
-                    package var value2: Operations.Resources_location_list.Input.Query.ProductIdPayloadPayload.Value2Payload?
-                    /// Creates a new `ProductIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: product shortcode, e.g. PRD-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_location_list.Input.Query.ProductIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/productId`.
-                package typealias ProductIdPayload = [Operations.Resources_location_list.Input.Query.ProductIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/productId`.
-                package var productId: Operations.Resources_location_list.Input.Query.ProductIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/productPresenceFilter`.
-                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to locations that are / aren't an instance of a Product. "has" is the vessel set (totes, bins, racks); "none" is rooms, areas and drawers.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/productPresenceFilter`.
-                package var productPresenceFilter: Operations.Resources_location_list.Input.Query.ProductPresenceFilterPayload?
-                /// location shortcode, e.g. LOC-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ParentIdPayload`.
-                package struct ParentIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// location shortcode, e.g. LOC-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ParentIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ParentIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/ParentIdPayload/value2`.
-                    package var value2: Operations.Resources_location_list.Input.Query.ParentIdPayloadPayload.Value2Payload?
-                    /// Creates a new `ParentIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: location shortcode, e.g. LOC-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_location_list.Input.Query.ParentIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/parentId`.
-                package typealias ParentIdPayload = [Operations.Resources_location_list.Input.Query.ParentIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/parentId`.
-                package var parentId: Operations.Resources_location_list.Input.Query.ParentIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/parentPresenceFilter`.
-                @frozen package enum ParentPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/parentPresenceFilter`.
-                package var parentPresenceFilter: Operations.Resources_location_list.Input.Query.ParentPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/inventoryPresenceFilter`.
-                @frozen package enum InventoryPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to locations that do / don't hold at least one live inventory entry
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/inventoryPresenceFilter`.
-                package var inventoryPresenceFilter: Operations.Resources_location_list.Input.Query.InventoryPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/imagePresenceFilter`.
-                @frozen package enum ImagePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to locations that do / don't have at least one image (PDF attachments don't count).
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/imagePresenceFilter`.
-                package var imagePresenceFilter: Operations.Resources_location_list.Input.Query.ImagePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/childPresenceFilter`.
-                @frozen package enum ChildPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// Filter to locations that do / don't have at least one live child location.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/childPresenceFilter`.
-                package var childPresenceFilter: Operations.Resources_location_list.Input.Query.ChildPresenceFilterPayload?
-                /// Locations last recounted more than this many days ago, or never recounted.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/lastBulkInventoryOlderThanDays`.
-                package var lastBulkInventoryOlderThanDays: Swift.Int?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/directItemCountMin`.
-                package var directItemCountMin: Swift.Int?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/directItemCountMax`.
-                package var directItemCountMax: Swift.Int?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/valuationMin`.
-                package var valuationMin: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/valuationMax`.
-                package var valuationMax: Swift.Double?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - ingredientId:
-                ///   - ingredientPresenceFilter:
-                ///   - ingredientSearch:
-                ///   - aiDescriptionPresenceFilter: Filter to locations that do / don't have an AI-generated description.
-                ///   - nameFilter: Filter by location name (substring)
-                ///   - itemTypeFilter:
-                ///   - productId:
-                ///   - productPresenceFilter: Filter to locations that are / aren't an instance of a Product. "has" is the vessel set (totes, bins, racks); "none" is rooms, areas and drawers.
-                ///   - parentId:
-                ///   - parentPresenceFilter:
-                ///   - inventoryPresenceFilter: Filter to locations that do / don't hold at least one live inventory entry
-                ///   - imagePresenceFilter: Filter to locations that do / don't have at least one image (PDF attachments don't count).
-                ///   - childPresenceFilter: Filter to locations that do / don't have at least one live child location.
-                ///   - lastBulkInventoryOlderThanDays: Locations last recounted more than this many days ago, or never recounted.
-                ///   - directItemCountMin:
-                ///   - directItemCountMax:
-                ///   - valuationMin:
-                ///   - valuationMax:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    ingredientId: [Swift.String]? = nil,
-                    ingredientPresenceFilter: Operations.Resources_location_list.Input.Query.IngredientPresenceFilterPayload? = nil,
-                    ingredientSearch: Swift.String? = nil,
-                    aiDescriptionPresenceFilter: Operations.Resources_location_list.Input.Query.AiDescriptionPresenceFilterPayload? = nil,
-                    nameFilter: Swift.String? = nil,
-                    itemTypeFilter: Operations.Resources_location_list.Input.Query.ItemTypeFilterPayload? = nil,
-                    productId: Operations.Resources_location_list.Input.Query.ProductIdPayload? = nil,
-                    productPresenceFilter: Operations.Resources_location_list.Input.Query.ProductPresenceFilterPayload? = nil,
-                    parentId: Operations.Resources_location_list.Input.Query.ParentIdPayload? = nil,
-                    parentPresenceFilter: Operations.Resources_location_list.Input.Query.ParentPresenceFilterPayload? = nil,
-                    inventoryPresenceFilter: Operations.Resources_location_list.Input.Query.InventoryPresenceFilterPayload? = nil,
-                    imagePresenceFilter: Operations.Resources_location_list.Input.Query.ImagePresenceFilterPayload? = nil,
-                    childPresenceFilter: Operations.Resources_location_list.Input.Query.ChildPresenceFilterPayload? = nil,
-                    lastBulkInventoryOlderThanDays: Swift.Int? = nil,
-                    directItemCountMin: Swift.Int? = nil,
-                    directItemCountMax: Swift.Int? = nil,
-                    valuationMin: Swift.Double? = nil,
-                    valuationMax: Swift.Double? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.ingredientId = ingredientId
-                    self.ingredientPresenceFilter = ingredientPresenceFilter
-                    self.ingredientSearch = ingredientSearch
-                    self.aiDescriptionPresenceFilter = aiDescriptionPresenceFilter
-                    self.nameFilter = nameFilter
-                    self.itemTypeFilter = itemTypeFilter
-                    self.productId = productId
-                    self.productPresenceFilter = productPresenceFilter
-                    self.parentId = parentId
-                    self.parentPresenceFilter = parentPresenceFilter
-                    self.inventoryPresenceFilter = inventoryPresenceFilter
-                    self.imagePresenceFilter = imagePresenceFilter
-                    self.childPresenceFilter = childPresenceFilter
-                    self.lastBulkInventoryOlderThanDays = lastBulkInventoryOlderThanDays
-                    self.directItemCountMin = directItemCountMin
-                    self.directItemCountMax = directItemCountMax
-                    self.valuationMin = valuationMin
-                    self.valuationMax = valuationMax
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_location_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/locations/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_location_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_location_list.Input.Query = .init(),
-                headers: Operations.Resources_location_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.LocationListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.LocationListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_location_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_location_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/locations/get(resources.location.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_location_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_location_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/locations/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_location_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_location_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/locations/get(resources.location.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_location_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_location_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `POST /api/v1/locations`.
-    /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)`.
-    package enum Resources_location_create {
-        package static let id: Swift.String = "resources.location.create"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/locations/POST/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_create.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_create.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_location_create.Input.Headers
-            /// - Remark: Generated from `#/paths/api/v1/locations/POST/requestBody`.
-            @frozen package enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/POST/requestBody/content/application\/json`.
-                case json(Components.Schemas.LocationCreateInput)
-            }
-            package var body: Operations.Resources_location_create.Input.Body?
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - headers:
-            ///   - body:
-            package init(
-                headers: Operations.Resources_location_create.Input.Headers = .init(),
-                body: Operations.Resources_location_create.Input.Body? = nil
-            ) {
-                self.headers = headers
-                self.body = body
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Created: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/201/headers`.
-                package struct Headers: Sendable, Hashable {
-                    /// Created resource URL
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/201/headers/Location`.
-                    package var location: Swift.String?
-                    /// Creates a new `Headers`.
-                    ///
-                    /// - Parameters:
-                    ///   - location: Created resource URL
-                    package init(location: Swift.String? = nil) {
-                        self.location = location
-                    }
-                }
-                /// Received HTTP response headers
-                package var headers: Operations.Resources_location_create.Output.Created.Headers
-                /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/201/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/201/content/application\/json`.
-                    case json(Components.Schemas.GeneratedEntityMutationCreateResultLocation)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GeneratedEntityMutationCreateResultLocation {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_location_create.Output.Created.Body
-                /// Creates a new `Created`.
-                ///
-                /// - Parameters:
-                ///   - headers: Received HTTP response headers
-                ///   - body: Received HTTP response body
-                package init(
-                    headers: Operations.Resources_location_create.Output.Created.Headers = .init(),
-                    body: Operations.Resources_location_create.Output.Created.Body
-                ) {
-                    self.headers = headers
-                    self.body = body
-                }
-            }
-            /// 201
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)/responses/201`.
-            ///
-            /// HTTP response code: `201 created`.
-            case created(Operations.Resources_location_create.Output.Created)
-            /// The associated value of the enum case if `self` is `.created`.
-            ///
-            /// - Throws: An error if `self` is not `.created`.
-            /// - SeeAlso: `.created`.
-            package var created: Operations.Resources_location_create.Output.Created {
-                get throws {
-                    switch self {
-                    case let .created(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "created",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/locations/POST/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_location_create.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_location_create.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_location_create.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_location_create.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/locations/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/locations/{id}/get(resources.location.get)`.
-    package enum Resources_location_get {
-        package static let id: Swift.String = "resources.location.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// location shortcode, e.g. LOC-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: location shortcode, e.g. LOC-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_location_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_location_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_location_get.Input.Path,
-                headers: Operations.Resources_location_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.InfLocation)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.InfLocation {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_location_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_location_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/locations/{id}/get(resources.location.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_location_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_location_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_location_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_location_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/locations/{id}/get(resources.location.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_location_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_location_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `PATCH /api/v1/locations/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)`.
-    package enum Resources_location_update {
-        package static let id: Swift.String = "resources.location.update"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/path`.
-            package struct Path: Sendable, Hashable {
-                /// location shortcode, e.g. LOC-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: location shortcode, e.g. LOC-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_location_update.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_update.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_location_update.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_location_update.Input.Headers
-            /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/requestBody`.
-            @frozen package enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/requestBody/content/application\/json`.
-                case json(Components.Schemas.LocationUpdateData)
-            }
-            package var body: Operations.Resources_location_update.Input.Body?
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            ///   - body:
-            package init(
-                path: Operations.Resources_location_update.Input.Path,
-                headers: Operations.Resources_location_update.Input.Headers = .init(),
-                body: Operations.Resources_location_update.Input.Body? = nil
-            ) {
-                self.path = path
-                self.headers = headers
-                self.body = body
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/responses/200/content/application\/json`.
-                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultLocation)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultLocation {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_location_update.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_location_update.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_location_update.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_location_update.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/locations/{id}/PATCH/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_location_update.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_location_update.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_location_update.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_location_update.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/inventory`.
-    /// - Remark: Generated from `#/paths//api/v1/inventory/get(resources.inventory.list)`.
-    package enum Resources_inventory_list {
-        package static let id: Swift.String = "resources.inventory.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientId`.
-                package var ingredientId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientPresenceFilter`.
-                @frozen package enum IngredientPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientPresenceFilter`.
-                package var ingredientPresenceFilter: Operations.Resources_inventory_list.Input.Query.IngredientPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/ingredientSearch`.
-                package var ingredientSearch: Swift.String?
-                /// Filter by product name (substring)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productNameFilter`.
-                package var productNameFilter: Swift.String?
-                /// Filter by location name (substring)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationNameFilter`.
-                package var locationNameFilter: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter`.
-                package struct LocationIdFilterPayload: Codable, Hashable, Sendable {
-                    /// location shortcode, e.g. LOC-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter/value2`.
-                    package var value2: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload.Value2Payload?
-                    /// Creates a new `LocationIdFilterPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: location shortcode, e.g. LOC-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// Filter by exact location ID
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationIdFilter`.
-                package var locationIdFilter: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter`.
-                package struct ProductIdFilterPayload: Codable, Hashable, Sendable {
-                    /// product shortcode, e.g. PRD-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter/value2`.
-                    package var value2: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload.Value2Payload?
-                    /// Creates a new `ProductIdFilterPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: product shortcode, e.g. PRD-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// Filter by exact product ID
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/productIdFilter`.
-                package var productIdFilter: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload?
-                /// Filter by product manufacturer (substring)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/manufacturerFilter`.
-                package var manufacturerFilter: Swift.String?
-                /// Product category
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/CategoryFilterPayload`.
-                @frozen package enum CategoryFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case food = "food"
-                    case tools = "tools"
-                    case toolConsumables = "tool-consumables"
-                    case toolAccessories = "tool-accessories"
-                    case storage = "storage"
-                    case hardware = "hardware"
-                    case electronics = "electronics"
-                    case software = "software"
-                    case books = "books"
-                    case household = "household"
-                    case supplies = "supplies"
-                    case apparel = "apparel"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/categoryFilter`.
-                package typealias CategoryFilterPayload = [Operations.Resources_inventory_list.Input.Query.CategoryFilterPayloadPayload]
-                /// Filter by product category
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/categoryFilter`.
-                package var categoryFilter: Operations.Resources_inventory_list.Input.Query.CategoryFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/placementFilter`.
-                @frozen package enum PlacementFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case stock = "stock"
-                    case installed = "installed"
-                    case all = "all"
-                }
-                /// Filter by placement. Omitted defaults to 'stock' (movable stock only); 'installed' returns fixtures; 'all' returns both.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/placementFilter`.
-                package var placementFilter: Operations.Resources_inventory_list.Input.Query.PlacementFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationRole`.
-                @frozen package enum LocationRolePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case globalUnknown = "global_unknown"
-                }
-                /// Filter by a stable household location role.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/locationRole`.
-                package var locationRole: Operations.Resources_inventory_list.Input.Query.LocationRolePayload?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedPresenceFilter`.
-                @frozen package enum VerifiedPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedPresenceFilter`.
-                package var verifiedPresenceFilter: Operations.Resources_inventory_list.Input.Query.VerifiedPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/valuationStatus`.
-                @frozen package enum ValuationStatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case valued = "valued"
-                    case missing = "missing"
-                    case missingWithPricedProduct = "missing_with_priced_product"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/valuationStatus`.
-                package var valuationStatus: Operations.Resources_inventory_list.Input.Query.ValuationStatusPayload?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedFrom`.
-                package var verifiedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/verifiedTo`.
-                package var verifiedTo: Swift.String?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - ingredientId:
-                ///   - ingredientPresenceFilter:
-                ///   - ingredientSearch:
-                ///   - productNameFilter: Filter by product name (substring)
-                ///   - locationNameFilter: Filter by location name (substring)
-                ///   - locationIdFilter: Filter by exact location ID
-                ///   - productIdFilter: Filter by exact product ID
-                ///   - manufacturerFilter: Filter by product manufacturer (substring)
-                ///   - categoryFilter: Filter by product category
-                ///   - placementFilter: Filter by placement. Omitted defaults to 'stock' (movable stock only); 'installed' returns fixtures; 'all' returns both.
-                ///   - locationRole: Filter by a stable household location role.
-                ///   - verifiedPresenceFilter:
-                ///   - valuationStatus:
-                ///   - verifiedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - verifiedTo: Calendar day as "YYYY-MM-DD"
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    ingredientId: [Swift.String]? = nil,
-                    ingredientPresenceFilter: Operations.Resources_inventory_list.Input.Query.IngredientPresenceFilterPayload? = nil,
-                    ingredientSearch: Swift.String? = nil,
-                    productNameFilter: Swift.String? = nil,
-                    locationNameFilter: Swift.String? = nil,
-                    locationIdFilter: Operations.Resources_inventory_list.Input.Query.LocationIdFilterPayload? = nil,
-                    productIdFilter: Operations.Resources_inventory_list.Input.Query.ProductIdFilterPayload? = nil,
-                    manufacturerFilter: Swift.String? = nil,
-                    categoryFilter: Operations.Resources_inventory_list.Input.Query.CategoryFilterPayload? = nil,
-                    placementFilter: Operations.Resources_inventory_list.Input.Query.PlacementFilterPayload? = nil,
-                    locationRole: Operations.Resources_inventory_list.Input.Query.LocationRolePayload? = nil,
-                    verifiedPresenceFilter: Operations.Resources_inventory_list.Input.Query.VerifiedPresenceFilterPayload? = nil,
-                    valuationStatus: Operations.Resources_inventory_list.Input.Query.ValuationStatusPayload? = nil,
-                    verifiedFrom: Swift.String? = nil,
-                    verifiedTo: Swift.String? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.ingredientId = ingredientId
-                    self.ingredientPresenceFilter = ingredientPresenceFilter
-                    self.ingredientSearch = ingredientSearch
-                    self.productNameFilter = productNameFilter
-                    self.locationNameFilter = locationNameFilter
-                    self.locationIdFilter = locationIdFilter
-                    self.productIdFilter = productIdFilter
-                    self.manufacturerFilter = manufacturerFilter
-                    self.categoryFilter = categoryFilter
-                    self.placementFilter = placementFilter
-                    self.locationRole = locationRole
-                    self.verifiedPresenceFilter = verifiedPresenceFilter
-                    self.valuationStatus = valuationStatus
-                    self.verifiedFrom = verifiedFrom
-                    self.verifiedTo = verifiedTo
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_inventory_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/inventory/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_inventory_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_inventory_list.Input.Query = .init(),
-                headers: Operations.Resources_inventory_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.InventoryListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.InventoryListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_inventory_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_inventory_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/inventory/get(resources.inventory.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_inventory_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_inventory_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/inventory/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_inventory_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_inventory_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/inventory/get(resources.inventory.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_inventory_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_inventory_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `POST /api/v1/inventory`.
-    /// - Remark: Generated from `#/paths//api/v1/inventory/post(resources.inventory.create)`.
-    package enum Resources_inventory_create {
-        package static let id: Swift.String = "resources.inventory.create"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/inventory/POST/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_create.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_create.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_inventory_create.Input.Headers
-            /// - Remark: Generated from `#/paths/api/v1/inventory/POST/requestBody`.
-            @frozen package enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/inventory/POST/requestBody/content/application\/json`.
-                case json(Components.Schemas.InventoryCreatePayloadData)
-            }
-            package var body: Operations.Resources_inventory_create.Input.Body?
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - headers:
-            ///   - body:
-            package init(
-                headers: Operations.Resources_inventory_create.Input.Headers = .init(),
-                body: Operations.Resources_inventory_create.Input.Body? = nil
-            ) {
-                self.headers = headers
-                self.body = body
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Created: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/201/headers`.
-                package struct Headers: Sendable, Hashable {
-                    /// Created resource URL
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/201/headers/Location`.
-                    package var location: Swift.String?
-                    /// Creates a new `Headers`.
-                    ///
-                    /// - Parameters:
-                    ///   - location: Created resource URL
-                    package init(location: Swift.String? = nil) {
-                        self.location = location
-                    }
-                }
-                /// Received HTTP response headers
-                package var headers: Operations.Resources_inventory_create.Output.Created.Headers
-                /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/201/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/201/content/application\/json`.
-                    case json(Components.Schemas.GeneratedEntityMutationCreateResultInventory)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GeneratedEntityMutationCreateResultInventory {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_inventory_create.Output.Created.Body
-                /// Creates a new `Created`.
-                ///
-                /// - Parameters:
-                ///   - headers: Received HTTP response headers
-                ///   - body: Received HTTP response body
-                package init(
-                    headers: Operations.Resources_inventory_create.Output.Created.Headers = .init(),
-                    body: Operations.Resources_inventory_create.Output.Created.Body
-                ) {
-                    self.headers = headers
-                    self.body = body
-                }
-            }
-            /// 201
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/inventory/post(resources.inventory.create)/responses/201`.
-            ///
-            /// HTTP response code: `201 created`.
-            case created(Operations.Resources_inventory_create.Output.Created)
-            /// The associated value of the enum case if `self` is `.created`.
-            ///
-            /// - Throws: An error if `self` is not `.created`.
-            /// - SeeAlso: `.created`.
-            package var created: Operations.Resources_inventory_create.Output.Created {
-                get throws {
-                    switch self {
-                    case let .created(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "created",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/POST/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_inventory_create.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_inventory_create.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/inventory/post(resources.inventory.create)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_inventory_create.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_inventory_create.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/inventory/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/get(resources.inventory.get)`.
-    package enum Resources_inventory_get {
-        package static let id: Swift.String = "resources.inventory.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// inventory shortcode, e.g. INV-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: inventory shortcode, e.g. INV-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_inventory_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_inventory_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_inventory_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_inventory_get.Input.Path,
-                headers: Operations.Resources_inventory_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.InventoryWithLocationAndProductOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.InventoryWithLocationAndProductOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_inventory_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_inventory_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/get(resources.inventory.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_inventory_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_inventory_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_inventory_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_inventory_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/inventory/{id}/get(resources.inventory.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_inventory_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_inventory_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/meals`.
-    /// - Remark: Generated from `#/paths//api/v1/meals/get(resources.meal.list)`.
-    package enum Resources_meal_list {
-        package static let id: Swift.String = "resources.meal.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/meals/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/MealTypePayload`.
-                @frozen package enum MealTypePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case breakfast = "breakfast"
-                    case brunch = "brunch"
-                    case lunch = "lunch"
-                    case snack = "snack"
-                    case dinner = "dinner"
-                    case dessert = "dessert"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealType`.
-                package typealias MealTypePayload = [Operations.Resources_meal_list.Input.Query.MealTypePayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealType`.
-                package var mealType: Operations.Resources_meal_list.Input.Query.MealTypePayload?
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/MealKindPayload`.
-                @frozen package enum MealKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case cooked = "cooked"
-                    case leftovers = "leftovers"
-                    case eatingOut = "eating_out"
-                    case takeout = "takeout"
-                    case other = "other"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealKind`.
-                package typealias MealKindPayload = [Operations.Resources_meal_list.Input.Query.MealKindPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealKind`.
-                package var mealKind: Operations.Resources_meal_list.Input.Query.MealKindPayload?
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealTypePresenceFilter`.
-                @frozen package enum MealTypePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/mealTypePresenceFilter`.
-                package var mealTypePresenceFilter: Operations.Resources_meal_list.Input.Query.MealTypePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipeCostCoverage`.
-                @frozen package enum RecipeCostCoveragePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case understated = "understated"
-                }
-                /// Meals with a live recipe whose priced ingredients are incomplete.
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipeCostCoverage`.
-                package var recipeCostCoverage: Operations.Resources_meal_list.Input.Query.RecipeCostCoveragePayload?
-                /// Only meals on or after this day
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/from`.
-                package var from: Swift.String?
-                /// Only meals on or before this day
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/to`.
-                package var to: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipeId`.
-                package var recipeId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipePresenceFilter`.
-                @frozen package enum RecipePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipePresenceFilter`.
-                package var recipePresenceFilter: Operations.Resources_meal_list.Input.Query.RecipePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/recipeSearch`.
-                package var recipeSearch: Swift.String?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - mealType:
-                ///   - mealKind:
-                ///   - mealTypePresenceFilter:
-                ///   - recipeCostCoverage: Meals with a live recipe whose priced ingredients are incomplete.
-                ///   - from: Only meals on or after this day
-                ///   - to: Only meals on or before this day
-                ///   - recipeId:
-                ///   - recipePresenceFilter:
-                ///   - recipeSearch:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    mealType: Operations.Resources_meal_list.Input.Query.MealTypePayload? = nil,
-                    mealKind: Operations.Resources_meal_list.Input.Query.MealKindPayload? = nil,
-                    mealTypePresenceFilter: Operations.Resources_meal_list.Input.Query.MealTypePresenceFilterPayload? = nil,
-                    recipeCostCoverage: Operations.Resources_meal_list.Input.Query.RecipeCostCoveragePayload? = nil,
-                    from: Swift.String? = nil,
-                    to: Swift.String? = nil,
-                    recipeId: [Swift.String]? = nil,
-                    recipePresenceFilter: Operations.Resources_meal_list.Input.Query.RecipePresenceFilterPayload? = nil,
-                    recipeSearch: Swift.String? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.mealType = mealType
-                    self.mealKind = mealKind
-                    self.mealTypePresenceFilter = mealTypePresenceFilter
-                    self.recipeCostCoverage = recipeCostCoverage
-                    self.from = from
-                    self.to = to
-                    self.recipeId = recipeId
-                    self.recipePresenceFilter = recipePresenceFilter
-                    self.recipeSearch = recipeSearch
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_meal_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/meals/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_meal_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_meal_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_meal_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_meal_list.Input.Query = .init(),
-                headers: Operations.Resources_meal_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/meals/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.MealListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.MealListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_meal_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_meal_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/meals/get(resources.meal.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_meal_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_meal_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/meals/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/meals/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_meal_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_meal_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/meals/get(resources.meal.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_meal_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_meal_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/meals/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)`.
-    package enum Resources_meal_get {
-        package static let id: Swift.String = "resources.meal.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// meal shortcode, e.g. MEL-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: meal shortcode, e.g. MEL-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_meal_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_meal_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_meal_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_meal_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_meal_get.Input.Path,
-                headers: Operations.Resources_meal_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.MealOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.MealOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_meal_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_meal_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_meal_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_meal_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_meal_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_meal_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_meal_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_meal_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/ledger-parties`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/get(resources.ledgerParty.list)`.
-    package enum Resources_ledgerParty_list {
-        package static let id: Swift.String = "resources.ledgerParty.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/search`.
-                package var search: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/KindPayload`.
-                @frozen package enum KindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case member = "member"
-                    case guest = "guest"
-                    case household = "household"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/kind`.
-                package typealias KindPayload = [Operations.Resources_ledgerParty_list.Input.Query.KindPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/kind`.
-                package var kind: Operations.Resources_ledgerParty_list.Input.Query.KindPayload?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - search:
-                ///   - kind:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    search: Swift.String? = nil,
-                    kind: Operations.Resources_ledgerParty_list.Input.Query.KindPayload? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.search = search
-                    self.kind = kind
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_ledgerParty_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerParty_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerParty_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_ledgerParty_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_ledgerParty_list.Input.Query = .init(),
-                headers: Operations.Resources_ledgerParty_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.LedgerPartyListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.LedgerPartyListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ledgerParty_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ledgerParty_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ledger-parties/get(resources.ledgerParty.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_ledgerParty_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_ledgerParty_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ledger-parties/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ledgerParty_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ledgerParty_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ledger-parties/get(resources.ledgerParty.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_ledgerParty_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_ledgerParty_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/ledger-parties/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/get(resources.ledgerParty.get)`.
-    package enum Resources_ledgerParty_get {
-        package static let id: Swift.String = "resources.ledgerParty.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// ledgerParty shortcode, e.g. LPY-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: ledgerParty shortcode, e.g. LPY-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_ledgerParty_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerParty_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerParty_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_ledgerParty_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_ledgerParty_get.Input.Path,
-                headers: Operations.Resources_ledgerParty_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.LedgerPartyOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.LedgerPartyOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ledgerParty_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ledgerParty_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/get(resources.ledgerParty.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_ledgerParty_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_ledgerParty_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ledgerParty_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ledgerParty_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ledger-parties/{id}/get(resources.ledgerParty.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_ledgerParty_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_ledgerParty_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/ledger-transfers`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/get(resources.ledgerTransfer.list)`.
-    package enum Resources_ledgerTransfer_list {
-        package static let id: Swift.String = "resources.ledgerTransfer.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/fromPartyId`.
-                package var fromPartyId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/toPartyId`.
-                package var toPartyId: [Swift.String]?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dateFrom`.
-                package var dateFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/dateTo`.
-                package var dateTo: Swift.String?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - fromPartyId:
-                ///   - toPartyId:
-                ///   - dateFrom: Calendar day as "YYYY-MM-DD"
-                ///   - dateTo: Calendar day as "YYYY-MM-DD"
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    fromPartyId: [Swift.String]? = nil,
-                    toPartyId: [Swift.String]? = nil,
-                    dateFrom: Swift.String? = nil,
-                    dateTo: Swift.String? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.fromPartyId = fromPartyId
-                    self.toPartyId = toPartyId
-                    self.dateFrom = dateFrom
-                    self.dateTo = dateTo
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_ledgerTransfer_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerTransfer_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerTransfer_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_ledgerTransfer_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_ledgerTransfer_list.Input.Query = .init(),
-                headers: Operations.Resources_ledgerTransfer_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.LedgerTransferListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.LedgerTransferListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ledgerTransfer_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ledgerTransfer_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/get(resources.ledgerTransfer.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_ledgerTransfer_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_ledgerTransfer_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ledgerTransfer_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ledgerTransfer_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/get(resources.ledgerTransfer.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_ledgerTransfer_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_ledgerTransfer_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/ledger-transfers/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/get(resources.ledgerTransfer.get)`.
-    package enum Resources_ledgerTransfer_get {
-        package static let id: Swift.String = "resources.ledgerTransfer.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// ledgerTransfer shortcode, e.g. LTR-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: ledgerTransfer shortcode, e.g. LTR-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_ledgerTransfer_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerTransfer_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_ledgerTransfer_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_ledgerTransfer_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_ledgerTransfer_get.Input.Path,
-                headers: Operations.Resources_ledgerTransfer_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.LedgerTransferOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.LedgerTransferOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ledgerTransfer_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ledgerTransfer_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/get(resources.ledgerTransfer.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_ledgerTransfer_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_ledgerTransfer_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_ledgerTransfer_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_ledgerTransfer_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/ledger-transfers/{id}/get(resources.ledgerTransfer.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_ledgerTransfer_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_ledgerTransfer_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
     /// - Remark: HTTP `GET /api/v1/projects`.
     /// - Remark: Generated from `#/paths//api/v1/projects/get(resources.project.list)`.
     package enum Resources_project_list {
@@ -11668,1373 +13619,6 @@ package enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             package var `default`: Operations.Resources_project_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/tasks`.
-    /// - Remark: Generated from `#/paths//api/v1/tasks/get(resources.task.list)`.
-    package enum Resources_task_list {
-        package static let id: Swift.String = "resources.task.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/blockedByTaskId`.
-                package var blockedByTaskId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/blockedByTaskPresenceFilter`.
-                @frozen package enum BlockedByTaskPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/blockedByTaskPresenceFilter`.
-                package var blockedByTaskPresenceFilter: Operations.Resources_task_list.Input.Query.BlockedByTaskPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/blockedByTaskSearch`.
-                package var blockedByTaskSearch: Swift.String?
-                /// task shortcode, e.g. TSK-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ParentTaskIdPayload`.
-                package struct ParentTaskIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// task shortcode, e.g. TSK-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ParentTaskIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ParentTaskIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ParentTaskIdPayload/value2`.
-                    package var value2: Operations.Resources_task_list.Input.Query.ParentTaskIdPayloadPayload.Value2Payload?
-                    /// Creates a new `ParentTaskIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: task shortcode, e.g. TSK-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_task_list.Input.Query.ParentTaskIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskId`.
-                package typealias ParentTaskIdPayload = [Operations.Resources_task_list.Input.Query.ParentTaskIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskId`.
-                package var parentTaskId: Operations.Resources_task_list.Input.Query.ParentTaskIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskPresenceFilter`.
-                @frozen package enum ParentTaskPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskPresenceFilter`.
-                package var parentTaskPresenceFilter: Operations.Resources_task_list.Input.Query.ParentTaskPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskSearch`.
-                package var parentTaskSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/search`.
-                package var search: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/StatusPayload`.
-                @frozen package enum StatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case notStarted = "not_started"
-                    case later = "later"
-                    case inProgress = "in_progress"
-                    case blocked = "blocked"
-                    case done = "done"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/status`.
-                package typealias StatusPayload = [Operations.Resources_task_list.Input.Query.StatusPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/status`.
-                package var status: Operations.Resources_task_list.Input.Query.StatusPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/TradePayload`.
-                @frozen package enum TradePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case planning = "planning"
-                    case demolition = "demolition"
-                    case building = "building"
-                    case drywall = "drywall"
-                    case electrical = "electrical"
-                    case plumbing = "plumbing"
-                    case mechanical = "mechanical"
-                    case cabinetry = "cabinetry"
-                    case countertop = "countertop"
-                    case flooring = "flooring"
-                    case millwork = "millwork"
-                    case finishes = "finishes"
-                    case appliances = "appliances"
-                    case landscaping = "landscaping"
-                    case logistics = "logistics"
-                    case metalworking = "metalworking"
-                    case crafts = "crafts"
-                    case auto = "auto"
-                    case other = "other"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/trade`.
-                package typealias TradePayload = [Operations.Resources_task_list.Input.Query.TradePayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/trade`.
-                package var trade: Operations.Resources_task_list.Input.Query.TradePayload?
-                /// project shortcode, e.g. PRJ-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload`.
-                package struct ProjectIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// project shortcode, e.g. PRJ-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload/value2`.
-                    package var value2: Operations.Resources_task_list.Input.Query.ProjectIdPayloadPayload.Value2Payload?
-                    /// Creates a new `ProjectIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: project shortcode, e.g. PRJ-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_task_list.Input.Query.ProjectIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectId`.
-                package typealias ProjectIdPayload = [Operations.Resources_task_list.Input.Query.ProjectIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectId`.
-                package var projectId: Operations.Resources_task_list.Input.Query.ProjectIdPayload?
-                /// product shortcode, e.g. PRD-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/SubjectProductIdPayload`.
-                package struct SubjectProductIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// product shortcode, e.g. PRD-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/SubjectProductIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/SubjectProductIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/SubjectProductIdPayload/value2`.
-                    package var value2: Operations.Resources_task_list.Input.Query.SubjectProductIdPayloadPayload.Value2Payload?
-                    /// Creates a new `SubjectProductIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: product shortcode, e.g. PRD-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_task_list.Input.Query.SubjectProductIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/subjectProductId`.
-                package typealias SubjectProductIdPayload = [Operations.Resources_task_list.Input.Query.SubjectProductIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/subjectProductId`.
-                package var subjectProductId: Operations.Resources_task_list.Input.Query.SubjectProductIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/topLevelOnly`.
-                package var topLevelOnly: Swift.Bool?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/includeSubProjects`.
-                package var includeSubProjects: Swift.Bool?
-                /// Inclusive lower bound on due date
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dueFrom`.
-                package var dueFrom: Swift.String?
-                /// Inclusive upper bound on due date
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dueTo`.
-                package var dueTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/duePresenceFilter`.
-                @frozen package enum DuePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/duePresenceFilter`.
-                package var duePresenceFilter: Operations.Resources_task_list.Input.Query.DuePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dueRelative`.
-                @frozen package enum DueRelativePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case beforeToday = "beforeToday"
-                    case onOrBeforeToday = "onOrBeforeToday"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dueRelative`.
-                package var dueRelative: Operations.Resources_task_list.Input.Query.DueRelativePayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/completion`.
-                @frozen package enum CompletionPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case all = "all"
-                    case open = "open"
-                    case done = "done"
-                }
-                /// Undefined = "all" (today's default, unchanged)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/completion`.
-                package var completion: Operations.Resources_task_list.Input.Query.CompletionPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectPresenceFilter`.
-                @frozen package enum ProjectPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectPresenceFilter`.
-                package var projectPresenceFilter: Operations.Resources_task_list.Input.Query.ProjectPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/subjectProductPresenceFilter`.
-                @frozen package enum SubjectProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/subjectProductPresenceFilter`.
-                package var subjectProductPresenceFilter: Operations.Resources_task_list.Input.Query.SubjectProductPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectScopeStatusesPayload`.
-                @frozen package enum ProjectScopeStatusesPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case planning = "planning"
-                    case notStarted = "not_started"
-                    case inProgress = "in_progress"
-                    case done = "done"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeStatuses`.
-                package typealias ProjectScopeStatusesPayload = [Operations.Resources_task_list.Input.Query.ProjectScopeStatusesPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeStatuses`.
-                package var projectScopeStatuses: Operations.Resources_task_list.Input.Query.ProjectScopeStatusesPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectScopeKindsPayload`.
-                @frozen package enum ProjectScopeKindsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case furniture = "furniture"
-                    case workshop = "workshop"
-                    case household = "household"
-                    case renovation = "renovation"
-                    case garden = "garden"
-                    case trip = "trip"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeKinds`.
-                package typealias ProjectScopeKindsPayload = [Operations.Resources_task_list.Input.Query.ProjectScopeKindsPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeKinds`.
-                package var projectScopeKinds: Operations.Resources_task_list.Input.Query.ProjectScopeKindsPayload?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeLocations`.
-                package var projectScopeLocations: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeSearch`.
-                package var projectScopeSearch: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeDateFrom`.
-                package var projectScopeDateFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeDateTo`.
-                package var projectScopeDateTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeCompletionYear`.
-                package var projectScopeCompletionYear: Swift.String?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - blockedByTaskId:
-                ///   - blockedByTaskPresenceFilter:
-                ///   - blockedByTaskSearch:
-                ///   - parentTaskId:
-                ///   - parentTaskPresenceFilter:
-                ///   - parentTaskSearch:
-                ///   - search:
-                ///   - status:
-                ///   - trade:
-                ///   - projectId:
-                ///   - subjectProductId:
-                ///   - topLevelOnly:
-                ///   - includeSubProjects:
-                ///   - dueFrom: Inclusive lower bound on due date
-                ///   - dueTo: Inclusive upper bound on due date
-                ///   - duePresenceFilter:
-                ///   - dueRelative:
-                ///   - completion: Undefined = "all" (today's default, unchanged)
-                ///   - projectPresenceFilter:
-                ///   - subjectProductPresenceFilter:
-                ///   - projectScopeStatuses:
-                ///   - projectScopeKinds:
-                ///   - projectScopeLocations:
-                ///   - projectScopeSearch:
-                ///   - projectScopeDateFrom: Calendar day as "YYYY-MM-DD"
-                ///   - projectScopeDateTo: Calendar day as "YYYY-MM-DD"
-                ///   - projectScopeCompletionYear:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    blockedByTaskId: [Swift.String]? = nil,
-                    blockedByTaskPresenceFilter: Operations.Resources_task_list.Input.Query.BlockedByTaskPresenceFilterPayload? = nil,
-                    blockedByTaskSearch: Swift.String? = nil,
-                    parentTaskId: Operations.Resources_task_list.Input.Query.ParentTaskIdPayload? = nil,
-                    parentTaskPresenceFilter: Operations.Resources_task_list.Input.Query.ParentTaskPresenceFilterPayload? = nil,
-                    parentTaskSearch: Swift.String? = nil,
-                    search: Swift.String? = nil,
-                    status: Operations.Resources_task_list.Input.Query.StatusPayload? = nil,
-                    trade: Operations.Resources_task_list.Input.Query.TradePayload? = nil,
-                    projectId: Operations.Resources_task_list.Input.Query.ProjectIdPayload? = nil,
-                    subjectProductId: Operations.Resources_task_list.Input.Query.SubjectProductIdPayload? = nil,
-                    topLevelOnly: Swift.Bool? = nil,
-                    includeSubProjects: Swift.Bool? = nil,
-                    dueFrom: Swift.String? = nil,
-                    dueTo: Swift.String? = nil,
-                    duePresenceFilter: Operations.Resources_task_list.Input.Query.DuePresenceFilterPayload? = nil,
-                    dueRelative: Operations.Resources_task_list.Input.Query.DueRelativePayload? = nil,
-                    completion: Operations.Resources_task_list.Input.Query.CompletionPayload? = nil,
-                    projectPresenceFilter: Operations.Resources_task_list.Input.Query.ProjectPresenceFilterPayload? = nil,
-                    subjectProductPresenceFilter: Operations.Resources_task_list.Input.Query.SubjectProductPresenceFilterPayload? = nil,
-                    projectScopeStatuses: Operations.Resources_task_list.Input.Query.ProjectScopeStatusesPayload? = nil,
-                    projectScopeKinds: Operations.Resources_task_list.Input.Query.ProjectScopeKindsPayload? = nil,
-                    projectScopeLocations: [Swift.String]? = nil,
-                    projectScopeSearch: Swift.String? = nil,
-                    projectScopeDateFrom: Swift.String? = nil,
-                    projectScopeDateTo: Swift.String? = nil,
-                    projectScopeCompletionYear: Swift.String? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.blockedByTaskId = blockedByTaskId
-                    self.blockedByTaskPresenceFilter = blockedByTaskPresenceFilter
-                    self.blockedByTaskSearch = blockedByTaskSearch
-                    self.parentTaskId = parentTaskId
-                    self.parentTaskPresenceFilter = parentTaskPresenceFilter
-                    self.parentTaskSearch = parentTaskSearch
-                    self.search = search
-                    self.status = status
-                    self.trade = trade
-                    self.projectId = projectId
-                    self.subjectProductId = subjectProductId
-                    self.topLevelOnly = topLevelOnly
-                    self.includeSubProjects = includeSubProjects
-                    self.dueFrom = dueFrom
-                    self.dueTo = dueTo
-                    self.duePresenceFilter = duePresenceFilter
-                    self.dueRelative = dueRelative
-                    self.completion = completion
-                    self.projectPresenceFilter = projectPresenceFilter
-                    self.subjectProductPresenceFilter = subjectProductPresenceFilter
-                    self.projectScopeStatuses = projectScopeStatuses
-                    self.projectScopeKinds = projectScopeKinds
-                    self.projectScopeLocations = projectScopeLocations
-                    self.projectScopeSearch = projectScopeSearch
-                    self.projectScopeDateFrom = projectScopeDateFrom
-                    self.projectScopeDateTo = projectScopeDateTo
-                    self.projectScopeCompletionYear = projectScopeCompletionYear
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_task_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/tasks/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_task_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_task_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_task_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_task_list.Input.Query = .init(),
-                headers: Operations.Resources_task_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.TaskListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.TaskListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_task_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_task_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/tasks/get(resources.task.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_task_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_task_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_task_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_task_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/tasks/get(resources.task.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_task_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_task_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/tasks/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)`.
-    package enum Resources_task_get {
-        package static let id: Swift.String = "resources.task.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// task shortcode, e.g. TSK-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: task shortcode, e.g. TSK-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_task_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_task_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_task_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_task_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_task_get.Input.Path,
-                headers: Operations.Resources_task_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.TaskOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.TaskOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_task_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_task_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_task_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_task_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_task_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_task_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_task_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_task_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/vendors`.
-    /// - Remark: Generated from `#/paths//api/v1/vendors/get(resources.vendor.list)`.
-    package enum Resources_vendor_list {
-        package static let id: Swift.String = "resources.vendor.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/expenseId`.
-                package var expenseId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/expensePresenceFilter`.
-                @frozen package enum ExpensePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/expensePresenceFilter`.
-                package var expensePresenceFilter: Operations.Resources_vendor_list.Input.Query.ExpensePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/expenseSearch`.
-                package var expenseSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchaseId`.
-                package var purchaseId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchasePresenceFilter`.
-                @frozen package enum PurchasePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchasePresenceFilter`.
-                package var purchasePresenceFilter: Operations.Resources_vendor_list.Input.Query.PurchasePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchaseSearch`.
-                package var purchaseSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/productId`.
-                package var productId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/productPresenceFilter`.
-                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/productPresenceFilter`.
-                package var productPresenceFilter: Operations.Resources_vendor_list.Input.Query.ProductPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/productSearch`.
-                package var productSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/projectId`.
-                package var projectId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/projectPresenceFilter`.
-                @frozen package enum ProjectPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/projectPresenceFilter`.
-                package var projectPresenceFilter: Operations.Resources_vendor_list.Input.Query.ProjectPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/projectSearch`.
-                package var projectSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/financialTransactionId`.
-                package var financialTransactionId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/financialTransactionPresenceFilter`.
-                @frozen package enum FinancialTransactionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/financialTransactionPresenceFilter`.
-                package var financialTransactionPresenceFilter: Operations.Resources_vendor_list.Input.Query.FinancialTransactionPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/financialTransactionSearch`.
-                package var financialTransactionSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/search`.
-                package var search: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchaseCountMin`.
-                package var purchaseCountMin: Swift.Int?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchaseCountMax`.
-                package var purchaseCountMax: Swift.Int?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/spendMin`.
-                package var spendMin: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/spendMax`.
-                package var spendMax: Swift.Double?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDateFrom`.
-                package var latestPurchaseDateFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDateTo`.
-                package var latestPurchaseDateTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDatePresenceFilter`.
-                @frozen package enum LatestPurchaseDatePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDatePresenceFilter`.
-                package var latestPurchaseDatePresenceFilter: Operations.Resources_vendor_list.Input.Query.LatestPurchaseDatePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoPresenceFilter`.
-                @frozen package enum LogoPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoPresenceFilter`.
-                package var logoPresenceFilter: Operations.Resources_vendor_list.Input.Query.LogoPresenceFilterPayload?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - expenseId:
-                ///   - expensePresenceFilter:
-                ///   - expenseSearch:
-                ///   - purchaseId:
-                ///   - purchasePresenceFilter:
-                ///   - purchaseSearch:
-                ///   - productId:
-                ///   - productPresenceFilter:
-                ///   - productSearch:
-                ///   - projectId:
-                ///   - projectPresenceFilter:
-                ///   - projectSearch:
-                ///   - financialTransactionId:
-                ///   - financialTransactionPresenceFilter:
-                ///   - financialTransactionSearch:
-                ///   - search:
-                ///   - purchaseCountMin:
-                ///   - purchaseCountMax:
-                ///   - spendMin:
-                ///   - spendMax:
-                ///   - latestPurchaseDateFrom: Calendar day as "YYYY-MM-DD"
-                ///   - latestPurchaseDateTo: Calendar day as "YYYY-MM-DD"
-                ///   - latestPurchaseDatePresenceFilter:
-                ///   - logoPresenceFilter:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    expenseId: [Swift.String]? = nil,
-                    expensePresenceFilter: Operations.Resources_vendor_list.Input.Query.ExpensePresenceFilterPayload? = nil,
-                    expenseSearch: Swift.String? = nil,
-                    purchaseId: [Swift.String]? = nil,
-                    purchasePresenceFilter: Operations.Resources_vendor_list.Input.Query.PurchasePresenceFilterPayload? = nil,
-                    purchaseSearch: Swift.String? = nil,
-                    productId: [Swift.String]? = nil,
-                    productPresenceFilter: Operations.Resources_vendor_list.Input.Query.ProductPresenceFilterPayload? = nil,
-                    productSearch: Swift.String? = nil,
-                    projectId: [Swift.String]? = nil,
-                    projectPresenceFilter: Operations.Resources_vendor_list.Input.Query.ProjectPresenceFilterPayload? = nil,
-                    projectSearch: Swift.String? = nil,
-                    financialTransactionId: [Swift.String]? = nil,
-                    financialTransactionPresenceFilter: Operations.Resources_vendor_list.Input.Query.FinancialTransactionPresenceFilterPayload? = nil,
-                    financialTransactionSearch: Swift.String? = nil,
-                    search: Swift.String? = nil,
-                    purchaseCountMin: Swift.Int? = nil,
-                    purchaseCountMax: Swift.Int? = nil,
-                    spendMin: Swift.Double? = nil,
-                    spendMax: Swift.Double? = nil,
-                    latestPurchaseDateFrom: Swift.String? = nil,
-                    latestPurchaseDateTo: Swift.String? = nil,
-                    latestPurchaseDatePresenceFilter: Operations.Resources_vendor_list.Input.Query.LatestPurchaseDatePresenceFilterPayload? = nil,
-                    logoPresenceFilter: Operations.Resources_vendor_list.Input.Query.LogoPresenceFilterPayload? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.expenseId = expenseId
-                    self.expensePresenceFilter = expensePresenceFilter
-                    self.expenseSearch = expenseSearch
-                    self.purchaseId = purchaseId
-                    self.purchasePresenceFilter = purchasePresenceFilter
-                    self.purchaseSearch = purchaseSearch
-                    self.productId = productId
-                    self.productPresenceFilter = productPresenceFilter
-                    self.productSearch = productSearch
-                    self.projectId = projectId
-                    self.projectPresenceFilter = projectPresenceFilter
-                    self.projectSearch = projectSearch
-                    self.financialTransactionId = financialTransactionId
-                    self.financialTransactionPresenceFilter = financialTransactionPresenceFilter
-                    self.financialTransactionSearch = financialTransactionSearch
-                    self.search = search
-                    self.purchaseCountMin = purchaseCountMin
-                    self.purchaseCountMax = purchaseCountMax
-                    self.spendMin = spendMin
-                    self.spendMax = spendMax
-                    self.latestPurchaseDateFrom = latestPurchaseDateFrom
-                    self.latestPurchaseDateTo = latestPurchaseDateTo
-                    self.latestPurchaseDatePresenceFilter = latestPurchaseDatePresenceFilter
-                    self.logoPresenceFilter = logoPresenceFilter
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_vendor_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/vendors/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_vendor_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_vendor_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_vendor_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_vendor_list.Input.Query = .init(),
-                headers: Operations.Resources_vendor_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.VendorListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.VendorListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_vendor_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_vendor_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/vendors/get(resources.vendor.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_vendor_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_vendor_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_vendor_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_vendor_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/vendors/get(resources.vendor.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_vendor_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_vendor_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/vendors/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/get(resources.vendor.get)`.
-    package enum Resources_vendor_get {
-        package static let id: Swift.String = "resources.vendor.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// vendor shortcode, e.g. VEN-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: vendor shortcode, e.g. VEN-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_vendor_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_vendor_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_vendor_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_vendor_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_vendor_get.Input.Path,
-                headers: Operations.Resources_vendor_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.VendorOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.VendorOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_vendor_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_vendor_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/get(resources.vendor.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_vendor_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_vendor_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_vendor_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_vendor_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/get(resources.vendor.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_vendor_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_vendor_get.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -13998,104 +14582,191 @@ package enum Operations {
     }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
-    /// - Remark: HTTP `GET /api/v1/financial-accounts`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/get(resources.financialAccount.list)`.
-    package enum Resources_financialAccount_list {
-        package static let id: Swift.String = "resources.financialAccount.list"
+    /// - Remark: HTTP `GET /api/v1/recipes`.
+    /// - Remark: Generated from `#/paths//api/v1/recipes/get(resources.recipe.list)`.
+    package enum Resources_recipe_list {
+        package static let id: Swift.String = "resources.recipe.list"
         package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query`.
+            /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query`.
             package struct Query: Sendable, Hashable {
                 /// Calendar day as "YYYY-MM-DD"
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/createdFrom`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/createdFrom`.
                 package var createdFrom: Swift.String?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/createdTo`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/createdTo`.
                 package var createdTo: Swift.String?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/updatedFrom`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/updatedFrom`.
                 package var updatedFrom: Swift.String?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/updatedTo`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/updatedTo`.
                 package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/financialTransactionId`.
-                package var financialTransactionId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/financialTransactionPresenceFilter`.
-                @frozen package enum FinancialTransactionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/ingredientId`.
+                package var ingredientId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/ingredientPresenceFilter`.
+                @frozen package enum IngredientPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
                     case none = "none"
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/financialTransactionPresenceFilter`.
-                package var financialTransactionPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.FinancialTransactionPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/financialTransactionSearch`.
-                package var financialTransactionSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/purchaseId`.
-                package var purchaseId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/purchasePresenceFilter`.
-                @frozen package enum PurchasePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/ingredientPresenceFilter`.
+                package var ingredientPresenceFilter: Operations.Resources_recipe_list.Input.Query.IngredientPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/ingredientSearch`.
+                package var ingredientSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/mealId`.
+                package var mealId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/mealPresenceFilter`.
+                @frozen package enum MealPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
                     case none = "none"
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/purchasePresenceFilter`.
-                package var purchasePresenceFilter: Operations.Resources_financialAccount_list.Input.Query.PurchasePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/purchaseSearch`.
-                package var purchaseSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorId`.
-                package var vendorId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorPresenceFilter`.
-                @frozen package enum VendorPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                /// Filter to recipes that have / haven't been planned on at least one live meal
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/mealPresenceFilter`.
+                package var mealPresenceFilter: Operations.Resources_recipe_list.Input.Query.MealPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/mealSearch`.
+                package var mealSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/nameFilter`.
+                package var nameFilter: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/tagFilters`.
+                package var tagFilters: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/totalMinutesMin`.
+                package var totalMinutesMin: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/totalMinutesMax`.
+                package var totalMinutesMax: Swift.Double?
+                /// cookbook shortcode, e.g. CKB-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload`.
+                package struct CookbookIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// cookbook shortcode, e.g. CKB-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/CookbookIdPayload/value2`.
+                    package var value2: Operations.Resources_recipe_list.Input.Query.CookbookIdPayloadPayload.Value2Payload?
+                    /// Creates a new `CookbookIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: cookbook shortcode, e.g. CKB-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_recipe_list.Input.Query.CookbookIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/cookbookId`.
+                package typealias CookbookIdPayload = [Operations.Resources_recipe_list.Input.Query.CookbookIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/cookbookId`.
+                package var cookbookId: Operations.Resources_recipe_list.Input.Query.CookbookIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/cookbookPresenceFilter`.
+                @frozen package enum CookbookPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
                     case none = "none"
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorPresenceFilter`.
-                package var vendorPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.VendorPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/vendorSearch`.
-                package var vendorSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/search`.
-                package var search: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/provisional`.
-                package var provisional: Swift.Bool?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/IdentityKindPayload`.
-                @frozen package enum IdentityKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case creditCard = "credit_card"
-                    case bankAccount = "bank_account"
-                    case storedValue = "stored_value"
-                    case cash = "cash"
-                    case other = "other"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/identityKind`.
-                package typealias IdentityKindPayload = [Operations.Resources_financialAccount_list.Input.Query.IdentityKindPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/identityKind`.
-                package var identityKind: Operations.Resources_financialAccount_list.Input.Query.IdentityKindPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/last4`.
-                package var last4: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/source`.
-                package var source: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/externalAccountId`.
-                package var externalAccountId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/sourceAliasPresenceFilter`.
-                @frozen package enum SourceAliasPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/cookbookPresenceFilter`.
+                package var cookbookPresenceFilter: Operations.Resources_recipe_list.Input.Query.CookbookPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/tagsPresenceFilter`.
+                @frozen package enum TagsPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
                     case none = "none"
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/sourceAliasPresenceFilter`.
-                package var sourceAliasPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.SourceAliasPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/tagsPresenceFilter`.
+                package var tagsPresenceFilter: Operations.Resources_recipe_list.Input.Query.TagsPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/imagePresenceFilter`.
+                @frozen package enum ImagePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to recipes that do / don't have at least one image (PDFs don't count)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/imagePresenceFilter`.
+                package var imagePresenceFilter: Operations.Resources_recipe_list.Input.Query.ImagePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/instructionsPresenceFilter`.
+                @frozen package enum InstructionsPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// Filter to recipes that do / don't have any written instructions.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/instructionsPresenceFilter`.
+                package var instructionsPresenceFilter: Operations.Resources_recipe_list.Input.Query.InstructionsPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/SourceTypeFilterPayload`.
+                @frozen package enum SourceTypeFilterPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case book = "Book"
+                    case website = "Website"
+                    case other = "Other"
+                    case notion = "Notion"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sourceTypeFilter`.
+                package typealias SourceTypeFilterPayload = [Operations.Resources_recipe_list.Input.Query.SourceTypeFilterPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sourceTypeFilter`.
+                package var sourceTypeFilter: Operations.Resources_recipe_list.Input.Query.SourceTypeFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sourceTypePresenceFilter`.
+                @frozen package enum SourceTypePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sourceTypePresenceFilter`.
+                package var sourceTypePresenceFilter: Operations.Resources_recipe_list.Input.Query.SourceTypePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/costTotalMin`.
+                package var costTotalMin: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/costTotalMax`.
+                package var costTotalMax: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/caloriesTotalMin`.
+                package var caloriesTotalMin: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/caloriesTotalMax`.
+                package var caloriesTotalMax: Swift.Double?
                 /// Page number, starting at 1 (default 1)
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/page`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/page`.
                 package var page: Swift.Int?
                 /// Items per page (default 10, maximum 500)
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/pageSize`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/pageSize`.
                 package var pageSize: Swift.Int?
                 /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/sort`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/sort`.
                 package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/query/groupBy`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/query/groupBy`.
                 package var groupBy: Swift.String?
                 /// Creates a new `Query`.
                 ///
@@ -14104,22 +14775,27 @@ package enum Operations {
                 ///   - createdTo: Calendar day as "YYYY-MM-DD"
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - financialTransactionId:
-                ///   - financialTransactionPresenceFilter:
-                ///   - financialTransactionSearch:
-                ///   - purchaseId:
-                ///   - purchasePresenceFilter:
-                ///   - purchaseSearch:
-                ///   - vendorId:
-                ///   - vendorPresenceFilter:
-                ///   - vendorSearch:
-                ///   - search:
-                ///   - provisional:
-                ///   - identityKind:
-                ///   - last4:
-                ///   - source:
-                ///   - externalAccountId:
-                ///   - sourceAliasPresenceFilter:
+                ///   - ingredientId:
+                ///   - ingredientPresenceFilter:
+                ///   - ingredientSearch:
+                ///   - mealId:
+                ///   - mealPresenceFilter: Filter to recipes that have / haven't been planned on at least one live meal
+                ///   - mealSearch:
+                ///   - nameFilter:
+                ///   - tagFilters:
+                ///   - totalMinutesMin:
+                ///   - totalMinutesMax:
+                ///   - cookbookId:
+                ///   - cookbookPresenceFilter:
+                ///   - tagsPresenceFilter:
+                ///   - imagePresenceFilter: Filter to recipes that do / don't have at least one image (PDFs don't count)
+                ///   - instructionsPresenceFilter: Filter to recipes that do / don't have any written instructions.
+                ///   - sourceTypeFilter:
+                ///   - sourceTypePresenceFilter:
+                ///   - costTotalMin:
+                ///   - costTotalMax:
+                ///   - caloriesTotalMin:
+                ///   - caloriesTotalMax:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
@@ -14129,22 +14805,27 @@ package enum Operations {
                     createdTo: Swift.String? = nil,
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
-                    financialTransactionId: [Swift.String]? = nil,
-                    financialTransactionPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.FinancialTransactionPresenceFilterPayload? = nil,
-                    financialTransactionSearch: Swift.String? = nil,
-                    purchaseId: [Swift.String]? = nil,
-                    purchasePresenceFilter: Operations.Resources_financialAccount_list.Input.Query.PurchasePresenceFilterPayload? = nil,
-                    purchaseSearch: Swift.String? = nil,
-                    vendorId: [Swift.String]? = nil,
-                    vendorPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.VendorPresenceFilterPayload? = nil,
-                    vendorSearch: Swift.String? = nil,
-                    search: Swift.String? = nil,
-                    provisional: Swift.Bool? = nil,
-                    identityKind: Operations.Resources_financialAccount_list.Input.Query.IdentityKindPayload? = nil,
-                    last4: Swift.String? = nil,
-                    source: [Swift.String]? = nil,
-                    externalAccountId: [Swift.String]? = nil,
-                    sourceAliasPresenceFilter: Operations.Resources_financialAccount_list.Input.Query.SourceAliasPresenceFilterPayload? = nil,
+                    ingredientId: [Swift.String]? = nil,
+                    ingredientPresenceFilter: Operations.Resources_recipe_list.Input.Query.IngredientPresenceFilterPayload? = nil,
+                    ingredientSearch: Swift.String? = nil,
+                    mealId: [Swift.String]? = nil,
+                    mealPresenceFilter: Operations.Resources_recipe_list.Input.Query.MealPresenceFilterPayload? = nil,
+                    mealSearch: Swift.String? = nil,
+                    nameFilter: Swift.String? = nil,
+                    tagFilters: [Swift.String]? = nil,
+                    totalMinutesMin: Swift.Double? = nil,
+                    totalMinutesMax: Swift.Double? = nil,
+                    cookbookId: Operations.Resources_recipe_list.Input.Query.CookbookIdPayload? = nil,
+                    cookbookPresenceFilter: Operations.Resources_recipe_list.Input.Query.CookbookPresenceFilterPayload? = nil,
+                    tagsPresenceFilter: Operations.Resources_recipe_list.Input.Query.TagsPresenceFilterPayload? = nil,
+                    imagePresenceFilter: Operations.Resources_recipe_list.Input.Query.ImagePresenceFilterPayload? = nil,
+                    instructionsPresenceFilter: Operations.Resources_recipe_list.Input.Query.InstructionsPresenceFilterPayload? = nil,
+                    sourceTypeFilter: Operations.Resources_recipe_list.Input.Query.SourceTypeFilterPayload? = nil,
+                    sourceTypePresenceFilter: Operations.Resources_recipe_list.Input.Query.SourceTypePresenceFilterPayload? = nil,
+                    costTotalMin: Swift.Double? = nil,
+                    costTotalMax: Swift.Double? = nil,
+                    caloriesTotalMin: Swift.Double? = nil,
+                    caloriesTotalMax: Swift.Double? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -14154,49 +14835,54 @@ package enum Operations {
                     self.createdTo = createdTo
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
-                    self.financialTransactionId = financialTransactionId
-                    self.financialTransactionPresenceFilter = financialTransactionPresenceFilter
-                    self.financialTransactionSearch = financialTransactionSearch
-                    self.purchaseId = purchaseId
-                    self.purchasePresenceFilter = purchasePresenceFilter
-                    self.purchaseSearch = purchaseSearch
-                    self.vendorId = vendorId
-                    self.vendorPresenceFilter = vendorPresenceFilter
-                    self.vendorSearch = vendorSearch
-                    self.search = search
-                    self.provisional = provisional
-                    self.identityKind = identityKind
-                    self.last4 = last4
-                    self.source = source
-                    self.externalAccountId = externalAccountId
-                    self.sourceAliasPresenceFilter = sourceAliasPresenceFilter
+                    self.ingredientId = ingredientId
+                    self.ingredientPresenceFilter = ingredientPresenceFilter
+                    self.ingredientSearch = ingredientSearch
+                    self.mealId = mealId
+                    self.mealPresenceFilter = mealPresenceFilter
+                    self.mealSearch = mealSearch
+                    self.nameFilter = nameFilter
+                    self.tagFilters = tagFilters
+                    self.totalMinutesMin = totalMinutesMin
+                    self.totalMinutesMax = totalMinutesMax
+                    self.cookbookId = cookbookId
+                    self.cookbookPresenceFilter = cookbookPresenceFilter
+                    self.tagsPresenceFilter = tagsPresenceFilter
+                    self.imagePresenceFilter = imagePresenceFilter
+                    self.instructionsPresenceFilter = instructionsPresenceFilter
+                    self.sourceTypeFilter = sourceTypeFilter
+                    self.sourceTypePresenceFilter = sourceTypePresenceFilter
+                    self.costTotalMin = costTotalMin
+                    self.costTotalMax = costTotalMax
+                    self.caloriesTotalMin = caloriesTotalMin
+                    self.caloriesTotalMax = caloriesTotalMax
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
                     self.groupBy = groupBy
                 }
             }
-            package var query: Operations.Resources_financialAccount_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/header`.
+            package var query: Operations.Resources_recipe_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/recipes/GET/header`.
             package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialAccount_list.AcceptableContentType>]
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_list.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
                 ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialAccount_list.AcceptableContentType>] = .defaultValues()) {
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_list.AcceptableContentType>] = .defaultValues()) {
                     self.accept = accept
                 }
             }
-            package var headers: Operations.Resources_financialAccount_list.Input.Headers
+            package var headers: Operations.Resources_recipe_list.Input.Headers
             /// Creates a new `Input`.
             ///
             /// - Parameters:
             ///   - query:
             ///   - headers:
             package init(
-                query: Operations.Resources_financialAccount_list.Input.Query = .init(),
-                headers: Operations.Resources_financialAccount_list.Input.Headers = .init()
+                query: Operations.Resources_recipe_list.Input.Query = .init(),
+                headers: Operations.Resources_recipe_list.Input.Headers = .init()
             ) {
                 self.query = query
                 self.headers = headers
@@ -14204,15 +14890,15 @@ package enum Operations {
         }
         @frozen package enum Output: Sendable, Hashable {
             package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/responses/200/content`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.FinancialAccountListPage)
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.RecipeListPage)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.FinancialAccountListPage {
+                    package var json: Components.Schemas.RecipeListPage {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -14222,26 +14908,26 @@ package enum Operations {
                     }
                 }
                 /// Received HTTP response body
-                package var body: Operations.Resources_financialAccount_list.Output.Ok.Body
+                package var body: Operations.Resources_recipe_list.Output.Ok.Body
                 /// Creates a new `Ok`.
                 ///
                 /// - Parameters:
                 ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_financialAccount_list.Output.Ok.Body) {
+                package init(body: Operations.Resources_recipe_list.Output.Ok.Body) {
                     self.body = body
                 }
             }
             /// 200
             ///
-            /// - Remark: Generated from `#/paths//api/v1/financial-accounts/get(resources.financialAccount.list)/responses/200`.
+            /// - Remark: Generated from `#/paths//api/v1/recipes/get(resources.recipe.list)/responses/200`.
             ///
             /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_financialAccount_list.Output.Ok)
+            case ok(Operations.Resources_recipe_list.Output.Ok)
             /// The associated value of the enum case if `self` is `.ok`.
             ///
             /// - Throws: An error if `self` is not `.ok`.
             /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_financialAccount_list.Output.Ok {
+            package var ok: Operations.Resources_recipe_list.Output.Ok {
                 get throws {
                     switch self {
                     case let .ok(response):
@@ -14255,9 +14941,9 @@ package enum Operations {
                 }
             }
             package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/responses/default/content`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/GET/responses/default/content`.
                 @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/GET/responses/default/content/application\/json`.
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/GET/responses/default/content/application\/json`.
                     case json(Components.Schemas.ApiError)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
@@ -14273,26 +14959,26 @@ package enum Operations {
                     }
                 }
                 /// Received HTTP response body
-                package var body: Operations.Resources_financialAccount_list.Output.Default.Body
+                package var body: Operations.Resources_recipe_list.Output.Default.Body
                 /// Creates a new `Default`.
                 ///
                 /// - Parameters:
                 ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_financialAccount_list.Output.Default.Body) {
+                package init(body: Operations.Resources_recipe_list.Output.Default.Body) {
                     self.body = body
                 }
             }
             /// Error
             ///
-            /// - Remark: Generated from `#/paths//api/v1/financial-accounts/get(resources.financialAccount.list)/responses/default`.
+            /// - Remark: Generated from `#/paths//api/v1/recipes/get(resources.recipe.list)/responses/default`.
             ///
             /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_financialAccount_list.Output.Default)
+            case `default`(statusCode: Swift.Int, Operations.Resources_recipe_list.Output.Default)
             /// The associated value of the enum case if `self` is `.`default``.
             ///
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_financialAccount_list.Output.Default {
+            package var `default`: Operations.Resources_recipe_list.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -14332,46 +15018,46 @@ package enum Operations {
             }
         }
     }
-    /// - Remark: HTTP `GET /api/v1/financial-accounts/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/get(resources.financialAccount.get)`.
-    package enum Resources_financialAccount_get {
-        package static let id: Swift.String = "resources.financialAccount.get"
+    /// - Remark: HTTP `GET /api/v1/recipes/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/get(resources.recipe.get)`.
+    package enum Resources_recipe_get {
+        package static let id: Swift.String = "resources.recipe.get"
         package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/path`.
+            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/path`.
             package struct Path: Sendable, Hashable {
-                /// financialAccount shortcode, e.g. FAC-4K7M
+                /// recipe shortcode, e.g. RCP-4K7M
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/path/id`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/path/id`.
                 package var id: Swift.String
                 /// Creates a new `Path`.
                 ///
                 /// - Parameters:
-                ///   - id: financialAccount shortcode, e.g. FAC-4K7M
+                ///   - id: recipe shortcode, e.g. RCP-4K7M
                 package init(id: Swift.String) {
                     self.id = id
                 }
             }
-            package var path: Operations.Resources_financialAccount_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/header`.
+            package var path: Operations.Resources_recipe_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/header`.
             package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialAccount_get.AcceptableContentType>]
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_get.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
                 ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialAccount_get.AcceptableContentType>] = .defaultValues()) {
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_get.AcceptableContentType>] = .defaultValues()) {
                     self.accept = accept
                 }
             }
-            package var headers: Operations.Resources_financialAccount_get.Input.Headers
+            package var headers: Operations.Resources_recipe_get.Input.Headers
             /// Creates a new `Input`.
             ///
             /// - Parameters:
             ///   - path:
             ///   - headers:
             package init(
-                path: Operations.Resources_financialAccount_get.Input.Path,
-                headers: Operations.Resources_financialAccount_get.Input.Headers = .init()
+                path: Operations.Resources_recipe_get.Input.Path,
+                headers: Operations.Resources_recipe_get.Input.Headers = .init()
             ) {
                 self.path = path
                 self.headers = headers
@@ -14379,15 +15065,15 @@ package enum Operations {
         }
         @frozen package enum Output: Sendable, Hashable {
             package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/200/content`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.FinancialAccountOut)
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.RecipeDetailMcpOut)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.FinancialAccountOut {
+                    package var json: Components.Schemas.RecipeDetailMcpOut {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -14397,26 +15083,26 @@ package enum Operations {
                     }
                 }
                 /// Received HTTP response body
-                package var body: Operations.Resources_financialAccount_get.Output.Ok.Body
+                package var body: Operations.Resources_recipe_get.Output.Ok.Body
                 /// Creates a new `Ok`.
                 ///
                 /// - Parameters:
                 ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_financialAccount_get.Output.Ok.Body) {
+                package init(body: Operations.Resources_recipe_get.Output.Ok.Body) {
                     self.body = body
                 }
             }
             /// 200
             ///
-            /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/get(resources.financialAccount.get)/responses/200`.
+            /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/get(resources.recipe.get)/responses/200`.
             ///
             /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_financialAccount_get.Output.Ok)
+            case ok(Operations.Resources_recipe_get.Output.Ok)
             /// The associated value of the enum case if `self` is `.ok`.
             ///
             /// - Throws: An error if `self` is not `.ok`.
             /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_financialAccount_get.Output.Ok {
+            package var ok: Operations.Resources_recipe_get.Output.Ok {
                 get throws {
                     switch self {
                     case let .ok(response):
@@ -14430,9 +15116,9 @@ package enum Operations {
                 }
             }
             package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/default/content`.
+                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/default/content`.
                 @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/default/content/application\/json`.
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/default/content/application\/json`.
                     case json(Components.Schemas.ApiError)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
@@ -14448,26 +15134,572 @@ package enum Operations {
                     }
                 }
                 /// Received HTTP response body
-                package var body: Operations.Resources_financialAccount_get.Output.Default.Body
+                package var body: Operations.Resources_recipe_get.Output.Default.Body
                 /// Creates a new `Default`.
                 ///
                 /// - Parameters:
                 ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_financialAccount_get.Output.Default.Body) {
+                package init(body: Operations.Resources_recipe_get.Output.Default.Body) {
                     self.body = body
                 }
             }
             /// Error
             ///
-            /// - Remark: Generated from `#/paths//api/v1/financial-accounts/{id}/get(resources.financialAccount.get)/responses/default`.
+            /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/get(resources.recipe.get)/responses/default`.
             ///
             /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_financialAccount_get.Output.Default)
+            case `default`(statusCode: Swift.Int, Operations.Resources_recipe_get.Output.Default)
             /// The associated value of the enum case if `self` is `.`default``.
             ///
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_financialAccount_get.Output.Default {
+            package var `default`: Operations.Resources_recipe_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `PATCH /api/v1/recipes/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/patch(resources.recipe.update)`.
+    package enum Resources_recipe_update {
+        package static let id: Swift.String = "resources.recipe.update"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/path`.
+            package struct Path: Sendable, Hashable {
+                /// recipe shortcode, e.g. RCP-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: recipe shortcode, e.g. RCP-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_recipe_update.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_update.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_recipe_update.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_recipe_update.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/requestBody`.
+            @frozen package enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.RecipeUpdateData)
+            }
+            package var body: Operations.Resources_recipe_update.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            package init(
+                path: Operations.Resources_recipe_update.Input.Path,
+                headers: Operations.Resources_recipe_update.Input.Headers = .init(),
+                body: Operations.Resources_recipe_update.Input.Body? = nil
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultRecipe)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultRecipe {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_recipe_update.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_recipe_update.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/patch(resources.recipe.update)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_recipe_update.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_recipe_update.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/PATCH/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_recipe_update.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_recipe_update.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/patch(resources.recipe.update)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_recipe_update.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_recipe_update.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/search/find`.
+    /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)`.
+    package enum Search_find {
+        package static let id: Swift.String = "search.find"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/query`.
+                package var query: Swift.String
+                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/EntityTypesPayload`.
+                @frozen package enum EntityTypesPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case product = "product"
+                    case recipe = "recipe"
+                    case ingredient = "ingredient"
+                    case cookbook = "cookbook"
+                    case location = "location"
+                    case inventory = "inventory"
+                    case meal = "meal"
+                    case project = "project"
+                    case task = "task"
+                    case vendor = "vendor"
+                    case purchase = "purchase"
+                    case financialAccount = "financialAccount"
+                    case financialTransaction = "financialTransaction"
+                    case wish = "wish"
+                    case expense = "expense"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/entityTypes`.
+                package typealias EntityTypesPayload = [Operations.Search_find.Input.Query.EntityTypesPayloadPayload]
+                /// Restrict results to these searchable entity types.
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/entityTypes`.
+                package var entityTypes: Operations.Search_find.Input.Query.EntityTypesPayload?
+                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/limit`.
+                package var limit: Swift.Int?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - query:
+                ///   - entityTypes: Restrict results to these searchable entity types.
+                ///   - limit:
+                package init(
+                    query: Swift.String,
+                    entityTypes: Operations.Search_find.Input.Query.EntityTypesPayload? = nil,
+                    limit: Swift.Int? = nil
+                ) {
+                    self.query = query
+                    self.entityTypes = entityTypes
+                    self.limit = limit
+                }
+            }
+            package var query: Operations.Search_find.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/search/find/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Search_find.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Search_find.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Search_find.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Search_find.Input.Query,
+                headers: Operations.Search_find.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/search/find/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.SearchHitsOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.SearchHitsOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Search_find.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Search_find.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Search_find.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Search_find.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/search/find/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/search/find/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Search_find.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Search_find.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Search_find.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Search_find.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/task/todayBriefing`.
+    /// - Remark: Generated from `#/paths//api/v1/task/todayBriefing/get(task.todayBriefing)`.
+    package enum Task_todayBriefing {
+        package static let id: Swift.String = "task.todayBriefing"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Task_todayBriefing.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Task_todayBriefing.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Task_todayBriefing.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            package init(headers: Operations.Task_todayBriefing.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TaskTodayBriefingOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.TaskTodayBriefingOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Task_todayBriefing.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Task_todayBriefing.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/task/todayBriefing/get(task.todayBriefing)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Task_todayBriefing.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Task_todayBriefing.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/task/todayBriefing/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Task_todayBriefing.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Task_todayBriefing.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/task/todayBriefing/get(task.todayBriefing)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Task_todayBriefing.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Task_todayBriefing.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -14509,137 +15741,170 @@ package enum Operations {
     }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
-    /// - Remark: HTTP `GET /api/v1/financial-transactions`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/get(resources.financialTransaction.list)`.
-    package enum Resources_financialTransaction_list {
-        package static let id: Swift.String = "resources.financialTransaction.list"
+    /// - Remark: HTTP `GET /api/v1/tasks`.
+    /// - Remark: Generated from `#/paths//api/v1/tasks/get(resources.task.list)`.
+    package enum Resources_task_list {
+        package static let id: Swift.String = "resources.task.list"
         package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query`.
+            /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query`.
             package struct Query: Sendable, Hashable {
                 /// Calendar day as "YYYY-MM-DD"
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/createdFrom`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/createdFrom`.
                 package var createdFrom: Swift.String?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/createdTo`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/createdTo`.
                 package var createdTo: Swift.String?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/updatedFrom`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/updatedFrom`.
                 package var updatedFrom: Swift.String?
                 /// Calendar day as "YYYY-MM-DD"
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/updatedTo`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/updatedTo`.
                 package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/vendorId`.
-                package var vendorId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/vendorPresenceFilter`.
-                @frozen package enum VendorPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/blockedByTaskId`.
+                package var blockedByTaskId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/blockedByTaskPresenceFilter`.
+                @frozen package enum BlockedByTaskPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
                     case none = "none"
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/vendorPresenceFilter`.
-                package var vendorPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.VendorPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/vendorSearch`.
-                package var vendorSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/expenseId`.
-                package var expenseId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/expensePresenceFilter`.
-                @frozen package enum ExpensePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/expensePresenceFilter`.
-                package var expensePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ExpensePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/expenseSearch`.
-                package var expenseSearch: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productId`.
-                package var productId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productPresenceFilter`.
-                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productPresenceFilter`.
-                package var productPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ProductPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/productSearch`.
-                package var productSearch: Swift.String?
-                /// Substring match on merchant or raw description
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/blockedByTaskPresenceFilter`.
+                package var blockedByTaskPresenceFilter: Operations.Resources_task_list.Input.Query.BlockedByTaskPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/blockedByTaskSearch`.
+                package var blockedByTaskSearch: Swift.String?
+                /// task shortcode, e.g. TSK-4K7M
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/search`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ParentTaskIdPayload`.
+                package struct ParentTaskIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// task shortcode, e.g. TSK-4K7M
+                    ///
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ParentTaskIdPayload/value1`.
+                    package var value1: Swift.String?
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ParentTaskIdPayload/value2`.
+                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
+                    }
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ParentTaskIdPayload/value2`.
+                    package var value2: Operations.Resources_task_list.Input.Query.ParentTaskIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ParentTaskIdPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value1: task shortcode, e.g. TSK-4K7M
+                    ///   - value2:
+                    package init(
+                        value1: Swift.String? = nil,
+                        value2: Operations.Resources_task_list.Input.Query.ParentTaskIdPayloadPayload.Value2Payload? = nil
+                    ) {
+                        self.value1 = value1
+                        self.value2 = value2
+                    }
+                    package init(from decoder: any Swift.Decoder) throws {
+                        var errors: [any Swift.Error] = []
+                        do {
+                            self.value1 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        do {
+                            self.value2 = try decoder.decodeFromSingleValueContainer()
+                        } catch {
+                            errors.append(error)
+                        }
+                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                            [
+                                self.value1,
+                                self.value2
+                            ],
+                            type: Self.self,
+                            codingPath: decoder.codingPath,
+                            errors: errors
+                        )
+                    }
+                    package func encode(to encoder: any Swift.Encoder) throws {
+                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                            self.value1,
+                            self.value2
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskId`.
+                package typealias ParentTaskIdPayload = [Operations.Resources_task_list.Input.Query.ParentTaskIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskId`.
+                package var parentTaskId: Operations.Resources_task_list.Input.Query.ParentTaskIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskPresenceFilter`.
+                @frozen package enum ParentTaskPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskPresenceFilter`.
+                package var parentTaskPresenceFilter: Operations.Resources_task_list.Input.Query.ParentTaskPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/parentTaskSearch`.
+                package var parentTaskSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/search`.
                 package var search: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/KindPayload`.
-                @frozen package enum KindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case purchase = "purchase"
-                    case refund = "refund"
-                    case accountTransfer = "account_transfer"
-                    case creditCardPayment = "credit_card_payment"
-                    case fee = "fee"
-                    case interest = "interest"
-                    case income = "income"
-                    case adjustment = "adjustment"
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/StatusPayload`.
+                @frozen package enum StatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case notStarted = "not_started"
+                    case later = "later"
+                    case inProgress = "in_progress"
+                    case blocked = "blocked"
+                    case done = "done"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/status`.
+                package typealias StatusPayload = [Operations.Resources_task_list.Input.Query.StatusPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/status`.
+                package var status: Operations.Resources_task_list.Input.Query.StatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/TradePayload`.
+                @frozen package enum TradePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case planning = "planning"
+                    case demolition = "demolition"
+                    case building = "building"
+                    case drywall = "drywall"
+                    case electrical = "electrical"
+                    case plumbing = "plumbing"
+                    case mechanical = "mechanical"
+                    case cabinetry = "cabinetry"
+                    case countertop = "countertop"
+                    case flooring = "flooring"
+                    case millwork = "millwork"
+                    case finishes = "finishes"
+                    case appliances = "appliances"
+                    case landscaping = "landscaping"
+                    case logistics = "logistics"
+                    case metalworking = "metalworking"
+                    case crafts = "crafts"
+                    case auto = "auto"
                     case other = "other"
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/kind`.
-                package typealias KindPayload = [Operations.Resources_financialTransaction_list.Input.Query.KindPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/kind`.
-                package var kind: Operations.Resources_financialTransaction_list.Input.Query.KindPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/StatusPayload`.
-                @frozen package enum StatusPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case expected = "expected"
-                    case pending = "pending"
-                    case posted = "posted"
-                    case void = "void"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/status`.
-                package typealias StatusPayload = [Operations.Resources_financialTransaction_list.Input.Query.StatusPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/status`.
-                package var status: Operations.Resources_financialTransaction_list.Input.Query.StatusPayload?
-                /// Calendar day as "YYYY-MM-DD"
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/trade`.
+                package typealias TradePayload = [Operations.Resources_task_list.Input.Query.TradePayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/trade`.
+                package var trade: Operations.Resources_task_list.Input.Query.TradePayload?
+                /// project shortcode, e.g. PRJ-4K7M
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/postedDateFrom`.
-                package var postedDateFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/postedDateTo`.
-                package var postedDateTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/merchant`.
-                package var merchant: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/transactionDateFrom`.
-                package var transactionDateFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/transactionDateTo`.
-                package var transactionDateTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMin`.
-                package var amountMin: Swift.Double?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/amountMax`.
-                package var amountMax: Swift.Double?
-                /// financialAccount shortcode, e.g. FAC-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload`.
-                package struct AccountIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// financialAccount shortcode, e.g. FAC-4K7M
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload`.
+                package struct ProjectIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// project shortcode, e.g. PRJ-4K7M
                     ///
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload/value1`.
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload/value1`.
                     package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload/value2`.
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload/value2`.
                     @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
                         case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
                     }
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/AccountIdPayload/value2`.
-                    package var value2: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayloadPayload.Value2Payload?
-                    /// Creates a new `AccountIdPayloadPayload`.
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectIdPayload/value2`.
+                    package var value2: Operations.Resources_task_list.Input.Query.ProjectIdPayloadPayload.Value2Payload?
+                    /// Creates a new `ProjectIdPayloadPayload`.
                     ///
                     /// - Parameters:
-                    ///   - value1: financialAccount shortcode, e.g. FAC-4K7M
+                    ///   - value1: project shortcode, e.g. PRJ-4K7M
                     ///   - value2:
                     package init(
                         value1: Swift.String? = nil,
-                        value2: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayloadPayload.Value2Payload? = nil
+                        value2: Operations.Resources_task_list.Input.Query.ProjectIdPayloadPayload.Value2Payload? = nil
                     ) {
                         self.value1 = value1
                         self.value2 = value2
@@ -14673,32 +15938,32 @@ package enum Operations {
                         ])
                     }
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/accountId`.
-                package typealias AccountIdPayload = [Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/accountId`.
-                package var accountId: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayload?
-                /// purchase shortcode, e.g. PUR-4K7M
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectId`.
+                package typealias ProjectIdPayload = [Operations.Resources_task_list.Input.Query.ProjectIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectId`.
+                package var projectId: Operations.Resources_task_list.Input.Query.ProjectIdPayload?
+                /// product shortcode, e.g. PRD-4K7M
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/PurchaseIdPayload`.
-                package struct PurchaseIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// purchase shortcode, e.g. PUR-4K7M
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/SubjectProductIdPayload`.
+                package struct SubjectProductIdPayloadPayload: Codable, Hashable, Sendable {
+                    /// product shortcode, e.g. PRD-4K7M
                     ///
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/PurchaseIdPayload/value1`.
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/SubjectProductIdPayload/value1`.
                     package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/PurchaseIdPayload/value2`.
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/SubjectProductIdPayload/value2`.
                     @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
                         case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
                     }
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/PurchaseIdPayload/value2`.
-                    package var value2: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayloadPayload.Value2Payload?
-                    /// Creates a new `PurchaseIdPayloadPayload`.
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/SubjectProductIdPayload/value2`.
+                    package var value2: Operations.Resources_task_list.Input.Query.SubjectProductIdPayloadPayload.Value2Payload?
+                    /// Creates a new `SubjectProductIdPayloadPayload`.
                     ///
                     /// - Parameters:
-                    ///   - value1: purchase shortcode, e.g. PUR-4K7M
+                    ///   - value1: product shortcode, e.g. PRD-4K7M
                     ///   - value2:
                     package init(
                         value1: Swift.String? = nil,
-                        value2: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayloadPayload.Value2Payload? = nil
+                        value2: Operations.Resources_task_list.Input.Query.SubjectProductIdPayloadPayload.Value2Payload? = nil
                     ) {
                         self.value1 = value1
                         self.value2 = value2
@@ -14732,40 +15997,111 @@ package enum Operations {
                         ])
                     }
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/purchaseId`.
-                package typealias PurchaseIdPayload = [Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/purchaseId`.
-                package var purchaseId: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/purchasePresenceFilter`.
-                @frozen package enum PurchasePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/subjectProductId`.
+                package typealias SubjectProductIdPayload = [Operations.Resources_task_list.Input.Query.SubjectProductIdPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/subjectProductId`.
+                package var subjectProductId: Operations.Resources_task_list.Input.Query.SubjectProductIdPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/topLevelOnly`.
+                package var topLevelOnly: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/includeSubProjects`.
+                package var includeSubProjects: Swift.Bool?
+                /// Inclusive lower bound on due date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dueFrom`.
+                package var dueFrom: Swift.String?
+                /// Inclusive upper bound on due date
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dueTo`.
+                package var dueTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/duePresenceFilter`.
+                @frozen package enum DuePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case has = "has"
                     case none = "none"
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/purchasePresenceFilter`.
-                package var purchasePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.PurchasePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/allocationIntegrity`.
-                @frozen package enum AllocationIntegrityPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case defect = "defect"
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/duePresenceFilter`.
+                package var duePresenceFilter: Operations.Resources_task_list.Input.Query.DuePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dueRelative`.
+                @frozen package enum DueRelativePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case beforeToday = "beforeToday"
+                    case onOrBeforeToday = "onOrBeforeToday"
                 }
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/allocationIntegrity`.
-                package var allocationIntegrity: Operations.Resources_financialTransaction_list.Input.Query.AllocationIntegrityPayload?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/source`.
-                package var source: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/externalId`.
-                package var externalId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/dueRelative`.
+                package var dueRelative: Operations.Resources_task_list.Input.Query.DueRelativePayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/completion`.
+                @frozen package enum CompletionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case all = "all"
+                    case open = "open"
+                    case done = "done"
+                }
+                /// Undefined = "all" (today's default, unchanged)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/completion`.
+                package var completion: Operations.Resources_task_list.Input.Query.CompletionPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectPresenceFilter`.
+                @frozen package enum ProjectPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectPresenceFilter`.
+                package var projectPresenceFilter: Operations.Resources_task_list.Input.Query.ProjectPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/subjectProductPresenceFilter`.
+                @frozen package enum SubjectProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/subjectProductPresenceFilter`.
+                package var subjectProductPresenceFilter: Operations.Resources_task_list.Input.Query.SubjectProductPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectScopeStatusesPayload`.
+                @frozen package enum ProjectScopeStatusesPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case planning = "planning"
+                    case notStarted = "not_started"
+                    case inProgress = "in_progress"
+                    case done = "done"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeStatuses`.
+                package typealias ProjectScopeStatusesPayload = [Operations.Resources_task_list.Input.Query.ProjectScopeStatusesPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeStatuses`.
+                package var projectScopeStatuses: Operations.Resources_task_list.Input.Query.ProjectScopeStatusesPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/ProjectScopeKindsPayload`.
+                @frozen package enum ProjectScopeKindsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case furniture = "furniture"
+                    case workshop = "workshop"
+                    case household = "household"
+                    case renovation = "renovation"
+                    case garden = "garden"
+                    case trip = "trip"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeKinds`.
+                package typealias ProjectScopeKindsPayload = [Operations.Resources_task_list.Input.Query.ProjectScopeKindsPayloadPayload]
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeKinds`.
+                package var projectScopeKinds: Operations.Resources_task_list.Input.Query.ProjectScopeKindsPayload?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeLocations`.
+                package var projectScopeLocations: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeSearch`.
+                package var projectScopeSearch: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeDateFrom`.
+                package var projectScopeDateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeDateTo`.
+                package var projectScopeDateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/projectScopeCompletionYear`.
+                package var projectScopeCompletionYear: Swift.String?
                 /// Page number, starting at 1 (default 1)
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/page`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/page`.
                 package var page: Swift.Int?
                 /// Items per page (default 10, maximum 500)
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/pageSize`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/pageSize`.
                 package var pageSize: Swift.Int?
                 /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/sort`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/sort`.
                 package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/query/groupBy`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/query/groupBy`.
                 package var groupBy: Swift.String?
                 /// Creates a new `Query`.
                 ///
@@ -14774,31 +16110,33 @@ package enum Operations {
                 ///   - createdTo: Calendar day as "YYYY-MM-DD"
                 ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
                 ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - vendorId:
-                ///   - vendorPresenceFilter:
-                ///   - vendorSearch:
-                ///   - expenseId:
-                ///   - expensePresenceFilter:
-                ///   - expenseSearch:
-                ///   - productId:
-                ///   - productPresenceFilter:
-                ///   - productSearch:
-                ///   - search: Substring match on merchant or raw description
-                ///   - kind:
+                ///   - blockedByTaskId:
+                ///   - blockedByTaskPresenceFilter:
+                ///   - blockedByTaskSearch:
+                ///   - parentTaskId:
+                ///   - parentTaskPresenceFilter:
+                ///   - parentTaskSearch:
+                ///   - search:
                 ///   - status:
-                ///   - postedDateFrom: Calendar day as "YYYY-MM-DD"
-                ///   - postedDateTo: Calendar day as "YYYY-MM-DD"
-                ///   - merchant:
-                ///   - transactionDateFrom: Calendar day as "YYYY-MM-DD"
-                ///   - transactionDateTo: Calendar day as "YYYY-MM-DD"
-                ///   - amountMin:
-                ///   - amountMax:
-                ///   - accountId:
-                ///   - purchaseId:
-                ///   - purchasePresenceFilter:
-                ///   - allocationIntegrity:
-                ///   - source:
-                ///   - externalId:
+                ///   - trade:
+                ///   - projectId:
+                ///   - subjectProductId:
+                ///   - topLevelOnly:
+                ///   - includeSubProjects:
+                ///   - dueFrom: Inclusive lower bound on due date
+                ///   - dueTo: Inclusive upper bound on due date
+                ///   - duePresenceFilter:
+                ///   - dueRelative:
+                ///   - completion: Undefined = "all" (today's default, unchanged)
+                ///   - projectPresenceFilter:
+                ///   - subjectProductPresenceFilter:
+                ///   - projectScopeStatuses:
+                ///   - projectScopeKinds:
+                ///   - projectScopeLocations:
+                ///   - projectScopeSearch:
+                ///   - projectScopeDateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - projectScopeDateTo: Calendar day as "YYYY-MM-DD"
+                ///   - projectScopeCompletionYear:
                 ///   - page: Page number, starting at 1 (default 1)
                 ///   - pageSize: Items per page (default 10, maximum 500)
                 ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
@@ -14808,31 +16146,33 @@ package enum Operations {
                     createdTo: Swift.String? = nil,
                     updatedFrom: Swift.String? = nil,
                     updatedTo: Swift.String? = nil,
-                    vendorId: [Swift.String]? = nil,
-                    vendorPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.VendorPresenceFilterPayload? = nil,
-                    vendorSearch: Swift.String? = nil,
-                    expenseId: [Swift.String]? = nil,
-                    expensePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ExpensePresenceFilterPayload? = nil,
-                    expenseSearch: Swift.String? = nil,
-                    productId: [Swift.String]? = nil,
-                    productPresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.ProductPresenceFilterPayload? = nil,
-                    productSearch: Swift.String? = nil,
+                    blockedByTaskId: [Swift.String]? = nil,
+                    blockedByTaskPresenceFilter: Operations.Resources_task_list.Input.Query.BlockedByTaskPresenceFilterPayload? = nil,
+                    blockedByTaskSearch: Swift.String? = nil,
+                    parentTaskId: Operations.Resources_task_list.Input.Query.ParentTaskIdPayload? = nil,
+                    parentTaskPresenceFilter: Operations.Resources_task_list.Input.Query.ParentTaskPresenceFilterPayload? = nil,
+                    parentTaskSearch: Swift.String? = nil,
                     search: Swift.String? = nil,
-                    kind: Operations.Resources_financialTransaction_list.Input.Query.KindPayload? = nil,
-                    status: Operations.Resources_financialTransaction_list.Input.Query.StatusPayload? = nil,
-                    postedDateFrom: Swift.String? = nil,
-                    postedDateTo: Swift.String? = nil,
-                    merchant: Swift.String? = nil,
-                    transactionDateFrom: Swift.String? = nil,
-                    transactionDateTo: Swift.String? = nil,
-                    amountMin: Swift.Double? = nil,
-                    amountMax: Swift.Double? = nil,
-                    accountId: Operations.Resources_financialTransaction_list.Input.Query.AccountIdPayload? = nil,
-                    purchaseId: Operations.Resources_financialTransaction_list.Input.Query.PurchaseIdPayload? = nil,
-                    purchasePresenceFilter: Operations.Resources_financialTransaction_list.Input.Query.PurchasePresenceFilterPayload? = nil,
-                    allocationIntegrity: Operations.Resources_financialTransaction_list.Input.Query.AllocationIntegrityPayload? = nil,
-                    source: [Swift.String]? = nil,
-                    externalId: [Swift.String]? = nil,
+                    status: Operations.Resources_task_list.Input.Query.StatusPayload? = nil,
+                    trade: Operations.Resources_task_list.Input.Query.TradePayload? = nil,
+                    projectId: Operations.Resources_task_list.Input.Query.ProjectIdPayload? = nil,
+                    subjectProductId: Operations.Resources_task_list.Input.Query.SubjectProductIdPayload? = nil,
+                    topLevelOnly: Swift.Bool? = nil,
+                    includeSubProjects: Swift.Bool? = nil,
+                    dueFrom: Swift.String? = nil,
+                    dueTo: Swift.String? = nil,
+                    duePresenceFilter: Operations.Resources_task_list.Input.Query.DuePresenceFilterPayload? = nil,
+                    dueRelative: Operations.Resources_task_list.Input.Query.DueRelativePayload? = nil,
+                    completion: Operations.Resources_task_list.Input.Query.CompletionPayload? = nil,
+                    projectPresenceFilter: Operations.Resources_task_list.Input.Query.ProjectPresenceFilterPayload? = nil,
+                    subjectProductPresenceFilter: Operations.Resources_task_list.Input.Query.SubjectProductPresenceFilterPayload? = nil,
+                    projectScopeStatuses: Operations.Resources_task_list.Input.Query.ProjectScopeStatusesPayload? = nil,
+                    projectScopeKinds: Operations.Resources_task_list.Input.Query.ProjectScopeKindsPayload? = nil,
+                    projectScopeLocations: [Swift.String]? = nil,
+                    projectScopeSearch: Swift.String? = nil,
+                    projectScopeDateFrom: Swift.String? = nil,
+                    projectScopeDateTo: Swift.String? = nil,
+                    projectScopeCompletionYear: Swift.String? = nil,
                     page: Swift.Int? = nil,
                     pageSize: Swift.Int? = nil,
                     sort: Swift.String? = nil,
@@ -14842,58 +16182,60 @@ package enum Operations {
                     self.createdTo = createdTo
                     self.updatedFrom = updatedFrom
                     self.updatedTo = updatedTo
-                    self.vendorId = vendorId
-                    self.vendorPresenceFilter = vendorPresenceFilter
-                    self.vendorSearch = vendorSearch
-                    self.expenseId = expenseId
-                    self.expensePresenceFilter = expensePresenceFilter
-                    self.expenseSearch = expenseSearch
-                    self.productId = productId
-                    self.productPresenceFilter = productPresenceFilter
-                    self.productSearch = productSearch
+                    self.blockedByTaskId = blockedByTaskId
+                    self.blockedByTaskPresenceFilter = blockedByTaskPresenceFilter
+                    self.blockedByTaskSearch = blockedByTaskSearch
+                    self.parentTaskId = parentTaskId
+                    self.parentTaskPresenceFilter = parentTaskPresenceFilter
+                    self.parentTaskSearch = parentTaskSearch
                     self.search = search
-                    self.kind = kind
                     self.status = status
-                    self.postedDateFrom = postedDateFrom
-                    self.postedDateTo = postedDateTo
-                    self.merchant = merchant
-                    self.transactionDateFrom = transactionDateFrom
-                    self.transactionDateTo = transactionDateTo
-                    self.amountMin = amountMin
-                    self.amountMax = amountMax
-                    self.accountId = accountId
-                    self.purchaseId = purchaseId
-                    self.purchasePresenceFilter = purchasePresenceFilter
-                    self.allocationIntegrity = allocationIntegrity
-                    self.source = source
-                    self.externalId = externalId
+                    self.trade = trade
+                    self.projectId = projectId
+                    self.subjectProductId = subjectProductId
+                    self.topLevelOnly = topLevelOnly
+                    self.includeSubProjects = includeSubProjects
+                    self.dueFrom = dueFrom
+                    self.dueTo = dueTo
+                    self.duePresenceFilter = duePresenceFilter
+                    self.dueRelative = dueRelative
+                    self.completion = completion
+                    self.projectPresenceFilter = projectPresenceFilter
+                    self.subjectProductPresenceFilter = subjectProductPresenceFilter
+                    self.projectScopeStatuses = projectScopeStatuses
+                    self.projectScopeKinds = projectScopeKinds
+                    self.projectScopeLocations = projectScopeLocations
+                    self.projectScopeSearch = projectScopeSearch
+                    self.projectScopeDateFrom = projectScopeDateFrom
+                    self.projectScopeDateTo = projectScopeDateTo
+                    self.projectScopeCompletionYear = projectScopeCompletionYear
                     self.page = page
                     self.pageSize = pageSize
                     self.sort = sort
                     self.groupBy = groupBy
                 }
             }
-            package var query: Operations.Resources_financialTransaction_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/header`.
+            package var query: Operations.Resources_task_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/tasks/GET/header`.
             package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialTransaction_list.AcceptableContentType>]
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_task_list.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
                 ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialTransaction_list.AcceptableContentType>] = .defaultValues()) {
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_task_list.AcceptableContentType>] = .defaultValues()) {
                     self.accept = accept
                 }
             }
-            package var headers: Operations.Resources_financialTransaction_list.Input.Headers
+            package var headers: Operations.Resources_task_list.Input.Headers
             /// Creates a new `Input`.
             ///
             /// - Parameters:
             ///   - query:
             ///   - headers:
             package init(
-                query: Operations.Resources_financialTransaction_list.Input.Query = .init(),
-                headers: Operations.Resources_financialTransaction_list.Input.Headers = .init()
+                query: Operations.Resources_task_list.Input.Query = .init(),
+                headers: Operations.Resources_task_list.Input.Headers = .init()
             ) {
                 self.query = query
                 self.headers = headers
@@ -14901,15 +16243,15 @@ package enum Operations {
         }
         @frozen package enum Output: Sendable, Hashable {
             package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/responses/200/content`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.FinancialTransactionListPage)
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TaskListPage)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.FinancialTransactionListPage {
+                    package var json: Components.Schemas.TaskListPage {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -14919,26 +16261,26 @@ package enum Operations {
                     }
                 }
                 /// Received HTTP response body
-                package var body: Operations.Resources_financialTransaction_list.Output.Ok.Body
+                package var body: Operations.Resources_task_list.Output.Ok.Body
                 /// Creates a new `Ok`.
                 ///
                 /// - Parameters:
                 ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_financialTransaction_list.Output.Ok.Body) {
+                package init(body: Operations.Resources_task_list.Output.Ok.Body) {
                     self.body = body
                 }
             }
             /// 200
             ///
-            /// - Remark: Generated from `#/paths//api/v1/financial-transactions/get(resources.financialTransaction.list)/responses/200`.
+            /// - Remark: Generated from `#/paths//api/v1/tasks/get(resources.task.list)/responses/200`.
             ///
             /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_financialTransaction_list.Output.Ok)
+            case ok(Operations.Resources_task_list.Output.Ok)
             /// The associated value of the enum case if `self` is `.ok`.
             ///
             /// - Throws: An error if `self` is not `.ok`.
             /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_financialTransaction_list.Output.Ok {
+            package var ok: Operations.Resources_task_list.Output.Ok {
                 get throws {
                     switch self {
                     case let .ok(response):
@@ -14952,9 +16294,9 @@ package enum Operations {
                 }
             }
             package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/responses/default/content`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/GET/responses/default/content`.
                 @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/GET/responses/default/content/application\/json`.
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/GET/responses/default/content/application\/json`.
                     case json(Components.Schemas.ApiError)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
@@ -14970,26 +16312,26 @@ package enum Operations {
                     }
                 }
                 /// Received HTTP response body
-                package var body: Operations.Resources_financialTransaction_list.Output.Default.Body
+                package var body: Operations.Resources_task_list.Output.Default.Body
                 /// Creates a new `Default`.
                 ///
                 /// - Parameters:
                 ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_financialTransaction_list.Output.Default.Body) {
+                package init(body: Operations.Resources_task_list.Output.Default.Body) {
                     self.body = body
                 }
             }
             /// Error
             ///
-            /// - Remark: Generated from `#/paths//api/v1/financial-transactions/get(resources.financialTransaction.list)/responses/default`.
+            /// - Remark: Generated from `#/paths//api/v1/tasks/get(resources.task.list)/responses/default`.
             ///
             /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_financialTransaction_list.Output.Default)
+            case `default`(statusCode: Swift.Int, Operations.Resources_task_list.Output.Default)
             /// The associated value of the enum case if `self` is `.`default``.
             ///
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_financialTransaction_list.Output.Default {
+            package var `default`: Operations.Resources_task_list.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -15029,46 +16371,46 @@ package enum Operations {
             }
         }
     }
-    /// - Remark: HTTP `GET /api/v1/financial-transactions/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/get(resources.financialTransaction.get)`.
-    package enum Resources_financialTransaction_get {
-        package static let id: Swift.String = "resources.financialTransaction.get"
+    /// - Remark: HTTP `GET /api/v1/tasks/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)`.
+    package enum Resources_task_get {
+        package static let id: Swift.String = "resources.task.get"
         package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/path`.
+            /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/path`.
             package struct Path: Sendable, Hashable {
-                /// financialTransaction shortcode, e.g. FTX-4K7M
+                /// task shortcode, e.g. TSK-4K7M
                 ///
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/path/id`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/path/id`.
                 package var id: Swift.String
                 /// Creates a new `Path`.
                 ///
                 /// - Parameters:
-                ///   - id: financialTransaction shortcode, e.g. FTX-4K7M
+                ///   - id: task shortcode, e.g. TSK-4K7M
                 package init(id: Swift.String) {
                     self.id = id
                 }
             }
-            package var path: Operations.Resources_financialTransaction_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/header`.
+            package var path: Operations.Resources_task_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/header`.
             package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialTransaction_get.AcceptableContentType>]
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_task_get.AcceptableContentType>]
                 /// Creates a new `Headers`.
                 ///
                 /// - Parameters:
                 ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_financialTransaction_get.AcceptableContentType>] = .defaultValues()) {
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_task_get.AcceptableContentType>] = .defaultValues()) {
                     self.accept = accept
                 }
             }
-            package var headers: Operations.Resources_financialTransaction_get.Input.Headers
+            package var headers: Operations.Resources_task_get.Input.Headers
             /// Creates a new `Input`.
             ///
             /// - Parameters:
             ///   - path:
             ///   - headers:
             package init(
-                path: Operations.Resources_financialTransaction_get.Input.Path,
-                headers: Operations.Resources_financialTransaction_get.Input.Headers = .init()
+                path: Operations.Resources_task_get.Input.Path,
+                headers: Operations.Resources_task_get.Input.Headers = .init()
             ) {
                 self.path = path
                 self.headers = headers
@@ -15076,15 +16418,15 @@ package enum Operations {
         }
         @frozen package enum Output: Sendable, Hashable {
             package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/200/content`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.FinancialTransactionOut)
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TaskOut)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.FinancialTransactionOut {
+                    package var json: Components.Schemas.TaskOut {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -15094,26 +16436,26 @@ package enum Operations {
                     }
                 }
                 /// Received HTTP response body
-                package var body: Operations.Resources_financialTransaction_get.Output.Ok.Body
+                package var body: Operations.Resources_task_get.Output.Ok.Body
                 /// Creates a new `Ok`.
                 ///
                 /// - Parameters:
                 ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_financialTransaction_get.Output.Ok.Body) {
+                package init(body: Operations.Resources_task_get.Output.Ok.Body) {
                     self.body = body
                 }
             }
             /// 200
             ///
-            /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/get(resources.financialTransaction.get)/responses/200`.
+            /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)/responses/200`.
             ///
             /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_financialTransaction_get.Output.Ok)
+            case ok(Operations.Resources_task_get.Output.Ok)
             /// The associated value of the enum case if `self` is `.ok`.
             ///
             /// - Throws: An error if `self` is not `.ok`.
             /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_financialTransaction_get.Output.Ok {
+            package var ok: Operations.Resources_task_get.Output.Ok {
                 get throws {
                     switch self {
                     case let .ok(response):
@@ -15127,9 +16469,9 @@ package enum Operations {
                 }
             }
             package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/default/content`.
+                /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/default/content`.
                 @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/default/content/application\/json`.
+                    /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/default/content/application\/json`.
                     case json(Components.Schemas.ApiError)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
@@ -15145,26 +16487,761 @@ package enum Operations {
                     }
                 }
                 /// Received HTTP response body
-                package var body: Operations.Resources_financialTransaction_get.Output.Default.Body
+                package var body: Operations.Resources_task_get.Output.Default.Body
                 /// Creates a new `Default`.
                 ///
                 /// - Parameters:
                 ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_financialTransaction_get.Output.Default.Body) {
+                package init(body: Operations.Resources_task_get.Output.Default.Body) {
                     self.body = body
                 }
             }
             /// Error
             ///
-            /// - Remark: Generated from `#/paths//api/v1/financial-transactions/{id}/get(resources.financialTransaction.get)/responses/default`.
+            /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)/responses/default`.
             ///
             /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_financialTransaction_get.Output.Default)
+            case `default`(statusCode: Swift.Int, Operations.Resources_task_get.Output.Default)
             /// The associated value of the enum case if `self` is `.`default``.
             ///
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_financialTransaction_get.Output.Default {
+            package var `default`: Operations.Resources_task_get.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/upc/lookup`.
+    /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)`.
+    package enum Upc_lookup {
+        package static let id: Swift.String = "upc.lookup"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/query/upc`.
+                package var upc: Swift.String
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - upc: EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode
+                package init(upc: Swift.String) {
+                    self.upc = upc
+                }
+            }
+            package var query: Operations.Upc_lookup.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Upc_lookup.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Upc_lookup.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Upc_lookup.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Upc_lookup.Input.Query,
+                headers: Operations.Upc_lookup.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.UpcLookupOutput)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.UpcLookupOutput {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Upc_lookup.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Upc_lookup.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Upc_lookup.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Upc_lookup.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/upc/lookup/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Upc_lookup.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Upc_lookup.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Upc_lookup.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Upc_lookup.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/vendors`.
+    /// - Remark: Generated from `#/paths//api/v1/vendors/get(resources.vendor.list)`.
+    package enum Resources_vendor_list {
+        package static let id: Swift.String = "resources.vendor.list"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/createdFrom`.
+                package var createdFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/createdTo`.
+                package var createdTo: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/updatedFrom`.
+                package var updatedFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/updatedTo`.
+                package var updatedTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/expenseId`.
+                package var expenseId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/expensePresenceFilter`.
+                @frozen package enum ExpensePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/expensePresenceFilter`.
+                package var expensePresenceFilter: Operations.Resources_vendor_list.Input.Query.ExpensePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/expenseSearch`.
+                package var expenseSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchaseId`.
+                package var purchaseId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchasePresenceFilter`.
+                @frozen package enum PurchasePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchasePresenceFilter`.
+                package var purchasePresenceFilter: Operations.Resources_vendor_list.Input.Query.PurchasePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchaseSearch`.
+                package var purchaseSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/productId`.
+                package var productId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/productPresenceFilter`.
+                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/productPresenceFilter`.
+                package var productPresenceFilter: Operations.Resources_vendor_list.Input.Query.ProductPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/productSearch`.
+                package var productSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/projectId`.
+                package var projectId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/projectPresenceFilter`.
+                @frozen package enum ProjectPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/projectPresenceFilter`.
+                package var projectPresenceFilter: Operations.Resources_vendor_list.Input.Query.ProjectPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/projectSearch`.
+                package var projectSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/financialTransactionId`.
+                package var financialTransactionId: [Swift.String]?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/financialTransactionPresenceFilter`.
+                @frozen package enum FinancialTransactionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/financialTransactionPresenceFilter`.
+                package var financialTransactionPresenceFilter: Operations.Resources_vendor_list.Input.Query.FinancialTransactionPresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/financialTransactionSearch`.
+                package var financialTransactionSearch: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/search`.
+                package var search: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchaseCountMin`.
+                package var purchaseCountMin: Swift.Int?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/purchaseCountMax`.
+                package var purchaseCountMax: Swift.Int?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/spendMin`.
+                package var spendMin: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/spendMax`.
+                package var spendMax: Swift.Double?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDateFrom`.
+                package var latestPurchaseDateFrom: Swift.String?
+                /// Calendar day as "YYYY-MM-DD"
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDateTo`.
+                package var latestPurchaseDateTo: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDatePresenceFilter`.
+                @frozen package enum LatestPurchaseDatePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/latestPurchaseDatePresenceFilter`.
+                package var latestPurchaseDatePresenceFilter: Operations.Resources_vendor_list.Input.Query.LatestPurchaseDatePresenceFilterPayload?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoPresenceFilter`.
+                @frozen package enum LogoPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case has = "has"
+                    case none = "none"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/logoPresenceFilter`.
+                package var logoPresenceFilter: Operations.Resources_vendor_list.Input.Query.LogoPresenceFilterPayload?
+                /// Page number, starting at 1 (default 1)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/page`.
+                package var page: Swift.Int?
+                /// Items per page (default 10, maximum 500)
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/pageSize`.
+                package var pageSize: Swift.Int?
+                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/sort`.
+                package var sort: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/query/groupBy`.
+                package var groupBy: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
+                ///   - createdTo: Calendar day as "YYYY-MM-DD"
+                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
+                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
+                ///   - expenseId:
+                ///   - expensePresenceFilter:
+                ///   - expenseSearch:
+                ///   - purchaseId:
+                ///   - purchasePresenceFilter:
+                ///   - purchaseSearch:
+                ///   - productId:
+                ///   - productPresenceFilter:
+                ///   - productSearch:
+                ///   - projectId:
+                ///   - projectPresenceFilter:
+                ///   - projectSearch:
+                ///   - financialTransactionId:
+                ///   - financialTransactionPresenceFilter:
+                ///   - financialTransactionSearch:
+                ///   - search:
+                ///   - purchaseCountMin:
+                ///   - purchaseCountMax:
+                ///   - spendMin:
+                ///   - spendMax:
+                ///   - latestPurchaseDateFrom: Calendar day as "YYYY-MM-DD"
+                ///   - latestPurchaseDateTo: Calendar day as "YYYY-MM-DD"
+                ///   - latestPurchaseDatePresenceFilter:
+                ///   - logoPresenceFilter:
+                ///   - page: Page number, starting at 1 (default 1)
+                ///   - pageSize: Items per page (default 10, maximum 500)
+                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
+                ///   - groupBy:
+                package init(
+                    createdFrom: Swift.String? = nil,
+                    createdTo: Swift.String? = nil,
+                    updatedFrom: Swift.String? = nil,
+                    updatedTo: Swift.String? = nil,
+                    expenseId: [Swift.String]? = nil,
+                    expensePresenceFilter: Operations.Resources_vendor_list.Input.Query.ExpensePresenceFilterPayload? = nil,
+                    expenseSearch: Swift.String? = nil,
+                    purchaseId: [Swift.String]? = nil,
+                    purchasePresenceFilter: Operations.Resources_vendor_list.Input.Query.PurchasePresenceFilterPayload? = nil,
+                    purchaseSearch: Swift.String? = nil,
+                    productId: [Swift.String]? = nil,
+                    productPresenceFilter: Operations.Resources_vendor_list.Input.Query.ProductPresenceFilterPayload? = nil,
+                    productSearch: Swift.String? = nil,
+                    projectId: [Swift.String]? = nil,
+                    projectPresenceFilter: Operations.Resources_vendor_list.Input.Query.ProjectPresenceFilterPayload? = nil,
+                    projectSearch: Swift.String? = nil,
+                    financialTransactionId: [Swift.String]? = nil,
+                    financialTransactionPresenceFilter: Operations.Resources_vendor_list.Input.Query.FinancialTransactionPresenceFilterPayload? = nil,
+                    financialTransactionSearch: Swift.String? = nil,
+                    search: Swift.String? = nil,
+                    purchaseCountMin: Swift.Int? = nil,
+                    purchaseCountMax: Swift.Int? = nil,
+                    spendMin: Swift.Double? = nil,
+                    spendMax: Swift.Double? = nil,
+                    latestPurchaseDateFrom: Swift.String? = nil,
+                    latestPurchaseDateTo: Swift.String? = nil,
+                    latestPurchaseDatePresenceFilter: Operations.Resources_vendor_list.Input.Query.LatestPurchaseDatePresenceFilterPayload? = nil,
+                    logoPresenceFilter: Operations.Resources_vendor_list.Input.Query.LogoPresenceFilterPayload? = nil,
+                    page: Swift.Int? = nil,
+                    pageSize: Swift.Int? = nil,
+                    sort: Swift.String? = nil,
+                    groupBy: Swift.String? = nil
+                ) {
+                    self.createdFrom = createdFrom
+                    self.createdTo = createdTo
+                    self.updatedFrom = updatedFrom
+                    self.updatedTo = updatedTo
+                    self.expenseId = expenseId
+                    self.expensePresenceFilter = expensePresenceFilter
+                    self.expenseSearch = expenseSearch
+                    self.purchaseId = purchaseId
+                    self.purchasePresenceFilter = purchasePresenceFilter
+                    self.purchaseSearch = purchaseSearch
+                    self.productId = productId
+                    self.productPresenceFilter = productPresenceFilter
+                    self.productSearch = productSearch
+                    self.projectId = projectId
+                    self.projectPresenceFilter = projectPresenceFilter
+                    self.projectSearch = projectSearch
+                    self.financialTransactionId = financialTransactionId
+                    self.financialTransactionPresenceFilter = financialTransactionPresenceFilter
+                    self.financialTransactionSearch = financialTransactionSearch
+                    self.search = search
+                    self.purchaseCountMin = purchaseCountMin
+                    self.purchaseCountMax = purchaseCountMax
+                    self.spendMin = spendMin
+                    self.spendMax = spendMax
+                    self.latestPurchaseDateFrom = latestPurchaseDateFrom
+                    self.latestPurchaseDateTo = latestPurchaseDateTo
+                    self.latestPurchaseDatePresenceFilter = latestPurchaseDatePresenceFilter
+                    self.logoPresenceFilter = logoPresenceFilter
+                    self.page = page
+                    self.pageSize = pageSize
+                    self.sort = sort
+                    self.groupBy = groupBy
+                }
+            }
+            package var query: Operations.Resources_vendor_list.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/vendors/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_vendor_list.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_vendor_list.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_vendor_list.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Resources_vendor_list.Input.Query = .init(),
+                headers: Operations.Resources_vendor_list.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.VendorListPage)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.VendorListPage {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_vendor_list.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_vendor_list.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/vendors/get(resources.vendor.list)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_vendor_list.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_vendor_list.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/vendors/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/vendors/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_vendor_list.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_vendor_list.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/vendors/get(resources.vendor.list)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_vendor_list.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_vendor_list.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/vendors/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/get(resources.vendor.get)`.
+    package enum Resources_vendor_get {
+        package static let id: Swift.String = "resources.vendor.get"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/path`.
+            package struct Path: Sendable, Hashable {
+                /// vendor shortcode, e.g. VEN-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/path/id`.
+                package var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id: vendor shortcode, e.g. VEN-4K7M
+                package init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            package var path: Operations.Resources_vendor_get.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_vendor_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_vendor_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Resources_vendor_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            package init(
+                path: Operations.Resources_vendor_get.Input.Path,
+                headers: Operations.Resources_vendor_get.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.VendorOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.VendorOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_vendor_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_vendor_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/get(resources.vendor.get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Resources_vendor_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Resources_vendor_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Resources_vendor_get.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Resources_vendor_get.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/vendors/{id}/get(resources.vendor.get)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Resources_vendor_get.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Resources_vendor_get.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):
@@ -15601,2083 +17678,6 @@ package enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             package var `default`: Operations.Resources_wish_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/expenses`.
-    /// - Remark: Generated from `#/paths//api/v1/expenses/get(resources.expense.list)`.
-    package enum Resources_expense_list {
-        package static let id: Swift.String = "resources.expense.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/createdFrom`.
-                package var createdFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/createdTo`.
-                package var createdTo: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/updatedFrom`.
-                package var updatedFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/updatedTo`.
-                package var updatedTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionId`.
-                package var financialTransactionId: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionPresenceFilter`.
-                @frozen package enum FinancialTransactionPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionPresenceFilter`.
-                package var financialTransactionPresenceFilter: Operations.Resources_expense_list.Input.Query.FinancialTransactionPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/financialTransactionSearch`.
-                package var financialTransactionSearch: Swift.String?
-                /// Inclusive lower bound on expense date
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateFrom`.
-                package var dateFrom: Swift.String?
-                /// Inclusive upper bound on expense date
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateTo`.
-                package var dateTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/CostTypePayload`.
-                @frozen package enum CostTypePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case materials = "materials"
-                    case tools = "tools"
-                    case services = "services"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costType`.
-                package typealias CostTypePayload = [Operations.Resources_expense_list.Input.Query.CostTypePayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costType`.
-                package var costType: Operations.Resources_expense_list.Input.Query.CostTypePayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/LineKindPayload`.
-                @frozen package enum LineKindPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case principal = "principal"
-                    case tax = "tax"
-                    case shipping = "shipping"
-                    case discount = "discount"
-                    case fee = "fee"
-                    case tip = "tip"
-                    case otherAdjustment = "other_adjustment"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/lineKind`.
-                package typealias LineKindPayload = [Operations.Resources_expense_list.Input.Query.LineKindPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/lineKind`.
-                package var lineKind: Operations.Resources_expense_list.Input.Query.LineKindPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/LineBasisPayload`.
-                @frozen package enum LineBasisPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case itemLine = "item_line"
-                    case allocation = "allocation"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/lineBasis`.
-                package typealias LineBasisPayload = [Operations.Resources_expense_list.Input.Query.LineBasisPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/lineBasis`.
-                package var lineBasis: Operations.Resources_expense_list.Input.Query.LineBasisPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/TradePayload`.
-                @frozen package enum TradePayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case planning = "planning"
-                    case demolition = "demolition"
-                    case building = "building"
-                    case drywall = "drywall"
-                    case electrical = "electrical"
-                    case plumbing = "plumbing"
-                    case mechanical = "mechanical"
-                    case cabinetry = "cabinetry"
-                    case countertop = "countertop"
-                    case flooring = "flooring"
-                    case millwork = "millwork"
-                    case finishes = "finishes"
-                    case appliances = "appliances"
-                    case landscaping = "landscaping"
-                    case logistics = "logistics"
-                    case metalworking = "metalworking"
-                    case crafts = "crafts"
-                    case auto = "auto"
-                    case other = "other"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/trade`.
-                package typealias TradePayload = [Operations.Resources_expense_list.Input.Query.TradePayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/trade`.
-                package var trade: Operations.Resources_expense_list.Input.Query.TradePayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/future`.
-                package var future: Swift.Bool?
-                /// Inclusive lower bound on expense cost, in dollars
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costMin`.
-                package var costMin: Swift.Double?
-                /// Inclusive upper bound on expense cost, in dollars
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costMax`.
-                package var costMax: Swift.Double?
-                /// Inclusive lower bound on recorded product quantity
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityMin`.
-                package var productQuantityMin: Swift.Double?
-                /// Inclusive upper bound on recorded product quantity
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityMax`.
-                package var productQuantityMax: Swift.Double?
-                /// Substring match on notes
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/notesSearch`.
-                package var notesSearch: Swift.String?
-                /// Substring match on url
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/urlSearch`.
-                package var urlSearch: Swift.String?
-                /// project shortcode, e.g. PRJ-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload`.
-                package struct ProjectIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// project shortcode, e.g. PRJ-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectIdPayload/value2`.
-                    package var value2: Operations.Resources_expense_list.Input.Query.ProjectIdPayloadPayload.Value2Payload?
-                    /// Creates a new `ProjectIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: project shortcode, e.g. PRJ-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_expense_list.Input.Query.ProjectIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectId`.
-                package typealias ProjectIdPayload = [Operations.Resources_expense_list.Input.Query.ProjectIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectId`.
-                package var projectId: Operations.Resources_expense_list.Input.Query.ProjectIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/includeSubProjects`.
-                package var includeSubProjects: Swift.Bool?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectPresenceFilter`.
-                @frozen package enum ProjectPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectPresenceFilter`.
-                package var projectPresenceFilter: Operations.Resources_expense_list.Input.Query.ProjectPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId`.
-                package struct ProductIdPayload: Codable, Hashable, Sendable {
-                    /// product shortcode, e.g. PRD-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId/value2`.
-                    package var value2: Operations.Resources_expense_list.Input.Query.ProductIdPayload.Value2Payload?
-                    /// Creates a new `ProductIdPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: product shortcode, e.g. PRD-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_expense_list.Input.Query.ProductIdPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// product shortcode, e.g. PRD-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productId`.
-                package var productId: Operations.Resources_expense_list.Input.Query.ProductIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productPresenceFilter`.
-                @frozen package enum ProductPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productPresenceFilter`.
-                package var productPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductPresenceFilterPayload?
-                /// vendor shortcode, e.g. VEN-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/VendorIdPayload`.
-                package struct VendorIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// vendor shortcode, e.g. VEN-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/VendorIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/VendorIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/VendorIdPayload/value2`.
-                    package var value2: Operations.Resources_expense_list.Input.Query.VendorIdPayloadPayload.Value2Payload?
-                    /// Creates a new `VendorIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: vendor shortcode, e.g. VEN-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_expense_list.Input.Query.VendorIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/vendorId`.
-                package typealias VendorIdPayload = [Operations.Resources_expense_list.Input.Query.VendorIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/vendorId`.
-                package var vendorId: Operations.Resources_expense_list.Input.Query.VendorIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/vendorPresenceFilter`.
-                @frozen package enum VendorPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/vendorPresenceFilter`.
-                package var vendorPresenceFilter: Operations.Resources_expense_list.Input.Query.VendorPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/search`.
-                package var search: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateRelative`.
-                @frozen package enum DateRelativePayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case beforeToday = "beforeToday"
-                    case onOrBeforeToday = "onOrBeforeToday"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/dateRelative`.
-                package var dateRelative: Operations.Resources_expense_list.Input.Query.DateRelativePayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costPresenceFilter`.
-                @frozen package enum CostPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costPresenceFilter`.
-                package var costPresenceFilter: Operations.Resources_expense_list.Input.Query.CostPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costSign`.
-                @frozen package enum CostSignPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case negative = "negative"
-                    case positive = "positive"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/costSign`.
-                package var costSign: Operations.Resources_expense_list.Input.Query.CostSignPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/disposalPurchasePresenceFilter`.
-                @frozen package enum DisposalPurchasePresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/disposalPurchasePresenceFilter`.
-                package var disposalPurchasePresenceFilter: Operations.Resources_expense_list.Input.Query.DisposalPurchasePresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityPresenceFilter`.
-                @frozen package enum ProductQuantityPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/productQuantityPresenceFilter`.
-                package var productQuantityPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductQuantityPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/orderIdPresenceFilter`.
-                @frozen package enum OrderIdPresenceFilterPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case has = "has"
-                    case none = "none"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/orderIdPresenceFilter`.
-                package var orderIdPresenceFilter: Operations.Resources_expense_list.Input.Query.OrderIdPresenceFilterPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/orderId`.
-                package var orderId: [Swift.String]?
-                /// purchase shortcode, e.g. PUR-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/PurchaseIdPayload`.
-                package struct PurchaseIdPayloadPayload: Codable, Hashable, Sendable {
-                    /// purchase shortcode, e.g. PUR-4K7M
-                    ///
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/PurchaseIdPayload/value1`.
-                    package var value1: Swift.String?
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/PurchaseIdPayload/value2`.
-                    @frozen package enum Value2Payload: String, Codable, Hashable, Sendable, CaseIterable {
-                        case __unresolvableEntityFilter = "__unresolvable_entity_filter__"
-                    }
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/PurchaseIdPayload/value2`.
-                    package var value2: Operations.Resources_expense_list.Input.Query.PurchaseIdPayloadPayload.Value2Payload?
-                    /// Creates a new `PurchaseIdPayloadPayload`.
-                    ///
-                    /// - Parameters:
-                    ///   - value1: purchase shortcode, e.g. PUR-4K7M
-                    ///   - value2:
-                    package init(
-                        value1: Swift.String? = nil,
-                        value2: Operations.Resources_expense_list.Input.Query.PurchaseIdPayloadPayload.Value2Payload? = nil
-                    ) {
-                        self.value1 = value1
-                        self.value2 = value2
-                    }
-                    package init(from decoder: any Swift.Decoder) throws {
-                        var errors: [any Swift.Error] = []
-                        do {
-                            self.value1 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        do {
-                            self.value2 = try decoder.decodeFromSingleValueContainer()
-                        } catch {
-                            errors.append(error)
-                        }
-                        try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
-                            [
-                                self.value1,
-                                self.value2
-                            ],
-                            type: Self.self,
-                            codingPath: decoder.codingPath,
-                            errors: errors
-                        )
-                    }
-                    package func encode(to encoder: any Swift.Encoder) throws {
-                        try encoder.encodeFirstNonNilValueToSingleValueContainer([
-                            self.value1,
-                            self.value2
-                        ])
-                    }
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/purchaseId`.
-                package typealias PurchaseIdPayload = [Operations.Resources_expense_list.Input.Query.PurchaseIdPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/purchaseId`.
-                package var purchaseId: Operations.Resources_expense_list.Input.Query.PurchaseIdPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectScopeStatusesPayload`.
-                @frozen package enum ProjectScopeStatusesPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case planning = "planning"
-                    case notStarted = "not_started"
-                    case inProgress = "in_progress"
-                    case done = "done"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeStatuses`.
-                package typealias ProjectScopeStatusesPayload = [Operations.Resources_expense_list.Input.Query.ProjectScopeStatusesPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeStatuses`.
-                package var projectScopeStatuses: Operations.Resources_expense_list.Input.Query.ProjectScopeStatusesPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/ProjectScopeKindsPayload`.
-                @frozen package enum ProjectScopeKindsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
-                    case furniture = "furniture"
-                    case workshop = "workshop"
-                    case household = "household"
-                    case renovation = "renovation"
-                    case garden = "garden"
-                    case trip = "trip"
-                }
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeKinds`.
-                package typealias ProjectScopeKindsPayload = [Operations.Resources_expense_list.Input.Query.ProjectScopeKindsPayloadPayload]
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeKinds`.
-                package var projectScopeKinds: Operations.Resources_expense_list.Input.Query.ProjectScopeKindsPayload?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeLocations`.
-                package var projectScopeLocations: [Swift.String]?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeSearch`.
-                package var projectScopeSearch: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeDateFrom`.
-                package var projectScopeDateFrom: Swift.String?
-                /// Calendar day as "YYYY-MM-DD"
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeDateTo`.
-                package var projectScopeDateTo: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/projectScopeCompletionYear`.
-                package var projectScopeCompletionYear: Swift.String?
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - createdFrom: Calendar day as "YYYY-MM-DD"
-                ///   - createdTo: Calendar day as "YYYY-MM-DD"
-                ///   - updatedFrom: Calendar day as "YYYY-MM-DD"
-                ///   - updatedTo: Calendar day as "YYYY-MM-DD"
-                ///   - financialTransactionId:
-                ///   - financialTransactionPresenceFilter:
-                ///   - financialTransactionSearch:
-                ///   - dateFrom: Inclusive lower bound on expense date
-                ///   - dateTo: Inclusive upper bound on expense date
-                ///   - costType:
-                ///   - lineKind:
-                ///   - lineBasis:
-                ///   - trade:
-                ///   - future:
-                ///   - costMin: Inclusive lower bound on expense cost, in dollars
-                ///   - costMax: Inclusive upper bound on expense cost, in dollars
-                ///   - productQuantityMin: Inclusive lower bound on recorded product quantity
-                ///   - productQuantityMax: Inclusive upper bound on recorded product quantity
-                ///   - notesSearch: Substring match on notes
-                ///   - urlSearch: Substring match on url
-                ///   - projectId:
-                ///   - includeSubProjects:
-                ///   - projectPresenceFilter:
-                ///   - productId: product shortcode, e.g. PRD-4K7M
-                ///   - productPresenceFilter:
-                ///   - vendorId:
-                ///   - vendorPresenceFilter:
-                ///   - search:
-                ///   - dateRelative:
-                ///   - costPresenceFilter:
-                ///   - costSign:
-                ///   - disposalPurchasePresenceFilter:
-                ///   - productQuantityPresenceFilter:
-                ///   - orderIdPresenceFilter:
-                ///   - orderId:
-                ///   - purchaseId:
-                ///   - projectScopeStatuses:
-                ///   - projectScopeKinds:
-                ///   - projectScopeLocations:
-                ///   - projectScopeSearch:
-                ///   - projectScopeDateFrom: Calendar day as "YYYY-MM-DD"
-                ///   - projectScopeDateTo: Calendar day as "YYYY-MM-DD"
-                ///   - projectScopeCompletionYear:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    createdFrom: Swift.String? = nil,
-                    createdTo: Swift.String? = nil,
-                    updatedFrom: Swift.String? = nil,
-                    updatedTo: Swift.String? = nil,
-                    financialTransactionId: [Swift.String]? = nil,
-                    financialTransactionPresenceFilter: Operations.Resources_expense_list.Input.Query.FinancialTransactionPresenceFilterPayload? = nil,
-                    financialTransactionSearch: Swift.String? = nil,
-                    dateFrom: Swift.String? = nil,
-                    dateTo: Swift.String? = nil,
-                    costType: Operations.Resources_expense_list.Input.Query.CostTypePayload? = nil,
-                    lineKind: Operations.Resources_expense_list.Input.Query.LineKindPayload? = nil,
-                    lineBasis: Operations.Resources_expense_list.Input.Query.LineBasisPayload? = nil,
-                    trade: Operations.Resources_expense_list.Input.Query.TradePayload? = nil,
-                    future: Swift.Bool? = nil,
-                    costMin: Swift.Double? = nil,
-                    costMax: Swift.Double? = nil,
-                    productQuantityMin: Swift.Double? = nil,
-                    productQuantityMax: Swift.Double? = nil,
-                    notesSearch: Swift.String? = nil,
-                    urlSearch: Swift.String? = nil,
-                    projectId: Operations.Resources_expense_list.Input.Query.ProjectIdPayload? = nil,
-                    includeSubProjects: Swift.Bool? = nil,
-                    projectPresenceFilter: Operations.Resources_expense_list.Input.Query.ProjectPresenceFilterPayload? = nil,
-                    productId: Operations.Resources_expense_list.Input.Query.ProductIdPayload? = nil,
-                    productPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductPresenceFilterPayload? = nil,
-                    vendorId: Operations.Resources_expense_list.Input.Query.VendorIdPayload? = nil,
-                    vendorPresenceFilter: Operations.Resources_expense_list.Input.Query.VendorPresenceFilterPayload? = nil,
-                    search: [Swift.String]? = nil,
-                    dateRelative: Operations.Resources_expense_list.Input.Query.DateRelativePayload? = nil,
-                    costPresenceFilter: Operations.Resources_expense_list.Input.Query.CostPresenceFilterPayload? = nil,
-                    costSign: Operations.Resources_expense_list.Input.Query.CostSignPayload? = nil,
-                    disposalPurchasePresenceFilter: Operations.Resources_expense_list.Input.Query.DisposalPurchasePresenceFilterPayload? = nil,
-                    productQuantityPresenceFilter: Operations.Resources_expense_list.Input.Query.ProductQuantityPresenceFilterPayload? = nil,
-                    orderIdPresenceFilter: Operations.Resources_expense_list.Input.Query.OrderIdPresenceFilterPayload? = nil,
-                    orderId: [Swift.String]? = nil,
-                    purchaseId: Operations.Resources_expense_list.Input.Query.PurchaseIdPayload? = nil,
-                    projectScopeStatuses: Operations.Resources_expense_list.Input.Query.ProjectScopeStatusesPayload? = nil,
-                    projectScopeKinds: Operations.Resources_expense_list.Input.Query.ProjectScopeKindsPayload? = nil,
-                    projectScopeLocations: [Swift.String]? = nil,
-                    projectScopeSearch: Swift.String? = nil,
-                    projectScopeDateFrom: Swift.String? = nil,
-                    projectScopeDateTo: Swift.String? = nil,
-                    projectScopeCompletionYear: Swift.String? = nil,
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.createdFrom = createdFrom
-                    self.createdTo = createdTo
-                    self.updatedFrom = updatedFrom
-                    self.updatedTo = updatedTo
-                    self.financialTransactionId = financialTransactionId
-                    self.financialTransactionPresenceFilter = financialTransactionPresenceFilter
-                    self.financialTransactionSearch = financialTransactionSearch
-                    self.dateFrom = dateFrom
-                    self.dateTo = dateTo
-                    self.costType = costType
-                    self.lineKind = lineKind
-                    self.lineBasis = lineBasis
-                    self.trade = trade
-                    self.future = future
-                    self.costMin = costMin
-                    self.costMax = costMax
-                    self.productQuantityMin = productQuantityMin
-                    self.productQuantityMax = productQuantityMax
-                    self.notesSearch = notesSearch
-                    self.urlSearch = urlSearch
-                    self.projectId = projectId
-                    self.includeSubProjects = includeSubProjects
-                    self.projectPresenceFilter = projectPresenceFilter
-                    self.productId = productId
-                    self.productPresenceFilter = productPresenceFilter
-                    self.vendorId = vendorId
-                    self.vendorPresenceFilter = vendorPresenceFilter
-                    self.search = search
-                    self.dateRelative = dateRelative
-                    self.costPresenceFilter = costPresenceFilter
-                    self.costSign = costSign
-                    self.disposalPurchasePresenceFilter = disposalPurchasePresenceFilter
-                    self.productQuantityPresenceFilter = productQuantityPresenceFilter
-                    self.orderIdPresenceFilter = orderIdPresenceFilter
-                    self.orderId = orderId
-                    self.purchaseId = purchaseId
-                    self.projectScopeStatuses = projectScopeStatuses
-                    self.projectScopeKinds = projectScopeKinds
-                    self.projectScopeLocations = projectScopeLocations
-                    self.projectScopeSearch = projectScopeSearch
-                    self.projectScopeDateFrom = projectScopeDateFrom
-                    self.projectScopeDateTo = projectScopeDateTo
-                    self.projectScopeCompletionYear = projectScopeCompletionYear
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_expense_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/expenses/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_expense_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_expense_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_expense_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_expense_list.Input.Query = .init(),
-                headers: Operations.Resources_expense_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.ExpenseListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ExpenseListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_expense_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_expense_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/expenses/get(resources.expense.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_expense_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_expense_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/expenses/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_expense_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_expense_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/expenses/get(resources.expense.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_expense_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_expense_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/expenses/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)`.
-    package enum Resources_expense_get {
-        package static let id: Swift.String = "resources.expense.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// expense shortcode, e.g. EXP-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: expense shortcode, e.g. EXP-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_expense_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_expense_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_expense_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_expense_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_expense_get.Input.Path,
-                headers: Operations.Resources_expense_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.ExpenseOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ExpenseOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_expense_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_expense_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_expense_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_expense_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_expense_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_expense_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_expense_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_expense_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/plantings`.
-    /// - Remark: Generated from `#/paths//api/v1/plantings/get(resources.planting.list)`.
-    package enum Resources_planting_list {
-        package static let id: Swift.String = "resources.planting.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_planting_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/plantings/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_planting_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_planting_list.Input.Query = .init(),
-                headers: Operations.Resources_planting_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/plantings/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.PlantingListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.PlantingListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_planting_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_planting_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/plantings/get(resources.planting.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_planting_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_planting_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/plantings/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/plantings/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_planting_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_planting_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/plantings/get(resources.planting.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_planting_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_planting_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/plantings/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/get(resources.planting.get)`.
-    package enum Resources_planting_get {
-        package static let id: Swift.String = "resources.planting.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// planting shortcode, e.g. PLT-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: planting shortcode, e.g. PLT-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_planting_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_planting_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_planting_get.Input.Path,
-                headers: Operations.Resources_planting_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.PlantingOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.PlantingOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_planting_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_planting_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/get(resources.planting.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_planting_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_planting_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_planting_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_planting_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/get(resources.planting.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_planting_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_planting_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `PATCH /api/v1/plantings/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/patch(resources.planting.update)`.
-    package enum Resources_planting_update {
-        package static let id: Swift.String = "resources.planting.update"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/path`.
-            package struct Path: Sendable, Hashable {
-                /// planting shortcode, e.g. PLT-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: planting shortcode, e.g. PLT-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_planting_update.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_update.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_planting_update.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_planting_update.Input.Headers
-            /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/requestBody`.
-            @frozen package enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/requestBody/content/application\/json`.
-                case json(Components.Schemas.PlantingUpdateData)
-            }
-            package var body: Operations.Resources_planting_update.Input.Body?
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            ///   - body:
-            package init(
-                path: Operations.Resources_planting_update.Input.Path,
-                headers: Operations.Resources_planting_update.Input.Headers = .init(),
-                body: Operations.Resources_planting_update.Input.Body? = nil
-            ) {
-                self.path = path
-                self.headers = headers
-                self.body = body
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/responses/200/content/application\/json`.
-                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultPlanting)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultPlanting {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_planting_update.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_planting_update.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/patch(resources.planting.update)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_planting_update.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_planting_update.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/PATCH/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_planting_update.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_planting_update.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/patch(resources.planting.update)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_planting_update.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_planting_update.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
-    ///
-    /// - Remark: HTTP `GET /api/v1/garden-entries`.
-    /// - Remark: Generated from `#/paths//api/v1/garden-entries/get(resources.gardenEntry.list)`.
-    package enum Resources_gardenEntry_list {
-        package static let id: Swift.String = "resources.gardenEntry.list"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query`.
-            package struct Query: Sendable, Hashable {
-                /// Page number, starting at 1 (default 1)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/page`.
-                package var page: Swift.Int?
-                /// Items per page (default 10, maximum 500)
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/pageSize`.
-                package var pageSize: Swift.Int?
-                /// Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/sort`.
-                package var sort: Swift.String?
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/query/groupBy`.
-                package var groupBy: Swift.String?
-                /// Creates a new `Query`.
-                ///
-                /// - Parameters:
-                ///   - page: Page number, starting at 1 (default 1)
-                ///   - pageSize: Items per page (default 10, maximum 500)
-                ///   - sort: Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt
-                ///   - groupBy:
-                package init(
-                    page: Swift.Int? = nil,
-                    pageSize: Swift.Int? = nil,
-                    sort: Swift.String? = nil,
-                    groupBy: Swift.String? = nil
-                ) {
-                    self.page = page
-                    self.pageSize = pageSize
-                    self.sort = sort
-                    self.groupBy = groupBy
-                }
-            }
-            package var query: Operations.Resources_gardenEntry_list.Input.Query
-            /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_list.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_list.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_gardenEntry_list.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - query:
-            ///   - headers:
-            package init(
-                query: Operations.Resources_gardenEntry_list.Input.Query = .init(),
-                headers: Operations.Resources_gardenEntry_list.Input.Headers = .init()
-            ) {
-                self.query = query
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.GardenEntryListPage)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GardenEntryListPage {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_gardenEntry_list.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_gardenEntry_list.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/garden-entries/get(resources.gardenEntry.list)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_gardenEntry_list.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_gardenEntry_list.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_gardenEntry_list.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_gardenEntry_list.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/garden-entries/get(resources.gardenEntry.list)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_gardenEntry_list.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_gardenEntry_list.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `GET /api/v1/garden-entries/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/get(resources.gardenEntry.get)`.
-    package enum Resources_gardenEntry_get {
-        package static let id: Swift.String = "resources.gardenEntry.get"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/path`.
-            package struct Path: Sendable, Hashable {
-                /// gardenEntry shortcode, e.g. GDE-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: gardenEntry shortcode, e.g. GDE-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_gardenEntry_get.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_get.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_get.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_gardenEntry_get.Input.Headers
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            package init(
-                path: Operations.Resources_gardenEntry_get.Input.Path,
-                headers: Operations.Resources_gardenEntry_get.Input.Headers = .init()
-            ) {
-                self.path = path
-                self.headers = headers
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.GardenEntryOut)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GardenEntryOut {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_gardenEntry_get.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_gardenEntry_get.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/get(resources.gardenEntry.get)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_gardenEntry_get.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_gardenEntry_get.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_gardenEntry_get.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_gardenEntry_get.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/get(resources.gardenEntry.get)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_gardenEntry_get.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_gardenEntry_get.Output.Default {
-                get throws {
-                    switch self {
-                    case let .`default`(_, response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "default",
-                            response: self
-                        )
-                    }
-                }
-            }
-        }
-        @frozen package enum AcceptableContentType: AcceptableProtocol {
-            case json
-            case other(Swift.String)
-            package init?(rawValue: Swift.String) {
-                switch rawValue.lowercased() {
-                case "application/json":
-                    self = .json
-                default:
-                    self = .other(rawValue)
-                }
-            }
-            package var rawValue: Swift.String {
-                switch self {
-                case let .other(string):
-                    return string
-                case .json:
-                    return "application/json"
-                }
-            }
-            package static var allCases: [Self] {
-                [
-                    .json
-                ]
-            }
-        }
-    }
-    /// - Remark: HTTP `PATCH /api/v1/garden-entries/{id}`.
-    /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/patch(resources.gardenEntry.update)`.
-    package enum Resources_gardenEntry_update {
-        package static let id: Swift.String = "resources.gardenEntry.update"
-        package struct Input: Sendable, Hashable {
-            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/path`.
-            package struct Path: Sendable, Hashable {
-                /// gardenEntry shortcode, e.g. GDE-4K7M
-                ///
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/path/id`.
-                package var id: Swift.String
-                /// Creates a new `Path`.
-                ///
-                /// - Parameters:
-                ///   - id: gardenEntry shortcode, e.g. GDE-4K7M
-                package init(id: Swift.String) {
-                    self.id = id
-                }
-            }
-            package var path: Operations.Resources_gardenEntry_update.Input.Path
-            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/header`.
-            package struct Headers: Sendable, Hashable {
-                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_update.AcceptableContentType>]
-                /// Creates a new `Headers`.
-                ///
-                /// - Parameters:
-                ///   - accept:
-                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Resources_gardenEntry_update.AcceptableContentType>] = .defaultValues()) {
-                    self.accept = accept
-                }
-            }
-            package var headers: Operations.Resources_gardenEntry_update.Input.Headers
-            /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/requestBody`.
-            @frozen package enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/requestBody/content/application\/json`.
-                case json(Components.Schemas.GardenEntryUpdateData)
-            }
-            package var body: Operations.Resources_gardenEntry_update.Input.Body?
-            /// Creates a new `Input`.
-            ///
-            /// - Parameters:
-            ///   - path:
-            ///   - headers:
-            ///   - body:
-            package init(
-                path: Operations.Resources_gardenEntry_update.Input.Path,
-                headers: Operations.Resources_gardenEntry_update.Input.Headers = .init(),
-                body: Operations.Resources_gardenEntry_update.Input.Body? = nil
-            ) {
-                self.path = path
-                self.headers = headers
-                self.body = body
-            }
-        }
-        @frozen package enum Output: Sendable, Hashable {
-            package struct Ok: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/responses/200/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/responses/200/content/application\/json`.
-                    case json(Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_gardenEntry_update.Output.Ok.Body
-                /// Creates a new `Ok`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_gardenEntry_update.Output.Ok.Body) {
-                    self.body = body
-                }
-            }
-            /// 200
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/patch(resources.gardenEntry.update)/responses/200`.
-            ///
-            /// HTTP response code: `200 ok`.
-            case ok(Operations.Resources_gardenEntry_update.Output.Ok)
-            /// The associated value of the enum case if `self` is `.ok`.
-            ///
-            /// - Throws: An error if `self` is not `.ok`.
-            /// - SeeAlso: `.ok`.
-            package var ok: Operations.Resources_gardenEntry_update.Output.Ok {
-                get throws {
-                    switch self {
-                    case let .ok(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            package struct Default: Sendable, Hashable {
-                /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/responses/default/content`.
-                @frozen package enum Body: Sendable, Hashable {
-                    /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/PATCH/responses/default/content/application\/json`.
-                    case json(Components.Schemas.ApiError)
-                    /// The associated value of the enum case if `self` is `.json`.
-                    ///
-                    /// - Throws: An error if `self` is not `.json`.
-                    /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ApiError {
-                        get throws {
-                            switch self {
-                            case let .json(body):
-                                return body
-                            }
-                        }
-                    }
-                }
-                /// Received HTTP response body
-                package var body: Operations.Resources_gardenEntry_update.Output.Default.Body
-                /// Creates a new `Default`.
-                ///
-                /// - Parameters:
-                ///   - body: Received HTTP response body
-                package init(body: Operations.Resources_gardenEntry_update.Output.Default.Body) {
-                    self.body = body
-                }
-            }
-            /// Error
-            ///
-            /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/patch(resources.gardenEntry.update)/responses/default`.
-            ///
-            /// HTTP response code: `default`.
-            case `default`(statusCode: Swift.Int, Operations.Resources_gardenEntry_update.Output.Default)
-            /// The associated value of the enum case if `self` is `.`default``.
-            ///
-            /// - Throws: An error if `self` is not `.`default``.
-            /// - SeeAlso: `.`default``.
-            package var `default`: Operations.Resources_gardenEntry_update.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):

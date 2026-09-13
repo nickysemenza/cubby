@@ -333,11 +333,36 @@ if (residual.length > 0)
     `Nullable schema a generated client would drop:\n${residual.join("\n")}`,
   );
 
+/**
+ * Emit `paths` (and each path item's methods) and `components.schemas` in
+ * sorted key order. The contract registers routes in module order, so before
+ * this an operation inserted mid-contract moved every later path and
+ * component, and swift-openapi-generator — which renders in document order —
+ * rewrote thousands of unrelated lines per addition. Sorting happens AFTER
+ * the passes: `foldPositionalDuplicates` picks survivors and `nameJsonValues`
+ * numbers by emission order, and those choices must not depend on the sort.
+ */
+const sortedKeys = <T extends object>(record: T): T =>
+  // SAFETY: same own enumerable entries, reordered; JSON key order carries no
+  // meaning, so the value is the same `T` it was.
+  Object.fromEntries(
+    Object.entries(record).sort(([a], [b]) => a.localeCompare(b)),
+  ) as T;
+const sortedPaths = sortedKeys(
+  Object.fromEntries(
+    Object.entries(document.paths).map(([route, item]) => [
+      route,
+      sortedKeys(item),
+    ]),
+  ),
+);
+
 const serialized = `${JSON.stringify(
   {
     ...document,
     openapi: "3.1.0",
-    components: { ...document.components, schemas: components },
+    paths: sortedPaths,
+    components: { ...document.components, schemas: sortedKeys(components) },
   },
   (key, value) => {
     if (key === "$id" || key === "$schema") return undefined;
