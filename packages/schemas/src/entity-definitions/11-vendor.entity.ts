@@ -196,7 +196,11 @@ export default defineEntity({
         "createdAt",
         "updatedAt",
       ],
-      default: "name",
+      // Open on biggest spenders first: "where did the money go" is the
+      // question this roster exists to answer. Used to be a browser-registry
+      // `list.defaultSort` override on top of a generated "name" default;
+      // the product decision now lives on the declaration itself.
+      default: "spend",
     },
     intents: {
       fields: {

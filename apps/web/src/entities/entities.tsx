@@ -150,23 +150,6 @@ const INK = {
   },
 } satisfies Record<string, EntityColor>;
 
-/**
- * `usda-food` has no `model.sort` declaration in the entity-definitions
- * pipeline (it is read-only USDA reference data, not a Cubby entity), so it
- * has no `generatedEntitySort` entry. Hand-list its sortable columns here
- * rather than importing `usdaFoodSortableFields` from
- * `packages/schemas/src/usda.ts` — that module also exports executable Zod
- * schemas, and importing it would drag validation graphs into this eager
- * client bundle. Kept in sync with `usdaListInput` in usda.ts by inspection.
- */
-const usdaFoodSortableFields = [
-  "fdc_id",
-  "description",
-  "data_type",
-  "relevance",
-  "linkedProducts",
-] as const;
-
 const newRouteExtensions = {
   ingredient: { new: "/ingredients/new" },
   inventory: { new: "/inventory/new" },
@@ -404,14 +387,9 @@ const entityDefinitions = withEntityNames({
     // A quiet roster, not a live money surface — same neutral as location/task.
     color: INK.slate,
     detail: { commonSections: ["history"] },
-    list: {
-      // Open on biggest spenders first: "where did the money go" is the
-      // question this roster exists to answer. (It used to be `name`, with the
-      // vendor list overriding it page-side — descending name would have
-      // landed the roster on Z→A.)
-      defaultSort: "spend",
-      defaultDensity: "dense",
-    },
+    // Default sort ("spend") is declared on `model.sort` in
+    // `11-vendor.entity.ts` now, not overridden here.
+    list: { defaultDensity: "dense" },
     // "fixed": the keeper is the vendor being viewed; candidates are every
     // OTHER vendor (mergeVendors has no cross-vendor refusal like
     // mergePurchases' vendor-match check — any two vendors can fold together).
@@ -519,12 +497,8 @@ const entityDefinitions = withEntityNames({
   "usda-food": {
     ...generatedBrowserRoutes["usda-food"],
     color: INK.positive,
-    // USDA foods are read-only, no detail/list conventions needed
-    list: {
-      // Deliberate override: usda-food has no generated default sort (see
-      // `usdaFoodSortableFields` below for why its roster is hand-listed).
-      defaultSort: "fdc_id",
-    },
+    // USDA foods are read-only, no detail conventions needed. Default sort
+    // ("fdc_id") comes from `model.sort` in `17-usda-food.entity.ts`.
   },
   image: {
     ...generatedBrowserRoutes.image,
@@ -590,28 +564,24 @@ const generatedSortRoster = (entity: Entity): GeneratedSortRoster | undefined =>
  * `import type { Entity }`, so it carries zero runtime schema dependencies —
  * pulling it into this route-loaded file does not drag Zod validation graphs
  * into the eager client bundle the way importing an entity's own schema
- * module would. `usda-food` has no generated sort roster (see
- * {@link usdaFoodSortableFields}) and is special-cased here instead.
+ * module would. Every browser-routed entity, `usda-food` included, now has a
+ * generated roster, so no per-entity special case remains here.
  */
 export const getSortableFields = (entity: Entity): readonly string[] => {
-  if (entity === "usda-food") return usdaFoodSortableFields;
   if (!isBrowserRoutedEntity(entity)) return [];
   return generatedSortRoster(entity)?.fields ?? [];
 };
 
 /**
- * Single source for an entity list's opening sort field: an explicit
- * `list.defaultSort` override (`vendor`'s "spend", `usda-food`'s "fdc_id")
- * wins, then the generated roster's own default, then "createdAt" for the
- * rare entity neither supplies (shouldn't happen for a routed entity today,
- * but keeps this total). Both `entity-list-ssr.ts` and
- * `useEntityListPresentation.tsx` call this so the SSR preload and the
- * mounted table can never open on different sorts.
+ * Single source for an entity list's opening sort field: the generated
+ * roster's own `default`, or "createdAt" for the rare entity that declares no
+ * `model.sort` at all (shouldn't happen for a routed entity today, but keeps
+ * this total). Both `entity-list-ssr.ts` and `useEntityListPresentation.tsx`
+ * call this so the SSR preload and the mounted table can never open on
+ * different sorts.
  */
 export const defaultSortFor = (entity: BrowserRoutedEntity): string =>
-  browserEntityDefinition(entity).list?.defaultSort ??
-  generatedSortRoster(entity)?.default ??
-  "createdAt";
+  generatedSortRoster(entity)?.default ?? "createdAt";
 
 /**
  * Human-readable label for any entity. `.label` is the manifest's own

@@ -847,7 +847,13 @@ describe("typed entity compiler", () => {
     const artifact = (suffix: string) =>
       artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))!
         .source;
+    // Field schemas are read off the declaration BY KEY at load time — never
+    // by a positional `definition.model.fields[N]` that a mid-roster insert
+    // would shift.
     expect(artifact("entity-field-schemas.ingredient.gen.ts")).toContain(
+      "= fieldSchemasOf(definition);",
+    );
+    expect(artifact("entity-field-schemas.ingredient.gen.ts")).not.toContain(
       "definition.model.fields[",
     );
     // Field schema maps reference the declaration; only the filter fields

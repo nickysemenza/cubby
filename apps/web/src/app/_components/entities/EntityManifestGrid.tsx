@@ -1,11 +1,14 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
 import {
   allEntities,
+  type EntityDescriptor,
   entityInspectorMetadata,
   entityManifest,
   entityReferences,
 } from "@cubby/schemas/entity-manifest";
 import type { EntityPresentation } from "@cubby/schemas/entity-presentation";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Minus, Stamp } from "lucide-react";
 import { type ReactNode, useId } from "react";
@@ -39,6 +42,8 @@ import {
 import { viewsForEntity } from "~/entities/view-manifest";
 import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
+import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
+import { HTTP_RESOURCES } from "~/lib/generated/http-resources.gen";
 import { cn } from "~/lib/utils";
 
 import { EntityReferenceGraph } from "./EntityReferenceGraph";
@@ -88,6 +93,20 @@ function emittedCode(entity: Entity) {
 
 function sourceRef(ref: { module: string; export: string } | null) {
   return ref ? `${ref.module}#${ref.export}` : "not declared";
+}
+
+/**
+ * `entityManifest[entity]`'s generated literal type omits an `optional()`
+ * schema key entirely for an entity that leaves it unset, rather than typing
+ * it `| undefined` — so a union-wide read of `countFilter`/
+ * `relatednessSignals`/`mcpNames` doesn't type-check against every member.
+ * Widen back to the zod-inferred shape, which `parsedEntityManifest` in
+ * `entity-manifest.ts` already verifies every entry satisfies.
+ */
+function extendedManifest(entity: Entity): EntityDescriptor {
+  // SAFETY: see doc comment above — `entityManifest[entity]` always
+  // satisfies `entityDescriptor`, just not through a type TS can see here.
+  return entityManifest[entity] as EntityDescriptor;
 }
 
 function acceptedCodes(entity: Entity) {
@@ -214,6 +233,7 @@ function ComparisonMatrix({
             <TableHead>Canonical</TableHead>
             <TableHead>Inbound aliases</TableHead>
             <TableHead>Prints labels</TableHead>
+            <TableHead>Native</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -256,6 +276,9 @@ function ComparisonMatrix({
                 </TableCell>
                 <TableCell>
                   <Bool value={printsLabels(entity)} />
+                </TableCell>
+                <TableCell className="text-xs whitespace-nowrap">
+                  {nativeCoverageLabel(entity)}
                 </TableCell>
               </TableRow>
             );
@@ -358,6 +381,40 @@ function startTransportLabel(entity: Entity) {
     .join(" · ");
 }
 
+/** `singular / plural`, falling back to `—` for a name half the manifest leaves unset. */
+function mcpNamesLabel(entity: Entity) {
+  const names = extendedManifest(entity).mcpNames;
+  if (!names) return dash;
+  return `${names.singular ?? "—"} / ${names.plural ?? "—"}`;
+}
+
+/** The browser route's base path, or a dash for an entity with no browser route. */
+function basePathFor(entity: Entity) {
+  return isBrowserRoutedEntity(entity) ? (
+    <code key="basePath">{browserEntityDefinition(entity).basePath}</code>
+  ) : (
+    dash
+  );
+}
+
+/** The declared `countFilter` enum value, or a dash when the entity leaves it unset. */
+function countFilterCell(entity: Entity) {
+  const countFilter = extendedManifest(entity).countFilter;
+  return countFilter ? <code key="countFilter">{countFilter}</code> : dash;
+}
+
+/** Each declared relatedness signal's `kind: label`, or a dash when none are declared. */
+function relatednessSignalsCell(entity: Entity) {
+  const signals = extendedManifest(entity).relatednessSignals;
+  if (!signals?.length) return dash;
+  return (
+    <Chips
+      key="relatedness"
+      items={signals.map((signal) => `${signal.kind}: ${signal.label}`)}
+    />
+  );
+}
+
 function RelationshipContract({ entity }: { entity: Entity }) {
   const { relationships } = entityManifest[entity];
   if (relationships.length === 0) return dash;
@@ -408,14 +465,165 @@ function PresentationSection({ entity }: { entity: Entity }) {
             <span key="icons" className="inline-flex items-center gap-2">
               <EntityIcon entity={entity} className="size-4" />
               <code>{metadata.icons.lucide}</code>
-              <span className="text-muted-foreground/60">·</span>
+              <span className="text-muted-foreground/60">web ·</span>
               <code>{metadata.icons.sfSymbol}</code>
+              <span className="text-muted-foreground/60">native</span>
             </span>,
           ],
           ["Empty state", emptyState.title],
           ["Empty copy", emptyState.description],
           ["Empty action", emptyState.actionLabel ?? dash],
           ["Images", images],
+        ]}
+      />
+    </Section>
+  );
+}
+
+/** `list · get · update` plus a `+N rpc` suffix; a dash when the app never touches it. */
+function nativeCoverageLabel(entity: Entity): string {
+  const coverage = ENTITY_NATIVE_COVERAGE[entity];
+  const actions = coverage.httpActions.join(" · ");
+  const rpc = coverage.rpcIds.length ? `+${coverage.rpcIds.length} rpc` : "";
+  const label = [actions, rpc].filter(Boolean).join(" ");
+  return label || "—";
+}
+
+/**
+ * The native shell draws four domain lines; the declaration vocabulary has
+ * five. Mirrors `AppDomain.init(_:)` in
+ * `apps/apple/App/Shared/Theme/PorcelainTokens.swift`: pantry files under
+ * House, and an entity on no line (image) files under House too.
+ */
+const nativeDomain = (domain: EntityPresentation["domain"]): string =>
+  domain === null || domain === "pantry" ? "house (fallback)" : domain;
+
+/**
+ * What the native app can do with this entity, from
+ * `entity-native-coverage.gen.ts` (emitted by the same script that writes
+ * `EntityOperations.swift`). "HTTP exposes" is the web API's resource verbs
+ * — what Swift's `httpActions` mirrors; "Native client" is the narrower set
+ * the filtered OpenAPI client actually carries (create/update/delete are
+ * opt-in via `native-operations.json`).
+ */
+function NativeSection({ entity }: { entity: Entity }) {
+  const metadata = entityInspectorMetadata[entity];
+  const coverage = ENTITY_NATIVE_COVERAGE[entity];
+  // SAFETY: `HTTP_RESOURCES` is `satisfies Partial<Record<Entity, …>>`; an
+  // entity with no HTTP resource simply has no entry.
+  const resource = (
+    HTTP_RESOURCES as Partial<Record<Entity, { verbs: readonly string[] }>>
+  )[entity];
+  return (
+    <Section title="Native app">
+      <ContractRows
+        rows={[
+          ["Domain (app)", nativeDomain(metadata.domain)],
+          ["Countable", <Bool key="countable" value={metadata.countable} />],
+          ["HTTP exposes", <Chips key="verbs" items={resource?.verbs ?? []} />],
+          [
+            "Native client",
+            <Chips key="native" items={coverage.httpActions} />,
+          ],
+          [
+            "Image attach / reorder",
+            <span key="images" className="inline-flex items-center gap-2">
+              <Bool value={coverage.imageAttach} />
+              <span className="text-muted-foreground/60">·</span>
+              <Bool value={coverage.imageOrder} />
+            </span>,
+          ],
+          ["RPC operations", <Chips key="rpc" items={coverage.rpcIds} />],
+        ]}
+      />
+    </Section>
+  );
+}
+
+type SortRoster =
+  (typeof generatedEntitySort)[keyof typeof generatedEntitySort];
+
+function sortRosterFor(entity: Entity): SortRoster | undefined {
+  // SAFETY: `generatedEntitySort` is `satisfies Partial<Record<Entity, …>>`;
+  // an entity with no declared list-sort roster simply has no entry.
+  return (generatedEntitySort as Partial<Record<Entity, SortRoster>>)[entity];
+}
+
+/**
+ * The `model.sort` roster from `entity-sort.gen.ts`. An empty `groupable`
+ * means every sortable field is groupable (see docs/entities.md); an entity
+ * with no roster at all (only `usda-food` today) gets a single explanatory
+ * row rather than an empty section.
+ */
+function SortingSection({ entity }: { entity: Entity }) {
+  const roster = sortRosterFor(entity);
+  return (
+    <Section title="Sorting">
+      <ContractRows
+        rows={
+          roster
+            ? [
+                ["Default", <code key="default">{roster.default}</code>],
+                ["Fields", <Chips key="fields" items={roster.fields} />],
+                [
+                  "Computed",
+                  roster.computed.length ? (
+                    <Chips key="computed" items={roster.computed} />
+                  ) : (
+                    dash
+                  ),
+                ],
+                [
+                  "Groupable",
+                  roster.groupable.length ? (
+                    <Chips key="groupable" items={roster.groupable} />
+                  ) : (
+                    "all sortable fields"
+                  ),
+                ],
+              ]
+            : [["Declared", "none (hand roster)"]]
+        }
+      />
+    </Section>
+  );
+}
+
+type EditIntents =
+  (typeof generatedEntityEditIntents)[keyof typeof generatedEntityEditIntents];
+
+function editIntentsFor(entity: Entity): EditIntents | undefined {
+  // SAFETY: `generatedEntityEditIntents` is `satisfies Partial<Record<Entity, …>>`;
+  // an entity with no browser editor declaration simply has no entry.
+  return (generatedEntityEditIntents as Partial<Record<Entity, EditIntents>>)[
+    entity
+  ];
+}
+
+/**
+ * The editor's named field fragments (`fields`) and the ordered intent names
+ * `create`/`update` accept, from `entity-edit-intents.gen.ts`. An entity
+ * absent from the map (`cookbook`, `image`, `usda-food` today) has no
+ * browser-editable form at all.
+ */
+function EditIntentsSection({ entity }: { entity: Entity }) {
+  const intents = editIntentsFor(entity);
+  if (!intents) {
+    return (
+      <Section title="Edit intents">
+        <ContractRows rows={[["Editable", "not editable in the browser"]]} />
+      </Section>
+    );
+  }
+  return (
+    <Section title="Edit intents">
+      <ContractRows
+        rows={[
+          ["Create intents", <Chips key="create" items={intents.create} />],
+          ["Update intents", <Chips key="update" items={intents.update} />],
+          ...Object.entries(intents.fields).map(([name, fields]) =>
+            contractRow(name, <Chips key={name} items={fields} />),
+          ),
         ]}
       />
     </Section>
@@ -475,6 +683,7 @@ export function EntityInspector({
         <ContractRows
           rows={[
             ["Route", route?.detail ?? "No browser detail route"],
+            ["Base path", basePathFor(entity)],
             ["Table", descriptor.dbTable ?? dash],
             ["ID brand", descriptor.idBrand ?? dash],
             ["Live rows", count ?? "Unavailable"],
@@ -555,9 +764,14 @@ export function EntityInspector({
             ["SQL predicates", "explicit repository predicates"],
             ["Option loaders", "generated static/deferred bindings"],
             ["MCP fields", mcpFieldLabel(entity)],
+            ["Count filter", countFilterCell(entity)],
           ]}
         />
       </Section>
+
+      <SortingSection entity={entity} />
+
+      <EditIntentsSection entity={entity} />
 
       <Section title="Search">
         <ContractRows
@@ -599,6 +813,7 @@ export function EntityInspector({
           rows={[
             ["Delete owner", metadata.operationOwners.delete ?? "none"],
             ["Merge owner", metadata.operationOwners.merge ?? "none"],
+            ["Relatedness signals", relatednessSignalsCell(entity)],
           ]}
         />
       </Section>
@@ -609,6 +824,7 @@ export function EntityInspector({
             ["Start", startTransportLabel(entity)],
             ["Extensions", "explicit workflow extensions only"],
             ["MCP", mcpTransportLabel(entity)],
+            ["MCP names", mcpNamesLabel(entity)],
             ["Routes / pages", routeCoverageLabel(entity)],
             ["Saved views", <SavedViewChips key="views" entity={entity} />],
             [
@@ -626,6 +842,8 @@ export function EntityInspector({
           ]}
         />
       </Section>
+
+      <NativeSection entity={entity} />
 
       <Collapsible>
         <div className="flex items-center justify-between border-y py-2">

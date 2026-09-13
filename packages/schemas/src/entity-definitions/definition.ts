@@ -689,6 +689,73 @@ type ReadFieldSchemas<D extends ReadableDeclaration> = {
   ]: F extends { validation: { read: infer S extends z.ZodType } } ? S : never;
 };
 
+type MutableDeclaration = {
+  model: {
+    fields: readonly {
+      key: string;
+      validation?: {
+        create: z.ZodType | null;
+        update: z.ZodType | null;
+      };
+    }[];
+    create: readonly string[];
+    update: readonly string[];
+  };
+};
+type ModeFieldSchemas<
+  D extends MutableDeclaration,
+  M extends "create" | "update",
+> = {
+  [
+    F in D["model"]["fields"][number] as F["key"] extends D["model"][M][number]
+      ? F["key"]
+      : never
+  ]: F extends { validation: { [K in M]: infer S extends z.ZodType } }
+    ? S
+    : never;
+};
+
+const modeFieldSchemas = <
+  const D extends MutableDeclaration,
+  M extends "create" | "update",
+>(
+  definition: D,
+  mode: M,
+): ModeFieldSchemas<D, M> => {
+  const entries = definition.model[mode].map((key) => {
+    const field = definition.model.fields.find((field) => field.key === key);
+    const schema = field?.validation?.[mode];
+    if (!schema) throw new Error(`Missing declared ${mode} schema for ${key}`);
+    return [key, schema];
+  });
+  // SAFETY: the explicit roster selects exact declared keys, each paired with
+  // that field's own `validation[mode]` instance; a missing schema fails above.
+  return Object.fromEntries(entries) as ModeFieldSchemas<D, M>;
+};
+
+/**
+ * The create/update/read field-schema maps a canonical module composes from.
+ * Keyed by the roster rather than by field index, so inserting a field
+ * mid-declaration cannot shift another field's schema, and the map hands
+ * back the declaration's own Zod instances (the field-map-drift test relies
+ * on that identity).
+ */
+export type FieldSchemas<D extends MutableDeclaration & ReadableDeclaration> = {
+  create: ModeFieldSchemas<D, "create">;
+  update: ModeFieldSchemas<D, "update">;
+  read: ReadFieldSchemas<D>;
+};
+
+export function fieldSchemasOf<
+  const D extends MutableDeclaration & ReadableDeclaration,
+>(definition: D): FieldSchemas<D> {
+  return {
+    create: modeFieldSchemas(definition, "create"),
+    update: modeFieldSchemas(definition, "update"),
+    read: readFieldSchemas(definition),
+  };
+}
+
 /** Compose domain projections from the same declared fields without importing generated code. */
 export function readFieldSchemas<const D extends ReadableDeclaration>(
   definition: D,
