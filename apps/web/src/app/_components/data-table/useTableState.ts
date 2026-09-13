@@ -18,12 +18,11 @@ import {
 import { z } from "zod";
 
 import {
-  decodeFilters,
-  encodeFilters,
+  compileFilterCodec,
+  type FilterCodec,
   type FilterSpecCore,
   type FilterValue,
   paramToSort,
-  partitionFilterSpecs,
   sortToParam,
 } from "~/entities/filters";
 
@@ -82,14 +81,14 @@ function serializeUrlState(
   sorting: SortingState,
   columnFilters: ColumnFiltersState,
   pagination: PaginationState,
-  columnSpecs: readonly FilterSpecCore[],
+  codec: FilterCodec,
   initialSort: string,
   initialSortDesc: boolean,
   syncPaginationToUrl: boolean,
 ): string {
   const sort = sortToParam(sorting);
   return JSON.stringify({
-    ...encodeFilters(columnSpecs, (columnId) =>
+    ...codec.encode((columnId) =>
       parseFilterValue(
         columnFilters.find((filter) => filter.id === columnId)?.value,
       ),
@@ -156,10 +155,11 @@ export function useTableState(
   // A URL-only spec has no column to hold its value, so it's excluded from
   // every columnFilters-shaped path below (seed, encode, managed URL keys) —
   // the page that deep-links it owns that param and clears it by navigating.
-  const [columnSpecs, urlOnlySpecs] = useMemo(
-    () => partitionFilterSpecs(filterSpecs),
-    [filterSpecs],
-  );
+  // The codec compiles that split, the keys each side owns, and the
+  // encode/decode over them from one walk, so this hook never re-derives a
+  // URL key on its own.
+  const codec = useMemo(() => compileFilterCodec(filterSpecs), [filterSpecs]);
+  const { urlOnlyKeys } = codec;
 
   const search = routerSearchSchema.parse(useSearch({ strict: false }));
   const navigate = useNavigate();
@@ -178,7 +178,7 @@ export function useTableState(
   // restores the same rows before first paint.
   const [columnFilters, setColumnFiltersRaw] = useState<ColumnFiltersState>(
     () => {
-      const fromUrl = decodeFilters(columnSpecs, urlStateSource);
+      const fromUrl = codec.decodeColumns(urlStateSource);
       return fromUrl.length ? fromUrl : initialFilter;
     },
   );
@@ -194,14 +194,12 @@ export function useTableState(
   // `usePaginatedTableCore`'s `filters`). Same reason `projects-dashboard`
   // keys its filters memo off joined primitives.
   const urlOnlyKey = JSON.stringify(
-    urlOnlySpecs.map(
-      (spec) => urlStateSource[spec.urlKey ?? spec.columnId] ?? null,
-    ),
+    urlOnlyKeys.map((key) => urlStateSource[key] ?? null),
   );
   const urlOnlyFilters = useMemo(
-    () => decodeFilters(urlOnlySpecs, urlStateSource),
+    () => codec.decodeUrlOnly(urlStateSource),
     // oxlint-disable-next-line react/exhaustive-deps -- keyed on the serialized values above, not `search`'s reference, on purpose
-    [urlOnlySpecs, urlOnlyKey],
+    [codec, urlOnlyKey],
   );
   const allFilters = useMemo(
     () =>
@@ -230,13 +228,8 @@ export function useTableState(
   // Every key this hook owns. URL-only keys are deliberately absent: no
   // column state can produce them, so this table must never delete them.
   const managedKeys = useMemo(
-    () => [
-      ...columnSpecs.map((spec) => spec.urlKey ?? spec.columnId),
-      SORT_KEY,
-      PAGE_KEY,
-      SIZE_KEY,
-    ],
-    [columnSpecs],
+    () => [...codec.columnKeys, SORT_KEY, PAGE_KEY, SIZE_KEY],
+    [codec],
   );
   const managedSearchKey = JSON.stringify(
     managedKeys.map((key) => urlStateSource[key] ?? null),
@@ -246,7 +239,7 @@ export function useTableState(
   // gives Back/Forward and same-route links a canonical comparison target,
   // while absent/invalid values continue to fall back to the caller defaults.
   const urlState = useMemo(() => {
-    const urlFilters = decodeFilters(columnSpecs, urlStateSource);
+    const urlFilters = codec.decodeColumns(urlStateSource);
     const page = syncPaginationToUrl
       ? Number(urlStateSource[PAGE_KEY])
       : Number.NaN;
@@ -270,7 +263,7 @@ export function useTableState(
     // oxlint-disable-next-line react/exhaustive-deps -- keyed on managed values above, not the router's fresh search-object reference
   }, [
     managedSearchKey,
-    columnSpecs,
+    codec,
     initialSort,
     initialSortDesc,
     initialFilter,
@@ -284,7 +277,7 @@ export function useTableState(
         sorting,
         columnFilters,
         pagination,
-        columnSpecs,
+        codec,
         initialSort,
         initialSortDesc,
         syncPaginationToUrl,
@@ -293,7 +286,7 @@ export function useTableState(
       sorting,
       columnFilters,
       pagination,
-      columnSpecs,
+      codec,
       initialSort,
       initialSortDesc,
       syncPaginationToUrl,
@@ -305,12 +298,12 @@ export function useTableState(
         urlState.sorting,
         urlState.columnFilters,
         urlState.pagination,
-        columnSpecs,
+        codec,
         initialSort,
         initialSortDesc,
         syncPaginationToUrl,
       ),
-    [urlState, columnSpecs, initialSort, initialSortDesc, syncPaginationToUrl],
+    [urlState, codec, initialSort, initialSortDesc, syncPaginationToUrl],
   );
   // Unlike `serializedSearchState`, retain explicit default and disabled-page
   // params so write-through can clean up keys this table owns.

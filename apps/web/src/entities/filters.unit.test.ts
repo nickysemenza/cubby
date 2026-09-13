@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
+  compileFilterCodec,
   buildFiltersFromManifest,
   FILTER_ANY,
   FILTER_NONE,
@@ -504,5 +505,36 @@ describe("paramToSort / sortToParam", () => {
     expect(paramToSort("")).toBeUndefined();
     expect(paramToSort(undefined)).toBeUndefined();
     expect(paramToSort(42)).toBeUndefined();
+  });
+});
+
+describe("compileFilterCodec", () => {
+  const specs = [
+    { columnId: "name", kind: "text" },
+    { columnId: "trade", kind: "multiselect" },
+    { columnId: "scope", kind: "text", urlKey: "in", urlOnly: true },
+  ] as const satisfies readonly FilterSpecCore[];
+
+  it("owns exactly the column-backed keys and encodes only those", () => {
+    const codec = compileFilterCodec(specs);
+    expect(codec.columnKeys).toEqual(["name", "trade"]);
+    expect(codec.urlOnlyKeys).toEqual(["in"]);
+    expect(
+      codec.encode((columnId) =>
+        columnId === "trade" ? ["drywall", "electrical"] : undefined,
+      ),
+    ).toEqual({ name: undefined, trade: "drywall,electrical" });
+  });
+
+  it("decodes each side from the same search", () => {
+    const codec = compileFilterCodec(specs);
+    const search = { name: "saw", trade: "drywall,electrical", in: "LOC-4K7M" };
+    expect(codec.decodeColumns(search)).toEqual([
+      { id: "name", value: "saw" },
+      { id: "trade", value: ["drywall", "electrical"] },
+    ]);
+    expect(codec.decodeUrlOnly(search)).toEqual([
+      { id: "scope", value: "LOC-4K7M" },
+    ]);
   });
 });

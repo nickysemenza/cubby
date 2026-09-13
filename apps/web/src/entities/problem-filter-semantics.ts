@@ -16,6 +16,7 @@ import {
   buildFiltersFromManifest,
   type FilterPatch,
   type FilterSpecCore,
+  filterUrlKey,
 } from "./filters";
 import type { FilterAssembly } from "./problem-query";
 
@@ -77,7 +78,7 @@ export function compileProblemFilters(
   const urlKeys = new Set(entityFilterUrlKeys(entity));
   const nonSerializable = assembly.find(({ id }) => {
     const spec = byColumn.get(id);
-    return !spec || !urlKeys.has(spec.urlKey ?? spec.columnId);
+    return !spec || !urlKeys.has(filterUrlKey(spec));
   });
   if (nonSerializable) {
     throw new Error(

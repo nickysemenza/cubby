@@ -319,6 +319,11 @@ export const soleValue = <T>(value: T | T[] | undefined): T | undefined => {
 
 const LIST_SEPARATOR = ",";
 
+/** The one search-param key a spec reads and writes. */
+export const filterUrlKey = (
+  spec: Pick<FilterSpecCore, "urlKey" | "columnId">,
+): string => spec.urlKey ?? spec.columnId;
+
 /**
  * `[column-backed, url-only]`.
  *
@@ -331,6 +336,44 @@ export const partitionFilterSpecs = (
 ): [FilterSpecCore[], FilterSpecCore[]] =>
   partition(specs, (spec) => !spec.urlOnly);
 
+/**
+ * Everything a table needs to move filters between state and the URL,
+ * compiled once from an entity's specs: which specs back columns and which
+ * are URL-only scopes, the exact search-param keys each side owns, and the
+ * encode/decode over them. Ownership and encoding come from the same walk,
+ * so a table can never claim (or delete) a key it does not encode.
+ */
+export interface FilterCodec {
+  readonly columnSpecs: readonly FilterSpecCore[];
+  readonly urlOnlySpecs: readonly FilterSpecCore[];
+  /** Search-param keys the table owns — it may write and clear these. */
+  readonly columnKeys: readonly string[];
+  /** Search-param keys only navigation may change; a table never deletes them. */
+  readonly urlOnlyKeys: readonly string[];
+  encode(
+    get: (columnId: string) => FilterValue,
+  ): Record<string, string | undefined>;
+  decodeColumns<TSearch extends {}>(search: TSearch): ColumnFilterValue[];
+  decodeUrlOnly<TSearch extends {}>(search: TSearch): ColumnFilterValue[];
+}
+
+export type ColumnFilterValue = { id: string; value: string | string[] };
+
+export const compileFilterCodec = (
+  specs: readonly FilterSpecCore[],
+): FilterCodec => {
+  const [columnSpecs, urlOnlySpecs] = partitionFilterSpecs(specs);
+  return {
+    columnSpecs,
+    urlOnlySpecs,
+    columnKeys: columnSpecs.map(filterUrlKey),
+    urlOnlyKeys: urlOnlySpecs.map(filterUrlKey),
+    encode: (get) => encodeFilters(columnSpecs, get),
+    decodeColumns: (search) => decodeFilters(columnSpecs, search),
+    decodeUrlOnly: (search) => decodeFilters(urlOnlySpecs, search),
+  };
+};
+
 /** Column-filter state → search params. Absent keys mean "not filtered". */
 export function encodeFilters(
   specs: readonly FilterSpecCore[],
@@ -342,7 +385,7 @@ export function encodeFilters(
     const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
     // undefined, never "" — `stripSearchParams` only strips on undefined, so
     // an empty string would stick in the URL forever.
-    params[spec.urlKey ?? spec.columnId] = values.length
+    params[filterUrlKey(spec)] = values.length
       ? values.join(LIST_SEPARATOR)
       : undefined;
   }
@@ -353,11 +396,11 @@ export function encodeFilters(
 export function decodeFilters<TSearch extends {}>(
   specs: readonly FilterSpecCore[],
   search: TSearch,
-): Array<{ id: string; value: string | string[] }> {
+): ColumnFilterValue[] {
   const parsedSearch = parseFilterSearch(search);
-  const filters: Array<{ id: string; value: string | string[] }> = [];
+  const filters: ColumnFilterValue[] = [];
   for (const spec of specs) {
-    const raw = parsedSearch[spec.urlKey ?? spec.columnId];
+    const raw = parsedSearch[filterUrlKey(spec)];
     if (raw === undefined || raw === "") continue;
     const parts = raw
       .split(LIST_SEPARATOR)
