@@ -1,5 +1,6 @@
 import CubbyKit
 import SwiftUI
+import TipKit
 
 /// The landing screen: what needs attention today (tasks, meals, open problems), and the ways in.
 /// Each section loads independently — a failure in one never blanks the others — and the whole
@@ -38,10 +39,13 @@ struct TodayContent: View {
     let tasks: TodaySectionState<[TodayTask]>
     let meals: TodaySectionState<[TodayMeal]>
     let problems: TodaySectionState<TodayProblemCounts>
-    let onRefresh: () async -> Void
+    let onRefresh: @Sendable () async -> Void
 
     @Environment(\.sectionSelection) private var sectionSelection
     @Environment(AppModel.self) private var model
+    #if os(iOS)
+        private let quickActionsTip = QuickActionsTip()
+    #endif
 
     var body: some View {
         ScrollView {
@@ -50,6 +54,11 @@ struct TodayContent: View {
                 tasksSection
                 mealsSection
                 problemsSection
+                // Inline, not a popover: TabView keeps this view alive, and a popover tip
+                // presented from here stays on screen over the other tabs.
+                #if os(iOS)
+                    TipView(quickActionsTip)
+                #endif
                 shortcutsSection
             }
             .padding(PorcelainTokens.Space.lg)
@@ -57,7 +66,7 @@ struct TodayContent: View {
             .frame(maxWidth: .infinity)
         }
         .porcelainScreen()
-        .refreshable { await onRefresh() }
+        .refreshControl { await onRefresh() }
     }
 
     // MARK: Tasks

@@ -27,6 +27,7 @@
     { "id": "location.ensureGlobalUnknown", "why": "Audit relocate target" },
     { "id": "location.makeTree", "why": "Audit scope picker" },
     { "id": "problems.getCounts", "why": "Today problems tile" },
+    { "id": "product.findOrCreateByCode", "why": "Search tab create from a barcode or ISBN" },
     { "id": "product.findOrCreateByUPC", "why": "Capture unknown barcode" },
     { "id": "resources.gardenEntry.update", "why": "Garden entry corrections" },
     { "id": "resources.ingredient.update", "why": "Garden guide association" },

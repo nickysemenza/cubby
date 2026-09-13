@@ -29,6 +29,16 @@ nonisolated enum IntentContext {
         AppModel.active?.navigator.open(link)
     }
 
+    /// Opens the Search tab with `query` prefilled — an intent's fallback when a code or a name
+    /// doesn't resolve to exactly one entity. `SearchView` consumes this the same way `CaptureView`
+    /// consumes a pending location: set-then-taken, so a relaunch does not repeat it.
+    @MainActor
+    static func openSearch(prefilling query: String) {
+        guard let navigator = AppModel.active?.navigator else { return }
+        navigator.pendingSearchQuery = query
+        navigator.open(.search)
+    }
+
     /// Fetches one entity by shortcode through the generic resource route.
     static func entity(id: String, client: CubbyClient) async throws -> CubbyEntity {
         guard let descriptor = EntityCatalog.descriptor(forShortcode: id), descriptor.isIntentExposed else {

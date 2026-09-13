@@ -8,6 +8,9 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var draftURL = ""
+    #if os(macOS)
+        @AppStorage(DockBadge.showInDockDefaultsKey) private var showProblemsInDock = true
+    #endif
 
     private var isCurrentHost: Bool {
         URL(string: draftURL) == nil || draftURL == model.baseURL.absoluteString
@@ -76,6 +79,15 @@ struct SettingsView: View {
             } header: {
                 Eyebrow("Session")
             }
+
+            #if os(macOS)
+                Section {
+                    Toggle("Show problem count in Dock", isOn: $showProblemsInDock)
+                        .frame(minHeight: PorcelainTokens.touchTarget - 12)
+                } header: {
+                    Eyebrow("Dock")
+                }
+            #endif
         }
         .formStyle(.grouped)
         .font(.porcelainBody)
@@ -84,6 +96,11 @@ struct SettingsView: View {
         .onAppear { draftURL = model.baseURL.absoluteString }
         #if os(iOS)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        #endif
+        #if os(macOS)
+            .onChange(of: showProblemsInDock) { _, enabled in
+                if !enabled { DockBadge.clear() }
+            }
         #endif
     }
 

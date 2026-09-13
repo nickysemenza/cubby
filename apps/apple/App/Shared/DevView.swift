@@ -1,6 +1,7 @@
 import CubbyKit
 import Sentry
 import SwiftUI
+import TipKit
 
 /// Developer utilities: the Rust parser over FFI, a one-tap API check, and the app's own
 /// coordinates. This is where a new capability gets its first visible proof before it has a real
@@ -116,6 +117,17 @@ struct DevView: View {
                         LabeledRow(label: "CubbyKit", value: CubbyKitInfo.version, mono: true)
                         PanelDivider()
                         LabeledRow(label: "Host", value: model.host, mono: true)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                    Eyebrow("Tips")
+                    devButton("Reset tips") {
+                        try? Tips.resetDatastore()
+                        try? Tips.configure([
+                            .displayFrequency(.daily),
+                            .datastoreLocation(.applicationDefault),
+                        ])
                     }
                 }
 

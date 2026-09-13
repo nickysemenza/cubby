@@ -180,6 +180,28 @@ struct RecountSessionTests {
         #expect(!service.calls.contains { if case .scan = $0 { true } else { false } })
     }
 
+    @Test func shelfAnnotationsComeFromTheRowsWithNoRequest() async throws {
+        let (session, service) = try await makeSession()
+        #expect(
+            session.annotation(forScanned: "012345678905")
+                == ShelfAnnotation(title: "Sample Product", detail: "1 each expected", tone: .expected))
+        #expect(
+            session.annotation(forScanned: "4006381333931")
+                == ShelfAnnotation(title: "Not in this bin", tone: .unexpected))
+        #expect(session.annotation(forScanned: "LOC-5678")?.tone == .verified)
+        #expect(session.annotation(forScanned: "LOC-6789")?.tone == .unexpected)
+        #expect(session.annotation(forScanned: "not a code") == nil)
+
+        session.submit("PRD-2345")
+        try await settle(session)
+        #expect(session.annotation(forScanned: "PRD-2345")?.detail == "1 each ✓")
+        session.stage(.adjust(Amount(value: 3, unit: "each")), for: InventoryEntryCode("INV-2345"))
+        #expect(
+            session.annotation(forScanned: "PRD-2345")
+                == ShelfAnnotation(title: "Sample Product", detail: "→ 3 each", tone: .verified))
+        #expect(!service.calls.contains { if case .scan = $0 { true } else { false } })
+    }
+
     @Test func aStagedAdjustmentSurvivesARescan() async throws {
         let (session, _) = try await makeSession()
         session.stage(.adjust(Amount(value: 2, unit: "each")), for: InventoryEntryCode("INV-2345"))

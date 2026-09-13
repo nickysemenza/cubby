@@ -21,7 +21,40 @@ struct EntityDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
             .task(id: appModel.host) { await setup() }
+            .refreshControl { await model?.load(id: id) }
+            .userActivity(NSUserActivityTypeBrowsingWeb, isActive: model?.row != nil) { activity in
+                guard let row = model?.row else { return }
+                activity.webpageURL = appModel.webURL(for: row.id)
+                activity.title = row.title
+                activity.isEligibleForHandoff = true
+                // Spotlight indexing is a separate path (`SpotlightIndexer`); this activity is
+                // Handoff-only.
+                activity.isEligibleForSearch = false
+            }
             .toolbar {
+                if let row = model?.row {
+                    ToolbarItem {
+                        ShareLink(item: appModel.webURL(for: row.id)) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    ToolbarItem {
+                        Menu {
+                            Button {
+                                Clipboard.copy(appModel.webURL(for: row.id).absoluteString)
+                            } label: {
+                                Label("Copy link", systemImage: "link")
+                            }
+                            Button {
+                                Clipboard.copy(row.id)
+                            } label: {
+                                Label("Copy shortcode", systemImage: "number")
+                            }
+                        } label: {
+                            Label("More", systemImage: "ellipsis.circle")
+                        }
+                    }
+                }
                 // Any entity whose update takes pendingImageIds can take a photo; the cover
                 // choice inside the sheet is product-only.
                 if descriptor.acceptsImages, let row = model?.row {

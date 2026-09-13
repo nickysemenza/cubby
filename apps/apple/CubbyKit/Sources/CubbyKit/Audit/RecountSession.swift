@@ -365,6 +365,10 @@ public final class RecountSession {
         lastError = nil
     }
 
+    func row(matching code: ScanCode) -> RowState? {
+        rowIndex(matching: code).map { rows[$0] }
+    }
+
     private func rowIndex(matching code: ScanCode) -> Int? {
         switch code {
         case .product(let id):

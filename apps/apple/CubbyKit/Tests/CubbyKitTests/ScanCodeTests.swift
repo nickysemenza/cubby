@@ -40,4 +40,46 @@ struct ScanCodeTests {
         #expect(ScanCode.classify("hello") == .failure(.unrecognized))
         #expect(ScanCode.classify("1234567") == .failure(.unrecognized))
     }
+
+    @Test func legacyPrefixRewritesToCanonical() throws {
+        #expect(try ScanCode.classify("P-4K7M").get() == .product(ProductCode("PRD-4K7M")))
+    }
+}
+
+@Suite("Shortcode.parse")
+struct ShortcodeParseTests {
+    @Test func canonicalPrefixParsesAsIs() {
+        let parsed = Shortcode.parse("PRD-4K7M")
+        #expect(parsed?.key == .product)
+        #expect(parsed?.code == "PRD-4K7M")
+    }
+
+    @Test func legacyProductPrefixRewritesToCanonical() {
+        let parsed = Shortcode.parse("P-4K7M")
+        #expect(parsed?.key == .product)
+        #expect(parsed?.singular == "Product")
+        #expect(parsed?.code == "PRD-4K7M")
+    }
+
+    @Test func legacyLocationPrefixRewritesToCanonical() {
+        let parsed = Shortcode.parse("L-4K7M")
+        #expect(parsed?.key == .location)
+        #expect(parsed?.code == "LOC-4K7M")
+    }
+
+    @Test func legacyPrefixIsCaseInsensitive() {
+        let parsed = Shortcode.parse("p-4k7m")
+        #expect(parsed?.key == .product)
+        #expect(parsed?.code == "PRD-4K7M")
+    }
+
+    @Test func unknownSingleLetterPrefixIsNil() {
+        #expect(Shortcode.parse("X-4K7M") == nil)
+    }
+
+    @Test func legacyPrefixExtractedFromLabelURL() {
+        let parsed = Shortcode.extract(from: "https://cubby.nickysemenza.com/L-4K7M")
+        #expect(parsed?.key == .location)
+        #expect(parsed?.code == "LOC-4K7M")
+    }
 }

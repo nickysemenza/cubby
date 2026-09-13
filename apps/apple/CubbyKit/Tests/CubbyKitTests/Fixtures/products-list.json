@@ -13,6 +13,7 @@
       "expectedQuantity": null,
       "category": "household",
       "images": [],
+      "displayImages": [],
       "externalIds": [],
       "price": null,
       "pricing": {

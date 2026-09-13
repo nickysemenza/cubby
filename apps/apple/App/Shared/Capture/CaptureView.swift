@@ -25,8 +25,16 @@ struct CaptureView: View {
             self.capture = capture
             await capture.loadLocations()
             applyPendingLocation()
+            applyPendingCode()
         }
-        .onChange(of: model.navigator.pendingCaptureLocation) { applyPendingLocation() }
+        .onChange(of: model.navigator.pendingCaptureLocation) {
+            applyPendingLocation()
+            applyPendingCode()
+        }
+        .onChange(of: model.navigator.pendingCaptureCode) { applyPendingCode() }
+        // "Stock it at a location" lands here before a location exists; the code waits for the
+        // pick, then seeds the field.
+        .onChange(of: capture?.location?.id) { applyPendingCode() }
         .sheet(isPresented: $pickingLocation) {
             if let capture { LocationPickerSheet(capture: capture) }
         }
@@ -42,6 +50,14 @@ extension CaptureView {
     fileprivate func applyPendingLocation() {
         guard let capture, !capture.locations.isEmpty else { return }
         if let id = model.navigator.takeCaptureLocation() { capture.select(id: id) }
+    }
+
+    /// A code found elsewhere (Search's scan sheet) only ever seeds the manual-entry field, and
+    /// only once a location is selected — whether one was just chosen above or was already set.
+    /// It is never submitted for the caller: inventory must never change without an explicit tap.
+    fileprivate func applyPendingCode() {
+        guard let capture, capture.location != nil else { return }
+        if let code = model.navigator.takeCaptureCode() { capture.manualEntry = code }
     }
 }
 
@@ -66,6 +82,11 @@ private struct CaptureContent: View {
             .frame(maxWidth: .infinity)
         }
         .porcelainScreen()
+        // Newest chip first; its status settling is what changes `chips`, so that is the trigger.
+        .scanFeedback(
+            capture.session.chips.first.flatMap { ScanFeedbackKind(chipStatus: $0.status) },
+            trigger: capture.session.chips
+        )
         .toolbar {
             ToolbarItem {
                 NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
@@ -108,7 +129,11 @@ private struct CaptureContent: View {
                         }
                         .padding(PorcelainTokens.Space.lg)
                     } else {
-                        ScannerSlot { code in capture.submit(code) }
+                        // Labels only for codes this sweep already resolved: no request per frame.
+                        ScannerSlot(
+                            onRead: { code in capture.submit(code) },
+                            annotate: { raw in capture.session.annotation(forScanned: raw) }
+                        )
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))

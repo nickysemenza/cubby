@@ -37,6 +37,7 @@ filter:
     - location.ensureGlobalUnknown
     - location.makeTree
     - problems.getCounts
+    - product.findOrCreateByCode
     - product.findOrCreateByUPC
     - resources.expense.get
     - resources.expense.list

@@ -46,6 +46,13 @@ public final class ScanSession {
         public var status: ChipStatus
     }
 
+    /// The last outcome for one code plus how many times it landed.
+    public struct Seen: Sendable, Hashable {
+        public var label: String
+        public var status: ChipStatus
+        public var count: Int
+    }
+
     /// One product that turned up elsewhere during the sweep. Keyed by product: scanning two
     /// copies of the same book must not queue the same decision twice.
     public struct QueuedStray: Sendable, Hashable, Identifiable {
@@ -68,6 +75,10 @@ public final class ScanSession {
     }
 
     public private(set) var chips: [Chip] = []
+    /// Everything this sweep has learned per code, keyed by `key(forScanned:)`, so the camera
+    /// overlay can label a barcode it has already seen without another request.
+    public private(set) var scanned: [String: Seen] = [:]
+    private var rawByToken: [UUID: String] = [:]
     public private(set) var strays: [QueuedStray] = []
     public private(set) var tally = Tally()
     public private(set) var lastError: String?
@@ -100,12 +111,25 @@ public final class ScanSession {
         guard let token = drain.submit(raw, at: date) else { return false }
         let chip = Chip(id: token, label: raw, status: .pending)
         chips = Array(([chip] + chips).prefix(Self.recentLimit))
+        rawByToken[token] = raw
+        if let key = Self.key(forScanned: raw) {
+            scanned[key, default: Seen(label: raw, status: .pending, count: 0)].status = .pending
+        }
         return true
+    }
+
+    /// The identity a raw read resolves to: the canonical code value, so a UPC-A read and its
+    /// EAN-13 spelling land on the same entry. Nil for anything the classifier refuses.
+    public static func key(forScanned raw: String) -> String? {
+        guard case .success(let code) = ScanCode.classify(raw) else { return nil }
+        return code.value
     }
 
     public func reset() {
         drain.reset()
         chips.removeAll()
+        scanned.removeAll()
+        rawByToken.removeAll()
         strays.removeAll()
         tally = Tally()
         lastError = nil
@@ -153,12 +177,22 @@ public final class ScanSession {
 
     private func fail(_ chipID: UUID, _ message: String) {
         patch(chipID) { $0.status = .failed(message) }
+        note(chipID) { $0.status = .failed(message) }
         lastError = message
     }
 
     private func apply(_ result: ScanResult, to chipID: UUID) {
         patch(chipID) {
             $0.label = result.product.name
+            switch result.outcome {
+            case .added: $0.status = .added
+            case .confirmed: $0.status = .confirmed
+            case .queued: $0.status = .queued
+            }
+        }
+        note(chipID) {
+            $0.label = result.product.name
+            $0.count += 1
             switch result.outcome {
             case .added: $0.status = .added
             case .confirmed: $0.status = .confirmed
@@ -175,6 +209,13 @@ public final class ScanSession {
                 QueuedStray(
                     productID: result.product.id, productName: result.product.name, rows: result.strays))
         }
+    }
+
+    private func note(_ chipID: UUID, _ change: (inout Seen) -> Void) {
+        guard let raw = rawByToken.removeValue(forKey: chipID), let key = Self.key(forScanned: raw) else {
+            return
+        }
+        change(&scanned[key, default: Seen(label: raw, status: .pending, count: 0)])
     }
 
     private func patch(_ chipID: UUID, _ change: (inout Chip) -> Void) {

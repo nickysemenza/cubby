@@ -24,6 +24,7 @@ struct NeedsPhotoView: View {
             self.needs = needs
             await needs.load()
         }
+        .refreshControl { await needs?.load() }
         .sheet(item: $capture) { capture in
             AddPhotoSheet(capture: capture) { _ in needs?.photoAdded() }
         }

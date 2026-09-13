@@ -35,9 +35,19 @@ struct BinView: View {
         }
         .listStyle(.plain)
         .porcelainScreen()
+        .refreshControl { await session.reload() }
         .sheet(isPresented: $showingStrays) {
             BinStraysSheet(session: session)
         }
+        .scanFeedback(latestScanFeedbackKind, trigger: session.chips)
+    }
+
+    /// Derived from `session.chips.first` (newest first — see `RecountSession.chips`): the most
+    /// recent chip's status, reduced to a feedback kind. `session.chips` itself is the trigger
+    /// passed to `.scanFeedback`, since it changes both when a new chip is pushed and when an
+    /// existing one's status settles.
+    private var latestScanFeedbackKind: ScanFeedbackKind? {
+        session.chips.first.flatMap { ScanFeedbackKind(chipStatus: $0.status) }
     }
 
     private func breadcrumbText(for bin: LocationTreeNode) -> String {
@@ -55,7 +65,14 @@ struct BinView: View {
                     .fill(PorcelainTokens.inset)
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: 300)
-                    .overlay { ScannerSlot { code in session.submit(code) } }
+                    // Floating labels come from the expected rows — a local match, never a
+                    // request per frame — so the walk shows what is verified before you scan it.
+                    .overlay {
+                        ScannerSlot(
+                            onRead: { code in session.submit(code) },
+                            annotate: { raw in session.annotation(forScanned: raw) }
+                        )
+                    }
                     .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
                     .overlay(
                         RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)

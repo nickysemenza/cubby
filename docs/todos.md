@@ -139,7 +139,14 @@ history is the archive. Permanent product constraints live in the
   `cubby-ffi` (UniFFI) ingredient parsing on-device, and VisionKit/Vision
   barcode + cover-image scanning. See [apps/apple/README.md](../apps/apple/README.md)
   for build order and ownership; removing the React scanner/PWA share target
-  waits for the native audit flow to reach parity.
+  waits for the native audit flow to reach parity. Still queued after the
+  Search tab, universal links, shelf overlay, and quick actions landed: NFC bin
+  tags (an NDEF record holding the label URL launches the app through the AASA
+  with no code), decoding a barcode from a photo (VisionKit `ImageAnalyzer`,
+  which also makes scan flows testable on the simulator), printing a label from
+  a location or product, a recipe cooking mode, and the widget / Control Center
+  scan control / Live Activity / share-extension set that needs the App Group
+  and Keychain access-group plumbing.
 
 - **Exact nutrition source tracing** — Resume when upstream conversion work is in
   scope. Extend `ingredient-parser` reports to retain actual mapping identities,

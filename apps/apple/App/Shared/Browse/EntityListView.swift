@@ -1,5 +1,6 @@
 import CubbyKit
 import SwiftUI
+import TipKit
 
 /// One entity's list screen. Owns a `GenericEntityListModel` created per host (mirrors
 /// `CaptureView`/`CaptureModel`), and accumulates pages into view state since the model itself
@@ -10,6 +11,7 @@ struct EntityListView: View {
     @Environment(AppModel.self) private var appModel
     @State private var model: GenericEntityListModel?
     @State private var loadedRows: [EntityRow] = []
+    private let pullToRefreshTip = PullToRefreshTip()
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -18,7 +20,7 @@ struct EntityListView: View {
             .porcelainScreen()
             .navigationTitle(descriptor.plural)
             .task(id: appModel.host) { await setup() }
-            .refreshable { await reload() }
+            .refreshControl { await reload() }
     }
 
     @ViewBuilder
@@ -77,10 +79,30 @@ struct EntityListView: View {
                     )
                     .listRowBackground(PorcelainTokens.canvas)
                     .listRowSeparator(.hidden)
+                // Inline so it cannot outlive this screen the way a popover over a pushed
+                // detail would.
+                TipView(pullToRefreshTip)
+                    .listRowBackground(PorcelainTokens.canvas)
+                    .listRowSeparator(.hidden)
             }
             ForEach(loadedRows) { row in
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
                     EntityRowView(key: key, row: row)
+                }
+                .contextMenu {
+                    Button {
+                        Clipboard.copy(appModel.webURL(for: row.id).absoluteString)
+                    } label: {
+                        Label("Copy link", systemImage: "link")
+                    }
+                    Button {
+                        Clipboard.copy(row.id)
+                    } label: {
+                        Label("Copy shortcode", systemImage: "number")
+                    }
+                    ShareLink(item: appModel.webURL(for: row.id)) {
+                        Label("Share…", systemImage: "square.and.arrow.up")
+                    }
                 }
                 .porcelainListRow()
             }
@@ -144,9 +166,12 @@ struct EntityRowView: View {
     let key: EntityKey
     let row: EntityRow
 
+    @Environment(\.zoomNamespace) private var zoomNamespace
+
     var body: some View {
         HStack(spacing: PorcelainTokens.Space.md) {
             Thumb(url: row.imageURL, size: 56, symbol: entitySymbol(for: key))
+                .zoomSource(id: row.id, in: zoomNamespace)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
                     .font(.body.weight(.semibold))
