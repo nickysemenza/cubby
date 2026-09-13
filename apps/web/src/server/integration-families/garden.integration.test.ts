@@ -14,7 +14,6 @@ import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   createPlanting,
   correctLocationDates,
-  backfillGardenLocationPeriods,
   finishPlanting,
   gardenEntries,
   gardenJournal,
@@ -437,47 +436,13 @@ describe("garden workflows", () => {
     expect(inventoryAfter).toBe(inventoryBefore);
   });
 
-  it("backfills conservative current-location facts and rejects inverted transitions", async () => {
+  it("rejects inverted location transitions", async () => {
     const crop = await createIngredient(
       ctx.db,
       { name: "Garden backfill crop" },
       TEST_ACTOR,
     );
     const tray = await location("Garden backfill tray", "tray");
-    const planned = await createPlanting(
-      ctx.db,
-      { ingredientId: crop.id, status: "planned" },
-      TEST_ACTOR,
-    );
-    await startPlanting(ctx.db, {
-      plantingId: planned.id,
-      locationId: tray.id,
-      startedOn: "2026-09-12",
-      startMethod: "sow",
-    });
-    const plantingId = await resolveLiveShortcode(
-      ctx.db,
-      planned.id,
-      "planting",
-    );
-    expect(plantingId).not.toBeNull();
-    await getDb(ctx.db)
-      .delete(plantingLocationPeriod)
-      .where(eq(plantingLocationPeriod.plantingId, plantingId!));
-    await backfillGardenLocationPeriods(ctx.db);
-    await backfillGardenLocationPeriods(ctx.db);
-    expect(
-      await gardenLocationHistory(ctx.db, { plantingId: planned.id }),
-    ).toMatchObject({
-      periods: [
-        {
-          sequence: 0,
-          locationId: tray.id,
-          endedOn: null,
-          startKind: "recorded",
-        },
-      ],
-    });
     const guarded = await createPlanting(
       ctx.db,
       {
@@ -501,21 +466,109 @@ describe("garden workflows", () => {
         finishedOn: "2026-09-19",
       }),
     ).rejects.toBeDefined();
-    const finished = await createPlanting(
+  });
+
+  it("lets a person confirm an existing planting location without a backfill", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Garden manually confirmed crop" },
+      TEST_ACTOR,
+    );
+    const bed = await location("Garden manually confirmed bed", "bed");
+    const existing = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    const existingId = await resolveLiveShortcode(
+      ctx.db,
+      existing.id,
+      "planting",
+    );
+    expect(existingId).not.toBeNull();
+    await getDb(ctx.db)
+      .delete(plantingLocationPeriod)
+      .where(eq(plantingLocationPeriod.plantingId, existingId!));
+    const bedPhoto = await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      kind: "observation",
+      observedOn: "2026-09-15",
+      note: "Existing bed overview",
+      pendingImageIds: [],
+    });
+    await correctLocationDates(ctx.db, {
+      plantingId: existing.id,
+      periods: [{ sequence: 0, inLocationSince: "2026-09-01", endedOn: null }],
+    });
+    expect(
+      await gardenLocationHistory(ctx.db, { plantingId: existing.id }),
+    ).toMatchObject({
+      periods: [
+        {
+          sequence: 0,
+          locationId: bed.id,
+          inLocationSince: "2026-09-01",
+          endedOn: null,
+          startKind: "actual",
+        },
+      ],
+    });
+    expect(
+      (
+        await gardenJournal(ctx.db, {
+          plantingId: existing.id,
+          includeBedContext: true,
+          page: 1,
+        })
+      ).items.find((entry) => entry.id === bedPhoto.id),
+    ).toMatchObject({ context: "bed" });
+    const planned = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned" },
+      TEST_ACTOR,
+    );
+    await expect(
+      correctLocationDates(ctx.db, {
+        plantingId: planned.id,
+        periods: [
+          { sequence: 0, inLocationSince: "2026-09-01", endedOn: null },
+        ],
+      }),
+    ).rejects.toBeDefined();
+    const moved = await createPlanting(
       ctx.db,
       { ingredientId: crop.id, status: "planned" },
       TEST_ACTOR,
     );
     await startPlanting(ctx.db, {
-      plantingId: finished.id,
-      locationId: tray.id,
-      startedOn: "2026-09-12",
+      plantingId: moved.id,
+      locationId: bed.id,
+      startedOn: "2026-09-10",
       startMethod: "sow",
     });
-    await finishPlanting(ctx.db, {
-      plantingId: finished.id,
-      finishedOn: "2026-10-01",
+    await movePlanting(ctx.db, {
+      plantingId: moved.id,
+      locationId: bed.id,
+      movedOn: "2026-09-20",
     });
+    const movedId = await resolveLiveShortcode(ctx.db, moved.id, "planting");
+    expect(movedId).not.toBeNull();
+    await getDb(ctx.db)
+      .delete(plantingLocationPeriod)
+      .where(eq(plantingLocationPeriod.plantingId, movedId!));
+    await expect(
+      correctLocationDates(ctx.db, {
+        plantingId: moved.id,
+        periods: [
+          { sequence: 0, inLocationSince: "2026-09-19", endedOn: null },
+        ],
+      }),
+    ).rejects.toBeDefined();
+    const finished = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
     const finishedId = await resolveLiveShortcode(
       ctx.db,
       finished.id,
@@ -525,18 +578,17 @@ describe("garden workflows", () => {
     await getDb(ctx.db)
       .delete(plantingLocationPeriod)
       .where(eq(plantingLocationPeriod.plantingId, finishedId!));
-    await backfillGardenLocationPeriods(ctx.db);
-    expect(
-      await gardenLocationHistory(ctx.db, { plantingId: finished.id }),
-    ).toMatchObject({
-      periods: [
-        {
-          locationId: tray.id,
-          inLocationSince: "2026-10-01",
-          endedOn: "2026-10-01",
-          startKind: "recorded",
-        },
-      ],
+    await finishPlanting(ctx.db, {
+      plantingId: finished.id,
+      finishedOn: "2026-10-01",
     });
+    await expect(
+      correctLocationDates(ctx.db, {
+        plantingId: finished.id,
+        periods: [
+          { sequence: 0, inLocationSince: "2026-09-01", endedOn: null },
+        ],
+      }),
+    ).rejects.toBeDefined();
   });
 });

@@ -979,150 +979,6 @@ export const gardenEntries = async (
 };
 
 /**
- * Garden v1 wrote structural move entries but had no interval table. Rebuild
- * those facts only; if none exist, record the rollout's current location so
- * people can later confirm a date without inventing earlier history.
- */
-const backfillKnownLocationPeriodsForPlanting = async (
-  db: Database,
-  plantingId: PlantingId,
-  rolloutDate: string,
-) =>
-  withTransaction(db, async (tx) => {
-    const existing = await unwrapDb(tx).query.plantingLocationPeriod.findFirst({
-      where: eq(plantingLocationPeriod.plantingId, plantingId),
-      columns: { id: true },
-    });
-    if (existing) return;
-    const current = await plantingRow(tx, plantingId);
-    const entries = await unwrapDb(tx).query.gardenEntry.findMany({
-      where: and(
-        eq(gardenEntry.plantingId, plantingId),
-        notDeleted(gardenEntry),
-        eq(gardenEntry.kind, "move"),
-      ),
-      columns: {
-        id: true,
-        locationId: true,
-        observedOn: true,
-        createdAt: true,
-      },
-      orderBy: [asc(gardenEntry.observedOn), asc(gardenEntry.createdAt)],
-    });
-    const finalEntry = entries.at(-1);
-    if (
-      current.status === "finished" &&
-      current.finishedOn &&
-      finalEntry &&
-      current.finishedOn < finalEntry.observedOn
-    ) {
-      // Leave incompatible legacy facts untouched rather than manufacturing an
-      // inverted interval or blocking the rest of the idempotent rollout.
-      return;
-    }
-    for (const [index, entry] of entries.entries()) {
-      const previous = entries[index - 1];
-      if (previous) {
-        await tx
-          .update(plantingLocationPeriod)
-          .set({ endedOn: entry.observedOn })
-          .where(
-            and(
-              eq(plantingLocationPeriod.plantingId, plantingId),
-              eq(plantingLocationPeriod.sequence, index - 1),
-            ),
-          );
-      }
-      await tx.insert(plantingLocationPeriod).values({
-        plantingId,
-        locationId: entry.locationId,
-        sequence: index,
-        inLocationSince: entry.observedOn,
-        endedOn: null,
-        startKind: "actual",
-        sourceGardenEntryId: entry.id,
-      });
-    }
-    if (!finalEntry && current.locationId) {
-      const recordedOn =
-        current.status === "finished" && current.finishedOn
-          ? current.finishedOn
-          : rolloutDate;
-      await tx.insert(plantingLocationPeriod).values({
-        plantingId,
-        locationId: current.locationId,
-        sequence: 0,
-        inLocationSince: recordedOn,
-        endedOn: current.status === "finished" ? recordedOn : null,
-        startKind: "recorded",
-        sourceGardenEntryId: null,
-      });
-    } else if (
-      finalEntry &&
-      current.status === "growing" &&
-      current.locationId &&
-      current.locationId !== finalEntry.locationId
-    ) {
-      const recordedOn = [rolloutDate, finalEntry.observedOn].sort().at(-1)!;
-      await tx
-        .update(plantingLocationPeriod)
-        .set({ endedOn: recordedOn })
-        .where(
-          and(
-            eq(plantingLocationPeriod.plantingId, plantingId),
-            isNull(plantingLocationPeriod.endedOn),
-          ),
-        );
-      await tx.insert(plantingLocationPeriod).values({
-        plantingId,
-        locationId: current.locationId,
-        sequence: entries.length,
-        inLocationSince: recordedOn,
-        endedOn: null,
-        startKind: "recorded",
-        sourceGardenEntryId: null,
-      });
-    } else if (
-      finalEntry &&
-      current.status === "finished" &&
-      current.finishedOn
-    ) {
-      await tx
-        .update(plantingLocationPeriod)
-        .set({ endedOn: current.finishedOn })
-        .where(
-          and(
-            eq(plantingLocationPeriod.plantingId, plantingId),
-            isNull(plantingLocationPeriod.endedOn),
-          ),
-        );
-    }
-  });
-
-/**
- * One-off, idempotent rollout maintenance. It derives historical periods only
- * from structural moves, then records the current location when history is
- * otherwise unknown; it never infers a period from a generic observation.
- */
-export const backfillGardenLocationPeriods = async (
-  db: Database,
-  options: { rolloutDate?: string } = {},
-) => {
-  const rolloutDate = options.rolloutDate ?? householdLocalDate();
-  const rows = await unwrapDb(db).query.planting.findMany({
-    where: notDeleted(planting),
-    columns: { id: true },
-  });
-  for (const row of rows) {
-    await backfillKnownLocationPeriodsForPlanting(
-      db,
-      parseEntityId("planting", row.id),
-      rolloutDate,
-    );
-  }
-};
-
-/**
  * A planting journal always includes its direct entries. Whole-location
  * entries join only when their observation date falls in a confirmed period.
  */
@@ -1282,6 +1138,51 @@ const applyLocationPeriodCorrections = async (
   }
 };
 
+const bootstrapConfirmedLocationPeriod = async (
+  tx: DrizzleTransaction,
+  plantingId: PlantingId,
+  plantingState: Awaited<ReturnType<typeof plantingRow>>,
+  submitted: SubmittedLocationPeriod[],
+) => {
+  if (
+    plantingState.status === "planned" ||
+    !plantingState.locationId ||
+    submitted.length !== 1 ||
+    submitted[0]?.sequence !== 0
+  ) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Confirm one current-location period for a growing or finished planting.",
+    );
+  }
+  const period = submitted[0];
+  if (!period) return;
+  const latestMove = await unwrapDb(tx).query.gardenEntry.findFirst({
+    where: and(
+      eq(gardenEntry.plantingId, plantingId),
+      eq(gardenEntry.kind, "move"),
+      notDeleted(gardenEntry),
+    ),
+    columns: { observedOn: true },
+    orderBy: [desc(gardenEntry.observedOn), desc(gardenEntry.createdAt)],
+  });
+  if (latestMove && period.inLocationSince < latestMove.observedOn) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "The confirmed current location cannot begin before its latest recorded move.",
+    );
+  }
+  await tx.insert(plantingLocationPeriod).values({
+    plantingId,
+    locationId: plantingState.locationId,
+    sequence: 0,
+    inLocationSince: period.inLocationSince,
+    endedOn: period.endedOn ?? null,
+    startKind: "actual",
+    sourceGardenEntryId: null,
+  });
+};
+
 export const correctLocationDates = async (
   db: Database,
   input: z.infer<typeof gardenCorrectLocationDatesInput>,
@@ -1302,9 +1203,18 @@ export const correctLocationDates = async (
       },
       orderBy: [asc(plantingLocationPeriod.sequence)],
     });
-    assertLocationCorrectionMatches(existing, input.periods);
     assertLocationPeriodDates(plantingState.status, input.periods);
-    await applyLocationPeriodCorrections(tx, existing, input.periods);
+    if (existing.length === 0) {
+      await bootstrapConfirmedLocationPeriod(
+        tx,
+        plantingId,
+        plantingState,
+        input.periods,
+      );
+    } else {
+      assertLocationCorrectionMatches(existing, input.periods);
+      await applyLocationPeriodCorrections(tx, existing, input.periods);
+    }
     const finalPeriod = input.periods.at(-1);
     if (
       plantingState.status === "finished" &&

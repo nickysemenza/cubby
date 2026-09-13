@@ -49,20 +49,17 @@ tray dates or maturity forecasts from planting windows.
 
 ## Schema rollout
 
-The database additions are Planting, GardenEntry, GardenEntryImage,
-PlantingLocationPeriod, and nullable garden fields on existing entities. Follow
-Cubby's existing Drizzle schema-push and production preflight process before
-deploying code that reads those columns.
+This journal update adds the internal PlantingLocationPeriod table to the
+existing Garden schema. Follow Cubby's Drizzle schema-push and production
+preflight process before deploying code that reads it.
 
-After the additive schema is deployed, first preview the one-off backfill with
-`pnpm --dir apps/web db:backfill-garden-location-periods -- --target <environment> --rollout-date YYYY-MM-DD`.
-After verifying the target and count, add `--execute` to that exact command.
-The script uses `DATABASE_URL` for its connection; `--target` labels the run.
-It is idempotent and derives historical rows only from structural move entries. A
-planting with no structural history receives a `recorded` period at the rollout
-date for its current Location (or its known finish date when finished), so a
-person can correct it later without inventing an earlier date. Do not infer a
-period from a harvest or ordinary observation alone. Do not remove or rename
-existing columns, and preserve Location's product/type constraint. Validate the
-schema on the target database after the additive change; local tests do not
-apply production DDL.
+Existing plantings can remain without confirmed location history. Open a
+planting's Location history and confirm **In this location since** to create its
+first period directly. Matching older bed photos then appear automatically.
+No backfill script is needed; entries and photos are never duplicated. Planned
+plantings do not establish presence, and unknown earlier dates stay unknown.
+
+Do not infer a period from a harvest or ordinary observation alone. Preserve
+existing columns and Location's product/type constraint. Validate the schema on
+the target database after the additive change; local tests do not apply
+production DDL.

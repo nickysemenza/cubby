@@ -1,4 +1,5 @@
 import { plantingShortcode } from "@cubby/schemas/identifiers";
+import type { PlantingOut } from "@cubby/schemas/planting";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
@@ -11,6 +12,11 @@ import { getErrorMessage } from "~/lib/error-utils";
 
 import { GardenField, GardenFormActions } from "./garden-fields";
 import { garden } from "./garden.functions";
+
+const historyOperations = {
+  locationHistory: garden.locationHistory,
+  correctLocationDates: garden.correctLocationDates,
+};
 
 type Periods = Awaited<
   ReturnType<typeof garden.locationHistory.call>
@@ -39,15 +45,17 @@ function LocationDatesForm({
   periods,
   onSaved,
   onCancel,
+  correctLocationDates,
 }: {
   plantingId: string;
   periods: Periods;
   onSaved: () => void;
   onCancel: () => void;
+  correctLocationDates: typeof garden.correctLocationDates;
 }) {
   const [dates, setDates] = useState(periods);
   const save = useMutation({
-    ...garden.correctLocationDates.mutationOptions(),
+    ...correctLocationDates.mutationOptions(),
     meta: { invalidates: ripple.garden },
     onSuccess: onSaved,
   });
@@ -57,7 +65,7 @@ function LocationDatesForm({
         event.preventDefault();
         if (save.isPending) return;
         save.mutate(
-          garden.correctLocationDates.definition.input.parse({
+          correctLocationDates.definition.input.parse({
             plantingId,
             periods: dates.map(({ sequence, inLocationSince, endedOn }) => ({
               sequence,
@@ -128,12 +136,17 @@ function LocationDatesForm({
 }
 
 export function PlantingLocationHistory({
-  plantingId,
+  planting,
+  locationName,
+  operations = historyOperations,
 }: {
-  plantingId: string;
+  planting: PlantingOut;
+  locationName?: string;
+  operations?: typeof historyOperations;
 }) {
+  const plantingId = planting.id;
   const history = useQuery(
-    garden.locationHistory.queryOptions({
+    operations.locationHistory.queryOptions({
       plantingId: plantingShortcode.parse(plantingId),
     }),
   );
@@ -150,12 +163,33 @@ export function PlantingLocationHistory({
         </Button>
       </Stack>
     );
+  const canConfirm =
+    planting.status !== "planned" && planting.locationId !== null;
+  const initialPeriods: Periods =
+    history.data.periods.length > 0
+      ? history.data.periods
+      : canConfirm && planting.locationId
+        ? [
+            {
+              sequence: 0,
+              locationId: planting.locationId,
+              locationName: locationName ?? "Current location",
+              inLocationSince: "",
+              endedOn:
+                planting.status === "finished"
+                  ? (planting.finishedOn ?? "")
+                  : null,
+              startKind: "actual",
+            },
+          ]
+        : [];
   return (
     <Stack gap="md">
       {history.data.periods.length === 0 && (
         <p className="text-sm text-muted-foreground">
-          No confirmed location dates yet. Starting a planting records its first
-          location.
+          {canConfirm
+            ? "Earlier presence is unknown. Confirm when this planting was here to include matching bed photos."
+            : "No confirmed location dates yet. Starting a planting records its first location."}
         </p>
       )}
       {history.data.periods.map((period) => (
@@ -180,23 +214,30 @@ export function PlantingLocationHistory({
           )}
         </Stack>
       ))}
-      {history.data.periods.length > 0 && (
+      {initialPeriods.length > 0 && (
         <Row>
           <Button variant="outline" onClick={() => setEditing(true)}>
-            Correct location dates
+            {history.data.periods.length > 0
+              ? "Correct location dates"
+              : "Confirm location dates"}
           </Button>
         </Row>
       )}
       {editing && (
         <ResponsiveDialog
           open
-          title="Correct location dates"
+          title={
+            history.data.periods.length > 0
+              ? "Correct location dates"
+              : "Confirm location dates"
+          }
           size="lg"
           onOpenChange={setEditing}
         >
           <LocationDatesForm
             plantingId={plantingId}
-            periods={history.data.periods}
+            periods={initialPeriods}
+            correctLocationDates={operations.correctLocationDates}
             onCancel={() => setEditing(false)}
             onSaved={() => {
               setEditing(false);

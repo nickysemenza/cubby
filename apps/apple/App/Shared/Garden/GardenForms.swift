@@ -970,16 +970,30 @@ private struct GardenLocationHistoryView: View {
     let planting: GardenPlanting
     @State private var history: GardenLocationHistoryModel
     @State private var revised: [GardenLocationPeriod] = []
+    @State private var initialLocationDate = Date.now
+    @State private var initialLastDay = Date.now
     @Environment(\.dismiss) private var dismiss
 
     init(service: any GardenService, planting: GardenPlanting) {
         self.service = service; self.planting = planting
         _history = State(initialValue: GardenLocationHistoryModel(service: service, planting: planting))
+        _initialLastDay = State(initialValue: planting.finishedAt ?? .now)
     }
 
     var body: some View {
         Form {
-            if let error = history.error { Text(error).foregroundStyle(PorcelainTokens.destructive) }
+            if let error = history.error {
+                ContentUnavailableView(
+                    "Couldn't load location history", systemImage: "exclamationmark.triangle",
+                    description: Text(error)
+                ) {
+                    Button("Retry") {
+                        Task {
+                            await history.load(); revised = history.periods
+                        }
+                    }
+                }
+            }
             ForEach($revised) { $period in
                 Section(period.location.name) {
                     DatePicker(
@@ -1007,6 +1021,26 @@ private struct GardenLocationHistoryView: View {
                 }
             }
             if history.isLoading && revised.isEmpty { ProgressView() }
+            if revised.isEmpty, !history.isLoading, history.error == nil, planting.status != .planned,
+                let location = planting.location
+            {
+                Section("Add location history") {
+                    Text(
+                        "No location date has been recorded for this planting. This does not create a sowing or transplant date."
+                    )
+                    .font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    LabeledContent("Location", value: location.name)
+                    DatePicker(
+                        "In this location since", selection: $initialLocationDate, displayedComponents: .date)
+                    if planting.status == .finished {
+                        DatePicker(
+                            "Last day in this location", selection: $initialLastDay,
+                            displayedComponents: .date)
+                    }
+                    Button("Record this date") { Task { await saveInitialPeriod(location: location) } }
+                        .disabled(history.isSaving)
+                }
+            }
         }
         .navigationTitle("Location history")
         .task {
@@ -1026,6 +1060,13 @@ private struct GardenLocationHistoryView: View {
                 .disabled(history.isSaving || revised.isEmpty)
             }
         }
+    }
+
+    private func saveInitialPeriod(location: GardenOption) async {
+        let first = GardenLocationPeriod(
+            sequence: 0, location: location, inLocationSince: initialLocationDate,
+            endedOn: planting.status == .finished ? initialLastDay : nil, startKind: .actual)
+        if await history.save([first]) { revised = history.periods; dismiss() }
     }
 
     private func reviseBoundary(sequence: Int, date: Date, start: Bool) {

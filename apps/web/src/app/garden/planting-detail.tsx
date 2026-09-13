@@ -314,7 +314,12 @@ export function PlantingDetail({
             title: "Location history",
             icon: History,
             placement: "supporting",
-            content: <PlantingLocationHistory plantingId={planting.id} />,
+            content: (
+              <PlantingLocationHistory
+                planting={planting}
+                locationName={location.data?.name}
+              />
+            ),
           },
           {
             id: "planting-guide",
