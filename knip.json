@@ -5,6 +5,7 @@
     // `scripts/**` glob so knip still reports a genuinely orphaned script.
     ".": {
       "entry": [
+        "scripts/apple.ts!",
         "scripts/check-soft-delete-filters.ts!",
         "scripts/check-unsafe-identifiers.unit.test.ts!",
         "scripts/check-security-audit.ts!",
@@ -15,10 +16,11 @@
       ],
       "project": ["scripts/**/*.ts!"],
       "ignoreDependencies": ["vitest", "vite"],
-      // Used by ci-scope.ts's `apple` push check to detect a machine without
-      // Xcode installed (so it can skip, not fail); a macOS-only system tool,
-      // never an npm dependency.
-      "ignoreBinaries": ["xcode-select"]
+      // xcode-select: ci-scope.ts's `apple` push check uses it to detect a
+      // machine without Xcode (so it can skip, not fail). pkill: apple.ts
+      // quits the running Mac app before relaunching. Both are macOS system
+      // tools, never npm dependencies.
+      "ignoreBinaries": ["xcode-select", "pkill"]
     },
     "apps/web": {
       "entry": [

@@ -42,6 +42,21 @@ owned by W2 (this package, the app targets, and the CLI harness).
 
 All are committed; hand-editing any of them fails the relevant `--check` gate.
 
+## Running
+
+`pnpm apple <command>` from the repo root ([scripts/apple.ts](../../scripts/apple.ts)) runs the
+build order above lazily (`build-rust.sh` is stamp-cached; xcodegen only when the project is
+missing) and then:
+
+- `pnpm apple cli <args…>` — incremental `swift build` of the `cubby` CLI and run it
+- `pnpm apple mac` — build `Cubby-macOS` into `apps/apple/DerivedData` and `open` the `.app`
+- `pnpm apple ios [--device <name>]` — build `Cubby-iOS`, install and launch on the paired
+  iPhone via `devicectl` (phone must be unlocked)
+- `pnpm apple sim [--sim <name>]` — same on the booted (or first iPhone) simulator
+- `pnpm apple gen` / `pnpm apple test` — the generators in order / `swift test`
+
+None of these attach a debugger; for breakpoints use the Xcode schemes below.
+
 ## Verification
 
 - `swift build --package-path apps/apple/CubbyKit`
