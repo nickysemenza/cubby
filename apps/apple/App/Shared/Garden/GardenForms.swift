@@ -316,7 +316,7 @@ struct GardenPlantingActionSheet: View {
     private func save() async {
         let saved: Bool
         switch action {
-        case .entry(let planting):
+        case .entry:
             // This path is routed through the dedicated entry editor so it can include photos.
             saved = false
         case .start(let planting):

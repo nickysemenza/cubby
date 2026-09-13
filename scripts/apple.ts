@@ -144,8 +144,12 @@ const xcodebuild = (
     "-derivedDataPath",
     DERIVED,
     // Automatic signing (project.yml) may need to mint a profile for a new
-    // device or a rotated team certificate.
+    // device or a rotated team certificate. -allowProvisioningUpdates alone
+    // refreshes profiles but never registers a device, so a machine that has
+    // never been added to the team (a fresh Mac, an unseen iPhone) fails with
+    // "isn't registered" → "No profiles found"; the second flag adds it.
     "-allowProvisioningUpdates",
+    "-allowProvisioningDeviceRegistration",
     ...(options.verbose ? [] : ["-quiet"]),
     // The index store only feeds Xcode's IDE navigation; a command-line build
     // has no reader for it. Left out of project.yml so GUI builds still index.
