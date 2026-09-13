@@ -28,7 +28,9 @@ Browser verification always follows the current web build. Pre-commit still
 runs `pnpm check`.
 
 A change under `apps/apple/` or `cubby-ffi/` additionally selects the `apple`
-push check: `apps/apple/scripts/build-rust.sh --check`, `xcodegen generate`,
+push check: `node scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI
+shim; a stale committed `cubby_ffi.swift` fails as a dirty tree), `xcodegen
+generate --use-cache`,
 `swift test --package-path apps/apple/CubbyKit`,
 `apps/apple/scripts/check-openapi-drift.sh`, then an `xcodebuild` simulator
 build. It skips itself (with a message, not a failure) when `xcode-select -p`

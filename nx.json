@@ -2,7 +2,7 @@
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "neverConnectToCloud": true,
   "parallel": 2,
-  "maxCacheSize": "2GB",
+  "maxCacheSize": "4GB",
   "tui": {
     "enabled": false
   },

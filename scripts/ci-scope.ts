@@ -391,8 +391,24 @@ const runAppleCheck = () => {
     );
     return;
   }
-  run("apps/apple/scripts/build-rust.sh", ["--check"]);
-  run("xcodegen", ["generate", "--spec", "apps/apple/project.yml"]);
+  // The xcframework + shim come from the Nx cache when the Rust tree is
+  // unchanged; a stale committed shim shows up as a dirty path afterwards.
+  // `requireCommittedCode` has already run, so the tree equals HEAD here and
+  // `status --porcelain` (which also sees an untracked new file, unlike
+  // `diff --exit-code`) judges the pushed revision.
+  run("node", ["scripts/ensure-apple-ffi.ts"]);
+  const shim = "apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift";
+  if (capture("git", ["status", "--porcelain", "--", shim]) !== "") {
+    throw new Error(
+      `${shim} is stale for the current Rust sources; commit the regenerated file.`,
+    );
+  }
+  run("xcodegen", [
+    "generate",
+    "--spec",
+    "apps/apple/project.yml",
+    "--use-cache",
+  ]);
   run("swift", [
     "format",
     "lint",
@@ -404,6 +420,9 @@ const runAppleCheck = () => {
   ]);
   run("swift", ["test", "--package-path", "apps/apple/CubbyKit"]);
   run("apps/apple/scripts/check-openapi-drift.sh", []);
+  // Same DerivedData as `pnpm apple`, so this build is incremental over the
+  // dev loop's instead of a second full compile of CubbyKit. The index store
+  // has no reader in a command-line build.
   run("xcodebuild", [
     "-project",
     "apps/apple/Cubby.xcodeproj",
@@ -411,6 +430,9 @@ const runAppleCheck = () => {
     "Cubby-iOS",
     "-destination",
     "generic/platform=iOS Simulator",
+    "-derivedDataPath",
+    "apps/apple/DerivedData",
+    "COMPILER_INDEX_STORE_ENABLE=NO",
     "build",
   ]);
 };

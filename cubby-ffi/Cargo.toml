@@ -42,16 +42,21 @@ uninlined_format_args = "warn"
 # (`build-rust.sh` default). No `panic = "abort"` here or in `dist` below:
 # UniFFI's generated scaffolding wraps every export in `catch_unwind`, which
 # requires unwinding to turn a Rust panic into a thrown Swift error instead
-# of a hard abort.
+# of a hard abort. Incremental is off for release by cargo default; on, an
+# edit to a path crate (recipebridge, the patched ingredient-parser checkouts)
+# is a partial recompile per target instead of a full one.
 [profile.release]
 strip = "debuginfo"
+incremental = true
 
 # Shipped-binary tuning (`build-rust.sh --profile dist`): LTO + one codegen
 # unit let the linker drop cross-crate dead code, `opt-level = "s"` favors
 # binary size over compile speed. Use this for the xcframework that actually
-# ships, not for every local rebuild.
+# ships, not for every local rebuild. `incremental` would be inherited and
+# cargo does not turn it off under LTO on its own.
 [profile.dist]
 inherits = "release"
 opt-level = "s"
 lto = true
 codegen-units = 1
+incremental = false

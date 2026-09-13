@@ -31,9 +31,7 @@ struct RootSplitView: View {
     }
 }
 
-/// A sidebar row carries the domain line it works in: Capture and Identify both act on House
-/// records, and Browse previews all four lines because it contains all of them. Today and Dev are
-/// the shell itself and get no mark.
+/// A sidebar row carries the domain line it works in; see `SectionDomainMarks`.
 private struct SidebarRow: View {
     let section: AppSection
 
@@ -44,25 +42,9 @@ private struct SidebarRow: View {
                 .frame(width: 18)
             Text(section.title).font(.porcelainBody)
             Spacer(minLength: PorcelainTokens.Space.sm)
-            marks
+            SectionDomainMarks(section: section)
         }
         .frame(minHeight: 28)
-    }
-
-    @ViewBuilder
-    private var marks: some View {
-        switch section {
-        case .capture, .identify:
-            DomainMark(.house, size: 7)
-        case .browse:
-            HStack(spacing: 3) {
-                ForEach(AppDomain.allCases) { domain in
-                    DomainMark(domain, size: 5)
-                }
-            }
-        case .today, .dev:
-            EmptyView()
-        }
     }
 }
 
