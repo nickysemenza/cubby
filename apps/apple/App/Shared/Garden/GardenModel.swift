@@ -40,6 +40,7 @@ final class GardenModel {
             phase = .loaded
         } catch {
             phase = .failed(Self.message(for: error))
+            Diagnostics.report(error, context: "garden.load")
             return
         }
         do {
@@ -50,6 +51,7 @@ final class GardenModel {
             // prevent the user from recording what is actually growing.
             guides = GardenGuidesDocument(schemaVersion: 1, sources: [], guides: [])
             guideError = Self.message(for: error)
+            Diagnostics.report(error, context: "garden.guides")
         }
     }
 
@@ -144,7 +146,10 @@ final class GardenModel {
                 locationID: nil, plantingID: nil, page: reset ? 1 : (entries.count / 50) + 1)
             entries = reset ? page.items : entries + page.items
             entriesHasMore = page.hasMore
-        } catch { entriesError = Self.message(for: error) }
+        } catch {
+            entriesError = Self.message(for: error)
+            Diagnostics.report(error, context: "garden.entries")
+        }
     }
 
     func updateEntry(_ input: EditGardenEntry) async -> Bool {
@@ -163,6 +168,7 @@ final class GardenModel {
             return true
         } catch {
             saveError = Self.message(for: error)
+            Diagnostics.report(error, context: "garden.save")
             return false
         }
     }

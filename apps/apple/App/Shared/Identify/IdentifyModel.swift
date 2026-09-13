@@ -62,6 +62,7 @@ final class IdentifyModel {
         } catch {
             candidates = []
             phase = .failed(message(for: error))
+            Diagnostics.report(error, context: "identify.rank")
         }
     }
 
@@ -113,6 +114,7 @@ final class IdentifyModel {
             phase = .ready(count: count)
         } catch {
             phase = .failed(message(for: error))
+            Diagnostics.report(error, context: "identify.buildIndex")
         }
     }
 

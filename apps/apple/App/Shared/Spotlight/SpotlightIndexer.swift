@@ -47,6 +47,7 @@ actor SpotlightIndexer {
             UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.stampKey(host))
         } catch {
             // Spotlight is a convenience; a failed refresh retries on the next launch.
+            Diagnostics.report(error, context: "spotlight.refresh")
         }
     }
 

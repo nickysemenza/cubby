@@ -72,11 +72,15 @@ type ModuleInfo = {
 };
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts"]);
+// Xcode/SwiftPM build output lives in-tree (`apps/apple/DerivedData`, `.build`) and
+// contains package checkouts with dangling symlinks that `statSync` cannot follow.
 const IGNORED_DIRECTORIES = new Set([
+  ".build",
   ".git",
   ".next",
   ".turbo",
   "coverage",
+  "DerivedData",
   "dist",
   "node_modules",
 ]);

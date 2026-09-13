@@ -1,4 +1,5 @@
 import CubbyKit
+import Sentry
 import SwiftUI
 
 /// Developer utilities: the Rust parser over FFI, a one-tap API check, and the app's own
@@ -9,6 +10,11 @@ struct DevView: View {
     @State private var line = "2 cups flour"
     @State private var apiResult: String?
     @State private var checking = false
+    @State private var sentryResult: String?
+
+    /// A deliberately thrown, locally defined error so a Sentry test event is recognisable as
+    /// one and never mistaken for a real failure.
+    private struct TestError: Error {}
 
     private var parsed: IngredientParser.Parsed { IngredientParser.parse(line) }
 
@@ -112,6 +118,35 @@ struct DevView: View {
                         LabeledRow(label: "Host", value: model.host, mono: true)
                     }
                 }
+
+                VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+                    Eyebrow("Sentry")
+                    Panel(padding: 0, spacing: 0) {
+                        LabeledRow(label: "Enabled", value: SentrySDK.isEnabled ? "Yes" : "No")
+                        PanelDivider()
+                        LabeledRow(
+                            label: "Environment", value: Diagnostics.environment(for: model.baseURL),
+                            mono: true)
+                        PanelDivider()
+                        LabeledRow(label: "Release", value: Diagnostics.release, mono: true)
+                    }
+                    HStack(spacing: PorcelainTokens.Space.sm) {
+                        devButton("Send test event") {
+                            let id = SentrySDK.capture(message: "Cubby test event")
+                            sentryResult = "message \(id)"
+                        }
+                        devButton("Report test error") {
+                            Diagnostics.report(TestError(), context: "dev.testError")
+                            sentryResult = "reported TestError via Diagnostics.report"
+                        }
+                    }
+                    if let sentryResult {
+                        Text(sentryResult)
+                            .font(.porcelainCode)
+                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            .textSelection(.enabled)
+                    }
+                }
             }
             .padding(PorcelainTokens.Space.lg)
             .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
@@ -119,6 +154,17 @@ struct DevView: View {
         }
         .porcelainScreen()
         .navigationTitle("Dev")
+    }
+
+    private func devButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.porcelainTitle)
+                .frame(maxWidth: .infinity, minHeight: PorcelainTokens.touchTarget)
+        }
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.roundedRectangle(radius: PorcelainTokens.radiusControl))
+        .tint(PorcelainTokens.cobalt)
     }
 
     private func check() async {

@@ -127,7 +127,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - **Storage:** Cloudflare R2 (S3-compatible) for images
 - **Charts:** Nivo (bar, pie, treemap, sunburst, calendar, line) + d3-force, d3-hierarchy
 - **Tooling:** Oxlint + Oxfmt (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PostgreSQL + IntegreSQL (authoritative contracts) · PGlite (explicit developer experiments)
-- **Observability:** OpenTelemetry → Jaeger (dev only) · Sentry
+- **Observability:** OpenTelemetry → Jaeger (dev only) · Sentry (the Apple app reports to its own `cubby-apple` project)
 
 ## 📦 Monorepo Layout
 

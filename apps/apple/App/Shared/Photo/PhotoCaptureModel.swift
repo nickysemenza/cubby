@@ -104,10 +104,13 @@ final class PhotoCaptureModel {
         } catch let failure as PhotoUploader.Failure {
             uploadCheckpoint = failure.checkpoint
             phase = .failed(failure.underlying.localizedDescription)
+            Diagnostics.report(failure.underlying, context: "photo.upload")
         } catch let error as CubbyAPIError {
             phase = .failed(error.detail?.message ?? "HTTP \(error.status)")
+            Diagnostics.report(error, context: "photo.upload")
         } catch {
             phase = .failed(String(describing: error))
+            Diagnostics.report(error, context: "photo.upload")
         }
     }
 

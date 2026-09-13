@@ -52,6 +52,7 @@ final class GardenJournalModel {
             failedPage = page
             failedReplacing = replacing
             self.error = error.localizedDescription
+            Diagnostics.report(error, context: "garden.journal.load")
         }
     }
 }
@@ -77,6 +78,7 @@ final class GardenLocationHistoryModel {
         defer { isLoading = false }
         do { periods = try await service.gardenLocationHistory(plantingID: planting.id) } catch {
             self.error = error.localizedDescription
+            Diagnostics.report(error, context: "garden.locationHistory.load")
         }
     }
 
@@ -90,6 +92,7 @@ final class GardenLocationHistoryModel {
             return true
         } catch {
             self.error = error.localizedDescription
+            Diagnostics.report(error, context: "garden.locationHistory.save")
             return false
         }
     }

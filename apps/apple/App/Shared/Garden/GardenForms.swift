@@ -224,8 +224,13 @@ struct GardenEntrySheet: View {
             uploadedIDs += failure.completedIDs
             uploadedImageCount += failure.completedCount
             uploadError = failure.underlying.localizedDescription
+            Diagnostics.report(failure.underlying, context: "garden.entry.upload")
             return
-        } catch { uploadError = error.localizedDescription; return }
+        } catch {
+            uploadError = error.localizedDescription
+            Diagnostics.report(error, context: "garden.entry.upload")
+            return
+        }
         let saved = await model.record(
             RecordGardenEntry(
                 locationID: locationID, plantingID: plantingID.nilIfEmpty, kind: kind,
@@ -892,8 +897,13 @@ struct GardenEntryCorrectionSheet: View {
             uploadedIDs += failure.completedIDs
             uploadedImageCount += failure.completedCount
             uploadError = failure.underlying.localizedDescription
+            Diagnostics.report(failure.underlying, context: "garden.entry.edit.upload")
             return
-        } catch { uploadError = error.localizedDescription; return }
+        } catch {
+            uploadError = error.localizedDescription
+            Diagnostics.report(error, context: "garden.entry.edit.upload")
+            return
+        }
         if await model.updateEntry(
             EditGardenEntry(
                 id: entry.id, locationID: locationID, plantingID: plantingID.nilIfEmpty, kind: entry.kind,

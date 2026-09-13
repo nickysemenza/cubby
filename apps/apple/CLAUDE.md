@@ -55,6 +55,10 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   edit the YAML, never the plist (a regenerate silently reverts hand edits, including URL schemes).
 - Presigned image PUTs (`PresignedUpload`) send only `Content-Type` and no auth header; every
   other request goes through `CubbyAuthMiddleware`.
+- An error that reaches the UI also goes through `Diagnostics.report(error, context:)` (one line
+  beside the existing string assignment; skip catches that already funnel into
+  `AppModel.handle`, which reports once). Sentry is an app-target dependency only — CubbyKit
+  never imports it.
 
 ## Language and style
 
