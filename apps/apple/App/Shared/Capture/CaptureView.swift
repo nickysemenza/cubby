@@ -32,6 +32,9 @@ struct CaptureView: View {
             applyPendingCode()
         }
         .onChange(of: model.navigator.pendingCaptureCode) { applyPendingCode() }
+        // "Stock it at a location" lands here before a location exists; the code waits for the
+        // pick, then seeds the field.
+        .onChange(of: capture?.location?.id) { applyPendingCode() }
         .sheet(isPresented: $pickingLocation) {
             if let capture { LocationPickerSheet(capture: capture) }
         }

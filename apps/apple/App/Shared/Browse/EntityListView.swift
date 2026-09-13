@@ -79,7 +79,11 @@ struct EntityListView: View {
                     )
                     .listRowBackground(PorcelainTokens.canvas)
                     .listRowSeparator(.hidden)
-                    .popoverTip(pullToRefreshTip)
+                // Inline so it cannot outlive this screen the way a popover over a pushed
+                // detail would.
+                TipView(pullToRefreshTip)
+                    .listRowBackground(PorcelainTokens.canvas)
+                    .listRowSeparator(.hidden)
             }
             ForEach(loadedRows) { row in
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {

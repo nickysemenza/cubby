@@ -54,10 +54,12 @@ struct TodayContent: View {
                 tasksSection
                 mealsSection
                 problemsSection
+                // Inline, not a popover: TabView keeps this view alive, and a popover tip
+                // presented from here stays on screen over the other tabs.
+                #if os(iOS)
+                    TipView(quickActionsTip)
+                #endif
                 shortcutsSection
-                    #if os(iOS)
-                        .popoverTip(quickActionsTip)
-                    #endif
             }
             .padding(PorcelainTokens.Space.lg)
             .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)

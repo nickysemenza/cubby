@@ -96,7 +96,6 @@ struct SearchContent: View {
                     } label: {
                         Label("Scan a code", systemImage: "barcode.viewfinder")
                     }
-                    .popoverTip(scanLabelTip)
                 }
             }
             .sheet(isPresented: $scanning) {
@@ -145,12 +144,19 @@ struct SearchContent: View {
     /// The un-searched state: recents alone don't need a big empty view (they show as
     /// suggestions), so this is mostly an invitation to scan instead of type.
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label("Search Cubby", systemImage: "magnifyingglass")
-        } description: {
-            Text("Find a product, location, recipe, or anything else.")
-        } actions: {
-            Button("Scan a code") { scanning = true }
+        VStack(spacing: 0) {
+            // Inline rather than a popover on the toolbar button: a popover here would stay up
+            // over a pushed detail screen.
+            TipView(scanLabelTip)
+                .padding(.horizontal, PorcelainTokens.Space.lg)
+                .padding(.top, PorcelainTokens.Space.md)
+            ContentUnavailableView {
+                Label("Search Cubby", systemImage: "magnifyingglass")
+            } description: {
+                Text("Find a product, location, recipe, or anything else.")
+            } actions: {
+                Button("Scan a code") { scanning = true }
+            }
         }
     }
 
