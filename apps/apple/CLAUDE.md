@@ -119,6 +119,14 @@ generated shape.
   `runAppleCheck` only runs from the pre-push gate when `apps/apple/` or
   `cubby-ffi/` changed, and from `pnpm verify:local` on any high-risk or full run.
 
+### Universal links
+
+The AASA lives at `https://cubby.nickysemenza.com/.well-known/apple-app-site-association`
+(served by apps/web). Apple's CDN caches it (up to ~24h) and the app fetches it at install —
+reinstall the app to refetch after a change. For a dev device, add
+`applinks:cubby.nickysemenza.com?mode=developer` to the entitlement and enable Developer Mode.
+Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemenza.com/LOC-XXXX`.
+
 ### Debugging on device
 
 Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white screen on

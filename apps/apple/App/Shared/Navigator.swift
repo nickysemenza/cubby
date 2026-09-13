@@ -35,6 +35,9 @@ final class Navigator {
         case .today:
             section = .today
             paths[.today] = []
+        case .search:
+            section = .search
+            paths[.search] = []
         }
     }
 

@@ -58,6 +58,7 @@ struct BrowseRootView: View {
         .task(id: model.host) {
             await counts.load(client: model.client)
         }
+        .refreshControl { await counts.load(client: model.client) }
     }
 
     @ViewBuilder

@@ -12,6 +12,7 @@ struct SectionView: View {
             case .today: TodayView()
             case .capture: CaptureView()
             case .browse: BrowseRootView()
+            case .search: SearchView()
             case .identify: IdentifyView()
             case .dev: DevView()
             }

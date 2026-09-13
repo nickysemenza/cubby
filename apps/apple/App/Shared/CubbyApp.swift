@@ -33,6 +33,11 @@ struct CubbyApp: App {
                         model.navigator.open(link)
                     }
                 }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL, let link = CubbyLink(url: url) {
+                        model.navigator.open(link)
+                    }
+                }
         }
         #if os(macOS)
             Settings {

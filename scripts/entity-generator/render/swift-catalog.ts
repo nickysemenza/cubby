@@ -6,6 +6,7 @@ import {
   SHORTCODE_BODY_LENGTH,
   SHORTCODE_CHARS,
 } from "../../../packages/shared/src/shortcode-alphabet.ts";
+import { LEGACY_SHORTCODE_PREFIX } from "../../../packages/shared/src/generated/shortcode-registry.gen.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import {
@@ -256,6 +257,19 @@ export const renderSwiftEntityCatalog = (
     "EntityFilterKind",
     FILTER_KINDS,
   );
+  // Sorted keys for a deterministic diff regardless of source object order.
+  const legacyEntries = Object.entries(LEGACY_SHORTCODE_PREFIX).sort(
+    ([a], [b]) => a.localeCompare(b),
+  );
+  const legacyShortcodePrefixesLiteral =
+    legacyEntries.length === 0
+      ? "[:]"
+      : `[\n${legacyEntries
+          .map(
+            ([prefix, type]) =>
+              `    ${swiftString(prefix)}: .${swiftCaseName(type)},`,
+          )
+          .join("\n")}\n  ]`;
   // One static per entity rather than a single ~900-line array literal:
   // Release/WMO spent ~650 s inside the SIL optimizer's COWArrayOpt pass
   // (ColdBlockInfo::analyze) on the one-time initializer of `all` when the
@@ -330,6 +344,11 @@ export const renderSwiftEntityCatalog = (
     "public enum EntityCatalog {\n" +
     `  public static let shortcodeAlphabet: String = "${SHORTCODE_CHARS}"\n` +
     `  public static let shortcodeBodyLength = ${SHORTCODE_BODY_LENGTH}\n\n` +
+    "  /// Single-letter prefixes printed on labels before the 2026-07 cutover.\n" +
+    "  /// INBOUND ONLY: nothing emits these; `Shortcode.parse` rewrites a hit to\n" +
+    "  /// its entity's canonical prefix. Mirrors `LEGACY_SHORTCODE_PREFIX` in\n" +
+    "  /// `packages/shared/src/generated/shortcode-registry.gen.ts`.\n" +
+    `  public static let legacyShortcodePrefixes: [String: EntityKey] = ${legacyShortcodePrefixesLiteral}\n\n` +
     `${descriptors}\n\n` +
     `  public static let all: [EntityDescriptor] = [\n${allEntries}\n  ]\n\n` +
     "  private static let byKey: [EntityKey: EntityDescriptor] = Dictionary(\n" +

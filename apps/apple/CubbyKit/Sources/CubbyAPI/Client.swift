@@ -5947,6 +5947,92 @@ package struct Client: APIProtocol {
             }
         )
     }
+    /// - Remark: HTTP `POST /api/v1/product/findOrCreateByCode`.
+    /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByCode/post(product.findOrCreateByCode)`.
+    package func product_findOrCreateByCode(_ input: Operations.Product_findOrCreateByCode.Input) async throws -> Operations.Product_findOrCreateByCode.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.Product_findOrCreateByCode.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/api/v1/product/findOrCreateByCode",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .post
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                let body: OpenAPIRuntime.HTTPBody?
+                switch input.body {
+                case .none:
+                    body = nil
+                case let .json(value):
+                    body = try converter.setOptionalRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
+                }
+                return (request, body)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.Product_findOrCreateByCode.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ProductFindOrCreateByUPCOut.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                default:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.Product_findOrCreateByCode.Output.Default.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.ApiError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .`default`(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                }
+            }
+        )
+    }
     /// - Remark: HTTP `POST /api/v1/product/findOrCreateByUPC`.
     /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByUPC/post(product.findOrCreateByUPC)`.
     package func product_findOrCreateByUPC(_ input: Operations.Product_findOrCreateByUPC.Input) async throws -> Operations.Product_findOrCreateByUPC.Output {

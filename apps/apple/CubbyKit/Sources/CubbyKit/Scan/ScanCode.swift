@@ -72,12 +72,16 @@ extension ScanCode {
 
 /// Cubby shortcodes: `<PREFIX>-<4 chars>` over a 31-character alphabet with the OCR-confusable
 /// characters removed. Prefixes come from the generated entity catalog, never a hand-kept list.
+/// Also accepts, inbound only, the single-letter prefixes printed on labels before the 2026-07
+/// cutover (`EntityCatalog.legacyShortcodePrefixes`) — a hit is rewritten to its entity's
+/// canonical prefix, mirroring `parseShortcode` in `packages/shared/src/shortcode.ts`.
 public enum Shortcode {
     public static let alphabet = EntityCatalog.shortcodeAlphabet
 
     public struct Parsed: Sendable, Hashable {
         public let key: EntityKey
         public let singular: String
+        /// Always the canonical prefix + body, even when the scanned text used a legacy prefix.
         public let code: String
     }
 
@@ -90,10 +94,16 @@ public enum Shortcode {
         else {
             return nil
         }
-        guard let descriptor = EntityCatalog.all.first(where: { $0.shortcodePrefix == prefix }) else {
-            return nil
+        if let descriptor = EntityCatalog.all.first(where: { $0.shortcodePrefix == prefix }) {
+            return Parsed(key: descriptor.key, singular: descriptor.singular, code: prefix + body)
         }
-        return Parsed(key: descriptor.key, singular: descriptor.singular, code: prefix + body)
+        // Legacy single-letter prefix: every entity in this table has a canonical
+        // `shortcodePrefix` by construction (the generator sources both from the
+        // same `ShortcodeType` registry), so the rewrite below always succeeds.
+        guard let key = EntityCatalog.legacyShortcodePrefixes[prefix] else { return nil }
+        let descriptor = EntityCatalog[key]
+        guard let canonicalPrefix = descriptor.shortcodePrefix else { return nil }
+        return Parsed(key: descriptor.key, singular: descriptor.singular, code: canonicalPrefix + body)
     }
 
     /// A raw shortcode, or the last path segment of a printed label URL.

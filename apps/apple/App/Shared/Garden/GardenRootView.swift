@@ -163,7 +163,7 @@ struct GardenRootView: View {
                 .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
                 .frame(maxWidth: .infinity)
             }
-            .refreshable { await garden.refresh() }
+            .refreshControl { await garden.refresh() }
         }
     }
 

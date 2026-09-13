@@ -8,7 +8,12 @@ struct RootTabsView: View {
         @Bindable var navigator = model.navigator
         TabView(selection: $navigator.section) {
             ForEach(AppSection.allCases) { section in
-                Tab(section.title, systemImage: section.symbol, value: section) {
+                // The search role pulls the tab out of the bar into its own pill (iOS 26) and
+                // hands its field to the section's `.searchable`.
+                Tab(
+                    section.title, systemImage: section.symbol, value: section,
+                    role: section == .search ? .search : nil
+                ) {
                     NavigationStack(path: navigator.path(for: section)) {
                         SectionView(section: section)
                     }

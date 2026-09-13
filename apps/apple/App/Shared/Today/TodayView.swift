@@ -38,7 +38,7 @@ struct TodayContent: View {
     let tasks: TodaySectionState<[TodayTask]>
     let meals: TodaySectionState<[TodayMeal]>
     let problems: TodaySectionState<TodayProblemCounts>
-    let onRefresh: () async -> Void
+    let onRefresh: @Sendable () async -> Void
 
     @Environment(\.sectionSelection) private var sectionSelection
     @Environment(AppModel.self) private var model
@@ -57,7 +57,7 @@ struct TodayContent: View {
             .frame(maxWidth: .infinity)
         }
         .porcelainScreen()
-        .refreshable { await onRefresh() }
+        .refreshControl { await onRefresh() }
     }
 
     // MARK: Tasks

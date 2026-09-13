@@ -23,6 +23,7 @@ struct ScopePickerSheet: View {
         }
         .listStyle(.plain)
         .porcelainScreen()
+        .refreshControl { await session.loadTree() }
         .overlay {
             if candidates.isEmpty {
                 ContentUnavailableView(

@@ -35,6 +35,7 @@ struct BinView: View {
         }
         .listStyle(.plain)
         .porcelainScreen()
+        .refreshControl { await session.reload() }
         .sheet(isPresented: $showingStrays) {
             BinStraysSheet(session: session)
         }

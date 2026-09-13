@@ -18,7 +18,7 @@ struct EntityListView: View {
             .porcelainScreen()
             .navigationTitle(descriptor.plural)
             .task(id: appModel.host) { await setup() }
-            .refreshable { await reload() }
+            .refreshControl { await reload() }
     }
 
     @ViewBuilder

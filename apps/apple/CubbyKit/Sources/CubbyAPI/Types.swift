@@ -195,6 +195,9 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/problems/getCounts`.
     /// - Remark: Generated from `#/paths//api/v1/problems/getCounts/get(problems.getCounts)`.
     func problems_getCounts(_ input: Operations.Problems_getCounts.Input) async throws -> Operations.Problems_getCounts.Output
+    /// - Remark: HTTP `POST /api/v1/product/findOrCreateByCode`.
+    /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByCode/post(product.findOrCreateByCode)`.
+    func product_findOrCreateByCode(_ input: Operations.Product_findOrCreateByCode.Input) async throws -> Operations.Product_findOrCreateByCode.Output
     /// - Remark: HTTP `POST /api/v1/product/findOrCreateByUPC`.
     /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByUPC/post(product.findOrCreateByUPC)`.
     func product_findOrCreateByUPC(_ input: Operations.Product_findOrCreateByUPC.Input) async throws -> Operations.Product_findOrCreateByUPC.Output
@@ -863,6 +866,17 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//api/v1/problems/getCounts/get(problems.getCounts)`.
     package func problems_getCounts(headers: Operations.Problems_getCounts.Input.Headers = .init()) async throws -> Operations.Problems_getCounts.Output {
         try await problems_getCounts(Operations.Problems_getCounts.Input(headers: headers))
+    }
+    /// - Remark: HTTP `POST /api/v1/product/findOrCreateByCode`.
+    /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByCode/post(product.findOrCreateByCode)`.
+    package func product_findOrCreateByCode(
+        headers: Operations.Product_findOrCreateByCode.Input.Headers = .init(),
+        body: Operations.Product_findOrCreateByCode.Input.Body? = nil
+    ) async throws -> Operations.Product_findOrCreateByCode.Output {
+        try await product_findOrCreateByCode(Operations.Product_findOrCreateByCode.Input(
+            headers: headers,
+            body: body
+        ))
     }
     /// - Remark: HTTP `POST /api/v1/product/findOrCreateByUPC`.
     /// - Remark: Generated from `#/paths//api/v1/product/findOrCreateByUPC/post(product.findOrCreateByUPC)`.

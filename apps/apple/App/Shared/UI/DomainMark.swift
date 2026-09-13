@@ -45,7 +45,7 @@ struct DomainMark: View {
 }
 
 /// The domain line(s) a top-level section works in. Capture and Identify both act on House
-/// records, and Browse previews all four lines because it contains all of them. Today and Dev
+/// records, and Browse and Search preview all four lines because they span all of them. Today and Dev
 /// are the shell itself and get no mark. The macOS sidebar shows this beside the row; the iOS tab
 /// bar cannot carry a custom view, so there it sits in the section's navigation bar instead.
 struct SectionDomainMarks: View {
@@ -55,7 +55,7 @@ struct SectionDomainMarks: View {
         switch section {
         case .capture, .identify:
             DomainMark(.house, size: 7)
-        case .browse:
+        case .browse, .search:
             HStack(spacing: 3) {
                 ForEach(AppDomain.allCases) { domain in
                     DomainMark(domain, size: 5)

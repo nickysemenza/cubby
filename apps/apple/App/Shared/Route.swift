@@ -14,7 +14,7 @@ enum Route: Hashable {
 
 /// Top-level sections. Tabs on iOS, sidebar rows on macOS.
 enum AppSection: String, CaseIterable, Identifiable {
-    case today, capture, browse, identify, dev
+    case today, capture, browse, search, identify, dev
 
     var id: String { rawValue }
 
@@ -23,6 +23,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .today: "Today"
         case .capture: "Capture"
         case .browse: "Browse"
+        case .search: "Search"
         case .identify: "Identify"
         case .dev: "Dev"
         }
@@ -33,6 +34,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .today: "sun.horizon"
         case .capture: "barcode.viewfinder"
         case .browse: "square.grid.2x2"
+        case .search: "magnifyingglass"
         case .identify: "camera.metering.center.weighted"
         case .dev: "wrench.and.screwdriver"
         }

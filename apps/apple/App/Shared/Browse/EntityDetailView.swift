@@ -21,6 +21,7 @@ struct EntityDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
             .task(id: appModel.host) { await setup() }
+            .refreshControl { await model?.load(id: id) }
             .toolbar {
                 // Any entity whose update takes pendingImageIds can take a photo; the cover
                 // choice inside the sheet is product-only.

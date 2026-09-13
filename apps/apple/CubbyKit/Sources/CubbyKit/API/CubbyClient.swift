@@ -54,6 +54,20 @@ public actor CubbyClient {
         }
     }
 
+    /// Find-or-create by a scanned code the way the web `/scan` page does: an ISBN becomes a
+    /// book, a barcode a product. `.product` is already a product and needs no request.
+    public func findOrCreateProduct(code: ScanCode) async throws -> FoundProduct? {
+        let body: Components.Schemas.ProductFindOrCreateByCodeInput
+        switch code {
+        case .barcode(let value): body = .barcode(.init(kind: .barcode, value: value))
+        case .isbn(let value): body = .isbn(.init(kind: .isbn, value: value))
+        case .product: return nil
+        }
+        return try await perform {
+            FoundProduct(try await api.product_findOrCreateByCode(body: .json(body)).ok.body.json)
+        }
+    }
+
     /// The photo backlog: products with no image, newest first. `location` narrows to one bin.
     public func productsMissingImages(
         page: Int = 1,
@@ -86,6 +100,14 @@ public actor CubbyClient {
             let result = try await api.resources_product_list(query: query).ok.body.json
             return ListPage(items: result.items.map { ProductCode($0.id) }, meta: PageMeta(result.meta))
         }
+    }
+
+    /// Existing products carrying `gtin` in any spelling (UPC-A, EAN-13, GTIN-14 — the server
+    /// widens the term). A lookup, never a create: the Search tab shows what is already here.
+    public func products(matchingBarcode gtin: String) async throws -> [EntityRow] {
+        var query = Operations.Resources_product_list.Input.Query(page: 1, pageSize: 5, sort: "name")
+        query.upcFilter = gtin
+        return try await productPage(query).items
     }
 
     // MARK: - Garden

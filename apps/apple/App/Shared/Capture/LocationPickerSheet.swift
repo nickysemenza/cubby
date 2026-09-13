@@ -63,6 +63,7 @@ struct LocationPickerSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
             .task { if capture.locations.isEmpty { await capture.loadLocations() } }
+            .refreshControl { await capture.loadLocations() }
         }
         #if os(macOS)
             .frame(minWidth: 360, minHeight: 420)
