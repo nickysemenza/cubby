@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { EntityInspector, SavedViewChips } from "./EntityManifestGrid";
@@ -116,5 +116,61 @@ describe("EntityInspector native coverage", () => {
   it("renders the section for an entity the app never touches", () => {
     render(<EntityInspector entity="cookbook" count={2} />);
     expect(screen.getByText("Native app")).toBeInTheDocument();
+  });
+});
+
+describe("EntityInspector sorting and edit intents", () => {
+  it("shows Product's declared sort default and a computed sort field", () => {
+    render(<EntityInspector entity="product" count={12} />);
+
+    expect(screen.getByText("Sorting")).toBeInTheDocument();
+    // `createdAt` (the default) also appears in the collapsed contract JSON,
+    // so assert presence rather than uniqueness.
+    expect(screen.getAllByText("createdAt").length).toBeGreaterThan(0);
+    // `expenseTotal` is one of product's `computed` roster entries (no
+    // `model.fields` read projection) in entity-sort.gen.ts; it also appears
+    // in the "Fields" row above, so scope the assertion to "Computed".
+    const computedRow = screen.getByText("Computed").closest("div");
+    if (computedRow === null) throw new Error("Computed row not found");
+    expect(within(computedRow).getByText("expenseTotal")).toBeInTheDocument();
+  });
+
+  it("renders the declared countFilter for the entity that has one", () => {
+    // Only `ingredient` declares a non-null `countFilter` today
+    // (`"recipeIdNull"`, set in 02-ingredient.entity.ts); re-grep
+    // entity-definitions/*.entity.ts if this ever needs to move.
+    render(<EntityInspector entity="ingredient" count={5} />);
+
+    expect(screen.getByText("Count filter")).toBeInTheDocument();
+    expect(screen.getByText("recipeIdNull")).toBeInTheDocument();
+  });
+
+  it("shows a dash for an entity with no declared countFilter", () => {
+    render(<EntityInspector entity="product" count={12} />);
+
+    const countFilterLabel = screen.getByText("Count filter");
+    const row = countFilterLabel.closest("div");
+    expect(row).not.toBeNull();
+    expect(row).toHaveTextContent("—");
+  });
+
+  it("renders an editable entity's create and update intents", () => {
+    render(<EntityInspector entity="product" count={12} />);
+
+    expect(screen.getByText("Edit intents")).toBeInTheDocument();
+    expect(screen.getByText("Create intents")).toBeInTheDocument();
+    expect(screen.getByText("Update intents")).toBeInTheDocument();
+    // "capture" and "full" are both intent names AND per-intent row labels,
+    // so multiple matches are expected.
+    expect(screen.getAllByText("capture").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("full").length).toBeGreaterThan(0);
+  });
+
+  it("shows usda-food has no declared sort roster (hand roster) and is not browser-editable", () => {
+    render(<EntityInspector entity="usda-food" count={0} />);
+
+    expect(screen.getByText("Declared")).toBeInTheDocument();
+    expect(screen.getByText("none (hand roster)")).toBeInTheDocument();
+    expect(screen.getByText("not editable in the browser")).toBeInTheDocument();
   });
 });
