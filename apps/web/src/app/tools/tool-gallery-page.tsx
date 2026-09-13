@@ -171,7 +171,10 @@ export function ToolCard({
         <Image
           src={item.coverImageUrl ?? ""}
           alt={item.productName}
-          displayWidth={500}
+          // 6-column grid: ~270px per card on screens up to 1920px wide. Only an
+          // ultra-wide monitor exceeds 320 (the 640-rung ceiling); accept a
+          // softer tile there rather than fetching 2048 everywhere.
+          displayWidth={320}
           className="absolute inset-0 h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.015]"
           fallback={
             <div className="flex h-full w-full items-center justify-center bg-[var(--domain-house-surface)] text-[var(--domain-house)]">

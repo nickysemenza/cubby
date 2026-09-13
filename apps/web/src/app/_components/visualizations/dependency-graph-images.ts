@@ -22,7 +22,7 @@ export function appendGraphImages(
       "http://www.w3.org/2000/svg",
       "image",
     );
-    image.setAttribute("href", transformedImageUrl(url, 128));
+    image.setAttribute("href", transformedImageUrl(url, 56));
     image.setAttribute("x", String(bounds.x + 16));
     image.setAttribute("y", String(bounds.y + (bounds.height - 56) / 2));
     image.setAttribute("width", "56");

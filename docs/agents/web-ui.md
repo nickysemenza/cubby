@@ -3,7 +3,10 @@
 Use style tokens—never component hardcoded colors. Semantic color additions get
 both `:root` and `@theme inline` mirrors. Use `size-N` icon sizing (inline/nav
 `size-3.5`, card/tile `size-5`) and the `Badge` primitive for categorical chips.
-Every `<Image>` specifies rendered `displayWidth`; prefer image wrappers.
+Every `<Image>` declares `displayWidth` as the box's true maximum rendered CSS
+width (widest breakpoint), never a guess or a rung: the helper fetches 2× and
+snaps up to 128/640/2048, so declaring 400 for a ~225px card fetches the 2048
+rung. Prefer image wrappers.
 
 Use the guarded spacing scale and `Row`, `Stack`, `Grid`, `Section` when the
 layout repeats or encodes a real decision. `gap` is for flex/grid siblings;

@@ -23,6 +23,11 @@ export const SHELF_VIEW_OPTIONS: ViewSwitcherOption<ShelfView>[] = [
 const SHELF_GRID_CLASS =
   "grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6";
 
+// Widest a card gets: the 6-column grid inside the 90rem contained page is
+// ~225px per column. Declaring more than 320 here would snap every shelf photo
+// to the 2048 rung (see transformWidth) instead of 640.
+const SHELF_CARD_PX = 240;
+
 /** A single image-led card: square photo (with graceful fallback) + caption. */
 export function ShelfCard({
   to,
@@ -58,7 +63,7 @@ export function ShelfCard({
           <Image
             src={image ?? ""}
             alt={title}
-            displayWidth={400}
+            displayWidth={SHELF_CARD_PX}
             className="absolute inset-0 h-full w-full object-cover"
             fallback={<EntityIcon entity={entity} colored className="size-6" />}
           />
