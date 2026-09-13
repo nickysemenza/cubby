@@ -16,7 +16,9 @@ export default defineEntity({
   route: { basePath: "inventory" },
   table: "InventoryEntry",
   identifiers: { brand: "InventoryId", shortcode: "INV-", legacy: null },
-  presentation: { titleField: "name" },
+  // Inventory has no name field; `amount` (the quantity on hand) is the
+  // lead value shown for a row — the closest thing to a title it has.
+  presentation: { titleField: "amount" },
   model: {
     fields: [
       {

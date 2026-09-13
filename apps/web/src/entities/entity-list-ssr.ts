@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import { browserEntityDefinition } from "./entities";
+import { browserEntityDefinition, defaultSortFor } from "./entities";
 import { compileEntityListInput, entityListFor } from "./entity-list.functions";
 import type { FilterPatch } from "./filters";
 import type { ListEntity } from "./generated/entity-lists.gen";
@@ -80,7 +80,7 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
 export function entityListDefaultSort<E extends ListEntity>(entity: E) {
   const list = browserEntityDefinition(entity).list;
   return {
-    orderBy: list?.defaultSort ?? "createdAt",
+    orderBy: defaultSortFor(entity),
     direction: list?.defaultSortDirection ?? "desc",
   };
 }

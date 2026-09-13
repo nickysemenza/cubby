@@ -719,6 +719,32 @@ const compiledShortcode = (
   return shortcode;
 };
 
+// `titleField` names a READ PROJECTION key, not a model field key — the two
+// diverge whenever a field renames itself for output (cookbook's `name`
+// field reads out as `book`, so `titleField: "book"` is correct and must
+// stay valid). A field with `readKey: null` is excluded from the read
+// projection entirely and can never be a legal titleField. Skipped when the
+// declaration has no read-projected fields at all (no `model`, or every
+// field is storage-only) — there is then no read projection to validate
+// against, which minimal test-only declarations elsewhere rely on.
+const validateTitleField = (
+  titleField: string,
+  fieldModel: CompiledEntity["fieldModel"],
+  key: string,
+  context: string,
+) => {
+  const readProjectionKeys = new Set(
+    fieldModel.fields
+      .map((field) => field.readKey)
+      .filter((readKey): readKey is string => readKey !== null),
+  );
+  if (readProjectionKeys.size === 0 || readProjectionKeys.has(titleField))
+    return;
+  throw new EntityDeclarationError(
+    `${context}.presentation.titleField "${titleField}" for entity "${key}" must be a read-projection key (a field's readKey, or its key when readKey is unset) of a declared, readable field.`,
+  );
+};
+
 // One compiler pass keeps cross-field capability errors attached to the exact
 // entity declaration rather than losing context across partial validators.
 export const compileEntity = (
@@ -751,6 +777,12 @@ export const compileEntity = (
     delete: declaration.capabilities.operationOwners.delete,
     merge: declaration.capabilities.operationOwners.merge,
   };
+  validateTitleField(
+    declaration.presentation.titleField,
+    fieldModel,
+    key,
+    context,
+  );
   const inspector = {
     singular: declaration.names.singular,
     plural: declaration.names.plural,

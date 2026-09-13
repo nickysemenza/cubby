@@ -479,6 +479,52 @@ describe("typed entity compiler", () => {
     ).toBe("resources");
   });
 
+  it("validates titleField against the read projection, not model field keys", () => {
+    // `readKey` renames a field for output; `titleField` must resolve through
+    // that rename (cookbook's `name` field reads out as `book`, so
+    // `titleField: "book"` is legal) rather than matching a raw model key. A
+    // second, always-readable field keeps the read projection non-empty so
+    // the "no readable fields at all" exemption doesn't mask these cases.
+    const compileWithReadKey = (readKey: string | null) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          presentation: { titleField: "book" },
+          model: {
+            ...model,
+            fields: [
+              { ...model.fields[0], readKey },
+              { key: "other", kind: "text", validation: { read: z.string() } },
+            ],
+          },
+        },
+      ]);
+    expect(compileWithReadKey("book")[0]?.inspector.titleField).toBe("book");
+    expect(() => compileWithReadKey(null)).toThrow(
+      /titleField "book" for entity "alpha" must be a read-projection key/,
+    );
+    expect(() => compileWithReadKey("name")).toThrow(
+      /titleField "book" for entity "alpha" must be a read-projection key/,
+    );
+  });
+
+  it("skips titleField validation when the entity has no readable fields", () => {
+    // A storage-only field set (every field's readKey is null) has no read
+    // projection to validate a titleField against; this must compile rather
+    // than reject a value that can never be satisfied.
+    const entity = compileEntityDeclarations([
+      {
+        ...base,
+        presentation: { titleField: "name" },
+        model: {
+          ...model,
+          fields: [{ ...model.fields[0], readKey: null }],
+        },
+      },
+    ])[0]!;
+    expect(entity.inspector.titleField).toBe("name");
+  });
+
   it("rejects duplicate entity and shortcode identities", () => {
     expect(() => compileEntityDeclarations([base, base])).toThrow(
       "Duplicate entity key alpha",

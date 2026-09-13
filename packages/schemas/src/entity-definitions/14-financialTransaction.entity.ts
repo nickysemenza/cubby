@@ -40,7 +40,9 @@ export default defineEntity({
     shortcode: "FTX-",
     legacy: null,
   },
-  presentation: { titleField: "name" },
+  // Financial transactions have no name field; `merchant` is the
+  // human-identifying label for a transaction row.
+  presentation: { titleField: "merchant" },
   model: {
     fields: [
       {

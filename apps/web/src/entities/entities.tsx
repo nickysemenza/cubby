@@ -4,6 +4,7 @@ import type {
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { entityNames } from "@cubby/schemas/entity-names";
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
   Apple,
@@ -147,6 +148,23 @@ const INK = {
   },
 } satisfies Record<string, EntityColor>;
 
+/**
+ * `usda-food` has no `model.sort` declaration in the entity-definitions
+ * pipeline (it is read-only USDA reference data, not a Cubby entity), so it
+ * has no `generatedEntitySort` entry. Hand-list its sortable columns here
+ * rather than importing `usdaFoodSortableFields` from
+ * `packages/schemas/src/usda.ts` — that module also exports executable Zod
+ * schemas, and importing it would drag validation graphs into this eager
+ * client bundle. Kept in sync with `usdaListInput` in usda.ts by inspection.
+ */
+const usdaFoodSortableFields = [
+  "fdc_id",
+  "description",
+  "data_type",
+  "relevance",
+  "linkedProducts",
+] as const;
+
 const newRouteExtensions = {
   ingredient: { new: "/ingredients/new" },
   inventory: { new: "/inventory/new" },
@@ -176,7 +194,7 @@ const newRouteExtensions = {
  */
 type EntityDefinitionSeed = Pick<
   EntityDefinition,
-  "basePath" | "lucideIcon" | "color" | "routes" | "sortableFields"
+  "basePath" | "lucideIcon" | "color" | "routes"
 >;
 const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
   Object.hasOwn(entityNames, value);
@@ -227,20 +245,10 @@ const entityDefinitions = withEntityNames({
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
     detail: { commonSections: ["history"] },
-    // appearsInRecipes/product are computed (recipe + product counts), sorted
-    // via correlated subqueries in ingredientList (not real columns).
-    sortableFields: [
-      "createdAt",
-      "updatedAt",
-      "name",
-      "appearsInRecipes",
-      "product",
-    ],
     // Ingredient supplies its domain columns explicitly; the shared list hook
     // still appends the default-hidden Created/Updated audit pair.
     list: {
       hasUnitMappings: true,
-      defaultSort: "createdAt",
     },
     // The caller supplies a duplicate group in a deterministic order; the
     // first ingredient starts as keeper, with a deliberate picker override.
@@ -264,34 +272,8 @@ const entityDefinitions = withEntityNames({
     // Note: product renders unit mappings as a custom section (coverage grid +
     // rows table, like ingredient), so unit-mappings is not a common section.
     detail: { commonSections: ["history"] },
-    // `ingredient` and `location` are computed sorts handled explicitly by
-    // productList, not physical product columns.
-    sortableFields: [
-      "createdAt",
-      "updatedAt",
-      "name",
-      "manufacturer",
-      "model",
-      "primaryGtin",
-      "category",
-      "fdc_id",
-      "price",
-      "notes",
-      "location",
-      "ingredient",
-      "expenseTotal",
-      "expenses",
-      "expectedQuantity",
-      "quantityVariance",
-      "purchaseDate",
-      "related:product.projects",
-      "related:product.vendors",
-      "related:product.purchases",
-      "identity_strength",
-    ],
     list: {
       hasUnitMappings: true,
-      defaultSort: "createdAt",
     },
     // The detector supplies duplicate rows in a stable order; the first starts
     // as keeper and the picker remains available for an intentional change.
@@ -330,21 +312,6 @@ const entityDefinitions = withEntityNames({
     // Cost/calorie column IDs sort the canonical estimates' known lower amount
     // via jsonb expressions. `source` (SourceType+SourceData)
     // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
-    sortableFields: [
-      "createdAt",
-      "updatedAt",
-      "name",
-      "cookbook",
-      "costTotal",
-      "caloriesTotal",
-      "source",
-      "yield",
-      "tags",
-      "totalMinutes",
-    ],
-    list: {
-      defaultSort: "createdAt",
-    },
   },
   cookbook: {
     ...generatedBrowserRoutes.cookbook,
@@ -352,7 +319,6 @@ const entityDefinitions = withEntityNames({
     color: INK.primary,
     // Keyed by FK id (rename-safe); no generic list columns or "new" form
     // (cookbooks are created by EPUB import, not a create form).
-    sortableFields: [],
   },
   location: {
     ...generatedBrowserRoutes.location,
@@ -365,20 +331,7 @@ const entityDefinitions = withEntityNames({
     // Note: location needs images in a specific position (before child locations),
     // so we handle it as a custom section and only use history from common
     detail: { commonSections: ["history"] },
-    sortableFields: [
-      "createdAt",
-      "updatedAt",
-      "name",
-      "type",
-      "parent",
-      "lastBulkInventory",
-      "valuation",
-      "inventoryEntries",
-    ],
     // Location supplies its domain columns explicitly; audit dates are shared.
-    list: {
-      defaultSort: "createdAt",
-    },
   },
   inventory: {
     ...generatedBrowserRoutes.inventory,
@@ -390,20 +343,7 @@ const entityDefinitions = withEntityNames({
     },
     // Inventory items have a simple single-section detail page
     detail: { commonSections: ["history"] },
-    sortableFields: [
-      "createdAt",
-      "updatedAt",
-      "name",
-      "product",
-      "location",
-      "amount",
-      "valuation",
-      "verifiedAt",
-    ],
     // Inventory list has custom columns (image from product, amount instead of name)
-    list: {
-      defaultSort: "createdAt",
-    },
   },
   meal: {
     ...generatedBrowserRoutes.meal,
@@ -414,13 +354,9 @@ const entityDefinitions = withEntityNames({
     // wearing it read as a warning about nothing.
     color: INK.slate,
     detail: { commonSections: ["history"] },
-    sortableFields: ["date", "name", "mealType", "createdAt", "updatedAt"],
     // Date/Name/Recipes/Cost columns are custom (meal-table.tsx) — Name needs
     // `emptyLabel`, which useStandardColumns's automatic "name" column
     // doesn't support. Audit dates are appended for every entity list.
-    list: {
-      defaultSort: "date",
-    },
   },
   project: {
     ...generatedBrowserRoutes.project,
@@ -429,37 +365,12 @@ const entityDefinitions = withEntityNames({
     // No "new" route — projects are created from a dialog on the list page
     // (mirrors meal), not a dedicated /projects/new form.
     detail: { commonSections: ["images", "history"] },
-    sortableFields: [
-      "name",
-      "status",
-      "kind",
-      "startDate",
-      "costEstimate",
-      "createdAt",
-      "updatedAt",
-    ],
-    list: {
-      defaultSort: "createdAt",
-    },
   },
   task: {
     ...generatedBrowserRoutes.task,
     lucideIcon: ListChecks,
     color: INK.slate,
     detail: { commonSections: ["history"] },
-    sortableFields: [
-      "name",
-      "status",
-      "dueDate",
-      "trade",
-      "project",
-      "subjectProduct",
-      "createdAt",
-      "updatedAt",
-    ],
-    list: {
-      defaultSort: "createdAt",
-    },
   },
   vendor: {
     ...generatedBrowserRoutes.vendor,
@@ -467,14 +378,6 @@ const entityDefinitions = withEntityNames({
     // A quiet roster, not a live money surface — same neutral as location/task.
     color: INK.slate,
     detail: { commonSections: ["history"] },
-    sortableFields: [
-      "name",
-      "purchaseCount",
-      "spend",
-      "latestPurchaseDate",
-      "createdAt",
-      "updatedAt",
-    ],
     list: {
       // Open on biggest spenders first: "where did the money go" is the
       // question this roster exists to answer. (It used to be `name`, with the
@@ -515,24 +418,8 @@ const entityDefinitions = withEntityNames({
     // A Purchase carries its documents (invoices/receipts), like
     // project's photos — same commonSections shape.
     detail: { commonSections: ["images", "history"] },
-    sortableFields: [
-      "orderId",
-      "displayLabel",
-      "date",
-      "statedTotal",
-      "vendor",
-      "expenseCount",
-      "expenseTotal",
-      "reconciliationGap",
-      "documentCount",
-      "createdAt",
-      "updatedAt",
-    ],
     // No `name` column — a purchase's identity is (vendor, orderId, date), not
     // a free-text name, so the list defines its columns explicitly (like location).
-    list: {
-      defaultSort: "date",
-    },
     // "fixed": the keeper is the purchase being viewed; candidates are every
     // OTHER purchase from the same vendor (mergePurchases refuses cross-vendor,
     // and separately refuses when both sides carry a non-null order id — that
@@ -565,33 +452,13 @@ const entityDefinitions = withEntityNames({
     lucideIcon: ReceiptText,
     color: INK.primary,
     detail: { commonSections: ["history"] },
-    sortableFields: [
-      "name",
-      "cost",
-      "lineKind",
-      "productQuantity",
-      "date",
-      "costType",
-      "trade",
-      "project",
-      "product",
-      "vendor",
-      "orderId",
-      "createdAt",
-      "updatedAt",
-    ],
-    list: {
-      defaultSort: "date",
-    },
   },
   ledgerParty: {
     ...generatedBrowserRoutes.ledgerParty,
     lucideIcon: Users,
     color: INK.slate,
     detail: { commonSections: ["history"] },
-    sortableFields: ["name", "kind", "createdAt", "updatedAt"],
     list: {
-      defaultSort: "name",
       // A name roster reads A→Z, same rationale as financialAccount below.
       defaultSortDirection: "asc",
     },
@@ -601,10 +468,6 @@ const entityDefinitions = withEntityNames({
     lucideIcon: ArrowLeftRight,
     color: INK.primary,
     detail: { commonSections: ["history"] },
-    sortableFields: ["date", "amount", "createdAt", "updatedAt"],
-    list: {
-      defaultSort: "date",
-    },
   },
   financialAccount: {
     dialogLabel: "Account",
@@ -612,15 +475,7 @@ const entityDefinitions = withEntityNames({
     lucideIcon: CreditCard,
     color: INK.slate,
     detail: { commonSections: ["history"] },
-    sortableFields: [
-      "name",
-      "provisional",
-      "transactionCount",
-      "createdAt",
-      "updatedAt",
-    ],
     list: {
-      defaultSort: "name",
       // A name roster reads A→Z; the table's blanket descending default was
       // opening the account list backwards.
       defaultSortDirection: "asc",
@@ -632,18 +487,7 @@ const entityDefinitions = withEntityNames({
     lucideIcon: CreditCard,
     color: INK.primary,
     detail: { commonSections: ["history"] },
-    sortableFields: [
-      "transactionDate",
-      "postedDate",
-      "amount",
-      "merchant",
-      "kind",
-      "status",
-      "createdAt",
-      "updatedAt",
-    ],
     list: {
-      defaultSort: "transactionDate",
       defaultDensity: "dense",
     },
   },
@@ -652,30 +496,15 @@ const entityDefinitions = withEntityNames({
     lucideIcon: Heart,
     color: INK.plum,
     detail: { commonSections: ["history"] },
-    sortableFields: [
-      "name",
-      "acquiredAt",
-      "priceRange",
-      "createdAt",
-      "updatedAt",
-    ],
-    list: {
-      defaultSort: "createdAt",
-    },
   },
   "usda-food": {
     ...generatedBrowserRoutes["usda-food"],
     lucideIcon: Apple,
     color: INK.positive,
-    sortableFields: [
-      "fdc_id",
-      "description",
-      "data_type",
-      "relevance",
-      "linkedProducts",
-    ],
     // USDA foods are read-only, no detail/list conventions needed
     list: {
+      // Deliberate override: usda-food has no generated default sort (see
+      // `usdaFoodSortableFields` below for why its roster is hand-listed).
       defaultSort: "fdc_id",
     },
   },
@@ -689,31 +518,19 @@ const entityDefinitions = withEntityNames({
       border: "border-l-muted-foreground",
     },
     detail: { commonSections: ["history"] },
-    sortableFields: ["createdAt", "updatedAt", "filename", "size", "status"],
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
-    list: {
-      defaultSort: "createdAt",
-    },
   },
   planting: {
     ...generatedBrowserRoutes.planting,
     lucideIcon: Sprout,
     color: INK.positive,
     detail: { commonSections: ["history"] },
-    sortableFields: ["createdAt", "updatedAt"],
-    list: {
-      defaultSort: "createdAt",
-    },
   },
   gardenEntry: {
     ...generatedBrowserRoutes.gardenEntry,
     lucideIcon: CalendarDays,
     color: INK.positive,
     detail: { commonSections: ["images", "history"] },
-    sortableFields: ["observedOn", "createdAt"],
-    list: {
-      defaultSort: "observedOn",
-    },
   },
 } as const) satisfies Record<BrowserRoutedEntity, EntityDefinition>;
 
@@ -733,6 +550,18 @@ export const browserEntityDefinition = (
   entity: BrowserRoutedEntity,
 ): EntityDefinition => entities[entity];
 
+type GeneratedSortRoster =
+  (typeof generatedEntitySort)[keyof typeof generatedEntitySort];
+
+/**
+ * The generated `model.sort` roster for an entity, or `undefined` for the few
+ * that declare none.
+ */
+const generatedSortRoster = (entity: Entity): GeneratedSortRoster | undefined =>
+  // SAFETY: `generatedEntitySort` is `satisfies Partial<Record<Entity, …>>`,
+  // so indexing by any entity is either a roster or absent.
+  (generatedEntitySort as Partial<Record<Entity, GeneratedSortRoster>>)[entity];
+
 /**
  * Every entity now carries a browser route (`ledgerParty`/`ledgerTransfer`
  * were the last holdouts), so this always resolves through the registry. Kept
@@ -740,9 +569,34 @@ export const browserEntityDefinition = (
  * because a future route-less entity is exactly the case
  * `isBrowserRoutedEntity` exists to guard; a bare index would silently regress
  * if one reappears.
+ *
+ * Reads `generatedEntitySort` (`@cubby/schemas/entity-sort`) instead of a
+ * hand-listed array on the definition: that generated module's only import is
+ * `import type { Entity }`, so it carries zero runtime schema dependencies —
+ * pulling it into this route-loaded file does not drag Zod validation graphs
+ * into the eager client bundle the way importing an entity's own schema
+ * module would. `usda-food` has no generated sort roster (see
+ * {@link usdaFoodSortableFields}) and is special-cased here instead.
  */
-export const getSortableFields = (entity: Entity): readonly string[] =>
-  isBrowserRoutedEntity(entity) ? entities[entity].sortableFields : [];
+export const getSortableFields = (entity: Entity): readonly string[] => {
+  if (entity === "usda-food") return usdaFoodSortableFields;
+  if (!isBrowserRoutedEntity(entity)) return [];
+  return generatedSortRoster(entity)?.fields ?? [];
+};
+
+/**
+ * Single source for an entity list's opening sort field: an explicit
+ * `list.defaultSort` override (`vendor`'s "spend", `usda-food`'s "fdc_id")
+ * wins, then the generated roster's own default, then "createdAt" for the
+ * rare entity neither supplies (shouldn't happen for a routed entity today,
+ * but keeps this total). Both `entity-list-ssr.ts` and
+ * `useEntityListPresentation.tsx` call this so the SSR preload and the
+ * mounted table can never open on different sorts.
+ */
+export const defaultSortFor = (entity: BrowserRoutedEntity): string =>
+  browserEntityDefinition(entity).list?.defaultSort ??
+  generatedSortRoster(entity)?.default ??
+  "createdAt";
 
 /**
  * Human-readable label for any entity. `.label` is the manifest's own

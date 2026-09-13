@@ -432,23 +432,15 @@ export const entityEditRegistry: EntityEditRegistry = {
       manufacturer: { required: true },
       notes: "nullableText",
     }),
-    create: ["capture", "full"],
-    update: ["full", "identity", "price", "stock"],
   })),
   ingredient: buildDefinition("ingredient", (f) => ({
     fields: f.fieldsFrom(["full"], { name: "trimmedName" }),
-    create: ["capture", "full"],
-    update: ["full", "identity"],
   })),
   inventory: buildDefinition("inventory", (f) => ({
     fields: f.fieldsFrom(["full"]),
-    create: ["capture", "full"],
-    update: ["full", "amount", "product", "location", "placement"],
   })),
   location: buildDefinition("location", (f) => ({
     fields: f.fieldsFrom(["full"], { name: "trimmedName" }),
-    create: ["capture", "full"],
-    update: ["full", "identity", "parent"],
   })),
   planting: buildDefinition("planting", (f) => ({
     fields: f.fieldsFrom(["capture", "full"], {
@@ -498,8 +490,6 @@ export const entityEditRegistry: EntityEditRegistry = {
       name: "trimmedName",
       notes: "nullableText",
     }),
-    create: ["capture", "full"],
-    update: ["full", "identity"],
   })),
   meal: buildDefinition("meal", (f) => ({
     fields: f.fieldsFrom(["full"], {
@@ -525,7 +515,6 @@ export const entityEditRegistry: EntityEditRegistry = {
         },
       },
     },
-    update: ["full", "calendar"],
   })),
   project: buildDefinition("project", (f) => ({
     fields: f.fieldsFrom(["full"], {
@@ -548,7 +537,6 @@ export const entityEditRegistry: EntityEditRegistry = {
       },
       full: { defaults: { status: "planning", kind: null } },
     },
-    update: ["full", "status", "kind", "dates", "parent"],
   })),
   task: buildDefinition("task", (f) => ({
     fields: f.fieldsFrom(["full"], {
@@ -672,7 +660,6 @@ export const entityEditRegistry: EntityEditRegistry = {
       capture: { defaults: vendorCreateDefaults },
       full: { defaults: vendorCreateDefaults },
     },
-    update: ["full", "identity"],
   })),
   purchase: buildDefinition("purchase", (f) => ({
     fields: f.fieldsFrom(["full"], {
@@ -699,7 +686,6 @@ export const entityEditRegistry: EntityEditRegistry = {
       },
       full: { defaults: { statedTotal: null } },
     },
-    update: ["full", "vendor", "identity"],
   })),
   financialAccount: buildDefinition("financialAccount", (f) => ({
     fields: f.fieldsFrom(["capture", "full"], {

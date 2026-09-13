@@ -16,7 +16,10 @@ export default defineEntity({
   route: { basePath: "usda", detailParam: "id" },
   table: null,
   identifiers: { brand: null, shortcode: null, legacy: null },
-  presentation: { titleField: "description" },
+  // USDA foods have no `description` field/readKey (it lives nested inside
+  // `foodInfo`'s JSON payload, not projected as its own field); `fdc_id` is
+  // the entity's real identifying scalar and already the list's default sort.
+  presentation: { titleField: "fdc_id" },
   model: {
     fields: [
       {
