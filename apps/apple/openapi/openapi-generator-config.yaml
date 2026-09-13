@@ -13,10 +13,13 @@ filter:
   operations:
     - agent.ask
     - dashboard.counts
+    - garden.correctLocationDates
     - garden.createPlanting
     - garden.entries
     - garden.finishPlanting
     - garden.guides
+    - garden.journal
+    - garden.locationHistory
     - garden.movePlanting
     - garden.options
     - garden.overview

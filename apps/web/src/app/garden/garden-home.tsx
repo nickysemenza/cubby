@@ -9,7 +9,7 @@ import type { z } from "zod";
 
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -18,7 +18,6 @@ import { householdLocalDate } from "~/lib/household-date";
 
 import { EntryForm } from "./entry-form";
 import { GardenField, GardenFormActions } from "./garden-fields";
-import { GardenTimeline } from "./garden-timeline";
 import { garden } from "./garden.functions";
 import { GardenLocationForm, type GardenLocation } from "./location-form";
 import { PlantingForm } from "./planting-form";
@@ -28,7 +27,6 @@ type HomeDialog =
   | { kind: "location"; location?: GardenLocation }
   | { kind: "planting"; location?: GardenLocation }
   | { kind: "entry"; location: GardenLocation }
-  | { kind: "history"; location: GardenLocation }
   | { kind: "finish"; plantings: OverviewPlanting[] };
 
 function FinishSelected({
@@ -277,12 +275,13 @@ export function GardenHome() {
               >
                 Note, photos, or harvest
               </Button>
-              <Button
-                variant="ghost"
-                onClick={() => setDialog({ kind: "history", location })}
+              <Link
+                to="/garden-entries"
+                search={{ locationId: location.id }}
+                className={buttonVariants({ variant: "ghost" })}
               >
-                History
-              </Button>
+                Bed journal
+              </Link>
               <Button
                 variant="ghost"
                 onClick={() => setDialog({ kind: "location", location })}
@@ -336,9 +335,6 @@ export function GardenHome() {
               onSaved={onSaved}
               onCancel={() => setDialog(null)}
             />
-          )}
-          {dialog.kind === "history" && (
-            <GardenTimeline locationId={dialog.location.id} />
           )}
           {dialog.kind === "finish" && (
             <FinishSelected

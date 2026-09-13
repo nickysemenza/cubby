@@ -53,6 +53,56 @@ struct ClientQueryTests {
         URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
     }
 
+    private static func requestBody(_ request: URLRequest) throws -> Data {
+        if let body = request.httpBody { return body }
+        let stream = try #require(request.httpBodyStream)
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeRawData) }
+            if count == 0 { break }
+            data.append(contentsOf: buffer.prefix(count))
+        }
+        return data
+    }
+
+    @Test func wholeBedCorrectionEncodesNullWhileAttachmentPatchesPreserveContent() async throws {
+        defer { QueryStub.handler.withLock { $0 = nil } }
+        let seen = Mutex<[[String: JSONValue]]>([])
+        QueryStub.handler.withLock { handler in
+            handler = { request in
+                do {
+                    let fields = try JSONDecoder().decode(
+                        [String: JSONValue].self, from: Self.requestBody(request))
+                    seen.withLock { $0.append(fields) }
+                } catch { Issue.record(error) }
+                // The test captures request encoding; reject before any response mapping.
+                return (400, Data("{}".utf8))
+            }
+        }
+        let client = try makeClient()
+        await #expect(throws: CubbyAPIError.self) {
+            try await client.updateGardenEntry(
+                .init(
+                    id: "GDE-2345", locationID: "LOC-2345", plantingID: nil, kind: .observation,
+                    observedAt: Date(timeIntervalSince1970: 1_700_000_000), note: nil,
+                    harvestAmount: nil, pendingImageIDs: [], removeImageIDs: []))
+        }
+        await #expect(throws: CubbyAPIError.self) {
+            try await client.attachImages(
+                [ImageCode("IMG-2345")], to: EntityCatalog[.gardenEntry], id: "GDE-2345")
+        }
+        let requests = seen.withLock { $0 }
+        try #require(requests.count == 2)
+        #expect(requests[0]["plantingId"] == JSONValue.null)
+        #expect(requests[0]["note"] == JSONValue.null)
+        #expect(requests[0]["harvestAmount"] == JSONValue.null)
+        #expect(requests[1] == ["pendingImageIds": .array([.string("IMG-2345")])])
+    }
+
     @Test func listSendsPlainPagingParamsWithTheBearerHeader() async throws {
         let request = try await capture(returning: try Fixtures.data(named: "products-list.json")) { client in
             _ = try await client.list(EntityCatalog[.product], page: 1, pageSize: 20, sort: "-name")

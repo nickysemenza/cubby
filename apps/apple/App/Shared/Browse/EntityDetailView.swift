@@ -86,6 +86,7 @@ struct EntityDetailContent: View {
     let row: EntityRow
 
     @State private var showingRaw = false
+    @State private var showingPhoto = false
 
     #if os(macOS)
         private let heroMaxHeight: CGFloat = 360
@@ -170,31 +171,37 @@ struct EntityDetailContent: View {
             .frame(maxWidth: .infinity)
         }
         .porcelainScreen()
+        .sheet(isPresented: $showingPhoto) {
+            if let photo = heroPhoto { PhotoPreview(photos: [photo], selectedID: photo.id) }
+        }
+    }
+
+    private var heroPhoto: PhotoAttachment? {
+        guard let url = row.imageURL else { return nil }
+        return PhotoAttachment(
+            id: row.id, filename: row.title, source: .remote(url),
+            imageID: descriptor.key == .image ? nil : row.raw["coverImageId"]?.stringValue)
     }
 
     @ViewBuilder
     private var hero: some View {
-        if let url = row.imageURL {
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                .fill(PorcelainTokens.inset)
-                .aspectRatio(4.0 / 3.0, contentMode: .fit)
-                .frame(maxWidth: .infinity, maxHeight: heroMaxHeight)
-                .overlay {
-                    AsyncImage(url: url) { phase in
-                        if case .success(let image) = phase {
-                            image.resizable().scaledToFill()
-                        } else if case .failure = phase {
-                            symbolTile
-                        } else {
-                            ProgressView().controlSize(.small)
-                        }
+        if let photo = heroPhoto {
+            Button {
+                showingPhoto = true
+            } label: {
+                RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                    .fill(PorcelainTokens.inset)
+                    .aspectRatio(4.0 / 3.0, contentMode: .fit)
+                    .frame(maxWidth: .infinity, maxHeight: heroMaxHeight)
+                    .overlay {
+                        PhotoAttachmentImage(photo: photo)
                     }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
-                .overlay(
-                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
-                )
+                    .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
+                            .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
+                    )
+            }.buttonStyle(.plain).accessibilityLabel("Preview \(photo.filename)")
         } else {
             symbolTile
                 .frame(width: 96, height: 96)

@@ -14,7 +14,12 @@ export const gardenEntryUpdateInput = z.object({
   id: gardenEntryShortcode,
   data: gardenEntryUpdateData,
 });
-export const gardenEntryOut = z.object(generatedGardenEntryFieldSchemas.read);
+export const gardenEntryOut = z
+  .object(generatedGardenEntryFieldSchemas.read)
+  .extend({
+    locationName: z.string(),
+    plantingName: z.string().nullable(),
+  });
 export type GardenEntryOut = z.infer<typeof gardenEntryOut>;
 export const gardenEntryListItemOut = gardenEntryOut.extend({});
 export const gardenEntryListOut = createPaginatedResponseSchema(

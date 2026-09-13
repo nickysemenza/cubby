@@ -332,6 +332,172 @@ package enum Operations {
             }
         }
     }
+    /// - Remark: HTTP `POST /api/v1/garden/correctLocationDates`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/correctLocationDates/post(garden.correctLocationDates)`.
+    package enum Garden_correctLocationDates {
+        package static let id: Swift.String = "garden.correctLocationDates"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/garden/correctLocationDates/POST/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Garden_correctLocationDates.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Garden_correctLocationDates.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Garden_correctLocationDates.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/garden/correctLocationDates/POST/requestBody`.
+            @frozen package enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden/correctLocationDates/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.GardenCorrectLocationDatesInput)
+            }
+            package var body: Operations.Garden_correctLocationDates.Input.Body?
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            package init(
+                headers: Operations.Garden_correctLocationDates.Input.Headers = .init(),
+                body: Operations.Garden_correctLocationDates.Input.Body? = nil
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden/correctLocationDates/POST/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden/correctLocationDates/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GardenLocationHistoryOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GardenLocationHistoryOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Garden_correctLocationDates.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Garden_correctLocationDates.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden/correctLocationDates/post(garden.correctLocationDates)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Garden_correctLocationDates.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Garden_correctLocationDates.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden/correctLocationDates/POST/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden/correctLocationDates/POST/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Garden_correctLocationDates.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Garden_correctLocationDates.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden/correctLocationDates/post(garden.correctLocationDates)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Garden_correctLocationDates.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Garden_correctLocationDates.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `POST /api/v1/garden/createPlanting`.
     /// - Remark: Generated from `#/paths//api/v1/garden/createPlanting/post(garden.createPlanting)`.
     package enum Garden_createPlanting {
@@ -969,6 +1135,368 @@ package enum Operations {
             /// - Throws: An error if `self` is not `.`default``.
             /// - SeeAlso: `.`default``.
             package var `default`: Operations.Garden_guides.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/garden/journal`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/journal/get(garden.journal)`.
+    package enum Garden_journal {
+        package static let id: Swift.String = "garden.journal"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// planting shortcode, e.g. PLT-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/query/plantingId`.
+                package var plantingId: Swift.String
+                /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/query/includeBedContext`.
+                package var includeBedContext: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/query/page`.
+                package var page: Swift.Int?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - plantingId: planting shortcode, e.g. PLT-4K7M
+                ///   - includeBedContext:
+                ///   - page:
+                package init(
+                    plantingId: Swift.String,
+                    includeBedContext: Swift.Bool? = nil,
+                    page: Swift.Int? = nil
+                ) {
+                    self.plantingId = plantingId
+                    self.includeBedContext = includeBedContext
+                    self.page = page
+                }
+            }
+            package var query: Operations.Garden_journal.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Garden_journal.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Garden_journal.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Garden_journal.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Garden_journal.Input.Query,
+                headers: Operations.Garden_journal.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GardenJournalOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GardenJournalOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Garden_journal.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Garden_journal.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden/journal/get(garden.journal)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Garden_journal.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Garden_journal.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden/journal/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Garden_journal.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Garden_journal.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden/journal/get(garden.journal)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Garden_journal.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Garden_journal.Output.Default {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen package enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            package init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            package var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            package static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// - Remark: HTTP `GET /api/v1/garden/locationHistory`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/locationHistory/get(garden.locationHistory)`.
+    package enum Garden_locationHistory {
+        package static let id: Swift.String = "garden.locationHistory"
+        package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/garden/locationHistory/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// planting shortcode, e.g. PLT-4K7M
+                ///
+                /// - Remark: Generated from `#/paths/api/v1/garden/locationHistory/GET/query/plantingId`.
+                package var plantingId: Swift.String
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - plantingId: planting shortcode, e.g. PLT-4K7M
+                package init(plantingId: Swift.String) {
+                    self.plantingId = plantingId
+                }
+            }
+            package var query: Operations.Garden_locationHistory.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/garden/locationHistory/GET/header`.
+            package struct Headers: Sendable, Hashable {
+                package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Garden_locationHistory.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                package init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Garden_locationHistory.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            package var headers: Operations.Garden_locationHistory.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            package init(
+                query: Operations.Garden_locationHistory.Input.Query,
+                headers: Operations.Garden_locationHistory.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen package enum Output: Sendable, Hashable {
+            package struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden/locationHistory/GET/responses/200/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden/locationHistory/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.GardenLocationHistoryOut)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.GardenLocationHistoryOut {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Garden_locationHistory.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Garden_locationHistory.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 200
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden/locationHistory/get(garden.locationHistory)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.Garden_locationHistory.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            package var ok: Operations.Garden_locationHistory.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            package struct Default: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden/locationHistory/GET/responses/default/content`.
+                @frozen package enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/garden/locationHistory/GET/responses/default/content/application\/json`.
+                    case json(Components.Schemas.ApiError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    package var json: Components.Schemas.ApiError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                package var body: Operations.Garden_locationHistory.Output.Default.Body
+                /// Creates a new `Default`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                package init(body: Operations.Garden_locationHistory.Output.Default.Body) {
+                    self.body = body
+                }
+            }
+            /// Error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/garden/locationHistory/get(garden.locationHistory)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Operations.Garden_locationHistory.Output.Default)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            package var `default`: Operations.Garden_locationHistory.Output.Default {
                 get throws {
                     switch self {
                     case let .`default`(_, response):

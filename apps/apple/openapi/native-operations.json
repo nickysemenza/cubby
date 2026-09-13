@@ -3,10 +3,13 @@
   "operations": [
     { "id": "agent.ask", "why": "Ask sheet" },
     { "id": "dashboard.counts", "why": "Browse row counts" },
+    { "id": "garden.correctLocationDates", "why": "Garden location-period correction" },
     { "id": "garden.createPlanting", "why": "Garden planting form" },
     { "id": "garden.entries", "why": "Garden entry history and corrections" },
     { "id": "garden.finishPlanting", "why": "Garden seasonal reset" },
     { "id": "garden.guides", "why": "Garden planting guides" },
+    { "id": "garden.journal", "why": "Planting journal" },
+    { "id": "garden.locationHistory", "why": "Planting location periods" },
     { "id": "garden.movePlanting", "why": "Garden transplant" },
     { "id": "garden.options", "why": "Garden planting form choices" },
     { "id": "garden.overview", "why": "Garden overview" },

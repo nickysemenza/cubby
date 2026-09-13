@@ -1,10 +1,15 @@
 import {
   gardenCreatePlantingInput,
+  gardenCorrectLocationDatesInput,
   gardenEntriesInput,
   gardenEntriesOut,
   gardenEntryOut,
   gardenFinishPlantingInput,
   gardenMovePlantingInput,
+  gardenJournalInput,
+  gardenJournalOut,
+  gardenLocationHistoryInput,
+  gardenLocationHistoryOut,
   gardenOverviewOut,
   gardenOptionsOut,
   gardenRecordEntryInput,
@@ -22,6 +27,15 @@ export const gardenContract = defineContract("garden", {
   options: query({ input: z.undefined(), output: gardenOptionsOut }),
   guides: query({ input: z.undefined(), output: gardenGuidesDocument }),
   entries: query({ input: gardenEntriesInput, output: gardenEntriesOut }),
+  journal: query({ input: gardenJournalInput, output: gardenJournalOut }),
+  locationHistory: query({
+    input: gardenLocationHistoryInput,
+    output: gardenLocationHistoryOut,
+  }),
+  correctLocationDates: mutation({
+    input: gardenCorrectLocationDatesInput,
+    output: gardenLocationHistoryOut,
+  }),
   createPlanting: mutation({
     input: gardenCreatePlantingInput,
     output: plantingOut,

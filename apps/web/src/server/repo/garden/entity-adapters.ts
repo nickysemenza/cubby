@@ -1,8 +1,17 @@
+import { and, inArray } from "drizzle-orm";
+
+import type { DrizzleTransaction } from "~/server/db";
+import {
+  gardenEntry,
+  planting,
+  plantingLocationPeriod,
+} from "~/server/db/schema";
 import {
   defineEntityAdapter,
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
-import { withTransaction } from "~/server/repo/database-helpers";
+import { createAppError } from "~/server/errors/app-error";
+import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import { removeEntity } from "~/server/repo/removal";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 
@@ -31,6 +40,12 @@ const PLANTING_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "A planting with garden entries cannot be deleted.",
   },
+  "PlantingLocationPeriod.plantingId": {
+    code: "hard-delete-location-history",
+    effect: "hard-delete",
+    description:
+      "Internal location-period rows are removed with a planting that has no retained entries.",
+  },
 } as const;
 
 const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
@@ -39,7 +54,41 @@ const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description: "Garden entry image associations are removed with the entry.",
   },
+  "PlantingLocationPeriod.sourceGardenEntryId": {
+    code: "block-location-history-source",
+    effect: "block",
+    description:
+      "A structural entry remains attached to confirmed location history.",
+  },
 } as const;
+
+const assertPlantingsHaveNoRetainedHistory = async (
+  tx: DrizzleTransaction,
+  ids: readonly string[],
+) => {
+  const [entries, children] = await Promise.all([
+    tx.query.gardenEntry.findMany({
+      where: and(
+        inArray(gardenEntry.plantingId, [...ids]),
+        notDeleted(gardenEntry),
+      ),
+      columns: { plantingId: true },
+    }),
+    tx.query.planting.findMany({
+      where: and(
+        inArray(planting.parentPlantingId, [...ids]),
+        notDeleted(planting),
+      ),
+      columns: { parentPlantingId: true },
+    }),
+  ]);
+  if (entries.length > 0 || children.length > 0) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A planting with retained garden history or split descendants cannot be deleted.",
+    );
+  }
+};
 
 export const plantingEntityAdapter = defineEntityAdapter({
   entity: "planting",
@@ -69,14 +118,22 @@ export const plantingEntityAdapter = defineEntityAdapter({
     },
     delete: async (ctx, shortcodes) => {
       const ids = await plantings.all(ctx.db, shortcodes);
-      await withTransaction(ctx.db, (tx) =>
-        removeEntity(tx, {
+      await withTransaction(ctx.db, async (tx) => {
+        await assertPlantingsHaveNoRetainedHistory(tx, ids);
+        await removeEntity(tx, {
           entity: "planting",
           ids,
           removal: "soft",
           actor: ctx.actorContext,
-        }),
-      );
+          children: [
+            {
+              table: plantingLocationPeriod,
+              parentColumns: [plantingLocationPeriod.plantingId],
+              mode: "hard",
+            },
+          ],
+        });
+      });
       return {
         deletedReferences: entityMutationReferences("planting", shortcodes),
       };

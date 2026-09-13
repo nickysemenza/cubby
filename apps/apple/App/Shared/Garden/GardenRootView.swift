@@ -12,7 +12,6 @@ struct GardenRootView: View {
     @State private var detailPlanting: GardenPlanting?
     @State private var showingFinished = false
     @State private var showingSetup = false
-    @State private var showingHistory = false
 
     var body: some View {
         Group {
@@ -26,7 +25,7 @@ struct GardenRootView: View {
         .navigationTitle("Garden")
         .task(id: appModel.host) { await setup() }
         .sheet(isPresented: $showingCreate) {
-            if let garden { GardenPlantingSheet(model: garden) }
+            if let garden { GardenPlantingSheet(model: garden).gardenEditorSize() }
         }
         .sheet(item: $entryTarget) { target in
             if let garden {
@@ -38,25 +37,22 @@ struct GardenRootView: View {
             }
         }
         .sheet(item: $action) { action in
-            if let garden { GardenPlantingActionSheet(model: garden, action: action) }
+            if let garden { GardenPlantingActionSheet(model: garden, action: action).gardenEditorSize() }
         }
-        .sheet(item: $detailPlanting) { planting in
+        .navigationDestination(item: $detailPlanting) { planting in
             if let garden {
-                GardenPlantingDetailSheet(
+                GardenPlantingDetailView(
                     model: garden, planting: planting, guide: garden.guide(for: planting.ingredient.id),
-                    source: garden.guideSource)
+                    source: garden.guideSource, uploader: GardenImageUploader(service: appModel.client))
             }
         }
         .sheet(isPresented: $showingFinished) {
-            if let garden { FinishedPlantingsSheet(plantings: garden.overview.finishedPlantings) }
+            if let garden {
+                FinishedPlantingsSheet(plantings: garden.overview.finishedPlantings).gardenEditorSize()
+            }
         }
         .sheet(isPresented: $showingSetup) {
-            if let garden { GardenSetupSheet(model: garden) }
-        }
-        .sheet(isPresented: $showingHistory) {
-            if let garden {
-                GardenHistorySheet(model: garden, uploader: GardenImageUploader(service: appModel.client))
-            }
+            if let garden { GardenSetupSheet(model: garden).gardenEditorSize() }
         }
         .toolbar {
             ToolbarItem(placement: .secondaryAction) {
@@ -82,11 +78,13 @@ struct GardenRootView: View {
         case .idle, .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let message):
-            ContentUnavailableView(
-                "Couldn't load the garden",
-                systemImage: "exclamationmark.triangle",
-                description: Text(message)
-            )
+            ContentUnavailableView {
+                Label("Couldn't load the garden", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(message)
+            } actions: {
+                Button("Retry") { Task { await garden.load() } }
+            }
         case .loaded:
             ScrollView {
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
@@ -152,8 +150,9 @@ struct GardenRootView: View {
                         }
                         .buttonStyle(.borderless)
                     }
-                    Button {
-                        showingHistory = true
+                    NavigationLink {
+                        GardenHistoryView(
+                            model: garden, uploader: GardenImageUploader(service: appModel.client))
                     } label: {
                         Label("Garden history", systemImage: "clock.arrow.circlepath")
                             .font(.porcelainBody)
@@ -185,7 +184,13 @@ private struct GardenLocationSection: View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(location.name).font(.porcelainTitle)
+                    if location.id == "unassigned" {
+                        Text(location.name).font(.porcelainTitle)
+                    } else {
+                        NavigationLink(value: Route.gardenBedJournal(id: location.id)) {
+                            Text(location.name).font(.porcelainTitle)
+                        }
+                    }
                     if let detail = locationDetail {
                         Text(detail).font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphiteSecondary)
                     }
@@ -271,6 +276,8 @@ private struct GardenPlantingRow: View {
             }
         }
         .padding(PorcelainTokens.Space.md)
+        .contentShape(Rectangle())
+        .onTapGesture { onDetail(planting) }
     }
 
     private var subtitle: String {

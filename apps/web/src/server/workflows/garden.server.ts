@@ -1,9 +1,12 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   gardenCreatePlantingInput,
+  gardenCorrectLocationDatesInput,
   gardenEntriesInput,
   gardenFinishPlantingInput,
   gardenMovePlantingInput,
+  gardenJournalInput,
+  gardenLocationHistoryInput,
   gardenRecordEntryInput,
   gardenSplitPlantingInput,
   gardenStartPlantingInput,
@@ -34,6 +37,25 @@ export const gardenEntriesWorkflow = defineWorkflowOperation(
   "garden.entries",
   (ctx: Context, input: unknown) =>
     repo.gardenEntries(ctx.db, gardenEntriesInput.parse(input)),
+);
+export const gardenJournalWorkflow = defineWorkflowOperation(
+  "garden.journal",
+  (ctx: Context, input: unknown) =>
+    repo.gardenJournal(ctx.db, gardenJournalInput.parse(input)),
+);
+export const gardenLocationHistoryWorkflow = defineWorkflowOperation(
+  "garden.locationHistory",
+  (ctx: Context, input: unknown) =>
+    repo.gardenLocationHistory(ctx.db, gardenLocationHistoryInput.parse(input)),
+);
+export const gardenCorrectLocationDatesWorkflow = defineWorkflowOperation(
+  "garden.correctLocationDates",
+  (ctx: Context, input: unknown) =>
+    repo.correctLocationDates(
+      ctx.db,
+      gardenCorrectLocationDatesInput.parse(input),
+      ctx.actorContext,
+    ),
 );
 export const gardenCreatePlantingWorkflow = defineWorkflowOperation(
   "garden.createPlanting",

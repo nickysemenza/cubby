@@ -25,14 +25,20 @@ final class PhotoCaptureModel {
     private(set) var original: CGImage?
     private(set) var lifted: LiftedImage?
     /// Send the lifted version when Vision found a subject; the toggle is only shown then.
-    var useLifted = true
+    var useLifted = true { didSet { if useLifted != oldValue { uploadCheckpoint = nil } } }
     var background: SubjectLift.Background = .white {
-        didSet { if background != oldValue, let original { Task { await lift(original) } } }
+        didSet {
+            if background != oldValue, let original {
+                uploadCheckpoint = nil
+                Task { await lift(original) }
+            }
+        }
     }
     var makeCover: Bool
 
     private let uploader: PhotoUploader
     private let featurePrints: FeaturePrintIndex
+    private var uploadCheckpoint: PhotoUploader.Checkpoint?
 
     init(
         client: CubbyClient, entity: EntityKey, entityID: String, entityTitle: String,
@@ -60,11 +66,13 @@ final class PhotoCaptureModel {
     }
 
     func receive(_ image: CGImage) async {
+        uploadCheckpoint = nil
         original = image
         await lift(image)
     }
 
     func retake() {
+        uploadCheckpoint = nil
         original = nil
         lifted = nil
         phase = .picking
@@ -79,7 +87,8 @@ final class PhotoCaptureModel {
             let outcome = try await uploader.upload(
                 .init(
                     image: image, format: format, entity: entity, entityID: entityID,
-                    makeCover: makeCover && canMakeCover, filenameBase: entityID.lowercased())
+                    makeCover: makeCover && canMakeCover, filenameBase: entityID.lowercased()),
+                resuming: uploadCheckpoint
             ) { step in
                 Task { @MainActor [weak self] in
                     if case .uploading = self?.phase { self?.phase = .uploading(step) }
@@ -92,6 +101,9 @@ final class PhotoCaptureModel {
                 try? await featurePrints.saveCache()
             }
             phase = .done(outcome.imageID)
+        } catch let failure as PhotoUploader.Failure {
+            uploadCheckpoint = failure.checkpoint
+            phase = .failed(failure.underlying.localizedDescription)
         } catch let error as CubbyAPIError {
             phase = .failed(error.detail?.message ?? "HTTP \(error.status)")
         } catch {
