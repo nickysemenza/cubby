@@ -38,6 +38,9 @@ packages:
   Sentry:
     url: https://github.com/getsentry/sentry-cocoa
     from: "9.28.0"
+  Nuke:
+    url: https://github.com/kean/Nuke
+    from: "12.8.0"
 
 targetTemplates:
   CubbyApp:
@@ -91,6 +94,10 @@ targetTemplates:
       # already caught (`Diagnostics.report`).
       - package: Sentry
         product: Sentry
+      - package: Nuke
+        product: Nuke
+      - package: Nuke
+        product: NukeUI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby

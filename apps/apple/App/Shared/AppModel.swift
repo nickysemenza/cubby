@@ -1,5 +1,6 @@
 import CubbyKit
 import Foundation
+import Nuke
 import Observation
 
 /// Root app state: which server, whether we are signed in, and the clients bound to both.
@@ -40,6 +41,7 @@ final class AppModel {
             UserDefaults.standard.set(baseURL.absoluteString, forKey: Self.baseURLKey)
             Diagnostics.setBaseURL(baseURL)
             rebindClients()
+            ImageCaches.reset()
             Task {
                 await spotlight.wipe()
                 await restoreSession()
@@ -100,6 +102,10 @@ final class AppModel {
         credential = nil
         phase = .signedOut
         await spotlight.wipe()
+        ImageCaches.reset()
+        #if os(macOS)
+            DockBadge.clear()
+        #endif
     }
 
     /// Called by any screen that receives a `CubbyAPIError`: a 401 means the middleware already

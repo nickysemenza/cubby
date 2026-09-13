@@ -123,7 +123,7 @@ struct ScanLookupSheet: View {
             ProductMatchesPanel(rows: rows, code: code) { row in
                 RecentEntities.record(row.id)
                 dismiss()
-                model.navigator.open(.entity(.product, id: row.id))
+                model.navigator.openInPlace(.entity(.product, id: row.id))
             }
         case .unknownCode(let code, let catalog):
             UnknownCodePanel(code: code, catalog: catalog, creating: creatingProduct) {
@@ -160,12 +160,12 @@ struct ScanLookupSheet: View {
             switch result {
             case .link(let link):
                 dismiss()
-                model.navigator.open(link)
+                model.navigator.openInPlace(link)
             case .products(let rows, _) where rows.count == 1:
                 if let row = rows.first {
                     RecentEntities.record(row.id)
                     dismiss()
-                    model.navigator.open(.entity(.product, id: row.id))
+                    model.navigator.openInPlace(.entity(.product, id: row.id))
                 }
             case .text(let value):
                 dismiss()
@@ -186,7 +186,7 @@ struct ScanLookupSheet: View {
             guard let found = try await model.client.findOrCreateProduct(code: code) else { return }
             RecentEntities.record(found.product.id.rawValue)
             dismiss()
-            model.navigator.open(.entity(.product, id: found.product.id.rawValue))
+            model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
         } catch {
             errorMessage = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
             Diagnostics.report(error, context: "scanLookup.createProduct")

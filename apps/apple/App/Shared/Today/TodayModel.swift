@@ -60,7 +60,11 @@ final class TodayModel {
 
     private func fetchProblems() async -> TodaySectionState<TodayProblemCounts> {
         do {
-            return .loaded(try await client.problemCounts())
+            let counts = try await client.problemCounts()
+            #if os(macOS)
+                DockBadge.update(total: counts.total)
+            #endif
+            return .loaded(counts)
         } catch {
             Diagnostics.report(error, context: "today.problems")
             return .failed(message(for: error))

@@ -1,6 +1,8 @@
 import CoreSpotlight
 import CubbyKit
+import Nuke
 import SwiftUI
+import TipKit
 
 @main
 struct CubbyApp: App {
@@ -19,6 +21,15 @@ struct CubbyApp: App {
         let model = AppModel()
         _model = State(initialValue: model)
         AppModel.active = model
+        // Thumbnails go through Nuke (`Thumb.swift`); a shared on-disk cache under Caches keeps
+        // covers warm across launches without growing the app's iCloud/backup footprint (Caches is
+        // excluded from both). `ImageCaches.reset()` wipes both tiers on sign-out and base-URL
+        // change, mirroring `SpotlightIndexer.wipe()`.
+        ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "cubby-images"))
+        try? Tips.configure([
+            .displayFrequency(.daily),
+            .datastoreLocation(.applicationDefault),
+        ])
     }
 
     var body: some Scene {
@@ -46,6 +57,9 @@ struct CubbyApp: App {
                     }
                 }
         }
+        // `Commands` is honoured on both macOS (menu bar) and iPadOS (hardware-keyboard shortcuts
+        // screen), so this stays outside any `#if os(macOS)` — see `CubbyCommands`'s doc comment.
+        .commands { CubbyCommands() }
         #if os(macOS)
             Settings {
                 SettingsView()

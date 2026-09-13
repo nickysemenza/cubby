@@ -1,21 +1,28 @@
 import CubbyKit
+import Nuke
+import NukeUI
 import SwiftUI
 
 /// A cover image in a 6pt rounded rect with a hairline. The placeholder is inset tone plus the
 /// entity's own glyph, so a row without a photo still says what kind of record it is.
+///
+/// Every cover URL is a public R2 URL (`EntityRow.imageURL`'s doc comment) — no auth header, so
+/// Nuke's default `DataLoader` (its own ephemeral `URLSession`, not `URLSession.cubbyShared`)
+/// fetches it exactly as the `AsyncImage` this replaced did.
 struct Thumb: View {
     let url: URL?
     var size: CGFloat = 56
     var symbol: String = "photo"
+
+    @Environment(\.displayScale) private var displayScale
 
     var body: some View {
         RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
             .fill(PorcelainTokens.inset)
             .overlay {
                 if let url {
-                    let displayURL = ImageTransform.transformed(url, renderedWidth: size)
-                    AsyncImage(url: displayURL) { phase in
-                        if case .success(let image) = phase {
+                    LazyImage(request: request(for: url)) { state in
+                        if let image = state.image {
                             image.resizable().scaledToFill()
                         } else {
                             glyph
@@ -32,6 +39,16 @@ struct Thumb: View {
             .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl))
             .frame(width: size, height: size)
             .accessibilityHidden(true)
+    }
+
+    /// Fetches the Cloudflare-transformed rung for this rendered width (the same URL the web
+    /// mints, so both clients share one edge-cache entry), then downsizes that rung to the thumb's
+    /// actual pixel size so the decoded bitmap never exceeds what is drawn.
+    private func request(for url: URL) -> ImageRequest {
+        let pixels = size * displayScale
+        return ImageRequest(
+            url: ImageTransform.transformed(url, renderedWidth: size),
+            processors: [ImageProcessors.Resize(size: CGSize(width: pixels, height: pixels))])
     }
 
     private var glyph: some View {

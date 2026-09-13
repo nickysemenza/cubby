@@ -18,6 +18,13 @@ final class Navigator {
     var pendingCaptureCode: String?
     /// A query typed or spoken elsewhere (an intent's fallback), for `SearchView` to prefill.
     var pendingSearchQuery: String?
+    /// Bumped by `CubbyCommands`' ⌘F so `SearchView` can pull keyboard focus to its search field
+    /// without this class needing a `FocusState` of its own (see that view's `.searchFocused`).
+    var focusSearchRequest = 0
+    /// Set the first time a deep link, Spotlight continuation, or Handoff activity opens a
+    /// destination this launch. `RootSplitView`'s persisted-section restore checks this so a link
+    /// that arrives either before or after the restore still wins — see that view's doc comment.
+    private(set) var launchLinkApplied = false
 
     func path(for section: AppSection) -> Binding<[Route]> {
         Binding(
@@ -27,6 +34,7 @@ final class Navigator {
     }
 
     func open(_ link: CubbyLink) {
+        launchLinkApplied = true
         switch link {
         case .entity(let key, let id):
             section = .browse
@@ -44,6 +52,17 @@ final class Navigator {
         case .search:
             section = .search
             paths[.search] = []
+        }
+    }
+
+    /// Opens an entity on top of the section the user is already in, so a result found from the
+    /// Search tab reads as a push there rather than a jump to Browse. Non-entity links (capture,
+    /// audit, today, search) still move sections.
+    func openInPlace(_ link: CubbyLink) {
+        if case .entity(let key, let id) = link {
+            paths[section, default: []].append(.entityDetail(key, id: id))
+        } else {
+            open(link)
         }
     }
 

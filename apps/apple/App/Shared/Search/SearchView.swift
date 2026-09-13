@@ -1,5 +1,6 @@
 import CubbyKit
 import SwiftUI
+import TipKit
 
 /// The Search tab: search-as-you-type across every intent-exposed entity, scoped by kind, with a
 /// scanner sheet for the barcode/ISBN/label path. Owns a `SearchModel` created per host, mirroring
@@ -40,6 +41,13 @@ private struct SearchContent: View {
     @Environment(\.dismissSearch) private var dismissSearch
     @State private var scanning = false
     @State private var creatingProduct = false
+    @FocusState private var searchFieldFocused: Bool
+    /// The last `navigator.focusSearchRequest` this view already acted on, so a fresh mount (the
+    /// common case: switching to the Search tab normally) doesn't steal focus, while a request
+    /// from ⌘F (`CubbyCommands`) does — whether it lands before this view exists (`.task` below)
+    /// or after (`.onChange` below).
+    @State private var lastHandledFocusRequest = 0
+    private let scanLabelTip = ScanLabelTip()
 
     /// The search-role tab supplies the field on iOS; pinning it in the drawer keeps it visible
     /// while results scroll. macOS has no drawer, so the toolbar field is the only placement.
@@ -56,6 +64,7 @@ private struct SearchContent: View {
             .porcelainScreen()
             .navigationTitle("Search")
             .searchable(text: $search.query, placement: Self.searchPlacement, prompt: "Search Cubby")
+            .searchFocused($searchFieldFocused)
             .searchScopes($search.scope) {
                 Text("All").tag(EntityKey?.none)
                 ForEach(EntityCatalog.intentExposed, id: \.key) { descriptor in
@@ -85,11 +94,24 @@ private struct SearchContent: View {
                     } label: {
                         Label("Scan a code", systemImage: "barcode.viewfinder")
                     }
+                    .popoverTip(scanLabelTip)
                 }
             }
             .sheet(isPresented: $scanning) {
                 ScanLookupSheet(onTextResolved: { search.query = $0 })
             }
+            .task { applyPendingFocusRequest() }
+            .onChange(of: model.navigator.focusSearchRequest) { applyPendingFocusRequest() }
+    }
+
+    /// Handles ⌘F landing either before this view exists (the `.task` above, on first appearance)
+    /// or after (the `.onChange` above, while it's already on screen) — see
+    /// `lastHandledFocusRequest`'s doc comment for why both are needed.
+    private func applyPendingFocusRequest() {
+        let request = model.navigator.focusSearchRequest
+        guard request != lastHandledFocusRequest else { return }
+        lastHandledFocusRequest = request
+        searchFieldFocused = true
     }
 
     @ViewBuilder
@@ -169,7 +191,7 @@ private struct SearchContent: View {
     private func openEntity(_ key: EntityKey, id: String) {
         RecentEntities.record(id)
         dismissSearch()
-        model.navigator.open(.entity(key, id: id))
+        model.navigator.openInPlace(.entity(key, id: id))
     }
 
     private func handleSubmit() async {
@@ -177,7 +199,7 @@ private struct SearchContent: View {
         switch outcome {
         case .link(let link):
             dismissSearch()
-            model.navigator.open(link)
+            model.navigator.openInPlace(link)
         case .products(let rows, _) where rows.count == 1:
             if let row = rows.first { openEntity(.product, id: row.id) }
         case .products, .unknownCode, .text:
@@ -194,7 +216,7 @@ private struct SearchContent: View {
             guard let found = try await model.client.findOrCreateProduct(code: code) else { return }
             RecentEntities.record(found.product.id.rawValue)
             dismissSearch()
-            model.navigator.open(.entity(.product, id: found.product.id.rawValue))
+            model.navigator.openInPlace(.entity(.product, id: found.product.id.rawValue))
         } catch {
             model.handle(error)
         }
@@ -205,10 +227,14 @@ private struct SearchContent: View {
 private struct SearchHitRow: View {
     let hit: SearchHit
 
+    @Environment(\.zoomNamespace) private var zoomNamespace
+
     var body: some View {
         HStack(spacing: PorcelainTokens.Space.md) {
             Thumb(
-                url: hit.imageURL, size: 48, symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square")
+                url: hit.imageURL, size: 48, symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square"
+            )
+            .zoomSource(id: hit.id, in: zoomNamespace)
             VStack(alignment: .leading, spacing: 2) {
                 Text(hit.title)
                     .font(.body.weight(.semibold))
