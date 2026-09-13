@@ -19,11 +19,13 @@ struct ScanLookupSheet: View {
     @State private var outcome: LookupOutcome?
     @State private var errorMessage: String?
     @State private var creatingProduct = false
-    @State private var lastRead: (value: String, at: Date)?
+    /// When each raw value was last accepted. Keyed per code because the scanner reports every
+    /// code in frame, so two labels alternating (A, B, A…) must each keep their own window.
+    @State private var recentReads: [String: Date] = [:]
 
-    /// A repeat of the last accepted raw value inside this window is a re-read, not a new code —
-    /// mirrors `ScanSession.debounceInterval` without touching `ScanDrain`, which this screen has
-    /// no session to anchor.
+    /// A repeat of a raw value inside this window is a re-read, not a new code — mirrors
+    /// `ScanSession.debounceInterval` without touching `ScanDrain`, which this screen has no
+    /// session to anchor.
     private static let repeatWindow: TimeInterval = 1.5
 
     var body: some View {
@@ -144,10 +146,12 @@ struct ScanLookupSheet: View {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
         let now = Date.now
-        if let lastRead, lastRead.value == value, now.timeIntervalSince(lastRead.at) < Self.repeatWindow {
-            return
-        }
-        lastRead = (value, now)
+        if let last = recentReads[value], now.timeIntervalSince(last) < Self.repeatWindow { return }
+        recentReads[value] = now
+        // Single-shot: the first code to reach the server wins. A second read while one is in
+        // flight would race it for `outcome`, and the panel's Create/Stock buttons would then act
+        // on whichever answer landed last.
+        guard !resolving else { return }
         Task { await resolve(value) }
     }
 
