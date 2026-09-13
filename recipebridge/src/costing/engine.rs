@@ -14,10 +14,19 @@
 //!   under a fired cycle guard depends on the visited set, not just the id.
 //!
 //! - Products complete each other's non-price conversion, food, and nutrition
-//!   edges in one graph. Price is intentionally resolved after that shared graph
-//!   converts an amount to `each`: when several linked products are priced, the
-//!   cheapest valid product price wins deterministically. Do not isolate whole
-//!   graphs per product — that breaks cross-product completion.
+//!   edges in one merged graph, which resolves weight and nutrition. Do not
+//!   isolate whole graphs per product — that breaks cross-product completion.
+//!
+//!   Price is different. `each` is a different package on every product, and
+//!   every `1 each = <size>` mapping normalizes onto the one `whole ↔ g` edge —
+//!   the merged graph keeps only the last product's factor, so resolving a row
+//!   to `each` there and multiplying by a *different* product's `$/each` mixed
+//!   one product's package with another's price (36 g of Thai basil priced as
+//!   0.16 of a 0.5 lb bag × the 0.5 oz pack's price). So the price leg resolves
+//!   `each` per priced product through a graph holding only that product's
+//!   package edges plus every shared edge, and the cheapest product wins
+//!   deterministically. A priced product with no package of its own borrows
+//!   the merged graph (branded eggs price only via the generic shell's bridge).
 //!
 //!   That `each` is fractional — 825 g of a 5 lb bag is 0.363763 bags. It relies
 //!   on `ingredient` NOT rounding a conversion to a whole count; when it did, every
@@ -42,7 +51,7 @@ use super::types::{
     WRecipeCosting, WRowKind, WRowMissing, WRowPaths, WRowResult,
 };
 use crate::WConversionStep;
-use crate::food_mappings::product_non_price_mapping_pairs;
+use crate::food_mappings::{ProductPairs, WProductInput, product_non_price_mapping_pairs};
 use crate::reconcile::finite;
 use crate::{
     WMeasureEstimate, WNamedEstimate, WNutritionTotals, WUnavailableReason,
@@ -242,21 +251,53 @@ struct Target {
     kind: MeasureKind,
 }
 
-/// Per-ingredient context: non-price mapping pairs synthesized once, plus the
-/// linked product prices. The graph stays shared so products can complete each
-/// other's conversion/food edges; price is selected deterministically after the
-/// shared graph resolves the row to `each`.
+/// One linked product with a scalar price: its own package edges and the
+/// graph the price leg resolves `each` on (shared edges + those package edges).
+struct PricedProduct {
+    price: f64,
+    package_pairs: Vec<(Measure, Measure)>,
+    graph: OnceCell<MeasureGraph>,
+}
+
+/// Per-ingredient context: non-price mapping pairs synthesized once. `pairs`
+/// is every product's edges merged (weight, nutrition, stored money edges,
+/// explain); `shared_pairs` is the same minus package edges, the base each
+/// priced product's own price graph is built on.
 struct IngredientCtx {
     pairs: Vec<(Measure, Measure)>,
-    prices: Vec<f64>,
+    shared_pairs: Vec<(Measure, Measure)>,
+    priced: Vec<PricedProduct>,
     graph: OnceCell<MeasureGraph>,
 }
 
 impl IngredientCtx {
-    fn new(pairs: Vec<(Measure, Measure)>, prices: Vec<f64>) -> Self {
+    fn new(products: &[WProductInput]) -> Self {
+        let mut shared_pairs = Vec::new();
+        let mut package_pairs = Vec::new();
+        let mut priced = Vec::new();
+        for product in products {
+            let ProductPairs { package, shared } = product_non_price_mapping_pairs(product);
+            shared_pairs.extend(shared);
+            if let Some(price) = product.price {
+                priced.push(PricedProduct {
+                    price,
+                    package_pairs: package.clone(),
+                    graph: OnceCell::new(),
+                });
+            }
+            package_pairs.extend(package);
+        }
+        // Shared-then-package ordering builds the same merged graph as the
+        // per-product input order did: a package edge (touches `whole`) and a
+        // shared edge never define the same unit pair, so `make_graph`'s
+        // last-mapping-wins only ever arbitrates within one class, whose
+        // relative order is preserved.
+        let mut pairs = shared_pairs.clone();
+        pairs.extend(package_pairs);
         Self {
             pairs,
-            prices,
+            shared_pairs,
+            priced,
             graph: OnceCell::new(),
         }
     }
@@ -265,23 +306,38 @@ impl IngredientCtx {
         self.graph.get_or_init(|| make_graph(&self.pairs))
     }
 
-    /// Resolve the written amount through the shared non-price graph, then
-    /// select the cheapest linked product with a valid scalar price. Ranges are
-    /// preserved by scaling both bounds.
+    /// The graph a product's price leg resolves `each` on. A product that
+    /// declares its own package is isolated to it; one without any borrows the
+    /// merged graph exactly as before (that is how a priced branded product
+    /// with no mappings reaches `each` through a generic sibling's bridge).
+    fn price_graph<'p>(&'p self, product: &'p PricedProduct) -> &'p MeasureGraph {
+        if product.package_pairs.is_empty() {
+            return self.graph();
+        }
+        product.graph.get_or_init(|| {
+            let mut pairs = self.shared_pairs.clone();
+            pairs.extend(product.package_pairs.iter().cloned());
+            make_graph(&pairs)
+        })
+    }
+
+    /// Resolve the written amount to `each` through each priced product's own
+    /// price graph, multiply by that product's price, and take the cheapest.
+    /// A product whose graph can't reach `each` contributes nothing. Ranges
+    /// are preserved by scaling both bounds.
     fn cheapest_price(&self, amounts: &[Measure]) -> Option<Measure> {
-        let each = convert_with_fallback(
-            amounts,
-            self.graph(),
-            MeasureKind::Other("each".to_string()),
-        )?;
-        self.prices
+        self.priced
             .iter()
-            .copied()
-            .filter(|price| price.is_finite())
-            .filter_map(|price| {
-                let value = each.value() * price;
+            .filter(|product| product.price.is_finite())
+            .filter_map(|product| {
+                let each = convert_with_fallback(
+                    amounts,
+                    self.price_graph(product),
+                    MeasureKind::Other("each".to_string()),
+                )?;
+                let value = each.value() * product.price;
                 value.is_finite().then(|| {
-                    let upper = each.upper_value().map(|bound| bound * price);
+                    let upper = each.upper_value().map(|bound| bound * product.price);
                     match upper {
                         Some(bound) if bound > value => Measure::with_range("dollar", value, bound),
                         _ => Measure::new("dollar", value),
@@ -333,24 +389,16 @@ impl<'a> Engine<'a> {
             ingredients: input
                 .ingredients
                 .iter()
-                .map(|i| {
-                    // Merge every product's non-price mappings into one graph. This is
-                    // intentional and load-bearing: products complete each other
-                    // (e.g. branded "Pete & Gerry's" eggs has no mappings and
-                    // reaches its price only via the generic shell's
-                    // `large → whole → each` bridge; branded olive oil supplies
-                    // price+package but its nutrition comes from the shell's USDA
-                    // food). Synthetic price edges stay out so several priced
-                    // products can be compared deterministically after `each`
-                    // resolves through this shared graph.
-                    let pairs = i
-                        .products
-                        .iter()
-                        .flat_map(product_non_price_mapping_pairs)
-                        .collect();
-                    let prices = i.products.iter().filter_map(|p| p.price).collect();
-                    (i.id.as_str(), IngredientCtx::new(pairs, prices))
-                })
+                // Every product's non-price mappings merge into one graph. This is
+                // intentional and load-bearing: products complete each other
+                // (e.g. branded "Pete & Gerry's" eggs has no mappings and
+                // reaches its price only via the generic shell's
+                // `large → whole → each` bridge; branded olive oil supplies
+                // price+package but its nutrition comes from the shell's USDA
+                // food). Synthetic price edges stay out, and each product's own
+                // package edges are re-isolated for its price leg — see
+                // `IngredientCtx::cheapest_price`.
+                .map(|i| (i.id.as_str(), IngredientCtx::new(&i.products)))
                 .collect(),
             targets: input
                 .nutrient_targets
@@ -365,7 +413,7 @@ impl<'a> Engine<'a> {
                     },
                 })
                 .collect(),
-            empty_ctx: IngredientCtx::new(Vec::new(), Vec::new()),
+            empty_ctx: IngredientCtx::new(&[]),
             sub_totals: RefCell::new(HashMap::new()),
         }
     }
@@ -1176,7 +1224,6 @@ impl<'a> Engine<'a> {
 mod tests {
     use super::*;
     use crate::WCostingIngredient;
-    use crate::food_mappings::WProductInput;
 
     fn product(id: &str, price: Option<f64>) -> WProductInput {
         WProductInput {

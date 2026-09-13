@@ -904,6 +904,122 @@ fn scalar_price_wins_when_cheaper_than_the_stored_money_edge() {
     assert_close(r.price, 0.1, 1e-9, "price");
 }
 
+/// A product with a scalar price and its own package edges (`unit_mappings`),
+/// the shape every priced grocery product has.
+fn packaged(id: &str, price: Option<f64>, mappings: Vec<WUnitMapping>) -> WProductInput {
+    WProductInput {
+        id: id.to_string(),
+        price,
+        unit_mappings: mappings,
+        food: None,
+    }
+}
+
+fn multi_product(id: &str, products: Vec<WProductInput>) -> WCostingIngredient {
+    WCostingIngredient {
+        id: id.to_string(),
+        products,
+    }
+}
+
+/// `each` is a different package on every product, and every `1 each = <size>`
+/// normalizes onto the one `whole ↔ g` edge, which the graph keeps last-wins.
+/// Resolving `each` on the merged graph and multiplying by a different
+/// product's price mixed one product's package with another's price: 36 g of
+/// Thai basil became 0.16 of the 0.5 lb bag × the 0.5 oz pack's price. The
+/// price leg must resolve `each` through the priced product's OWN package.
+/// Both product orders are asserted because the old result depended on which
+/// product was listed last (36/226 × $1 = $0.16 one way, $2.57 the other).
+#[test]
+fn each_resolves_through_the_priced_products_own_package() {
+    let pack = || packaged("pack", Some(1.0), vec![mapping((1.0, "each"), (14.0, "g"))]);
+    let bag = || {
+        packaged(
+            "bag",
+            Some(3.59),
+            vec![mapping((1.0, "each"), (226.0, "g"))],
+        )
+    };
+    for products in [vec![pack(), bag()], vec![bag(), pack()]] {
+        let r = cost(
+            vec![row("basil", "thai basil", Some((36.0, "g")), None, None)],
+            vec![multi_product("basil", products)],
+            vec![],
+        );
+        // min(36/14 × $1 = $2.5714, 36/226 × $3.59 = $0.5719)
+        assert_close(r.price, 36.0 / 226.0 * 3.59, 1e-6, "price");
+        assert!(r.missing_by_type.price.is_empty());
+    }
+}
+
+/// Cross-product completion must survive the isolation: a priced product with
+/// no mappings at all (branded eggs) still reaches `each` through a sibling's
+/// package edge, exactly as before.
+#[test]
+fn unmapped_priced_product_borrows_a_siblings_package() {
+    let eggs = multi_product(
+        "eggs",
+        vec![
+            packaged("generic", None, vec![mapping((1.0, "each"), (50.0, "g"))]),
+            packaged("branded", Some(4.0), vec![]),
+        ],
+    );
+    let r = cost(
+        vec![row("eggs", "eggs", Some((100.0, "g")), None, None)],
+        vec![eggs],
+        vec![],
+    );
+    assert_close(r.price, 8.0, 1e-9, "price");
+}
+
+/// Only package edges are isolated per product; a sibling's density (or any
+/// other non-count edge) still completes the priced product's graph.
+#[test]
+fn shared_non_package_edges_still_complete_the_price_graph() {
+    let oil = multi_product(
+        "oil",
+        vec![
+            packaged(
+                "bottle",
+                Some(15.29),
+                vec![mapping((1.0, "each"), (750.0, "ml"))],
+            ),
+            packaged("generic", None, vec![mapping((1.0, "ml"), (0.92, "g"))]),
+        ],
+    );
+    let r = cost(
+        vec![row("oil", "olive oil", Some((30.0, "g")), None, None)],
+        vec![oil],
+        vec![],
+    );
+    // 30 g ÷ 0.92 g/ml ÷ 750 ml/each × $15.29
+    assert_close(r.price, 30.0 / 0.92 / 750.0 * 15.29, 1e-4, "price");
+}
+
+/// A product that declares its own package but can't reach `each` from the
+/// row's amount is skipped — it must not fall back to a sibling's package.
+#[test]
+fn own_package_that_cannot_reach_each_contributes_nothing() {
+    let herbs = multi_product(
+        "herbs",
+        vec![
+            packaged("bag", Some(2.0), vec![mapping((1.0, "each"), (100.0, "g"))]),
+            packaged(
+                "bunch",
+                Some(1.0),
+                vec![mapping((1.0, "each"), (1.0, "bunch"))],
+            ),
+        ],
+    );
+    let r = cost(
+        vec![row("herbs", "herbs", Some((50.0, "g")), None, None)],
+        vec![herbs],
+        vec![],
+    );
+    // Only the bag prices: 50/100 × $2. The bunch's $0.50 would need 50 g → bunch.
+    assert_close(r.price, 1.0, 1e-9, "price");
+}
+
 #[test]
 fn measured_salt_is_normal_even_with_to_taste() {
     let r = cost(

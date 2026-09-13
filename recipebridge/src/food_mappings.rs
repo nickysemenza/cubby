@@ -11,7 +11,7 @@
 
 use ingredient::{
     from_str as parse_ingredient_str,
-    unit::{Measure, singular},
+    unit::{Measure, Unit, singular},
 };
 use serde::{Deserialize, Serialize};
 use tsify_next::Tsify;
@@ -275,22 +275,42 @@ pub(crate) fn product_mapping_pairs(product: &WProductInput) -> Vec<(Measure, Me
         .collect()
 }
 
-/// One product's non-price conversion edges. Costing merges these across every
-/// product linked to an ingredient so products can complete each other's unit,
-/// food, and nutrition mappings without letting several synthetic price edges
-/// collide on the shared `each` node.
-pub(crate) fn product_non_price_mapping_pairs(product: &WProductInput) -> Vec<(Measure, Measure)> {
-    let food = product
-        .food
-        .as_ref()
-        .map(mappings_from_food)
-        .unwrap_or_default();
-    product
+/// One product's non-price conversion edges, split by what they describe.
+///
+/// Costing merges these across every product linked to an ingredient so
+/// products can complete each other's unit, food, and nutrition mappings,
+/// without letting several synthetic price edges collide on the shared `each`
+/// node. The split exists because `each` is *also* where package sizes
+/// collide: every product's `1 each = <size>` normalizes onto the one
+/// `whole ↔ g` edge, and the graph keeps only the last one written. So
+/// `package` edges are per-product when a product's price is resolved (see
+/// `IngredientCtx::cheapest_price`), while `shared` edges are ingredient-level
+/// and always merged.
+pub(crate) struct ProductPairs {
+    /// Stored rows that mention a bare count (`each`/`whole`): the product's
+    /// own package. Never food-derived — a USDA `1 whole = 50 g` portion
+    /// describes the ingredient, and `serving_mapping` relabels bare counts —
+    /// so the cross-product `large → whole` egg bridge stays in `shared`.
+    pub package: Vec<(Measure, Measure)>,
+    /// Everything else: density, `cup = 120 g`, stored money edges, food
+    /// portions, and nutrition.
+    pub shared: Vec<(Measure, Measure)>,
+}
+
+fn mentions_count(pair: &(Measure, Measure)) -> bool {
+    pair.0.unit().normalize() == Unit::Whole || pair.1.unit().normalize() == Unit::Whole
+}
+
+pub(crate) fn product_non_price_mapping_pairs(product: &WProductInput) -> ProductPairs {
+    let (package, mut shared): (Vec<_>, Vec<_>) = product
         .unit_mappings
         .iter()
-        .chain(food.iter())
         .map(WUnitMapping::to_pair)
-        .collect()
+        .partition(mentions_count);
+    if let Some(food) = product.food.as_ref() {
+        shared.extend(mappings_from_food(food).iter().map(WUnitMapping::to_pair));
+    }
+    ProductPairs { package, shared }
 }
 
 /// All unit mappings derivable from one USDA food: portion edges, the
