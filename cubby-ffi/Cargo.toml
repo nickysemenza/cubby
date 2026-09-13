@@ -1,10 +1,8 @@
 [package]
 name = "cubby-ffi"
 version = "0.1.0"
-# Matches recipebridge's floor: the pinned upstream ingredient-parser crates
-# require Rust 1.88, and this crate depends on recipebridge directly.
+# Matches recipebridge: edition 2024, no `rust-version` floor (see its Cargo.toml).
 edition = "2024"
-rust-version = "1.88"
 
 [lib]
 name = "cubby_ffi"
