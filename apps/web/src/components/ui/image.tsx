@@ -5,7 +5,7 @@ import {
   useCallback,
   useState,
 } from "react";
-import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
+import { transformedImageUrl } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 
 export type ImageProps = Omit<
@@ -72,17 +72,15 @@ export function Image({
   const transformApplied = hasSrc && transformedSrc !== src;
   const useTransform = transformApplied && !triedOriginal;
 
+  // No srcSet: the helper already requests 2× the rendered width, so every
+  // device pixel ratio fetches the same URL and shares one cache entry.
   const effectiveSrc = useTransform
     ? transformedSrc
     : (src as string | undefined);
-  const effectiveSrcSet =
-    useTransform && displayWidth != null
-      ? transformedSrcSet(src as string, displayWidth)
-      : undefined;
 
   // Skip the placeholder entirely for images already loaded this session.
-  // Keyed on the final (transformed) URL so two display widths of the same
-  // source are tracked independently.
+  // Keyed on the final (transformed) URL, so two placements that snap to the
+  // same rung share the "already seen it" decision.
   const [isLoading, setIsLoading] = useState(
     () => !(effectiveSrc != null && loadedSrcs.has(effectiveSrc)),
   );
@@ -142,7 +140,6 @@ export function Image({
       <img
         ref={handleRef}
         src={effectiveSrc}
-        srcSet={effectiveSrcSet}
         alt={alt}
         loading="lazy"
         decoding="async"

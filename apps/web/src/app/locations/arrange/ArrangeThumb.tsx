@@ -4,14 +4,9 @@ import type React from "react";
 import type { ReactNode } from "react";
 
 import { Image } from "~/components/ui/image";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
+import { ImagePreviewPopup } from "~/components/ui/image-with-preview";
+import { Tooltip, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
-
-const PREVIEW_PX = 280;
 
 interface ArrangeThumbProps {
   /** Candidate covers; the first displayable one wins. */
@@ -52,7 +47,7 @@ interface ArrangeThumbProps {
  * alignment down a column), and `ImageThumbnail` is a 64px table cell carrying
  * a `+N` badge. `ImageWithPreview` doesn't fit either — it owns its trigger
  * element, and this tile's three drag-safety attributes below are exactly what
- * a generic trigger would drop.
+ * a generic trigger would drop. Only its popup (`ImagePreviewPopup`) is shared.
  *
  * The hover preview is drag-safe by construction, which is what a tile inside a
  * native-drag source needs:
@@ -131,22 +126,7 @@ export function ArrangeThumb({
           fallback={fallback}
         />
       </TooltipTrigger>
-      <TooltipContent
-        side="right"
-        className="pointer-events-none max-w-none overflow-hidden rounded-none border border-[var(--border)] bg-popover p-0"
-      >
-        <div
-          className="relative"
-          style={{ width: PREVIEW_PX, height: PREVIEW_PX }}
-        >
-          <Image
-            src={cover.url}
-            alt={alt}
-            displayWidth={PREVIEW_PX}
-            className="absolute inset-0 size-full bg-card object-contain"
-          />
-        </div>
-      </TooltipContent>
+      <ImagePreviewPopup src={cover.url} alt={alt} />
     </Tooltip>
   );
 }

@@ -63,7 +63,6 @@ export function LocationPickerThumb({
         src={imageUrl}
         alt=""
         displayWidth={THUMB_PX}
-        previewSize={280}
         // Left: the tile is at the row's left edge, so the preview lands
         // outside the popup instead of covering the options you're scanning.
         previewSide="left"

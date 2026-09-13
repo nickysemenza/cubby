@@ -300,7 +300,7 @@ function LocationContextStrip({ location }: { location: SessionLocation }) {
             <Image
               src={images[0]?.url}
               alt={`${location.name} photo`}
-              displayWidth={112}
+              displayWidth={96}
               className="h-16 w-24 border border-[var(--border)] object-cover"
             />
           </button>
@@ -335,7 +335,7 @@ function LocationContextStrip({ location }: { location: SessionLocation }) {
               key={image.id}
               src={image.url}
               alt={`${location.name} photo`}
-              displayWidth={96}
+              displayWidth={80}
               className="h-14 w-20 shrink-0 border border-[var(--border)] object-cover"
             />
           ))}
@@ -435,7 +435,7 @@ function ExpectedItemReviewRow({
         <Image
           src={item.product.images.find(isDisplayableImageFile)?.url}
           alt=""
-          displayWidth={96}
+          displayWidth={48}
           className="size-12 shrink-0 border border-[var(--border)] object-cover"
         />
         <div className="min-w-0 flex-1">

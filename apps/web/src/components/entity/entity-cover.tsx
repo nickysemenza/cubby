@@ -91,7 +91,6 @@ export function EntityCover({
           lazyPreview={lazyPreview}
           fallback={mediaFallback}
           displayWidth={size ?? 64}
-          previewSize={400}
           fit={fit}
           className="absolute inset-0 h-full w-full rounded-none border-0"
         />

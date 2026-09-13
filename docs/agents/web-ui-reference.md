@@ -83,9 +83,10 @@ const { data, isLoading } = useQueries({
 
 ## Images
 
-- **Every `<Image>` declares its rendered width or explicitly opts out with `unoptimized`.** The `ImageProps` union enforces this at typecheck. The helper never upscales (`fit=scale-down`) and emits a 1x/2x `srcSet`, so retina is already covered.
+- **Every `<Image>` declares its rendered CSS width (`displayWidth`) or explicitly opts out with `unoptimized`.** The `ImageProps` union enforces this at typecheck. Declare the box's real width — never a transform size: `transformedImageUrl` (`src/lib/image-url.ts`) requests 2× the rendered width and snaps up to one of three rungs (`IMAGE_WIDTHS` = 128 / 640 / 2048), so every small placement of a photo shares one URL, one cache entry and one billed transformation. There is no `srcSet`; the 2× request covers retina. The native app mints identical URLs (`CubbyKit/Media/ImageTransform.swift`) — change the ladder in both places or not at all.
 - Passing `displayWidth` for a non-bucket URL (external UPC-lookup images, data URLs) is a **harmless no-op** — `transformedImageUrl` returns the input unchanged. That's why the rule has no allowlist: there's never a reason not to declare the width.
-- Prefer the wrappers over a bare `<Image>`: `ImageWithPreview` (defaults `displayWidth` to its `size`), `CardThumbnail`, `ImageThumbnail`, `InteractiveImage`. Only reach for `<Image>` directly when none of those fit.
+- Prefer the wrappers over a bare `<Image>`: `ImageWithPreview` (defaults `displayWidth` to its `size`), `CardThumbnail`, `ImageThumbnail`. Only reach for `<Image>` directly when none of those fit. Every hover preview renders at `PREVIEW_PX` (`ImagePreviewPopup`); don't mint a per-surface preview size.
+- List thumbnails come from the row's server-resolved `displayImages` (`createImageColumn` reads it; no per-list `getImages` rule) — see the entity-display-image policy in `server/repo/entity-display-image.ts`.
 
 ## Spacing
 
