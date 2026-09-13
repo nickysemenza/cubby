@@ -265,7 +265,7 @@ function CookbookDetailBody({ cookbook }: { cookbook: CookbookSummary }) {
             <Image
               src={coverUrl}
               alt={name}
-              displayWidth={480}
+              displayWidth={320}
               className="max-h-72 w-auto object-contain"
             />
           </div>

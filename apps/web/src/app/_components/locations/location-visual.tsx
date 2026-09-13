@@ -118,7 +118,7 @@ function ChildContactSheet({
             key={child.id}
             src={child.image.url}
             alt={`${child.name} compartment`}
-            displayWidth={360}
+            displayWidth={240}
             className="size-full bg-card object-cover"
           />
         );
@@ -157,11 +157,11 @@ function LocationVisualMedia({
     visual.primarySource === "location" || visual.primarySource === "product";
   const hasChildren = visual.childVisuals.length > 0;
   const ownImageCount = location.images.filter(isDisplayableImageFile).length;
+  // The hero is edge-to-edge on mobile (DetailPlate's w-screen slot); every
+  // other variant is a card or rail tile.
+  const primaryDisplayWidth = variant === "hero" ? 640 : 320;
   const primaryImage = (
-    <PrimaryImage
-      location={location}
-      displayWidth={variant === "hero" ? 640 : 320}
-    />
+    <PrimaryImage location={location} displayWidth={primaryDisplayWidth} />
   );
   return (
     <div
@@ -195,7 +195,12 @@ function LocationVisualMedia({
           interactive={interactive ?? false}
         />
       ) : (
-        !hasIdentity && <PrimaryImage location={location} displayWidth={320} />
+        !hasIdentity && (
+          <PrimaryImage
+            location={location}
+            displayWidth={primaryDisplayWidth}
+          />
+        )
       )}
     </div>
   );

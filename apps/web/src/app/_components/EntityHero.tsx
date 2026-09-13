@@ -88,7 +88,7 @@ export const EntityHero: FC<EntityHeroProps> = ({
                   <Image
                     src={image.url}
                     alt={image.filename}
-                    displayWidth={96}
+                    displayWidth={48}
                     className="absolute inset-0 h-full w-full bg-card object-contain"
                   />
                 </button>
