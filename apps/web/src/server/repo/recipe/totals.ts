@@ -344,6 +344,55 @@ export const findStaleParentRecipeIds = async (
 };
 
 /**
+ * For each root, every recipe reachable from it through sub-recipe links —
+ * transitively, and including the root itself when a cycle leads back to it.
+ * The cascade uses this to refuse to stale a parent that is also a descendant
+ * of the child that changed: around a cycle each recompute folds the other's
+ * totals in again, so both keep "changing" and the cascade never converges
+ * (inline it recursed without bound; queued it ping-ponged forever). The
+ * Problems page's dependency-cycle detector is the durable report of such
+ * data; the cascade only has to stop.
+ */
+const findSubRecipeDescendantIds = async (
+  db: Database | DrizzleTransaction,
+  rootIds: readonly RecipeId[],
+): Promise<Map<RecipeId, Set<RecipeId>>> => {
+  const byRoot = new Map<RecipeId, Set<RecipeId>>();
+  if (rootIds.length === 0) return byRoot;
+  const res = await unwrapDb(db).execute<{
+    root: RecipeId;
+    recipeId: RecipeId;
+  }>(
+    sql`
+    WITH RECURSIVE recipe_tree AS (
+      SELECT r.id AS root, r.id AS "recipeId", 0 AS depth
+      FROM unnest(ARRAY[${sql.join(
+        rootIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )}]) AS r(id)
+      UNION
+      SELECT rt.root, i."recipeId", 1
+      FROM recipe_tree rt
+      INNER JOIN ${recipeSection} rs
+        ON rs."recipeId" = rt."recipeId" AND rs."deletedAt" IS NULL
+      INNER JOIN ${recipeSectionIngredient} rsi
+        ON rsi."recipeSectionId" = rs.id AND rsi."deletedAt" IS NULL
+      INNER JOIN ${ingredient} i
+        ON i.id = rsi."ingredientId" AND i."deletedAt" IS NULL
+      WHERE i."recipeId" IS NOT NULL
+    )
+    SELECT DISTINCT root, "recipeId" FROM recipe_tree WHERE depth > 0
+  `,
+  );
+  for (const row of res.rows) {
+    const set = byRoot.get(row.root) ?? new Set<RecipeId>();
+    set.add(row.recipeId);
+    byRoot.set(row.root, set);
+  }
+  return byRoot;
+};
+
+/**
  * Commit one recompute chunk: changed totals, fresh stamps for unchanged
  * recipes, and the invalidation of every parent whose sub-recipe cost changed,
  * in ONE transaction. Publishing the parents' wakeups happens after commit —
@@ -375,11 +424,24 @@ export const commitRecipeTotals = async (
       tx,
       input.changedIds,
     );
+    const descendants = await findSubRecipeDescendantIds(tx, [
+      ...parentsByRecipe.keys(),
+    ]);
     const processed = new Set<RecipeId>(input.processedIds);
     const changedParents = new Set<RecipeId>();
-    for (const parents of parentsByRecipe.values())
-      for (const parent of parents)
-        if (!processed.has(parent)) changedParents.add(parent);
+    const cyclic = new Set<RecipeId>();
+    for (const [child, parents] of parentsByRecipe)
+      for (const parent of parents) {
+        if (processed.has(parent)) continue;
+        if (descendants.get(child)?.has(parent)) cyclic.add(parent);
+        else changedParents.add(parent);
+      }
+    if (cyclic.size > 0) {
+      console.warn(
+        `[recompute] sub-recipe cycle: not re-staling ${cyclic.size} parent(s) that are also descendants`,
+        [...cyclic],
+      );
+    }
     await markRecipesStaleReturningTransitioned(tx, [...changedParents]);
     return { changedParentIds: [...changedParents] };
   });

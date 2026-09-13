@@ -11,7 +11,7 @@ import {
 } from "~/server/entity-kernel";
 import { findOrCreateIngredient } from "~/server/repo/ingredient";
 import { createProduct, updateProduct } from "~/server/repo/product";
-import { createRecipe } from "~/server/repo/recipe";
+import { createRecipe, updateRecipe } from "~/server/repo/recipe";
 import {
   getRecipeTotalsState,
   markRecipesStale,
@@ -135,6 +135,7 @@ describe("recipe totals cascade", () => {
     };
     const ids = {
       childCode: child.id,
+      parentCode: parent.id,
       child: await resolve(child.id),
       parent: await resolve(parent.id),
       grandparent: await resolve(grandparent.id),
@@ -244,4 +245,44 @@ describe("recipe totals cascade", () => {
     expect(await stale(tree.parent)).toBe(true);
     expect(published).toEqual([[tree.parent]]);
   });
+
+  it(
+    "stops at a sub-recipe cycle instead of re-staling around it",
+    { timeout: 10_000 },
+    async () => {
+      const tree = await seedTree();
+      // Close the loop: the child now also includes its own parent.
+      await updateRecipe(
+        ctx.db,
+        tree.child,
+        {
+          sections: [
+            {
+              instructions: [{ instruction: "Use parent" }],
+              ingredients: [
+                {
+                  type: "recipe" as const,
+                  recipeId: tree.parentCode,
+                  ingredientId: null,
+                  amounts: [{ value: 1, unit: "each" }],
+                },
+              ],
+            },
+          ],
+        },
+        ctx.actor,
+      );
+      await markRecipesStale(ctx.db, [tree.child]);
+      const published = installQueue();
+
+      // Inline transport would recurse here without bound; queued it would
+      // ping-pong. Either way the totals around a cycle never converge, so
+      // the cascade must refuse to stale a parent that is also a descendant.
+      await costing().recomputeQueued([tree.child]);
+
+      expect(await stale(tree.child)).toBe(false);
+      expect(await stale(tree.parent)).toBe(false);
+      expect(published).toEqual([]);
+    },
+  );
 });
