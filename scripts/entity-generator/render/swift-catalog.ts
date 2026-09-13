@@ -245,9 +245,22 @@ export const renderSwiftEntityCatalog = (
     "EntityFilterKind",
     filterKinds,
   );
+  // One static per entity rather than a single ~900-line array literal:
+  // Release/WMO spent ~650 s inside the SIL optimizer's COWArrayOpt pass
+  // (ColdBlockInfo::analyze) on the one-time initializer of `all` when the
+  // whole catalog was one function; nineteen small initializers cost ~17 s.
+  const descriptorName = (entity: CompiledEntity) =>
+    `${swiftCaseName(entity.key)}Descriptor`;
   const descriptors = entities
-    .map((entity) => renderEntityDescriptorLiteral(entity, kernelContractCases))
-    .join(",\n");
+    .map(
+      (entity) =>
+        `  private static let ${descriptorName(entity)}: EntityDescriptor =\n` +
+        renderEntityDescriptorLiteral(entity, kernelContractCases),
+    )
+    .join("\n\n");
+  const allEntries = entities
+    .map((entity) => `    ${descriptorName(entity)},`)
+    .join("\n");
   const source =
     generatedHeader +
     "// swift-format-ignore-file\n\n" +
@@ -295,7 +308,8 @@ export const renderSwiftEntityCatalog = (
     "  public let actions: Set<EntityAction>\n" +
     "}\n\n" +
     "public enum EntityCatalog {\n" +
-    `  public static let all: [EntityDescriptor] = [\n${descriptors}\n  ]\n\n` +
+    `${descriptors}\n\n` +
+    `  public static let all: [EntityDescriptor] = [\n${allEntries}\n  ]\n\n` +
     "  private static let byKey: [EntityKey: EntityDescriptor] = Dictionary(\n" +
     "    uniqueKeysWithValues: all.map { ($0.key, $0) }\n" +
     "  )\n\n" +
