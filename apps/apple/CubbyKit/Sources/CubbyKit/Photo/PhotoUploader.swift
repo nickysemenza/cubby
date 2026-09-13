@@ -49,6 +49,17 @@ public actor PhotoUploader {
         public let byteCount: Int
     }
 
+    public struct Checkpoint: Sendable {
+        fileprivate let outcome: Outcome
+        fileprivate var marked = false
+        fileprivate var attached = false
+    }
+
+    public struct Failure: Error, Sendable {
+        public let checkpoint: Checkpoint?
+        public let underlying: Error
+    }
+
     private let service: any PhotoService
     private let put: PresignedUpload.Put
 
@@ -60,8 +71,44 @@ public actor PhotoUploader {
         self.put = put
     }
 
-    public func upload(_ request: Request, progress: (@Sendable (Step) -> Void)? = nil) async throws
+    public func upload(
+        _ request: Request, resuming checkpoint: Checkpoint? = nil,
+        progress: (@Sendable (Step) -> Void)? = nil
+    ) async throws
         -> Outcome
+    {
+        var saved = checkpoint
+        do {
+            if saved == nil { saved = try await uploadBytes(request, progress: progress) }
+            guard var current = saved else { throw CocoaError(.fileWriteUnknown) }
+            if !current.marked {
+                progress?(.marking)
+                try await service.markUploaded(current.outcome.imageID)
+                current.marked = true
+                saved = current
+            }
+            if !current.attached {
+                progress?(.attaching)
+                try await service.attachImages(
+                    [current.outcome.imageID], to: request.entity, id: request.entityID)
+                current.attached = true
+                saved = current
+            }
+            if request.makeCover, request.entity == .product {
+                progress?(.ordering)
+                let product = ProductCode(request.entityID)
+                let existing = try await service.productImageIDs(product).filter {
+                    $0 != current.outcome.imageID
+                }
+                try await service.setImageOrder([current.outcome.imageID] + existing, product: product)
+            }
+            progress?(.done)
+            return current.outcome
+        } catch { throw Failure(checkpoint: saved, underlying: error) }
+    }
+
+    private func uploadBytes(_ request: Request, progress: (@Sendable (Step) -> Void)?) async throws
+        -> Checkpoint
     {
         progress?(.encoding)
         let scaled = try ImageEncoding.downscaled(request.image, maxPixelSize: request.maxPixelSize)
@@ -76,20 +123,6 @@ public actor PhotoUploader {
         progress?(.uploading)
         try await put(data, upload.uploadUrl, request.format.contentType)
 
-        progress?(.marking)
-        try await service.markUploaded(upload.imageId)
-
-        progress?(.attaching)
-        try await service.attachImages([upload.imageId], to: request.entity, id: request.entityID)
-
-        if request.makeCover, request.entity == .product {
-            progress?(.ordering)
-            let product = ProductCode(request.entityID)
-            let existing = try await service.productImageIDs(product).filter { $0 != upload.imageId }
-            try await service.setImageOrder([upload.imageId] + existing, product: product)
-        }
-
-        progress?(.done)
-        return Outcome(imageID: upload.imageId, url: upload.url, byteCount: data.count)
+        return Checkpoint(outcome: Outcome(imageID: upload.imageId, url: upload.url, byteCount: data.count))
     }
 }

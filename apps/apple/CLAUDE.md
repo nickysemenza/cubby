@@ -5,9 +5,11 @@ Native PoC: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI harne
 
 ## Build order
 
-`apps/apple/scripts/build-rust.sh` → `apps/apple/scripts/generate-openapi.sh` → `xcodegen generate
---spec apps/apple/project.yml`. If a build fails with the literal text `artifact of binary target
-'CubbyFFIBinary' not found`, the xcframework is missing — run `build-rust.sh` first.
+`node scripts/ensure-apple-ffi.ts` (Nx-cached `build-rust.sh`; restores the xcframework + shim
+across worktrees when Rust is unchanged) → `apps/apple/scripts/generate-openapi.sh` → `xcodegen
+generate --spec apps/apple/project.yml --use-cache`. If a build fails with the literal text
+`artifact of binary target 'CubbyFFIBinary' not found`, the xcframework is missing — run
+`ensure-apple-ffi.ts` first.
 
 ## Wire rules (non-negotiable)
 
@@ -80,7 +82,7 @@ Native PoC: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI harne
   `scripts/entity-generator/render/swift-catalog.ts`. Regenerate with `pnpm entity:generate`
   (repo root).
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — from `uniffi-bindgen`. Regenerate with
-  `apps/apple/scripts/build-rust.sh`.
+  `node scripts/ensure-apple-ffi.ts` (or `apps/apple/scripts/build-rust.sh` directly).
 - `CubbyKit/Sources/CubbyAPI/*.swift` (`Client.swift`, `Types*.swift`) — swift-openapi-generator's
   typed client and schema types, from `apps/web`'s committed OpenAPI document
   (`apps/web/src/lib/generated/http-openapi.gen.json`). The entire `CubbyAPI` target is generated,
@@ -93,16 +95,17 @@ Native PoC: SwiftUI (iOS 26 / macOS 26) + `CubbyKit` package + `cubby` CLI harne
   That same script also (re)writes `openapi/openapi-generator-config.yaml` from the allowlist, so
   it is generated too even though nothing above reads it directly.
 
-Hand-editing any of these fails its generator's `--check`/staleness gate. If one is missing (its
+Hand-editing any of these fails its generator's staleness gate. If one is missing (its
 owning agent hasn't landed yet), a stub at the same path is expected — do not fabricate the real
 generated shape.
 
 ## Verification
 
+- `pnpm apple <cli|mac|ios|sim|gen|test>` from the repo root launches each product (README "Running").
 - `swift build --package-path apps/apple/CubbyKit`
 - `swift test --package-path apps/apple/CubbyKit`
 - `xcodegen generate --spec apps/apple/project.yml` (only once `project.yml` exists)
-- Full app build needs the xcframework from `build-rust.sh` first; that script and its inputs
+- Full app build needs the xcframework from `ensure-apple-ffi.ts` first; that script and its inputs
   belong to W1.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
   `scripts/ci-scope.ts`'s `runAppleCheck`) gates formatting; run

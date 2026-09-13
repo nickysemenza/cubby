@@ -13,8 +13,31 @@ export const garden = defineOperationDomain(gardenContract, {
       ["product"],
     ],
   },
-  options: { tags: [["garden"], ["location"], ["ingredient"], ["product"]] },
-  entries: { tags: [["garden"], ["gardenEntry"]] },
+  options: {
+    tags: [["garden"], ["location"], ["ingredient"], ["product"], ["planting"]],
+  },
+  entries: {
+    tags: [
+      ["garden"],
+      ["gardenEntry"],
+      ["location"],
+      ["planting"],
+      ["ingredient"],
+      ["image"],
+    ],
+  },
+  journal: {
+    tags: [
+      ["garden"],
+      ["gardenEntry"],
+      ["planting"],
+      ["location"],
+      ["ingredient"],
+      ["image"],
+    ],
+  },
+  locationHistory: { tags: [["garden"], ["planting"], ["location"]] },
+  correctLocationDates: { invalidates: ripple.garden },
   guides: { tags: [["garden", "guides"]] },
   createPlanting: { invalidates: ripple.garden },
   recordEntry: { invalidates: ripple.garden },

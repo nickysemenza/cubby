@@ -17,6 +17,7 @@ import {
   locationImage,
   mealRecipe,
   mealRecipePortion,
+  plantingLocationPeriod,
   productComponent,
   productConversionCoverage,
   productExternalId,
@@ -48,7 +49,7 @@ import {
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 70 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 73 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -620,6 +621,17 @@ const SOURCE_FACTORIES = {
       observedOn: "2026-01-01",
     }),
 
+  "PlantingLocationPeriod.locationId": async (db, targetId) => {
+    const sourcePlanting = await mkPlanting(db);
+    return insertAndReturn(db, plantingLocationPeriod, {
+      plantingId: sourcePlanting.id,
+      locationId: parseEntityId("location", targetId),
+      sequence: 0,
+      inLocationSince: "2026-01-01",
+      startKind: "actual",
+    });
+  },
+
   "LocationImage.locationId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, locationImage, {
@@ -734,6 +746,30 @@ const SOURCE_FACTORIES = {
       locationId: growingLocation.id,
       plantingId: parseEntityId("planting", targetId),
       observedOn: "2026-01-01",
+    });
+  },
+
+  "PlantingLocationPeriod.plantingId": async (db, targetId) => {
+    const sourceLocation = await mkLocation(db);
+    return insertAndReturn(db, plantingLocationPeriod, {
+      plantingId: parseEntityId("planting", targetId),
+      locationId: sourceLocation.id,
+      sequence: 0,
+      inLocationSince: "2026-01-01",
+      startKind: "actual",
+    });
+  },
+
+  "PlantingLocationPeriod.sourceGardenEntryId": async (db, targetId) => {
+    const sourcePlanting = await mkPlanting(db);
+    const sourceLocation = await mkLocation(db);
+    return insertAndReturn(db, plantingLocationPeriod, {
+      plantingId: sourcePlanting.id,
+      locationId: sourceLocation.id,
+      sourceGardenEntryId: parseEntityId("gardenEntry", targetId),
+      sequence: 0,
+      inLocationSince: "2026-01-01",
+      startKind: "actual",
     });
   },
 
@@ -931,6 +967,7 @@ function entityTableName(entity: Entity): string {
 }
 
 const HARD_DELETE_ONLY_SOURCE_TABLES = new Set([
+  "PlantingLocationPeriod",
   "ProjectDependency",
   "ProductConversionCoverage",
   "TaskDependency",
@@ -972,11 +1009,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 70 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 73 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(70);
+    expect(derivedMustTargetLiveEdges).toHaveLength(73);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

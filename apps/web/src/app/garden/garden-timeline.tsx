@@ -4,20 +4,35 @@ import {
   locationShortcode,
   plantingShortcode,
 } from "@cubby/schemas/identifiers";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { Grid, Row, Stack } from "~/components/layout";
+import { PhotoGrid } from "~/app/_components/photos/photo-grid";
+import { PhotoViewer } from "~/app/_components/photos/photo-viewer";
+import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Image } from "~/components/ui/image";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { getErrorMessage } from "~/lib/error-utils";
+import { householdDateTime } from "~/lib/household-date";
 
 import { EntryForm } from "./entry-form";
 import { garden } from "./garden.functions";
 
 export function GardenEntryContent({ entry }: { entry: GardenEntryOut }) {
+  const [preview, setPreview] = useState<number | null>(null);
+  const kind =
+    entry.kind === "observation"
+      ? "Observation"
+      : entry.kind === "harvest"
+        ? "Harvest"
+        : "Move";
+  const date = householdDateTime(entry.observedOn).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "America/Los_Angeles",
+  });
   return (
     <Stack gap="md">
       <Row gap="sm" align="center" justify="between">
@@ -26,34 +41,51 @@ export function GardenEntryContent({ entry }: { entry: GardenEntryOut }) {
           params={{ shortcode: gardenEntryShortcode.parse(entry.id) }}
           className="min-h-11 content-center font-medium hover:underline"
         >
-          {entry.observedOn} · {entry.kind}
+          {date} · {entry.plantingId ? kind : `Whole-bed ${kind.toLowerCase()}`}
         </Link>
         <Link
           to="/locations/$shortcode"
           params={{ shortcode: entry.locationId }}
           className="text-sm underline"
         >
-          Event location
+          {entry.locationName}
         </Link>
       </Row>
+      {entry.plantingId && (
+        <Link
+          to="/plantings/$shortcode"
+          params={{ shortcode: entry.plantingId }}
+          className="text-sm font-medium underline"
+        >
+          {entry.plantingName ?? "View planting"}
+        </Link>
+      )}
       {entry.harvestAmount && <p>{entry.harvestAmount}</p>}
       {entry.note && (
         <p className="text-sm whitespace-pre-wrap">{entry.note}</p>
       )}
       {entry.images.length > 0 && (
-        <Grid cols="pair" gap="md">
-          {entry.images.map((image) => (
-            <a key={image.id} href={image.url} target="_blank" rel="noreferrer">
-              <Image
-                src={image.url}
-                alt={`Garden observation on ${entry.observedOn}`}
-                displayWidth={480}
-                className="max-h-80 w-full rounded-md object-contain"
-              />
-            </a>
-          ))}
-        </Grid>
+        <PhotoGrid
+          images={entry.images}
+          fit="contain"
+          className={
+            entry.images.length === 1
+              ? "max-w-md grid-cols-1 sm:grid-cols-1 md:grid-cols-1"
+              : "grid-cols-2 sm:grid-cols-2 md:grid-cols-2"
+          }
+          tileClassName="aspect-[4/3]"
+          onSelect={(_, index) => setPreview(index)}
+        />
       )}
+      <PhotoViewer
+        images={entry.images}
+        index={preview}
+        onIndexChange={setPreview}
+        onOpenChange={(open) => {
+          if (!open) setPreview(null);
+        }}
+        detailLink={(image) => ({ shortcode: image.id })}
+      />
     </Stack>
   );
 }
@@ -65,15 +97,57 @@ export function GardenTimeline({
   locationId?: string;
   plantingId?: string;
 }) {
+  return plantingId ? (
+    <PlantingTimeline key={plantingId} plantingId={plantingId} />
+  ) : (
+    <LocationTimeline key={locationId ?? "all"} locationId={locationId} />
+  );
+}
+
+function PlantingTimeline({ plantingId }: { plantingId: string }) {
   const [page, setPage] = useState(1);
-  const [editing, setEditing] = useState<GardenEntryOut | null>(null);
   const entries = useQuery(
-    garden.entries.queryOptions({
-      locationId: locationId ? locationShortcode.parse(locationId) : undefined,
-      plantingId: plantingId ? plantingShortcode.parse(plantingId) : undefined,
+    garden.journal.queryOptions({
+      plantingId: plantingShortcode.parse(plantingId),
+      includeBedContext: true,
       page,
     }),
   );
+  return (
+    <GardenTimelineContent
+      entries={entries}
+      page={page}
+      setPage={setPage}
+      plantingId={plantingId}
+    />
+  );
+}
+
+function LocationTimeline({ locationId }: { locationId?: string }) {
+  const [page, setPage] = useState(1);
+  const entries = useQuery(
+    garden.entries.queryOptions({
+      locationId: locationId ? locationShortcode.parse(locationId) : undefined,
+      page,
+    }),
+  );
+  return (
+    <GardenTimelineContent entries={entries} page={page} setPage={setPage} />
+  );
+}
+
+function GardenTimelineContent({
+  entries,
+  page,
+  setPage,
+  plantingId,
+}: {
+  entries: UseQueryResult<{ items: GardenEntryOut[]; hasMore: boolean }>;
+  page: number;
+  setPage: (page: number) => void;
+  plantingId?: string;
+}) {
+  const [editing, setEditing] = useState<GardenEntryOut | null>(null);
   if (entries.isPending) return <p>Loading history…</p>;
   if (entries.isError)
     return (
@@ -85,7 +159,13 @@ export function GardenTimeline({
       </Stack>
     );
   return (
-    <Stack gap="lg">
+    <Stack gap="lg" className="w-full max-w-3xl">
+      {plantingId && (
+        <p className="text-sm text-muted-foreground">
+          Includes whole-bed entries from dates when this planting was known to
+          be there.
+        </p>
+      )}
       {entries.data.items.length === 0 && (
         <p className="text-sm text-muted-foreground">
           No entries yet. A photo or short note is a good place to start.

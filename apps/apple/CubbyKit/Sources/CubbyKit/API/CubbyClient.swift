@@ -14,16 +14,27 @@ public actor CubbyClient {
     public let baseURL: URL
     public let credentials: CredentialProvider
     private let api: Client
+    private let gardenEditAPI: Client
 
     public init(baseURL: URL, credentials: CredentialProvider, session: URLSession = .cubbyShared) {
         self.baseURL = baseURL
         self.credentials = credentials
+        let transport = URLSessionTransport(configuration: .init(session: session))
+        let auth = CubbyAuthMiddleware(credentials: credentials)
         // The spec's `servers` entry is "/", so the base URL must always be supplied here.
         self.api = Client(
             serverURL: baseURL,
             configuration: .cubby,
-            transport: URLSessionTransport(configuration: .init(session: session)),
-            middlewares: [CubbyAuthMiddleware(credentials: credentials)]
+            transport: transport,
+            middlewares: [auth]
+        )
+        // Only full Garden editors encode nil as null. Generic attachment/order patches keep
+        // using `api`, where omitted optional fields must never clear the entry's content.
+        self.gardenEditAPI = Client(
+            serverURL: baseURL,
+            configuration: .cubby,
+            transport: transport,
+            middlewares: [auth, GardenEditEncodingMiddleware()]
         )
     }
 
@@ -193,7 +204,7 @@ public actor CubbyClient {
 
     public func updateGardenPlanting(_ input: EditGardenPlanting) async throws {
         try await perform {
-            _ = try await api.resources_planting_update(
+            _ = try await gardenEditAPI.resources_planting_update(
                 path: .init(id: input.id),
                 body: .json(
                     .init(
@@ -209,15 +220,64 @@ public actor CubbyClient {
         }
     }
 
-    public func gardenEntries() async throws -> [GardenEntry] {
+    public func gardenEntry(id: String) async throws -> GardenEntry {
         try await perform {
-            try await api.garden_entries(query: .init()).ok.body.json.items.map(GardenEntry.init)
+            GardenEntry(try await api.resources_gardenEntry_get(path: .init(id: id)).ok.body.json)
+        }
+    }
+
+    public func gardenPlanting(id: String) async throws -> GardenPlanting {
+        try await perform {
+            async let options = gardenOptions()
+            let output = try await api.resources_planting_get(path: .init(id: id)).ok.body.json
+            return GardenPlanting(output, options: try await options)
+        }
+    }
+
+    public func gardenEntries(
+        locationID: String? = nil, plantingID: String? = nil, page: Int = 1
+    ) async throws -> (items: [GardenEntry], hasMore: Bool) {
+        try await perform {
+            let result = try await api.garden_entries(
+                query: .init(locationId: locationID, plantingId: plantingID, page: page)
+            ).ok.body.json
+            return (result.items.map(GardenEntry.init), result.hasMore)
+        }
+    }
+
+    public func gardenJournal(
+        plantingID: String, includeBedContext: Bool = false, page: Int = 1
+    ) async throws -> (items: [GardenJournalEntry], hasMore: Bool) {
+        try await perform {
+            let result = try await api.garden_journal(
+                query: .init(plantingId: plantingID, includeBedContext: includeBedContext, page: page)
+            ).ok.body.json
+            return (result.items.map(GardenJournalEntry.init), result.hasMore)
+        }
+    }
+
+    public func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriod] {
+        try await perform {
+            let result = try await api.garden_locationHistory(query: .init(plantingId: plantingID)).ok.body
+                .json
+            return result.periods.map(GardenLocationPeriod.init)
+        }
+    }
+
+    public func correctGardenLocationDates(
+        plantingID: String, periods: [GardenLocationPeriod]
+    ) async throws -> [GardenLocationPeriod] {
+        try await perform {
+            let result = try await api.garden_correctLocationDates(
+                body: .json(GardenCorrectLocationDatesInput(plantingID: plantingID, periods: periods))
+            ).ok.body.json
+            return result.periods.map(GardenLocationPeriod.init)
         }
     }
 
     public func updateGardenEntry(_ input: EditGardenEntry) async throws {
         try await perform {
-            _ = try await api.resources_gardenEntry_update(
+            _ = try await gardenEditAPI.resources_gardenEntry_update(
                 path: .init(id: input.id),
                 body: .json(
                     .init(

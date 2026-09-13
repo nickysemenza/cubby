@@ -14,6 +14,7 @@ export function GardenField({
   type = "text",
   required = false,
   placeholder,
+  disabled = false,
 }: {
   label: string;
   value: string;
@@ -21,6 +22,7 @@ export function GardenField({
   type?: "text" | "date";
   required?: boolean;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   const id = useId();
   return (
@@ -32,6 +34,7 @@ export function GardenField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         required={required}
+        disabled={disabled}
         placeholder={placeholder}
       />
     </Stack>
@@ -42,10 +45,12 @@ export function GardenNotes({
   value,
   onChange,
   label = "Notes",
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  disabled?: boolean;
 }) {
   const id = useId();
   return (
@@ -54,6 +59,7 @@ export function GardenNotes({
       <Textarea
         id={id}
         value={value}
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       />
     </Stack>

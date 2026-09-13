@@ -12,15 +12,19 @@ final class GardenModel {
         case failed(String)
     }
 
-    private let service: any GardenService
+    let service: any GardenService
     private(set) var phase: Phase = .idle
     private(set) var overview = GardenOverview(locations: [], finishedPlantings: [])
     private(set) var options = GardenOptions(ingredients: [], locations: [], products: [])
     private(set) var guides = GardenGuidesDocument(schemaVersion: 1, sources: [], guides: [])
     private(set) var guideError: String?
     private(set) var entries: [GardenEntry] = []
+    private(set) var entriesError: String?
+    private(set) var entriesHasMore = false
+    private(set) var entriesLoading = false
     private(set) var isSaving = false
     private(set) var saveError: String?
+    private(set) var journalRevision = 0
 
     init(service: any GardenService) {
         self.service = service
@@ -48,6 +52,12 @@ final class GardenModel {
             guideError = Self.message(for: error)
         }
     }
+
+    var allPlantings: [GardenPlanting] {
+        overview.locations.flatMap(\.plantings) + overview.unassignedPlantings + overview.finishedPlantings
+    }
+
+    var allPlantingOptions: [GardenOption] { options.plantings }
 
     func guide(for ingredientID: String) -> GardenGuide? {
         guard let key = options.ingredients.first(where: { $0.id == ingredientID })?.gardenGuideKey else {
@@ -124,7 +134,18 @@ final class GardenModel {
         await save { try await self.service.updateGardenPlanting(input) }
     }
 
-    func loadEntries() async { entries = (try? await service.gardenEntries()) ?? [] }
+    func loadEntries(reset: Bool = true) async {
+        guard !entriesLoading else { return }
+        entriesLoading = true
+        entriesError = nil
+        defer { entriesLoading = false }
+        do {
+            let page = try await service.gardenEntries(
+                locationID: nil, plantingID: nil, page: reset ? 1 : (entries.count / 50) + 1)
+            entries = reset ? page.items : entries + page.items
+            entriesHasMore = page.hasMore
+        } catch { entriesError = Self.message(for: error) }
+    }
 
     func updateEntry(_ input: EditGardenEntry) async -> Bool {
         await save { try await self.service.updateGardenEntry(input) }
@@ -138,6 +159,7 @@ final class GardenModel {
         do {
             try await operation()
             await load()
+            journalRevision += 1
             return true
         } catch {
             saveError = Self.message(for: error)

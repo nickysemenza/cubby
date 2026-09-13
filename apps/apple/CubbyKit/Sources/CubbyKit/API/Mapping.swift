@@ -43,6 +43,12 @@ typealias GardenSplitInput = Components.Schemas.GardenSplitPlantingInput
 typealias GardenStartInput = Components.Schemas.GardenStartPlantingInput
 typealias GardenEntriesOut = Components.Schemas.GardenEntriesOut
 typealias GardenEntryOut = Components.Schemas.GardenEntryOut
+typealias PlantingOut = Components.Schemas.PlantingOut
+typealias GardenJournalOut = Components.Schemas.GardenJournalOut
+typealias GardenJournalEntryOut = Components.Schemas.GardenJournalEntryOut
+typealias GardenLocationHistoryOut = Components.Schemas.GardenLocationHistoryOut
+typealias GardenLocationPeriodOut = Components.Schemas.GardenLocationPeriodOut
+typealias GardenCorrectLocationDatesInput = Components.Schemas.GardenCorrectLocationDatesInput
 
 // MARK: - Scanning
 
@@ -164,6 +170,32 @@ extension GardenPlanting {
     }
 }
 
+extension GardenPlanting {
+    init(_ out: PlantingOut, options: GardenOptions) {
+        let ingredient =
+            options.ingredients.first(where: { $0.id == out.ingredientId })
+            ?? GardenOption(id: out.ingredientId, name: out.ingredientId)
+        self.init(
+            id: out.id, ingredient: ingredient,
+            product: out.sourceProductId.map { id in
+                options.products.first(where: { $0.id == id }).map { GardenOption(id: $0.id, name: $0.name) }
+                    ?? GardenOption(id: id, name: id)
+            },
+            location: out.locationId.map { id in
+                options.locations.first(where: { $0.id == id }) ?? GardenOption(id: id, name: id)
+            },
+            intendedLocation: out.intendedLocationId.map { id in
+                options.locations.first(where: { $0.id == id }) ?? GardenOption(id: id, name: id)
+            },
+            parentPlantingID: out.parentPlantingId, status: .init(rawValue: out.status.rawValue)!,
+            variety: out.variety, quantity: out.quantity, notes: out.notes, plannedWindow: out.plannedWindow,
+            plannedDate: GardenPlainDate.date(out.plannedDate), sownAt: GardenPlainDate.date(out.sowedOn),
+            transplantedAt: GardenPlainDate.date(out.transplantedOn),
+            finishedAt: GardenPlainDate.date(out.finishedOn),
+            gardenGuideKey: ingredient.gardenGuideKey)
+    }
+}
+
 extension GardenOverview {
     init(_ out: GardenOverviewOut) {
         self.init(
@@ -187,7 +219,10 @@ extension GardenEntry {
         self.init(
             id: out.id, locationID: out.locationId, plantingID: out.plantingId,
             kind: .init(rawValue: out.kind.rawValue)!, observedAt: GardenPlainDate.date(out.observedOn)!,
-            note: out.note, harvestAmount: out.harvestAmount, imageIDs: out.images.map(\.id))
+            note: out.note, harvestAmount: out.harvestAmount,
+            images: out.images.compactMap { image in
+                URL(string: image.url).map { GardenImage(id: image.id, url: $0, filename: image.filename) }
+            }, locationName: out.locationName, plantingName: out.plantingName)
     }
 }
 
@@ -200,6 +235,9 @@ extension GardenOptions {
             locations: out.locations.map { .init(id: $0.id, name: $0.name) },
             products: out.products.map {
                 .init(id: $0.id, name: $0.name, growsIngredientID: $0.growsIngredientId)
+            },
+            plantings: out.plantings.map {
+                .init(id: $0.id, name: [$0.name, $0.locationName].compactMap { $0 }.joined(separator: " · "))
             }
         )
     }
@@ -250,6 +288,8 @@ extension GardenCreateInput {
             locationId: input.locationID,
             intendedLocationId: input.intendedLocationID,
             status: .init(rawValue: input.status.rawValue),
+            inLocationSince: input.inLocationSince.map(GardenPlainDate.string),
+            inLocationSinceKind: .init(rawValue: input.inLocationSinceKind.rawValue)!,
             sourceProductId: input.productID,
             variety: input.variety,
             quantity: input.quantity,
@@ -259,6 +299,43 @@ extension GardenCreateInput {
             sowedOn: input.sownAt.map(GardenPlainDate.string),
             transplantedOn: input.transplantedAt.map(GardenPlainDate.string)
         )
+    }
+}
+
+extension GardenJournalEntry {
+    init(_ out: GardenJournalEntryOut) {
+        let entry = GardenEntry(
+            id: out.id, locationID: out.locationId, plantingID: out.plantingId,
+            kind: .init(rawValue: out.kind.rawValue)!, observedAt: GardenPlainDate.date(out.observedOn)!,
+            note: out.note, harvestAmount: out.harvestAmount,
+            images: out.images.compactMap { image in
+                URL(string: image.url).map { GardenImage(id: image.id, url: $0, filename: image.filename) }
+            }, locationName: out.locationName, plantingName: out.plantingName)
+        self.init(
+            entry: entry, context: .init(rawValue: out.context.rawValue) ?? .direct,
+            locationName: out.locationName, plantingName: out.plantingName)
+    }
+}
+
+extension GardenLocationPeriod {
+    init(_ out: GardenLocationPeriodOut) {
+        self.init(
+            sequence: out.sequence, location: .init(id: out.locationId, name: out.locationName),
+            inLocationSince: GardenPlainDate.date(out.inLocationSince)!,
+            endedOn: GardenPlainDate.date(out.endedOn),
+            startKind: .init(rawValue: out.startKind.rawValue) ?? .actual)
+    }
+}
+
+extension GardenCorrectLocationDatesInput {
+    init(plantingID: String, periods: [GardenLocationPeriod]) {
+        self.init(
+            plantingId: plantingID,
+            periods: periods.map {
+                .init(
+                    sequence: $0.sequence, inLocationSince: GardenPlainDate.string($0.inLocationSince),
+                    endedOn: $0.endedOn.map(GardenPlainDate.string))
+            })
     }
 }
 

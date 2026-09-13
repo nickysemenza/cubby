@@ -2096,6 +2096,45 @@
         }
       }
     },
+    "/api/v1/garden/correctLocationDates": {
+      "post": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.correctLocationDates",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenCorrectLocationDatesInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenLocationHistoryOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/garden/createPlanting": {
       "post": {
         "tags": ["garden"],
@@ -2249,6 +2288,110 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GardenGuidesDocument"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/journal": {
+      "get": {
+        "tags": ["garden"],
+        "parameters": [
+          {
+            "name": "plantingId",
+            "in": "query",
+            "description": "planting shortcode, e.g. PLT-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "includeBedContext",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "garden.journal",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenJournalOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/locationHistory": {
+      "get": {
+        "tags": ["garden"],
+        "parameters": [
+          {
+            "name": "plantingId",
+            "in": "query",
+            "description": "planting shortcode, e.g. PLT-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "garden.locationHistory",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenLocationHistoryOut"
                 }
               }
             }
@@ -21369,6 +21512,35 @@
       "FinancialTransactionNonZeroAmount": {
         "$ref": "#/components/schemas/WholeCentAmount"
       },
+      "GardenCorrectLocationDatesInput": {
+        "type": "object",
+        "properties": {
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "periods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sequence": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "inLocationSince": {
+                  "$ref": "#/components/schemas/PlainDate"
+                },
+                "endedOn": {
+                  "$ref": "#/components/schemas/PlainDate"
+                }
+              },
+              "required": ["sequence", "inLocationSince"]
+            }
+          }
+        },
+        "required": ["plantingId", "periods"]
+      },
       "GardenCreatePlantingInput": {
         "type": "object",
         "properties": {
@@ -21384,6 +21556,13 @@
           "status": {
             "default": "planned",
             "$ref": "#/components/schemas/PlantingStatus"
+          },
+          "inLocationSince": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "inLocationSinceKind": {
+            "default": "actual",
+            "$ref": "#/components/schemas/PlantingLocationStartKind"
           },
           "sourceProductId": {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -21531,6 +21710,34 @@
           }
         },
         "required": ["plantingId", "finishedOn"]
+      },
+      "GardenJournalInput": {
+        "type": "object",
+        "properties": {
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "includeBedContext": {
+            "default": false,
+            "type": "boolean"
+          },
+          "page": {
+            "default": 1,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": ["plantingId"]
+      },
+      "GardenLocationHistoryInput": {
+        "type": "object",
+        "properties": {
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          }
+        },
+        "required": ["plantingId"]
       },
       "GardenLocationKind": {
         "type": "string",
@@ -21693,6 +21900,10 @@
           }
         },
         "required": ["ingredientId"]
+      },
+      "PlantingLocationStartKind": {
+        "type": "string",
+        "enum": ["actual", "recorded"]
       },
       "PlantingStatus": {
         "type": "string",
@@ -32194,6 +32405,12 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "locationName": {
+            "type": "string"
+          },
+          "plantingName": {
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -32205,7 +32422,9 @@
           "harvestAmount",
           "images",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "locationName",
+          "plantingName"
         ],
         "additionalProperties": false
       },
@@ -32247,6 +32466,12 @@
             "type": "string",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "locationName": {
+            "type": "string"
+          },
+          "plantingName": {
+            "type": ["string", "null"]
           }
         },
         "required": [
@@ -32258,7 +32483,137 @@
           "harvestAmount",
           "images",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "locationName",
+          "plantingName"
+        ],
+        "additionalProperties": false
+      },
+      "GardenJournalEntryOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/GardenEntryShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GardenEntryKind"
+          },
+          "observedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "harvestAmount": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "images": {
+            "$ref": "#/components/schemas/output_schema29"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "locationName": {
+            "type": "string"
+          },
+          "plantingName": {
+            "type": ["string", "null"]
+          },
+          "context": {
+            "type": "string",
+            "enum": ["direct", "bed"]
+          }
+        },
+        "required": [
+          "id",
+          "locationId",
+          "kind",
+          "observedOn",
+          "note",
+          "harvestAmount",
+          "images",
+          "createdAt",
+          "updatedAt",
+          "locationName",
+          "plantingName",
+          "context"
+        ],
+        "additionalProperties": false
+      },
+      "GardenJournalOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenJournalEntryOut"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": ["items", "hasMore"],
+        "additionalProperties": false
+      },
+      "GardenLocationHistoryOut": {
+        "type": "object",
+        "properties": {
+          "periods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenLocationPeriodOut"
+            }
+          }
+        },
+        "required": ["periods"],
+        "additionalProperties": false
+      },
+      "GardenLocationPeriodOut": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "locationName": {
+            "type": "string"
+          },
+          "inLocationSince": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "endedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "startKind": {
+            "$ref": "#/components/schemas/PlantingLocationStartKind"
+          }
+        },
+        "required": [
+          "sequence",
+          "locationId",
+          "locationName",
+          "inLocationSince",
+          "startKind"
         ],
         "additionalProperties": false
       },
@@ -32349,9 +32704,34 @@
               "required": ["id", "name"],
               "additionalProperties": false
             }
+          },
+          "plantings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/PlantingShortcode"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "locationId": {
+                  "$ref": "#/components/schemas/LocationShortcode"
+                },
+                "locationName": {
+                  "type": ["string", "null"]
+                },
+                "status": {
+                  "$ref": "#/components/schemas/PlantingStatus"
+                }
+              },
+              "required": ["id", "name", "locationName", "status"],
+              "additionalProperties": false
+            }
           }
         },
-        "required": ["locations", "ingredients", "products"],
+        "required": ["locations", "ingredients", "products", "plantings"],
         "additionalProperties": false
       },
       "GardenOverviewOut": {
@@ -33693,7 +34073,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema93"
+            "$ref": "#/components/schemas/output_schema95"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -33814,7 +34194,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema93"
+            "$ref": "#/components/schemas/output_schema95"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -33904,7 +34284,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema93"
+            "$ref": "#/components/schemas/output_schema95"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -34002,7 +34382,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema93"
+            "$ref": "#/components/schemas/output_schema95"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -34054,7 +34434,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema93"
+            "$ref": "#/components/schemas/output_schema95"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -34404,7 +34784,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema107"
+            "$ref": "#/components/schemas/output_schema109"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -34417,7 +34797,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema111"
+            "$ref": "#/components/schemas/output_schema113"
           },
           "createdAt": {
             "type": "string",
@@ -34447,7 +34827,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema107"
+            "$ref": "#/components/schemas/output_schema109"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -34460,7 +34840,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema111"
+            "$ref": "#/components/schemas/output_schema113"
           },
           "createdAt": {
             "type": "string",
@@ -34579,7 +34959,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema107"
+            "$ref": "#/components/schemas/output_schema109"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -34592,7 +34972,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema111"
+            "$ref": "#/components/schemas/output_schema113"
           },
           "createdAt": {
             "type": "string",
@@ -34868,7 +35248,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema117"
+            "$ref": "#/components/schemas/output_schema119"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -35095,7 +35475,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema117"
+            "$ref": "#/components/schemas/output_schema119"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -35294,7 +35674,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema117"
+            "$ref": "#/components/schemas/output_schema119"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -35417,10 +35797,10 @@
             "maximum": 9007199254740991
           },
           "direct": {
-            "$ref": "#/components/schemas/output_schema127"
+            "$ref": "#/components/schemas/output_schema129"
           },
           "total": {
-            "$ref": "#/components/schemas/output_schema127"
+            "$ref": "#/components/schemas/output_schema129"
           },
           "installed": {
             "type": "object",
@@ -35532,7 +35912,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema117"
+            "$ref": "#/components/schemas/output_schema119"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -36142,10 +36522,10 @@
             "type": "object",
             "properties": {
               "confirmed": {
-                "$ref": "#/components/schemas/output_schema149"
+                "$ref": "#/components/schemas/output_schema151"
               },
               "projected": {
-                "$ref": "#/components/schemas/output_schema149"
+                "$ref": "#/components/schemas/output_schema151"
               }
             },
             "required": ["confirmed", "projected"],
@@ -37323,10 +37703,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema93"
+                "$ref": "#/components/schemas/output_schema95"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema93"
+                "$ref": "#/components/schemas/output_schema95"
               }
             },
             "required": ["covered", "applicable"],
@@ -38293,10 +38673,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema93"
+                "$ref": "#/components/schemas/output_schema95"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema93"
+                "$ref": "#/components/schemas/output_schema95"
               }
             },
             "required": ["covered", "applicable"],
@@ -39231,7 +39611,7 @@
             }
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema167"
+            "$ref": "#/components/schemas/output_schema169"
           },
           "inventoryEntry": {
             "type": "array",
@@ -39456,7 +39836,7 @@
                 "usedOnProjects": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema170"
+                    "$ref": "#/components/schemas/output_schema172"
                   }
                 },
                 "ownershipIntervals": {
@@ -39563,7 +39943,7 @@
                         "$ref": "#/components/schemas/PlainDate"
                       },
                       "chargedTo": {
-                        "$ref": "#/components/schemas/output_schema170"
+                        "$ref": "#/components/schemas/output_schema172"
                       },
                       "provenanceOnly": {
                         "type": "boolean"
@@ -40052,7 +40432,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema167"
+            "$ref": "#/components/schemas/output_schema169"
           },
           "unitMappings": {
             "type": "array",
@@ -40063,13 +40443,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema171"
+              "$ref": "#/components/schemas/output_schema173"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema173"
+              "$ref": "#/components/schemas/output_schema175"
             }
           },
           "food": {
@@ -40200,7 +40580,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema167"
+            "$ref": "#/components/schemas/output_schema169"
           },
           "unitMappings": {
             "type": "array",
@@ -40211,13 +40591,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema171"
+              "$ref": "#/components/schemas/output_schema173"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema173"
+              "$ref": "#/components/schemas/output_schema175"
             }
           },
           "componentCount": {
@@ -40702,10 +41082,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema185"
+            "$ref": "#/components/schemas/output_schema187"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema185"
+            "$ref": "#/components/schemas/output_schema187"
           },
           "subtaskCount": {
             "type": "integer",
@@ -41108,10 +41488,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema191"
+                "$ref": "#/components/schemas/output_schema193"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema191"
+                "$ref": "#/components/schemas/output_schema193"
               }
             },
             "required": ["scope", "grid"],
@@ -41121,19 +41501,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema191"
+                "$ref": "#/components/schemas/output_schema193"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema191"
+                    "$ref": "#/components/schemas/output_schema193"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema191"
+                    "$ref": "#/components/schemas/output_schema193"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema191"
+                    "$ref": "#/components/schemas/output_schema193"
                   }
                 },
                 "required": [
@@ -42884,10 +43264,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema185"
+            "$ref": "#/components/schemas/output_schema187"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema185"
+            "$ref": "#/components/schemas/output_schema187"
           },
           "subtaskCount": {
             "type": "integer",
@@ -44279,13 +44659,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema132"
+                "$ref": "#/components/schemas/output_schema134"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema132"
+                "$ref": "#/components/schemas/output_schema134"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema132"
+                "$ref": "#/components/schemas/output_schema134"
               }
             },
             "required": ["cost", "weight", "nutrients"],
@@ -44295,10 +44675,10 @@
             "type": ["number", "null"]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema133"
+            "$ref": "#/components/schemas/output_schema135"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema133"
+            "$ref": "#/components/schemas/output_schema135"
           },
           "nutrient": {
             "oneOf": [
@@ -45789,13 +46169,13 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema204"
+                  "$ref": "#/components/schemas/output_schema206"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema204"
+                  "$ref": "#/components/schemas/output_schema206"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema206"
+                  "$ref": "#/components/schemas/output_schema208"
                 }
               },
               "required": ["name", "inputSchema"],
@@ -45851,10 +46231,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema207"
+                  "$ref": "#/components/schemas/output_schema209"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema208"
+                  "$ref": "#/components/schemas/output_schema210"
                 }
               },
               "required": [
@@ -45946,7 +46326,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema209"
+              "$ref": "#/components/schemas/output_schema211"
             }
           },
           "tools": {
@@ -45964,13 +46344,13 @@
                   "type": ["string", "null"]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema204"
+                  "$ref": "#/components/schemas/output_schema206"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema204"
+                  "$ref": "#/components/schemas/output_schema206"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema206"
+                  "$ref": "#/components/schemas/output_schema208"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -46014,19 +46394,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema209"
+                    "$ref": "#/components/schemas/output_schema211"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema207"
+                    "$ref": "#/components/schemas/output_schema209"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema208"
+                    "$ref": "#/components/schemas/output_schema210"
                   }
                 }
               },
@@ -46053,25 +46433,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema210"
+              "$ref": "#/components/schemas/output_schema212"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema210"
+              "$ref": "#/components/schemas/output_schema212"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema210"
+              "$ref": "#/components/schemas/output_schema212"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema210"
+              "$ref": "#/components/schemas/output_schema212"
             }
           }
         },
@@ -47974,7 +48354,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema143"
+            "$ref": "#/components/schemas/output_schema145"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -48046,7 +48426,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema143"
+            "$ref": "#/components/schemas/output_schema145"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -48159,7 +48539,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema143"
+            "$ref": "#/components/schemas/output_schema145"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -48231,7 +48611,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema143"
+            "$ref": "#/components/schemas/output_schema145"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -50054,13 +50434,13 @@
         "required": ["module", "export"],
         "additionalProperties": false
       },
-      "output_schema93": {
+      "output_schema95": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/BaseKind"
         }
       },
-      "output_schema107": {
+      "output_schema109": {
         "type": "object",
         "properties": {
           "value": {
@@ -50079,15 +50459,15 @@
         "additionalProperties": false,
         "description": "Quantity on hand"
       },
-      "output_schema111": {
+      "output_schema113": {
         "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
         "$ref": "#/components/schemas/InventoryPlacement"
       },
-      "output_schema117": {
+      "output_schema119": {
         "description": "Namespaced Collection tags assigned directly to this location",
         "$ref": "#/components/schemas/input_schema45"
       },
-      "output_schema127": {
+      "output_schema129": {
         "type": "object",
         "properties": {
           "priced": {
@@ -50109,7 +50489,7 @@
         "required": ["priced", "missingPricing", "miscNoPrice"],
         "additionalProperties": false
       },
-      "output_schema132": {
+      "output_schema134": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -50138,7 +50518,7 @@
           }
         }
       },
-      "output_schema133": {
+      "output_schema135": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -50148,13 +50528,13 @@
           }
         ]
       },
-      "output_schema143": {
+      "output_schema145": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Amount"
         }
       },
-      "output_schema149": {
+      "output_schema151": {
         "type": "object",
         "properties": {
           "portionCount": {
@@ -50169,7 +50549,7 @@
         "required": ["portionCount", "totals"],
         "additionalProperties": false
       },
-      "output_schema167": {
+      "output_schema169": {
         "type": "object",
         "properties": {
           "id": {
@@ -50211,7 +50591,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema170": {
+      "output_schema172": {
         "type": "object",
         "properties": {
           "id": {
@@ -50224,7 +50604,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema171": {
+      "output_schema173": {
         "type": "object",
         "properties": {
           "id": {
@@ -50270,7 +50650,7 @@
                 "$ref": "#/components/schemas/input_schema45"
               },
               "tags": {
-                "$ref": "#/components/schemas/output_schema117"
+                "$ref": "#/components/schemas/output_schema119"
               },
               "type": {
                 "$ref": "#/components/schemas/LocationType"
@@ -50315,7 +50695,7 @@
               "ancestors": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/output_schema172"
+                  "$ref": "#/components/schemas/output_schema174"
                 }
               }
             },
@@ -50345,7 +50725,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema172": {
+      "output_schema174": {
         "type": "object",
         "properties": {
           "id": {
@@ -50364,7 +50744,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema173": {
+      "output_schema175": {
         "type": "object",
         "properties": {
           "id": {
@@ -50382,20 +50762,20 @@
           "ancestors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema172"
+              "$ref": "#/components/schemas/output_schema174"
             }
           }
         },
         "required": ["id", "name", "ancestors"],
         "additionalProperties": false
       },
-      "output_schema185": {
+      "output_schema187": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema191": {
+      "output_schema193": {
         "type": "object",
         "properties": {
           "current": {
@@ -50408,7 +50788,7 @@
         "required": ["current"],
         "additionalProperties": false
       },
-      "output_schema204": {
+      "output_schema206": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -50417,7 +50797,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema206": {
+      "output_schema208": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -50435,7 +50815,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema207": {
+      "output_schema209": {
         "type": "object",
         "properties": {
           "id": {
@@ -50451,7 +50831,7 @@
         "required": ["id", "name", "email"],
         "additionalProperties": false
       },
-      "output_schema208": {
+      "output_schema210": {
         "type": "object",
         "properties": {
           "id": {
@@ -50464,7 +50844,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema209": {
+      "output_schema211": {
         "type": "object",
         "properties": {
           "day": {
@@ -50489,7 +50869,7 @@
         "required": ["day", "success", "error", "total"],
         "additionalProperties": false
       },
-      "output_schema210": {
+      "output_schema212": {
         "type": "object",
         "properties": {
           "key": {

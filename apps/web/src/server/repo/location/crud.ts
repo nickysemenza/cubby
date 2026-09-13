@@ -146,6 +146,12 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "A location with dated garden observations cannot be deleted.",
   },
+  "PlantingLocationPeriod.locationId": {
+    code: "block-location-history",
+    effect: "block",
+    description:
+      "A location with confirmed planting history cannot be deleted.",
+  },
 } as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
 
 /**

@@ -37,7 +37,8 @@ extension EntityDescriptor {
             id: id,
             title: title,
             subtitle: subtitle,
-            imageURL: Self.imageURL(from: object),
+            imageURL: (key == .image
+                ? object["url"]?.stringValue.flatMap(URL.init(string:)) : Self.imageURL(from: object)),
             raw: object
         )
     }

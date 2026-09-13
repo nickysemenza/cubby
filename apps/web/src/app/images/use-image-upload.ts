@@ -3,7 +3,7 @@ import {
   MAX_IMAGE_UPLOAD_BYTES,
 } from "@cubby/schemas/image";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -17,109 +17,125 @@ export interface UploadedImage {
   key: string;
 }
 
+export type ImageUploadResult =
+  | { state: "complete"; image: UploadedImage }
+  | { state: "failed"; uploadedImage?: UploadedImage }
+  | { state: "in-flight" };
+
 const imageContentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
+
+type ImageUploadOperations = Pick<
+  typeof imageUpload,
+  "uploadImage" | "markUploaded"
+>;
 
 /**
  * Standalone `/images` upload transport: validate → presigned PUT → finalize.
  *
- * Extracted from `PendingImageUpload`'s `uploadFile` (`~/app/_components/PendingImageUpload.tsx`),
- * but with the OPPOSITE finalize policy — deliberately NOT layered onto it.
- * `PendingImageUpload`'s rows must stay PENDING until the owning entity's form
- * saves (`associatePendingImages` is what flips them to UPLOADED there). A
- * standalone `/images` upload has no later save step to do that, so it
- * finalizes immediately by calling `image.markUploaded` right after the R2 PUT
- * succeeds. Skipping that call would leave the row PENDING forever — it would
- * render "Upload pending…" indefinitely and then be deleted (R2 object
- * included) by the pending-image cull, which selects exactly PENDING + no
- * entity association (see the `markImageUploaded` doc comment in
- * `~/server/repo/image.ts`).
- *
- * A raw `useMutation` per step (not `useActionMutation`) is correct here —
- * this is the multi-step-file-flow carve-out in root CLAUDE.md: the caller
- * toasts via try/catch around a sequence of `mutateAsync` calls rather than a
- * single mutation's `onSuccess`/`onError`.
+ * Unlike `PendingImageUpload`, no owning form will later associate this row,
+ * so a successful PUT must be finalized here instead of being left PENDING.
+ * A completed PUT is checkpointed in the caller's draft before `markUploaded`.
+ * If that final step fails, retry only finalizes the same image row: it never
+ * creates another pending row or uploads the bytes again.
  */
-export function useImageUpload() {
-  const [isUploading, setIsUploading] = useState(false);
+export function useImageUpload(
+  operations: ImageUploadOperations = imageUpload,
+) {
+  const [activeUploadCount, setActiveUploadCount] = useState(0);
+  const inFlightFilesRef = useRef(new WeakSet<File>());
 
   const uploadImageMutation = useMutation(
-    imageUpload.uploadImage.mutationOptions(),
+    operations.uploadImage.mutationOptions(),
   );
   const markUploadedMutation = useMutation(
-    imageUpload.markUploaded.mutationOptions(),
+    operations.markUploaded.mutationOptions(),
   );
 
   const uploadFile = useCallback(
-    async (file: File): Promise<UploadedImage | null> => {
+    async (
+      file: File,
+      checkpoint?: UploadedImage,
+    ): Promise<ImageUploadResult> => {
+      if (inFlightFilesRef.current.has(file)) return { state: "in-flight" };
+
       const contentType = imageContentTypeSchema.safeParse(file.type);
-      if (!contentType.success) {
+      if (!checkpoint && !contentType.success) {
         toast.error(
           `Unsupported image type: ${file.type}. Allowed: JPEG, PNG, GIF, WebP, HEIC.`,
         );
-        return null;
+        return { state: "failed" };
       }
-      if (file.size > MAX_IMAGE_UPLOAD_BYTES) {
+      if (!checkpoint && file.size > MAX_IMAGE_UPLOAD_BYTES) {
         toast.error(`${file.name} exceeds the upload size limit.`);
-        return null;
+        return { state: "failed" };
       }
 
+      inFlightFilesRef.current.add(file);
+      setActiveUploadCount((count) => count + 1);
+      let uploadedImage = checkpoint;
       try {
-        const initResult = await uploadImageMutation.mutateAsync({
-          filename: file.name,
-          contentType: contentType.data,
-          size: file.size,
-        });
+        if (!uploadedImage) {
+          // `contentType` has succeeded above when there is no checkpoint.
+          const initResult = await uploadImageMutation.mutateAsync({
+            filename: file.name,
+            contentType: contentType.data!,
+            size: file.size,
+          });
 
-        const uploadResult = await fetch(initResult.uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
-        });
-        if (!uploadResult.ok) {
-          const errorText = await uploadResult
-            .text()
-            .catch(() => "Unknown error");
-          throw new Error(
-            `Storage error (${uploadResult.status}): ${errorText}`,
-          );
+          const uploadResult = await fetch(initResult.uploadUrl, {
+            method: "PUT",
+            body: file,
+            headers: { "Content-Type": file.type },
+          });
+          if (!uploadResult.ok) {
+            const errorText = await uploadResult
+              .text()
+              .catch(() => "Unknown error");
+            throw new Error(
+              `Storage error (${uploadResult.status}): ${errorText}`,
+            );
+          }
+
+          uploadedImage = {
+            id: initResult.imageId,
+            url: initResult.url,
+            filename: file.name,
+            key: initResult.key,
+          };
         }
 
-        await markUploadedMutation.mutateAsync({ id: initResult.imageId });
-
-        return {
-          id: initResult.imageId,
-          url: initResult.url,
-          filename: file.name,
-          key: initResult.key,
-        };
+        await markUploadedMutation.mutateAsync({ id: uploadedImage.id });
+        return { state: "complete", image: uploadedImage };
       } catch (error) {
         toast.error(
           `Upload failed for ${file.name}: ${getErrorMessage(error)}`,
         );
-        return null;
+        return { state: "failed", uploadedImage };
+      } finally {
+        inFlightFilesRef.current.delete(file);
+        setActiveUploadCount((count) => Math.max(0, count - 1));
       }
     },
-    [uploadImageMutation, markUploadedMutation],
+    [markUploadedMutation, uploadImageMutation],
   );
 
   /** Sequential (not `Promise.all`) — bounds presigned-PUT concurrency and
    * keeps any per-file error toasts in selection order. */
   const uploadFiles = useCallback(
     async (files: File[]): Promise<UploadedImage[]> => {
-      setIsUploading(true);
-      try {
-        const uploaded: UploadedImage[] = [];
-        for (const file of files) {
-          const result = await uploadFile(file);
-          if (result) uploaded.push(result);
-        }
-        return uploaded;
-      } finally {
-        setIsUploading(false);
+      const uploaded: UploadedImage[] = [];
+      for (const file of files) {
+        const result = await uploadFile(file);
+        if (result.state === "complete") uploaded.push(result.image);
       }
+      return uploaded;
     },
     [uploadFile],
   );
 
-  return { uploadFile, uploadFiles, isUploading };
+  return {
+    uploadFile,
+    uploadFiles,
+    isUploading: activeUploadCount > 0,
+  };
 }

@@ -19,6 +19,9 @@ struct GardenPlantingSheet: View {
     @State private var plannedDate = Date.now
     @State private var useTransplantDate = false
     @State private var transplantedAt = Date.now
+    @State private var useInLocationSince = false
+    @State private var inLocationSince = Date.now
+    @State private var inLocationSinceKind: GardenLocationStartKind = .actual
 
     var body: some View {
         NavigationStack {
@@ -62,6 +65,10 @@ struct GardenPlantingSheet: View {
                         if useTransplantDate {
                             DatePicker("Transplanted", selection: $transplantedAt, displayedComponents: .date)
                         }
+                        Toggle("In this location since", isOn: $useInLocationSince)
+                        if useInLocationSince {
+                            DatePicker("Since", selection: $inLocationSince, displayedComponents: .date)
+                        }
                     }
                 }
                 Section("Notes") { TextField("Anything useful to remember", text: $notes, axis: .vertical) }
@@ -98,7 +105,9 @@ struct GardenPlantingSheet: View {
                 plannedWindow: plannedWindow.nilIfEmpty,
                 plannedDate: usePlannedDate ? plannedDate : nil,
                 sownAt: useSowingDate ? sownAt : nil,
-                transplantedAt: useTransplantDate ? transplantedAt : nil
+                transplantedAt: useTransplantDate ? transplantedAt : nil,
+                inLocationSince: useInLocationSince ? inLocationSince : nil,
+                inLocationSinceKind: inLocationSinceKind
             )
         )
         if saved { dismiss() }
@@ -117,6 +126,17 @@ struct GardenEntrySheet: View {
     @State private var images: [CGImage] = []
     @State private var uploadStatus: String?
     @State private var uploadError: String?
+    @State private var uploadedIDs: [ImageCode] = []
+    @State private var uploadedImageCount = 0
+    @State private var isUploading = false
+    @State private var locationID: String
+    @State private var plantingID: String
+
+    init(model: GardenModel, target: GardenEntryTarget, uploader: GardenImageUploader) {
+        self.model = model; self.target = target; self.uploader = uploader
+        _locationID = State(initialValue: target.locationID ?? "")
+        _plantingID = State(initialValue: target.planting?.id ?? "")
+    }
 
     var body: some View {
         NavigationStack {
@@ -128,32 +148,35 @@ struct GardenEntrySheet: View {
                     }
                     .pickerStyle(.segmented)
                     DatePicker("Date", selection: $observedAt, displayedComponents: .date)
+                    GardenOptionPicker(
+                        "Location", selection: $locationID, options: model.options.locations, required: true)
+                    GardenOptionPicker(
+                        "About", selection: $plantingID, options: model.allPlantingOptions,
+                        noneLabel: "Whole bed")
                     if kind == .harvest { TextField("Harvest amount", text: $harvestAmount) }
                     TextField("Note", text: $note, axis: .vertical)
                 }
+                if let error = model.saveError { Text(error).foregroundStyle(PorcelainTokens.destructive) }
                 Section("Photos") {
-                    if !images.isEmpty {
-                        ScrollView(.horizontal) {
-                            HStack {
-                                ForEach(Array(images.enumerated()), id: \.offset) { index, image in
-                                    Image(decorative: image, scale: 1)
-                                        .resizable().scaledToFill().frame(width: 92, height: 92).clipped()
-                                        .clipShape(
-                                            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                                        )
-                                        .overlay(alignment: .topTrailing) {
-                                            Button {
-                                                images.remove(at: index)
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                            }
-                                            .buttonStyle(.borderless)
-                                        }
+                    PhotoBatch(
+                        photos: images.enumerated().map {
+                            PhotoAttachment(
+                                id: "local-\($0.offset)", filename: "Garden photo \($0.offset + 1)",
+                                source: .local($0.element),
+                                status: $0.offset < uploadedImageCount ? "Uploaded" : nil)
+                        },
+                        onRemove: isUploading
+                            ? nil
+                            : { id in
+                                guard let index = Int(id.replacingOccurrences(of: "local-", with: "")) else {
+                                    return
                                 }
-                            }
-                        }
-                        .frame(height: 104)
-                    }
+                                if index < uploadedImageCount {
+                                    uploadedIDs.remove(at: index)
+                                    uploadedImageCount -= 1
+                                }
+                                images.remove(at: index)
+                            })
                     GardenPhotoSourceButtons { images.append(contentsOf: $0) }
                     if let uploadStatus { Text(uploadStatus).font(.porcelainLabel) }
                     if let uploadError {
@@ -161,24 +184,31 @@ struct GardenEntrySheet: View {
                     }
                 }
             }
+            .disabled(isUploading || model.isSaving)
             .navigationTitle(kind == .harvest ? "Log harvest" : "Garden entry")
+            #if os(macOS)
+                .frame(minWidth: 520, idealWidth: 620, minHeight: 560, idealHeight: 720)
+            #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.disabled(model.isSaving)
+                    Button("Cancel") { dismiss() }.disabled(model.isSaving || isUploading)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await save() } }
-                        .disabled(target.locationID == nil || model.isSaving)
+                        .disabled(locationID.isEmpty || model.isSaving || isUploading)
                 }
             }
-        }
+        }.interactiveDismissDisabled(isUploading || model.isSaving)
     }
 
     private func save() async {
-        guard let locationID = target.locationID else { return }
+        guard !locationID.isEmpty, !isUploading else { return }
         uploadError = nil
+        isUploading = true
+        defer { isUploading = false }
         do {
-            let ids = try await uploader.upload(images) { step in
+            let remaining = Array(images.dropFirst(uploadedImageCount))
+            let ids = try await uploader.upload(remaining) { step in
                 Task { @MainActor in
                     uploadStatus =
                         switch step {
@@ -188,21 +218,21 @@ struct GardenEntrySheet: View {
                         }
                 }
             }
-            let saved = await model.record(
-                RecordGardenEntry(
-                    locationID: locationID,
-                    plantingID: target.planting?.id,
-                    kind: kind,
-                    observedAt: observedAt,
-                    note: note.nilIfEmpty,
-                    harvestAmount: kind == .harvest ? harvestAmount.nilIfEmpty : nil,
-                    pendingImageIDs: ids
-                )
-            )
-            if saved { dismiss() }
-        } catch {
-            uploadError = String(describing: error)
-        }
+            uploadedIDs += ids
+            uploadedImageCount = images.count
+        } catch let failure as GardenImageUploader.PartialFailure {
+            uploadedIDs += failure.completedIDs
+            uploadedImageCount += failure.completedCount
+            uploadError = failure.underlying.localizedDescription
+            return
+        } catch { uploadError = error.localizedDescription; return }
+        let saved = await model.record(
+            RecordGardenEntry(
+                locationID: locationID, plantingID: plantingID.nilIfEmpty, kind: kind,
+                observedAt: observedAt,
+                note: note.nilIfEmpty, harvestAmount: kind == .harvest ? harvestAmount.nilIfEmpty : nil,
+                pendingImageIDs: uploadedIDs))
+        if saved { dismiss() }
     }
 }
 
@@ -310,10 +340,14 @@ struct FinishedPlantingsSheet: View {
     var body: some View {
         NavigationStack {
             List(plantings) { planting in
-                VStack(alignment: .leading) {
-                    Text(planting.ingredient.name).font(.porcelainBody.weight(.semibold))
-                    if let date = planting.finishedAt {
-                        Text(date.formatted(date: .abbreviated, time: .omitted)).font(.porcelainLabel)
+                NavigationLink {
+                    GardenPlantingRouteView(id: planting.id)
+                } label: {
+                    VStack(alignment: .leading) {
+                        Text(planting.ingredient.name).font(.porcelainBody.weight(.semibold))
+                        if let date = planting.finishedAt {
+                            Text(date.formatted(date: .abbreviated, time: .omitted)).font(.porcelainLabel)
+                        }
                     }
                 }
             }
@@ -323,47 +357,105 @@ struct FinishedPlantingsSheet: View {
     }
 }
 
-struct GardenPlantingDetailSheet: View {
+struct GardenPlantingDetailView: View {
     let model: GardenModel
     let planting: GardenPlanting
     let guide: GardenGuide?
     let source: (String) -> GardenGuideSource?
-    @Environment(\.dismiss) private var dismiss
+    let uploader: GardenImageUploader
     @State private var editing = false
+    @State private var loggingEntry = false
+    @State private var section: DetailSection = .journal
+
+    private enum DetailSection: String, CaseIterable, Identifiable {
+        case journal = "Journal", about = "About"
+        var id: String { rawValue }
+    }
 
     var body: some View {
-        NavigationStack {
-            List {
+        let planting = model.allPlantings.first(where: { $0.id == self.planting.id }) ?? self.planting
+        List {
+            Picker("View", selection: $section) {
+                ForEach(DetailSection.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            Section {
+                LabeledContent("Status", value: planting.status.rawValue.capitalized)
+                if let location = planting.location {
+                    NavigationLink(value: Route.gardenBedJournal(id: location.id)) {
+                        LabeledContent("Location", value: location.name)
+                    }
+                }
+                if let variety = planting.variety { LabeledContent("Variety", value: variety) }
+            }
+            if section == .journal {
+                GardenPlantingJournal(model: model, planting: planting, uploader: uploader)
+            } else {
                 Section("Planting") {
                     LabeledContent("Crop", value: planting.ingredient.name)
                     LabeledContent("Status", value: planting.status.rawValue.capitalized)
                     if let variety = planting.variety { LabeledContent("Variety", value: variety) }
                     if let quantity = planting.quantity { LabeledContent("Quantity", value: quantity) }
-                    if let location = planting.location { LabeledContent("Location", value: location.name) }
+                    if let location = planting.location {
+                        NavigationLink(value: Route.gardenBedJournal(id: location.id)) {
+                            LabeledContent("Whole bed", value: location.name)
+                        }
+                    }
+                    NavigationLink("Location history") {
+                        GardenLocationHistoryView(service: model.service, planting: planting)
+                    }
                     if let planned = planting.plannedWindow { LabeledContent("Plan", value: planned) }
+                    if let date = planting.plannedDate {
+                        LabeledContent(
+                            "Planned date", value: date.formatted(date: .abbreviated, time: .omitted))
+                    }
+                    if let date = planting.sownAt {
+                        LabeledContent("Sowed", value: date.formatted(date: .abbreviated, time: .omitted))
+                    }
+                    if let date = planting.transplantedAt {
+                        LabeledContent(
+                            "Transplanted", value: date.formatted(date: .abbreviated, time: .omitted))
+                    }
+                    if let sourceProduct = planting.product {
+                        NavigationLink(value: Route.entityDetail(.product, id: sourceProduct.id)) {
+                            LabeledContent("Source", value: sourceProduct.name)
+                        }
+                    }
+                    if let date = planting.finishedAt {
+                        LabeledContent("Finished", value: date.formatted(date: .abbreviated, time: .omitted))
+                    }
                 }
                 if let notes = planting.notes { Section("Notes") { Text(notes) } }
                 if let guide {
                     Section("Planting guide") {
-                        ForEach(guide.windows) { window in
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(source(window.sourceID)?.name ?? window.sourceID)
-                                    .font(.porcelainBody.weight(.semibold))
-                                Text(guideWindowSummary(window))
-                                    .font(.porcelainLabel)
-                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                                if let note = window.note { Text(note).font(.porcelainLabel) }
+                        DisclosureGroup("Show guide") {
+                            ForEach(guide.windows) { window in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(source(window.sourceID)?.name ?? window.sourceID)
+                                        .font(.porcelainBody.weight(.semibold))
+                                    Text(guideWindowSummary(window))
+                                        .font(.porcelainLabel)
+                                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                    if let note = window.note { Text(note).font(.porcelainLabel) }
+                                }
                             }
                         }
                     }
                 }
             }
-            .navigationTitle(planting.ingredient.name)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Edit") { editing = true } }
+        }
+        .navigationTitle(planting.ingredient.name)
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                Button("Add photos / Log entry") { loggingEntry = true }
+                Button("Edit") { editing = true }
             }
-            .sheet(isPresented: $editing) { GardenPlantingCorrectionSheet(model: model, planting: planting) }
+        }
+        .sheet(isPresented: $editing) {
+            GardenPlantingCorrectionSheet(model: model, planting: planting).gardenEditorSize()
+        }
+        .sheet(isPresented: $loggingEntry) {
+            GardenEntrySheet(model: model, target: .planting(planting), uploader: uploader)
         }
     }
 
@@ -438,22 +530,38 @@ private struct GardenPlantingCorrectionSheet: View {
     }
 }
 
+extension View {
+    @ViewBuilder
+    func gardenEditorSize() -> some View {
+        #if os(macOS)
+            self.frame(minWidth: 520, idealWidth: 620, minHeight: 560, idealHeight: 720)
+        #else
+            self
+        #endif
+    }
+}
+
 private struct GardenOptionPicker: View {
     let title: String
     @Binding var selection: String
     let options: [GardenOption]
     var required = false
+    var noneLabel = "None"
 
-    init(_ title: String, selection: Binding<String>, options: [GardenOption], required: Bool = false) {
+    init(
+        _ title: String, selection: Binding<String>, options: [GardenOption], required: Bool = false,
+        noneLabel: String = "None"
+    ) {
         self.title = title
         _selection = selection
         self.options = options
         self.required = required
+        self.noneLabel = noneLabel
     }
 
     var body: some View {
         Picker(title, selection: $selection) {
-            Text(required ? "Choose…" : "None").tag("")
+            Text(required ? "Choose…" : noneLabel).tag("")
             ForEach(options) { option in Text(option.name).tag(option.id) }
         }
     }
@@ -681,76 +789,294 @@ private struct GardenIngredientForm: View {
     }
 }
 
-struct GardenHistorySheet: View {
+struct GardenHistoryView: View {
     let model: GardenModel
     let uploader: GardenImageUploader
-    @Environment(\.dismiss) private var dismiss
-    @State private var editing: GardenEntry?
-    var body: some View {
-        NavigationStack {
-            List(model.entries) { entry in
-                Button {
-                    editing = entry
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text(entry.kind.rawValue.capitalized)
-                        Text(
-                            entry.note ?? entry.harvestAmount
-                                ?? entry.observedAt.formatted(date: .abbreviated, time: .omitted)
-                        ).font(.caption)
-                    }
-                }
-            }
-            .navigationTitle("Garden history")
-            .task { await model.loadEntries() }
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
-            .sheet(item: $editing) { GardenEntryCorrectionSheet(model: model, entry: $0, uploader: uploader) }
-        }
-    }
+    var body: some View { GardenBedJournalView(locationID: nil) }
 }
 
-private struct GardenEntryCorrectionSheet: View {
+struct GardenEntryCorrectionSheet: View {
     let model: GardenModel; let entry: GardenEntry; let uploader: GardenImageUploader
     @Environment(\.dismiss) private var dismiss
     @State private var date: Date; @State private var note: String; @State private var amount: String
+    @State private var locationID: String; @State private var plantingID: String
     @State private var images: [CGImage] = []; @State private var removed: Set<String> = []
+    @State private var uploadedIDs: [ImageCode] = []; @State private var uploadedImageCount = 0
+    @State private var uploadError: String?; @State private var isUploading = false
     init(model: GardenModel, entry: GardenEntry, uploader: GardenImageUploader) {
         self.model = model; self.entry = entry; self.uploader = uploader
         _date = State(initialValue: entry.observedAt); _note = State(initialValue: entry.note ?? "");
         _amount = State(initialValue: entry.harvestAmount ?? "")
+        _locationID = State(initialValue: entry.locationID)
+        _plantingID = State(initialValue: entry.plantingID ?? "")
     }
     var body: some View {
         NavigationStack {
             Form {
                 DatePicker("Date", selection: $date, displayedComponents: .date)
+                    .disabled(entry.kind == .move)
+                if entry.kind == .move {
+                    LabeledContent(
+                        "Location",
+                        value: model.options.locations.first(where: { $0.id == locationID })?.name
+                            ?? locationID)
+                    LabeledContent(
+                        "Planting",
+                        value: model.allPlantingOptions.first(where: { $0.id == plantingID })?.name
+                            ?? "Bed observation")
+                } else {
+                    GardenOptionPicker(
+                        "Location", selection: $locationID, options: model.options.locations, required: true)
+                    GardenOptionPicker(
+                        "About", selection: $plantingID, options: model.allPlantingOptions,
+                        noneLabel: "Whole bed")
+                }
                 TextField("Note", text: $note, axis: .vertical)
                 if entry.kind == .harvest { TextField("Harvest amount", text: $amount) }
+                if let error = model.saveError { Text(error).foregroundStyle(PorcelainTokens.destructive) }
                 Section("Photos") {
-                    ForEach(entry.imageIDs, id: \.self) { id in
-                        Toggle(
-                            id,
-                            isOn: Binding(
-                                get: { !removed.contains(id) },
-                                set: { if !$0 { removed.insert(id) } else { removed.remove(id) } }))
-                    }
+                    PhotoBatch(
+                        photos: entry.images.filter { !removed.contains($0.id) }.map {
+                            PhotoAttachment(
+                                id: $0.id, filename: $0.filename, source: .remote($0.url), imageID: $0.id)
+                        },
+                        onRemove: isUploading ? nil : { removed.insert($0) })
+                    PhotoBatch(
+                        photos: images.enumerated().map {
+                            PhotoAttachment(
+                                id: "local-\($0.offset)", filename: "Garden photo \($0.offset + 1)",
+                                source: .local($0.element),
+                                status: $0.offset < uploadedImageCount ? "Uploaded" : nil)
+                        },
+                        onRemove: isUploading
+                            ? nil
+                            : { id in
+                                guard let index = Int(id.replacingOccurrences(of: "local-", with: "")) else {
+                                    return
+                                }
+                                if index < uploadedImageCount {
+                                    uploadedIDs.remove(at: index); uploadedImageCount -= 1
+                                }
+                                images.remove(at: index)
+                            })
                     GardenPhotoSourceButtons { images.append(contentsOf: $0) }
+                    if let uploadError { Text(uploadError).foregroundStyle(PorcelainTokens.destructive) }
                 }
-            }.navigationTitle("Edit entry").toolbar {
+            }
+            .disabled(isUploading || model.isSaving)
+            .navigationTitle("Edit entry")
+            #if os(macOS)
+                .frame(minWidth: 520, idealWidth: 620, minHeight: 560, idealHeight: 720)
+            #endif
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.disabled(model.isSaving || isUploading)
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }.disabled(model.isSaving)
+                    Button("Save") { Task { await save() } }.disabled(
+                        locationID.isEmpty || model.isSaving || isUploading)
+                }
+            }
+        }.interactiveDismissDisabled(isUploading || model.isSaving)
+    }
+    private func save() async {
+        guard !isUploading else { return }
+        isUploading = true
+        uploadError = nil
+        defer { isUploading = false }
+        do {
+            let ids = try await uploader.upload(Array(images.dropFirst(uploadedImageCount)))
+            uploadedIDs += ids
+            uploadedImageCount = images.count
+        } catch let failure as GardenImageUploader.PartialFailure {
+            uploadedIDs += failure.completedIDs
+            uploadedImageCount += failure.completedCount
+            uploadError = failure.underlying.localizedDescription
+            return
+        } catch { uploadError = error.localizedDescription; return }
+        if await model.updateEntry(
+            EditGardenEntry(
+                id: entry.id, locationID: locationID, plantingID: plantingID.nilIfEmpty, kind: entry.kind,
+                observedAt: date, note: note.nilIfEmpty, harvestAmount: amount.nilIfEmpty,
+                pendingImageIDs: uploadedIDs, removeImageIDs: Array(removed)))
+        {
+            dismiss()
+        }
+    }
+}
+
+private struct GardenPlantingJournal: View {
+    let model: GardenModel
+    let planting: GardenPlanting
+    let uploader: GardenImageUploader
+    @State private var journal: GardenJournalModel
+    @State private var editing: GardenEntry?
+
+    init(model: GardenModel, planting: GardenPlanting, uploader: GardenImageUploader) {
+        self.model = model; self.planting = planting; self.uploader = uploader
+        _journal = State(initialValue: GardenJournalModel(service: model.service, planting: planting))
+    }
+
+    var body: some View {
+        Section {
+            Toggle("Include whole-bed context", isOn: $journal.includeBedContext)
+        } footer: {
+            Text("Bed observations appear alongside entries recorded directly for this planting.")
+        }
+        Section("Journal") {
+            if journal.entries.isEmpty && journal.isLoading { ProgressView() }
+            if let error = journal.error, journal.entries.isEmpty {
+                ContentUnavailableView {
+                    Label("Couldn't load journal", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(error)
+                } actions: {
+                    Button("Retry") { Task { await journal.retry() } }
+                }
+            }
+            if let error = journal.error, !journal.entries.isEmpty {
+                Button("Couldn't load more: \(error). Retry") { Task { await journal.retry() } }
+                    .foregroundStyle(PorcelainTokens.destructive)
+            }
+            ForEach(journal.entries) { item in
+                GardenEntrySummary(entry: item.entry)
+                    .contextMenu { Button("Edit entry") { editing = item.entry } }
+            }
+            if journal.hasMore {
+                Button(journal.isLoading ? "Loading…" : "Load more") { Task { await journal.loadMore() } }
+                    .disabled(journal.isLoading)
+            }
+        }
+        .task(id: model.journalRevision) { await journal.refresh() }
+        .refreshable { await journal.refresh() }
+        .sheet(item: $editing) {
+            GardenEntryCorrectionSheet(model: model, entry: $0, uploader: uploader)
+        }
+    }
+}
+
+struct GardenImageStrip: View {
+    let images: [GardenImage]
+    var body: some View {
+        PhotoBatch(
+            photos: images.map {
+                PhotoAttachment(id: $0.id, filename: $0.filename, source: .remote($0.url), imageID: $0.id)
+            })
+    }
+}
+
+private struct GardenLocationHistoryView: View {
+    let service: any GardenService
+    let planting: GardenPlanting
+    @State private var history: GardenLocationHistoryModel
+    @State private var revised: [GardenLocationPeriod] = []
+    @State private var initialLocationDate = Date.now
+    @State private var initialLastDay = Date.now
+    @Environment(\.dismiss) private var dismiss
+
+    init(service: any GardenService, planting: GardenPlanting) {
+        self.service = service; self.planting = planting
+        _history = State(initialValue: GardenLocationHistoryModel(service: service, planting: planting))
+        _initialLastDay = State(initialValue: planting.finishedAt ?? .now)
+    }
+
+    var body: some View {
+        Form {
+            if let error = history.error {
+                VStack(spacing: PorcelainTokens.Space.sm) {
+                    ContentUnavailableView(
+                        "Couldn't load location history", systemImage: "exclamationmark.triangle",
+                        description: Text(error))
+                    Button("Retry") {
+                        Task {
+                            await history.load(); revised = history.periods
+                        }
+                    }
+                }
+            }
+            ForEach($revised) { $period in
+                Section(period.location.name) {
+                    DatePicker(
+                        "In this location since",
+                        selection: Binding(
+                            get: { period.inLocationSince },
+                            set: { reviseBoundary(sequence: period.sequence, date: $0, start: true) }),
+                        displayedComponents: .date)
+                    LabeledContent(
+                        "Recorded as", value: period.startKind == .actual ? "Actual date" : "Recorded later")
+                    if period.startKind == .recorded {
+                        Text("Earlier presence is unknown. Add a date you know to include older bed photos.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let ended = period.endedOn {
+                        DatePicker(
+                            "Ended",
+                            selection: Binding(
+                                get: { ended },
+                                set: { reviseBoundary(sequence: period.sequence, date: $0, start: false) }),
+                            displayedComponents: .date)
+                    } else {
+                        Text("Current location").foregroundStyle(.secondary)
+                    }
+                }
+            }
+            if history.isLoading && revised.isEmpty { ProgressView() }
+            if revised.isEmpty, !history.isLoading, history.error == nil, planting.status != .planned,
+                let location = planting.location
+            {
+                Section("Add location history") {
+                    Text(
+                        "No location date has been recorded for this planting. This does not create a sowing or transplant date."
+                    )
+                    .font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    LabeledContent("Location", value: location.name)
+                    DatePicker(
+                        "In this location since", selection: $initialLocationDate, displayedComponents: .date)
+                    if planting.status == .finished {
+                        DatePicker(
+                            "Last day in this location", selection: $initialLastDay,
+                            displayedComponents: .date)
+                    }
+                    Button("Record this date") { Task { await saveInitialPeriod(location: location) } }
+                        .disabled(history.isSaving)
                 }
             }
         }
+        .navigationTitle("Location history")
+        .task {
+            await history.load()
+            revised = history.periods
+        }
+        .refreshable {
+            await history.load(); revised = history.periods
+        }
+        .disabled(history.isSaving)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .primaryAction) {
+                Button("Save") {
+                    Task { if await history.save(revised) { revised = history.periods; dismiss() } }
+                }
+                .disabled(history.isSaving || revised.isEmpty)
+            }
+        }
     }
-    private func save() async {
-        guard let pending = try? await uploader.upload(images) else { return }
-        if await model.updateEntry(
-            EditGardenEntry(
-                id: entry.id, locationID: entry.locationID, plantingID: entry.plantingID, kind: entry.kind,
-                observedAt: date, note: note.nilIfEmpty, harvestAmount: amount.nilIfEmpty,
-                pendingImageIDs: pending, removeImageIDs: Array(removed)))
-        {
-            dismiss()
+
+    private func saveInitialPeriod(location: GardenOption) async {
+        let first = GardenLocationPeriod(
+            sequence: 0, location: location, inLocationSince: initialLocationDate,
+            endedOn: planting.status == .finished ? initialLastDay : nil, startKind: .actual)
+        if await history.save([first]) { revised = history.periods; dismiss() }
+    }
+
+    private func reviseBoundary(sequence: Int, date: Date, start: Bool) {
+        guard let index = revised.firstIndex(where: { $0.sequence == sequence }) else { return }
+        if start {
+            revised[index].inLocationSince = date
+            if index > 0 { revised[index - 1].endedOn = date }
+        } else {
+            revised[index].endedOn = date
+            if index + 1 < revised.count { revised[index + 1].inLocationSince = date }
         }
     }
 }

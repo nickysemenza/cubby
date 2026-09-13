@@ -363,6 +363,12 @@ export const ENTITY_EDGE_SEMANTICS = {
         "A garden entry retains the location where the observation happened.",
       liveness: { kind: "must-target-live" },
     },
+    "PlantingLocationPeriod.locationId": {
+      role: "history",
+      label: "planting location history",
+      description: "A confirmed interval retains the location it records.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   project: {
     "Project.parentProjectId": {
@@ -554,6 +560,12 @@ export const ENTITY_EDGE_SEMANTICS = {
         "Garden observations and harvests retain the planting they describe.",
       liveness: { kind: "must-target-live" },
     },
+    "PlantingLocationPeriod.plantingId": {
+      role: "history",
+      label: "location history",
+      description: "A confirmed interval belongs to its planting.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   gardenEntry: {
     "GardenEntryImage.gardenEntryId": {
@@ -561,6 +573,13 @@ export const ENTITY_EDGE_SEMANTICS = {
       label: "entry photos",
       description:
         "Photos attached to this garden entry have no independent meaning once it is removed.",
+      liveness: { kind: "must-target-live" },
+    },
+    "PlantingLocationPeriod.sourceGardenEntryId": {
+      role: "history",
+      label: "location-history source entries",
+      description:
+        "A workflow-created period retains the entry that records its start.",
       liveness: { kind: "must-target-live" },
     },
   },

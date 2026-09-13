@@ -7,6 +7,7 @@ struct AddPhotoSheet: View {
     @Bindable var capture: PhotoCaptureModel
     var onDone: (ImageCode) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var previewing = false
 
     var body: some View {
         NavigationStack {
@@ -91,6 +92,14 @@ struct AddPhotoSheet: View {
         #if os(macOS)
             .frame(minWidth: 480, minHeight: 520)
         #endif
+        .sheet(isPresented: $previewing) {
+            if let image = capture.chosen {
+                PhotoPreview(
+                    photos: [
+                        PhotoAttachment(id: "selection", filename: "Selected photo", source: .local(image))
+                    ], selectedID: "selection")
+            }
+        }
     }
 
     private var isUploading: Bool {
@@ -105,9 +114,13 @@ struct AddPhotoSheet: View {
                 capture.lifted?.foundSubject == true
                     ? (capture.useLifted ? "Lifted subject" : "Original") : "Photo")
             if let image = capture.chosen {
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .scaledToFit()
+                Button {
+                    previewing = true
+                } label: {
+                    PhotoAttachmentImage(
+                        photo: PhotoAttachment(
+                            id: "selection", filename: "Selected photo", source: .local(image))
+                    )
                     .frame(maxWidth: .infinity, maxHeight: 320)
                     .background(checkerboard)
                     .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
@@ -115,6 +128,7 @@ struct AddPhotoSheet: View {
                         RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
                             .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
                     )
+                }.buttonStyle(.plain).accessibilityLabel("Preview selected photo")
             }
             if capture.lifted?.foundSubject == false {
                 Text("No subject found; the photo goes up as it is.")

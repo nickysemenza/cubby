@@ -76,6 +76,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
   planting,
+  plantingLocationPeriod,
   statementRow,
   task,
   taskDependency,
@@ -194,6 +195,9 @@ export const INCOMING_EDGES = {
     "Planting.locationId": { column: planting.locationId },
     "Planting.intendedLocationId": { column: planting.intendedLocationId },
     "GardenEntry.locationId": { column: gardenEntry.locationId },
+    "PlantingLocationPeriod.locationId": {
+      column: plantingLocationPeriod.locationId,
+    },
   }),
   project: edges({
     "Project.parentProjectId": { column: project.parentProjectId },
@@ -253,10 +257,16 @@ export const INCOMING_EDGES = {
   planting: edges({
     "Planting.parentPlantingId": { column: planting.parentPlantingId },
     "GardenEntry.plantingId": { column: gardenEntry.plantingId },
+    "PlantingLocationPeriod.plantingId": {
+      column: plantingLocationPeriod.plantingId,
+    },
   }),
   gardenEntry: edges({
     "GardenEntryImage.gardenEntryId": {
       column: gardenEntryImage.gardenEntryId,
+    },
+    "PlantingLocationPeriod.sourceGardenEntryId": {
+      column: plantingLocationPeriod.sourceGardenEntryId,
     },
   }),
   // No table carries a live FK at these two: `inventory` is a leaf stock row,

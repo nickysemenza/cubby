@@ -2,10 +2,13 @@ import { gardenContract } from "~/contracts/garden.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import {
   gardenCreatePlantingWorkflow,
+  gardenCorrectLocationDatesWorkflow,
   gardenEntriesWorkflow,
   gardenFinishPlantingWorkflow,
   gardenGuidesWorkflow,
   gardenMovePlantingWorkflow,
+  gardenJournalWorkflow,
+  gardenLocationHistoryWorkflow,
   gardenOverviewWorkflow,
   gardenOptionsWorkflow,
   gardenRecordEntryWorkflow,
@@ -18,6 +21,9 @@ export const gardenHandlers = implementOperationDomain(gardenContract, {
   options: gardenOptionsWorkflow,
   guides: gardenGuidesWorkflow,
   entries: gardenEntriesWorkflow,
+  journal: gardenJournalWorkflow,
+  locationHistory: gardenLocationHistoryWorkflow,
+  correctLocationDates: gardenCorrectLocationDatesWorkflow,
   createPlanting: gardenCreatePlantingWorkflow,
   recordEntry: gardenRecordEntryWorkflow,
   startPlanting: gardenStartPlantingWorkflow,

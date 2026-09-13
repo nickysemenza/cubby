@@ -2,7 +2,12 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type GardenPlantingOut,
   gardenCreatePlantingInput,
+  gardenCorrectLocationDatesInput,
   gardenEntryKind,
+  gardenJournalInput,
+  gardenJournalOut,
+  gardenLocationHistoryInput,
+  gardenLocationHistoryOut,
   gardenLocationKind,
   gardenRecordEntryInput,
   gardenEntryOut,
@@ -18,10 +23,21 @@ import {
   type PlantingId,
 } from "@cubby/schemas/identifiers";
 import type { SortParams } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   gardenEntry,
@@ -29,6 +45,7 @@ import {
   ingredient,
   location,
   planting,
+  plantingLocationPeriod,
   product,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -114,10 +131,19 @@ const mapPlanting = (row: PlantingWithReferences) =>
   });
 
 type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
-  location: { shortcode: string };
-  planting: { shortcode: string } | null;
+  location: { shortcode: string; name: string };
+  planting: {
+    shortcode: string;
+    variety: string | null;
+    ingredient: { name: string };
+  } | null;
   images: Array<{ image: MappableImageRecord; deletedAt?: Date | null }>;
 };
+
+const plantingDisplayName = (
+  row: NonNullable<GardenEntryWithReferences["planting"]>,
+) =>
+  row.variety ? `${row.ingredient.name} (${row.variety})` : row.ingredient.name;
 
 const mapEntry = (row: GardenEntryWithReferences) =>
   gardenEntryOut.parse({
@@ -127,6 +153,8 @@ const mapEntry = (row: GardenEntryWithReferences) =>
     plantingId: row.planting
       ? parseShortcodeFor("planting", row.planting.shortcode)
       : null,
+    locationName: row.location.name,
+    plantingName: row.planting ? plantingDisplayName(row.planting) : null,
     images: mapImages(row.images),
   });
 
@@ -137,8 +165,11 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
   const row = await unwrapDb(db).query.gardenEntry.findFirst({
     where: and(eq(gardenEntry.id, id), notDeleted(gardenEntry)),
     with: {
-      location: { columns: { shortcode: true } },
-      planting: { columns: { shortcode: true } },
+      location: { columns: { shortcode: true, name: true } },
+      planting: {
+        columns: { shortcode: true, variety: true },
+        with: { ingredient: { columns: { name: true } } },
+      },
       images: { with: { image: true } },
     },
   });
@@ -150,33 +181,70 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
   return mapEntry(row);
 };
 
+type CreatePlantingData = z.input<typeof gardenCreatePlantingInput>;
+
+const plantingCreateReferences = async (
+  tx: DrizzleTransaction,
+  data: CreatePlantingData,
+) => ({
+  ingredientId: await required(tx, data.ingredientId, "ingredient"),
+  locationId: data.locationId
+    ? await required(tx, data.locationId, "location")
+    : null,
+  intendedLocationId: data.intendedLocationId
+    ? await required(tx, data.intendedLocationId, "location")
+    : null,
+  sourceProductId: data.sourceProductId
+    ? await required(tx, data.sourceProductId, "product")
+    : null,
+});
+
+const assertPlantingCreateLocation = (
+  data: CreatePlantingData,
+  locationId: LocationId | null,
+) => {
+  if (data.status === "growing" && !locationId) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A growing planting needs a current location.",
+    );
+  }
+  if (data.inLocationSince && (!locationId || data.status !== "growing")) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A location start date needs a growing planting in a current location.",
+    );
+  }
+};
+
+const addInitialLocationPeriod = async (
+  tx: DrizzleTransaction,
+  plantingId: PlantingId,
+  locationId: LocationId | null,
+  data: CreatePlantingData,
+) => {
+  if (locationId && data.status === "growing") {
+    await addLocationPeriod(tx, {
+      plantingId,
+      locationId,
+      inLocationSince: data.inLocationSince ?? householdLocalDate(),
+      startKind: data.inLocationSince
+        ? (data.inLocationSinceKind ?? "actual")
+        : "recorded",
+    });
+  }
+};
+
 export const createPlanting = async (
   db: Database,
-  data: z.infer<typeof gardenCreatePlantingInput>,
+  data: CreatePlantingData,
   _actor: ActorContext,
 ) =>
   withTransaction(db, async (tx) => {
-    const ingredientId = await required(tx, data.ingredientId, "ingredient");
-    const locationId = data.locationId
-      ? await required(tx, data.locationId, "location")
-      : null;
-    const intendedLocationId = data.intendedLocationId
-      ? await required(tx, data.intendedLocationId, "location")
-      : null;
-    const sourceProductId = data.sourceProductId
-      ? await required(tx, data.sourceProductId, "product")
-      : null;
-    if (data.status === "growing" && !locationId) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A growing planting needs a current location.",
-      );
-    }
+    const references = await plantingCreateReferences(tx, data);
+    assertPlantingCreateLocation(data, references.locationId);
     const row = await insertWithShortcode(tx, "planting", {
-      ingredientId,
-      locationId,
-      intendedLocationId,
-      sourceProductId,
+      ...references,
       status: data.status,
       variety: data.variety ?? null,
       quantity: data.quantity ?? null,
@@ -193,7 +261,9 @@ export const createPlanting = async (
       entityId: parseEntityId("planting", row.id),
       action: "create",
     });
-    return getPlanting(tx, parseEntityId("planting", row.id));
+    const plantingId = parseEntityId("planting", row.id);
+    await addInitialLocationPeriod(tx, plantingId, references.locationId, data);
+    return getPlanting(tx, plantingId);
   });
 
 export const recordGardenEntry = async (
@@ -258,6 +328,77 @@ const auditGardenChange = async (
   await logAuditEntry(tx, actor, { entityType, entityId, action });
 };
 
+const locationPeriodsFor = (db: GardenDb, plantingId: PlantingId) =>
+  unwrapDb(db).query.plantingLocationPeriod.findMany({
+    where: eq(plantingLocationPeriod.plantingId, plantingId),
+    with: { location: { columns: { shortcode: true, name: true } } },
+    orderBy: [asc(plantingLocationPeriod.sequence)],
+  });
+
+const mapLocationHistory = async (db: GardenDb, plantingId: PlantingId) =>
+  gardenLocationHistoryOut.parse({
+    periods: (await locationPeriodsFor(db, plantingId)).map((period) => ({
+      sequence: period.sequence,
+      locationId: parseShortcodeFor("location", period.location.shortcode),
+      locationName: period.location.name,
+      inLocationSince: period.inLocationSince,
+      endedOn: period.endedOn,
+      startKind: period.startKind,
+    })),
+  });
+
+const addLocationPeriod = async (
+  tx: DrizzleTransaction,
+  input: {
+    plantingId: PlantingId;
+    locationId: LocationId;
+    inLocationSince: string;
+    startKind: "actual" | "recorded";
+    sourceGardenEntryId?: GardenEntryId | null;
+  },
+) => {
+  const previous = await unwrapDb(tx).query.plantingLocationPeriod.findFirst({
+    where: eq(plantingLocationPeriod.plantingId, input.plantingId),
+    columns: { sequence: true },
+    orderBy: [desc(plantingLocationPeriod.sequence)],
+  });
+  await tx.insert(plantingLocationPeriod).values({
+    ...input,
+    sequence: (previous?.sequence ?? -1) + 1,
+    endedOn: null,
+    sourceGardenEntryId: input.sourceGardenEntryId ?? null,
+  });
+};
+
+const closeOpenLocationPeriod = async (
+  tx: DrizzleTransaction,
+  plantingId: PlantingId,
+  endedOn: string,
+) => {
+  const openPeriod = await unwrapDb(tx).query.plantingLocationPeriod.findFirst({
+    where: and(
+      eq(plantingLocationPeriod.plantingId, plantingId),
+      isNull(plantingLocationPeriod.endedOn),
+    ),
+    columns: { inLocationSince: true },
+  });
+  if (openPeriod && endedOn < openPeriod.inLocationSince) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A location transition cannot happen before the current location began.",
+    );
+  }
+  await tx
+    .update(plantingLocationPeriod)
+    .set({ endedOn })
+    .where(
+      and(
+        eq(plantingLocationPeriod.plantingId, plantingId),
+        isNull(plantingLocationPeriod.endedOn),
+      ),
+    );
+};
+
 export const startPlanting = async (
   db: Database,
   input: {
@@ -288,7 +429,7 @@ export const startPlanting = async (
       .update(planting)
       .set({ status: "growing", locationId, ...dates })
       .where(eq(planting.id, id));
-    await insertWithShortcode(tx, "gardenEntry", {
+    const startEntry = await insertWithShortcode(tx, "gardenEntry", {
       locationId,
       plantingId: id,
       kind: "observation",
@@ -300,6 +441,13 @@ export const startPlanting = async (
             ? "Transplanted"
             : "Recorded existing planting",
       harvestAmount: null,
+    });
+    await addLocationPeriod(tx, {
+      plantingId: id,
+      locationId,
+      inLocationSince: input.startedOn,
+      startKind: input.startMethod === "existing" ? "recorded" : "actual",
+      sourceGardenEntryId: parseEntityId("gardenEntry", startEntry.id),
     });
     await auditGardenChange(tx, actor, "planting", id, "update");
     return getPlanting(tx, id);
@@ -333,7 +481,21 @@ export const movePlanting = async (
         transplantedOn: current.transplantedOn ?? input.movedOn,
       })
       .where(eq(planting.id, id));
-    await moveEntry(tx, id, locationId, input.movedOn, input.note ?? null);
+    await closeOpenLocationPeriod(tx, id, input.movedOn);
+    const entry = await moveEntry(
+      tx,
+      id,
+      locationId,
+      input.movedOn,
+      input.note ?? null,
+    );
+    await addLocationPeriod(tx, {
+      plantingId: id,
+      locationId,
+      inLocationSince: input.movedOn,
+      startKind: "actual",
+      sourceGardenEntryId: parseEntityId("gardenEntry", entry.id),
+    });
     await auditGardenChange(tx, actor, "planting", id, "update");
     return getPlanting(tx, id);
   });
@@ -375,13 +537,20 @@ export const splitPlanting = async (
       transplantedOn: input.movedOn,
       finishedOn: null,
     });
-    await moveEntry(
+    const entry = await moveEntry(
       tx,
       parseEntityId("planting", child.id),
       locationId,
       input.movedOn,
       input.note ?? null,
     );
+    await addLocationPeriod(tx, {
+      plantingId: parseEntityId("planting", child.id),
+      locationId,
+      inLocationSince: input.movedOn,
+      startKind: "actual",
+      sourceGardenEntryId: parseEntityId("gardenEntry", entry.id),
+    });
     if (actor) {
       await logAuditEntry(tx, actor, {
         entityType: "planting",
@@ -404,6 +573,7 @@ export const finishPlanting = async (
       .update(planting)
       .set({ status: "finished", finishedOn: input.finishedOn })
       .where(eq(planting.id, id));
+    await closeOpenLocationPeriod(tx, id, input.finishedOn);
     if (input.note && current.locationId) {
       await insertWithShortcode(tx, "gardenEntry", {
         locationId: current.locationId,
@@ -477,20 +647,77 @@ export const updatePlantingDetails = async (
     return getPlanting(tx, id);
   });
 
+type GardenEntryUpdateDetails = {
+  locationId?: string;
+  plantingId?: string | null;
+  kind?: "observation" | "harvest" | "move";
+  observedOn?: string;
+  note?: string | null;
+  harvestAmount?: string | null;
+  pendingImageIds?: string[];
+  removeImageIds?: string[];
+  imageOrder?: string[];
+};
+
+const assertGardenEntryStructure = (
+  current: { kind: string },
+  data: GardenEntryUpdateDetails,
+) => {
+  const editsMoveStructure =
+    data.locationId !== undefined ||
+    data.plantingId !== undefined ||
+    data.observedOn !== undefined;
+  if (current.kind === "move" && editsMoveStructure) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Use location history to correct a structural move.",
+    );
+  }
+  if (data.kind !== undefined && data.kind !== current.kind) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Move entries are created only by planting workflows.",
+    );
+  }
+};
+
+const updateGardenEntryImages = async (
+  tx: DrizzleTransaction,
+  id: GardenEntryId,
+  data: GardenEntryUpdateDetails,
+) => {
+  if (data.pendingImageIds?.length) {
+    const imageIds = await resolveAllOrThrow(tx, "image", data.pendingImageIds);
+    await associatePendingImages(
+      tx,
+      imageJoinBindings.gardenEntry,
+      id,
+      imageIds,
+    );
+  }
+  if (data.removeImageIds?.length) {
+    const imageIds = await resolveAllOrThrow(tx, "image", data.removeImageIds);
+    await tx
+      .update(gardenEntryImage)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(gardenEntryImage.gardenEntryId, id),
+          inArray(gardenEntryImage.imageId, imageIds),
+          notDeleted(gardenEntryImage),
+        ),
+      );
+  }
+  if (data.imageOrder?.length) {
+    const imageIds = await resolveAllOrThrow(tx, "image", data.imageOrder);
+    await applyImageOrder(tx, imageJoinBindings.gardenEntry, id, imageIds);
+  }
+};
+
 export const updateGardenEntryDetails = async (
   db: Database,
   id: GardenEntryId,
-  data: {
-    locationId?: unknown;
-    plantingId?: unknown;
-    kind?: "observation" | "harvest" | "move";
-    observedOn?: string;
-    note?: string | null;
-    harvestAmount?: string | null;
-    pendingImageIds?: string[];
-    removeImageIds?: string[];
-    imageOrder?: string[];
-  },
+  data: GardenEntryUpdateDetails,
   actor?: ActorContext,
 ) =>
   withTransaction(db, async (tx) => {
@@ -507,35 +734,22 @@ export const updateGardenEntryDetails = async (
         "The garden entry no longer exists.",
       );
     }
-    const currentLocationId = parseShortcodeFor(
-      "location",
-      current.location.shortcode,
-    );
-    const currentPlantingId = current.planting
-      ? parseShortcodeFor("planting", current.planting.shortcode)
-      : null;
-    if (
-      (data.locationId !== undefined &&
-        data.locationId !== currentLocationId) ||
-      (data.plantingId !== undefined && data.plantingId !== currentPlantingId)
-    ) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A garden entry keeps the crop and location where it happened.",
-      );
-    }
-    if (
-      data.kind !== undefined &&
-      (data.kind === "move") !== (current.kind === "move")
-    ) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Move entries are created only by planting workflows.",
-      );
-    }
+    assertGardenEntryStructure(current, data);
+    const locationId =
+      data.locationId === undefined
+        ? current.locationId
+        : await required(tx, data.locationId, "location");
+    const plantingId =
+      data.plantingId === undefined
+        ? current.plantingId
+        : data.plantingId
+          ? await required(tx, data.plantingId, "planting")
+          : null;
     await tx
       .update(gardenEntry)
       .set({
+        locationId,
+        plantingId,
         observedOn: data.observedOn ?? current.observedOn,
         note: data.note === undefined ? current.note : data.note,
         harvestAmount:
@@ -545,40 +759,7 @@ export const updateGardenEntryDetails = async (
         kind: data.kind ?? gardenEntryKind.parse(current.kind),
       })
       .where(eq(gardenEntry.id, id));
-    if (data.pendingImageIds?.length) {
-      const imageIds = await resolveAllOrThrow(
-        tx,
-        "image",
-        data.pendingImageIds,
-      );
-      await associatePendingImages(
-        tx,
-        imageJoinBindings.gardenEntry,
-        id,
-        imageIds,
-      );
-    }
-    if (data.removeImageIds?.length) {
-      const imageIds = await resolveAllOrThrow(
-        tx,
-        "image",
-        data.removeImageIds,
-      );
-      await tx
-        .update(gardenEntryImage)
-        .set({ deletedAt: new Date() })
-        .where(
-          and(
-            eq(gardenEntryImage.gardenEntryId, id),
-            inArray(gardenEntryImage.imageId, imageIds),
-            notDeleted(gardenEntryImage),
-          ),
-        );
-    }
-    if (data.imageOrder?.length) {
-      const imageIds = await resolveAllOrThrow(tx, "image", data.imageOrder);
-      await applyImageOrder(tx, imageJoinBindings.gardenEntry, id, imageIds);
-    }
+    await updateGardenEntryImages(tx, id, data);
     await auditGardenChange(tx, actor, "gardenEntry", id, "update");
     return getGardenEntry(tx, id);
   });
@@ -636,8 +817,11 @@ export const gardenEntryList = async (
   const rows = await unwrapDb(db).query.gardenEntry.findMany({
     where: buildGardenEntryWhere(),
     with: {
-      location: { columns: { shortcode: true } },
-      planting: { columns: { shortcode: true } },
+      location: { columns: { shortcode: true, name: true } },
+      planting: {
+        columns: { shortcode: true, variety: true },
+        with: { ingredient: { columns: { name: true } } },
+      },
       images: { with: { image: true } },
     },
     orderBy: [order, desc(gardenEntry.createdAt)],
@@ -773,11 +957,18 @@ export const gardenEntries = async (
       ...(plantingId ? [eq(gardenEntry.plantingId, plantingId)] : []),
     ),
     with: {
-      location: { columns: { shortcode: true } },
-      planting: { columns: { shortcode: true } },
+      location: { columns: { shortcode: true, name: true } },
+      planting: {
+        columns: { shortcode: true, variety: true },
+        with: { ingredient: { columns: { name: true } } },
+      },
       images: { with: { image: true } },
     },
-    orderBy: [desc(gardenEntry.observedOn), desc(gardenEntry.createdAt)],
+    orderBy: [
+      desc(gardenEntry.observedOn),
+      desc(gardenEntry.createdAt),
+      desc(gardenEntry.id),
+    ],
     limit: pageSize + 1,
     offset: (input.page - 1) * pageSize,
   });
@@ -787,8 +978,261 @@ export const gardenEntries = async (
   };
 };
 
+/**
+ * A planting journal always includes its direct entries. Whole-location
+ * entries join only when their observation date falls in a confirmed period.
+ */
+export const gardenJournal = async (
+  db: Database,
+  input: z.infer<typeof gardenJournalInput>,
+) => {
+  const plantingId = await required(db, input.plantingId, "planting");
+  const pageSize = 50;
+  const inConfirmedLocationPeriod = exists(
+    unwrapDb(db)
+      .select({ one: sql`1` })
+      .from(plantingLocationPeriod)
+      .where(
+        and(
+          eq(plantingLocationPeriod.plantingId, plantingId),
+          sql`${plantingLocationPeriod.locationId} = ${sql.raw('"gardenEntry"."locationId"')}`,
+          sql`${sql.raw('"gardenEntry"."observedOn"')} >= ${plantingLocationPeriod.inLocationSince}`,
+          or(
+            isNull(plantingLocationPeriod.endedOn),
+            sql`${sql.raw('"gardenEntry"."observedOn"')} <= ${plantingLocationPeriod.endedOn}`,
+          ),
+        ),
+      ),
+  );
+  const rows = await unwrapDb(db).query.gardenEntry.findMany({
+    where: and(
+      notDeleted(gardenEntry),
+      input.includeBedContext
+        ? or(
+            eq(gardenEntry.plantingId, plantingId),
+            and(isNull(gardenEntry.plantingId), inConfirmedLocationPeriod),
+          )
+        : eq(gardenEntry.plantingId, plantingId),
+    ),
+    with: {
+      location: { columns: { shortcode: true, name: true } },
+      planting: {
+        columns: { shortcode: true, variety: true },
+        with: { ingredient: { columns: { name: true } } },
+      },
+      images: { with: { image: true } },
+    },
+    orderBy: [
+      desc(gardenEntry.observedOn),
+      desc(gardenEntry.createdAt),
+      desc(gardenEntry.id),
+    ],
+    limit: pageSize + 1,
+    offset: (input.page - 1) * pageSize,
+  });
+  return gardenJournalOut.parse({
+    items: rows.slice(0, pageSize).map((row) => ({
+      ...mapEntry(row),
+      context: row.plantingId === plantingId ? "direct" : "bed",
+    })),
+    hasMore: rows.length > pageSize,
+  });
+};
+
+export const gardenLocationHistory = async (
+  db: Database,
+  input: z.infer<typeof gardenLocationHistoryInput>,
+) => {
+  const plantingId = await required(db, input.plantingId, "planting");
+  return mapLocationHistory(db, plantingId);
+};
+
+type StoredLocationPeriod = Pick<
+  typeof plantingLocationPeriod.$inferSelect,
+  | "id"
+  | "sequence"
+  | "inLocationSince"
+  | "endedOn"
+  | "startKind"
+  | "sourceGardenEntryId"
+>;
+type SubmittedLocationPeriod = z.infer<
+  typeof gardenCorrectLocationDatesInput
+>["periods"][number];
+
+const assertLocationCorrectionMatches = (
+  existing: StoredLocationPeriod[],
+  submitted: SubmittedLocationPeriod[],
+) => {
+  if (
+    existing.length !== submitted.length ||
+    existing.some(
+      (period, index) => period.sequence !== submitted[index]?.sequence,
+    )
+  ) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Location history changed; reload it before correcting dates.",
+    );
+  }
+};
+
+const assertLocationPeriodDates = (
+  status: string,
+  periods: SubmittedLocationPeriod[],
+) => {
+  for (const [index, period] of periods.entries()) {
+    const isLast = index === periods.length - 1;
+    if (period.endedOn && period.endedOn < period.inLocationSince) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A location period cannot end before it starts.",
+      );
+    }
+    if (!isLast && period.endedOn !== periods[index + 1]?.inLocationSince) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A move's source end and destination start must be the same date.",
+      );
+    }
+    if (isLast && status === "growing" && period.endedOn !== null) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "The active location period must remain open.",
+      );
+    }
+    if (isLast && status === "finished" && !period.endedOn) {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A finished planting's final location period must be closed.",
+      );
+    }
+  }
+};
+
+const applyLocationPeriodCorrections = async (
+  tx: DrizzleTransaction,
+  existing: StoredLocationPeriod[],
+  submitted: SubmittedLocationPeriod[],
+) => {
+  for (const [index, period] of submitted.entries()) {
+    const existingPeriod = existing[index];
+    if (!existingPeriod) continue;
+    const datesChanged =
+      existingPeriod.inLocationSince !== period.inLocationSince ||
+      existingPeriod.endedOn !== (period.endedOn ?? null);
+    await tx
+      .update(plantingLocationPeriod)
+      .set({
+        inLocationSince: period.inLocationSince,
+        endedOn: period.endedOn ?? null,
+        startKind: datesChanged ? "actual" : existingPeriod.startKind,
+      })
+      .where(eq(plantingLocationPeriod.id, existingPeriod.id));
+    if (existingPeriod.sourceGardenEntryId && datesChanged) {
+      await tx
+        .update(gardenEntry)
+        .set({ observedOn: period.inLocationSince })
+        .where(eq(gardenEntry.id, existingPeriod.sourceGardenEntryId));
+    }
+  }
+};
+
+const bootstrapConfirmedLocationPeriod = async (
+  tx: DrizzleTransaction,
+  plantingId: PlantingId,
+  plantingState: Awaited<ReturnType<typeof plantingRow>>,
+  submitted: SubmittedLocationPeriod[],
+) => {
+  if (
+    plantingState.status === "planned" ||
+    !plantingState.locationId ||
+    submitted.length !== 1 ||
+    submitted[0]?.sequence !== 0
+  ) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Confirm one current-location period for a growing or finished planting.",
+    );
+  }
+  const period = submitted[0];
+  if (!period) return;
+  const latestMove = await unwrapDb(tx).query.gardenEntry.findFirst({
+    where: and(
+      eq(gardenEntry.plantingId, plantingId),
+      eq(gardenEntry.kind, "move"),
+      notDeleted(gardenEntry),
+    ),
+    columns: { observedOn: true },
+    orderBy: [desc(gardenEntry.observedOn), desc(gardenEntry.createdAt)],
+  });
+  if (latestMove && period.inLocationSince < latestMove.observedOn) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "The confirmed current location cannot begin before its latest recorded move.",
+    );
+  }
+  await tx.insert(plantingLocationPeriod).values({
+    plantingId,
+    locationId: plantingState.locationId,
+    sequence: 0,
+    inLocationSince: period.inLocationSince,
+    endedOn: period.endedOn ?? null,
+    startKind: "actual",
+    sourceGardenEntryId: null,
+  });
+};
+
+export const correctLocationDates = async (
+  db: Database,
+  input: z.infer<typeof gardenCorrectLocationDatesInput>,
+  actor?: ActorContext,
+) =>
+  withTransaction(db, async (tx) => {
+    const plantingId = await required(tx, input.plantingId, "planting");
+    const plantingState = await plantingRow(tx, plantingId);
+    const existing = await unwrapDb(tx).query.plantingLocationPeriod.findMany({
+      where: eq(plantingLocationPeriod.plantingId, plantingId),
+      columns: {
+        id: true,
+        sequence: true,
+        inLocationSince: true,
+        endedOn: true,
+        startKind: true,
+        sourceGardenEntryId: true,
+      },
+      orderBy: [asc(plantingLocationPeriod.sequence)],
+    });
+    assertLocationPeriodDates(plantingState.status, input.periods);
+    if (existing.length === 0) {
+      await bootstrapConfirmedLocationPeriod(
+        tx,
+        plantingId,
+        plantingState,
+        input.periods,
+      );
+    } else {
+      assertLocationCorrectionMatches(existing, input.periods);
+      await applyLocationPeriodCorrections(tx, existing, input.periods);
+    }
+    const finalPeriod = input.periods.at(-1);
+    if (
+      plantingState.status === "finished" &&
+      finalPeriod?.endedOn &&
+      plantingState.finishedOn !== finalPeriod.endedOn
+    ) {
+      await tx
+        .update(planting)
+        .set({ finishedOn: finalPeriod.endedOn })
+        .where(eq(planting.id, plantingId));
+    }
+    await auditGardenChange(tx, actor, "planting", plantingId, "update");
+    return mapLocationHistory(tx, plantingId);
+  });
+
 export const gardenOptions = async (db: Database) => {
-  const [locations, ingredients, products] = await Promise.all([
+  const optionLocation = alias(location, "GardenOptionLocation");
+  const [locations, ingredients, products, plantings] = await Promise.all([
     unwrapDb(db)
       .select({
         shortcode: location.shortcode,
@@ -818,6 +1262,20 @@ export const gardenOptions = async (db: Database) => {
       .leftJoin(ingredient, eq(product.growsIngredientId, ingredient.id))
       .where(notDeleted(product))
       .orderBy(asc(product.name)),
+    unwrapDb(db)
+      .select({
+        shortcode: planting.shortcode,
+        status: planting.status,
+        variety: planting.variety,
+        ingredientName: ingredient.name,
+        locationShortcode: optionLocation.shortcode,
+        locationName: optionLocation.name,
+      })
+      .from(planting)
+      .innerJoin(ingredient, eq(planting.ingredientId, ingredient.id))
+      .leftJoin(optionLocation, eq(planting.locationId, optionLocation.id))
+      .where(notDeleted(planting))
+      .orderBy(asc(ingredient.name), asc(planting.createdAt)),
   ]);
   return gardenOptionsOut.parse({
     locations: locations.map((row) => ({
@@ -837,6 +1295,17 @@ export const gardenOptions = async (db: Database) => {
       growsIngredientId: row.growsIngredientShortcode
         ? parseShortcodeFor("ingredient", row.growsIngredientShortcode)
         : null,
+    })),
+    plantings: plantings.map((row) => ({
+      id: parseShortcodeFor("planting", row.shortcode),
+      name: row.variety
+        ? `${row.ingredientName} (${row.variety})`
+        : row.ingredientName,
+      locationId: row.locationShortcode
+        ? parseShortcodeFor("location", row.locationShortcode)
+        : null,
+      locationName: row.locationName,
+      status: row.status,
     })),
   });
 };

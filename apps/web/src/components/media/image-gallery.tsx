@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { PhotoViewer } from "~/app/_components/photos/photo-viewer";
 import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 
@@ -15,6 +16,7 @@ interface ImageGalleryProps {
 export function ImageGallery({ images, className }: ImageGalleryProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -84,13 +86,20 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
             data-index={index}
             className="w-full flex-shrink-0 snap-start"
           >
-            <img
-              src={transformedImageUrl(image.url, 800)}
-              srcSet={transformedSrcSet(image.url, 800)}
-              alt={image.filename}
-              className="aspect-video w-full bg-card object-contain md:aspect-[4/3]"
-              loading={index === 0 ? "eager" : "lazy"}
-            />
+            <button
+              type="button"
+              className="block w-full cursor-zoom-in text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              aria-label={`View ${image.filename}`}
+              onClick={() => setViewerIndex(index)}
+            >
+              <img
+                src={transformedImageUrl(image.url, 800)}
+                srcSet={transformedSrcSet(image.url, 800)}
+                alt={image.filename}
+                className="aspect-video w-full bg-card object-contain md:aspect-[4/3]"
+                loading={index === 0 ? "eager" : "lazy"}
+              />
+            </button>
           </div>
         ))}
       </div>
@@ -117,6 +126,15 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
       <div className="border-b border-border bg-card px-2 py-1 eyebrow sm:px-4 sm:py-2">
         Fig. {String(activeIndex + 1).padStart(2, "0")} / {images.length}
       </div>
+      <PhotoViewer
+        images={images}
+        index={viewerIndex}
+        onIndexChange={setViewerIndex}
+        onOpenChange={(open) => {
+          if (!open) setViewerIndex(null);
+        }}
+        detailLink={(image) => ({ shortcode: image.id })}
+      />
     </div>
   );
 }

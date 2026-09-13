@@ -28,6 +28,11 @@ public enum GardenLocationKind: String, CaseIterable, Codable, Sendable, Hashabl
     case other
 }
 
+public enum GardenLocationStartKind: String, CaseIterable, Codable, Sendable, Hashable {
+    case actual
+    case recorded
+}
+
 public struct GardenOption: Identifiable, Codable, Sendable, Hashable {
     public let id: String
     public let name: String
@@ -158,6 +163,8 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
     public let plannedDate: Date?
     public let sownAt: Date?
     public let transplantedAt: Date?
+    public let inLocationSince: Date?
+    public let inLocationSinceKind: GardenLocationStartKind
     public let finishedAt: Date?
     public let gardenGuideKey: String?
 
@@ -176,6 +183,8 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
         plannedDate: Date? = nil,
         sownAt: Date? = nil,
         transplantedAt: Date? = nil,
+        inLocationSince: Date? = nil,
+        inLocationSinceKind: GardenLocationStartKind = .actual,
         finishedAt: Date? = nil,
         gardenGuideKey: String? = nil
     ) {
@@ -193,6 +202,8 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
         self.plannedDate = plannedDate
         self.sownAt = sownAt
         self.transplantedAt = transplantedAt
+        self.inLocationSince = inLocationSince
+        self.inLocationSinceKind = inLocationSinceKind
         self.finishedAt = finishedAt
         self.gardenGuideKey = gardenGuideKey
     }
@@ -228,15 +239,61 @@ public struct GardenEntry: Identifiable, Codable, Sendable, Hashable {
     public let observedAt: Date
     public let note: String?
     public let harvestAmount: String?
-    public let imageIDs: [String]
+    public let locationName: String?
+    public let plantingName: String?
+    /// Retain the server image reference so journals can render the actual photo and link through
+    /// to its ordinary Image detail record; ids alone made the correction UI a blind checklist.
+    public let images: [GardenImage]
 
     public init(
         id: String, locationID: String, plantingID: String?, kind: GardenEntryKind, observedAt: Date,
-        note: String?, harvestAmount: String?, imageIDs: [String]
+        note: String?, harvestAmount: String?, images: [GardenImage], locationName: String? = nil,
+        plantingName: String? = nil
     ) {
         self.id = id; self.locationID = locationID; self.plantingID = plantingID; self.kind = kind
-        self.observedAt = observedAt; self.note = note; self.harvestAmount = harvestAmount;
-        self.imageIDs = imageIDs
+        self.observedAt = observedAt; self.note = note; self.harvestAmount = harvestAmount
+        self.locationName = locationName; self.plantingName = plantingName; self.images = images
+    }
+}
+
+public struct GardenImage: Identifiable, Codable, Sendable, Hashable {
+    public let id: String
+    public let url: URL
+    public let filename: String
+    public init(id: String, url: URL, filename: String) {
+        self.id = id; self.url = url; self.filename = filename
+    }
+}
+
+public enum GardenJournalContext: String, Codable, Sendable, Hashable { case direct, bed }
+
+public struct GardenJournalEntry: Identifiable, Codable, Sendable, Hashable {
+    public let entry: GardenEntry
+    public let context: GardenJournalContext
+    public let locationName: String
+    public let plantingName: String?
+    public var id: String { entry.id }
+
+    public init(
+        entry: GardenEntry, context: GardenJournalContext, locationName: String, plantingName: String?
+    ) {
+        self.entry = entry
+        self.context = context
+        self.locationName = locationName
+        self.plantingName = plantingName
+    }
+}
+
+public struct GardenLocationPeriod: Identifiable, Codable, Sendable, Hashable {
+    public let sequence: Int; public let location: GardenOption; public var inLocationSince: Date
+    public var endedOn: Date?; public let startKind: GardenLocationStartKind
+    public var id: Int { sequence }
+    public init(
+        sequence: Int, location: GardenOption, inLocationSince: Date, endedOn: Date?,
+        startKind: GardenLocationStartKind
+    ) {
+        self.sequence = sequence; self.location = location; self.inLocationSince = inLocationSince;
+        self.endedOn = endedOn; self.startKind = startKind
     }
 }
 
@@ -293,11 +350,16 @@ public struct GardenOptions: Codable, Sendable, Hashable {
     public let ingredients: [GardenOption]
     public let locations: [GardenOption]
     public let products: [GardenProductOption]
+    public let plantings: [GardenOption]
 
-    public init(ingredients: [GardenOption], locations: [GardenOption], products: [GardenProductOption]) {
+    public init(
+        ingredients: [GardenOption], locations: [GardenOption], products: [GardenProductOption],
+        plantings: [GardenOption] = []
+    ) {
         self.ingredients = ingredients
         self.locations = locations
         self.products = products
+        self.plantings = plantings
     }
 }
 
@@ -314,6 +376,8 @@ public struct CreateGardenPlanting: Codable, Sendable, Hashable {
     public let plannedDate: Date?
     public let sownAt: Date?
     public let transplantedAt: Date?
+    public let inLocationSince: Date?
+    public let inLocationSinceKind: GardenLocationStartKind
 
     public init(
         ingredientID: String,
@@ -327,7 +391,9 @@ public struct CreateGardenPlanting: Codable, Sendable, Hashable {
         plannedWindow: String? = nil,
         plannedDate: Date? = nil,
         sownAt: Date? = nil,
-        transplantedAt: Date? = nil
+        transplantedAt: Date? = nil,
+        inLocationSince: Date? = nil,
+        inLocationSinceKind: GardenLocationStartKind = .actual
     ) {
         self.ingredientID = ingredientID
         self.locationID = locationID
@@ -341,6 +407,8 @@ public struct CreateGardenPlanting: Codable, Sendable, Hashable {
         self.plannedDate = plannedDate
         self.sownAt = sownAt
         self.transplantedAt = transplantedAt
+        self.inLocationSince = inLocationSince
+        self.inLocationSinceKind = inLocationSinceKind
     }
 }
 

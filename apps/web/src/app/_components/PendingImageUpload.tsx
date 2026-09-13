@@ -7,14 +7,15 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { FileDropField } from "~/components/file-upload/FileDropField";
-import { Grid } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { Image } from "~/components/ui/image";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { getErrorMessage } from "~/lib/error-utils";
 import { imageUpload } from "~/lib/image.functions";
 import { cn } from "~/lib/utils";
+
+import { PhotoGrid, type PhotoGridImage } from "./photos/photo-grid";
+import { PhotoViewer } from "./photos/photo-viewer";
 
 const imageContentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
 
@@ -25,8 +26,51 @@ export interface PendingImage {
   key: string;
 }
 
+interface UploadDraft {
+  id: string;
+  file: File;
+  url: string;
+  filename: string;
+  state: "uploading" | "failed";
+  error?: string;
+}
+
 const EMPTY_IMAGES: PendingImage[] = [];
 const ACCEPTED_IMAGE_TYPES = ALLOWED_IMAGE_TYPES.join(",");
+
+type PreviewSelection = { group: "draft" | "pending" | "existing"; id: string };
+
+function PendingPhotoPreview({
+  viewing,
+  setViewing,
+  groups,
+}: {
+  viewing: PreviewSelection | null;
+  setViewing: (selection: PreviewSelection | null) => void;
+  groups: Record<PreviewSelection["group"], PhotoGridImage[]>;
+}) {
+  if (!viewing) return null;
+  const images = groups[viewing.group];
+  const index = images.findIndex((image) => image.id === viewing.id);
+  return (
+    <PhotoViewer
+      images={images}
+      index={index < 0 ? null : index}
+      onOpenChange={(open) => {
+        if (!open) setViewing(null);
+      }}
+      onIndexChange={(index) => {
+        const image = images[index];
+        if (image) setViewing({ ...viewing, id: image.id });
+      }}
+      detailLink={
+        viewing.group === "existing"
+          ? (image) => ({ shortcode: image.id })
+          : undefined
+      }
+    />
+  );
+}
 
 interface PendingImageUploadProps {
   entityType: EntityImage;
@@ -40,6 +84,8 @@ interface PendingImageUploadProps {
   // When set, automatically import this URL once (e.g. an image found by the
   // recipe scraper). Re-imports only when the value changes to a new URL.
   autoImportUrl?: string | null;
+  /** Injectable transport seam for UI tests; production keeps the real operations. */
+  operations?: Pick<typeof imageUpload, "uploadImage" | "importFromUrl">;
 }
 
 export function PendingImageUpload({
@@ -50,8 +96,10 @@ export function PendingImageUpload({
   onExistingImagesReorder,
   className = "",
   autoImportUrl,
+  operations = imageUpload,
 }: PendingImageUploadProps) {
-  const [uploading, setUploading] = useState(false);
+  const [uploadDrafts, setUploadDrafts] = useState<UploadDraft[]>([]);
+  const uploading = uploadDrafts.some((draft) => draft.state === "uploading");
   const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
   const pendingImagesRef = useRef<PendingImage[]>([]);
   const onImagesChangeRef = useRef(onImagesChange);
@@ -69,6 +117,20 @@ export function PendingImageUpload({
   const [importing, setImporting] = useState(false);
 
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const uploadDraftsRef = useRef(uploadDrafts);
+  const abandonedDraftIdsRef = useRef(new Set<string>());
+  const activeDraftIdsRef = useRef(new Set<string>());
+  const [viewing, setViewing] = useState<PreviewSelection | null>(null);
+  uploadDraftsRef.current = uploadDrafts;
+
+  useEffect(
+    () => () => {
+      for (const draft of uploadDraftsRef.current) {
+        URL.revokeObjectURL(draft.url);
+      }
+    },
+    [],
+  );
 
   // Every asynchronous source (scraper, URL, camera, file drop, paste) meets
   // at this one append/remove seam. Reading the ref before publishing the
@@ -94,7 +156,7 @@ export function PendingImageUpload({
   }
 
   const uploadImageMutation = useMutation(
-    imageUpload.uploadImage.mutationOptions({
+    operations.uploadImage.mutationOptions({
       onError: (error) => {
         toast.error(`Upload initialization failed: ${getErrorMessage(error)}`);
       },
@@ -102,7 +164,7 @@ export function PendingImageUpload({
   );
 
   const importFromUrlMutation = useMutation(
-    imageUpload.importFromUrl.mutationOptions({
+    operations.importFromUrl.mutationOptions({
       onError: (error) => {
         toast.error(`Import failed: ${getErrorMessage(error)}`);
       },
@@ -166,68 +228,112 @@ export function PendingImageUpload({
   }, [autoImportUrl, autoImported, importUrl]);
 
   const uploadFile = useCallback(
-    async (file: File) => {
+    async (file: File): Promise<PendingImage> => {
       if (!file) {
-        toast.error("No file to upload");
-        return null;
+        throw new Error("No file to upload");
       }
 
-      setUploading(true);
+      const contentType = imageContentTypeSchema.safeParse(file.type);
+      if (!contentType.success) {
+        throw new Error(
+          `Unsupported image type: ${file.type}. Allowed: JPEG, PNG, GIF, WebP, HEIC.`,
+        );
+      }
 
+      const initResult = await uploadImageMutation.mutateAsync({
+        filename: file.name,
+        contentType: contentType.data,
+        size: file.size,
+        entityType,
+      });
+
+      const uploadResult = await fetch(initResult.uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: {
+          "Content-Type": file.type,
+        },
+      });
+
+      if (!uploadResult.ok) {
+        const errorText = await uploadResult
+          .text()
+          .catch(() => "Unknown error");
+        throw new Error(`Storage error (${uploadResult.status}): ${errorText}`);
+      }
+
+      return {
+        id: initResult.imageId,
+        url: initResult.url,
+        filename: file.name,
+        key: initResult.key,
+      };
+    },
+    [entityType, uploadImageMutation],
+  );
+
+  const runUpload = useCallback(
+    async (draftId: string, file: File) => {
+      if (
+        activeDraftIdsRef.current.has(draftId) ||
+        abandonedDraftIdsRef.current.has(draftId)
+      )
+        return;
+      activeDraftIdsRef.current.add(draftId);
+      setUploadDrafts((drafts) =>
+        drafts.map((draft) =>
+          draft.id === draftId
+            ? { ...draft, state: "uploading" as const, error: undefined }
+            : draft,
+        ),
+      );
       try {
-        const contentType = imageContentTypeSchema.safeParse(file.type);
-        if (!contentType.success) {
-          toast.error(
-            `Unsupported image type: ${file.type}. Allowed: JPEG, PNG, GIF, WebP, HEIC.`,
-          );
-          return null;
-        }
-
-        const initResult = await uploadImageMutation.mutateAsync({
-          filename: file.name,
-          contentType: contentType.data,
-          size: file.size,
-          entityType,
+        const uploaded = await uploadFile(file);
+        if (abandonedDraftIdsRef.current.has(draftId)) return;
+        setUploadDrafts((drafts) => {
+          const completed = drafts.find((draft) => draft.id === draftId);
+          if (completed) URL.revokeObjectURL(completed.url);
+          return drafts.filter((draft) => draft.id !== draftId);
         });
-
-        const uploadResult = await fetch(initResult.uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: {
-            "Content-Type": file.type,
-          },
-        });
-
-        if (!uploadResult.ok) {
-          const errorText = await uploadResult
-            .text()
-            .catch(() => "Unknown error");
-          throw new Error(
-            `Storage error (${uploadResult.status}): ${errorText}`,
-          );
-        }
-
-        const newImage: PendingImage = {
-          id: initResult.imageId,
-          url: initResult.url,
-          filename: file.name,
-          key: initResult.key,
-        };
-
-        replacePendingImages((current) => [...current, newImage]);
-
+        replacePendingImages((current) =>
+          current.some((image) => image.id === uploaded.id)
+            ? current
+            : [...current, uploaded],
+        );
         toast.success("Photo added.");
-
-        return newImage;
       } catch (error) {
-        console.error("Upload error:", error);
-        toast.error(`Upload failed: ${getErrorMessage(error)}`);
-        return null;
+        const message = getErrorMessage(error);
+        setUploadDrafts((drafts) =>
+          drafts.map((draft) =>
+            draft.id === draftId
+              ? { ...draft, state: "failed" as const, error: message }
+              : draft,
+          ),
+        );
+        toast.error(`Upload failed: ${message}`);
       } finally {
-        setUploading(false);
+        activeDraftIdsRef.current.delete(draftId);
       }
     },
-    [entityType, uploadImageMutation, replacePendingImages],
+    [replacePendingImages, uploadFile],
+  );
+
+  const beginUpload = useCallback(
+    (file: File) => {
+      const suffix = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`;
+      const id = `${file.name}-${suffix}`;
+      abandonedDraftIdsRef.current.delete(id);
+      const draft: UploadDraft = {
+        id,
+        file,
+        url: URL.createObjectURL(file),
+        filename: file.name,
+        state: "uploading",
+      };
+      setUploadDrafts((drafts) => [...drafts, draft]);
+      void runUpload(id, file);
+    },
+    [runUpload],
   );
 
   useEffect(() => {
@@ -251,7 +357,7 @@ export function PendingImageUpload({
             { type: file.type },
           );
 
-          uploadFile(namedFile);
+          beginUpload(namedFile);
           return;
         }
       }
@@ -259,7 +365,7 @@ export function PendingImageUpload({
 
     document.addEventListener("paste", handlePaste);
     return () => document.removeEventListener("paste", handlePaste);
-  }, [uploadFile, uploading, importing]);
+  }, [beginUpload, uploading, importing]);
 
   const handleFileUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -269,22 +375,30 @@ export function PendingImageUpload({
         return;
       }
 
-      await uploadFile(file);
+      beginUpload(file);
 
       if (cameraInputRef.current) {
         cameraInputRef.current.value = "";
       }
     },
-    [uploadFile],
+    [beginUpload],
   );
 
   const handleSelectedImages = useCallback(
     (files: File[]) => {
-      const file = files[0];
-      if (file) void uploadFile(file);
+      for (const file of files) beginUpload(file);
     },
-    [uploadFile],
+    [beginUpload],
   );
+
+  const removeUploadDraft = useCallback((draftId: string) => {
+    abandonedDraftIdsRef.current.add(draftId);
+    setUploadDrafts((drafts) => {
+      const draft = drafts.find((item) => item.id === draftId);
+      if (draft) URL.revokeObjectURL(draft.url);
+      return drafts.filter((item) => item.id !== draftId);
+    });
+  }, []);
 
   const removeImage = useCallback(
     (imageId: string) => {
@@ -343,6 +457,7 @@ export function PendingImageUpload({
               description="or drop it here"
               mode="compact"
               onFilesAdded={handleSelectedImages}
+              multiple
               disabled={uploading || importing}
             />
           </div>
@@ -407,67 +522,103 @@ export function PendingImageUpload({
         </div>
       )}
 
+      {uploadDrafts.length > 0 && (
+        <div className="space-y-2">
+          <Label>Uploading images</Label>
+          <PhotoGrid
+            images={uploadDrafts}
+            onSelect={(image) => setViewing({ group: "draft", id: image.id })}
+            renderOverlay={(draft) => (
+              <div className="absolute inset-x-1 bottom-1 z-20 flex items-center justify-between gap-1 rounded bg-background/90 p-1 text-xs">
+                {draft.state === "uploading" ? (
+                  <span>Uploading…</span>
+                ) : (
+                  <span
+                    className="truncate text-destructive"
+                    title={draft.error}
+                  >
+                    Upload failed
+                  </span>
+                )}
+                <div className="flex shrink-0 gap-1">
+                  {draft.state === "failed" ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => void runUpload(draft.id, draft.file)}
+                    >
+                      Retry
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-6"
+                    aria-label={`Remove ${draft.filename}`}
+                    onClick={() => removeUploadDraft(draft.id)}
+                  >
+                    <X className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          />
+        </div>
+      )}
+
       {pendingImages.length > 0 && (
         <div className="space-y-2">
           <Label>New images</Label>
-          <Grid cols="images" gap="sm">
-            {pendingImages.map((image) => (
-              <div
-                key={image.id}
-                className="relative overflow-hidden rounded-md border"
+          <PhotoGrid
+            images={pendingImages}
+            onSelect={(image) => setViewing({ group: "pending", id: image.id })}
+            renderOverlay={(image) => (
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                className="absolute top-1 right-1 z-20 size-6 rounded-full p-1"
+                onClick={() => removeImage(image.id)}
+                aria-label={`Remove ${image.filename}`}
+                title={`Remove ${image.filename}`}
               >
-                <Image
-                  src={image.url}
-                  alt={image.filename}
-                  displayWidth={200}
-                  className="h-24 w-full object-cover"
-                />
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-1 right-1 size-6 rounded-full p-1"
-                  onClick={() => removeImage(image.id)}
-                >
-                  <X className="size-4" />
-                </Button>
-              </div>
-            ))}
-          </Grid>
+                <X className="size-4" />
+              </Button>
+            )}
+          />
         </div>
       )}
 
       {currentExistingImages.length > 0 && (
         <div className="space-y-2">
           <Label>Existing images</Label>
-          <Grid cols="images" gap="sm">
-            {currentExistingImages.map((image, index) => (
-              <div
-                key={image.id}
-                className="relative overflow-hidden rounded-md border"
-              >
-                <Image
-                  src={image.url}
-                  alt={image.filename}
-                  displayWidth={200}
-                  className="h-24 w-full object-cover"
-                />
+          <PhotoGrid
+            images={currentExistingImages}
+            onSelect={(image) =>
+              setViewing({ group: "existing", id: image.id })
+            }
+            renderOverlay={(image, index) => (
+              <>
                 <Button
                   type="button"
                   variant="destructive"
                   size="icon"
-                  className="absolute top-1 right-1 size-6 rounded-full p-1"
+                  className="absolute top-1 right-1 z-20 size-6 rounded-full p-1"
+                  aria-label={`Remove ${image.filename}`}
+                  title={`Remove ${image.filename}`}
                   onClick={() => removeExistingImage(image.id)}
                 >
                   <X className="size-4" />
                 </Button>
                 {onExistingImagesReorder && index === 0 && (
-                  <span className="absolute bottom-1 left-1 rounded-sm bg-background/80 px-1 font-mono text-2xs text-foreground uppercase">
+                  <span className="absolute bottom-1 left-1 z-20 rounded-sm bg-background/80 px-1 font-mono text-2xs text-foreground uppercase">
                     Cover
                   </span>
                 )}
                 {onExistingImagesReorder && index > 0 && (
-                  <div className="absolute bottom-1 left-1 flex gap-1">
+                  <div className="absolute bottom-1 left-1 z-20 flex gap-1">
                     <Button
                       type="button"
                       variant="secondary"
@@ -502,11 +653,20 @@ export function PendingImageUpload({
                     )}
                   </div>
                 )}
-              </div>
-            ))}
-          </Grid>
+              </>
+            )}
+          />
         </div>
       )}
+      <PendingPhotoPreview
+        viewing={viewing}
+        setViewing={setViewing}
+        groups={{
+          draft: uploadDrafts,
+          pending: pendingImages,
+          existing: currentExistingImages,
+        }}
+      />
     </div>
   );
 }

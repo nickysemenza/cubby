@@ -150,6 +150,7 @@ export function PlantingForm({
   onCancel: () => void;
 }) {
   const queryClient = useQueryClient();
+  const [inLocationSince, setInLocationSince] = useState("");
   const {
     source,
     setSource,
@@ -207,6 +208,10 @@ export function PlantingForm({
         plannedDate: nullable(plannedDate),
         sowedOn: nullable(sowedOn),
         transplantedOn: nullable(transplantedOn),
+        inLocationSince:
+          !planting && status === "growing"
+            ? (nullable(inLocationSince) ?? undefined)
+            : undefined,
       });
       if (source && rememberSource) {
         const currentSource = await queryClient.ensureQueryData(
@@ -256,16 +261,6 @@ export function PlantingForm({
       }}
     >
       <Stack gap="lg">
-        <GardenPicker
-          entity="product"
-          label="Seed packet or plant (optional)"
-          value={
-            sourceDetail.data
-              ? item(sourceDetail.data.id, sourceDetail.data.name)
-              : source
-          }
-          onChange={setSource}
-        />
         <GardenPicker
           entity="ingredient"
           label="Crop"
@@ -319,6 +314,31 @@ export function PlantingForm({
             Dates and other details (optional)
           </summary>
           <Stack gap="md" className="pt-4">
+            {!planting && status === "growing" && (
+              <Stack gap="sm">
+                <GardenField
+                  label="In this location since"
+                  type="date"
+                  value={inLocationSince}
+                  onChange={setInLocationSince}
+                />
+                <p className="text-sm text-muted-foreground">
+                  Optional. This confirms which older bed photos belong in the
+                  journal. Leave blank to record presence from today without
+                  guessing an earlier date.
+                </p>
+              </Stack>
+            )}
+            <GardenPicker
+              entity="product"
+              label="Seed packet or plant (optional)"
+              value={
+                sourceDetail.data
+                  ? item(sourceDetail.data.id, sourceDetail.data.name)
+                  : source
+              }
+              onChange={setSource}
+            />
             <GardenPicker
               entity="location"
               label="Intended destination"

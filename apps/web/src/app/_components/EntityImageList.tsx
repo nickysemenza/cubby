@@ -1,16 +1,18 @@
 import { Link } from "@tanstack/react-router";
 import { ImageIcon, X } from "lucide-react";
-import { type FC, Fragment } from "react";
+import { type FC, useState } from "react";
 
-import { Grid, Row } from "~/components/layout";
-import { InteractiveImage } from "~/components/media/interactive-image";
-import { Button } from "~/components/ui/button";
+import { Row } from "~/components/layout";
+import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Empty,
   EmptyDescription,
   EmptyMedia,
   EmptyTitle,
 } from "~/components/ui/empty";
+
+import { PhotoGrid } from "./photos/photo-grid";
+import { PhotoViewer } from "./photos/photo-viewer";
 
 /** Minimal image type for display - only the fields we actually use */
 interface MinimalImage {
@@ -23,21 +25,21 @@ interface EntityImageListProps {
   images: MinimalImage[];
   showViewAllButton?: boolean;
   /**
-   * Opt-in detach affordance: an X on each thumbnail. Omitted, the list stays
-   * display-only and renders exactly the markup it always did — the button is a
-   * SIBLING of the tile's `<Link>` (never nested inside it: a button inside an
-   * anchor is invalid, and the click would navigate to the image page instead of
-   * detaching). Detaching is the owning entity's call, so the handler gets the
-   * image id and nothing else.
+   * Detaching belongs to the owning entity. The removal button is a sibling of
+   * the preview target so removal never opens the image viewer.
    */
   onRemove?: (imageId: string) => void;
+  /** Preserve the whole scene for context-heavy photos such as garden beds. */
+  imageFit?: "cover" | "contain";
 }
 
 const EntityImageList: FC<EntityImageListProps> = ({
   images,
   showViewAllButton = true,
   onRemove,
+  imageFit = "cover",
 }) => {
+  const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   return (
     <div>
       {images.length === 0 ? (
@@ -50,55 +52,49 @@ const EntityImageList: FC<EntityImageListProps> = ({
         </Empty>
       ) : (
         <div>
-          <Grid cols="thumbs" className="mb-4">
-            {images.map((image) => {
-              const tile = (
-                <Link
-                  to="/images/$shortcode"
-                  params={{ shortcode: image.id }}
-                  className="group block"
-                >
-                  <InteractiveImage
-                    src={image.url}
-                    alt={image.filename}
-                    displayWidth={256}
-                    hoverEffect="both"
-                    transition="all"
-                  />
-                  <p className="mt-1 truncate text-sm" title={image.filename}>
-                    {image.filename}
-                  </p>
-                </Link>
-              );
-              // Fragment, not a wrapper div, in the display-only case: the
-              // positioning context only exists when there's a button to
-              // position, so every existing caller's DOM is unchanged.
-              if (!onRemove) return <Fragment key={image.id}>{tile}</Fragment>;
-              return (
-                <div key={image.id} className="relative">
-                  {tile}
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    aria-label={`Remove ${image.filename}`}
-                    title={`Remove ${image.filename}`}
-                    className="absolute top-1 right-1 size-6 bg-[var(--background)] text-muted-foreground hover:text-destructive"
-                    onClick={() => onRemove(image.id)}
-                  >
-                    <X className="size-3.5" />
-                  </Button>
-                </div>
-              );
-            })}
-          </Grid>
+          <PhotoGrid
+            images={images}
+            fit={imageFit}
+            className="mb-4"
+            onSelect={(_image, index) => setViewerIndex(index)}
+            renderOverlay={
+              onRemove
+                ? (image) => (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label={`Remove ${image.filename}`}
+                      title={`Remove ${image.filename}`}
+                      className="absolute top-1 right-1 z-20 size-6 bg-[var(--background)] text-muted-foreground hover:text-destructive"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onRemove(image.id);
+                      }}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  )
+                : undefined
+            }
+          />
+          <PhotoViewer
+            images={images}
+            index={viewerIndex}
+            onIndexChange={setViewerIndex}
+            onOpenChange={(open) => {
+              if (!open) setViewerIndex(null);
+            }}
+            detailLink={(image) => ({ shortcode: image.id })}
+          />
 
           {showViewAllButton && (
             <Row justify="end">
-              <Link to="/images">
-                <Button variant="outline" size="sm">
-                  View All Images
-                </Button>
+              <Link
+                to="/images"
+                className={buttonVariants({ variant: "outline", size: "sm" })}
+              >
+                View All Images
               </Link>
             </Row>
           )}
