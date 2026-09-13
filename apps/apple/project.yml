@@ -29,8 +29,8 @@ settings:
     "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: Y9A97FXT63
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "2"
 
 packages:
   CubbyKit:
@@ -73,6 +73,10 @@ targetTemplates:
             UIInterfaceOrientationLandscapeRight,
           ]
         LSMinimumSystemVersion: "26.0"
+        # XcodeGen otherwise hardcodes 1.0/1 here, orphaning MARKETING_VERSION and
+        # CURRENT_PROJECT_VERSION above. Bump those for each TestFlight upload.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         # Only HTTPS via URLSession (exempt); answers App Store Connect's export-compliance
         # question at upload so every TestFlight build skips the prompt.
         ITSAppUsesNonExemptEncryption: false
