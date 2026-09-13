@@ -116,6 +116,8 @@ generated shape.
 - `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
   `scripts/ci-scope.ts`'s `runAppleCheck`) gates formatting; run
   `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
+  `runAppleCheck` only runs from the pre-push gate when `apps/apple/` or
+  `cubby-ffi/` changed, and from `pnpm verify:local` on any high-risk or full run.
 
 ### Debugging on device
 

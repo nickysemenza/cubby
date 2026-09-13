@@ -24,7 +24,7 @@
     "format": "oxfmt .",
     "verify:local": "node scripts/ci-scope.ts",
     "verify:local:full": "node scripts/ci-scope.ts --full",
-    "verify:push": "node scripts/ci-scope.ts",
+    "verify:push": "node scripts/ci-scope.ts --push",
     "test": "NX_DAEMON=false nx run cubby-checks:fast-tests --outputStyle=stream",
     "test:unit": "pnpm --filter @cubby/web test:unit",
     "test:ui": "pnpm --filter @cubby/web test:ui",

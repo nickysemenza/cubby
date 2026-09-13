@@ -6,18 +6,34 @@ production Workers without running tests or E2E again.
 
 ## Local verification
 
-After committing, run `pnpm verify:local` (also the mandatory pre-push hook).
-It rejects uncommitted code, includes deleted paths, runs repository checks and
-selects affected web, PostgreSQL, browser, build, auxiliary and Rust gates using
-`scripts/ci-scope.ts`. Unknown paths fail safe. High-risk changes run the complete
-routine suite; `pnpm verify:local:full` forces that suite for any revision.
-Use `CUBBY_VERIFY_BASE` to override the default merge base with `origin/main`.
+After committing, run `pnpm verify:local`. It rejects uncommitted code, includes
+deleted paths, runs repository checks and selects affected web, PostgreSQL,
+browser, build, auxiliary and Rust gates using `scripts/ci-scope.ts`. Unknown
+paths fail safe. High-risk changes run the complete routine suite;
+`pnpm verify:local:full` forces that suite for any revision. Use
+`CUBBY_VERIFY_BASE` to override the default merge base with `origin/main`.
 The full command includes WASM preparation, dependency installation/deduplication,
 repository checks, workspace and PostgreSQL tests, Rust formatting/lint/tests,
 auxiliary builds and a fresh web build. It then runs the fast tests followed by
 PostgreSQL and browser tests concurrently through the existing `concurrently`
 npm runner. Those two tiers use isolated database templates; a failure stops
-the peer and fails verification. It deploys nothing.
+the peer and fails verification. It deploys nothing. Both `pnpm verify:push`
+and `pnpm verify:local` print each step's elapsed seconds and a total.
+
+**Pre-push.** `.husky/pre-push` runs `pnpm verify:push`
+(`node scripts/ci-scope.ts --push`): a scoped fast gate that never escalates to
+the full suite. It runs `requireCommittedCode`, resolves the base (merge-base
+with `origin/main`, falling back to `HEAD^` and saying so), then: `pnpm wasm`
+only when `recipebridge/` changed; `pnpm install --frozen-lockfile` plus
+`pnpm dedupe:check` only when dependency manifests or the lockfile changed;
+always `pnpm check` (not `check:all`); then only the lanes whose paths
+changed — changed Vitest (`test:changed`) or PostgreSQL (`test:changed:postgres`)
+tests, the Cloudflare build, E2E for routing paths, auxiliary worker
+tests/builds, and Rust fmt/clippy/test per changed manifest (`recipebridge/`
+selects recipebridge, `cubby-ffi/` selects cubby-ffi, `rust-toolchain.toml`
+selects both). High-risk paths do not escalate the push gate. Unknown
+(unclassified) paths run the JavaScript gates and print a warning to run
+`pnpm verify:local` before merging.
 
 Node 24, pnpm 12.3.4, Rust/wasm-pack, local PostgreSQL/IntegreSQL and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
@@ -28,17 +44,19 @@ Browser verification always follows the current web build. Pre-commit still
 runs `pnpm check`.
 
 A change under `apps/apple/` or `cubby-ffi/` additionally selects the `apple`
-push check: `node scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI
-shim; a stale committed `cubby_ffi.swift` fails as a dirty tree), `xcodegen
+check — true for both the push gate and `pnpm verify:local`: `node
+scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI shim; a stale
+committed `cubby_ffi.swift` fails as a dirty tree), `xcodegen
 generate --use-cache`,
 `swift test --package-path apps/apple/CubbyKit`,
 `apps/apple/scripts/check-openapi-drift.sh`, then an `xcodebuild` simulator
 build. It skips itself (with a message, not a failure) when `xcode-select -p`
-fails, so a machine without Xcode still passes `pnpm verify:local`. `rust`
-gates loop both Rust manifests (`recipebridge/Cargo.toml`,
-`cubby-ffi/Cargo.toml`) for fmt/clippy/test. There is no hosted macOS runner
-yet — the `apple` push check only runs locally; a `workflow_dispatch` job
-behind a `run_ios` input is a possible follow-up, not implemented.
+fails, so a machine without Xcode still passes. `rust` gates run fmt/clippy/test
+per changed manifest (`recipebridge/Cargo.toml`, `cubby-ffi/Cargo.toml`);
+`verify:local:full` and high-risk runs loop both manifests regardless of what
+changed. There is no hosted macOS runner yet — the `apple` check only runs
+locally; a `workflow_dispatch` job behind a `run_ios` input is a possible
+follow-up, not implemented.
 
 ## Optional hosted suite
 
@@ -70,8 +88,10 @@ The Cloudflare CI pilot is retired; its evaluation remains historical.
 The workflow policy takes effect after merging this branch. On September 7,
 2026, the complete warm `pnpm verify:local:full` passed in **124.47 seconds**
 on the local ARM Mac. The preceding pre-push run took 289.37 seconds including
-about 135 seconds of Rust compilation. These are individual observations, not
-a guaranteed runtime; see [local measurements](local-check-performance.md).
+about 135 seconds of Rust compilation. Those predate the `cubby-ffi` manifest
+and the `apple` check (2026-09-11); re-measure after the split. These are
+individual observations, not a guaranteed runtime; see
+[local measurements](local-check-performance.md).
 
 ## Measurements and rejected optimizations
 

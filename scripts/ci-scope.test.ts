@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { classifyPaths, selectPushChecks } from "./ci-scope.ts";
+import {
+  classifyPaths,
+  selectPushChecks,
+  selectVerifyChecks,
+} from "./ci-scope.ts";
 
 test("agent, documentation, and editor-only changes are inert", () => {
   assert.deepEqual(classifyPaths([".claude/skills/example/SKILL.md"]), {
@@ -8,6 +12,7 @@ test("agent, documentation, and editor-only changes are inert", () => {
     web: false,
     rust: false,
     wasm: false,
+    ffi: false,
     apple: false,
     aux: false,
     usda: false,
@@ -32,6 +37,7 @@ test("a web-only change runs web CI without auxiliary or Rust work", () => {
     web: true,
     rust: false,
     wasm: false,
+    ffi: false,
     apple: false,
     aux: false,
     usda: false,
@@ -72,6 +78,7 @@ test("Rust and generated WASM paths have distinct scopes", () => {
   const rust = classifyPaths(["recipebridge/src/lib.rs"]);
   assert.equal(rust.rust, true);
   assert.equal(rust.wasm, true);
+  assert.equal(rust.ffi, false);
   assert.equal(rust.web, true);
 
   const wasmPackage = classifyPaths(["packages/wasm/package.json"]);
@@ -93,6 +100,7 @@ test("apps/apple and cubby-ffi paths select the apple scope without tripping unk
   assert.equal(ffi.rust, true);
   assert.equal(ffi.apple, true);
   assert.equal(ffi.wasm, false);
+  assert.equal(ffi.ffi, true);
   assert.equal(ffi.unknown, false);
 });
 
@@ -118,6 +126,7 @@ test("a novel path fails safe to every suite and worker", () => {
     web: true,
     rust: true,
     wasm: true,
+    ffi: true,
     apple: true,
     aux: true,
     usda: true,
@@ -159,6 +168,20 @@ test("database, browser, and high-risk paths select their expensive gates", () =
   ]) {
     assert.equal(classifyPaths([path]).highRisk, true, path);
   }
+
+  // The highRisk fragment scan is scoped to apps/web/src/server/ — a UI file
+  // that merely mentions inventory/expense/delete is not high-risk.
+  for (const path of [
+    "apps/web/src/app/_components/inventory/format-amount.tsx",
+    "apps/web/src/app/_components/actions/delete-entity-action.tsx",
+    "packages/schemas/src/money.ts",
+  ]) {
+    assert.equal(classifyPaths([path]).highRisk, false, path);
+  }
+  assert.equal(
+    classifyPaths(["apps/web/src/server/services/ledger-posting.ts"]).highRisk,
+    true,
+  );
 });
 
 test("inert files do not dilute a real code change", () => {
@@ -170,11 +193,12 @@ test("inert files do not dilute a real code change", () => {
 });
 
 test("documentation-only pushes do not launch code gates", () => {
-  assert.deepEqual(selectPushChecks(["docs/ci.md"]), []);
+  assert.deepEqual(selectPushChecks(["docs/ci.md"]).checks, []);
+  assert.deepEqual(selectVerifyChecks(["docs/ci.md"]), []);
 });
 
 test("ordinary web source runs affected tests and the Cloudflare build", () => {
-  assert.deepEqual(selectPushChecks(["apps/web/src/lib/date.ts"]), [
+  assert.deepEqual(selectPushChecks(["apps/web/src/lib/date.ts"]).checks, [
     "web-tests",
     "cloudflare",
   ]);
@@ -182,24 +206,25 @@ test("ordinary web source runs affected tests and the Cloudflare build", () => {
 
 test("database changes upgrade affected tests to PostgreSQL", () => {
   assert.deepEqual(
-    selectPushChecks(["apps/web/src/server/repo/product/read.ts"]),
+    selectPushChecks(["apps/web/src/server/repo/product/read.ts"]).checks,
     ["postgres", "cloudflare"],
   );
 });
 
 test("high-risk and routing changes add browser verification", () => {
   assert.deepEqual(
-    selectPushChecks(["apps/web/src/server/repo/inventory/update.ts"]),
+    selectVerifyChecks(["apps/web/src/server/repo/inventory/update.ts"]),
     ["rust", "aux", "cloudflare", "all-tests", "apple"],
   );
   assert.deepEqual(
-    selectPushChecks(["apps/web/src/routes/_authenticated/products.tsx"]),
+    selectPushChecks(["apps/web/src/routes/_authenticated/products.tsx"])
+      .checks,
     ["web-tests", "cloudflare", "e2e"],
   );
 });
 
 test("unknown paths fail safe across all implementation stacks", () => {
-  assert.deepEqual(selectPushChecks(["new-system/config.toml"]), [
+  assert.deepEqual(selectVerifyChecks(["new-system/config.toml"]), [
     "rust",
     "aux",
     "cloudflare",
@@ -209,7 +234,7 @@ test("unknown paths fail safe across all implementation stacks", () => {
 });
 
 test("explicit full verification includes every stack even for inert changes", () => {
-  assert.deepEqual(selectPushChecks(["docs/ci.md"], true), [
+  assert.deepEqual(selectVerifyChecks(["docs/ci.md"], true), [
     "rust",
     "aux",
     "cloudflare",
@@ -219,15 +244,49 @@ test("explicit full verification includes every stack even for inert changes", (
 });
 
 test("a Swift-only change selects only the apple push check", () => {
-  assert.deepEqual(
-    selectPushChecks(["apps/apple/CubbyKit/Sources/CubbyKit/RootView.swift"]),
-    ["apple"],
-  );
+  const result = selectPushChecks([
+    "apps/apple/CubbyKit/Sources/CubbyKit/RootView.swift",
+  ]);
+  assert.deepEqual(result.checks, ["apple"]);
+  assert.deepEqual(result.manifests, []);
 });
 
 test("a cubby-ffi change selects rust and apple push checks", () => {
-  assert.deepEqual(selectPushChecks(["cubby-ffi/src/lib.rs"]), [
-    "rust",
-    "apple",
+  const result = selectPushChecks(["cubby-ffi/src/lib.rs"]);
+  assert.deepEqual(result.checks, ["rust", "apple"]);
+  assert.deepEqual(result.manifests, ["cubby-ffi/Cargo.toml"]);
+});
+
+test("a recipebridge change selects the rust push check with only its own manifest", () => {
+  const result = selectPushChecks(["recipebridge/src/lib.rs"]);
+  assert.ok(result.checks.includes("rust"));
+  assert.deepEqual(result.manifests, ["recipebridge/Cargo.toml"]);
+});
+
+test("a rust-toolchain.toml change runs both manifests", () => {
+  const result = selectPushChecks(["rust-toolchain.toml"]);
+  assert.deepEqual(result.manifests, [
+    "recipebridge/Cargo.toml",
+    "cubby-ffi/Cargo.toml",
   ]);
+});
+
+test("pre-push never escalates to the full suite", () => {
+  assert.deepEqual(
+    selectPushChecks(["apps/web/src/server/repo/inventory/update.ts"]).checks,
+    ["postgres", "cloudflare"],
+  );
+  assert.deepEqual(selectPushChecks(["scripts/ci-scope.ts"]).checks, [
+    "web-tests",
+    "cloudflare",
+    "aux",
+  ]);
+});
+
+test("unknown paths in push mode run the JavaScript gates and warn", () => {
+  const result = selectPushChecks(["new-system/config.toml"]);
+  assert.deepEqual(result.checks, ["web-tests", "cloudflare", "aux"]);
+  assert.deepEqual(result.manifests, []);
+  assert.match(result.warning ?? "", /verify:local/);
+  assert.match(result.warning ?? "", /new-system\/config\.toml/);
 });

@@ -225,6 +225,14 @@ test("local checks retain every required gate and keep stateful verification liv
   ])
     assert.equal(project.targets[name]?.cache, false, name);
   assert.equal(manifest.scripts["verify:local"], "node scripts/ci-scope.ts");
+  assert.equal(
+    manifest.scripts["verify:push"],
+    "node scripts/ci-scope.ts --push",
+  );
+  assert.equal(
+    manifest.scripts["verify:local:full"],
+    "node scripts/ci-scope.ts --full",
+  );
   assert.match(manifest.scripts.lint!, /nx run cubby-checks:lint\b/u);
   assert.match(
     manifest.scripts["format:check"]!,
@@ -296,6 +304,6 @@ test("task caching is bounded and cannot connect to Nx Cloud", () => {
     })
     .parse(JSON.parse(readFileSync("nx.json", "utf8")));
   assert.equal(config.neverConnectToCloud, true);
-  assert.equal(config.parallel, 2);
+  assert.equal(config.parallel, 4);
   assert.equal(config.maxCacheSize, "4GB");
 });

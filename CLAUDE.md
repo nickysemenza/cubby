@@ -30,6 +30,7 @@
 - Before merge, verify the exact final commit locally with `pnpm verify:local`.
   High-risk changes select full verification; `pnpm verify:local:full` forces it.
   Hosted verification and coverage are manual; main only builds and deploys.
+  The pre-push hook is a scoped fast gate, not a substitute.
 - Spend tool calls on bytes that earn their place. Batch independent read-only
   shell into one call, but prefer a targeted `Grep`/`Glob` over dumping a large
   file: the cost is calls x bytes returned, not calls alone. Re-read a file only
