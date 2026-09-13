@@ -3,6 +3,7 @@ import {
   externalIdKind,
   GTIN_SOURCE,
 } from "@cubby/schemas/external-id";
+import { gardenLocationKind } from "@cubby/schemas/garden-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InventoryListProductOut,
@@ -51,7 +52,11 @@ type ProductImageRow =
       deletedAt?: Date | null;
     };
 
-type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
+type ProductTopLevelDB = Omit<
+  RowWithOptionalAliases<typeof product.$inferSelect>,
+  "growsIngredientId"
+> & {
+  growsIngredientId?: (typeof product.$inferSelect)["growsIngredientId"];
   images?: ProductImageRow[] | null;
   externalIds?: MappableProductExternalId[] | null;
   dataQuality: ProductTopLevelOut["dataQuality"];
@@ -60,6 +65,8 @@ type ProductTopLevelDB = RowWithOptionalAliases<typeof product.$inferSelect> & {
   // (same rule the picker uses). Optional: callers that never asked for it
   // (e.g. ingredient-relation reads) fall back to `null` below.
   coverImageUrl?: string | null;
+  /** Loaded where a public product response needs the garden source relation. */
+  growsIngredient?: { shortcode: string } | null;
 };
 
 /**
@@ -138,6 +145,9 @@ export const mapDbProductToTopLevel = (
   notes: productData.notes,
   expectedQuantity: productData.expectedQuantity,
   category: productData.category,
+  growsIngredientId: productData.growsIngredient
+    ? parseShortcodeFor("ingredient", productData.growsIngredient.shortcode)
+    : null,
   price: productData.price,
   pricing: productData.pricing ?? resolveProductPricing(productData.price),
   usdaUnavailable: productData.usdaUnavailable,
@@ -412,6 +422,10 @@ export const dbProductToAPI = (
         id: parseShortcodeFor("location", entry.location.shortcode),
         name: entry.location.name,
         aliases: entry.location.aliases,
+        gardenKind: entry.location.gardenKind
+          ? gardenLocationKind.parse(entry.location.gardenKind)
+          : null,
+        gardenConditions: entry.location.gardenConditions ?? null,
         // Null whenever the location IS a product; only a present value is
         // validated against the enum.
         type: parseLocationType(entry.location.type, {
@@ -443,6 +457,9 @@ export const dbProductToAPI = (
     notes: productData.notes,
     expectedQuantity: productData.expectedQuantity,
     category: productData.category,
+    growsIngredientId: productData.growsIngredient
+      ? parseShortcodeFor("ingredient", productData.growsIngredient.shortcode)
+      : null,
     price: productData.price,
     pricing: productData.pricing ?? resolveProductPricing(productData.price),
     usdaUnavailable: productData.usdaUnavailable,

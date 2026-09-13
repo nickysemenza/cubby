@@ -8,7 +8,7 @@ extension OperationRoute {
     )
 
     /// Entity keys whose `resources.<key>.update` body accepts `pendingImageIds`.
-    public static let imageAttachableEntities: Set<String> = ["location", "product", "purchase", "recipe"]
+    public static let imageAttachableEntities: Set<String> = ["gardenEntry", "location", "product", "purchase", "recipe"]
 
     private static let routeTable: [OperationRoute] = [
         OperationRoute(operationID: "agent.ask", method: .post, path: "/api/v1/agent/ask", pathParameters: [], queryParameters: [], hasBody: true),
@@ -68,6 +68,16 @@ extension OperationRoute {
         OperationRoute(operationID: "financialAccount.options", method: .get, path: "/api/v1/financialAccount/options", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "financialTransaction.sourceOptions", method: .get, path: "/api/v1/financialTransaction/sourceOptions", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "financialTransaction.vendorInference", method: .get, path: "/api/v1/financialTransaction/vendorInference", pathParameters: [], queryParameters: ["merchant"], hasBody: false),
+        OperationRoute(operationID: "garden.createPlanting", method: .post, path: "/api/v1/garden/createPlanting", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "garden.entries", method: .get, path: "/api/v1/garden/entries", pathParameters: [], queryParameters: ["locationId", "page", "plantingId"], hasBody: false),
+        OperationRoute(operationID: "garden.finishPlanting", method: .post, path: "/api/v1/garden/finishPlanting", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "garden.guides", method: .get, path: "/api/v1/garden/guides", pathParameters: [], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "garden.movePlanting", method: .post, path: "/api/v1/garden/movePlanting", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "garden.options", method: .get, path: "/api/v1/garden/options", pathParameters: [], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "garden.overview", method: .get, path: "/api/v1/garden/overview", pathParameters: [], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "garden.recordEntry", method: .post, path: "/api/v1/garden/recordEntry", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "garden.splitPlanting", method: .post, path: "/api/v1/garden/splitPlanting", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "garden.startPlanting", method: .post, path: "/api/v1/garden/startPlanting", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "householdContribution.ledger", method: .get, path: "/api/v1/householdContribution/ledger", pathParameters: [], queryParameters: ["asOf"], hasBody: false),
         OperationRoute(operationID: "householdContribution.project", method: .get, path: "/api/v1/householdContribution/project", pathParameters: [], queryParameters: ["includeSubprojects", "projectId"], hasBody: false),
         OperationRoute(operationID: "image.cleanupUnreferencedImages", method: .post, path: "/api/v1/image/cleanupUnreferencedImages", pathParameters: [], queryParameters: [], hasBody: true),
@@ -230,6 +240,11 @@ extension OperationRoute {
         OperationRoute(operationID: "resources.financialTransaction.get", method: .get, path: "/api/v1/financial-transactions/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "resources.financialTransaction.list", method: .get, path: "/api/v1/financial-transactions", pathParameters: [], queryParameters: ["accountId", "allocationIntegrity", "amountMax", "amountMin", "createdFrom", "createdTo", "expenseId", "expensePresenceFilter", "expenseSearch", "externalId", "groupBy", "kind", "merchant", "page", "pageSize", "postedDateFrom", "postedDateTo", "productId", "productPresenceFilter", "productSearch", "purchaseId", "purchasePresenceFilter", "search", "sort", "source", "status", "transactionDateFrom", "transactionDateTo", "updatedFrom", "updatedTo", "vendorId", "vendorPresenceFilter", "vendorSearch"], hasBody: false),
         OperationRoute(operationID: "resources.financialTransaction.update", method: .patch, path: "/api/v1/financial-transactions/{id}", pathParameters: ["id"], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "resources.gardenEntry.create", method: .post, path: "/api/v1/garden-entries", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "resources.gardenEntry.delete", method: .delete, path: "/api/v1/garden-entries/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "resources.gardenEntry.get", method: .get, path: "/api/v1/garden-entries/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "resources.gardenEntry.list", method: .get, path: "/api/v1/garden-entries", pathParameters: [], queryParameters: ["groupBy", "page", "pageSize", "sort"], hasBody: false),
+        OperationRoute(operationID: "resources.gardenEntry.update", method: .patch, path: "/api/v1/garden-entries/{id}", pathParameters: ["id"], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "resources.image.delete", method: .delete, path: "/api/v1/images/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "resources.image.update", method: .patch, path: "/api/v1/images/{id}", pathParameters: ["id"], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "resources.ingredient.create", method: .post, path: "/api/v1/ingredients", pathParameters: [], queryParameters: [], hasBody: true),
@@ -262,6 +277,11 @@ extension OperationRoute {
         OperationRoute(operationID: "resources.meal.get", method: .get, path: "/api/v1/meals/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "resources.meal.list", method: .get, path: "/api/v1/meals", pathParameters: [], queryParameters: ["createdFrom", "createdTo", "from", "groupBy", "mealKind", "mealType", "mealTypePresenceFilter", "page", "pageSize", "recipeCostCoverage", "recipeId", "recipePresenceFilter", "recipeSearch", "sort", "to", "updatedFrom", "updatedTo"], hasBody: false),
         OperationRoute(operationID: "resources.meal.update", method: .patch, path: "/api/v1/meals/{id}", pathParameters: ["id"], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "resources.planting.create", method: .post, path: "/api/v1/plantings", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "resources.planting.delete", method: .delete, path: "/api/v1/plantings/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "resources.planting.get", method: .get, path: "/api/v1/plantings/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "resources.planting.list", method: .get, path: "/api/v1/plantings", pathParameters: [], queryParameters: ["groupBy", "page", "pageSize", "sort"], hasBody: false),
+        OperationRoute(operationID: "resources.planting.update", method: .patch, path: "/api/v1/plantings/{id}", pathParameters: ["id"], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "resources.product.create", method: .post, path: "/api/v1/products", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "resources.product.delete", method: .delete, path: "/api/v1/products/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "resources.product.get", method: .get, path: "/api/v1/products/{id}", pathParameters: ["id"], queryParameters: [], hasBody: false),

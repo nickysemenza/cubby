@@ -31,6 +31,18 @@ typealias MealRowOut = Components.Schemas.MealOut
 typealias UploadInput = Components.Schemas.InitiateUploadWithoutEntity
 typealias UploadOut = Components.Schemas.InitiateUploadWithoutEntityResponse
 typealias UPCLookupOut = Components.Schemas.UpcLookupOutput
+typealias GardenCreateInput = Components.Schemas.GardenCreatePlantingInput
+typealias GardenFinishInput = Components.Schemas.GardenFinishPlantingInput
+typealias GardenGuidesOut = Components.Schemas.GardenGuidesDocument
+typealias GardenMoveInput = Components.Schemas.GardenMovePlantingInput
+typealias GardenOptionsOut = Components.Schemas.GardenOptionsOut
+typealias GardenOverviewOut = Components.Schemas.GardenOverviewOut
+typealias GardenPlantingOut = Components.Schemas.GardenPlantingOut
+typealias GardenRecordInput = Components.Schemas.GardenRecordEntryInput
+typealias GardenSplitInput = Components.Schemas.GardenSplitPlantingInput
+typealias GardenStartInput = Components.Schemas.GardenStartPlantingInput
+typealias GardenEntriesOut = Components.Schemas.GardenEntriesOut
+typealias GardenEntryOut = Components.Schemas.GardenEntryOut
 
 // MARK: - Scanning
 
@@ -102,6 +114,205 @@ extension AmountInput {
 
     init(_ amount: Amount) {
         self.init(value: amount.value, unit: amount.unit, upperValue: amount.upperValue)
+    }
+}
+
+// MARK: - Garden
+
+enum GardenPlainDate {
+    static func date(_ raw: String?) -> Date? {
+        guard let raw else { return nil }
+        let components = raw.split(separator: "-", omittingEmptySubsequences: false).compactMap { Int($0) }
+        guard components.count == 3 else { return nil }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        return calendar.date(
+            from: DateComponents(year: components[0], month: components[1], day: components[2]))
+    }
+
+    static func string(_ date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+    }
+}
+
+extension GardenPlanting {
+    init(_ out: GardenPlantingOut) {
+        self.init(
+            id: out.id,
+            ingredient: .init(
+                id: out.ingredientId, name: out.ingredientName, gardenGuideKey: out.gardenGuideKey),
+            product: out.sourceProductId.map { .init(id: $0, name: out.sourceProductName ?? $0) },
+            location: out.locationId.map { .init(id: $0, name: out.locationName ?? $0) },
+            intendedLocation: out.intendedLocationId.map {
+                .init(id: $0, name: out.intendedLocationName ?? $0)
+            },
+            parentPlantingID: out.parentPlantingId,
+            status: .init(rawValue: out.status.rawValue)!,
+            variety: out.variety,
+            quantity: out.quantity,
+            notes: out.notes,
+            plannedWindow: out.plannedWindow,
+            plannedDate: GardenPlainDate.date(out.plannedDate),
+            sownAt: GardenPlainDate.date(out.sowedOn),
+            transplantedAt: GardenPlainDate.date(out.transplantedOn),
+            finishedAt: GardenPlainDate.date(out.finishedOn),
+            gardenGuideKey: out.gardenGuideKey
+        )
+    }
+}
+
+extension GardenOverview {
+    init(_ out: GardenOverviewOut) {
+        self.init(
+            locations: out.locations.map {
+                GardenLocation(
+                    id: $0.id,
+                    name: $0.name,
+                    gardenKind: $0.gardenKind?.rawValue,
+                    conditions: $0.gardenConditions,
+                    plantings: $0.plantings.map(GardenPlanting.init)
+                )
+            },
+            finishedPlantings: out.finished.map(GardenPlanting.init),
+            unassignedPlantings: out.unassigned.map(GardenPlanting.init)
+        )
+    }
+}
+
+extension GardenEntry {
+    init(_ out: GardenEntryOut) {
+        self.init(
+            id: out.id, locationID: out.locationId, plantingID: out.plantingId,
+            kind: .init(rawValue: out.kind.rawValue)!, observedAt: GardenPlainDate.date(out.observedOn)!,
+            note: out.note, harvestAmount: out.harvestAmount, imageIDs: out.images.map(\.id))
+    }
+}
+
+extension GardenOptions {
+    init(_ out: GardenOptionsOut) {
+        self.init(
+            ingredients: out.ingredients.map {
+                .init(id: $0.id, name: $0.name, gardenGuideKey: $0.gardenGuideKey)
+            },
+            locations: out.locations.map { .init(id: $0.id, name: $0.name) },
+            products: out.products.map {
+                .init(id: $0.id, name: $0.name, growsIngredientID: $0.growsIngredientId)
+            }
+        )
+    }
+}
+
+extension GardenGuidesDocument {
+    init(_ out: GardenGuidesOut) {
+        self.init(
+            schemaVersion: Int(out.schemaVersion),
+            sources: out.sources.map {
+                GardenGuideSource(
+                    id: $0.id,
+                    name: $0.name,
+                    url: URL(string: $0.url)!,
+                    publishedOrRevised: $0.publishedOrRevised,
+                    reviewedAt: $0.reviewedAt,
+                    basedOn: $0.basedOn,
+                    notes: $0.notes
+                )
+            },
+            guides: out.guides.map { guide in
+                GardenGuide(
+                    key: guide.key,
+                    name: guide.name,
+                    aliases: guide.aliases,
+                    windows: guide.windows.enumerated().map { index, window in
+                        GardenGuideWindow(
+                            id: "\(guide.key)-\(index)",
+                            sourceID: window.sourceId,
+                            microclimate: window.microclimate.rawValue,
+                            method: window.method.rawValue,
+                            months: window.months,
+                            monthPart: window.monthPart?.rawValue,
+                            note: window.notes
+                        )
+                    },
+                    notes: guide.notes
+                )
+            }
+        )
+    }
+}
+
+extension GardenCreateInput {
+    init(_ input: CreateGardenPlanting) {
+        self.init(
+            ingredientId: input.ingredientID,
+            locationId: input.locationID,
+            intendedLocationId: input.intendedLocationID,
+            status: .init(rawValue: input.status.rawValue),
+            sourceProductId: input.productID,
+            variety: input.variety,
+            quantity: input.quantity,
+            notes: input.notes,
+            plannedWindow: input.plannedWindow,
+            plannedDate: input.plannedDate.map(GardenPlainDate.string),
+            sowedOn: input.sownAt.map(GardenPlainDate.string),
+            transplantedOn: input.transplantedAt.map(GardenPlainDate.string)
+        )
+    }
+}
+
+extension GardenRecordInput {
+    init(_ input: RecordGardenEntry) {
+        self.init(
+            locationId: input.locationID,
+            plantingId: input.plantingID,
+            kind: .init(rawValue: input.kind.rawValue),
+            observedOn: GardenPlainDate.string(input.observedAt),
+            note: input.note,
+            harvestAmount: input.harvestAmount,
+            pendingImageIds: input.pendingImageIDs.map(\.rawValue)
+        )
+    }
+}
+
+extension GardenMoveInput {
+    init(_ input: MoveGardenPlanting) {
+        self.init(
+            plantingId: input.plantingID,
+            locationId: input.destinationLocationID,
+            movedOn: GardenPlainDate.string(input.observedAt),
+            note: input.note
+        )
+    }
+}
+
+extension GardenSplitInput {
+    init(_ input: SplitGardenPlanting) {
+        self.init(
+            plantingId: input.plantingID,
+            locationId: input.destinationLocationID,
+            movedOn: GardenPlainDate.string(input.observedAt),
+            quantity: input.quantity,
+            note: input.note
+        )
+    }
+}
+
+extension GardenStartInput {
+    init(id: String, locationID: String, startedAt: Date, method: GardenStartMethod) {
+        self.init(
+            plantingId: id,
+            locationId: locationID,
+            startedOn: GardenPlainDate.string(startedAt),
+            startMethod: .init(rawValue: method.rawValue)!
+        )
+    }
+}
+
+extension GardenFinishInput {
+    init(id: String, finishedAt: Date) {
+        self.init(plantingId: id, finishedOn: GardenPlainDate.string(finishedAt))
     }
 }
 

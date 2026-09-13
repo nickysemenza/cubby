@@ -10,6 +10,7 @@ import {
   locationType,
   locationValuation,
 } from "@cubby/schemas/location-fields";
+import { gardenLocationKind } from "@cubby/schemas/garden-fields";
 import { z } from "zod";
 export default defineEntity({
   key: "location",
@@ -93,6 +94,28 @@ export default defineEntity({
           read: locationType.nullable(),
           create: locationType.nullable().optional(),
           update: locationType.nullable().optional(),
+        },
+      },
+      {
+        key: "gardenKind",
+        kind: "enum",
+        nullable: true,
+        label: "Garden kind",
+        validation: {
+          read: gardenLocationKind.nullable(),
+          create: gardenLocationKind.nullable().optional(),
+          update: gardenLocationKind.nullable().optional(),
+        },
+      },
+      {
+        key: "gardenConditions",
+        kind: "text",
+        nullable: true,
+        label: "Growing conditions",
+        validation: {
+          read: z.string().nullable(),
+          create: z.string().trim().min(1).nullable().optional(),
+          update: z.string().trim().min(1).nullable().optional(),
         },
       },
       {
@@ -278,6 +301,8 @@ export default defineEntity({
       { key: "parentId", reference: "location" },
       { key: "productId", reference: "product" },
       { key: "type", specialized: "enum:type" },
+      { key: "gardenKind", specialized: "enum:gardenKind" },
+      "gardenConditions",
       "aiDescription",
       { key: "valuation", specialized: "json:valuation" },
     ],
@@ -286,6 +311,8 @@ export default defineEntity({
       "aliases",
       "tags",
       "type",
+      "gardenKind",
+      "gardenConditions",
       "productId",
       "parentId",
       "pendingImageIds",
@@ -295,6 +322,8 @@ export default defineEntity({
       "aliases",
       "tags",
       "type",
+      "gardenKind",
+      "gardenConditions",
       "productId",
       "parentId",
       "pendingImageIds",
@@ -334,6 +363,8 @@ export default defineEntity({
       "aliases",
       "tags",
       "type",
+      "gardenKind",
+      "gardenConditions",
       "product",
       "lastBulkInventory",
       "aiDescription",

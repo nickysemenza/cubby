@@ -51,6 +51,7 @@ export const makeProduct = (
   tags: [],
   primaryGtin: opts.upc ?? null,
   fdc_id: opts.fdc ?? null,
+  growsIngredientId: null,
   manufacturer: "",
   category: null,
   model: null,
@@ -123,6 +124,7 @@ export const ingredientWith = (
   aliases: [],
   naKinds: [],
   usuallyOnHand: false,
+  gardenGuideKey: null,
   ...dates,
   product,
 });

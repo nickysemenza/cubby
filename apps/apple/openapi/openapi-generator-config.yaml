@@ -13,6 +13,16 @@ filter:
   operations:
     - agent.ask
     - dashboard.counts
+    - garden.createPlanting
+    - garden.entries
+    - garden.finishPlanting
+    - garden.guides
+    - garden.movePlanting
+    - garden.options
+    - garden.overview
+    - garden.recordEntry
+    - garden.splitPlanting
+    - garden.startPlanting
     - image.markUploaded
     - image.uploadImage
     - inventory.findDuplicates
@@ -31,8 +41,12 @@ filter:
     - resources.financialAccount.list
     - resources.financialTransaction.get
     - resources.financialTransaction.list
+    - resources.gardenEntry.get
+    - resources.gardenEntry.list
+    - resources.gardenEntry.update
     - resources.ingredient.get
     - resources.ingredient.list
+    - resources.ingredient.update
     - resources.inventory.create
     - resources.inventory.get
     - resources.inventory.list
@@ -40,11 +54,15 @@ filter:
     - resources.ledgerParty.list
     - resources.ledgerTransfer.get
     - resources.ledgerTransfer.list
+    - resources.location.create
     - resources.location.get
     - resources.location.list
     - resources.location.update
     - resources.meal.get
     - resources.meal.list
+    - resources.planting.get
+    - resources.planting.list
+    - resources.planting.update
     - resources.product.get
     - resources.product.list
     - resources.product.update

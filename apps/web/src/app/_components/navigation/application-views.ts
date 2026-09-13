@@ -16,6 +16,7 @@ import {
   ScanBarcode,
   ShoppingCart,
   Sparkles,
+  Sprout,
   Warehouse,
   Wrench,
 } from "lucide-react";
@@ -188,6 +189,13 @@ export const activityViews = [
       ),
       recordDestination("task", "Review concrete work and completion state."),
       {
+        to: "/garden",
+        label: "Garden",
+        description:
+          "Record plantings, photos, harvests, and plans for your growing areas.",
+        icon: Sprout,
+      },
+      {
         to: "/tools",
         label: "Tool coverage",
         description: "See which reusable tools support household work.",
@@ -257,6 +265,8 @@ export const recordViews = [
   recordView("wish", "Wanted items and candidate products."),
   recordView("project", "Household work grouped into durable projects."),
   recordView("task", "Concrete work, schedules, and completion state."),
+  recordView("planting", "Crops growing now and planned for later."),
+  recordView("gardenEntry", "Dated garden photos, observations, and harvests."),
   recordView("vendor", "Sources for purchases and expense evidence."),
   recordView("purchase", "Orders and their itemized expense lines."),
   recordView("expense", "The authoritative record of household spend."),

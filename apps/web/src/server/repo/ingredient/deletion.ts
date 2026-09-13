@@ -40,6 +40,18 @@ export const INGREDIENT_DELETE_EDGE_POLICY = {
     description:
       "An ingredient linked to a product can't be deleted — unlink or delete the product first.",
   },
+  "Product.growsIngredientId": {
+    code: "block-live-garden-source-product",
+    effect: "block",
+    description:
+      "An ingredient named by a live garden source product cannot be deleted.",
+  },
+  "Planting.ingredientId": {
+    code: "block-live-planting",
+    effect: "block",
+    description:
+      "An ingredient recorded by a planting cannot be deleted because garden history retains its crop.",
+  },
 } as const satisfies IncomingEdgePolicy<"ingredient", OperationDisposition>;
 
 /**

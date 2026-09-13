@@ -95,7 +95,7 @@ extension EntityKey {
     /// stock on hand, and an ingredient is a recipe-side identity.
     var domain: AppDomain {
         switch self {
-        case .product, .inventory, .location, .usdaFood, .image: .house
+        case .product, .inventory, .location, .usdaFood, .image, .planting, .gardenEntry: .house
         case .recipe, .ingredient, .cookbook, .meal: .cook
         case .project, .task, .wish: .plan
         case .vendor, .purchase, .expense, .financialAccount, .financialTransaction,

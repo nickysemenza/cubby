@@ -151,6 +151,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Absorbed products' conversion projections are discarded; the survivor is marked stale and rebuilt from the merged graph.",
   },
+  "Planting.sourceProductId": {
+    code: "preserve-garden-source",
+    effect: "preserve",
+    description:
+      "Planting provenance retains the merged product tombstone rather than rewriting its recorded source.",
+  },
 } as const satisfies IncomingEdgePolicy<"product", OperationDisposition>;
 
 /**

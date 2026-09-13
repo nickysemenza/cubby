@@ -197,6 +197,36 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "financialTransaction.vendorInference": async () =>
     (await import("~/server/finance-browser.server"))
       .financialTransactionHandlers.operations.vendorInference,
+  "garden.createPlanting": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .createPlanting,
+  "garden.entries": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .entries,
+  "garden.finishPlanting": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .finishPlanting,
+  "garden.guides": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .guides,
+  "garden.movePlanting": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .movePlanting,
+  "garden.options": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .options,
+  "garden.overview": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .overview,
+  "garden.recordEntry": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .recordEntry,
+  "garden.splitPlanting": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .splitPlanting,
+  "garden.startPlanting": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .startPlanting,
   "householdContribution.ledger": async () =>
     (await import("~/server/household-contribution-browser.server"))
       .householdContributionHandlers.operations.ledger,

@@ -55,9 +55,11 @@ import {
   cookbook,
   expense,
   image,
+  ingredient,
   inventoryEntry,
   location,
   product,
+  planting,
   productComponent,
   productConversionCoverage,
   productExternalId,
@@ -1414,7 +1416,22 @@ export const createProduct = async (
             })
           : [];
 
-      return { ...newProduct, images, externalIds: createdExternalIds };
+      const growsIngredient = productData.growsIngredientId
+        ? await tx.query.ingredient.findFirst({
+            where: and(
+              eq(ingredient.id, productData.growsIngredientId),
+              notDeleted(ingredient),
+            ),
+            columns: { shortcode: true },
+          })
+        : null;
+
+      return {
+        ...newProduct,
+        growsIngredient,
+        images,
+        externalIds: createdExternalIds,
+      };
     });
     const qualities = await loadProductDataQualities(db, [created.id]);
     return dbProductToTopLevelAPI({
@@ -2001,6 +2018,13 @@ type ProductDependentFetcher = (
 ) => Promise<Array<{ productId: ProductId | null }>>;
 
 const PRODUCT_RETAINING_DEPENDENTS = {
+  "Planting.sourceProductId": async (tx, ids) => {
+    const rows = await tx.query.planting.findMany({
+      where: and(inArray(planting.sourceProductId, ids), notDeleted(planting)),
+      columns: { sourceProductId: true },
+    });
+    return rows.map(({ sourceProductId }) => ({ productId: sourceProductId }));
+  },
   "InventoryEntry.productId": (tx, ids) =>
     tx.query.inventoryEntry.findMany({
       where: and(
@@ -2183,14 +2207,16 @@ export const deleteProducts = async (
 
 export type ProductRepoCreateInput = Omit<
   ProductCreateInput,
-  "ingredientId"
+  "ingredientId" | "growsIngredientId"
 > & {
   ingredientId: IngredientId | null;
+  growsIngredientId?: IngredientId | null;
 };
 
 export type ProductRepoUpdateData = Omit<
   ProductUpdateInput["data"],
-  "ingredientId"
+  "ingredientId" | "growsIngredientId"
 > & {
   ingredientId?: IngredientId | null;
+  growsIngredientId?: IngredientId | null;
 };

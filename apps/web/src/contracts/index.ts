@@ -35,6 +35,7 @@ export { householdContributionContract } from "./household-contribution.contract
 export { imageUploadContract } from "./image-upload.contract";
 export { imageContract } from "./image.contract";
 export { ingredientContract } from "./ingredient.contract";
+export { gardenContract } from "./garden.contract";
 export { inventoryContract } from "./inventory.contract";
 export { locationContract } from "./location.contract";
 export { mcpContract } from "./mcp.contract";

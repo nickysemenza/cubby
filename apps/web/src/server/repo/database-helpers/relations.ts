@@ -272,6 +272,7 @@ export const relations = {
     full: {
       with: {
         ingredient: true,
+        growsIngredient: { columns: { shortcode: true } },
         unitMappings: { where: notDeleted(productUnitMappings) },
         externalIds: { where: notDeleted(productExternalId) },
         // Locations that ARE this product — a bin in service, as opposed to
@@ -328,6 +329,7 @@ export const relations = {
     list: {
       with: {
         ingredient: true,
+        growsIngredient: { columns: { shortcode: true } },
         images: {
           where: notDeleted(productImage),
           orderBy: imageOrder,

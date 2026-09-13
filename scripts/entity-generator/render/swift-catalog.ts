@@ -210,8 +210,8 @@ const renderEntityDescriptorLiteral = (
     `    basePath: ${swiftString(entity.route.basePath)},\n` +
     `    shortcodePrefix: ${swiftOptionalString(entity.shortcode)},\n` +
     `    titleField: ${swiftString(entity.inspector.titleField)},\n` +
-    `    fields: [\n      ${fields}\n    ],\n` +
-    `    filters: [\n      ${filters}\n    ],\n` +
+    `    fields: ${fields.length === 0 ? "[]" : `[\n      ${fields}\n    ]`},\n` +
+    `    filters: ${filters.length === 0 ? "[]" : `[\n      ${filters}\n    ]`},\n` +
     `    actions: [${orderedActions.map((action) => `.${swiftCaseName(action)}`).join(", ")}]\n` +
     `  )`
   );

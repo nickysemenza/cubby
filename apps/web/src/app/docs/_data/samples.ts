@@ -33,6 +33,8 @@ const makeLocation = (
     type,
     lastBulkInventory: null,
     aiDescription: null,
+    gardenKind: null,
+    gardenConditions: null,
     images: [],
     valuation: null,
     ...ts,

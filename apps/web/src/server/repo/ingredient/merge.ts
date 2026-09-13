@@ -59,6 +59,17 @@ export const INGREDIENT_MERGE_EDGE_POLICY = {
     description:
       "A merged ingredient's linked products are re-pointed onto the surviving ingredient.",
   },
+  "Product.growsIngredientId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description:
+      "Garden source products point to the surviving crop ingredient.",
+  },
+  "Planting.ingredientId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description: "Plantings retain the surviving crop ingredient.",
+  },
 } as const satisfies IncomingEdgePolicy<"ingredient", OperationDisposition>;
 
 /**

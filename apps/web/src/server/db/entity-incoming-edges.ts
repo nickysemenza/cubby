@@ -48,6 +48,8 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
+  gardenEntry,
+  gardenEntryImage,
   ingredient,
   inventoryEntry,
   ledgerSourceClaim,
@@ -73,6 +75,7 @@ import {
   recipeImage,
   recipeSection,
   recipeSectionIngredient,
+  planting,
   statementRow,
   task,
   taskDependency,
@@ -126,6 +129,7 @@ export const INCOMING_EDGES = {
     "RecipeImage.imageId": { column: recipeImage.imageId },
     "ProjectImage.imageId": { column: projectImage.imageId },
     "PurchaseImage.imageId": { column: purchaseImage.imageId },
+    "GardenEntryImage.imageId": { column: gardenEntryImage.imageId },
   }),
   recipe: edges({
     "RecipeSection.recipeId": { column: recipeSection.recipeId },
@@ -138,6 +142,8 @@ export const INCOMING_EDGES = {
       column: recipeSectionIngredient.ingredientId,
     },
     "Product.ingredientId": { column: product.ingredientId },
+    "Product.growsIngredientId": { column: product.growsIngredientId },
+    "Planting.ingredientId": { column: planting.ingredientId },
   }),
   meal: edges({
     "MealRecipe.mealId": { column: mealRecipe.mealId },
@@ -179,11 +185,15 @@ export const INCOMING_EDGES = {
     "ProductConversionCoverage.productId": {
       column: productConversionCoverage.productId,
     },
+    "Planting.sourceProductId": { column: planting.sourceProductId },
   }),
   location: edges({
     "InventoryEntry.locationId": { column: inventoryEntry.locationId },
     "LocationImage.locationId": { column: locationImage.locationId },
     "Location.parentId": { column: location.parentId },
+    "Planting.locationId": { column: planting.locationId },
+    "Planting.intendedLocationId": { column: planting.intendedLocationId },
+    "GardenEntry.locationId": { column: gardenEntry.locationId },
   }),
   project: edges({
     "Project.parentProjectId": { column: project.parentProjectId },
@@ -238,6 +248,15 @@ export const INCOMING_EDGES = {
     },
     "LedgerSourceClaim.ledgerTransferId": {
       column: ledgerSourceClaim.ledgerTransferId,
+    },
+  }),
+  planting: edges({
+    "Planting.parentPlantingId": { column: planting.parentPlantingId },
+    "GardenEntry.plantingId": { column: gardenEntry.plantingId },
+  }),
+  gardenEntry: edges({
+    "GardenEntryImage.gardenEntryId": {
+      column: gardenEntryImage.gardenEntryId,
     },
   }),
   // No table carries a live FK at these two: `inventory` is a leaf stock row,

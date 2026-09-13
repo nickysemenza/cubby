@@ -17,6 +17,36 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/dashboard/counts`.
     /// - Remark: Generated from `#/paths//api/v1/dashboard/counts/get(dashboard.counts)`.
     func dashboard_counts(_ input: Operations.Dashboard_counts.Input) async throws -> Operations.Dashboard_counts.Output
+    /// - Remark: HTTP `POST /api/v1/garden/createPlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/createPlanting/post(garden.createPlanting)`.
+    func garden_createPlanting(_ input: Operations.Garden_createPlanting.Input) async throws -> Operations.Garden_createPlanting.Output
+    /// - Remark: HTTP `GET /api/v1/garden/entries`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/entries/get(garden.entries)`.
+    func garden_entries(_ input: Operations.Garden_entries.Input) async throws -> Operations.Garden_entries.Output
+    /// - Remark: HTTP `POST /api/v1/garden/finishPlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/finishPlanting/post(garden.finishPlanting)`.
+    func garden_finishPlanting(_ input: Operations.Garden_finishPlanting.Input) async throws -> Operations.Garden_finishPlanting.Output
+    /// - Remark: HTTP `GET /api/v1/garden/guides`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/guides/get(garden.guides)`.
+    func garden_guides(_ input: Operations.Garden_guides.Input) async throws -> Operations.Garden_guides.Output
+    /// - Remark: HTTP `POST /api/v1/garden/movePlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/movePlanting/post(garden.movePlanting)`.
+    func garden_movePlanting(_ input: Operations.Garden_movePlanting.Input) async throws -> Operations.Garden_movePlanting.Output
+    /// - Remark: HTTP `GET /api/v1/garden/options`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/options/get(garden.options)`.
+    func garden_options(_ input: Operations.Garden_options.Input) async throws -> Operations.Garden_options.Output
+    /// - Remark: HTTP `GET /api/v1/garden/overview`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/overview/get(garden.overview)`.
+    func garden_overview(_ input: Operations.Garden_overview.Input) async throws -> Operations.Garden_overview.Output
+    /// - Remark: HTTP `POST /api/v1/garden/recordEntry`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/recordEntry/post(garden.recordEntry)`.
+    func garden_recordEntry(_ input: Operations.Garden_recordEntry.Input) async throws -> Operations.Garden_recordEntry.Output
+    /// - Remark: HTTP `POST /api/v1/garden/splitPlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/splitPlanting/post(garden.splitPlanting)`.
+    func garden_splitPlanting(_ input: Operations.Garden_splitPlanting.Input) async throws -> Operations.Garden_splitPlanting.Output
+    /// - Remark: HTTP `POST /api/v1/garden/startPlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/startPlanting/post(garden.startPlanting)`.
+    func garden_startPlanting(_ input: Operations.Garden_startPlanting.Input) async throws -> Operations.Garden_startPlanting.Output
     /// - Remark: HTTP `POST /api/v1/image/markUploaded`.
     /// - Remark: Generated from `#/paths//api/v1/image/markUploaded/post(image.markUploaded)`.
     func image_markUploaded(_ input: Operations.Image_markUploaded.Input) async throws -> Operations.Image_markUploaded.Output
@@ -92,11 +122,17 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/ingredients/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/get(resources.ingredient.get)`.
     func resources_ingredient_get(_ input: Operations.Resources_ingredient_get.Input) async throws -> Operations.Resources_ingredient_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/ingredients/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)`.
+    func resources_ingredient_update(_ input: Operations.Resources_ingredient_update.Input) async throws -> Operations.Resources_ingredient_update.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/locations`.
     /// - Remark: Generated from `#/paths//api/v1/locations/get(resources.location.list)`.
     func resources_location_list(_ input: Operations.Resources_location_list.Input) async throws -> Operations.Resources_location_list.Output
+    /// - Remark: HTTP `POST /api/v1/locations`.
+    /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)`.
+    func resources_location_create(_ input: Operations.Resources_location_create.Input) async throws -> Operations.Resources_location_create.Output
     /// - Remark: HTTP `GET /api/v1/locations/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/locations/{id}/get(resources.location.get)`.
     func resources_location_get(_ input: Operations.Resources_location_get.Input) async throws -> Operations.Resources_location_get.Output
@@ -205,6 +241,28 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/expenses/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)`.
     func resources_expense_get(_ input: Operations.Resources_expense_get.Input) async throws -> Operations.Resources_expense_get.Output
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/plantings`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/get(resources.planting.list)`.
+    func resources_planting_list(_ input: Operations.Resources_planting_list.Input) async throws -> Operations.Resources_planting_list.Output
+    /// - Remark: HTTP `GET /api/v1/plantings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/get(resources.planting.get)`.
+    func resources_planting_get(_ input: Operations.Resources_planting_get.Input) async throws -> Operations.Resources_planting_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/plantings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/patch(resources.planting.update)`.
+    func resources_planting_update(_ input: Operations.Resources_planting_update.Input) async throws -> Operations.Resources_planting_update.Output
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/garden-entries`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/get(resources.gardenEntry.list)`.
+    func resources_gardenEntry_list(_ input: Operations.Resources_gardenEntry_list.Input) async throws -> Operations.Resources_gardenEntry_list.Output
+    /// - Remark: HTTP `GET /api/v1/garden-entries/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/get(resources.gardenEntry.get)`.
+    func resources_gardenEntry_get(_ input: Operations.Resources_gardenEntry_get.Input) async throws -> Operations.Resources_gardenEntry_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/garden-entries/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/patch(resources.gardenEntry.update)`.
+    func resources_gardenEntry_update(_ input: Operations.Resources_gardenEntry_update.Input) async throws -> Operations.Resources_gardenEntry_update.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -224,6 +282,98 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//api/v1/dashboard/counts/get(dashboard.counts)`.
     package func dashboard_counts(headers: Operations.Dashboard_counts.Input.Headers = .init()) async throws -> Operations.Dashboard_counts.Output {
         try await dashboard_counts(Operations.Dashboard_counts.Input(headers: headers))
+    }
+    /// - Remark: HTTP `POST /api/v1/garden/createPlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/createPlanting/post(garden.createPlanting)`.
+    package func garden_createPlanting(
+        headers: Operations.Garden_createPlanting.Input.Headers = .init(),
+        body: Operations.Garden_createPlanting.Input.Body? = nil
+    ) async throws -> Operations.Garden_createPlanting.Output {
+        try await garden_createPlanting(Operations.Garden_createPlanting.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/garden/entries`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/entries/get(garden.entries)`.
+    package func garden_entries(
+        query: Operations.Garden_entries.Input.Query = .init(),
+        headers: Operations.Garden_entries.Input.Headers = .init()
+    ) async throws -> Operations.Garden_entries.Output {
+        try await garden_entries(Operations.Garden_entries.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/garden/finishPlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/finishPlanting/post(garden.finishPlanting)`.
+    package func garden_finishPlanting(
+        headers: Operations.Garden_finishPlanting.Input.Headers = .init(),
+        body: Operations.Garden_finishPlanting.Input.Body? = nil
+    ) async throws -> Operations.Garden_finishPlanting.Output {
+        try await garden_finishPlanting(Operations.Garden_finishPlanting.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/garden/guides`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/guides/get(garden.guides)`.
+    package func garden_guides(headers: Operations.Garden_guides.Input.Headers = .init()) async throws -> Operations.Garden_guides.Output {
+        try await garden_guides(Operations.Garden_guides.Input(headers: headers))
+    }
+    /// - Remark: HTTP `POST /api/v1/garden/movePlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/movePlanting/post(garden.movePlanting)`.
+    package func garden_movePlanting(
+        headers: Operations.Garden_movePlanting.Input.Headers = .init(),
+        body: Operations.Garden_movePlanting.Input.Body? = nil
+    ) async throws -> Operations.Garden_movePlanting.Output {
+        try await garden_movePlanting(Operations.Garden_movePlanting.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/garden/options`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/options/get(garden.options)`.
+    package func garden_options(headers: Operations.Garden_options.Input.Headers = .init()) async throws -> Operations.Garden_options.Output {
+        try await garden_options(Operations.Garden_options.Input(headers: headers))
+    }
+    /// - Remark: HTTP `GET /api/v1/garden/overview`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/overview/get(garden.overview)`.
+    package func garden_overview(headers: Operations.Garden_overview.Input.Headers = .init()) async throws -> Operations.Garden_overview.Output {
+        try await garden_overview(Operations.Garden_overview.Input(headers: headers))
+    }
+    /// - Remark: HTTP `POST /api/v1/garden/recordEntry`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/recordEntry/post(garden.recordEntry)`.
+    package func garden_recordEntry(
+        headers: Operations.Garden_recordEntry.Input.Headers = .init(),
+        body: Operations.Garden_recordEntry.Input.Body? = nil
+    ) async throws -> Operations.Garden_recordEntry.Output {
+        try await garden_recordEntry(Operations.Garden_recordEntry.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/garden/splitPlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/splitPlanting/post(garden.splitPlanting)`.
+    package func garden_splitPlanting(
+        headers: Operations.Garden_splitPlanting.Input.Headers = .init(),
+        body: Operations.Garden_splitPlanting.Input.Body? = nil
+    ) async throws -> Operations.Garden_splitPlanting.Output {
+        try await garden_splitPlanting(Operations.Garden_splitPlanting.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/garden/startPlanting`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/startPlanting/post(garden.startPlanting)`.
+    package func garden_startPlanting(
+        headers: Operations.Garden_startPlanting.Input.Headers = .init(),
+        body: Operations.Garden_startPlanting.Input.Body? = nil
+    ) async throws -> Operations.Garden_startPlanting.Output {
+        try await garden_startPlanting(Operations.Garden_startPlanting.Input(
+            headers: headers,
+            body: body
+        ))
     }
     /// - Remark: HTTP `POST /api/v1/image/markUploaded`.
     /// - Remark: Generated from `#/paths//api/v1/image/markUploaded/post(image.markUploaded)`.
@@ -470,6 +620,19 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// - Remark: HTTP `PATCH /api/v1/ingredients/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/ingredients/{id}/patch(resources.ingredient.update)`.
+    package func resources_ingredient_update(
+        path: Operations.Resources_ingredient_update.Input.Path,
+        headers: Operations.Resources_ingredient_update.Input.Headers = .init(),
+        body: Operations.Resources_ingredient_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_ingredient_update.Output {
+        try await resources_ingredient_update(Operations.Resources_ingredient_update.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/locations`.
@@ -481,6 +644,17 @@ extension APIProtocol {
         try await resources_location_list(Operations.Resources_location_list.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/locations`.
+    /// - Remark: Generated from `#/paths//api/v1/locations/post(resources.location.create)`.
+    package func resources_location_create(
+        headers: Operations.Resources_location_create.Input.Headers = .init(),
+        body: Operations.Resources_location_create.Input.Body? = nil
+    ) async throws -> Operations.Resources_location_create.Output {
+        try await resources_location_create(Operations.Resources_location_create.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/locations/{id}`.
@@ -817,6 +991,80 @@ extension APIProtocol {
         try await resources_expense_get(Operations.Resources_expense_get.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/plantings`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/get(resources.planting.list)`.
+    package func resources_planting_list(
+        query: Operations.Resources_planting_list.Input.Query = .init(),
+        headers: Operations.Resources_planting_list.Input.Headers = .init()
+    ) async throws -> Operations.Resources_planting_list.Output {
+        try await resources_planting_list(Operations.Resources_planting_list.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/plantings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/get(resources.planting.get)`.
+    package func resources_planting_get(
+        path: Operations.Resources_planting_get.Input.Path,
+        headers: Operations.Resources_planting_get.Input.Headers = .init()
+    ) async throws -> Operations.Resources_planting_get.Output {
+        try await resources_planting_get(Operations.Resources_planting_get.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/plantings/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/plantings/{id}/patch(resources.planting.update)`.
+    package func resources_planting_update(
+        path: Operations.Resources_planting_update.Input.Path,
+        headers: Operations.Resources_planting_update.Input.Headers = .init(),
+        body: Operations.Resources_planting_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_planting_update.Output {
+        try await resources_planting_update(Operations.Resources_planting_update.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
+    ///
+    /// - Remark: HTTP `GET /api/v1/garden-entries`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/get(resources.gardenEntry.list)`.
+    package func resources_gardenEntry_list(
+        query: Operations.Resources_gardenEntry_list.Input.Query = .init(),
+        headers: Operations.Resources_gardenEntry_list.Input.Headers = .init()
+    ) async throws -> Operations.Resources_gardenEntry_list.Output {
+        try await resources_gardenEntry_list(Operations.Resources_gardenEntry_list.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/garden-entries/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/get(resources.gardenEntry.get)`.
+    package func resources_gardenEntry_get(
+        path: Operations.Resources_gardenEntry_get.Input.Path,
+        headers: Operations.Resources_gardenEntry_get.Input.Headers = .init()
+    ) async throws -> Operations.Resources_gardenEntry_get.Output {
+        try await resources_gardenEntry_get(Operations.Resources_gardenEntry_get.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/garden-entries/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/garden-entries/{id}/patch(resources.gardenEntry.update)`.
+    package func resources_gardenEntry_update(
+        path: Operations.Resources_gardenEntry_update.Input.Path,
+        headers: Operations.Resources_gardenEntry_update.Input.Headers = .init(),
+        body: Operations.Resources_gardenEntry_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_gardenEntry_update.Output {
+        try await resources_gardenEntry_update(Operations.Resources_gardenEntry_update.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
 }

@@ -149,6 +149,29 @@ const purchaseRipple = rippleTags(
  * rather than a catch-all prefix.
  */
 export const ripple = {
+  garden: rippleTags([
+    ["dashboard"],
+    ["garden"],
+    ["planting"],
+    ["gardenEntry"],
+    ["location"],
+    ["ingredient"],
+    ["product"],
+    ["image"],
+  ]),
+  planting: rippleTags([
+    ["planting"],
+    ["garden"],
+    ["gardenEntry"],
+    ["dashboard"],
+  ]),
+  gardenEntry: rippleTags([
+    ["dashboard"],
+    ["gardenEntry"],
+    ["garden"],
+    ["planting"],
+    ["image"],
+  ]),
   none: EMPTY_INVALIDATION_TAG_SET,
   backgroundBatch: exactRippleTags([["background-batch"]]),
   search: exactRippleTags([["search"]]),

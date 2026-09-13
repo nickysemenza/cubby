@@ -12,6 +12,7 @@ import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
   expenseAttribution,
   financialTransactionAllocation,
+  gardenEntryImage,
   ledgerSourceClaim,
   locationImage,
   mealRecipe,
@@ -47,7 +48,7 @@ import {
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 60 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 70 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -124,6 +125,26 @@ const mkLocation = (db: Database) =>
     name: uniq("Location"),
     type: "room",
   });
+
+const mkPlanting = async (db: Database) => {
+  const [crop, growingLocation] = await Promise.all([
+    mkIngredient(db),
+    mkLocation(db),
+  ]);
+  return insertWithShortcode(db, "planting", {
+    ingredientId: crop.id,
+    locationId: growingLocation.id,
+    status: "growing",
+  });
+};
+
+const mkGardenEntry = async (db: Database) => {
+  const growingLocation = await mkLocation(db);
+  return insertWithShortcode(db, "gardenEntry", {
+    locationId: growingLocation.id,
+    observedOn: "2026-01-01",
+  });
+};
 
 const mkProject = (db: Database) =>
   insertWithShortcode(db, "project", { name: uniq("Project") });
@@ -206,6 +227,8 @@ const TARGET_FACTORIES = {
   ledgerTransfer: mkLedgerTransfer,
   product: mkProduct,
   location: mkLocation,
+  planting: mkPlanting,
+  gardenEntry: mkGardenEntry,
   project: mkProject,
   task: mkTask,
   vendor: mkVendor,
@@ -386,6 +409,14 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "GardenEntryImage.imageId": async (db, targetId) => {
+    const entry = await mkGardenEntry(db);
+    return insertAndReturn(db, gardenEntryImage, {
+      gardenEntryId: entry.id,
+      imageId: targetId,
+    });
+  },
+
   "RecipeSection.recipeId": (db, targetId) =>
     insertAndReturn(db, recipeSection, {
       recipeId: parseEntityId("recipe", targetId),
@@ -423,6 +454,31 @@ const SOURCE_FACTORIES = {
       manufacturer: "Test Mfr",
       ingredientId: parseEntityId("ingredient", targetId),
     }),
+
+  "Product.growsIngredientId": (db, targetId) =>
+    insertWithShortcode(db, "product", {
+      name: uniq("Garden source"),
+      manufacturer: "Test Mfr",
+      growsIngredientId: parseEntityId("ingredient", targetId),
+    }),
+
+  "Planting.sourceProductId": async (db, targetId) => {
+    const crop = await mkIngredient(db);
+    return insertWithShortcode(db, "planting", {
+      ingredientId: crop.id,
+      sourceProductId: parseEntityId("product", targetId),
+      status: "planned",
+    });
+  },
+
+  "Planting.ingredientId": async (db, targetId) => {
+    const growingLocation = await mkLocation(db);
+    return insertWithShortcode(db, "planting", {
+      ingredientId: parseEntityId("ingredient", targetId),
+      locationId: growingLocation.id,
+      status: "growing",
+    });
+  },
 
   "MealRecipe.mealId": async (db, targetId) => {
     const r = await mkRecipe(db);
@@ -536,6 +592,34 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "Planting.locationId": async (db, targetId) => {
+    const crop = await mkIngredient(db);
+    return insertWithShortcode(db, "planting", {
+      ingredientId: crop.id,
+      locationId: parseEntityId("location", targetId),
+      status: "growing",
+    });
+  },
+
+  "Planting.intendedLocationId": async (db, targetId) => {
+    const [crop, growingLocation] = await Promise.all([
+      mkIngredient(db),
+      mkLocation(db),
+    ]);
+    return insertWithShortcode(db, "planting", {
+      ingredientId: crop.id,
+      locationId: growingLocation.id,
+      intendedLocationId: parseEntityId("location", targetId),
+      status: "planned",
+    });
+  },
+
+  "GardenEntry.locationId": (db, targetId) =>
+    insertWithShortcode(db, "gardenEntry", {
+      locationId: parseEntityId("location", targetId),
+      observedOn: "2026-01-01",
+    }),
+
   "LocationImage.locationId": async (db, targetId) => {
     const img = await mkImage(db);
     return insertAndReturn(db, locationImage, {
@@ -630,6 +714,36 @@ const SOURCE_FACTORIES = {
       trade: "other",
       parentTaskId: parseEntityId("task", targetId),
     }),
+
+  "Planting.parentPlantingId": async (db, targetId) => {
+    const [crop, growingLocation] = await Promise.all([
+      mkIngredient(db),
+      mkLocation(db),
+    ]);
+    return insertWithShortcode(db, "planting", {
+      ingredientId: crop.id,
+      locationId: growingLocation.id,
+      parentPlantingId: parseEntityId("planting", targetId),
+      status: "growing",
+    });
+  },
+
+  "GardenEntry.plantingId": async (db, targetId) => {
+    const growingLocation = await mkLocation(db);
+    return insertWithShortcode(db, "gardenEntry", {
+      locationId: growingLocation.id,
+      plantingId: parseEntityId("planting", targetId),
+      observedOn: "2026-01-01",
+    });
+  },
+
+  "GardenEntryImage.gardenEntryId": async (db, targetId) => {
+    const photo = await mkImage(db);
+    return insertAndReturn(db, gardenEntryImage, {
+      gardenEntryId: parseEntityId("gardenEntry", targetId),
+      imageId: photo.id,
+    });
+  },
 
   "TaskDependency.taskId": async (db, targetId) => {
     const other = await mkTask(db);
@@ -858,11 +972,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 60 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 70 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(60);
+    expect(derivedMustTargetLiveEdges).toHaveLength(70);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {
@@ -880,8 +994,8 @@ describe("findReferentialLivenessViolations", () => {
   it("reports every derived edge when a live source points at a soft-deleted target", async () => {
     // Authoritative owner for the old per-edge "reports exactly one" cases:
     // make one violation for every derived edge, then prove the detector returns
-    // that complete edge/source/target map in one scan. This retains the exact
-    // 50-edge regression guard without paying for 50 database resets and audits.
+    // that complete edge/source/target map in one scan. This retains complete
+    // edge coverage without paying for one database reset per edge.
     const expected: ExpectedViolation[] = [];
 
     for (const spec of derivedMustTargetLiveEdges) {

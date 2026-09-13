@@ -73,6 +73,7 @@ const baseIngredient = {
   aliases: ["all-purpose flour"],
   naKinds: [],
   usuallyOnHand: false,
+  gardenGuideKey: null,
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,

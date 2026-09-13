@@ -595,7 +595,9 @@
                 "financialAccount",
                 "financialTransaction",
                 "wish",
-                "expense"
+                "expense",
+                "planting",
+                "gardenEntry"
               ]
             },
             "style": "form",
@@ -606,7 +608,7 @@
             "in": "query",
             "schema": {
               "type": "string",
-              "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+              "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
             },
             "style": "form",
             "explode": true
@@ -2509,6 +2511,390 @@
         }
       }
     },
+    "/api/v1/garden/createPlanting": {
+      "post": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.createPlanting",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenCreatePlantingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantingOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/entries": {
+      "get": {
+        "tags": ["garden"],
+        "parameters": [
+          {
+            "name": "locationId",
+            "in": "query",
+            "description": "location shortcode, e.g. LOC-4K7M",
+            "schema": {
+              "type": "string",
+              "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "plantingId",
+            "in": "query",
+            "description": "planting shortcode, e.g. PLT-4K7M",
+            "schema": {
+              "type": "string",
+              "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "garden.entries",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenEntriesOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/finishPlanting": {
+      "post": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.finishPlanting",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenFinishPlantingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantingOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/guides": {
+      "get": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.guides",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenGuidesDocument"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/movePlanting": {
+      "post": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.movePlanting",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenMovePlantingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantingOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/options": {
+      "get": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.options",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenOptionsOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/overview": {
+      "get": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.overview",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenOverviewOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/recordEntry": {
+      "post": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.recordEntry",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenRecordEntryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenEntryOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/splitPlanting": {
+      "post": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.splitPlanting",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenSplitPlantingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantingOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden/startPlanting": {
+      "post": {
+        "tags": ["garden"],
+        "parameters": [],
+        "operationId": "garden.startPlanting",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenStartPlantingInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantingOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/householdContribution/ledger": {
       "get": {
         "tags": ["householdContribution"],
@@ -4266,7 +4652,9 @@
                 "financialTransaction",
                 "wish",
                 "usda-food",
-                "image"
+                "image",
+                "planting",
+                "gardenEntry"
               ]
             },
             "style": "form",
@@ -8704,7 +9092,9 @@
                 "financialTransaction",
                 "wish",
                 "usda-food",
-                "image"
+                "image",
+                "planting",
+                "gardenEntry"
               ]
             },
             "style": "form",
@@ -19089,6 +19479,498 @@
           }
         }
       }
+    },
+    "/api/v1/plantings": {
+      "get": {
+        "description": "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.",
+        "tags": ["planting"],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number, starting at 1 (default 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (default 10, maximum 500)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "schema": {
+              "type": "string",
+              "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "resources.planting.list",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantingListPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["planting"],
+        "parameters": [],
+        "operationId": "resources.planting.create",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlantingCreateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedEntityMutationCreateResultPlanting"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Created resource URL"
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/plantings/{id}": {
+      "get": {
+        "tags": ["planting"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "planting shortcode, e.g. PLT-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.planting.get",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlantingOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["planting"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "planting shortcode, e.g. PLT-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.planting.update",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlantingUpdateData"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedEntityMutationUpdateResultPlanting"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["planting"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "planting shortcode, e.g. PLT-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.planting.delete",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityDeleteResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden-entries": {
+      "get": {
+        "description": "Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.",
+        "tags": ["gardenEntry"],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number, starting at 1 (default 1)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Items per page (default 10, maximum 500)",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "schema": {
+              "type": "string",
+              "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "resources.gardenEntry.list",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenEntryListPage"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["gardenEntry"],
+        "parameters": [],
+        "operationId": "resources.gardenEntry.create",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenEntryCreateInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "201",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedEntityMutationCreateResultGardenEntry"
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Created resource URL"
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/garden-entries/{id}": {
+      "get": {
+        "tags": ["gardenEntry"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "gardenEntry shortcode, e.g. GDE-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^GDE-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.gardenEntry.get",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GardenEntryOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["gardenEntry"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "gardenEntry shortcode, e.g. GDE-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^GDE-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.gardenEntry.update",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GardenEntryUpdateData"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["gardenEntry"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "gardenEntry shortcode, e.g. GDE-4K7M",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^GDE-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            }
+          }
+        ],
+        "operationId": "resources.gardenEntry.delete",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityDeleteResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "info": {
@@ -19353,7 +20235,9 @@
           "financialAccount",
           "financialTransaction",
           "wish",
-          "expense"
+          "expense",
+          "planting",
+          "gardenEntry"
         ]
       },
       "AuditLogListInput": {
@@ -19364,7 +20248,7 @@
           },
           "entityId": {
             "type": "string",
-            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
           },
           "source": {
             "anyOf": [
@@ -20669,7 +21553,8 @@
           "COOKBOOK",
           "LOCATION",
           "PROJECT",
-          "PURCHASE"
+          "PURCHASE",
+          "GARDENENTRY"
         ]
       },
       "Entity": {
@@ -20693,7 +21578,9 @@
           "financialTransaction",
           "wish",
           "usda-food",
-          "image"
+          "image",
+          "planting",
+          "gardenEntry"
         ]
       },
       "EntityGraphInput": {
@@ -21214,6 +22101,405 @@
       "FinancialTransactionNonZeroAmount": {
         "$ref": "#/components/schemas/WholeCentAmount"
       },
+      "GardenCreatePlantingInput": {
+        "type": "object",
+        "properties": {
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "intendedLocationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "status": {
+            "default": "planned",
+            "$ref": "#/components/schemas/PlantingStatus"
+          },
+          "sourceProductId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "variety": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "quantity": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedWindow": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedDate": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "sowedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "transplantedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          }
+        },
+        "required": ["ingredientId"]
+      },
+      "GardenEntriesInput": {
+        "type": "object",
+        "properties": {
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "page": {
+            "default": 1,
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "GardenEntryCreateInput": {
+        "type": "object",
+        "properties": {
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode",
+            "default": null
+          },
+          "kind": {
+            "default": "observation",
+            "$ref": "#/components/schemas/GardenEntryKind"
+          },
+          "observedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "default": null
+          },
+          "harvestAmount": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "default": null
+          },
+          "pendingImageIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageShortcode"
+            }
+          }
+        },
+        "required": ["locationId", "observedOn"]
+      },
+      "GardenEntryKind": {
+        "type": "string",
+        "enum": ["observation", "harvest", "move"]
+      },
+      "GardenEntryUpdateData": {
+        "type": "object",
+        "properties": {
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GardenEntryKind"
+          },
+          "observedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "harvestAmount": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "pendingImageIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageShortcode"
+            }
+          },
+          "removeImageIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageShortcode"
+            }
+          },
+          "imageOrder": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageShortcode"
+            }
+          }
+        }
+      },
+      "GardenFinishPlantingInput": {
+        "type": "object",
+        "properties": {
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "finishedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1
+          }
+        },
+        "required": ["plantingId", "finishedOn"]
+      },
+      "GardenLocationKind": {
+        "type": "string",
+        "enum": ["bed", "tray", "other"]
+      },
+      "GardenMovePlantingInput": {
+        "type": "object",
+        "properties": {
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "movedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1
+          }
+        },
+        "required": ["plantingId", "locationId", "movedOn"]
+      },
+      "GardenRecordEntryInput": {
+        "type": "object",
+        "properties": {
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "kind": {
+            "default": "observation",
+            "type": "string",
+            "enum": ["observation", "harvest"]
+          },
+          "observedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "harvestAmount": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "pendingImageIds": {
+            "default": [],
+            "maxItems": 20,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ImageShortcode"
+            }
+          }
+        },
+        "required": ["locationId", "observedOn"]
+      },
+      "GardenSplitPlantingInput": {
+        "type": "object",
+        "properties": {
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "movedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "quantity": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1
+          }
+        },
+        "required": ["plantingId", "locationId", "movedOn"]
+      },
+      "GardenStartPlantingInput": {
+        "type": "object",
+        "properties": {
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "startedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "startMethod": {
+            "type": "string",
+            "enum": ["sow", "transplant", "existing"]
+          }
+        },
+        "required": ["plantingId", "locationId", "startedOn", "startMethod"]
+      },
+      "PlantingCreateInput": {
+        "type": "object",
+        "properties": {
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "sourceProductId": {
+            "$ref": "#/components/schemas/ProductShortcode",
+            "default": null
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode",
+            "default": null
+          },
+          "intendedLocationId": {
+            "$ref": "#/components/schemas/LocationShortcode",
+            "default": null
+          },
+          "status": {
+            "default": "planned",
+            "$ref": "#/components/schemas/PlantingStatus"
+          },
+          "variety": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "default": null
+          },
+          "quantity": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "default": null
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "default": null
+          },
+          "plannedWindow": {
+            "type": ["string", "null"],
+            "minLength": 1,
+            "default": null
+          },
+          "plannedDate": {
+            "$ref": "#/components/schemas/PlainDate",
+            "default": null
+          },
+          "sowedOn": {
+            "$ref": "#/components/schemas/PlainDate",
+            "default": null
+          },
+          "transplantedOn": {
+            "$ref": "#/components/schemas/PlainDate",
+            "default": null
+          },
+          "finishedOn": {
+            "$ref": "#/components/schemas/PlainDate",
+            "default": null
+          }
+        },
+        "required": ["ingredientId"]
+      },
+      "PlantingStatus": {
+        "type": "string",
+        "enum": ["planned", "growing", "finished"]
+      },
+      "PlantingUpdateData": {
+        "type": "object",
+        "properties": {
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "sourceProductId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "intendedLocationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlantingStatus"
+          },
+          "variety": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "quantity": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedWindow": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedDate": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "sowedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "transplantedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "finishedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          }
+        }
+      },
+      "GardenGuideMethod": {
+        "type": "string",
+        "enum": [
+          "sow",
+          "direct-sow",
+          "transplant",
+          "root",
+          "set",
+          "tuber",
+          "rhizome",
+          "bare-root",
+          "unspecified"
+        ]
+      },
+      "GardenGuideMicroclimate": {
+        "type": "string",
+        "enum": ["sunny", "foggy", "bay-area", "unspecified"]
+      },
+      "GardenGuideMonthPart": {
+        "type": "string",
+        "enum": ["weeks-1-2", "weeks-3-4"]
+      },
       "ExpenseContributionGapCode": {
         "type": "string",
         "enum": [
@@ -21268,6 +22554,11 @@
         "pattern": "^FTX-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "financialTransaction shortcode, e.g. FTX-4K7M"
       },
+      "GardenEntryShortcode": {
+        "type": "string",
+        "pattern": "^GDE-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "gardenEntry shortcode, e.g. GDE-4K7M"
+      },
       "Id": {
         "type": "string",
         "format": "uuid",
@@ -21313,6 +22604,11 @@
         "type": "string",
         "pattern": "^MEL-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "meal shortcode, e.g. MEL-4K7M"
+      },
+      "PlantingShortcode": {
+        "type": "string",
+        "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+        "description": "planting shortcode, e.g. PLT-4K7M"
       },
       "ProductShortcode": {
         "type": "string",
@@ -21428,14 +22724,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema36"
+                "$ref": "#/components/schemas/input_schema38"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema36"
+                  "$ref": "#/components/schemas/input_schema38"
                 }
               }
             ]
@@ -21445,7 +22741,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema37"
+            "$ref": "#/components/schemas/input_schema39"
           },
           "groupBy": {
             "type": "string",
@@ -21470,16 +22766,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "nameFilter": {
             "type": "string",
@@ -21487,7 +22783,7 @@
           },
           "status": {
             "description": "Filter by upload status",
-            "$ref": "#/components/schemas/input_schema34"
+            "$ref": "#/components/schemas/input_schema36"
           },
           "referencePresenceFilter": {
             "type": "string",
@@ -21538,7 +22834,7 @@
             "maximum": 52428800
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema40"
+            "$ref": "#/components/schemas/input_schema42"
           },
           "contentType": {
             "type": "string",
@@ -21563,7 +22859,7 @@
             "maximum": 52428800
           },
           "entityType": {
-            "$ref": "#/components/schemas/input_schema40"
+            "$ref": "#/components/schemas/input_schema42"
           },
           "contentType": {
             "type": "string",
@@ -21781,6 +23077,10 @@
           "usuallyOnHand": {
             "default": false,
             "type": "boolean"
+          },
+          "gardenGuideKey": {
+            "type": ["string", "null"],
+            "minLength": 1
           }
         },
         "required": ["name"]
@@ -21869,6 +23169,10 @@
           "usuallyOnHand": {
             "type": "boolean"
           },
+          "gardenGuideKey": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
           "name": {
             "type": "string",
             "minLength": 1,
@@ -21876,7 +23180,7 @@
           },
           "aliases": {
             "description": "New aliases (replaces existing list)",
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           }
         }
       },
@@ -22390,13 +23694,20 @@
           "aliases": {
             "default": [],
             "description": "Alternate names for this location — searched alongside the name. Replaces the existing list when provided.",
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
+          },
+          "gardenKind": {
+            "$ref": "#/components/schemas/GardenLocationKind"
+          },
+          "gardenConditions": {
+            "type": ["string", "null"],
+            "minLength": 1
           },
           "productId": {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -22405,7 +23716,7 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema52"
+            "$ref": "#/components/schemas/input_schema56"
           }
         },
         "required": ["name"]
@@ -22414,16 +23725,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "ingredientId": {
             "anyOf": [
@@ -22470,12 +23781,12 @@
           "productId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema56"
+                "$ref": "#/components/schemas/input_schema60"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema56"
+                  "$ref": "#/components/schemas/input_schema60"
                 }
               }
             ]
@@ -22488,12 +23799,12 @@
           "parentId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema58"
+                "$ref": "#/components/schemas/input_schema62"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema58"
+                  "$ref": "#/components/schemas/input_schema62"
                 }
               }
             ]
@@ -22577,13 +23888,20 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
+          },
+          "gardenKind": {
+            "$ref": "#/components/schemas/GardenLocationKind"
+          },
+          "gardenConditions": {
+            "type": ["string", "null"],
+            "minLength": 1
           },
           "productId": {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -22592,15 +23910,15 @@
             "$ref": "#/components/schemas/LocationShortcode"
           },
           "pendingImageIds": {
-            "$ref": "#/components/schemas/input_schema52"
+            "$ref": "#/components/schemas/input_schema56"
           },
           "removeImageIds": {
             "description": "Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema52"
+            "$ref": "#/components/schemas/input_schema56"
           },
           "imageOrder": {
             "description": "existing image ids in display order; first = cover",
-            "$ref": "#/components/schemas/input_schema52"
+            "$ref": "#/components/schemas/input_schema56"
           }
         }
       },
@@ -23033,6 +24351,9 @@
           "ingredientId": {
             "$ref": "#/components/schemas/IngredientShortcode"
           },
+          "growsIngredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
           "price": {
             "$ref": "#/components/schemas/PositiveMoney"
           },
@@ -23098,16 +24419,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "vendorId": {
             "anyOf": [
@@ -23304,7 +24625,7 @@
           },
           "categoryFilter": {
             "description": "Filter by category",
-            "$ref": "#/components/schemas/input_schema80"
+            "$ref": "#/components/schemas/input_schema84"
           },
           "expectedQuantityMin": {
             "type": "number"
@@ -23325,7 +24646,7 @@
           },
           "tagFilters": {
             "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema82"
+            "$ref": "#/components/schemas/input_schema86"
           },
           "upcPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
@@ -23398,12 +24719,12 @@
           "locationIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema58"
+                "$ref": "#/components/schemas/input_schema62"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema58"
+                  "$ref": "#/components/schemas/input_schema62"
                 }
               }
             ]
@@ -23414,12 +24735,12 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema91"
+                "$ref": "#/components/schemas/input_schema95"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema91"
+                  "$ref": "#/components/schemas/input_schema95"
                 }
               }
             ]
@@ -23441,10 +24762,10 @@
             "type": "boolean"
           },
           "taskDueFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "taskDueTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "tagsPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
@@ -23574,10 +24895,10 @@
             "$ref": "#/components/schemas/ProductFilters"
           },
           "movementFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "movementTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "order": {
             "default": "desc",
@@ -23720,6 +25041,9 @@
           "ingredientId": {
             "$ref": "#/components/schemas/IngredientShortcode"
           },
+          "growsIngredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
           "price": {
             "$ref": "#/components/schemas/PositiveMoney"
           },
@@ -23851,14 +25175,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema98"
+                "$ref": "#/components/schemas/input_schema102"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema98"
+                  "$ref": "#/components/schemas/input_schema102"
                 }
               }
             ]
@@ -23868,7 +25192,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema37"
+            "$ref": "#/components/schemas/input_schema39"
           },
           "groupBy": {
             "type": "string",
@@ -23940,10 +25264,10 @@
             "type": "string"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "completionYear": {
             "type": "string",
@@ -24096,16 +25420,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "financialTransactionId": {
             "anyOf": [
@@ -24217,12 +25541,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema107"
+                "$ref": "#/components/schemas/input_schema111"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema107"
+                  "$ref": "#/components/schemas/input_schema111"
                 }
               }
             ]
@@ -24253,12 +25577,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema110"
+                "$ref": "#/components/schemas/input_schema114"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema110"
+                  "$ref": "#/components/schemas/input_schema114"
                 }
               }
             ]
@@ -24314,12 +25638,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema114"
+                "$ref": "#/components/schemas/input_schema118"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema114"
+                  "$ref": "#/components/schemas/input_schema118"
                 }
               }
             ]
@@ -24480,22 +25804,22 @@
         "type": "object",
         "properties": {
           "statusScope": {
-            "$ref": "#/components/schemas/input_schema117"
+            "$ref": "#/components/schemas/input_schema121"
           },
           "kinds": {
-            "$ref": "#/components/schemas/input_schema118"
+            "$ref": "#/components/schemas/input_schema122"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "search": {
             "type": "string"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "completionYear": {
             "type": "string",
@@ -24519,16 +25843,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "projectId": {
             "anyOf": [
@@ -24701,13 +26025,13 @@
           },
           "location": {
             "description": "Any exact match against locations[]",
-            "$ref": "#/components/schemas/input_schema82"
+            "$ref": "#/components/schemas/input_schema86"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "completionYear": {
             "type": "string",
@@ -24727,12 +26051,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema107"
+                "$ref": "#/components/schemas/input_schema111"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema107"
+                  "$ref": "#/components/schemas/input_schema111"
                 }
               }
             ]
@@ -24795,22 +26119,22 @@
         "type": "object",
         "properties": {
           "statusScope": {
-            "$ref": "#/components/schemas/input_schema117"
+            "$ref": "#/components/schemas/input_schema121"
           },
           "kinds": {
-            "$ref": "#/components/schemas/input_schema118"
+            "$ref": "#/components/schemas/input_schema122"
           },
           "locations": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "search": {
             "type": "string"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "completionYear": {
             "type": "string",
@@ -24879,14 +26203,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema127"
+                "$ref": "#/components/schemas/input_schema131"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema127"
+                  "$ref": "#/components/schemas/input_schema131"
                 }
               }
             ]
@@ -24896,7 +26220,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema37"
+            "$ref": "#/components/schemas/input_schema39"
           },
           "groupBy": {
             "type": "string"
@@ -25061,16 +26385,16 @@
         "type": "object",
         "properties": {
           "createdFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "createdTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "updatedTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "blockedByTaskId": {
             "anyOf": [
@@ -25095,12 +26419,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema128"
+                "$ref": "#/components/schemas/input_schema132"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema128"
+                  "$ref": "#/components/schemas/input_schema132"
                 }
               }
             ]
@@ -25143,12 +26467,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema107"
+                "$ref": "#/components/schemas/input_schema111"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema107"
+                  "$ref": "#/components/schemas/input_schema111"
                 }
               }
             ]
@@ -25156,12 +26480,12 @@
           "subjectProductId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema56"
+                "$ref": "#/components/schemas/input_schema60"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema56"
+                  "$ref": "#/components/schemas/input_schema60"
                 }
               }
             ]
@@ -25466,11 +26790,11 @@
           },
           "removeImageIds": {
             "description": "Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.",
-            "$ref": "#/components/schemas/input_schema52"
+            "$ref": "#/components/schemas/input_schema56"
           },
           "imageOrder": {
             "description": "existing document ids in display order",
-            "$ref": "#/components/schemas/input_schema52"
+            "$ref": "#/components/schemas/input_schema56"
           }
         }
       },
@@ -26146,7 +27470,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema140"
+                "$ref": "#/components/schemas/input_schema144"
               }
             ],
             "description": "The scanned code."
@@ -26188,7 +27512,7 @@
           },
           "entityTypes": {
             "description": "Restrict results to these searchable entity types.",
-            "$ref": "#/components/schemas/input_schema141"
+            "$ref": "#/components/schemas/input_schema145"
           },
           "limit": {
             "default": 5,
@@ -26244,14 +27568,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema144"
+                "$ref": "#/components/schemas/input_schema148"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema144"
+                  "$ref": "#/components/schemas/input_schema148"
                 }
               }
             ]
@@ -26261,7 +27585,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema37"
+            "$ref": "#/components/schemas/input_schema39"
           },
           "groupBy": {
             "type": "string",
@@ -26318,10 +27642,10 @@
             "type": "string"
           },
           "dateFrom": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "dateTo": {
-            "$ref": "#/components/schemas/input_schema31"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "amountMin": {
             "type": "number"
@@ -26580,14 +27904,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema145"
+                "$ref": "#/components/schemas/input_schema149"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema145"
+                  "$ref": "#/components/schemas/input_schema149"
                 }
               }
             ]
@@ -26597,7 +27921,7 @@
               "pageIndex": 0,
               "pageSize": 10
             },
-            "$ref": "#/components/schemas/input_schema37"
+            "$ref": "#/components/schemas/input_schema39"
           },
           "groupBy": {
             "type": "string",
@@ -27391,10 +28715,10 @@
       "JsonValue": {
         "description": "Any JSON value: a string, number, boolean, null, array or object."
       },
-      "input_schema31": {
+      "input_schema33": {
         "$ref": "#/components/schemas/PlainDate"
       },
-      "input_schema34": {
+      "input_schema36": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ImageStatus"
@@ -27407,7 +28731,7 @@
           }
         ]
       },
-      "input_schema36": {
+      "input_schema38": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -27422,7 +28746,7 @@
           }
         }
       },
-      "input_schema37": {
+      "input_schema39": {
         "type": "object",
         "properties": {
           "pageIndex": {
@@ -27439,22 +28763,22 @@
           }
         }
       },
-      "input_schema40": {
+      "input_schema42": {
         "$ref": "#/components/schemas/EntityImage"
       },
-      "input_schema43": {
+      "input_schema45": {
         "type": "array",
         "items": {
           "type": "string"
         }
       },
-      "input_schema52": {
+      "input_schema56": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageShortcode"
         }
       },
-      "input_schema56": {
+      "input_schema60": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductShortcode"
@@ -27468,7 +28792,7 @@
         "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "product shortcode, e.g. PRD-4K7M"
       },
-      "input_schema58": {
+      "input_schema62": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/LocationShortcode"
@@ -27482,7 +28806,7 @@
         "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "location shortcode, e.g. LOC-4K7M"
       },
-      "input_schema80": {
+      "input_schema84": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductCategory"
@@ -27495,7 +28819,7 @@
           }
         ]
       },
-      "input_schema82": {
+      "input_schema86": {
         "anyOf": [
           {
             "type": "string"
@@ -27508,7 +28832,7 @@
           }
         ]
       },
-      "input_schema91": {
+      "input_schema95": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -27522,7 +28846,7 @@
         "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "ingredient shortcode, e.g. ING-4K7M"
       },
-      "input_schema98": {
+      "input_schema102": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -27559,7 +28883,7 @@
           }
         }
       },
-      "input_schema107": {
+      "input_schema111": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -27573,7 +28897,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema110": {
+      "input_schema114": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -27587,7 +28911,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema114": {
+      "input_schema118": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -27601,19 +28925,19 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema117": {
+      "input_schema121": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectStatus"
         }
       },
-      "input_schema118": {
+      "input_schema122": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectKind"
         }
       },
-      "input_schema127": {
+      "input_schema131": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -27627,7 +28951,7 @@
           }
         }
       },
-      "input_schema128": {
+      "input_schema132": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -27641,7 +28965,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema140": {
+      "input_schema144": {
         "type": "object",
         "properties": {
           "kind": {
@@ -27654,7 +28978,7 @@
         },
         "required": ["kind", "value"]
       },
-      "input_schema141": {
+      "input_schema145": {
         "minItems": 1,
         "maxItems": 15,
         "type": "array",
@@ -27662,7 +28986,7 @@
           "$ref": "#/components/schemas/SearchableEntity"
         }
       },
-      "input_schema144": {
+      "input_schema148": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -27683,7 +29007,7 @@
           }
         }
       },
-      "input_schema145": {
+      "input_schema149": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -28236,7 +29560,7 @@
           },
           "entityId": {
             "type": ["string", "null"],
-            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
           },
           "entityName": {
             "type": ["string", "null"]
@@ -29017,13 +30341,13 @@
             "type": "object",
             "properties": {
               "meals": {
-                "$ref": "#/components/schemas/output_schema45"
+                "$ref": "#/components/schemas/output_schema46"
               },
               "tasks": {
-                "$ref": "#/components/schemas/output_schema45"
+                "$ref": "#/components/schemas/output_schema46"
               },
               "all": {
-                "$ref": "#/components/schemas/output_schema45"
+                "$ref": "#/components/schemas/output_schema46"
               }
             },
             "required": [],
@@ -30525,6 +31849,16 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
+          "planting": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "gardenEntry": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
           "usdaFoods": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -30548,6 +31882,8 @@
           "financialTransaction",
           "image",
           "wish",
+          "planting",
+          "gardenEntry",
           "usdaFoods"
         ],
         "additionalProperties": false
@@ -31059,10 +32395,10 @@
                 "minLength": 1
               },
               "itemSchema": {
-                "$ref": "#/components/schemas/output_schema69"
+                "$ref": "#/components/schemas/output_schema70"
               },
               "adapter": {
-                "$ref": "#/components/schemas/output_schema69"
+                "$ref": "#/components/schemas/output_schema70"
               },
               "audiences": {
                 "minItems": 1,
@@ -31949,6 +33285,631 @@
         "items": {
           "$ref": "#/components/schemas/FinancialTransactionAllocationInput"
         }
+      },
+      "GardenEntriesOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenEntryOut"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        },
+        "required": ["items", "hasMore"],
+        "additionalProperties": false
+      },
+      "GardenEntryListItemOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/GardenEntryShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GardenEntryKind"
+          },
+          "observedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "harvestAmount": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "images": {
+            "$ref": "#/components/schemas/output_schema31"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "locationId",
+          "kind",
+          "observedOn",
+          "note",
+          "harvestAmount",
+          "images",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "GardenEntryOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/GardenEntryShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "plantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/GardenEntryKind"
+          },
+          "observedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "note": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "harvestAmount": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "images": {
+            "$ref": "#/components/schemas/output_schema31"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "locationId",
+          "kind",
+          "observedOn",
+          "note",
+          "harvestAmount",
+          "images",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "GardenLocationSummaryOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "name": {
+            "type": "string"
+          },
+          "gardenKind": {
+            "$ref": "#/components/schemas/GardenLocationKind"
+          },
+          "gardenConditions": {
+            "type": ["string", "null"]
+          },
+          "plantings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenPlantingOut"
+            }
+          }
+        },
+        "required": ["id", "name", "gardenConditions", "plantings"],
+        "additionalProperties": false
+      },
+      "GardenOptionsOut": {
+        "type": "object",
+        "properties": {
+          "locations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/LocationShortcode"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "gardenKind": {
+                  "$ref": "#/components/schemas/GardenLocationKind"
+                },
+                "gardenConditions": {
+                  "type": ["string", "null"]
+                }
+              },
+              "required": ["id", "name", "gardenConditions"],
+              "additionalProperties": false
+            }
+          },
+          "ingredients": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/IngredientShortcode"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "gardenGuideKey": {
+                  "type": ["string", "null"]
+                }
+              },
+              "required": ["id", "name", "gardenGuideKey"],
+              "additionalProperties": false
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "$ref": "#/components/schemas/ProductShortcode"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "growsIngredientId": {
+                  "$ref": "#/components/schemas/IngredientShortcode"
+                }
+              },
+              "required": ["id", "name"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["locations", "ingredients", "products"],
+        "additionalProperties": false
+      },
+      "GardenOverviewOut": {
+        "type": "object",
+        "properties": {
+          "locations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenLocationSummaryOut"
+            }
+          },
+          "finished": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenPlantingOut"
+            }
+          },
+          "unassigned": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenPlantingOut"
+            }
+          }
+        },
+        "required": ["locations", "finished", "unassigned"],
+        "additionalProperties": false
+      },
+      "GardenPlantingOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "sourceProductId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "intendedLocationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "parentPlantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlantingStatus"
+          },
+          "variety": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "quantity": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedWindow": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedDate": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "sowedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "transplantedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "finishedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "ingredientName": {
+            "type": "string"
+          },
+          "gardenGuideKey": {
+            "type": ["string", "null"]
+          },
+          "sourceProductName": {
+            "type": ["string", "null"]
+          },
+          "locationName": {
+            "type": ["string", "null"]
+          },
+          "intendedLocationName": {
+            "type": ["string", "null"]
+          }
+        },
+        "required": [
+          "id",
+          "ingredientId",
+          "status",
+          "variety",
+          "quantity",
+          "notes",
+          "plannedWindow",
+          "createdAt",
+          "updatedAt",
+          "ingredientName",
+          "gardenGuideKey",
+          "sourceProductName",
+          "locationName",
+          "intendedLocationName"
+        ],
+        "additionalProperties": false
+      },
+      "PlantingListItemOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "sourceProductId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "intendedLocationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "parentPlantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlantingStatus"
+          },
+          "variety": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "quantity": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedWindow": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedDate": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "sowedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "transplantedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "finishedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "ingredientId",
+          "status",
+          "variety",
+          "quantity",
+          "notes",
+          "plannedWindow",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "PlantingOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "ingredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
+          "sourceProductId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "locationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "intendedLocationId": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "parentPlantingId": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlantingStatus"
+          },
+          "variety": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "quantity": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedWindow": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "plannedDate": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "sowedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "transplantedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "finishedOn": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          }
+        },
+        "required": [
+          "id",
+          "ingredientId",
+          "status",
+          "variety",
+          "quantity",
+          "notes",
+          "plannedWindow",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "GardenGuide": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "windows": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenGuideWindow"
+            }
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1
+          }
+        },
+        "required": ["key", "name", "aliases", "windows", "notes"],
+        "additionalProperties": false
+      },
+      "GardenGuideSource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "publishedOrRevised": {
+            "type": ["string", "null"],
+            "minLength": 1
+          },
+          "reviewedAt": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "basedOn": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "url",
+          "publishedOrRevised",
+          "reviewedAt",
+          "basedOn",
+          "notes"
+        ],
+        "additionalProperties": false
+      },
+      "GardenGuideWindow": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "microclimate": {
+            "$ref": "#/components/schemas/GardenGuideMicroclimate"
+          },
+          "method": {
+            "$ref": "#/components/schemas/GardenGuideMethod"
+          },
+          "months": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            }
+          },
+          "monthPart": {
+            "$ref": "#/components/schemas/GardenGuideMonthPart"
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "minLength": 1
+          }
+        },
+        "required": ["sourceId", "microclimate", "method", "months", "notes"],
+        "additionalProperties": false
+      },
+      "GardenGuidesDocument": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "number",
+            "const": 1
+          },
+          "sources": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenGuideSource"
+            }
+          },
+          "guides": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenGuide"
+            }
+          }
+        },
+        "required": ["schemaVersion", "sources", "guides"],
+        "additionalProperties": false
       },
       "HouseholdContributionGapCode": {
         "anyOf": [
@@ -32875,13 +34836,16 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema79"
+            "$ref": "#/components/schemas/output_schema97"
           },
           "usuallyOnHand": {
             "type": "boolean"
+          },
+          "gardenGuideKey": {
+            "type": ["string", "null"]
           },
           "createdAt": {
             "type": "string",
@@ -32963,6 +34927,7 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
+          "gardenGuideKey",
           "createdAt",
           "updatedAt",
           "product",
@@ -32992,13 +34957,16 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema79"
+            "$ref": "#/components/schemas/output_schema97"
           },
           "usuallyOnHand": {
             "type": "boolean"
+          },
+          "gardenGuideKey": {
+            "type": ["string", "null"]
           },
           "createdAt": {
             "type": "string",
@@ -33034,6 +35002,7 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
+          "gardenGuideKey",
           "createdAt",
           "updatedAt",
           "product",
@@ -33078,13 +35047,16 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema79"
+            "$ref": "#/components/schemas/output_schema97"
           },
           "usuallyOnHand": {
             "type": "boolean"
+          },
+          "gardenGuideKey": {
+            "type": ["string", "null"]
           },
           "createdAt": {
             "type": "string",
@@ -33103,6 +35075,7 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
+          "gardenGuideKey",
           "createdAt",
           "updatedAt"
         ],
@@ -33172,13 +35145,16 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema79"
+            "$ref": "#/components/schemas/output_schema97"
           },
           "usuallyOnHand": {
             "type": "boolean"
+          },
+          "gardenGuideKey": {
+            "type": ["string", "null"]
           },
           "createdAt": {
             "type": "string",
@@ -33203,6 +35179,7 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
+          "gardenGuideKey",
           "createdAt",
           "updatedAt",
           "product"
@@ -33220,13 +35197,16 @@
             "description": "Ingredient name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema79"
+            "$ref": "#/components/schemas/output_schema97"
           },
           "usuallyOnHand": {
             "type": "boolean"
+          },
+          "gardenGuideKey": {
+            "type": ["string", "null"]
           },
           "createdAt": {
             "type": "string",
@@ -33266,6 +35246,7 @@
           "aliases",
           "naKinds",
           "usuallyOnHand",
+          "gardenGuideKey",
           "createdAt",
           "updatedAt",
           "recipeUsages",
@@ -33569,7 +35550,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema92"
+            "$ref": "#/components/schemas/output_schema111"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -33582,7 +35563,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema96"
+            "$ref": "#/components/schemas/output_schema115"
           },
           "createdAt": {
             "type": "string",
@@ -33612,7 +35593,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema92"
+            "$ref": "#/components/schemas/output_schema111"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -33625,7 +35606,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema96"
+            "$ref": "#/components/schemas/output_schema115"
           },
           "createdAt": {
             "type": "string",
@@ -33744,7 +35725,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema92"
+            "$ref": "#/components/schemas/output_schema111"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -33757,7 +35738,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema96"
+            "$ref": "#/components/schemas/output_schema115"
           },
           "createdAt": {
             "type": "string",
@@ -34030,13 +36011,19 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema102"
+            "$ref": "#/components/schemas/output_schema121"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
+          },
+          "gardenKind": {
+            "$ref": "#/components/schemas/GardenLocationKind"
+          },
+          "gardenConditions": {
+            "type": ["string", "null"]
           },
           "product": {
             "$ref": "#/components/schemas/LocationIdentityProductOut"
@@ -34051,7 +36038,7 @@
             "type": ["string", "null"]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -34117,6 +36104,7 @@
           "id",
           "name",
           "aliases",
+          "gardenConditions",
           "lastBulkInventory",
           "aiDescription",
           "images",
@@ -34250,13 +36238,19 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema102"
+            "$ref": "#/components/schemas/output_schema121"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
+          },
+          "gardenKind": {
+            "$ref": "#/components/schemas/GardenLocationKind"
+          },
+          "gardenConditions": {
+            "type": ["string", "null"]
           },
           "product": {
             "$ref": "#/components/schemas/LocationIdentityProductOut"
@@ -34271,7 +36265,7 @@
             "type": ["string", "null"]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -34405,6 +36399,7 @@
           "id",
           "name",
           "aliases",
+          "gardenConditions",
           "lastBulkInventory",
           "aiDescription",
           "images",
@@ -34442,13 +36437,19 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema102"
+            "$ref": "#/components/schemas/output_schema121"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
+          },
+          "gardenKind": {
+            "$ref": "#/components/schemas/GardenLocationKind"
+          },
+          "gardenConditions": {
+            "type": ["string", "null"]
           },
           "product": {
             "$ref": "#/components/schemas/LocationIdentityProductOut"
@@ -34463,7 +36464,7 @@
             "type": ["string", "null"]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -34483,6 +36484,7 @@
           "id",
           "name",
           "aliases",
+          "gardenConditions",
           "lastBulkInventory",
           "aiDescription",
           "images",
@@ -34561,10 +36563,10 @@
             "maximum": 9007199254740991
           },
           "direct": {
-            "$ref": "#/components/schemas/output_schema110"
+            "$ref": "#/components/schemas/output_schema131"
           },
           "total": {
-            "$ref": "#/components/schemas/output_schema110"
+            "$ref": "#/components/schemas/output_schema131"
           },
           "installed": {
             "type": "object",
@@ -34673,13 +36675,19 @@
             "description": "name of location"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema102"
+            "$ref": "#/components/schemas/output_schema121"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
+          },
+          "gardenKind": {
+            "$ref": "#/components/schemas/GardenLocationKind"
+          },
+          "gardenConditions": {
+            "type": ["string", "null"]
           },
           "product": {
             "$ref": "#/components/schemas/LocationIdentityProductOut"
@@ -34694,7 +36702,7 @@
             "type": ["string", "null"]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -34717,6 +36725,7 @@
           "id",
           "name",
           "aliases",
+          "gardenConditions",
           "lastBulkInventory",
           "aiDescription",
           "images",
@@ -35111,7 +37120,7 @@
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           }
         },
         "required": [
@@ -35224,10 +37233,10 @@
             "type": "object",
             "properties": {
               "confirmed": {
-                "$ref": "#/components/schemas/output_schema132"
+                "$ref": "#/components/schemas/output_schema153"
               },
               "projected": {
-                "$ref": "#/components/schemas/output_schema132"
+                "$ref": "#/components/schemas/output_schema153"
               }
             },
             "required": ["confirmed", "projected"],
@@ -36316,7 +38325,7 @@
           },
           "entityId": {
             "type": "string",
-            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+            "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|LPY-|LTR-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|IMG-|PLT-|GDE-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
           }
         },
         "required": ["entityType", "entityId"],
@@ -36422,10 +38431,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema79"
+                "$ref": "#/components/schemas/output_schema97"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema79"
+                "$ref": "#/components/schemas/output_schema97"
               }
             },
             "required": ["covered", "applicable"],
@@ -37440,10 +39449,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema79"
+                "$ref": "#/components/schemas/output_schema97"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema79"
+                "$ref": "#/components/schemas/output_schema97"
               }
             },
             "required": ["covered", "applicable"],
@@ -38354,10 +40363,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -38380,11 +40389,14 @@
           "category": {
             "$ref": "#/components/schemas/ProductCategory"
           },
+          "growsIngredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema32"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -38419,7 +40431,7 @@
             }
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema150"
+            "$ref": "#/components/schemas/output_schema171"
           },
           "inventoryEntry": {
             "type": "array",
@@ -38644,7 +40656,7 @@
                 "usedOnProjects": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema153"
+                    "$ref": "#/components/schemas/output_schema174"
                   }
                 },
                 "ownershipIntervals": {
@@ -38751,7 +40763,7 @@
                         "$ref": "#/components/schemas/PlainDate"
                       },
                       "chargedTo": {
-                        "$ref": "#/components/schemas/output_schema153"
+                        "$ref": "#/components/schemas/output_schema174"
                       },
                       "provenanceOnly": {
                         "type": "boolean"
@@ -39064,10 +41076,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -39090,11 +41102,14 @@
           "category": {
             "$ref": "#/components/schemas/ProductCategory"
           },
+          "growsIngredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema32"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -39171,10 +41186,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -39197,11 +41212,14 @@
           "category": {
             "$ref": "#/components/schemas/ProductCategory"
           },
+          "growsIngredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema32"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -39234,7 +41252,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema150"
+            "$ref": "#/components/schemas/output_schema171"
           },
           "unitMappings": {
             "type": "array",
@@ -39245,13 +41263,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema154"
+              "$ref": "#/components/schemas/output_schema175"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema156"
+              "$ref": "#/components/schemas/output_schema177"
             }
           },
           "food": {
@@ -39316,10 +41334,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -39342,11 +41360,14 @@
           "category": {
             "$ref": "#/components/schemas/ProductCategory"
           },
+          "growsIngredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema32"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -39379,7 +41400,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema150"
+            "$ref": "#/components/schemas/output_schema171"
           },
           "unitMappings": {
             "type": "array",
@@ -39390,13 +41411,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema154"
+              "$ref": "#/components/schemas/output_schema175"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema156"
+              "$ref": "#/components/schemas/output_schema177"
             }
           },
           "componentCount": {
@@ -39470,10 +41491,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -39496,11 +41517,14 @@
           "category": {
             "$ref": "#/components/schemas/ProductCategory"
           },
+          "growsIngredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema32"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -39575,10 +41599,10 @@
             "description": "Product name"
           },
           "aliases": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/input_schema43"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "primaryGtin": {
             "$ref": "#/components/schemas/Gtin"
@@ -39601,11 +41625,14 @@
           "category": {
             "$ref": "#/components/schemas/ProductCategory"
           },
+          "growsIngredientId": {
+            "$ref": "#/components/schemas/IngredientShortcode"
+          },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema32"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -39875,10 +41902,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema168"
+            "$ref": "#/components/schemas/output_schema189"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema168"
+            "$ref": "#/components/schemas/output_schema189"
           },
           "subtaskCount": {
             "type": "integer",
@@ -40281,10 +42308,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema174"
+                "$ref": "#/components/schemas/output_schema195"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema174"
+                "$ref": "#/components/schemas/output_schema195"
               }
             },
             "required": ["scope", "grid"],
@@ -40294,19 +42321,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema174"
+                "$ref": "#/components/schemas/output_schema195"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema174"
+                    "$ref": "#/components/schemas/output_schema195"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema174"
+                    "$ref": "#/components/schemas/output_schema195"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema174"
+                    "$ref": "#/components/schemas/output_schema195"
                   }
                 },
                 "required": [
@@ -42057,10 +44084,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema168"
+            "$ref": "#/components/schemas/output_schema189"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema168"
+            "$ref": "#/components/schemas/output_schema189"
           },
           "subtaskCount": {
             "type": "integer",
@@ -43408,7 +45435,7 @@
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema30"
+            "$ref": "#/components/schemas/output_schema31"
           },
           "sideEffects": {
             "$ref": "#/components/schemas/MutationSideEffects"
@@ -43452,13 +45479,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema115"
+                "$ref": "#/components/schemas/output_schema136"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema115"
+                "$ref": "#/components/schemas/output_schema136"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema115"
+                "$ref": "#/components/schemas/output_schema136"
               }
             },
             "required": ["cost", "weight", "nutrients"],
@@ -43468,10 +45495,10 @@
             "type": ["number", "null"]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema116"
+            "$ref": "#/components/schemas/output_schema137"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema116"
+            "$ref": "#/components/schemas/output_schema137"
           },
           "nutrient": {
             "oneOf": [
@@ -45055,13 +47082,13 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema187"
+                  "$ref": "#/components/schemas/output_schema208"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema187"
+                  "$ref": "#/components/schemas/output_schema208"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema189"
+                  "$ref": "#/components/schemas/output_schema210"
                 }
               },
               "required": ["name", "inputSchema"],
@@ -45117,10 +47144,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema190"
+                  "$ref": "#/components/schemas/output_schema211"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema191"
+                  "$ref": "#/components/schemas/output_schema212"
                 }
               },
               "required": [
@@ -45212,7 +47239,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema192"
+              "$ref": "#/components/schemas/output_schema213"
             }
           },
           "tools": {
@@ -45230,13 +47257,13 @@
                   "type": ["string", "null"]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema187"
+                  "$ref": "#/components/schemas/output_schema208"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema187"
+                  "$ref": "#/components/schemas/output_schema208"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema189"
+                  "$ref": "#/components/schemas/output_schema210"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -45280,19 +47307,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema192"
+                    "$ref": "#/components/schemas/output_schema213"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema190"
+                    "$ref": "#/components/schemas/output_schema211"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema191"
+                    "$ref": "#/components/schemas/output_schema212"
                   }
                 }
               },
@@ -45319,25 +47346,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema193"
+              "$ref": "#/components/schemas/output_schema214"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema193"
+              "$ref": "#/components/schemas/output_schema214"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema193"
+              "$ref": "#/components/schemas/output_schema214"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema193"
+              "$ref": "#/components/schemas/output_schema214"
             }
           }
         },
@@ -45965,7 +47992,9 @@
               "financialTransaction",
               "wish",
               "expense",
-              "image"
+              "image",
+              "planting",
+              "gardenEntry"
             ]
           },
           "deletedReferences": {
@@ -45992,7 +48021,9 @@
                     "financialTransaction",
                     "wish",
                     "expense",
-                    "image"
+                    "image",
+                    "planting",
+                    "gardenEntry"
                   ]
                 },
                 "id": {
@@ -46094,7 +48125,7 @@
             "minimum": 0
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema44"
+            "$ref": "#/components/schemas/output_schema45"
           }
         },
         "required": ["status", "lower", "upper", "coverage"],
@@ -46116,7 +48147,7 @@
             "minimum": 0
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema44"
+            "$ref": "#/components/schemas/output_schema45"
           }
         },
         "required": ["status", "lower", "upper", "coverage"],
@@ -47236,7 +49267,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema126"
+            "$ref": "#/components/schemas/output_schema147"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -47308,7 +49339,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema126"
+            "$ref": "#/components/schemas/output_schema147"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -47421,7 +49452,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema126"
+            "$ref": "#/components/schemas/output_schema147"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -47493,7 +49524,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema126"
+            "$ref": "#/components/schemas/output_schema147"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -48061,6 +50092,48 @@
         "required": ["action", "entity", "item", "sideEffects"],
         "additionalProperties": false
       },
+      "GeneratedEntityMutationCreateResultPlanting": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "create"
+          },
+          "entity": {
+            "type": "string",
+            "const": "planting"
+          },
+          "item": {
+            "$ref": "#/components/schemas/PlantingOut"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
+          }
+        },
+        "required": ["action", "entity", "item", "sideEffects"],
+        "additionalProperties": false
+      },
+      "GeneratedEntityMutationCreateResultGardenEntry": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "create"
+          },
+          "entity": {
+            "type": "string",
+            "const": "gardenEntry"
+          },
+          "item": {
+            "$ref": "#/components/schemas/GardenEntryOut"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
+          }
+        },
+        "required": ["action", "entity", "item", "sideEffects"],
+        "additionalProperties": false
+      },
       "GeneratedEntityMutationUpdateResultProduct": {
         "type": "object",
         "properties": {
@@ -48410,6 +50483,48 @@
           },
           "item": {
             "$ref": "#/components/schemas/ImageOut"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
+          }
+        },
+        "required": ["action", "entity", "item", "sideEffects"],
+        "additionalProperties": false
+      },
+      "GeneratedEntityMutationUpdateResultPlanting": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "update"
+          },
+          "entity": {
+            "type": "string",
+            "const": "planting"
+          },
+          "item": {
+            "$ref": "#/components/schemas/PlantingOut"
+          },
+          "sideEffects": {
+            "$ref": "#/components/schemas/MutationSideEffects"
+          }
+        },
+        "required": ["action", "entity", "item", "sideEffects"],
+        "additionalProperties": false
+      },
+      "GeneratedEntityMutationUpdateResultGardenEntry": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "const": "update"
+          },
+          "entity": {
+            "type": "string",
+            "const": "gardenEntry"
+          },
+          "item": {
+            "$ref": "#/components/schemas/GardenEntryOut"
           },
           "sideEffects": {
             "$ref": "#/components/schemas/MutationSideEffects"
@@ -49096,6 +51211,38 @@
         "required": ["items", "meta"],
         "additionalProperties": false
       },
+      "PlantingListPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlantingListItemOut"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListPageMeta"
+          }
+        },
+        "required": ["items", "meta"],
+        "additionalProperties": false
+      },
+      "GardenEntryListPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GardenEntryListItemOut"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/ListPageMeta"
+          }
+        },
+        "required": ["items", "meta"],
+        "additionalProperties": false
+      },
       "output_schema8": {
         "type": "object",
         "properties": {
@@ -49130,19 +51277,19 @@
           }
         }
       },
-      "output_schema30": {
+      "output_schema31": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageOut"
         }
       },
-      "output_schema31": {
+      "output_schema32": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ExternalIdOut"
         }
       },
-      "output_schema44": {
+      "output_schema45": {
         "type": "object",
         "properties": {
           "covered": {
@@ -49159,7 +51306,7 @@
         "required": ["covered", "total"],
         "additionalProperties": false
       },
-      "output_schema45": {
+      "output_schema46": {
         "type": "object",
         "properties": {
           "etag": {
@@ -49195,7 +51342,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema69": {
+      "output_schema70": {
         "type": "object",
         "properties": {
           "module": {
@@ -49210,13 +51357,13 @@
         "required": ["module", "export"],
         "additionalProperties": false
       },
-      "output_schema79": {
+      "output_schema97": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/BaseKind"
         }
       },
-      "output_schema92": {
+      "output_schema111": {
         "type": "object",
         "properties": {
           "value": {
@@ -49235,15 +51382,15 @@
         "additionalProperties": false,
         "description": "Quantity on hand"
       },
-      "output_schema96": {
+      "output_schema115": {
         "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
         "$ref": "#/components/schemas/InventoryPlacement"
       },
-      "output_schema102": {
+      "output_schema121": {
         "description": "Namespaced Collection tags assigned directly to this location",
-        "$ref": "#/components/schemas/input_schema43"
+        "$ref": "#/components/schemas/input_schema45"
       },
-      "output_schema110": {
+      "output_schema131": {
         "type": "object",
         "properties": {
           "priced": {
@@ -49265,7 +51412,7 @@
         "required": ["priced", "missingPricing", "miscNoPrice"],
         "additionalProperties": false
       },
-      "output_schema115": {
+      "output_schema136": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -49294,7 +51441,7 @@
           }
         }
       },
-      "output_schema116": {
+      "output_schema137": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -49304,13 +51451,13 @@
           }
         ]
       },
-      "output_schema126": {
+      "output_schema147": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Amount"
         }
       },
-      "output_schema132": {
+      "output_schema153": {
         "type": "object",
         "properties": {
           "portionCount": {
@@ -49325,7 +51472,7 @@
         "required": ["portionCount", "totals"],
         "additionalProperties": false
       },
-      "output_schema150": {
+      "output_schema171": {
         "type": "object",
         "properties": {
           "id": {
@@ -49367,7 +51514,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema153": {
+      "output_schema174": {
         "type": "object",
         "properties": {
           "id": {
@@ -49380,7 +51527,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema154": {
+      "output_schema175": {
         "type": "object",
         "properties": {
           "id": {
@@ -49423,13 +51570,19 @@
                 "description": "name of location"
               },
               "aliases": {
-                "$ref": "#/components/schemas/input_schema43"
+                "$ref": "#/components/schemas/input_schema45"
               },
               "tags": {
-                "$ref": "#/components/schemas/output_schema102"
+                "$ref": "#/components/schemas/output_schema121"
               },
               "type": {
                 "$ref": "#/components/schemas/LocationType"
+              },
+              "gardenKind": {
+                "$ref": "#/components/schemas/GardenLocationKind"
+              },
+              "gardenConditions": {
+                "type": ["string", "null"]
               },
               "product": {
                 "$ref": "#/components/schemas/LocationIdentityProductOut"
@@ -49444,7 +51597,7 @@
                 "type": ["string", "null"]
               },
               "images": {
-                "$ref": "#/components/schemas/output_schema30"
+                "$ref": "#/components/schemas/output_schema31"
               },
               "valuation": {
                 "$ref": "#/components/schemas/LocationValuation"
@@ -49465,7 +51618,7 @@
               "ancestors": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/output_schema155"
+                  "$ref": "#/components/schemas/output_schema176"
                 }
               }
             },
@@ -49473,6 +51626,7 @@
               "id",
               "name",
               "aliases",
+              "gardenConditions",
               "lastBulkInventory",
               "aiDescription",
               "images",
@@ -49494,7 +51648,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema155": {
+      "output_schema176": {
         "type": "object",
         "properties": {
           "id": {
@@ -49513,7 +51667,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema156": {
+      "output_schema177": {
         "type": "object",
         "properties": {
           "id": {
@@ -49531,20 +51685,20 @@
           "ancestors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema155"
+              "$ref": "#/components/schemas/output_schema176"
             }
           }
         },
         "required": ["id", "name", "ancestors"],
         "additionalProperties": false
       },
-      "output_schema168": {
+      "output_schema189": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema174": {
+      "output_schema195": {
         "type": "object",
         "properties": {
           "current": {
@@ -49557,7 +51711,7 @@
         "required": ["current"],
         "additionalProperties": false
       },
-      "output_schema187": {
+      "output_schema208": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -49566,7 +51720,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema189": {
+      "output_schema210": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -49584,7 +51738,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema190": {
+      "output_schema211": {
         "type": "object",
         "properties": {
           "id": {
@@ -49600,7 +51754,7 @@
         "required": ["id", "name", "email"],
         "additionalProperties": false
       },
-      "output_schema191": {
+      "output_schema212": {
         "type": "object",
         "properties": {
           "id": {
@@ -49613,7 +51767,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema192": {
+      "output_schema213": {
         "type": "object",
         "properties": {
           "day": {
@@ -49638,7 +51792,7 @@
         "required": ["day", "success", "error", "total"],
         "additionalProperties": false
       },
-      "output_schema193": {
+      "output_schema214": {
         "type": "object",
         "properties": {
           "key": {

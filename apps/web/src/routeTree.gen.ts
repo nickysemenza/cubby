@@ -25,6 +25,7 @@ import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authe
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedDesignRouteImport } from './routes/_authenticated/design'
 import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
+import { Route as AuthenticatedGardenRouteImport } from './routes/_authenticated/garden'
 import { Route as AuthenticatedHouseholdContributionRouteImport } from './routes/_authenticated/household-contribution'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
@@ -52,6 +53,8 @@ import { Route as AuthenticatedFinancialAccountsIndexRouteImport } from './route
 import { Route as AuthenticatedFinancialAccountsShortcodeRouteImport } from './routes/_authenticated/financial-accounts.$shortcode'
 import { Route as AuthenticatedFinancialTransactionsIndexRouteImport } from './routes/_authenticated/financial-transactions.index'
 import { Route as AuthenticatedFinancialTransactionsShortcodeRouteImport } from './routes/_authenticated/financial-transactions.$shortcode'
+import { Route as AuthenticatedGardenEntriesIndexRouteImport } from './routes/_authenticated/garden-entries.index'
+import { Route as AuthenticatedGardenEntriesShortcodeRouteImport } from './routes/_authenticated/garden-entries.$shortcode'
 import { Route as AuthenticatedImagesIndexRouteImport } from './routes/_authenticated/images.index'
 import { Route as AuthenticatedImagesShortcodeRouteImport } from './routes/_authenticated/images.$shortcode'
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
@@ -78,6 +81,8 @@ import { Route as AuthenticatedMealsIndexRouteImport } from './routes/_authentic
 import { Route as AuthenticatedMealsShortcodeRouteImport } from './routes/_authenticated/meals.$shortcode'
 import { Route as AuthenticatedMealsShoppingListRouteImport } from './routes/_authenticated/meals.shopping-list'
 import { Route as AuthenticatedMealsSuggestionsRouteImport } from './routes/_authenticated/meals.suggestions'
+import { Route as AuthenticatedPlantingsIndexRouteImport } from './routes/_authenticated/plantings.index'
+import { Route as AuthenticatedPlantingsShortcodeRouteImport } from './routes/_authenticated/plantings.$shortcode'
 import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products.index'
 import { Route as AuthenticatedProductsShortcodeRouteImport } from './routes/_authenticated/products.$shortcode'
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products.new'
@@ -200,6 +205,11 @@ const AuthenticatedDesignRoute = AuthenticatedDesignRouteImport.update({
 const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
   id: '/entities',
   path: '/entities',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedGardenRoute = AuthenticatedGardenRouteImport.update({
+  id: '/garden',
+  path: '/garden',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedHouseholdContributionRoute =
@@ -349,6 +359,18 @@ const AuthenticatedFinancialTransactionsShortcodeRoute =
   AuthenticatedFinancialTransactionsShortcodeRouteImport.update({
     id: '/financial-transactions/$shortcode',
     path: '/financial-transactions/$shortcode',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedGardenEntriesIndexRoute =
+  AuthenticatedGardenEntriesIndexRouteImport.update({
+    id: '/garden-entries/',
+    path: '/garden-entries/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedGardenEntriesShortcodeRoute =
+  AuthenticatedGardenEntriesShortcodeRouteImport.update({
+    id: '/garden-entries/$shortcode',
+    path: '/garden-entries/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedImagesIndexRoute =
@@ -504,6 +526,18 @@ const AuthenticatedMealsSuggestionsRoute =
   AuthenticatedMealsSuggestionsRouteImport.update({
     id: '/meals/suggestions',
     path: '/meals/suggestions',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPlantingsIndexRoute =
+  AuthenticatedPlantingsIndexRouteImport.update({
+    id: '/plantings/',
+    path: '/plantings/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPlantingsShortcodeRoute =
+  AuthenticatedPlantingsShortcodeRouteImport.update({
+    id: '/plantings/$shortcode',
+    path: '/plantings/$shortcode',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProductsIndexRoute =
@@ -746,6 +780,7 @@ export interface FileRoutesByFullPath {
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
+  '/garden': typeof AuthenticatedGardenRoute
   '/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
@@ -768,6 +803,7 @@ export interface FileRoutesByFullPath {
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
+  '/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
   '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -787,6 +823,7 @@ export interface FileRoutesByFullPath {
   '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
+  '/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -813,6 +850,7 @@ export interface FileRoutesByFullPath {
   '/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
   '/financial-transactions/': typeof AuthenticatedFinancialTransactionsIndexRoute
+  '/garden-entries/': typeof AuthenticatedGardenEntriesIndexRoute
   '/images/': typeof AuthenticatedImagesIndexRoute
   '/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -820,6 +858,7 @@ export interface FileRoutesByFullPath {
   '/ledger-transfers/': typeof AuthenticatedLedgerTransfersIndexRoute
   '/locations/': typeof AuthenticatedLocationsIndexRoute
   '/meals/': typeof AuthenticatedMealsIndexRoute
+  '/plantings/': typeof AuthenticatedPlantingsIndexRoute
   '/products/': typeof AuthenticatedProductsIndexRoute
   '/projects/': typeof AuthenticatedProjectsIndexRoute
   '/purchases/': typeof AuthenticatedPurchasesIndexRoute
@@ -854,6 +893,7 @@ export interface FileRoutesByTo {
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
+  '/garden': typeof AuthenticatedGardenRoute
   '/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
@@ -876,6 +916,7 @@ export interface FileRoutesByTo {
   '/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
+  '/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
   '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -895,6 +936,7 @@ export interface FileRoutesByTo {
   '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
+  '/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
   '/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/products/new': typeof AuthenticatedProductsNewRoute
   '/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -921,6 +963,7 @@ export interface FileRoutesByTo {
   '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/financial-accounts': typeof AuthenticatedFinancialAccountsIndexRoute
   '/financial-transactions': typeof AuthenticatedFinancialTransactionsIndexRoute
+  '/garden-entries': typeof AuthenticatedGardenEntriesIndexRoute
   '/images': typeof AuthenticatedImagesIndexRoute
   '/ingredients': typeof AuthenticatedIngredientsIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
@@ -928,6 +971,7 @@ export interface FileRoutesByTo {
   '/ledger-transfers': typeof AuthenticatedLedgerTransfersIndexRoute
   '/locations': typeof AuthenticatedLocationsIndexRoute
   '/meals': typeof AuthenticatedMealsIndexRoute
+  '/plantings': typeof AuthenticatedPlantingsIndexRoute
   '/products': typeof AuthenticatedProductsIndexRoute
   '/projects': typeof AuthenticatedProjectsIndexRoute
   '/purchases': typeof AuthenticatedPurchasesIndexRoute
@@ -965,6 +1009,7 @@ export interface FileRoutesById {
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/design': typeof AuthenticatedDesignRoute
   '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
+  '/_authenticated/garden': typeof AuthenticatedGardenRoute
   '/_authenticated/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
@@ -987,6 +1032,7 @@ export interface FileRoutesById {
   '/_authenticated/expenses/$shortcode': typeof AuthenticatedExpensesShortcodeRoute
   '/_authenticated/financial-accounts/$shortcode': typeof AuthenticatedFinancialAccountsShortcodeRoute
   '/_authenticated/financial-transactions/$shortcode': typeof AuthenticatedFinancialTransactionsShortcodeRoute
+  '/_authenticated/garden-entries/$shortcode': typeof AuthenticatedGardenEntriesShortcodeRoute
   '/_authenticated/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/_authenticated/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/_authenticated/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
@@ -1006,6 +1052,7 @@ export interface FileRoutesById {
   '/_authenticated/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
   '/_authenticated/meals/suggestions': typeof AuthenticatedMealsSuggestionsRoute
+  '/_authenticated/plantings/$shortcode': typeof AuthenticatedPlantingsShortcodeRoute
   '/_authenticated/products/$shortcode': typeof AuthenticatedProductsShortcodeRoute
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
   '/_authenticated/projects/$shortcode': typeof AuthenticatedProjectsShortcodeRoute
@@ -1032,6 +1079,7 @@ export interface FileRoutesById {
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/_authenticated/financial-accounts/': typeof AuthenticatedFinancialAccountsIndexRoute
   '/_authenticated/financial-transactions/': typeof AuthenticatedFinancialTransactionsIndexRoute
+  '/_authenticated/garden-entries/': typeof AuthenticatedGardenEntriesIndexRoute
   '/_authenticated/images/': typeof AuthenticatedImagesIndexRoute
   '/_authenticated/ingredients/': typeof AuthenticatedIngredientsIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
@@ -1039,6 +1087,7 @@ export interface FileRoutesById {
   '/_authenticated/ledger-transfers/': typeof AuthenticatedLedgerTransfersIndexRoute
   '/_authenticated/locations/': typeof AuthenticatedLocationsIndexRoute
   '/_authenticated/meals/': typeof AuthenticatedMealsIndexRoute
+  '/_authenticated/plantings/': typeof AuthenticatedPlantingsIndexRoute
   '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
   '/_authenticated/projects/': typeof AuthenticatedProjectsIndexRoute
   '/_authenticated/purchases/': typeof AuthenticatedPurchasesIndexRoute
@@ -1076,6 +1125,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/design'
     | '/entities'
+    | '/garden'
     | '/household-contribution'
     | '/labels'
     | '/mcp'
@@ -1098,6 +1148,7 @@ export interface FileRouteTypes {
     | '/expenses/$shortcode'
     | '/financial-accounts/$shortcode'
     | '/financial-transactions/$shortcode'
+    | '/garden-entries/$shortcode'
     | '/images/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
@@ -1117,6 +1168,7 @@ export interface FileRouteTypes {
     | '/meals/$shortcode'
     | '/meals/shopping-list'
     | '/meals/suggestions'
+    | '/plantings/$shortcode'
     | '/products/$shortcode'
     | '/products/new'
     | '/projects/$shortcode'
@@ -1143,6 +1195,7 @@ export interface FileRouteTypes {
     | '/expenses/'
     | '/financial-accounts/'
     | '/financial-transactions/'
+    | '/garden-entries/'
     | '/images/'
     | '/ingredients/'
     | '/inventory/'
@@ -1150,6 +1203,7 @@ export interface FileRouteTypes {
     | '/ledger-transfers/'
     | '/locations/'
     | '/meals/'
+    | '/plantings/'
     | '/products/'
     | '/projects/'
     | '/purchases/'
@@ -1184,6 +1238,7 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/design'
     | '/entities'
+    | '/garden'
     | '/household-contribution'
     | '/labels'
     | '/mcp'
@@ -1206,6 +1261,7 @@ export interface FileRouteTypes {
     | '/expenses/$shortcode'
     | '/financial-accounts/$shortcode'
     | '/financial-transactions/$shortcode'
+    | '/garden-entries/$shortcode'
     | '/images/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
@@ -1225,6 +1281,7 @@ export interface FileRouteTypes {
     | '/meals/$shortcode'
     | '/meals/shopping-list'
     | '/meals/suggestions'
+    | '/plantings/$shortcode'
     | '/products/$shortcode'
     | '/products/new'
     | '/projects/$shortcode'
@@ -1251,6 +1308,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/financial-accounts'
     | '/financial-transactions'
+    | '/garden-entries'
     | '/images'
     | '/ingredients'
     | '/inventory'
@@ -1258,6 +1316,7 @@ export interface FileRouteTypes {
     | '/ledger-transfers'
     | '/locations'
     | '/meals'
+    | '/plantings'
     | '/products'
     | '/projects'
     | '/purchases'
@@ -1294,6 +1353,7 @@ export interface FileRouteTypes {
     | '/_authenticated/calendar'
     | '/_authenticated/design'
     | '/_authenticated/entities'
+    | '/_authenticated/garden'
     | '/_authenticated/household-contribution'
     | '/_authenticated/labels'
     | '/_authenticated/mcp'
@@ -1316,6 +1376,7 @@ export interface FileRouteTypes {
     | '/_authenticated/expenses/$shortcode'
     | '/_authenticated/financial-accounts/$shortcode'
     | '/_authenticated/financial-transactions/$shortcode'
+    | '/_authenticated/garden-entries/$shortcode'
     | '/_authenticated/images/$shortcode'
     | '/_authenticated/ingredients/$shortcode'
     | '/_authenticated/ingredients/equivalences'
@@ -1335,6 +1396,7 @@ export interface FileRouteTypes {
     | '/_authenticated/meals/$shortcode'
     | '/_authenticated/meals/shopping-list'
     | '/_authenticated/meals/suggestions'
+    | '/_authenticated/plantings/$shortcode'
     | '/_authenticated/products/$shortcode'
     | '/_authenticated/products/new'
     | '/_authenticated/projects/$shortcode'
@@ -1361,6 +1423,7 @@ export interface FileRouteTypes {
     | '/_authenticated/expenses/'
     | '/_authenticated/financial-accounts/'
     | '/_authenticated/financial-transactions/'
+    | '/_authenticated/garden-entries/'
     | '/_authenticated/images/'
     | '/_authenticated/ingredients/'
     | '/_authenticated/inventory/'
@@ -1368,6 +1431,7 @@ export interface FileRouteTypes {
     | '/_authenticated/ledger-transfers/'
     | '/_authenticated/locations/'
     | '/_authenticated/meals/'
+    | '/_authenticated/plantings/'
     | '/_authenticated/products/'
     | '/_authenticated/projects/'
     | '/_authenticated/purchases/'
@@ -1519,6 +1583,13 @@ declare module '@tanstack/react-router' {
       path: '/entities'
       fullPath: '/entities'
       preLoaderRoute: typeof AuthenticatedEntitiesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/garden': {
+      id: '/_authenticated/garden'
+      path: '/garden'
+      fullPath: '/garden'
+      preLoaderRoute: typeof AuthenticatedGardenRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/household-contribution': {
@@ -1710,6 +1781,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFinancialTransactionsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/garden-entries/': {
+      id: '/_authenticated/garden-entries/'
+      path: '/garden-entries'
+      fullPath: '/garden-entries/'
+      preLoaderRoute: typeof AuthenticatedGardenEntriesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/garden-entries/$shortcode': {
+      id: '/_authenticated/garden-entries/$shortcode'
+      path: '/garden-entries/$shortcode'
+      fullPath: '/garden-entries/$shortcode'
+      preLoaderRoute: typeof AuthenticatedGardenEntriesShortcodeRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/images/': {
       id: '/_authenticated/images/'
       path: '/images'
@@ -1890,6 +1975,20 @@ declare module '@tanstack/react-router' {
       path: '/meals/suggestions'
       fullPath: '/meals/suggestions'
       preLoaderRoute: typeof AuthenticatedMealsSuggestionsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/plantings/': {
+      id: '/_authenticated/plantings/'
+      path: '/plantings'
+      fullPath: '/plantings/'
+      preLoaderRoute: typeof AuthenticatedPlantingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/plantings/$shortcode': {
+      id: '/_authenticated/plantings/$shortcode'
+      path: '/plantings/$shortcode'
+      fullPath: '/plantings/$shortcode'
+      preLoaderRoute: typeof AuthenticatedPlantingsShortcodeRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/products/': {
@@ -2179,6 +2278,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedDesignRoute: typeof AuthenticatedDesignRoute
   AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
+  AuthenticatedGardenRoute: typeof AuthenticatedGardenRoute
   AuthenticatedHouseholdContributionRoute: typeof AuthenticatedHouseholdContributionRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
@@ -2196,6 +2296,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedExpensesShortcodeRoute: typeof AuthenticatedExpensesShortcodeRoute
   AuthenticatedFinancialAccountsShortcodeRoute: typeof AuthenticatedFinancialAccountsShortcodeRoute
   AuthenticatedFinancialTransactionsShortcodeRoute: typeof AuthenticatedFinancialTransactionsShortcodeRoute
+  AuthenticatedGardenEntriesShortcodeRoute: typeof AuthenticatedGardenEntriesShortcodeRoute
   AuthenticatedImagesShortcodeRoute: typeof AuthenticatedImagesShortcodeRoute
   AuthenticatedIngredientsShortcodeRoute: typeof AuthenticatedIngredientsShortcodeRoute
   AuthenticatedIngredientsEquivalencesRoute: typeof AuthenticatedIngredientsEquivalencesRoute
@@ -2215,6 +2316,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedMealsShortcodeRoute: typeof AuthenticatedMealsShortcodeRoute
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
   AuthenticatedMealsSuggestionsRoute: typeof AuthenticatedMealsSuggestionsRoute
+  AuthenticatedPlantingsShortcodeRoute: typeof AuthenticatedPlantingsShortcodeRoute
   AuthenticatedProductsShortcodeRoute: typeof AuthenticatedProductsShortcodeRoute
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
   AuthenticatedProjectsShortcodeRoute: typeof AuthenticatedProjectsShortcodeRoute
@@ -2235,6 +2337,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
   AuthenticatedFinancialAccountsIndexRoute: typeof AuthenticatedFinancialAccountsIndexRoute
   AuthenticatedFinancialTransactionsIndexRoute: typeof AuthenticatedFinancialTransactionsIndexRoute
+  AuthenticatedGardenEntriesIndexRoute: typeof AuthenticatedGardenEntriesIndexRoute
   AuthenticatedImagesIndexRoute: typeof AuthenticatedImagesIndexRoute
   AuthenticatedIngredientsIndexRoute: typeof AuthenticatedIngredientsIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
@@ -2242,6 +2345,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedLedgerTransfersIndexRoute: typeof AuthenticatedLedgerTransfersIndexRoute
   AuthenticatedLocationsIndexRoute: typeof AuthenticatedLocationsIndexRoute
   AuthenticatedMealsIndexRoute: typeof AuthenticatedMealsIndexRoute
+  AuthenticatedPlantingsIndexRoute: typeof AuthenticatedPlantingsIndexRoute
   AuthenticatedProductsIndexRoute: typeof AuthenticatedProductsIndexRoute
   AuthenticatedProjectsIndexRoute: typeof AuthenticatedProjectsIndexRoute
   AuthenticatedPurchasesIndexRoute: typeof AuthenticatedPurchasesIndexRoute
@@ -2269,6 +2373,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedDesignRoute: AuthenticatedDesignRoute,
   AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
+  AuthenticatedGardenRoute: AuthenticatedGardenRoute,
   AuthenticatedHouseholdContributionRoute:
     AuthenticatedHouseholdContributionRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,
@@ -2292,6 +2397,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedFinancialAccountsShortcodeRoute,
   AuthenticatedFinancialTransactionsShortcodeRoute:
     AuthenticatedFinancialTransactionsShortcodeRoute,
+  AuthenticatedGardenEntriesShortcodeRoute:
+    AuthenticatedGardenEntriesShortcodeRoute,
   AuthenticatedImagesShortcodeRoute: AuthenticatedImagesShortcodeRoute,
   AuthenticatedIngredientsShortcodeRoute:
     AuthenticatedIngredientsShortcodeRoute,
@@ -2316,6 +2423,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedMealsShortcodeRoute: AuthenticatedMealsShortcodeRoute,
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,
   AuthenticatedMealsSuggestionsRoute: AuthenticatedMealsSuggestionsRoute,
+  AuthenticatedPlantingsShortcodeRoute: AuthenticatedPlantingsShortcodeRoute,
   AuthenticatedProductsShortcodeRoute: AuthenticatedProductsShortcodeRoute,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
   AuthenticatedProjectsShortcodeRoute: AuthenticatedProjectsShortcodeRoute,
@@ -2339,6 +2447,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedFinancialAccountsIndexRoute,
   AuthenticatedFinancialTransactionsIndexRoute:
     AuthenticatedFinancialTransactionsIndexRoute,
+  AuthenticatedGardenEntriesIndexRoute: AuthenticatedGardenEntriesIndexRoute,
   AuthenticatedImagesIndexRoute: AuthenticatedImagesIndexRoute,
   AuthenticatedIngredientsIndexRoute: AuthenticatedIngredientsIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
@@ -2347,6 +2456,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedLedgerTransfersIndexRoute,
   AuthenticatedLocationsIndexRoute: AuthenticatedLocationsIndexRoute,
   AuthenticatedMealsIndexRoute: AuthenticatedMealsIndexRoute,
+  AuthenticatedPlantingsIndexRoute: AuthenticatedPlantingsIndexRoute,
   AuthenticatedProductsIndexRoute: AuthenticatedProductsIndexRoute,
   AuthenticatedProjectsIndexRoute: AuthenticatedProjectsIndexRoute,
   AuthenticatedPurchasesIndexRoute: AuthenticatedPurchasesIndexRoute,

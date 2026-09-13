@@ -89,6 +89,8 @@ import {
   generatedLocationColumns,
   generatedMealColumns,
   generatedProductColumns,
+  generatedPlantingColumns,
+  generatedGardenEntryColumns,
   generatedProjectColumns,
   generatedPurchaseColumns,
   generatedRecipeColumns,
@@ -878,6 +880,59 @@ export const locationImage = pgTable(
       .where(sql`${table.deletedAt} IS NULL`),
     index("LocationImage_locationId_idx").on(table.locationId),
     index("LocationImage_imageId_idx").on(table.imageId),
+  ],
+);
+
+export const planting = pgTable(
+  "Planting",
+  generatedPlantingColumns({
+    ingredient: (): AnyPgColumn => ingredient.id,
+    product: (): AnyPgColumn => product.id,
+    location: (): AnyPgColumn => location.id,
+    planting: (): AnyPgColumn => planting.id,
+  }),
+  (table) => [
+    shortcodeUnique("Planting", table.shortcode),
+    index("Planting_ingredientId_idx").on(table.ingredientId),
+    index("Planting_locationId_idx").on(table.locationId),
+    index("Planting_status_idx").on(table.status),
+  ],
+);
+
+export const gardenEntry = pgTable(
+  "GardenEntry",
+  generatedGardenEntryColumns({
+    location: (): AnyPgColumn => location.id,
+    planting: (): AnyPgColumn => planting.id,
+  }),
+  (table) => [
+    shortcodeUnique("GardenEntry", table.shortcode),
+    index("GardenEntry_locationId_idx").on(table.locationId),
+    index("GardenEntry_plantingId_idx").on(table.plantingId),
+    index("GardenEntry_observedOn_idx").on(table.observedOn),
+  ],
+);
+
+export const gardenEntryImage = pgTable(
+  "GardenEntryImage",
+  {
+    id: pkUuid(),
+    gardenEntryId: uuid("gardenEntryId")
+      .notNull()
+      .references(() => gardenEntry.id),
+    imageId: uuid("imageId")
+      .notNull()
+      .references(() => image.id),
+    sortOrder: integer("sortOrder").notNull().default(0),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    uniqueIndex("GardenEntryImage_gardenEntryId_imageId_key")
+      .on(table.gardenEntryId, table.imageId)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index("GardenEntryImage_gardenEntryId_idx").on(table.gardenEntryId),
+    index("GardenEntryImage_imageId_idx").on(table.imageId),
   ],
 );
 
@@ -1739,7 +1794,8 @@ export const ingredientRelations = relations(ingredient, ({ one, many }) => ({
     references: [recipe.id],
   }),
   recipeSectionIngredient: many(recipeSectionIngredient),
-  product: many(product),
+  product: many(product, { relationName: "ProductIngredient" }),
+  grownByProducts: many(product, { relationName: "ProductGrowsIngredient" }),
 }));
 
 export const recipeSectionIngredientRelations = relations(
@@ -1795,6 +1851,12 @@ export const productRelations = relations(product, ({ one, many }) => ({
   ingredient: one(ingredient, {
     fields: [product.ingredientId],
     references: [ingredient.id],
+    relationName: "ProductIngredient",
+  }),
+  growsIngredient: one(ingredient, {
+    fields: [product.growsIngredientId],
+    references: [ingredient.id],
+    relationName: "ProductGrowsIngredient",
   }),
   unitMappings: many(productUnitMappings),
   conversionCoverage: one(productConversionCoverage),
@@ -1864,6 +1926,51 @@ export const locationRelations = relations(location, ({ one, many }) => ({
     fields: [location.productId],
     references: [product.id],
   }),
+  plantings: many(planting, { relationName: "PlantingCurrentLocation" }),
+  intendedPlantings: many(planting, {
+    relationName: "PlantingIntendedLocation",
+  }),
+  gardenEntries: many(gardenEntry),
+}));
+
+export const plantingRelations = relations(planting, ({ one, many }) => ({
+  ingredient: one(ingredient, {
+    fields: [planting.ingredientId],
+    references: [ingredient.id],
+  }),
+  sourceProduct: one(product, {
+    fields: [planting.sourceProductId],
+    references: [product.id],
+  }),
+  location: one(location, {
+    fields: [planting.locationId],
+    references: [location.id],
+    relationName: "PlantingCurrentLocation",
+  }),
+  intendedLocation: one(location, {
+    fields: [planting.intendedLocationId],
+    references: [location.id],
+    relationName: "PlantingIntendedLocation",
+  }),
+  parentPlanting: one(planting, {
+    fields: [planting.parentPlantingId],
+    references: [planting.id],
+    relationName: "PlantingParent",
+  }),
+  childPlantings: many(planting, { relationName: "PlantingParent" }),
+  entries: many(gardenEntry),
+}));
+
+export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
+  location: one(location, {
+    fields: [gardenEntry.locationId],
+    references: [location.id],
+  }),
+  planting: one(planting, {
+    fields: [gardenEntry.plantingId],
+    references: [planting.id],
+  }),
+  images: many(gardenEntryImage),
 }));
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({
@@ -1883,6 +1990,7 @@ export const imageRelations = relations(image, ({ many }) => ({
   recipeImages: many(recipeImage),
   projectImages: many(projectImage),
   purchaseImages: many(purchaseImage),
+  gardenEntryImages: many(gardenEntryImage),
   cookbookCovers: many(cookbook),
   vendorLogos: many(vendor),
 }));
@@ -2190,6 +2298,20 @@ export const locationImageRelations = relations(locationImage, ({ one }) => ({
     references: [image.id],
   }),
 }));
+
+export const gardenEntryImageRelations = relations(
+  gardenEntryImage,
+  ({ one }) => ({
+    gardenEntry: one(gardenEntry, {
+      fields: [gardenEntryImage.gardenEntryId],
+      references: [gardenEntry.id],
+    }),
+    image: one(image, {
+      fields: [gardenEntryImage.imageId],
+      references: [image.id],
+    }),
+  }),
+);
 
 export const recipeImageRelations = relations(recipeImage, ({ one }) => ({
   recipe: one(recipe, {

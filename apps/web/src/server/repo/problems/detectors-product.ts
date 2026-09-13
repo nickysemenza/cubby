@@ -51,6 +51,7 @@ import {
   inventoryEntry,
   location,
   product,
+  planting,
   productComponent,
   productExternalId,
   productImage,
@@ -98,6 +99,15 @@ type ProductWithUpcGapCandidate = {
 
 /** Orphan suggestions are not a saved predicate: delete eligibility must use the canonical incoming-edge policy. */
 const PRODUCT_RETAINING_NOT_EXISTS = {
+  "Planting.sourceProductId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(planting)
+        .where(
+          and(eq(planting.sourceProductId, product.id), notDeleted(planting)),
+        ),
+    ),
   "InventoryEntry.productId": (dbClient) =>
     notExists(
       dbClient

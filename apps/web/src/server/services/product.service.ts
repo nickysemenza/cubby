@@ -184,11 +184,15 @@ export const createProductWithFood = async (
   const ingredientEntityId = data.ingredientId
     ? await resolveOrThrow(db, "ingredient", data.ingredientId)
     : null;
+  const growsIngredientEntityId = data.growsIngredientId
+    ? await resolveOrThrow(db, "ingredient", data.growsIngredientId)
+    : null;
   const product = await createProductRepo(
     db,
     {
       ...data,
       ingredientId: ingredientEntityId,
+      growsIngredientId: growsIngredientEntityId,
     },
     actor,
   );
@@ -215,12 +219,17 @@ export const updateProductWithFood = async (
     data.ingredientId == null
       ? data.ingredientId
       : await resolveOrThrow(db, "ingredient", data.ingredientId);
+  const growsIngredientEntityId =
+    data.growsIngredientId == null
+      ? data.growsIngredientId
+      : await resolveOrThrow(db, "ingredient", data.growsIngredientId);
   const { detachedImageKeys } = await updateProductRepo(
     db,
     id,
     {
       ...data,
       ingredientId: ingredientEntityId,
+      growsIngredientId: growsIngredientEntityId,
     },
     actor,
   );

@@ -130,6 +130,21 @@ export const LOCATION_DELETE_EDGE_POLICY = {
     description:
       "A deleted location's children are promoted to its nearest surviving ancestor rather than the deletion being blocked.",
   },
+  "Planting.locationId": {
+    code: "block-live-planting",
+    effect: "block",
+    description: "A location with current plantings cannot be deleted.",
+  },
+  "Planting.intendedLocationId": {
+    code: "block-planned-planting",
+    effect: "block",
+    description: "A location named by a planned planting cannot be deleted.",
+  },
+  "GardenEntry.locationId": {
+    code: "block-garden-history",
+    effect: "block",
+    description: "A location with dated garden observations cannot be deleted.",
+  },
 } as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
 
 /**
@@ -251,6 +266,8 @@ const createLocationTx = async (
       // Form factor is a fact about the SKU, so a linked location stores no
       // type of its own.
       type: productId ? null : (data.type ?? null),
+      gardenKind: data.gardenKind ?? null,
+      gardenConditions: data.gardenConditions ?? null,
       productId,
       parentId,
     });
@@ -455,6 +472,8 @@ export const updateLocation = async (
       // Linking a product clears the now-redundant type; the two are
       // alternatives, never companions.
       type: productId ? null : data.type,
+      gardenKind: data.gardenKind,
+      gardenConditions: data.gardenConditions,
       productId,
       parentId,
     });

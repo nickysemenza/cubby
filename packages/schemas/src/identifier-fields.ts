@@ -75,6 +75,12 @@ export type PurchaseId = z.infer<typeof purchaseId>;
 export const wishId = brandedId("WishId");
 export type WishId = z.infer<typeof wishId>;
 
+export const plantingId = brandedId("PlantingId");
+export type PlantingId = z.infer<typeof plantingId>;
+
+export const gardenEntryId = brandedId("GardenEntryId");
+export type GardenEntryId = z.infer<typeof gardenEntryId>;
+
 /** Every local entity's private UUID schema, keyed by its manifest entity. */
 export const ENTITY_ID_SCHEMA = {
   cookbook: cookbookId,
@@ -95,6 +101,8 @@ export const ENTITY_ID_SCHEMA = {
   task: taskId,
   vendor: vendorId,
   wish: wishId,
+  planting: plantingId,
+  gardenEntry: gardenEntryId,
 } as const satisfies Record<ShortcodeEntity, z.ZodType>;
 
 /** The branded private UUID for one exact local entity. */
@@ -182,6 +190,8 @@ const PARSE_ENTITY_REF = {
   task: entityRefParser("task", taskId),
   vendor: entityRefParser("vendor", vendorId),
   wish: entityRefParser("wish", wishId),
+  planting: entityRefParser("planting", plantingId),
+  gardenEntry: entityRefParser("gardenEntry", gardenEntryId),
 } as const satisfies Record<ShortcodeEntity, EntityRefParser>;
 
 /** Parse and correlate an internal entity discriminator with its UUID brand. */
@@ -221,6 +231,8 @@ export {
   taskShortcode,
   vendorShortcode,
   wishShortcode,
+  plantingShortcode,
+  gardenEntryShortcode,
 } from "@cubby/shared";
 export type {
   CookbookShortcode,

@@ -17,6 +17,8 @@ it("renders location facts without sending image and valuation projections throu
     product: null,
     lastBulkInventory: null,
     aiDescription: null,
+    gardenKind: null,
+    gardenConditions: null,
     images: [],
     valuation: null,
     createdAt: new Date(0),

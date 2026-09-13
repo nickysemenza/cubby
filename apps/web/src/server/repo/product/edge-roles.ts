@@ -234,4 +234,11 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
     description:
       "The rebuildable conversion coverage projection is deleted with the product.",
   },
+  "Planting.sourceProductId": {
+    code: "block-garden-source",
+    effect: "block",
+    description: "A planting retains its source product for growing history.",
+    reason: "CONSTRAINT_VIOLATION",
+    label: "garden plantings",
+  },
 } as const satisfies IncomingEdgePolicy<"product", ProductDeleteDisposition>;

@@ -35,6 +35,7 @@ const baseProduct = {
   tags: [],
   upc: null,
   fdc_id: null,
+  growsIngredientId: null,
   model: "5lb",
   expectedQuantity: null,
   notes: "Keep dry",
@@ -60,6 +61,8 @@ const baseLocation = {
   parentId: null,
   type: "room",
   aiDescription: null,
+  gardenKind: null,
+  gardenConditions: null,
   valuation: null,
 };
 
@@ -195,6 +198,8 @@ describe("inventory mappers", () => {
         lastBulkInventory: null,
         product: null,
         aiDescription: null,
+        gardenKind: null,
+        gardenConditions: null,
         images: [],
         valuation: null,
         name: "Pantry",

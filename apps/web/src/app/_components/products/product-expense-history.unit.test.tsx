@@ -25,6 +25,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   tags: [],
   primaryGtin: null,
   fdc_id: null,
+  growsIngredientId: null,
   manufacturer: "Milwaukee",
   model: null,
   notes: null,

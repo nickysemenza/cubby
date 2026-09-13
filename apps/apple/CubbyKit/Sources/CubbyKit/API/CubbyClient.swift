@@ -77,6 +77,161 @@ public actor CubbyClient {
         }
     }
 
+    // MARK: - Garden
+
+    public func gardenOverview() async throws -> GardenOverview {
+        try await perform { GardenOverview(try await api.garden_overview().ok.body.json) }
+    }
+
+    public func gardenOptions() async throws -> GardenOptions {
+        try await perform { GardenOptions(try await api.garden_options().ok.body.json) }
+    }
+
+    public func gardenGuides() async throws -> GardenGuidesDocument {
+        try await perform { GardenGuidesDocument(try await api.garden_guides().ok.body.json) }
+    }
+
+    public func createGardenPlanting(_ input: CreateGardenPlanting) async throws {
+        try await perform {
+            _ = try await api.garden_createPlanting(body: .json(GardenCreateInput(input))).ok
+        }
+    }
+
+    public func recordGardenEntry(_ input: RecordGardenEntry) async throws {
+        try await perform {
+            _ = try await api.garden_recordEntry(body: .json(GardenRecordInput(input))).ok
+        }
+    }
+
+    public func startGardenPlanting(
+        id: String,
+        locationID: String,
+        startedAt: Date,
+        method: GardenStartMethod
+    ) async throws {
+        try await perform {
+            _ = try await api.garden_startPlanting(
+                body: .json(
+                    GardenStartInput(id: id, locationID: locationID, startedAt: startedAt, method: method))
+            ).ok
+        }
+    }
+
+    public func moveGardenPlanting(_ input: MoveGardenPlanting) async throws {
+        try await perform {
+            _ = try await api.garden_movePlanting(body: .json(GardenMoveInput(input))).ok
+        }
+    }
+
+    public func splitGardenPlanting(_ input: SplitGardenPlanting) async throws {
+        try await perform {
+            _ = try await api.garden_splitPlanting(body: .json(GardenSplitInput(input))).ok
+        }
+    }
+
+    public func finishGardenPlanting(id: String, finishedAt: Date) async throws {
+        try await perform {
+            _ = try await api.garden_finishPlanting(
+                body: .json(GardenFinishInput(id: id, finishedAt: finishedAt))
+            ).ok
+        }
+    }
+
+    /// A garden bed or tray remains an ordinary `.area` location, with garden-only context held
+    /// in its additive classification fields.
+    public func createGardenLocation(name: String, kind: GardenLocationKind, conditions: String?) async throws
+    {
+        try await perform {
+            _ = try await api.resources_location_create(
+                body: .json(
+                    .init(
+                        name: name,
+                        _type: .area,
+                        gardenKind: .init(rawValue: kind.rawValue),
+                        gardenConditions: conditions
+                    )
+                )
+            ).created
+        }
+    }
+
+    public func updateGardenLocation(
+        id: String, name: String?, kind: GardenLocationKind?, conditions: String?
+    ) async throws {
+        try await perform {
+            _ = try await api.resources_location_update(
+                path: .init(id: id),
+                body: .json(
+                    .init(
+                        name: name,
+                        gardenKind: kind.map { .init(rawValue: $0.rawValue)! },
+                        gardenConditions: conditions
+                    )
+                )
+            ).ok
+        }
+    }
+
+    /// This association only says what the product grows; it never creates edible inventory.
+    public func setGardenProduct(id: String, growsIngredientID: String?) async throws {
+        try await perform {
+            _ = try await api.resources_product_update(
+                path: .init(id: id),
+                body: .json(.init(growsIngredientId: growsIngredientID))
+            ).ok
+        }
+    }
+
+    public func setGardenIngredient(id: String, guideKey: String?) async throws {
+        try await perform {
+            _ = try await api.resources_ingredient_update(
+                path: .init(id: id),
+                body: .json(.init(gardenGuideKey: guideKey))
+            ).ok
+        }
+    }
+
+    public func updateGardenPlanting(_ input: EditGardenPlanting) async throws {
+        try await perform {
+            _ = try await api.resources_planting_update(
+                path: .init(id: input.id),
+                body: .json(
+                    .init(
+                        ingredientId: input.ingredientID, sourceProductId: input.productID,
+                        intendedLocationId: input.intendedLocationID, variety: input.variety,
+                        quantity: input.quantity, notes: input.notes, plannedWindow: input.plannedWindow,
+                        plannedDate: input.plannedDate.map(GardenPlainDate.string),
+                        sowedOn: input.sownAt.map(GardenPlainDate.string),
+                        transplantedOn: input.transplantedAt.map(GardenPlainDate.string)
+                    )
+                )
+            ).ok
+        }
+    }
+
+    public func gardenEntries() async throws -> [GardenEntry] {
+        try await perform {
+            try await api.garden_entries(query: .init()).ok.body.json.items.map(GardenEntry.init)
+        }
+    }
+
+    public func updateGardenEntry(_ input: EditGardenEntry) async throws {
+        try await perform {
+            _ = try await api.resources_gardenEntry_update(
+                path: .init(id: input.id),
+                body: .json(
+                    .init(
+                        locationId: input.locationID, plantingId: input.plantingID,
+                        kind: .init(rawValue: input.kind.rawValue),
+                        observedOn: GardenPlainDate.string(input.observedAt),
+                        note: input.note, harvestAmount: input.harvestAmount,
+                        pendingImageIds: input.pendingImageIDs.map(\.rawValue),
+                        removeImageIds: input.removeImageIDs
+                    ))
+            ).ok
+        }
+    }
+
     // MARK: - Generic entity access
 
     /// One page of rows for any entity the HTTP document lists.
@@ -342,3 +497,5 @@ public actor CubbyClient {
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 }
+
+extension CubbyClient: GardenService {}

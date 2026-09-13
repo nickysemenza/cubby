@@ -7,6 +7,12 @@ import type {
   FinancialTransactionCreateInput,
   FinancialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
+import {
+  gardenEntryCreateInput,
+  gardenEntryUpdateData,
+  plantingCreateInput,
+  plantingUpdateData,
+} from "@cubby/schemas/garden";
 import type {
   IngredientCreateInput,
   IngredientUpdateInput,
@@ -101,6 +107,13 @@ interface EntityEditDraftMap {
     FinancialTransactionCreateInput & FinancialTransactionUpdateData
   >;
   wish: Partial<WishCreateInput & WishUpdateData>;
+  planting: Partial<
+    z.infer<typeof plantingCreateInput> & z.infer<typeof plantingUpdateData>
+  >;
+  gardenEntry: Partial<
+    z.infer<typeof gardenEntryCreateInput> &
+      z.infer<typeof gardenEntryUpdateData>
+  >;
 }
 
 type GeneratedIntents = typeof generatedEntityEditIntents;
@@ -130,6 +143,8 @@ interface EntityEditCreateInputMap {
   ledgerParty: LedgerPartyCreateInput;
   ledgerTransfer: LedgerTransferCreateInput;
   wish: WishCreateInput;
+  planting: z.infer<typeof plantingCreateInput>;
+  gardenEntry: z.infer<typeof gardenEntryCreateInput>;
 }
 
 interface EntityEditUpdateInputMap {
@@ -149,6 +164,8 @@ interface EntityEditUpdateInputMap {
   ledgerParty: LedgerPartyUpdateData;
   ledgerTransfer: LedgerTransferUpdateData;
   wish: WishUpdateData;
+  planting: z.infer<typeof plantingUpdateData>;
+  gardenEntry: z.infer<typeof gardenEntryUpdateData>;
 }
 
 type EntityEditSpecification<E extends keyof EntityEditIntentCatalog> = {

@@ -217,6 +217,24 @@ struct PhotoUploaderTests {
     }
 }
 
+@Suite("GardenImageUploader")
+struct GardenImageUploaderTests {
+    @Test func leavesCompletedPhotosPendingForTheEntryWorkflow() async throws {
+        let service = StubPhotoService()
+        let uploader = GardenImageUploader(service: service) { data, url, contentType in
+            service.record(.put(url, contentType, data.count))
+        }
+        let image = TestImages.canvas(width: 1200, height: 800, subject: true)
+        let ids = try await uploader.upload([image, image])
+
+        #expect(ids == [ImageCode("IMG-2345"), ImageCode("IMG-2345")])
+        let calls = service.calls.withLock { $0 }
+        #expect(calls.count == 6)
+        #expect(calls.filter { if case .attach = $0 { true } else { false } }.isEmpty)
+        #expect(calls.filter { if case .mark = $0 { true } else { false } }.count == 2)
+    }
+}
+
 private final class PresignedStub: URLProtocol, @unchecked Sendable {
     static let handler = Mutex<StubNetworking.Handler?>(nil)
     override class func canInit(with request: URLRequest) -> Bool { true }

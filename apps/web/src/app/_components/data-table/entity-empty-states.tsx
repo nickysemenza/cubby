@@ -53,6 +53,16 @@ const entityEmptyConfig = {
       "Create spaces to organize where everything lives — pantry, fridge, garage, you decide.",
     actionLabel: "Create Location",
   },
+  planting: {
+    title: "No plantings yet",
+    description:
+      "Record what is growing now or plan the next crop for one of your garden locations.",
+  },
+  gardenEntry: {
+    title: "No garden entries yet",
+    description:
+      "Add a dated observation, harvest, or photo batch to keep a simple garden history.",
+  },
   inventory: {
     title: "Your cubbies are empty",
     description:

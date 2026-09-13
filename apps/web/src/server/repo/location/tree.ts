@@ -1,13 +1,14 @@
+/**
+ * Location tree and hierarchy operations.
+ * Build location trees, type counts, and import updates.
+ */
+import { gardenLocationKind } from "@cubby/schemas/garden";
 import {
   locationId as locationIdSchema,
   type LocationId,
   parseShortcodeFor,
   productId as productIdSchema,
 } from "@cubby/schemas/identifiers";
-/**
- * Location tree and hierarchy operations.
- * Build location trees, type counts, and import updates.
- */
 import { isDisplayableImageFile } from "@cubby/schemas/image";
 import {
   type InfLocation,
@@ -59,6 +60,8 @@ const locationTreeRowSchema = z.object({
   productId: productIdSchema.nullable(),
   type: z.string().nullable(),
   aiDescription: z.string().nullable(),
+  gardenKind: gardenLocationKind.nullable(),
+  gardenConditions: z.string().nullable(),
   valuation: locationValuation.nullable(),
   depth: z.coerce.number().int().nonnegative(),
 });

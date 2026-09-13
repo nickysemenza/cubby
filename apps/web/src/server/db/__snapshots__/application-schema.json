@@ -2766,6 +2766,316 @@
       },
       "isRLSEnabled": false
     },
+    "public.GardenEntry": {
+      "name": "GardenEntry",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "locationId": {
+          "name": "locationId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "plantingId": {
+          "name": "plantingId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'observation'"
+        },
+        "observedOn": {
+          "name": "observedOn",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "harvestAmount": {
+          "name": "harvestAmount",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "GardenEntry_shortcode_unique": {
+          "name": "GardenEntry_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "GardenEntry_locationId_idx": {
+          "name": "GardenEntry_locationId_idx",
+          "columns": [
+            {
+              "expression": "locationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "GardenEntry_plantingId_idx": {
+          "name": "GardenEntry_plantingId_idx",
+          "columns": [
+            {
+              "expression": "plantingId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "GardenEntry_observedOn_idx": {
+          "name": "GardenEntry_observedOn_idx",
+          "columns": [
+            {
+              "expression": "observedOn",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "GardenEntry_locationId_Location_id_fk": {
+          "name": "GardenEntry_locationId_Location_id_fk",
+          "tableFrom": "GardenEntry",
+          "tableTo": "Location",
+          "columnsFrom": [
+            "locationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "GardenEntry_plantingId_Planting_id_fk": {
+          "name": "GardenEntry_plantingId_Planting_id_fk",
+          "tableFrom": "GardenEntry",
+          "tableTo": "Planting",
+          "columnsFrom": [
+            "plantingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.GardenEntryImage": {
+      "name": "GardenEntryImage",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "gardenEntryId": {
+          "name": "gardenEntryId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "imageId": {
+          "name": "imageId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sortOrder": {
+          "name": "sortOrder",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "GardenEntryImage_gardenEntryId_imageId_key": {
+          "name": "GardenEntryImage_gardenEntryId_imageId_key",
+          "columns": [
+            {
+              "expression": "gardenEntryId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"GardenEntryImage\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "GardenEntryImage_gardenEntryId_idx": {
+          "name": "GardenEntryImage_gardenEntryId_idx",
+          "columns": [
+            {
+              "expression": "gardenEntryId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "GardenEntryImage_imageId_idx": {
+          "name": "GardenEntryImage_imageId_idx",
+          "columns": [
+            {
+              "expression": "imageId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "GardenEntryImage_gardenEntryId_GardenEntry_id_fk": {
+          "name": "GardenEntryImage_gardenEntryId_GardenEntry_id_fk",
+          "tableFrom": "GardenEntryImage",
+          "tableTo": "GardenEntry",
+          "columnsFrom": [
+            "gardenEntryId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "GardenEntryImage_imageId_Image_id_fk": {
+          "name": "GardenEntryImage_imageId_Image_id_fk",
+          "tableFrom": "GardenEntryImage",
+          "tableTo": "Image",
+          "columnsFrom": [
+            "imageId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.Image": {
       "name": "Image",
       "schema": "",
@@ -3039,6 +3349,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "gardenGuideKey": {
+          "name": "gardenGuideKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -3993,6 +4309,18 @@
         },
         "type": {
           "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gardenKind": {
+          "name": "gardenKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gardenConditions": {
+          "name": "gardenConditions",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -5884,6 +6212,264 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.Planting": {
+      "name": "Planting",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "shortcode": {
+          "name": "shortcode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ingredientId": {
+          "name": "ingredientId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceProductId": {
+          "name": "sourceProductId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locationId": {
+          "name": "locationId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "intendedLocationId": {
+          "name": "intendedLocationId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parentPlantingId": {
+          "name": "parentPlantingId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'planned'"
+        },
+        "variety": {
+          "name": "variety",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "plannedWindow": {
+          "name": "plannedWindow",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "plannedDate": {
+          "name": "plannedDate",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sowedOn": {
+          "name": "sowedOn",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "transplantedOn": {
+          "name": "transplantedOn",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "finishedOn": {
+          "name": "finishedOn",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "Planting_shortcode_unique": {
+          "name": "Planting_shortcode_unique",
+          "columns": [
+            {
+              "expression": "shortcode",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Planting_ingredientId_idx": {
+          "name": "Planting_ingredientId_idx",
+          "columns": [
+            {
+              "expression": "ingredientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Planting_locationId_idx": {
+          "name": "Planting_locationId_idx",
+          "columns": [
+            {
+              "expression": "locationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Planting_status_idx": {
+          "name": "Planting_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "Planting_ingredientId_Ingredient_id_fk": {
+          "name": "Planting_ingredientId_Ingredient_id_fk",
+          "tableFrom": "Planting",
+          "tableTo": "Ingredient",
+          "columnsFrom": [
+            "ingredientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Planting_sourceProductId_Product_id_fk": {
+          "name": "Planting_sourceProductId_Product_id_fk",
+          "tableFrom": "Planting",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "sourceProductId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Planting_locationId_Location_id_fk": {
+          "name": "Planting_locationId_Location_id_fk",
+          "tableFrom": "Planting",
+          "tableTo": "Location",
+          "columnsFrom": [
+            "locationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Planting_intendedLocationId_Location_id_fk": {
+          "name": "Planting_intendedLocationId_Location_id_fk",
+          "tableFrom": "Planting",
+          "tableTo": "Location",
+          "columnsFrom": [
+            "intendedLocationId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Planting_parentPlantingId_Planting_id_fk": {
+          "name": "Planting_parentPlantingId_Planting_id_fk",
+          "tableFrom": "Planting",
+          "tableTo": "Planting",
+          "columnsFrom": [
+            "parentPlantingId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.Product": {
       "name": "Product",
       "schema": "",
@@ -5966,6 +6552,12 @@
         },
         "ingredientId": {
           "name": "ingredientId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "growsIngredientId": {
+          "name": "growsIngredientId",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -6198,6 +6790,19 @@
           "tableTo": "Ingredient",
           "columnsFrom": [
             "ingredientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Product_growsIngredientId_Ingredient_id_fk": {
+          "name": "Product_growsIngredientId_Ingredient_id_fk",
+          "tableFrom": "Product",
+          "tableTo": "Ingredient",
+          "columnsFrom": [
+            "growsIngredientId"
           ],
           "columnsTo": [
             "id"

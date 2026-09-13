@@ -14,6 +14,8 @@
   "financialAccount": 2,
   "financialTransaction": 30,
   "image": 11,
+  "planting": 0,
+  "gardenEntry": 0,
   "wish": 3,
   "usdaFoods": 7
 }

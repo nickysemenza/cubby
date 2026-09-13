@@ -52,7 +52,10 @@ describe("mergeProducts", () => {
 
   const seedProduct = async (
     name: string,
-    overrides: Omit<Partial<ProductCreateInput>, "ingredientId"> = {},
+    overrides: Omit<
+      Partial<ProductCreateInput>,
+      "ingredientId" | "growsIngredientId"
+    > = {},
   ) => {
     const created = await createProduct(
       ctx.db,

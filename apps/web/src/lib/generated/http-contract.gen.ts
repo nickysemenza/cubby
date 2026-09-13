@@ -323,6 +323,58 @@ export const httpContract = httpContractBuilder.router(
         contracts.financialTransactionContract.ops["vendorInference"],
       ),
     },
+    garden: {
+      createPlanting: rpcMutation(
+        "garden",
+        "createPlanting",
+        contracts.gardenContract.ops["createPlanting"],
+      ),
+      entries: rpcQuery(
+        "garden",
+        "entries",
+        contracts.gardenContract.ops["entries"],
+      ),
+      finishPlanting: rpcMutation(
+        "garden",
+        "finishPlanting",
+        contracts.gardenContract.ops["finishPlanting"],
+      ),
+      guides: rpcQuery(
+        "garden",
+        "guides",
+        contracts.gardenContract.ops["guides"],
+      ),
+      movePlanting: rpcMutation(
+        "garden",
+        "movePlanting",
+        contracts.gardenContract.ops["movePlanting"],
+      ),
+      options: rpcQuery(
+        "garden",
+        "options",
+        contracts.gardenContract.ops["options"],
+      ),
+      overview: rpcQuery(
+        "garden",
+        "overview",
+        contracts.gardenContract.ops["overview"],
+      ),
+      recordEntry: rpcMutation(
+        "garden",
+        "recordEntry",
+        contracts.gardenContract.ops["recordEntry"],
+      ),
+      splitPlanting: rpcMutation(
+        "garden",
+        "splitPlanting",
+        contracts.gardenContract.ops["splitPlanting"],
+      ),
+      startPlanting: rpcMutation(
+        "garden",
+        "startPlanting",
+        contracts.gardenContract.ops["startPlanting"],
+      ),
+    },
     householdContribution: {
       ledger: rpcQuery(
         "householdContribution",
@@ -1351,6 +1403,20 @@ export const httpContract = httpContractBuilder.router(
       image: {
         update: resourceUpdate("image", "images"),
         delete: resourceDelete("image", "images"),
+      },
+      planting: {
+        list: resourceList("planting", "plantings"),
+        get: resourceGet("planting", "plantings"),
+        create: resourceCreate("planting", "plantings"),
+        update: resourceUpdate("planting", "plantings"),
+        delete: resourceDelete("planting", "plantings"),
+      },
+      gardenEntry: {
+        list: resourceList("gardenEntry", "garden-entries"),
+        get: resourceGet("gardenEntry", "garden-entries"),
+        create: resourceCreate("gardenEntry", "garden-entries"),
+        update: resourceUpdate("gardenEntry", "garden-entries"),
+        delete: resourceDelete("gardenEntry", "garden-entries"),
       },
     },
   },
