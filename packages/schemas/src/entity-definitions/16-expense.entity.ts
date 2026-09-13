@@ -601,6 +601,7 @@ export default defineEntity({
     create: { module: "@cubby/schemas/project", export: "expenseCreateInput" },
     update: { module: "@cubby/schemas/project", export: "expenseUpdateData" },
     output: { module: "@cubby/schemas/project", export: "expenseOut" },
+    list: { module: "@cubby/schemas/project", export: "expenseListItemOut" },
   },
   filters: {
     audit: true,
@@ -1021,7 +1022,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: "borrowed",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

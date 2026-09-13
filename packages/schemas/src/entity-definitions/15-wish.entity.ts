@@ -164,6 +164,7 @@ export default defineEntity({
     create: { module: "@cubby/schemas/wish", export: "wishCreateInput" },
     update: { module: "@cubby/schemas/wish", export: "wishUpdateData" },
     output: { module: "@cubby/schemas/wish", export: "wishOut" },
+    list: { module: "@cubby/schemas/wish", export: "wishListItemOut" },
   },
   filters: {
     audit: true,
@@ -236,7 +237,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: "borrowed",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

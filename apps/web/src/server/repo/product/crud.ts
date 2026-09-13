@@ -104,6 +104,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import {
   productAcquisitionDateFilterSql,
@@ -988,11 +989,15 @@ export const productList = async (
     db,
     pricedResults,
   );
-  const products = ledgeredResults.map((prod) =>
-    dbProductToListAPI({
-      ...prod,
-      dataQuality: qualities.get(prod.id)!,
-    }),
+  const products = await withDisplayImages(
+    db,
+    "product",
+    ledgeredResults,
+    (prod, displayImages) =>
+      dbProductToListAPI(
+        { ...prod, dataQuality: qualities.get(prod.id)! },
+        displayImages,
+      ),
   );
 
   const priceSum = Number(aggregates[0]?.priceSum ?? 0);

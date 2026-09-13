@@ -43,7 +43,7 @@ import {
   ImageStatus,
   ImageStorageStatus,
 } from "./image";
-import { imageUrlSummary } from "./image-summary";
+import { displayImagesField, imageUrlSummary } from "./image-summary";
 import {
   locationAncestorFields,
   locationAncestorOut,
@@ -801,6 +801,7 @@ export type ProductInventoryEntriesByIdOut = z.infer<
 
 export const productListItemOut = z.object({
   ...productTopLevelFields,
+  displayImages: displayImagesField,
   unitMappings: z.array(unitMappingOut),
   ingredient: productIngredientOut.nullable(),
   inventoryEntry: z.array(productListInventoryEntryOut),

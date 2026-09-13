@@ -23408,6 +23408,9 @@
           },
           "product": {
             "$ref": "#/components/schemas/CookbookProductSummary"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
           }
         },
         "required": [
@@ -23418,7 +23421,8 @@
           "recipeCount",
           "coverUrl",
           "sourceRecipeCount",
-          "needsReextract"
+          "needsReextract",
+          "displayImages"
         ],
         "additionalProperties": false
       },
@@ -24043,6 +24047,26 @@
           }
         },
         "required": ["sourceId", "tag"]
+      },
+      "DisplayImagesField": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/DisplayImageSummary"
+        }
+      },
+      "DisplayImageSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ImageShortcode"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": ["id", "url"],
+        "additionalProperties": false
       },
       "DryRunPruneAliasesOut": {
         "type": "object",
@@ -25579,10 +25603,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema191"
+                "$ref": "#/components/schemas/output_schema206"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema191"
+                "$ref": "#/components/schemas/output_schema206"
               }
             },
             "required": ["scope", "grid"],
@@ -25592,19 +25616,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema191"
+                "$ref": "#/components/schemas/output_schema206"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema191"
+                    "$ref": "#/components/schemas/output_schema206"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema191"
+                    "$ref": "#/components/schemas/output_schema206"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema191"
+                    "$ref": "#/components/schemas/output_schema206"
                   }
                 },
                 "required": [
@@ -26175,13 +26199,141 @@
           "other_adjustment"
         ]
       },
+      "ExpenseListItemOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ExpenseShortcode"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "cost": {
+            "description": "Dollars",
+            "$ref": "#/components/schemas/WholeCentAmount"
+          },
+          "date": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "lineKind": {
+            "$ref": "#/components/schemas/output_schema209"
+          },
+          "lineBasis": {
+            "$ref": "#/components/schemas/output_schema210"
+          },
+          "costType": {
+            "$ref": "#/components/schemas/CostType"
+          },
+          "trade": {
+            "$ref": "#/components/schemas/Trade"
+          },
+          "url": {
+            "type": ["string", "null"]
+          },
+          "notes": {
+            "type": ["string", "null"]
+          },
+          "future": {
+            "type": "boolean"
+          },
+          "projectId": {
+            "$ref": "#/components/schemas/ProjectShortcode"
+          },
+          "productId": {
+            "description": "Optional link to the product this expense bought. A negative-cost expense on the same product records an exit (sale, return, or a 0-cost disposal).",
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "productQuantity": {
+            "$ref": "#/components/schemas/SignedProductQuantity"
+          },
+          "vendor": {
+            "type": ["string", "null"]
+          },
+          "orderId": {
+            "type": ["string", "null"]
+          },
+          "purchaseId": {
+            "$ref": "#/components/schemas/PurchaseShortcode"
+          },
+          "purchaseDate": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "purchaseDisplayLabel": {
+            "type": ["string", "null"]
+          },
+          "vendorId": {
+            "$ref": "#/components/schemas/VendorShortcode"
+          },
+          "vendorLogo": {
+            "$ref": "#/components/schemas/ImageUrlSummary"
+          },
+          "orderUrl": {
+            "type": ["string", "null"],
+            "format": "uri"
+          },
+          "projectName": {
+            "type": ["string", "null"]
+          },
+          "productName": {
+            "type": ["string", "null"]
+          },
+          "beneficiaries": {
+            "$ref": "#/components/schemas/LedgerAttributions"
+          },
+          "funders": {
+            "$ref": "#/components/schemas/LedgerAttributions"
+          },
+          "sourceClaims": {
+            "$ref": "#/components/schemas/LedgerSourceClaimsOut"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "date",
+          "lineKind",
+          "lineBasis",
+          "costType",
+          "trade",
+          "url",
+          "notes",
+          "future",
+          "vendor",
+          "orderId",
+          "purchaseDisplayLabel",
+          "orderUrl",
+          "projectName",
+          "productName",
+          "beneficiaries",
+          "funders",
+          "sourceClaims",
+          "createdAt",
+          "updatedAt",
+          "displayImages"
+        ],
+        "additionalProperties": false
+      },
       "ExpenseListPage": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ExpenseOut"
+              "$ref": "#/components/schemas/ExpenseListItemOut"
             }
           },
           "meta": {
@@ -26243,12 +26395,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
-            "$ref": "#/components/schemas/ExpenseLineKind"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "lineBasis": {
-            "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
-            "$ref": "#/components/schemas/ExpenseLineBasis"
+            "$ref": "#/components/schemas/output_schema210"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -27979,6 +28129,9 @@
           },
           "plantingName": {
             "type": ["string", "null"]
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
           }
         },
         "required": [
@@ -27992,7 +28145,8 @@
           "createdAt",
           "updatedAt",
           "locationName",
-          "plantingName"
+          "plantingName",
+          "displayImages"
         ],
         "additionalProperties": false
       },
@@ -30817,6 +30971,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          },
           "product": {
             "type": "array",
             "items": {
@@ -30844,6 +31001,7 @@
           "gardenGuideKey",
           "createdAt",
           "updatedAt",
+          "displayImages",
           "product",
           "appearsInRecipes",
           "ownRecipeCount"
@@ -32244,6 +32402,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          },
           "product": {
             "$ref": "#/components/schemas/InventoryListProductOut"
           },
@@ -32258,6 +32419,7 @@
           "placement",
           "createdAt",
           "updatedAt",
+          "displayImages",
           "product",
           "location"
         ],
@@ -33822,6 +33984,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          },
           "children": {
             "type": "array",
             "items": {
@@ -33947,6 +34112,7 @@
           "images",
           "createdAt",
           "updatedAt",
+          "displayImages",
           "children",
           "inventoryEntries"
         ],
@@ -34622,13 +34788,13 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema206"
+                  "$ref": "#/components/schemas/output_schema256"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema206"
+                  "$ref": "#/components/schemas/output_schema256"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema208"
+                  "$ref": "#/components/schemas/output_schema258"
                 }
               },
               "required": ["name", "inputSchema"],
@@ -34732,10 +34898,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema209"
+                  "$ref": "#/components/schemas/output_schema259"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema210"
+                  "$ref": "#/components/schemas/output_schema260"
                 }
               },
               "required": [
@@ -34827,7 +34993,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema211"
+              "$ref": "#/components/schemas/output_schema261"
             }
           },
           "tools": {
@@ -34845,13 +35011,13 @@
                   "type": ["string", "null"]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema206"
+                  "$ref": "#/components/schemas/output_schema256"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema206"
+                  "$ref": "#/components/schemas/output_schema256"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema208"
+                  "$ref": "#/components/schemas/output_schema258"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -34895,19 +35061,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema211"
+                    "$ref": "#/components/schemas/output_schema261"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema209"
+                    "$ref": "#/components/schemas/output_schema259"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema210"
+                    "$ref": "#/components/schemas/output_schema260"
                   }
                 }
               },
@@ -34934,25 +35100,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema212"
+              "$ref": "#/components/schemas/output_schema262"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema212"
+              "$ref": "#/components/schemas/output_schema262"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema212"
+              "$ref": "#/components/schemas/output_schema262"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema212"
+              "$ref": "#/components/schemas/output_schema262"
             }
           }
         },
@@ -36692,7 +36858,13 @@
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema191": {
+      "output_schema200": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/ProjectShortcode"
+        }
+      },
+      "output_schema206": {
         "type": "object",
         "properties": {
           "current": {
@@ -36705,7 +36877,15 @@
         "required": ["current"],
         "additionalProperties": false
       },
-      "output_schema195": {
+      "output_schema209": {
+        "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
+        "$ref": "#/components/schemas/ExpenseLineKind"
+      },
+      "output_schema210": {
+        "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
+        "$ref": "#/components/schemas/ExpenseLineBasis"
+      },
+      "output_schema245": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -36734,7 +36914,7 @@
           }
         }
       },
-      "output_schema196": {
+      "output_schema246": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -36744,7 +36924,7 @@
           }
         ]
       },
-      "output_schema206": {
+      "output_schema256": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -36753,7 +36933,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema208": {
+      "output_schema258": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -36771,7 +36951,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema209": {
+      "output_schema259": {
         "type": "object",
         "properties": {
           "id": {
@@ -36787,7 +36967,7 @@
         "required": ["id", "name", "email"],
         "additionalProperties": false
       },
-      "output_schema210": {
+      "output_schema260": {
         "type": "object",
         "properties": {
           "id": {
@@ -36800,7 +36980,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema211": {
+      "output_schema261": {
         "type": "object",
         "properties": {
           "day": {
@@ -36825,7 +37005,7 @@
         "required": ["day", "success", "error", "total"],
         "additionalProperties": false
       },
-      "output_schema212": {
+      "output_schema262": {
         "type": "object",
         "properties": {
           "key": {
@@ -36842,6 +37022,12 @@
         },
         "required": ["key", "label", "count"],
         "additionalProperties": false
+      },
+      "output_schema266": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WishCandidateOut"
+        }
       },
       "output_schema29": {
         "type": "array",
@@ -39118,6 +39304,9 @@
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          },
           "unitMappings": {
             "type": "array",
             "items": {
@@ -39176,6 +39365,7 @@
           "dataQuality",
           "createdAt",
           "updatedAt",
+          "displayImages",
           "unitMappings",
           "inventoryEntry",
           "expenseCount",
@@ -42476,13 +42666,114 @@
           "trip"
         ]
       },
+      "ProjectListItemOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ProjectShortcode"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectStatus"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProjectKind"
+          },
+          "locations": {
+            "$ref": "#/components/schemas/input_schema45"
+          },
+          "costEstimate": {
+            "$ref": "#/components/schemas/PositiveMoney",
+            "description": "Budget estimate in dollars"
+          },
+          "parentProjectId": {
+            "$ref": "#/components/schemas/ProjectShortcode"
+          },
+          "startDate": {
+            "description": "Manual start override; usually null",
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "endDate": {
+            "description": "Manual end override; usually null",
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "icon": {
+            "type": ["string", "null"],
+            "description": "Emoji shown next to the name"
+          },
+          "notes": {
+            "type": ["string", "null"],
+            "description": "Freeform markdown"
+          },
+          "googleDriveFolderUrl": {
+            "type": ["string", "null"],
+            "description": "Complete HTTPS drive.google.com folder URL; empty input clears the field"
+          },
+          "notionPageUrl": {
+            "type": ["string", "null"],
+            "description": "Complete HTTPS notion.so/notion.site page URL (including subdomains) or app.notion.com page URL; empty input clears the field"
+          },
+          "parentProjectName": {
+            "type": ["string", "null"]
+          },
+          "childProjectIds": {
+            "$ref": "#/components/schemas/output_schema200"
+          },
+          "blockedByIds": {
+            "$ref": "#/components/schemas/output_schema200"
+          },
+          "blockingIds": {
+            "$ref": "#/components/schemas/output_schema200"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "rollup": {
+            "$ref": "#/components/schemas/ProjectOutputFieldsProjectRollup"
+          },
+          "dates": {
+            "$ref": "#/components/schemas/ProjectOutputFieldsProjectDateWindow"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "locations",
+          "icon",
+          "notes",
+          "parentProjectName",
+          "childProjectIds",
+          "blockedByIds",
+          "blockingIds",
+          "createdAt",
+          "updatedAt",
+          "rollup",
+          "dates",
+          "displayImages"
+        ],
+        "additionalProperties": false
+      },
       "ProjectListPage": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ProjectOut"
+              "$ref": "#/components/schemas/ProjectListItemOut"
             }
           },
           "meta": {
@@ -42537,11 +42828,7 @@
             "$ref": "#/components/schemas/ProjectKind"
           },
           "locations": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "House/site names, free-form"
+            "$ref": "#/components/schemas/input_schema45"
           },
           "costEstimate": {
             "$ref": "#/components/schemas/PositiveMoney",
@@ -42578,22 +42865,13 @@
             "type": ["string", "null"]
           },
           "childProjectIds": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProjectShortcode"
-            }
+            "$ref": "#/components/schemas/output_schema200"
           },
           "blockedByIds": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProjectShortcode"
-            }
+            "$ref": "#/components/schemas/output_schema200"
           },
           "blockingIds": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ProjectShortcode"
-            }
+            "$ref": "#/components/schemas/output_schema200"
           },
           "createdAt": {
             "type": "string",
@@ -43883,13 +44161,114 @@
         "required": ["id", "name", "cost", "projectName"],
         "additionalProperties": false
       },
+      "PurchaseListItemOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/PurchaseShortcode"
+          },
+          "vendorId": {
+            "$ref": "#/components/schemas/VendorShortcode"
+          },
+          "orderId": {
+            "type": ["string", "null"]
+          },
+          "displayLabel": {
+            "type": ["string", "null"]
+          },
+          "date": {
+            "$ref": "#/components/schemas/input_schema33"
+          },
+          "statedTotal": {
+            "$ref": "#/components/schemas/WholeCentAmount"
+          },
+          "notes": {
+            "type": ["string", "null"]
+          },
+          "vendorName": {
+            "type": ["string", "null"]
+          },
+          "vendorLogo": {
+            "$ref": "#/components/schemas/ImageUrlSummary"
+          },
+          "orderUrl": {
+            "type": ["string", "null"],
+            "format": "uri"
+          },
+          "expenseCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "unpricedExpenseCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "expenseTotal": {
+            "$ref": "#/components/schemas/Money"
+          },
+          "reconciliation": {
+            "$ref": "#/components/schemas/PurchaseFieldsPurchaseReconciliation"
+          },
+          "financialReconciliation": {
+            "$ref": "#/components/schemas/FinancialReconciliationSummary"
+          },
+          "documentCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "images": {
+            "$ref": "#/components/schemas/PurchaseImages"
+          },
+          "dataQuality": {
+            "$ref": "#/components/schemas/DataQuality"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          }
+        },
+        "required": [
+          "id",
+          "vendorId",
+          "orderId",
+          "displayLabel",
+          "date",
+          "notes",
+          "vendorName",
+          "orderUrl",
+          "expenseCount",
+          "unpricedExpenseCount",
+          "expenseTotal",
+          "reconciliation",
+          "financialReconciliation",
+          "documentCount",
+          "images",
+          "dataQuality",
+          "createdAt",
+          "updatedAt",
+          "displayImages"
+        ],
+        "additionalProperties": false
+      },
       "PurchaseListPage": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/PurchaseOut"
+              "$ref": "#/components/schemas/PurchaseListItemOut"
             }
           },
           "meta": {
@@ -43967,8 +44346,7 @@
             "type": ["string", "null"]
           },
           "date": {
-            "description": "The vendor order or receipt date",
-            "$ref": "#/components/schemas/PlainDate"
+            "$ref": "#/components/schemas/input_schema33"
           },
           "statedTotal": {
             "$ref": "#/components/schemas/WholeCentAmount"
@@ -45414,11 +45792,8 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "images": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ImageOut"
-            }
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
           }
         },
         "required": [
@@ -45429,7 +45804,7 @@
           "meta",
           "mealCount",
           "sectionCount",
-          "images"
+          "displayImages"
         ],
         "additionalProperties": false
       },
@@ -47062,13 +47437,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema195"
+                "$ref": "#/components/schemas/output_schema245"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema195"
+                "$ref": "#/components/schemas/output_schema245"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema195"
+                "$ref": "#/components/schemas/output_schema245"
               }
             },
             "required": ["cost", "weight", "nutrients"],
@@ -47078,10 +47453,10 @@
             "type": ["number", "null"]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema196"
+            "$ref": "#/components/schemas/output_schema246"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema196"
+            "$ref": "#/components/schemas/output_schema246"
           },
           "nutrient": {
             "oneOf": [
@@ -50918,13 +51293,62 @@
         },
         "required": ["name"]
       },
+      "WishListItemOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/WishShortcode"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "notes": {
+            "type": ["string", "null"]
+          },
+          "acquiredAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+            "description": "When last verified in an audit session (null = never)"
+          },
+          "candidates": {
+            "$ref": "#/components/schemas/output_schema266"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          },
+          "displayImages": {
+            "$ref": "#/components/schemas/DisplayImagesField"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "notes",
+          "acquiredAt",
+          "candidates",
+          "createdAt",
+          "updatedAt",
+          "displayImages"
+        ],
+        "additionalProperties": false
+      },
       "WishListPage": {
         "type": "object",
         "properties": {
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/WishOut"
+              "$ref": "#/components/schemas/WishListItemOut"
             }
           },
           "meta": {
@@ -50951,13 +51375,11 @@
           "acquiredAt": {
             "type": ["string", "null"],
             "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$",
+            "description": "When last verified in an audit session (null = never)"
           },
           "candidates": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WishCandidateOut"
-            }
+            "$ref": "#/components/schemas/output_schema266"
           },
           "createdAt": {
             "type": "string",

@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/external-id";
 import { gardenLocationKind } from "@cubby/schemas/garden-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { DisplayImageSummary } from "@cubby/schemas/image-summary";
 import type {
   InventoryListProductOut,
   ProductInventoryEmbedOut,
@@ -363,12 +364,14 @@ const deriveProductQuantitySummary = (
 
 export const dbProductToListAPI = (
   productData: ProductListDB,
+  displayImages: DisplayImageSummary[],
 ): ProductListItem => {
   const inventoryEntry = mapProductListInventoryEntries(
     productData.inventoryEntry,
   );
   const result = {
     ...mapDbProductToTopLevel(productData),
+    displayImages,
     ingredient:
       productData.ingredient && isNotDeleted(productData.ingredient)
         ? mapDbProductIngredient(productData.ingredient)

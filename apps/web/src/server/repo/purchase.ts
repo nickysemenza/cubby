@@ -25,6 +25,7 @@ import type {
   MergePurchasesOut,
   PurchaseCreateInput,
   PurchaseFilters,
+  PurchaseListItemOut,
   PurchaseOut,
   PurchaseUpdateData,
   ReclassifyPurchaseDocumentInput,
@@ -98,6 +99,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import {
   assertQuantitySignMatchesCost,
   dbExpenseToAPI,
@@ -576,7 +578,7 @@ export const purchaseList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-): Promise<{ data: PurchaseOut[]; count: number }> => {
+): Promise<{ data: PurchaseListItemOut[]; count: number }> => {
   const whereClause = await buildPurchaseWhereClause(db, filters);
   const { take, skip } = purchaseScaffold.page(pagination);
 
@@ -609,7 +611,7 @@ export const purchaseList = async (
   ]);
 
   return {
-    data: rows.map((row) =>
+    data: await withDisplayImages(db, "purchase", rows, (row) =>
       dbPurchaseToAPI(
         row,
         dataQualities.get(row.id)!,

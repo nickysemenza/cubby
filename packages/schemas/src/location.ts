@@ -34,6 +34,7 @@ import {
   locationType,
   locationValuation,
 } from "./location-fields";
+import { displayImagesField } from "./image-summary";
 
 export {
   locationIdentityProductOut,
@@ -320,6 +321,7 @@ const locationInventoryWithProductOut = z.object({
 
 const locationListItemFields = {
   ...locationOutFields,
+  displayImages: displayImagesField,
   children: z.array(locationListRefOut),
   parent: locationListRefOut.nullable(),
   inventoryEntries: z.array(locationInventoryWithProductOut),

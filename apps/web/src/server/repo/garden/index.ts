@@ -62,6 +62,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   resolveAllOrThrow,
@@ -833,7 +834,10 @@ export const gardenEntryList = async (
       }),
     count: () => countWhere(db, gardenEntry, where),
   });
-  return { data: rows.map(mapEntry), count };
+  return {
+    data: await withDisplayImages(db, "gardenEntry", rows, mapEntry),
+    count,
+  };
 };
 
 export const gardenOverview = async (db: Database) => {

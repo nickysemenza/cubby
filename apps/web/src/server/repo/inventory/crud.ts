@@ -458,11 +458,15 @@ export const inventoryentryList = async (
     .map((id) => resultsById.get(id))
     .filter((r): r is NonNullable<typeof r> => r !== undefined);
   const pricing = await loadInventoryEntryPricing(db, orderedResults);
-  const inventoryEntries = orderedResults.map((entry) =>
-    dbInventoryEntryToListAPI(
-      entry,
-      requireLoadedProductPricing(pricing, entry.product.id),
-    ),
+  const inventoryEntries = await withDisplayImages(
+    db,
+    "inventory",
+    orderedResults,
+    (entry) =>
+      dbInventoryEntryToListAPI(
+        entry,
+        requireLoadedProductPricing(pricing, entry.product.id),
+      ),
   );
   const valuationSum = Number(countResult?.valuationSum ?? 0);
   return {
@@ -727,3 +731,5 @@ export const deleteInventoryEntries = async (
 };
 
 import type { UNRESOLVABLE_ENTITY_FILTER } from "@cubby/shared";
+
+import { withDisplayImages } from "~/server/repo/entity-display-image";

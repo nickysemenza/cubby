@@ -51,6 +51,7 @@ import {
   relations,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { getProductCoverImageUrlsByProductIds } from "~/server/repo/product";
 import { markProductConversionCoverageInputStale } from "~/server/repo/product/conversion-coverage";
 import { dbProductToListAPI } from "~/server/repo/product/mappers";
@@ -176,12 +177,18 @@ export async function listKitComponentRows(
   );
   const priced = await enrichProductRowsWithPricing(db, rows);
   const ledgered = await enrichProductRowsWithQuantityLedger(db, priced);
-  const byId = new Map(
-    ledgered.map((row) => [
-      row.id,
-      dbProductToListAPI({ ...row, dataQuality: qualities.get(row.id)! }),
-    ]),
+  const items = await withDisplayImages(
+    db,
+    "product",
+    ledgered,
+    (row, displayImages) =>
+      dbProductToListAPI(
+        { ...row, dataQuality: qualities.get(row.id)! },
+        displayImages,
+      ),
   );
+  // Keyed by the private uuid the edges carry, not the item's public shortcode.
+  const byId = new Map(ledgered.map((row, index) => [row.id, items[index]!]));
 
   return edges.flatMap((edge) => {
     const item = byId.get(edge.componentProductId);

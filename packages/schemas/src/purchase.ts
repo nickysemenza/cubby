@@ -31,6 +31,7 @@ import {
   PRODUCT_QUANTITY_DESCRIPTION,
   tradeSchema,
 } from "./project";
+import { displayImagesField } from "./image-summary";
 
 export const splitExpenseOut = z.array(expenseOut);
 
@@ -145,6 +146,11 @@ export type PurchaseSortField = GeneratedEntitySortField<"purchase">;
  */
 export const purchaseOut = z.object(generatedPurchaseFieldSchemas.read);
 export type PurchaseOut = z.infer<typeof purchaseOut>;
+
+export const purchaseListItemOut = purchaseOut.extend({
+  displayImages: displayImagesField,
+});
+export type PurchaseListItemOut = z.infer<typeof purchaseListItemOut>;
 
 export const purchaseListResponse = createPaginatedResponseSchema(purchaseOut);
 export type PurchaseListResponse = z.infer<typeof purchaseListResponse>;

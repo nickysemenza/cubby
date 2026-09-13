@@ -32,6 +32,7 @@ import {
 import { unitMappingOut } from "./unitmapping";
 import { inventoryPlacement as cycleSafeInventoryPlacement } from "./inventory-fields";
 import { generatedInventoryItemFieldSchemas } from "./generated/entity-field-schemas.inventory.gen";
+import { displayImagesField } from "./image-summary";
 
 export { positiveAmount } from "./codec";
 
@@ -177,6 +178,7 @@ export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 
 const inventoryListItemFields = {
   ...inventoryEntryFields,
+  displayImages: displayImagesField,
   product: inventoryListProductOut,
   location: inventoryListLocationOut,
 };

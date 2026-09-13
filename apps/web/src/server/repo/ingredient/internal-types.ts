@@ -9,6 +9,7 @@
 
 import type { DataQuality } from "@cubby/schemas/data-quality";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { DisplayImageSummary } from "@cubby/schemas/image-summary";
 import type { IngredientOut } from "@cubby/schemas/ingredient";
 import {
   type IngredientListItem,
@@ -139,9 +140,11 @@ type IngredientListDB = IngredientSelect & {
 
 export const dbIngredientToListAPI = (
   ingredientData: IngredientListDB,
+  displayImages: DisplayImageSummary[],
 ): IngredientListItem => {
   const result = {
     ...dbIngredientToTopLevel(ingredientData),
+    displayImages,
     product: mapIngredientProducts(ingredientData.product),
     appearsInRecipes: ingredientData.appearsInRecipes ?? [],
     ownRecipeCount: Number(ingredientData.ownRecipeCount),

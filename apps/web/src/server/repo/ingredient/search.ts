@@ -60,6 +60,7 @@ import {
   relations,
 } from "~/server/repo/database-helpers";
 import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import {
   enrichProductRowsWithPricing,
   loadProductPricingForIngredientIds,
@@ -705,15 +706,22 @@ const ingredientListImpl = async (
     qualifiedProducts.map((product) => [product.id, product.dataQuality]),
   );
   return {
-    data: results.map((row) =>
-      dbIngredientToListAPI({
-        ...row,
-        product: row.product.map((product) => ({
-          ...product,
-          pricing: pricingById.get(product.id),
-          dataQuality: qualityById.get(product.id)!,
-        })),
-      }),
+    data: await withDisplayImages(
+      db,
+      "ingredient",
+      results,
+      (row, displayImages) =>
+        dbIngredientToListAPI(
+          {
+            ...row,
+            product: row.product.map((product) => ({
+              ...product,
+              pricing: pricingById.get(product.id),
+              dataQuality: qualityById.get(product.id)!,
+            })),
+          },
+          displayImages,
+        ),
     ),
     count: totalCount,
   };

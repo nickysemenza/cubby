@@ -22,6 +22,7 @@ function makeInventoryItem(params: {
   const now = new Date();
   return {
     id: testShortcode("inventory", params.id),
+    displayImages: [],
     createdAt: now,
     updatedAt: now,
     amount: { value: 1, unit: "each" },

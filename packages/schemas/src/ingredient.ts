@@ -27,6 +27,7 @@ import {
   recipeUsageOut,
 } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
+import { displayImagesField } from "./image-summary";
 
 export const ingredientBaseFields = {
   name: generatedIngredientFieldSchemas.read.name,
@@ -187,6 +188,7 @@ export type IngredientWithFoodLeanOut = z.infer<
 // refs of recipes it appears in. USDA summaries hydrate separately.
 export const ingredientListItemOut = z.object({
   ...ingredientOutFields,
+  displayImages: displayImagesField,
   product: z.array(productWithMappingsOut),
   appearsInRecipes: z.array(recipeRefOut),
   ownRecipeCount: z.number().int(),

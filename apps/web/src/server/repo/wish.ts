@@ -11,6 +11,7 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   WishCreateInput,
   WishFilters,
+  WishListItemOut,
   WishOut,
   WishUpdateData,
 } from "@cubby/schemas/wish";
@@ -34,6 +35,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   effectiveProductPriceSql,
@@ -277,7 +279,7 @@ export const wishList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{
-  data: WishOut[];
+  data: WishListItemOut[];
   count: number;
   sums: { priceLow: number; priceHigh: number };
 }> => {
@@ -305,8 +307,9 @@ export const wishList = async (
       .from(wish)
       .where(where),
   ]);
+  const hydrated = await hydrateWishes(db, rows);
   return {
-    data: await hydrateWishes(db, rows),
+    data: await withDisplayImages(db, "wish", hydrated, (row) => row),
     count,
     sums: {
       priceLow: Number(totals?.priceLow ?? 0),

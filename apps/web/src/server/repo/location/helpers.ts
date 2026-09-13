@@ -94,7 +94,7 @@ export const dbLocationToListAPI = (
   locationData: LocationListDB,
   pricingByProductId: ReadonlyMap<ProductId, ProductPricing>,
   valuations?: ReadonlyMap<LocationId, LocationValuation>,
-): LocationListItemOut => ({
+): Omit<LocationListItemOut, "displayImages"> => ({
   ...dbLocationToAPI(locationData, valuations),
   parent:
     locationData.parent && isNotDeleted(locationData.parent)

@@ -20,8 +20,7 @@ import {
   ingredientShortcode,
   recipeShortcode,
 } from "./identifiers";
-import { imageOut } from "./image";
-import { imageUrlSummary } from "./image-summary";
+import { displayImagesField, imageUrlSummary } from "./image-summary";
 import {
   createPaginatedResponseSchema,
   entityFilterList,
@@ -206,11 +205,10 @@ export const recipeListItemOut = z.object({
   /** Live sections. Cheap correlated scalar — the section GRAPH is not on the
    *  list path (dropping it was the ~4.7s over-fetch fix). */
   sectionCount: z.number().int(),
-  // Single cover image only (sortOrder-first, limit 1) — the list only ever
-  // renders a thumbnail, and loading every image was the over-fetch the
-  // `totals` comment above already dropped `.sections` for. Backs the
-  // standard image column (createImageColumn).
-  images: z.array(imageOut),
+  // The list only ever renders a thumbnail, so the section graph AND the full
+  // image projection stay off this path (loading every image was the same
+  // over-fetch the `totals` comment above dropped `.sections` for).
+  displayImages: displayImagesField,
 });
 export type RecipeListItem = z.infer<typeof recipeListItemOut>;
 
@@ -236,7 +234,10 @@ export const recipeDryRunRecomputeTotalsOut = z.object({
   total: z.number().int().nonnegative(),
 });
 
-export const cookbookSummary = z.object(generatedCookbookFieldSchemas.read);
+export const cookbookSummary = z.object({
+  ...generatedCookbookFieldSchemas.read,
+  displayImages: displayImagesField,
+});
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
 
 /**

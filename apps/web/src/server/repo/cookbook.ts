@@ -45,6 +45,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
@@ -256,7 +257,10 @@ const readCookbookSummaries = async (
     rows.flatMap((r) => (r.productId ? [r.productId] : [])),
   );
 
-  return rows.map(
+  return withDisplayImages(
+    db,
+    "cookbook",
+    rows,
     ({ productId, productShortcode, productName, coverKey, ...r }) => ({
       ...r,
       id: parseShortcodeFor("cookbook", r.shortcode),
