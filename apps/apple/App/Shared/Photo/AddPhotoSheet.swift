@@ -117,9 +117,11 @@ struct AddPhotoSheet: View {
                 Button {
                     previewing = true
                 } label: {
+                    // A just-picked local image has no bucket URL to size a transform for.
                     PhotoAttachmentImage(
                         photo: PhotoAttachment(
-                            id: "selection", filename: "Selected photo", source: .local(image))
+                            id: "selection", filename: "Selected photo", source: .local(image)),
+                        renderedWidth: nil
                     )
                     .frame(maxWidth: .infinity, maxHeight: 320)
                     .background(checkerboard)

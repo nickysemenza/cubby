@@ -20,7 +20,7 @@ export interface NativeCoverage {
 // Generated coverage stays one entity per line.
 // oxfmt-ignore
 export const ENTITY_NATIVE_COVERAGE = {
-  "product": {"httpActions":["get","list","update"],"imageAttach":true,"imageOrder":true,"rpcIds":["product.findOrCreateByUPC"]},
+  "product": {"httpActions":["get","list","update"],"imageAttach":true,"imageOrder":true,"rpcIds":["product.findOrCreateByCode","product.findOrCreateByUPC"]},
   "recipe": {"httpActions":["get","list","update"],"imageAttach":true,"imageOrder":true,"rpcIds":[]},
   "ingredient": {"httpActions":["get","list","update"],"imageAttach":false,"imageOrder":false,"rpcIds":[]},
   "cookbook": {"httpActions":[],"imageAttach":false,"imageOrder":false,"rpcIds":[]},
