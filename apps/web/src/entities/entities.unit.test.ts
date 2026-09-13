@@ -17,18 +17,13 @@ import {
 } from "./entities";
 
 describe("defaultSortFor", () => {
-  it("falls back to the generated default when the registry has no override", () => {
-    // `product` has no `list.defaultSort` override (WS4 dropped the
-    // redundant hand-listed copies that matched the generated default).
-    expect(
-      browserEntityDefinition("product").list?.defaultSort,
-    ).toBeUndefined();
+  it("reads product's default straight off the generated roster", () => {
     expect(defaultSortFor("product")).toBe(generatedEntitySort.product.default);
     expect(defaultSortFor("product")).toBe("createdAt");
   });
 
-  it("keeps vendor's deliberate override to spend, not the generated name default", () => {
-    expect(generatedEntitySort.vendor.default).toBe("name");
+  it("reads vendor's default sort as spend — the product decision now lives on the declaration, not a browser override", () => {
+    expect(generatedEntitySort.vendor.default).toBe("spend");
     expect(defaultSortFor("vendor")).toBe("spend");
   });
 });

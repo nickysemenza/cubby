@@ -110,7 +110,8 @@ export function VendorList() {
   // `entities/filter-manifest.tsx` drives all three surfaces at once — the Name
   // search box, the server `VendorFilters` object, and the `?q=` URL round-trip
   // that makes a filtered roster shareable. The roster opens on biggest
-  // spenders first — see `entities.vendor.list.defaultSort`.
+  // spenders first — see `model.sort.default` on
+  // `packages/schemas/src/entity-definitions/11-vendor.entity.ts`.
   //
   // Delete comes from the vendor contract: `deleteVendors` refuses while live
   // purchases still point at the vendor (VENDOR_HAS_PURCHASES) — the server

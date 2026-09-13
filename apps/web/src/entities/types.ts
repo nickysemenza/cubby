@@ -20,7 +20,6 @@ interface EntityDetailConfig {
 
 interface EntityListConfig {
   hasUnitMappings?: boolean;
-  defaultSort?: string;
   defaultDensity?: ListDefaultDensity;
   /**
    * Direction the list opens `defaultSort` in. Defaults to "desc", which is

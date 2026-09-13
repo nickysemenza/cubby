@@ -166,11 +166,22 @@ describe("EntityInspector sorting and edit intents", () => {
     expect(screen.getAllByText("full").length).toBeGreaterThan(0);
   });
 
-  it("shows usda-food has no declared sort roster (hand roster) and is not browser-editable", () => {
+  it("shows usda-food's declared sort default and relevance as a computed sort field, and that it's not browser-editable", () => {
     render(<EntityInspector entity="usda-food" count={0} />);
 
-    expect(screen.getByText("Declared")).toBeInTheDocument();
-    expect(screen.getByText("none (hand roster)")).toBeInTheDocument();
+    expect(screen.getByText("Sorting")).toBeInTheDocument();
+    // `fdc_id` (the default) also appears in the "Fields" chips, so assert
+    // presence rather than uniqueness.
+    expect(screen.getAllByText("fdc_id").length).toBeGreaterThan(0);
+    // `relevance` is one of usda-food's `computed` roster entries (a
+    // search-only synthetic score with no `model.fields` read projection) in
+    // entity-sort.gen.ts; it also appears in the "Fields" row above, so scope
+    // the assertion to "Computed".
+    const computedRow = screen.getByText("Computed").closest("div");
+    if (computedRow === null) throw new Error("Computed row not found");
+    expect(within(computedRow).getByText("relevance")).toBeInTheDocument();
+    // usda-food still has no entry in `entity-edit-intents.gen.ts` — read-only
+    // USDA reference data, unaffected by gaining a sort roster.
     expect(screen.getByText("not editable in the browser")).toBeInTheDocument();
   });
 });

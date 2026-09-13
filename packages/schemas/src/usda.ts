@@ -5,16 +5,10 @@ import {
   createPaginatedResponseSchema,
 } from "./pagination";
 import { generatedUSDAFoodFieldSchemas } from "./generated/entity-field-schemas.usda-food.gen";
+import { generatedEntitySort } from "./generated/entity-sort.gen";
+import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 
-export const usdaFoodSortableFields = [
-  "fdc_id",
-  "description",
-  "data_type",
-  "relevance",
-  "linkedProducts",
-] as const;
-
-export type USDAFoodSortField = (typeof usdaFoodSortableFields)[number];
+export type USDAFoodSortField = GeneratedEntitySortField<"usda-food">;
 
 export const usdaListInput = z.object({
   filters: z.object({
@@ -25,8 +19,8 @@ export const usdaListInput = z.object({
     linkedProductsOnly: z.boolean().optional(),
   }),
   ...createSortPaginationFields({
-    sortableFields: usdaFoodSortableFields,
-    defaultSort: "fdc_id",
+    sortableFields: generatedEntitySort["usda-food"].fields,
+    defaultSort: generatedEntitySort["usda-food"].default,
   }),
 });
 
