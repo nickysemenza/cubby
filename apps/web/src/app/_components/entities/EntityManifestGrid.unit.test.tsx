@@ -101,3 +101,20 @@ describe("EntityInspector presentation", () => {
     expect(screen.getByText("none (no wayfinding line)")).toBeInTheDocument();
   });
 });
+
+describe("EntityInspector native coverage", () => {
+  it("shows what the native client carries, distinct from what HTTP exposes", () => {
+    render(<EntityInspector entity="product" count={12} />);
+
+    expect(screen.getByText("Native app")).toBeInTheDocument();
+    expect(screen.getByText("HTTP exposes")).toBeInTheDocument();
+    expect(screen.getByText("Native client")).toBeInTheDocument();
+    expect(screen.getByText("product.findOrCreateByUPC")).toBeInTheDocument();
+    expect(screen.getByText("house (fallback)")).toBeInTheDocument();
+  });
+
+  it("renders the section for an entity the app never touches", () => {
+    render(<EntityInspector entity="cookbook" count={2} />);
+    expect(screen.getByText("Native app")).toBeInTheDocument();
+  });
+});

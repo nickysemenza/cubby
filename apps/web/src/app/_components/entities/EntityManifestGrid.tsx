@@ -39,6 +39,8 @@ import {
 import { viewsForEntity } from "~/entities/view-manifest";
 import { authClient } from "~/lib/auth-client";
 import { copyText } from "~/lib/clipboard";
+import { ENTITY_NATIVE_COVERAGE } from "~/lib/generated/entity-native-coverage.gen";
+import { HTTP_RESOURCES } from "~/lib/generated/http-resources.gen";
 import { cn } from "~/lib/utils";
 
 import { EntityReferenceGraph } from "./EntityReferenceGraph";
@@ -214,6 +216,7 @@ function ComparisonMatrix({
             <TableHead>Canonical</TableHead>
             <TableHead>Inbound aliases</TableHead>
             <TableHead>Prints labels</TableHead>
+            <TableHead>Native</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -256,6 +259,9 @@ function ComparisonMatrix({
                 </TableCell>
                 <TableCell>
                   <Bool value={printsLabels(entity)} />
+                </TableCell>
+                <TableCell className="text-xs whitespace-nowrap">
+                  {nativeCoverageLabel(entity)}
                 </TableCell>
               </TableRow>
             );
@@ -408,14 +414,75 @@ function PresentationSection({ entity }: { entity: Entity }) {
             <span key="icons" className="inline-flex items-center gap-2">
               <EntityIcon entity={entity} className="size-4" />
               <code>{metadata.icons.lucide}</code>
-              <span className="text-muted-foreground/60">·</span>
+              <span className="text-muted-foreground/60">web ·</span>
               <code>{metadata.icons.sfSymbol}</code>
+              <span className="text-muted-foreground/60">native</span>
             </span>,
           ],
           ["Empty state", emptyState.title],
           ["Empty copy", emptyState.description],
           ["Empty action", emptyState.actionLabel ?? dash],
           ["Images", images],
+        ]}
+      />
+    </Section>
+  );
+}
+
+/** `list · get · update` plus a `+N rpc` suffix; a dash when the app never touches it. */
+function nativeCoverageLabel(entity: Entity): string {
+  const coverage = ENTITY_NATIVE_COVERAGE[entity];
+  const actions = coverage.httpActions.join(" · ");
+  const rpc = coverage.rpcIds.length ? `+${coverage.rpcIds.length} rpc` : "";
+  const label = [actions, rpc].filter(Boolean).join(" ");
+  return label || "—";
+}
+
+/**
+ * The native shell draws four domain lines; the declaration vocabulary has
+ * five. Mirrors `AppDomain.init(_:)` in
+ * `apps/apple/App/Shared/Theme/PorcelainTokens.swift`: pantry files under
+ * House, and an entity on no line (image) files under House too.
+ */
+const nativeDomain = (domain: EntityPresentation["domain"]): string =>
+  domain === null || domain === "pantry" ? "house (fallback)" : domain;
+
+/**
+ * What the native app can do with this entity, from
+ * `entity-native-coverage.gen.ts` (emitted by the same script that writes
+ * `EntityOperations.swift`). "HTTP exposes" is the web API's resource verbs
+ * — what Swift's `httpActions` mirrors; "Native client" is the narrower set
+ * the filtered OpenAPI client actually carries (create/update/delete are
+ * opt-in via `native-operations.json`).
+ */
+function NativeSection({ entity }: { entity: Entity }) {
+  const metadata = entityInspectorMetadata[entity];
+  const coverage = ENTITY_NATIVE_COVERAGE[entity];
+  // SAFETY: `HTTP_RESOURCES` is `satisfies Partial<Record<Entity, …>>`; an
+  // entity with no HTTP resource simply has no entry.
+  const resource = (
+    HTTP_RESOURCES as Partial<Record<Entity, { verbs: readonly string[] }>>
+  )[entity];
+  return (
+    <Section title="Native app">
+      <ContractRows
+        rows={[
+          ["Domain (app)", nativeDomain(metadata.domain)],
+          ["Countable", <Bool key="countable" value={metadata.countable} />],
+          ["HTTP exposes", <Chips key="verbs" items={resource?.verbs ?? []} />],
+          [
+            "Native client",
+            <Chips key="native" items={coverage.httpActions} />,
+          ],
+          [
+            "Image attach / reorder",
+            <span key="images" className="inline-flex items-center gap-2">
+              <Bool value={coverage.imageAttach} />
+              <span className="text-muted-foreground/60">·</span>
+              <Bool value={coverage.imageOrder} />
+            </span>,
+          ],
+          ["RPC operations", <Chips key="rpc" items={coverage.rpcIds} />],
         ]}
       />
     </Section>
@@ -626,6 +693,8 @@ export function EntityInspector({
           ]}
         />
       </Section>
+
+      <NativeSection entity={entity} />
 
       <Collapsible>
         <div className="flex items-center justify-between border-y py-2">
