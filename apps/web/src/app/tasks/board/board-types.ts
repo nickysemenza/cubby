@@ -1,7 +1,6 @@
 import {
   type ProjectShortcode,
   projectShortcode,
-  type TaskShortcode,
   taskShortcode,
 } from "@cubby/schemas/identifiers";
 import {
@@ -21,13 +20,7 @@ import { z } from "zod";
  */
 
 /** The moved task's current coordinates — lets the drop handler diff for no-ops. */
-export type TaskCardDragData = {
-  taskBoardDrag: true;
-  taskId: TaskShortcode;
-  status: TaskStatus;
-  projectId: ProjectShortcode | null;
-  trade: Trade;
-};
+export type TaskCardDragData = z.infer<typeof taskCardDragDataSchema>;
 
 /**
  * A board axis value. Columns and swimlanes are the same three kinds; the
@@ -45,11 +38,7 @@ export type BoardLaneKey =
   | { kind: "trade"; trade: Trade };
 
 /** A cell drop target: its column, plus the lane row it sits in (null = no lanes). */
-export type BoardDropData = {
-  taskBoardTarget: true;
-  column: BoardColumnKey;
-  lane: BoardLaneKey | null;
-};
+export type BoardDropData = z.infer<typeof boardDropDataSchema>;
 
 /**
  * A card drop target: nested inside a cell target, it names the card the drop
@@ -58,12 +47,7 @@ export type BoardDropData = {
  * false — no axis change) can still resolve its coordinates from this alone.
  * The closest edge ("top"/"bottom") rides along via `attachClosestEdge`.
  */
-export type BoardCardDropData = {
-  taskBoardCardTarget: true;
-  column: BoardColumnKey;
-  lane: BoardLaneKey | null;
-  targetTaskId: TaskShortcode;
-};
+export type BoardCardDropData = z.infer<typeof boardCardDropDataSchema>;
 
 /** The fields a single drop can write — a subset of `taskUpdateData`. */
 export type TaskBoardPatch = {

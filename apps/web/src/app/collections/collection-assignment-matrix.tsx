@@ -40,6 +40,7 @@ import { IDEMPOTENT_MUTATION_RETRY } from "~/integrations/tanstack-query/query-p
 import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 
+import type { CollectionAssignmentSearch } from "./collection-assignment-search";
 import {
   CopyableShortcode,
   ProductContextLine,
@@ -55,16 +56,6 @@ const PAGE_SIZE_OPTIONS = [100, 250, 500] as const;
 const EMPTY_COLLECTIONS: CollectionSlug[] = [];
 type MatrixRow = CollectionMatrixRow;
 type CollectionAssignmentSubject = "product" | "location";
-
-export interface CollectionAssignmentSearch {
-  subject?: CollectionAssignmentSubject;
-  q?: string;
-  page?: number;
-  rows?: number;
-  sort?: CollectionMatrixSort;
-  collection?: CollectionSlug;
-  membership?: CollectionMatrixMembership;
-}
 
 export type CollectionAssignmentOperations = Pick<
   typeof collectionOperations,
@@ -610,7 +601,16 @@ export function CollectionAssignmentMatrix({
             aria-label="Rows per page"
             value={pageSize}
             onChange={(event) =>
-              onSearchChange({ rows: Number(event.target.value), page: 1 })
+              onSearchChange({
+                // SAFETY: the schema's `.refine` narrows to the literal options below
+                // (TS infers it as a type predicate); the select's own
+                // `<option>`s are generated from the same array, so the parsed
+                // value is always one of them.
+                rows: Number(
+                  event.target.value,
+                ) as (typeof PAGE_SIZE_OPTIONS)[number],
+                page: 1,
+              })
             }
           >
             {PAGE_SIZE_OPTIONS.map((option) => (

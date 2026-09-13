@@ -2,6 +2,7 @@ import { entityRefKey, type EntityRef } from "@cubby/schemas/entity";
 import type {
   EntityGraphEdge,
   EntityGraphPath,
+  EntityGraphPathsOutput,
 } from "@cubby/schemas/entity-graph";
 
 export type GraphPathSearchLimits = {
@@ -47,12 +48,7 @@ type Side = {
   visits: Map<string, Visit>;
 };
 
-export type GraphPathSearchResult = {
-  paths: EntityGraphPath[];
-  edges: EntityGraphEdge[];
-  completion: "exhausted" | "depth-limit" | "budget-limit";
-  shortestPathCertain: boolean;
-};
+export type GraphPathSearchResult = Omit<EntityGraphPathsOutput, "nodes">;
 
 const chunks = <T>(items: readonly T[], size: number): T[][] => {
   const result: T[][] = [];

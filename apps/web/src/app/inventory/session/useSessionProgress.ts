@@ -24,14 +24,6 @@ const AUDIT_SESSION_STORAGE_PREFIX = "cubby:audit-session:";
  */
 const SESSION_PROGRESS_VERSION = 4;
 
-export interface SessionSummary {
-  adjusted: number;
-  locations: number;
-  relocated: number;
-  removed: number;
-  verified: number;
-}
-
 /** Recount's slice of the persisted pass: what the queue core doesn't own. */
 interface SessionExtra {
   itemResolutions: [string, ItemResolution][];
@@ -67,6 +59,7 @@ const sessionSummarySchema = z.object({
   removed: z.number(),
   verified: z.number(),
 });
+export type SessionSummary = z.infer<typeof sessionSummarySchema>;
 
 const itemResolutionSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("verify") }),

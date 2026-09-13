@@ -5,6 +5,7 @@
  * while this module owns the persistent freshness contract. A failed provider
  * call never replaces a last-known answer with an empty successful result.
  */
+import type { UpcEnrichmentFreshness } from "@cubby/schemas/problems";
 import type { UPCLookupResponse } from "@cubby/upc-contract";
 import { inArray, sql } from "drizzle-orm";
 
@@ -15,17 +16,6 @@ import { getDb } from "~/server/repo/database-helpers";
 
 /** Provider data is advisory; refresh at most once per UPC per week. */
 const UPC_LOOKUP_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-
-export type UpcEnrichmentFreshness = {
-  /** fresh = all candidate answers checked this interval; stale = cached data survived an outage. */
-  status: "fresh" | "stale" | "unavailable";
-  /** Server time at which this view determined its provider state. */
-  checkedAt: Date;
-  /** Oldest cached answer used for this view, null when nothing was available. */
-  oldestFetchedAt: Date | null;
-  /** Number of candidate UPCs without a usable answer after the attempt. */
-  unavailableCount: number;
-};
 
 type CachedUpcLookup = {
   upc: string;

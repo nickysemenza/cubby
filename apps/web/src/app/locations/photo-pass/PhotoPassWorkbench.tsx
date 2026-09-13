@@ -22,7 +22,7 @@ import type {
  * bookkeeping, and the advance cursor all live in `_components/queue-pass`,
  * shared with the recount session and the ingredient review queue.
  */
-import type { InfLocation, LocationType } from "@cubby/schemas/location";
+import type { InfLocation } from "@cubby/schemas/location";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Camera, Check, Home, RotateCcw } from "lucide-react";
@@ -58,15 +58,9 @@ import { Spinner } from "~/components/ui/spinner";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 
+import type { PhotoPassSearch } from "./photo-pass-search";
 import { flattenPhotoStops, type PhotoStop } from "./photo-pass-utils";
 import { PhotoPassStop } from "./PhotoPassStop";
-
-export interface PhotoPassSearch {
-  parent?: LocationShortcode;
-  scope?: "house" | "scan";
-  all?: boolean;
-  type?: LocationType[];
-}
 
 const EMPTY_ROOTS: InfLocation[] = [];
 

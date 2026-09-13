@@ -1,4 +1,7 @@
-import { gardenLocationKind } from "@cubby/schemas/garden";
+import {
+  gardenLocationKind,
+  gardenLocationSummaryOut,
+} from "@cubby/schemas/garden";
 import { locationShortcode } from "@cubby/schemas/identifiers";
 import {
   locationCreateInput,
@@ -6,6 +9,7 @@ import {
 } from "@cubby/schemas/location";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import type { z } from "zod";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { Stack } from "~/components/layout";
@@ -17,12 +21,10 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { GardenField, GardenFormActions, GardenNotes } from "./garden-fields";
 import { GardenPicker } from "./garden-picker";
 
-export interface GardenLocation {
-  id: string;
-  name: string;
-  gardenKind: "bed" | "tray" | "other" | null;
-  gardenConditions: string | null;
-}
+export type GardenLocation = Pick<
+  z.infer<typeof gardenLocationSummaryOut>,
+  "id" | "name" | "gardenKind" | "gardenConditions"
+>;
 
 export function GardenLocationForm({
   location,

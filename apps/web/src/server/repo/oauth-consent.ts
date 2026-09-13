@@ -1,4 +1,5 @@
 import type { UserId } from "@cubby/schemas/identifiers";
+import type { ConnectedApp } from "@cubby/schemas/oauth";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -20,24 +21,6 @@ import { unwrapDb, withTransaction } from "~/server/repo/database-helpers";
  * real revoke has to touch tokens the plugin's `delete-consent` leaves alone
  * (see {@link revokeConnectedApp}).
  */
-
-export interface ConnectedApp {
-  consentId: string;
-  clientId: string;
-  name: string | null;
-  uri: string | null;
-  scopes: string[];
-  grantedAt: Date | null;
-  /** Live (unrevoked, unexpired) refresh tokens — i.e. can it still get in. */
-  activeTokens: number;
-  /**
-   * Newest refresh token, which stands in for "last used": the token endpoint
-   * rotates the refresh token on every use, so a fresh row means recent
-   * activity. Without it, several connect attempts from the same client are
-   * indistinguishable and there's no way to tell which one is still live.
-   */
-  lastActiveAt: Date | null;
-}
 
 /** Newest refresh token per (client, user) — see `ConnectedApp.lastActiveAt`. */
 const lastActiveExpr = sql<Date | null>`(
