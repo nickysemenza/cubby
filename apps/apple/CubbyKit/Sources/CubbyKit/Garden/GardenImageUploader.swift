@@ -18,17 +18,13 @@ public struct GardenImageUploader: Sendable {
         public let underlying: Error
     }
 
-    private let service: any PhotoService
-    private let put: @Sendable (Data, URL, String) async throws -> Void
+    private let pending: PendingImageUpload
 
     public init(
         service: any PhotoService,
-        put: @escaping @Sendable (Data, URL, String) async throws -> Void = { data, url, contentType in
-            try await PresignedUpload.put(data, to: url, contentType: contentType)
-        }
+        put: @escaping PresignedUpload.Put = { try await PresignedUpload.put($0, to: $1, contentType: $2) }
     ) {
-        self.service = service
-        self.put = put
+        pending = PendingImageUpload(service: service, put: put)
     }
 
     public func upload(
@@ -42,17 +38,18 @@ public struct GardenImageUploader: Sendable {
             do {
                 progress?(.encoding(position, images.count))
                 let data = try ImageEncoding.encode(image, as: .jpeg)
-                let upload = try await service.createUpload(
+                let result = try await pending.upload(
+                    data,
                     filename: "garden-entry-\(UUID().uuidString).jpg",
-                    size: data.count,
                     format: .jpeg,
                     entity: entity
-                )
-                progress?(.uploading(position, images.count))
-                try await put(data, upload.uploadUrl, ImageEncoding.Format.jpeg.contentType)
+                ) { phase in
+                    if phase == .uploading { progress?(.uploading(position, images.count)) }
+                }
                 // Garden entry attachment marks pending images uploaded in the same transaction
-                // as the entry. Keep this id after PUT so failed record saves reuse the bytes.
-                ids.append(upload.imageId)
+                // as the entry (see `PhotoService.markUploaded`'s doc comment — this path never
+                // calls it). Keep this id after PUT so failed record saves reuse the bytes.
+                ids.append(result.imageID)
             } catch {
                 throw PartialFailure(completedIDs: ids, completedCount: offset, underlying: error)
             }

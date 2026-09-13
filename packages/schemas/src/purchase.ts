@@ -4,13 +4,9 @@ import {
   generatedPurchaseFieldSchemas,
   generatedPurchaseFilterFields,
 } from "./generated/entity-field-schemas.purchase.gen";
-import {
-  auditDateFilterFields,
-  timestampedFields,
-  uniqueBy,
-} from "./base-entity";
+import { auditDateFilterFields, uniqueBy } from "./base-entity";
 import { relationMutationOut } from "./common";
-import { dataCheck, dataQuality, dataQualityStatus } from "./data-quality";
+import { dataCheck, dataQualityStatus } from "./data-quality";
 import {
   expenseShortcode,
   imageShortcode,
@@ -19,8 +15,6 @@ import {
   purchaseShortcode,
   vendorShortcode,
 } from "./identifiers";
-import { financialReconciliationSummary } from "./financial-reconciliation";
-import { imageUrlSummary } from "./image-summary";
 import { expenseLineKindSchema } from "./expense-line-kind";
 import { purchaseRelatedFilterFields } from "./related-view";
 import {
@@ -144,50 +138,12 @@ export type PurchaseFilters = z.infer<typeof purchaseFiltersSchema>;
 
 export type PurchaseSortField = GeneratedEntitySortField<"purchase">;
 
-export const purchaseOut = z.object({
-  ...generatedPurchaseFieldSchemas.read,
-  /** Resolved through the join; null only if the vendor was soft-deleted. */
-  vendorName: z.string().nullable(),
-  vendorLogo: imageUrlSummary.nullable(),
-  /**
-   * Link out to the vendor's own order page, derived at read time from
-   * `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`). Read-only
-   * and absent from the create/update shapes — nothing stores it, and null
-   * simply means this order isn't linkable.
-   */
-  orderUrl: z.url().nullable(),
-  expenseCount: z.number().int(),
-  /** Live Expenses whose cost has not been recorded yet. */
-  unpricedExpenseCount: z.number().int(),
-  /**
-   * `SUM(cost)` over this purchase's live expenses. THIS is the purchase's spend;
-   * `statedTotal` is only what the paperwork claimed. They may legitimately
-   * disagree — see the reconciliation note on `statedTotal`.
-   */
-  expenseTotal: money,
-  reconciliation: purchaseReconciliation,
-  /** Settlement evidence only; never participates in spend rollups. */
-  financialReconciliation: financialReconciliationSummary,
-  documentCount: z.number().int(),
-  images: z.array(
-    z.object({
-      id: imageShortcode,
-      url: z.url(),
-      filename: z.string(),
-      contentType: z.string(),
-      /**
-       * The R2 object key. Nothing RENDERS it — it's here because it's part of an
-       * image's identity, and because `PendingDocument` (the upload widget's row
-       * type) requires it, which is what lets the document list offer a detach
-       * affordance without a per-document round-trip back to `image.getByID`.
-       */
-      key: z.string(),
-      documentKind: purchaseDocumentKind,
-    }),
-  ),
-  dataQuality,
-  ...timestampedFields,
-});
+/**
+ * The purchase read shape is exactly the declaration's read projection —
+ * every computed field (vendor join, order URL, expense rollups,
+ * reconciliation, documents) is declared there with its constraints.
+ */
+export const purchaseOut = z.object(generatedPurchaseFieldSchemas.read);
 export type PurchaseOut = z.infer<typeof purchaseOut>;
 
 export const purchaseListResponse = createPaginatedResponseSchema(purchaseOut);

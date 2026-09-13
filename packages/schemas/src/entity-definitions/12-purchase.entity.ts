@@ -164,6 +164,7 @@ export default defineEntity({
         },
       },
       {
+        // Resolved through the join; null only if the vendor was soft-deleted.
         key: "vendorName",
         kind: "text",
         nullable: true,
@@ -184,6 +185,10 @@ export default defineEntity({
         },
       },
       {
+        // Link out to the vendor's own order page, derived at read time from
+        // `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`). Read-only
+        // and absent from the create/update shapes — nothing stores it, and null
+        // simply means this order isn't linkable.
         key: "orderUrl",
         kind: "text",
         nullable: true,
@@ -204,6 +209,7 @@ export default defineEntity({
         },
       },
       {
+        // Live Expenses whose cost has not been recorded yet.
         key: "unpricedExpenseCount",
         kind: "number",
         validation: {
@@ -213,6 +219,9 @@ export default defineEntity({
         },
       },
       {
+        // `SUM(cost)` over this purchase's live expenses. THIS is the purchase's
+        // spend; `statedTotal` is only what the paperwork claimed. They may
+        // legitimately disagree — see the reconciliation note on `statedTotal`.
         key: "expenseTotal",
         kind: "number",
         display: { list: true },
@@ -233,6 +242,7 @@ export default defineEntity({
         },
       },
       {
+        // Settlement evidence only; never participates in spend rollups.
         key: "financialReconciliation",
         kind: "json",
         validation: {
