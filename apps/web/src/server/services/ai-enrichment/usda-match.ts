@@ -10,11 +10,8 @@ import type { Confidence } from "@cubby/schemas/ai";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 
-import { getErrorMessage } from "~/lib/error-utils";
 import { runAiSelection } from "~/server/ai/selection";
-import { dispatchBackgroundJobs } from "~/server/background-dispatch";
 import type { Database } from "~/server/db";
-import { getIngredientByID } from "~/server/repo/ingredient";
 
 import {
   buildUsdaShortlist,
@@ -88,35 +85,16 @@ interface UsdaFoodBatchSuggestion extends UsdaFoodSuggestion {
 }
 
 export interface UsdaMatchPorts<TDatabase> {
-  dispatchRetries: (
-    database: TDatabase,
-    input: Parameters<typeof dispatchBackgroundJobs>[1],
-  ) => Promise<void>;
-  getIngredient: (
-    database: TDatabase,
-    id: IngredientId,
-  ) => Promise<{ name: string }>;
   suggest: (
     service: UsdaLookupPort,
     database: TDatabase,
     name: string,
     options?: { ingredientId?: IngredientId },
   ) => Promise<UsdaFoodSuggestion>;
-  servicesForRetry: (
-    database: TDatabase,
-  ) => Promise<{ usdaService: UsdaLookupPort }>;
 }
 
 const productionUsdaMatchPorts: UsdaMatchPorts<Database> = {
-  dispatchRetries: async (database, input) => {
-    await dispatchBackgroundJobs(database, input);
-  },
-  getIngredient: getIngredientByID,
   suggest: suggestUsdaFood,
-  servicesForRetry: async (database) => {
-    const { buildCrudServices } = await import("~/server/request-context");
-    return buildCrudServices(database);
-  },
 };
 
 /**
@@ -129,12 +107,8 @@ const productionUsdaMatchPorts: UsdaMatchPorts<Database> = {
  * (network blip, AI gateway hiccup) — indistinguishable, to this function's
  * caller, from "the model genuinely found no match". The degraded
  * `{food: null, reasoning: "Lookup failed."}` entry still returns immediately
- * so the batch doesn't stall, but the failure ALSO dispatches a
- * `usda-match.retry` background job for that ingredient, so the queue's own
- * backoff/attempts absorb a transient blip instead of the human having to
- * notice a "Lookup failed" row and manually retry (Tenet 3: this is exactly
- * the unattended-retry work the queue exists for, unlike the interactive
- * search loop above it).
+ * so the batch doesn't stall and the item is reported as a failed row in the
+ * result rather than silently treated as "no match".
  */
 async function suggestUsdaFoodBatchWithPorts<TDatabase>(
   usdaService: UsdaLookupPort,
@@ -144,7 +118,6 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
 ): Promise<UsdaFoodBatchSuggestion[]> {
   const capped = ingredients.slice(0, 20);
   const out: UsdaFoodBatchSuggestion[] = [];
-  const failed: { id: IngredientId; name: string }[] = [];
   for (let i = 0; i < capped.length; i += 5) {
     const batch = capped.slice(i, i + 5);
     const results = await Promise.allSettled(
@@ -165,83 +138,17 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
           confidence: "low",
           reasoning: "Lookup failed.",
         });
-        failed.push(item);
       }
-    }
-  }
-
-  // Retry scheduling is deliberately BEST-EFFORT and happens after the read
-  // loop, never inside it. Two reasons, both learned the hard way:
-  //
-  //  1. `out` already holds every degraded and matched entry by this point. An
-  //     unguarded `await dispatchBackgroundJobs(...)` inside the loop meant a
-  //     rejecting dispatch (DB insert, queue.sendBatch) threw straight out of
-  //     this function and discarded ALL of them — turning "some matched, some
-  //     degraded" into a total failure, the exact opposite of the degrade
-  //     path's purpose.
-  //  2. With no queue bound (dev, test, self-host), `dispatchBackgroundJobs`
-  //     falls through to `processInlineJobs`, which loops
-  //     `while (outcome === "retry")` with no backoff and no bound. Dispatching
-  //     per failed item ran a full extra agent lookup, synchronously, inside
-  //     the user's request — once per failure, precisely during the upstream
-  //     outage that caused the failures. One dispatch of N jobs replaces N
-  //     dispatches, and the try/catch keeps a queue problem from ever reaching
-  //     the caller.
-  if (failed.length > 0) {
-    try {
-      await ports.dispatchRetries(db, {
-        kind: "usda-match.retry",
-        source: "mutation",
-        jobs: failed.map((item) => ({
-          kind: "usda-match.retry" as const,
-          dedupeKey: `usda-match.retry:${item.id}`,
-          payload: { ingredientId: item.id },
-        })),
-      });
-    } catch (error) {
-      console.error(
-        "[suggestUsdaFoodBatch] could not schedule retries:",
-        getErrorMessage(error),
-      );
     }
   }
 
   return out;
 }
 
-/**
- * Background-job retry for a `suggestUsdaFoodBatch` item that failed at the
- * infra level (see that function's doc comment). Re-fetches the ingredient's
- * current name — the dispatching batch may be stale by the time this job
- * runs — and re-attempts the single-item lookup directly, bypassing
- * `suggestUsdaFoodBatch`'s swallow-and-degrade catch so a real failure here
- * throws and lets `processBackgroundJob`'s retry/backoff take over.
- *
- * Deliberately read-only, same as `suggestUsdaFood` itself: it does not set
- * `product.usdaUnavailable` (that column is a human's "I checked, no USDA
- * food exists" assertion — conflating it with an automated retry, successful
- * or not, would misrepresent what a person decided) and does not link a
- * product to this food. Tenet 2's `ingredient → product → fdc_id` commit
- * stays a deliberate, reviewed write in the interactive workbench; a
- * successful retry's only visible effect is the job finishing "succeeded"
- * rather than "failed", confirming the transient failure has cleared.
- */
-async function retryUsdaMatchWithPorts<TDatabase>(
-  db: TDatabase,
-  ingredientId: IngredientId,
-  ports: UsdaMatchPorts<TDatabase>,
-): Promise<void> {
-  const { usdaService } = await ports.servicesForRetry(db);
-  const ingredient = await ports.getIngredient(db, ingredientId);
-  await ports.suggest(usdaService, db, ingredient.name, { ingredientId });
-}
-
 export function createUsdaMatchService<TDatabase>(
   ports: UsdaMatchPorts<TDatabase>,
 ) {
   return {
-    retryUsdaMatch: (database: TDatabase, ingredientId: IngredientId) =>
-      retryUsdaMatchWithPorts(database, ingredientId, ports),
     suggestUsdaFoodBatch: (
       service: UsdaLookupPort,
       database: TDatabase,
@@ -251,5 +158,4 @@ export function createUsdaMatchService<TDatabase>(
 }
 
 const productionUsdaMatch = createUsdaMatchService(productionUsdaMatchPorts);
-export const retryUsdaMatch = productionUsdaMatch.retryUsdaMatch;
 export const suggestUsdaFoodBatch = productionUsdaMatch.suggestUsdaFoodBatch;

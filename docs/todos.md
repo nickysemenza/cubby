@@ -115,6 +115,23 @@ history is the archive. Permanent product constraints live in the
 
 ## Triggered
 
+- **Push change feed for post-mutation refresh** — Promote only when a derived
+  value users actually wait on (an AI location description, a recipe total
+  cascade) reliably lands after the client's fixed +5 s / +30 s deferred
+  refetch (`lib/deferred-invalidation.ts`). The design is a Durable Object
+  change feed over the WebSocket Hibernation API: the queue consumer pings it
+  after each task, the browser subscribes once per session and invalidates the
+  task's cache tags on each event. Rejected for now because it is ~300–400
+  lines of new infrastructure (DO, binding, auth on the socket, reconnect, a
+  workerd test) in a repo whose direction is removing execution infrastructure,
+  and the fixed refetch covers the observed latencies for a single-user tool.
+
+- **Move the UPC-batch detector out of the problem-count badge** — Promote if
+  the badge's refresh-behind-read ever shows up in request timings: one detector
+  (`productsWithBetterUpcData`) calls the external UPC lookup, so the badge
+  refresh is not pure SQL. Moving it to the coverage page (computed on that
+  page's load) keeps the badge cheap without losing the detector.
+
 - **Native iOS/macOS app beyond the proof of concept** — Promote screen porting,
   App Intents, widgets, and TestFlight once the `apps/apple` vertical slice
   proves its four unknowns: bearer sign-in against Better Auth, generated

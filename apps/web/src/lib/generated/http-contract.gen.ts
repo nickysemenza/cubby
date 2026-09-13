@@ -23,11 +23,6 @@ export const httpContract = httpContractBuilder.router(
         "approveDetectedInventoryItem",
         contracts.aiContract.ops["approveDetectedInventoryItem"],
       ),
-      auditCategories: rpcMutation(
-        "ai",
-        "auditCategories",
-        contracts.aiContract.ops["auditCategories"],
-      ),
       describeLocation: rpcMutation(
         "ai",
         "describeLocation",
@@ -89,55 +84,6 @@ export const httpContract = httpContractBuilder.router(
         "auditLog",
         "list",
         contracts.auditLogContract.ops["list"],
-      ),
-    },
-    "background-batch": {
-      cancel: rpcMutation(
-        "background-batch",
-        "cancel",
-        contracts.backgroundBatchContract.ops["cancel"],
-      ),
-      jobs: rpcQuery(
-        "background-batch",
-        "jobs",
-        contracts.backgroundBatchContract.ops["jobs"],
-      ),
-      list: rpcQuery(
-        "background-batch",
-        "list",
-        contracts.backgroundBatchContract.ops["list"],
-      ),
-      retry: rpcMutation(
-        "background-batch",
-        "retry",
-        contracts.backgroundBatchContract.ops["retry"],
-      ),
-      summary: rpcQuery(
-        "background-batch",
-        "summary",
-        contracts.backgroundBatchContract.ops["summary"],
-      ),
-    },
-    "background-job": {
-      clearStranded: rpcMutation(
-        "background-job",
-        "clearStranded",
-        contracts.backgroundJobContract.ops["clearStranded"],
-      ),
-      drain: rpcMutation(
-        "background-job",
-        "drain",
-        contracts.backgroundJobContract.ops["drain"],
-      ),
-      retry: rpcMutation(
-        "background-job",
-        "retry",
-        contracts.backgroundJobContract.ops["retry"],
-      ),
-      strandedCount: rpcQuery(
-        "background-job",
-        "strandedCount",
-        contracts.backgroundJobContract.ops["strandedCount"],
       ),
     },
     calendar: {
@@ -403,11 +349,6 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     image: {
-      cleanupUnreferencedImages: rpcMutation(
-        "image",
-        "cleanupUnreferencedImages",
-        contracts.imageUploadContract.ops["cleanupUnreferencedImages"],
-      ),
       cullPendingImages: rpcMutation(
         "image",
         "cullPendingImages",
@@ -582,11 +523,6 @@ export const httpContract = httpContractBuilder.router(
         "parentOptions",
         contracts.locationContract.ops["parentOptions"],
       ),
-      recomputeValuations: rpcMutation(
-        "location",
-        "recomputeValuations",
-        contracts.locationContract.ops["recomputeValuations"],
-      ),
       search: rpcQueryPost(
         "location",
         "search",
@@ -601,6 +537,18 @@ export const httpContract = httpContractBuilder.router(
         "location",
         "valuationSummary",
         contracts.locationContract.ops["valuationSummary"],
+      ),
+    },
+    maintenance: {
+      awaitingWork: rpcQuery(
+        "maintenance",
+        "awaitingWork",
+        contracts.maintenanceContract.ops["awaitingWork"],
+      ),
+      settleAwaitingWork: rpcMutation(
+        "maintenance",
+        "settleAwaitingWork",
+        contracts.maintenanceContract.ops["settleAwaitingWork"],
       ),
     },
     mcp: {
@@ -685,11 +633,6 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     problems: {
-      cleanupOrphanedEmbeddings: rpcMutation(
-        "problems",
-        "cleanupOrphanedEmbeddings",
-        contracts.problemsContract.ops["cleanupOrphanedEmbeddings"],
-      ),
       deleteUnused: rpcMutation(
         "problems",
         "deleteUnused",
@@ -1157,16 +1100,6 @@ export const httpContract = httpContractBuilder.router(
     },
     search: {
       debug: rpcQuery("search", "debug", contracts.searchContract.ops["debug"]),
-      documentHealth: rpcQuery(
-        "search",
-        "documentHealth",
-        contracts.searchContract.ops["documentHealth"],
-      ),
-      enqueueEmbeddingBackfill: rpcMutation(
-        "search",
-        "enqueueEmbeddingBackfill",
-        contracts.searchContract.ops["enqueueEmbeddingBackfill"],
-      ),
       find: rpcQuery("search", "find", contracts.searchContract.ops["find"]),
       grouped: rpcQuery(
         "search",
@@ -1182,11 +1115,6 @@ export const httpContract = httpContractBuilder.router(
         "search",
         "relatedGrouped",
         contracts.searchContract.ops["relatedGrouped"],
-      ),
-      repairDocuments: rpcMutation(
-        "search",
-        "repairDocuments",
-        contracts.searchContract.ops["repairDocuments"],
       ),
       requestEmbeddingRefresh: rpcMutation(
         "search",

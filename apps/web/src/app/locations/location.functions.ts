@@ -8,7 +8,6 @@ export const location = defineOperationDomain(locationContract, {
   ensureGlobalUnknown: { invalidates: ripple.location },
   bulkUpdateParent: { invalidates: ripple.locationReparent },
   getByShortcodes: { tags: [["location", "getByShortcodes"]] },
-  recomputeValuations: { invalidates: ripple.locationValuation },
   search: { tags: [["location", "search"]] },
   subtree: { tags: [["location", "subtree"]] },
   inventoryBreakdown: {

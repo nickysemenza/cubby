@@ -289,7 +289,8 @@ All generic entity work enters through `executeEntity(context, command)` in
 - capability checks and normalized pagination/sorting;
 - baseline get/list/create/update/delete/merge/search commands;
 - declared attach/detach relation families;
-- post-commit object cleanup and background side effects;
+- in-transaction search projections, then post-commit object cleanup and
+  best-effort background task publication;
 - one normalized delete result with public references and affected-edge data.
 
 Repositories own database access, transactions, invariants, and the exact
@@ -354,8 +355,10 @@ with a comment saying why.
 Searchable entities use persisted `SearchDocument` rows for lexical and
 embedding input. The spec generates search capability gates, while projection
 SQL and embedding loaders remain explicit because several entities need joins,
-aggregates, and workflow-specific text. Search-document repair must be queued
-after projection changes; source edits do not rewrite persisted rows.
+aggregates, and workflow-specific text. The kernel refreshes an entity's own
+projection and its fan-out projections inside the write transaction; a change
+to projection SQL itself does not rewrite persisted rows — run the streaming
+"Repair index" maintenance action after such a change.
 
 ## Relations, deletion, and merge
 

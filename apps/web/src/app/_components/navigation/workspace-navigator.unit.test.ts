@@ -8,8 +8,8 @@ import {
 describe("workspace navigator", () => {
   it("searches the complete destination universe by label and context", () => {
     expect(
-      filterWorkspaceDestinations("background").map(({ item }) => item.to),
-    ).toContain("/background-jobs");
+      filterWorkspaceDestinations("debug").map(({ item }) => item.to),
+    ).toContain("/search/debug");
     expect(
       filterWorkspaceDestinations("dev").map(({ item }) => item.to),
     ).toContain("/mcp");

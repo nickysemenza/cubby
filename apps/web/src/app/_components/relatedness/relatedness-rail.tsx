@@ -1,6 +1,6 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type { RelatednessOut } from "@cubby/schemas/relatedness";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 import { useEffect, useMemo } from "react";
@@ -8,9 +8,6 @@ import { useEffect, useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { backgroundBatch } from "~/lib/background-batch.functions";
 import { relatedness } from "~/lib/recommendations.functions";
 import { search } from "~/lib/search.functions";
 
@@ -19,6 +16,7 @@ import {
   type ProductImageMap,
   useHydratedProductImages,
 } from "../products/product-image-summaries";
+import { useEmbeddingReadinessPoll } from "./use-embedding-readiness-poll";
 
 const EMPTY_RELATED_PRODUCTS: RelatednessOut["items"] = [];
 
@@ -27,13 +25,11 @@ const EMPTY_RELATED_PRODUCTS: RelatednessOut["items"] = [];
 export interface RelatednessRailOperations {
   relatedness: typeof relatedness.product;
   requestEmbeddingRefresh: typeof search.requestEmbeddingRefresh;
-  batchSummary: typeof backgroundBatch.summary;
 }
 
 const productionOperations: RelatednessRailOperations = {
   relatedness: relatedness.product,
   requestEmbeddingRefresh: search.requestEmbeddingRefresh,
-  batchSummary: backgroundBatch.summary,
 };
 
 function RelatednessIndexPrompt({
@@ -69,6 +65,24 @@ function RelatednessIndexPrompt({
       >
         <Sparkles className="size-3" />
         {indexing ? "Indexing…" : "Index now"}
+      </Button>
+    </Row>
+  );
+}
+
+function StillIndexingNotice({ onCheckAgain }: { onCheckAgain: () => void }) {
+  return (
+    <Row
+      align="center"
+      justify="between"
+      gap="sm"
+      className="border-b border-border pb-2"
+    >
+      <span className="text-xs text-muted-foreground">
+        Still indexing — this can take a minute.
+      </span>
+      <Button type="button" size="sm" variant="outline" onClick={onCheckAgain}>
+        Check again
       </Button>
     </Row>
   );
@@ -110,40 +124,36 @@ export function RelatednessRail({
   /** An established product-summary projection avoids a duplicate query. */
   imageSummaries?: ProductImageMap;
 }) {
-  const queryClient = useQueryClient();
-  const relatednessQuery = useQuery(
-    operations.relatedness.queryOptions(product.id),
-  );
-  const refresh = useMutation(
-    operations.requestEmbeddingRefresh.mutationOptions(),
-  );
-  const batch = useQuery({
-    ...operations.batchSummary.queryOptions({
-      batchId: refresh.data?.batchId ?? "00000000-0000-4000-8000-000000000000",
-    }),
-    enabled: refresh.data?.batchId != null,
-    refetchInterval: (query) =>
-      query.state.data?.status === "queued" ||
-      query.state.data?.status === "running"
-        ? 1_000
-        : false,
+  const poll = useEmbeddingReadinessPoll(product.id);
+  const { refetchInterval, notifyStatus } = poll;
+
+  const relatednessQuery = useQuery({
+    ...operations.relatedness.queryOptions(product.id),
+    refetchInterval,
   });
+  const refresh = useMutation(
+    operations.requestEmbeddingRefresh.mutationOptions({
+      onSuccess: () => poll.start(),
+    }),
+  );
 
   const status = relatednessQuery.data?.status;
+  // Terminal readiness updates the visible "Indexing…" state the instant this
+  // render sees it, rather than waiting a render behind for the effect below
+  // to flip the poll's own phase — that effect governs the interval/timeout,
+  // not the display.
+  const indexing =
+    poll.isPolling && status !== "ready" && status !== "unavailable";
+
+  useEffect(() => {
+    notifyStatus(status);
+  }, [status, notifyStatus]);
+
   const items = relatednessQuery.data?.items ?? EMPTY_RELATED_PRODUCTS;
   const relatedProductIds = useMemo(
     () => items.map((item) => item.shortcode),
     [items],
   );
-  const indexing =
-    batch.data?.status === "queued" || batch.data?.status === "running";
-
-  useEffect(() => {
-    if (!refresh.data?.batchId || indexing || !batch.data) return;
-    // The worker has reached a terminal state. Re-read the product's status
-    // rather than leaving the rail on the request-time readiness snapshot.
-    void invalidateOperationTags(queryClient, ripple.relatednessProduct);
-  }, [batch.data, indexing, queryClient, refresh.data?.batchId]);
 
   return (
     <Stack gap="sm">
@@ -155,6 +165,12 @@ export function RelatednessRail({
           refresh.mutate({ entityType: "product", entityId: product.id })
         }
       />
+
+      {poll.timedOut && (
+        <StillIndexingNotice
+          onCheckAgain={() => poll.checkAgain(relatednessQuery.refetch)}
+        />
+      )}
 
       {status === "unavailable" && (
         <p className="text-xs text-muted-foreground">

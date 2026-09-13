@@ -1,3 +1,4 @@
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import { taskCreateInput } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
@@ -9,6 +10,7 @@ import { auditLog, taskDependency } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getDb } from "~/server/repo/database-helpers";
+import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
   createTask,
@@ -51,7 +53,15 @@ describe("task reorder workflow", () => {
         expect.objectContaining({ id: second.output.id, sortOrder: 10 }),
       ]),
     );
-    expect(result.sideEffects.backgroundBatches.length).toBeGreaterThan(0);
+    expect(result.sideEffects).toEqual(EMPTY_MUTATION_SIDE_EFFECTS);
+    // The bulk-reorder workflow's effect step fans out entity-embedding
+    // refreshes for both reordered tasks; with no queue bound in tests that
+    // runs inline and refreshes the search-document projection first (see
+    // refreshEntityEmbedding), so a live projection is the observable proof
+    // the fanout ran.
+    expect(
+      await getSearchDocumentEmbeddingText(ctx.db, "task", first.entityId),
+    ).not.toBeNull();
     expect((await getTaskByShortcode(ctx.db, first.output.id))?.sortOrder).toBe(
       20,
     );

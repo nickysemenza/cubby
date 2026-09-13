@@ -1,17 +1,16 @@
-import type { BackgroundQueueMessage } from "@cubby/schemas/queue-messages";
+import type { BackgroundTaskMessageInput } from "@cubby/schemas/queue-messages";
 
 export interface BackgroundQueueProducer {
-  send(body: BackgroundQueueMessage): Promise<void>;
   sendBatch(
-    messages: Iterable<{ body: BackgroundQueueMessage }>,
+    messages: Iterable<{ body: BackgroundTaskMessageInput }>,
   ): Promise<void>;
 }
 
 export interface BackgroundQueueDeliveredMessage {
   /**
-   * `unknown`, not `BackgroundQueueMessage`: what Cloudflare hands back is
-   * whatever JSON was on the wire, including messages minted by an older
-   * deploy. Typing it forces the consumer through `safeParse`.
+   * `unknown`, not the message type: what Cloudflare hands back is whatever
+   * JSON was on the wire, including messages minted by an older deploy. Typing
+   * it forces the consumer through `safeParse`.
    */
   readonly body: unknown;
   ack(): void;

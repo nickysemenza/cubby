@@ -22,12 +22,9 @@ export const STRONG_BROWSER_QUERY_OPERATIONS = [
 
   // Credentials, audit history, and live operational state.
   "auditLog.list",
-  "background-batch.jobs",
-  "background-batch.list",
-  "background-batch.summary",
-  "background-job.strandedCount",
   "calendar.getCredential",
   "calendar.getFeed",
+  "maintenance.awaitingWork",
   "calendar.inspectFeed",
   "mcp.listTools",
   "mcp.usageActivity",
@@ -55,7 +52,6 @@ export const STRONG_BROWSER_QUERY_OPERATIONS = [
   "problems.getViews",
   "problems.recipeUsageByProduct",
   "search.debug",
-  "search.documentHealth",
 
   // Reads that drive imports or delegate to modules owning a strong database.
   "meal.getShoppingList",

@@ -14,6 +14,7 @@
  * The branching itself is pure and lives in `scan-plan.ts`.
  */
 
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import type {
@@ -127,7 +128,7 @@ export async function scanAtLocation(
       outcome: "queued",
       product: productOut,
       strays: [...plan.strays],
-      sideEffects: { backgroundBatches: [] },
+      sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     };
   }
 
@@ -140,7 +141,7 @@ export async function scanAtLocation(
       );
     }
     await markInventoryEntryVerified(db, entryId, actor);
-    const backgroundBatches = await runMutationSideEffects(db, {
+    await runMutationSideEffects(db, {
       action: "updated",
       entity: { entity: "inventory", id: entryId },
       source: "inventory.scanAtLocation",
@@ -149,7 +150,7 @@ export async function scanAtLocation(
       outcome: "confirmed",
       product: productOut,
       strays: [...plan.strays],
-      sideEffects: { backgroundBatches },
+      sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     };
   }
 
@@ -176,7 +177,7 @@ export async function scanAtLocation(
         "inventory",
         entry.id,
       );
-      const backgroundBatches = await runMutationSideEffects(db, {
+      await runMutationSideEffects(db, {
         action: "created",
         entity: { entity: "inventory", id: entityId },
         source: "inventory.scanAtLocation",
@@ -185,7 +186,7 @@ export async function scanAtLocation(
         outcome: "added" as const,
         product: productOut,
         strays: [...plan.strays],
-        sideEffects: { backgroundBatches },
+        sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       };
     },
     async () => {
@@ -198,7 +199,7 @@ export async function scanAtLocation(
         outcome: "confirmed" as const,
         product: productOut,
         strays: [...plan.strays],
-        sideEffects: { backgroundBatches: [] },
+        sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       };
     },
     SLOT_CONSTRAINT,
@@ -261,11 +262,11 @@ export async function resolveScanStrays(
   }
 
   if (items.length === 0) {
-    return { moved: 0, skipped, sideEffects: { backgroundBatches: [] } };
+    return { moved: 0, skipped, sideEffects: EMPTY_MUTATION_SIDE_EFFECTS };
   }
 
   const moved = await moveInventoryEntries(db, { items }, actor);
-  const backgroundBatches = await runMutationSideEffects(db, {
+  await runMutationSideEffects(db, {
     action: "updated",
     entity: { entity: "location", id: targetLocationId },
     source: "inventory.resolveScanStrays",
@@ -274,6 +275,6 @@ export async function resolveScanStrays(
   return {
     moved: moved.length,
     skipped,
-    sideEffects: { backgroundBatches },
+    sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
   };
 }

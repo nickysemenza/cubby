@@ -56,13 +56,6 @@ describe("recomputeRecipesForPriceAffectedProducts", () => {
       "expense.test",
     );
 
-    expect(result).toEqual([
-      expect.objectContaining({
-        kind: "recipe-totals.recompute",
-        processor: "inline",
-        status: "succeeded",
-        totalJobs: 1,
-      }),
-    ]);
+    expect(result).toBe(1);
   });
 });

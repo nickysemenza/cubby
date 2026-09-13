@@ -9,10 +9,10 @@
  * reuses a database whose columns no longer match the model.
  *
  * The `@cubby/schemas` entries are the modules `schema.ts` and the generated
- * columns import *values* from — constant arrays such as `backgroundJobKinds`
- * that become `pgEnum` values or `text({ enum })` columns. Adding a value there
- * changes the schema without touching any file under `src/server/db`, which is
- * exactly the miss that bit the `entity-embedding.refresh-batch` job kind.
+ * columns import *values* from — constant arrays that become `pgEnum` values
+ * or `text({ enum })` columns. Adding a value there changes the schema without
+ * touching any file under `src/server/db`, which is exactly the miss that once
+ * bit a new background-job kind.
  * `schema-template-inputs.unit.test.ts` derives the required list from the
  * imports and fails when this array falls behind. Paths resolve from
  * `apps/web` (the hasher joins them onto `process.cwd()`), which is where both
@@ -22,7 +22,6 @@ export const schemaTemplateInputs = [
   "./src/server/db/schema.ts",
   "./src/server/db/auth.schema.ts",
   "./src/server/db/generated/**/*.ts",
-  "../../packages/schemas/src/background-jobs.ts",
   "../../packages/schemas/src/expense-line-kind.ts",
   "../../packages/schemas/src/image.ts",
   "../../packages/schemas/src/meal-classification.ts",

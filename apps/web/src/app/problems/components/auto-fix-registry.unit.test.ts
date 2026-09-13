@@ -19,9 +19,6 @@ describe("buildAutoFixPlan", () => {
   it("keeps maintenance work out of the listed-problems count", () => {
     const plan = buildAutoFixPlan(
       problems({
-        orphanedEntityEmbeddings: fromPartial<
-          AllProblems["orphanedEntityEmbeddings"]
-        >([{ id: "orphan" }]),
         entitiesMissingEmbeddings: fromPartial<
           AllProblems["entitiesMissingEmbeddings"]
         >([{ entityId: "sample" }]),
@@ -32,18 +29,15 @@ describe("buildAutoFixPlan", () => {
         staleRecipeTotals: 3,
         productsWithNoImages: 0,
         locationsWithoutAiDescription: 0,
-        unreferencedImages: 0,
       }),
     );
 
-    expect(plan.items).toBe(20);
-    expect(plan.listedItems).toBe(2);
+    expect(plan.items).toBe(19);
+    expect(plan.listedItems).toBe(1);
     expect(plan.tasks.map((task) => task.key)).toEqual([
-      "orphanedEmbeddings",
       "cullPendingImages",
       "missingEmbeddings",
       "staleRecipeTotals",
-      "locationValuations",
     ]);
   });
 
@@ -56,7 +50,6 @@ describe("buildAutoFixPlan", () => {
         staleRecipeTotals: 0,
         productsWithNoImages: 0,
         locationsWithoutAiDescription: 0,
-        unreferencedImages: 0,
       }),
     );
 
@@ -67,7 +60,6 @@ describe("buildAutoFixPlan", () => {
     expect([...AUTO_FIX_SECTION_IDS].sort()).toEqual([
       "ai-descriptions",
       "missing-embeddings",
-      "orphaned-embeddings",
     ]);
   });
 });

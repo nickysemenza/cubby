@@ -6,9 +6,9 @@ import { toast } from "sonner";
 
 import { useTableDensity } from "~/app/_components/data-table/useTableDensity";
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { CategoryAudit } from "~/app/_components/insights/category-audit";
 import { CalendarConnectDialog } from "~/app/calendar/calendar-connect-dialog";
 import { calendar } from "~/app/calendar/calendar.functions";
+import { AwaitingWorkCard } from "~/app/problems/components/awaiting-work-card";
 import { MaintenanceCard } from "~/app/problems/components/maintenance-card";
 import { Row, Stack } from "~/components/layout";
 import { Page } from "~/components/page/Page";
@@ -134,9 +134,9 @@ function SettingsPage() {
 
               <CalendarFeedInspectorCard enabled={devOpen} />
 
-              <MaintenanceCard />
+              <AwaitingWorkCard />
 
-              <CategoryAudit />
+              <MaintenanceCard />
 
               <Button variant="outline" size="sm" onClick={resetFlags}>
                 Reset developer flags

@@ -1,6 +1,4 @@
 import {
-  cleanupOrphanedEntityEmbeddingsInput,
-  cleanupOrphanedEntityEmbeddingsOut,
   coverageTotalsSchema,
   deleteUnusedIngredientsInput,
   deleteUnusedIngredientsOut,
@@ -77,10 +75,6 @@ export const problemsContract = defineContract("problems", {
   deleteUnused: mutation({
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
-  }),
-  cleanupOrphanedEmbeddings: mutation({
-    input: cleanupOrphanedEntityEmbeddingsInput,
-    output: cleanupOrphanedEntityEmbeddingsOut,
   }),
 });
 

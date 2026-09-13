@@ -26,6 +26,7 @@ import { problems as problemOperations } from "~/lib/problems.functions";
 
 import { AutoFixButton, useAutoFixPlan } from "./components/auto-fix-button";
 import { AUTO_FIX_SECTION_IDS } from "./components/auto-fix-registry";
+import { AwaitingWorkCard } from "./components/awaiting-work-card";
 import { MaintenanceCard } from "./components/maintenance-card";
 import { PROBLEM_SECTIONS } from "./components/problem-sections";
 import { RecipeUsageContext } from "./components/recipe-usage-context";
@@ -244,9 +245,11 @@ export function ProblemsOverview() {
           {COVERAGE_SECTIONS.map(renderSection)}
         </Section>
 
-        {/* Force-run batch fixes — surfaced here (not just buried in Settings)
-            so the "fix it" tools live right next to the issues. Same shared card
-            as Settings → Developer / Maintenance, same mutations. */}
+        {/* Derived work still waiting on a queue wakeup, then the one-off tools —
+            surfaced here (not just buried in Settings) so the "fix it" affordances
+            live right next to the issues. Same shared cards as Settings →
+            Developer / Maintenance, same mutations. */}
+        <AwaitingWorkCard />
         <MaintenanceCard />
       </Stack>
     </RecipeUsageContext.Provider>

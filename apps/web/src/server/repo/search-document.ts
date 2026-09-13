@@ -7,8 +7,8 @@ import {
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
-import { getDb, uuidArrayParam } from "~/server/repo/database-helpers";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 import {
   getEmbeddingTextsForEntityTypes,
   getEmbeddingTextsForRefs,
@@ -43,11 +43,11 @@ export interface SearchDocumentDiagnostics {
 
 /** Internal query boundary for the search service's indexed retrieval SQL. */
 export async function executeSearchDocumentSql<Schema extends z.ZodType>(
-  db: Database,
+  db: Database | DrizzleTransaction,
   rowSchema: Schema,
   query: SQL,
 ): Promise<Array<z.output<Schema>>> {
-  const result = await getDb(db).execute(query);
+  const result = await unwrapDb(db).execute(query);
   return z.array(rowSchema).parse(result.rows);
 }
 
@@ -96,7 +96,7 @@ const textArray = (values: string[]): SQL =>
  * indexes searchable by exactly the same relationship-derived language.
  */
 async function getSearchDocumentSources(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entityTypes: SearchableEntity[],
   entityIds?: readonly string[],
   page?: { cursor?: SearchDocumentCursor; pageSize?: number },
@@ -215,7 +215,7 @@ async function getSearchDocumentSources(
     ? sql`WHERE (source."entityType", source."entityId"::uuid) > (${page.cursor.entityType}, ${page.cursor.entityId}::uuid)`
     : sql``;
   const limit = page?.pageSize ? sql`LIMIT ${page.pageSize}` : sql``;
-  const result = await getDb(db).execute<{
+  const result = await unwrapDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
     shortcode: string;
@@ -256,7 +256,7 @@ async function getSearchDocumentSources(
 }
 
 async function getSearchDocumentPage(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
 ): Promise<{
   refs: Array<{ entityType: SearchableEntity; entityId: string }>;
@@ -266,7 +266,7 @@ async function getSearchDocumentPage(
   const cursor = options.cursor
     ? sql`AND ("entityType", "entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
     : sql``;
-  const result = await getDb(db).execute<{
+  const result = await unwrapDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
   }>(sql`
@@ -284,7 +284,7 @@ async function getSearchDocumentPage(
 }
 
 export async function getSearchDocumentSourceRepairPage(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entityTypes: SearchableEntity[],
   options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
 ): Promise<{
@@ -308,7 +308,7 @@ export async function getSearchDocumentSourceRepairPage(
   }
   const [texts, documents] = await Promise.all([
     getEmbeddingTextsForRefs(db, idsByType),
-    getDb(db).execute<{
+    unwrapDb(db).execute<{
       entityType: SearchableEntity;
       entityId: string;
       sourceHash: string;
@@ -360,7 +360,7 @@ export async function getSearchDocumentSourceRepairPage(
 }
 
 export async function getSearchDocumentOrphanPage(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
 ): Promise<{
   refs: Array<{ entityType: SearchableEntity; entityId: string }>;
@@ -404,7 +404,7 @@ export async function getSearchDocumentOrphanPage(
 }
 
 export async function refreshSearchDocument(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entityType: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
@@ -413,11 +413,11 @@ export async function refreshSearchDocument(
 }
 
 async function markSearchDocumentMissing(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entityType: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
-  await getDb(db).execute(sql`
+  await unwrapDb(db).execute(sql`
     UPDATE "SearchDocument" SET "deletedAt" = now(), "updatedAt" = now()
     WHERE "entityType" = ${entityType} AND "entityId" = ${entityId}::uuid AND "deletedAt" IS NULL
   `);
@@ -425,7 +425,7 @@ async function markSearchDocumentMissing(
 }
 
 async function upsertSearchDocumentBatch(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entries: ReadonlyArray<{ source: SearchDocumentSource; body: string }>,
 ): Promise<SearchDocumentRefreshResult[]> {
   if (entries.length === 0) return [];
@@ -442,7 +442,7 @@ async function upsertSearchDocumentBatch(
       )`;
     }),
   );
-  await getDb(db).execute(sql`
+  await unwrapDb(db).execute(sql`
     INSERT INTO "SearchDocument" (
       "entityType", "entityId", "shortcode", title, subtitle, "typeHint",
       aliases, keywords, body, "semanticText", "normalizedText",
@@ -476,7 +476,7 @@ async function upsertSearchDocumentBatch(
 }
 
 export async function refreshSearchDocuments(
-  db: Database,
+  db: Database | DrizzleTransaction,
   refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
 ): Promise<SearchDocumentRefreshResult[]> {
   if (refs.length === 0) return [];
@@ -542,11 +542,11 @@ export async function refreshSearchDocuments(
 }
 
 export async function getSearchDocumentEmbeddingText(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entityType: SearchableEntity,
   entityId: string,
 ): Promise<SearchableEntityText | null> {
-  const result = await getDb(db).execute<{
+  const result = await unwrapDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
     embeddingText: string;
@@ -572,7 +572,7 @@ export async function getSearchDocumentEmbeddingText(
  * exactly as the single-ref loader's `null` does.
  */
 export async function getSearchDocumentEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
 ): Promise<SearchableEntityText[]> {
   if (refs.length === 0) return [];
@@ -583,7 +583,7 @@ export async function getSearchDocumentEmbeddingTexts(
     ),
     sql`, `,
   );
-  const result = await getDb(db).execute<{
+  const result = await unwrapDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
     embeddingText: string;
@@ -602,6 +602,79 @@ export async function getSearchDocumentEmbeddingTexts(
 }
 
 const SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE = 250;
+
+/**
+ * The SQL twin of `normalizeSearchText` (trim, collapse whitespace, lowercase),
+ * so "is this document's vector current?" can be answered inside Postgres
+ * without shipping every body to JS to hash. Equal normalized texts hash equal.
+ */
+const normalizedTextSql = (column: SQL): SQL =>
+  sql`lower(regexp_replace(btrim(${column}), '\\s+', ' ', 'g'))`;
+
+/**
+ * Live documents whose configured vector is missing or was computed from
+ * different text. This predicate is shared by the awaiting-work count, the
+ * "Settle now" selection, and the cron assertion so they cannot disagree.
+ */
+const unembeddedDocumentsSql = (config: SemanticEmbeddingConfig): SQL => sql`
+  FROM "SearchDocument" sd
+  LEFT JOIN "EntityEmbedding" ee
+    ON ee."entityType" = sd."entityType"
+    AND ee."entityId" = sd."entityId"
+    AND ee.provider = ${config.provider}
+    AND ee.model = ${config.model}
+    AND ee.dimensions = ${config.dimensions}
+    AND ee."deletedAt" IS NULL
+  WHERE sd."deletedAt" IS NULL
+    AND (ee.id IS NULL
+      OR ${normalizedTextSql(sql`ee."embeddingText"`)} <> ${normalizedTextSql(sql`sd."semanticText"`)})
+`;
+
+export async function countUnembeddedSearchDocuments(
+  db: Database | DrizzleTransaction,
+  config: SemanticEmbeddingConfig,
+): Promise<number> {
+  const result = await unwrapDb(db).execute<{ count: number }>(sql`
+    SELECT count(*)::int AS count ${unembeddedDocumentsSql(config)}
+  `);
+  return result.rows[0]?.count ?? 0;
+}
+
+/** One keyset page of unembedded refs, for publishing refresh tasks. */
+export async function selectUnembeddedSearchDocumentRefs(
+  db: Database | DrizzleTransaction,
+  config: SemanticEmbeddingConfig,
+  options: { cursor?: SearchDocumentCursor; pageSize?: number } = {},
+): Promise<{
+  refs: Array<{ entityType: SearchableEntity; entityId: string }>;
+  nextCursor: SearchDocumentCursor | null;
+}> {
+  const pageSize = Math.min(
+    Math.max(options.pageSize ?? SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE, 1),
+    SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE,
+  );
+  const cursor = options.cursor
+    ? sql`AND (sd."entityType", sd."entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
+    : sql``;
+  const result = await unwrapDb(db).execute<{
+    entityType: SearchableEntity;
+    entityId: string;
+  }>(sql`
+    SELECT sd."entityType", sd."entityId"::text AS "entityId"
+    ${unembeddedDocumentsSql(config)}
+    ${cursor}
+    ORDER BY sd."entityType", sd."entityId"
+    LIMIT ${pageSize}
+  `);
+  const last = result.rows.at(-1);
+  return {
+    refs: result.rows,
+    nextCursor:
+      last && result.rows.length === pageSize
+        ? { entityType: last.entityType, entityId: last.entityId }
+        : null,
+  };
+}
 
 export type SearchDocumentCursor = {
   entityType: SearchableEntity;
@@ -622,7 +695,7 @@ export type StaleSearchDocumentEmbeddingText = SearchableEntityText & {
  * in JS, after no more than 250 rows have crossed the network.
  */
 export async function getStaleSearchDocumentEmbeddingTextPage(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entityTypes: SearchableEntity[],
   config: SemanticEmbeddingConfig,
   options: {
@@ -641,7 +714,7 @@ export async function getStaleSearchDocumentEmbeddingTextPage(
   const cursor = options.cursor
     ? sql`AND (sd."entityType", sd."entityId") > (${options.cursor.entityType}, ${options.cursor.entityId}::uuid)`
     : sql``;
-  const result = await getDb(db).execute<{
+  const result = await unwrapDb(db).execute<{
     entityType: SearchableEntity;
     entityId: string;
     embeddingText: string;
@@ -711,7 +784,7 @@ export async function getStaleSearchDocumentEmbeddingTextPage(
  * every projected column rather than the subset the embedding text echoes.
  */
 export async function getSearchDocumentDiagnostics(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entityTypes: SearchableEntity[] = [...searchableEntities],
 ): Promise<SearchDocumentDiagnostics> {
   // Texts enumerate what SHOULD exist (the canonical loaders, as the backfill
@@ -719,7 +792,7 @@ export async function getSearchDocumentDiagnostics(
   const [texts, sources, documentResult] = await Promise.all([
     getEmbeddingTextsForEntityTypes(db, entityTypes),
     getSearchDocumentSources(db, entityTypes),
-    getDb(db).execute<{
+    unwrapDb(db).execute<{
       entityType: SearchableEntity;
       entityId: string;
       sourceHash: string;

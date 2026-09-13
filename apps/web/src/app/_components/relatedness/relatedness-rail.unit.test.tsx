@@ -1,14 +1,9 @@
-import {
-  backgroundBatchBrowserSummarySchema,
-  type BackgroundBatchStatus,
-} from "@cubby/schemas/background-jobs";
 import { imageOut, type ImageOut } from "@cubby/schemas/image";
 import type { RelatednessOut } from "@cubby/schemas/relatedness";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { backgroundBatch } from "~/lib/background-batch.functions";
 import { relatedness } from "~/lib/recommendations.functions";
 import { search } from "~/lib/search.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -17,53 +12,30 @@ import {
   type RelatednessRailOperations,
   RelatednessRail,
 } from "./relatedness-rail";
+import {
+  EMBEDDING_READINESS_POLL_INTERVAL_MS,
+  EMBEDDING_READINESS_POLL_TIMEOUT_MS,
+} from "./use-embedding-readiness-poll";
 
-const BATCH_ID = "00000000-0000-4000-8000-000000000001";
-
-let harness: ReturnType<typeof createBrowserTestHarness>;
-
-beforeEach(() => {
-  harness = createBrowserTestHarness();
-});
+let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 
 afterEach(() => {
-  harness.dispose();
+  harness?.dispose();
+  harness = undefined;
 });
-
-function completedBatch(status: BackgroundBatchStatus = "succeeded") {
-  return backgroundBatchBrowserSummarySchema.parse({
-    id: BATCH_ID,
-    kind: "entity-embedding.refresh",
-    source: "ui",
-    processor: "inline",
-    status,
-    totalJobs: 1,
-    queuedJobs: 0,
-    runningJobs: 0,
-    succeededJobs: status === "succeeded" ? 1 : 0,
-    failedJobs: status === "failed" ? 1 : 0,
-    skippedJobs: 0,
-    cancelledJobs: 0,
-    firstEnqueuedAt: new Date("2026-01-01T00:00:00.000Z"),
-    lastEnqueuedAt: new Date("2026-01-01T00:00:00.000Z"),
-    firstJobStartedAt: new Date("2026-01-01T00:00:00.000Z"),
-    lastJobFinishedAt: new Date("2026-01-01T00:00:01.000Z"),
-    processingDurationMs: 1_000,
-    wallDurationMs: 1_000,
-    activeDurationMs: 1_000,
-    metadata: null,
-    createdAt: new Date("2026-01-01T00:00:00.000Z"),
-    updatedAt: new Date("2026-01-01T00:00:01.000Z"),
-  });
-}
 
 interface RelatednessRailTestAdapter {
   operations: RelatednessRailOperations;
   relatednessRequestCount: () => number;
 }
 
+/**
+ * `relatednessResults` is consumed in order, one entry per request, and the
+ * LAST entry repeats once exhausted — a stand-in for a query that stops
+ * changing once the transport has nothing further to report.
+ */
 function createTestOperations(
-  relatednessResult: RelatednessOut,
+  relatednessResults: readonly RelatednessOut[],
 ): RelatednessRailTestAdapter {
   let requestCount = 0;
   return {
@@ -71,17 +43,13 @@ function createTestOperations(
     // in-memory, so input/output parsing and cache metadata are exercised.
     operations: {
       relatedness: relatedness.product.withTransport(async () => {
+        const index = Math.min(requestCount, relatednessResults.length - 1);
+        const result = relatednessResults[index]!;
         requestCount += 1;
-        return relatednessResult;
+        return result;
       }),
       requestEmbeddingRefresh: search.requestEmbeddingRefresh.withTransport(
-        async () => ({
-          batchId: BATCH_ID,
-          totalJobs: 1,
-        }),
-      ),
-      batchSummary: backgroundBatch.summary.withTransport(async () =>
-        completedBatch(),
+        async () => ({ accepted: true as const }),
       ),
     },
     relatednessRequestCount: () => requestCount,
@@ -109,70 +77,134 @@ function productImage(id: string, url: string): ImageOut {
   });
 }
 
-function renderRail({
-  relatednessResult,
-  imageSummaries,
-}: {
-  relatednessResult: RelatednessOut;
-  imageSummaries?: Record<string, ImageOut[]>;
-}) {
-  const adapter = createTestOperations(relatednessResult);
+function renderRail(
+  adapter: RelatednessRailTestAdapter,
+  wrapper: React.ComponentType<{ children: React.ReactNode }>,
+) {
   render(
     <RelatednessRail
       product={{ id: testShortcode("product", "PRD-SOURCE"), tags: [] }}
       operations={adapter.operations}
-      imageSummaries={imageSummaries}
     />,
-    { wrapper: harness.wrapper },
+    { wrapper },
   );
-  return adapter;
 }
 
 describe("RelatednessRail", () => {
-  it("refetches relatedness after its Index now batch reaches a terminal state", async () => {
-    const adapter = renderRail({
-      relatednessResult: { status: "stale", items: [] },
+  it("polls readiness after Index now and stops on ready", async () => {
+    harness = createBrowserTestHarness({ clock: { now: 0 } });
+    const adapter = createTestOperations([
+      { status: "stale", items: [] },
+      { status: "ready", items: [] },
+    ]);
+    renderRail(adapter, harness.wrapper);
+
+    await act(async () => {
+      await harness!.clock!.advanceBy(0);
+    });
+    expect(adapter.relatednessRequestCount()).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Index now" }));
+    await act(async () => {
+      await harness!.clock!.advanceBy(0);
+    });
+    expect(screen.getByText("Indexing…")).toBeInTheDocument();
+
+    await act(async () => {
+      await harness!.clock!.advanceBy(EMBEDDING_READINESS_POLL_INTERVAL_MS);
+      await Promise.resolve();
+    });
+    expect(adapter.relatednessRequestCount()).toBe(2);
+    await act(async () => {
+      await harness!.clock!.advanceBy(1);
+    });
+    expect(screen.queryByText("Indexing…")).not.toBeInTheDocument();
+
+    // The poll stopped once status turned "ready" — nothing further fires
+    // even well past another interval tick.
+    await act(async () => {
+      await harness!.clock!.advanceBy(EMBEDDING_READINESS_POLL_INTERVAL_MS * 5);
+      await Promise.resolve();
+    });
+    expect(adapter.relatednessRequestCount()).toBe(2);
+  });
+
+  it("shows a check-again affordance once the poll times out", async () => {
+    harness = createBrowserTestHarness({ clock: { now: 0 } });
+    const adapter = createTestOperations([{ status: "stale", items: [] }]);
+    renderRail(adapter, harness.wrapper);
+
+    await act(async () => {
+      await harness!.clock!.advanceBy(0);
     });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Index now" }));
-
-    await waitFor(() => {
-      expect(adapter.relatednessRequestCount()).toBe(2);
+    fireEvent.click(screen.getByRole("button", { name: "Index now" }));
+    await act(async () => {
+      await harness!.clock!.advanceBy(0);
     });
+
+    await act(async () => {
+      await harness!.clock!.advanceBy(EMBEDDING_READINESS_POLL_TIMEOUT_MS);
+      await Promise.resolve();
+    });
+
+    expect(
+      screen.getByText("Still indexing — this can take a minute."),
+    ).toBeInTheDocument();
+    const checkAgainButton = screen.getByRole("button", {
+      name: "Check again",
+    });
+
+    const requestsBeforeCheck = adapter.relatednessRequestCount();
+    fireEvent.click(checkAgainButton);
+    await act(async () => {
+      await harness!.clock!.advanceBy(0);
+    });
+    expect(adapter.relatednessRequestCount()).toBe(requestsBeforeCheck + 1);
+    expect(
+      screen.queryByText("Still indexing — this can take a minute."),
+    ).not.toBeInTheDocument();
   });
 
   it("renders image and icon identity marks for ready related products", async () => {
+    harness = createBrowserTestHarness();
     const pictured = testShortcode("product", "PRD-PICTURED");
     const unpictured = testShortcode("product", "PRD-UNPICTURED");
-    renderRail({
-      relatednessResult: {
-        status: "ready",
-        items: [
-          {
-            entity: "product",
-            shortcode: pictured,
-            title: "Pictured related product",
-            score: 0.92,
-            evidence: [{ signal: "Semantic match", detail: null, weight: 1 }],
-          },
-          {
-            entity: "product",
-            shortcode: unpictured,
-            title: "Unpictured related product",
-            score: 0,
-            evidence: [{ signal: "Shared tag", detail: null, weight: 0 }],
-          },
-        ],
-      },
-      imageSummaries: {
-        [pictured]: [
-          productImage(
-            testShortcode("image", "IMG-PICTURED"),
-            "https://images.example/cover.jpg",
-          ),
-        ],
-      },
-    });
+    const relatednessResult: RelatednessOut = {
+      status: "ready",
+      items: [
+        {
+          entity: "product",
+          shortcode: pictured,
+          title: "Pictured related product",
+          score: 0.92,
+          evidence: [{ signal: "Semantic match", detail: null, weight: 1 }],
+        },
+        {
+          entity: "product",
+          shortcode: unpictured,
+          title: "Unpictured related product",
+          score: 0,
+          evidence: [{ signal: "Shared tag", detail: null, weight: 0 }],
+        },
+      ],
+    };
+    const adapter = createTestOperations([relatednessResult]);
+    render(
+      <RelatednessRail
+        product={{ id: testShortcode("product", "PRD-SOURCE"), tags: [] }}
+        operations={adapter.operations}
+        imageSummaries={{
+          [pictured]: [
+            productImage(
+              testShortcode("image", "IMG-PICTURED"),
+              "https://images.example/cover.jpg",
+            ),
+          ],
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
 
     const picturedLink = await screen.findByRole("link", {
       name: "Pictured related product",

@@ -51,8 +51,6 @@ describe("garden workflows", () => {
     services: {
       // SAFETY: planting deletion never invokes recipe side effects.
       recipeCosting: undefined as never,
-      // SAFETY: planting deletion never invokes location valuation.
-      locationValuation: undefined as never,
     },
   });
 

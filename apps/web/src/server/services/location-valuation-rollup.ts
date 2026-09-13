@@ -1,7 +1,8 @@
 /**
  * Pure tree-rollup for per-location inventory valuation — no DB/IO, so it's
- * unit-testable in isolation. location-valuation.service feeds it the repo's
- * read and persists the result.
+ * unit-testable in isolation. `repo/location/valuation.ts`'s
+ * `computeLocationValuations` feeds it the repo's read, on demand, on every
+ * call — there is no persisted result.
  *
  * `direct` = items placed at a location; `total` = direct + all descendants.
  */

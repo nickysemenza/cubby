@@ -1,3 +1,5 @@
+import "../entity-kernel/projection.integration.test";
+import "../entity-kernel/write-transaction.integration.test";
 import "../repo/cookbook.integration.test";
 import "../repo/image.integration.test";
 import "../repo/problems/detectors-integrity.integration.test";

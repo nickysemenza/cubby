@@ -79,6 +79,8 @@
     "./ai": "./src/ai.ts",
     "./agent": "./src/agent.ts",
     "./background-jobs": "./src/background-jobs.ts",
+    "./background-tasks": "./src/background-tasks.ts",
+    "./maintenance": "./src/maintenance.ts",
     "./queue-messages": "./src/queue-messages.ts",
     "./telemetry": "./src/telemetry.ts",
     "./calendar": "./src/calendar.ts",

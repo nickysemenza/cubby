@@ -18,7 +18,6 @@ export const ai = defineOperationDomain(aiContract, {
   suggestIngredientMergeBatch: { invalidates: ripple.ingredient },
   usageRecent: { tags: [["ai", "usage"]] },
   usageSummary: { tags: [["ai", "usage"]] },
-  auditCategories: { invalidates: ripple.product },
 });
 
 export const aiStreams = defineOperationDomain(aiStreamsContract);

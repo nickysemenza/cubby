@@ -268,7 +268,6 @@ export const aiBackfillLocationDescriptionsEventSchema = z.discriminatedUnion(
       result: z.object({
         enqueued: z.number().int().nonnegative(),
         total: z.number().int().nonnegative(),
-        batchId: z.string(),
       }),
     }),
   ],
@@ -304,20 +303,6 @@ export const aiEnrichmentProposalEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const categoryAuditSchema = z.object({
-  suggestions: z.array(
-    z.object({
-      categoryName: z.string(),
-      description: z.string(),
-      productNames: z.array(z.string()),
-      reasoning: z.string(),
-    }),
-  ),
-  summary: z.string(),
-});
-
-export type CategoryAudit = z.infer<typeof categoryAuditSchema>;
-
 export const aiUsageCacheStatus = z.enum(["hit", "miss", "none"]);
 export type AiUsageCacheStatus = z.infer<typeof aiUsageCacheStatus>;
 
@@ -343,7 +328,6 @@ export const aiUsageEntrySchema = z.object({
   durationMs: z.number().int(),
   entityType: z.string().nullable(),
   entityId: z.string().nullable(),
-  batchId: z.string().nullable(),
   createdAt: z.coerce.date(),
 });
 

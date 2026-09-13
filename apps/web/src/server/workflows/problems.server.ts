@@ -1,7 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
-  cleanupOrphanedEntityEmbeddingsInput,
-  cleanupOrphanedEntityEmbeddingsOut,
   coverageTotalsSchema,
   deleteUnusedIngredientsInput,
   deleteUnusedIngredientsOut,
@@ -30,7 +28,6 @@ import {
   findViewProblems,
 } from "~/server/services/problem-views.service";
 import {
-  cleanupOrphanedEntityEmbeddings,
   deleteUnusedIngredients,
   dryRunPruneAliases,
   dryRunReparse,
@@ -93,10 +90,6 @@ const problemsWorkflowSchemas = {
     input: deleteUnusedIngredientsInput,
     output: deleteUnusedIngredientsOut,
   },
-  cleanupOrphanedEmbeddings: {
-    input: cleanupOrphanedEntityEmbeddingsInput,
-    output: cleanupOrphanedEntityEmbeddingsOut,
-  },
 };
 
 export const findFastProblemsWorkflow = defineWorkflowOperation(
@@ -154,21 +147,6 @@ export const recipeUsageByProductWorkflow = defineWorkflowOperation(
     input: z.output<typeof recipeUsageByProductInput>,
   ) => recipeUsageCountsByProduct(c.db, input.productShortcodes),
 );
-export const cleanupOrphanedEmbeddingsWorkflow = bindWorkflow(
-  workflow<
-    ProblemsWorkflowContext,
-    z.output<typeof cleanupOrphanedEntityEmbeddingsInput>
-  >("problems.cleanupOrphanedEmbeddings")
-    .commit("cleaned", async ({ context }, { input }) =>
-      cleanupOrphanedEntityEmbeddings(context.db, input?.ids),
-    )
-    .output(({ cleaned }) => cleaned),
-  (
-    context: ProblemsWorkflowContext,
-    input: z.output<typeof cleanupOrphanedEntityEmbeddingsInput>,
-  ) => ({ context, input }),
-);
-
 type DeleteUnusedIngredientsInput = z.output<
   typeof deleteUnusedIngredientsInput
 >;

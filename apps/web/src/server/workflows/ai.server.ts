@@ -19,10 +19,9 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
-import { CATEGORY_DESCRIPTIONS, getAiClient } from "~/server/clients/ai";
+import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { listRecentAiUsage, summarizeAiUsage } from "~/server/repo/ai-usage";
-import { getProductSummaryForAudit } from "~/server/repo/product";
 import {
   resolveAllOrThrow,
   resolveLiveShortcodes,
@@ -328,19 +327,6 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
     input: undefined,
     signal,
   }),
-);
-export const auditCategoriesWorkflow = bindWorkflow(
-  workflow<Database, undefined>("ai.auditCategories")
-    .call("products", ({ context }) => getProductSummaryForAudit(context))
-    .call("audit", ({ context }, { products }) =>
-      getAiClient().auditCategories(products, CATEGORY_DESCRIPTIONS, {
-        db: context,
-        operation: "auditCategories",
-        cacheStatus: "none",
-      }),
-    )
-    .output(({ audit }) => audit),
-  (db: Database) => ({ context: db, input: undefined }),
 );
 export const listAiUsageRecentWorkflow = defineWorkflowOperation(
   "ai.usageRecent",

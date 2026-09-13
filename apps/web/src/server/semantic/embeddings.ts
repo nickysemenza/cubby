@@ -81,7 +81,6 @@ export async function embedTexts(
     db?: Database;
     feature?: string;
     entity?: { entityType: string; entityId: string };
-    batchId?: string;
   },
   ports: EmbeddingPorts = productionEmbeddingPorts,
 ): Promise<number[][]> {
@@ -103,14 +102,11 @@ export async function embedTexts(
       "ai.input_count": texts.length,
     });
     const startedAt = performance.now();
-    // At most five entries survive the gateway; `batchId` is the fifth and is
-    // omitted rather than displacing one of the four that always apply.
     const metadata: GatewayMetadata = {
       feature,
       operation,
       inputCount: texts.length,
     };
-    if (opts?.batchId) metadata.batchId = opts.batchId;
     const result = await embed({
       adapter: ports.adapter(config, metadata),
       input: texts,
@@ -129,7 +125,6 @@ export async function embedTexts(
         durationMs: Math.round(performance.now() - startedAt),
         cacheStatus: "none",
         entity: opts.entity,
-        batchId: opts.batchId,
       });
     }
 

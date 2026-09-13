@@ -14,7 +14,6 @@ import {
   makeExpenseInput,
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
-import { LocationValuationService } from "~/server/services/location-valuation.service";
 import { runDiagnostic } from "~/server/services/problem-diagnostics.service";
 import { createProductWriteActions } from "~/server/services/product.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
@@ -254,7 +253,6 @@ describe("applyUpcDataWithSideEffects", () => {
         db: ctx.db,
         product: createProductWriteActions(ctx.db, usdaClient()),
         recipeCosting: new RecipeCostingService(ctx.db, usdaClient()),
-        locationValuation: new LocationValuationService(ctx.db),
         upcLookupClient: upcLookupClient(async () =>
           upcResponse({ upc, priceDollars: 9.99 }),
         ),
@@ -297,7 +295,6 @@ describe("applyUpcDataWithSideEffects", () => {
         db: ctx.db,
         product: createProductWriteActions(ctx.db, usdaClient()),
         recipeCosting: new RecipeCostingService(ctx.db, usdaClient()),
-        locationValuation: new LocationValuationService(ctx.db),
         upcLookupClient: lookup,
       },
       { id: product.entityId, upc },

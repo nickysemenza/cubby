@@ -63,12 +63,11 @@ export const ingredientEntityAdapter = defineEntityAdapter({
         data,
         ctx.actorContext,
       );
-      const backgroundBatches =
-        await ctx.services.recipeCosting.recomputeForIngredient(entityId, {
-          source: "ingredient.update",
-          entity: { entityType: "ingredient", entityId },
-        });
-      return { output, entityId, backgroundBatches };
+      await ctx.services.recipeCosting.recomputeForIngredient(entityId, {
+        source: "ingredient.update",
+        entity: { entityType: "ingredient", entityId },
+      });
+      return { output, entityId };
     },
     bulkUpdate: async (ctx, shortcodes, data) => {
       const ids = await ingredientShortcodes.all(ctx.db, shortcodes);
@@ -78,7 +77,7 @@ export const ingredientEntityAdapter = defineEntityAdapter({
         data,
         ctx.actorContext,
       );
-      const backgroundBatches = await runMutationSideEffectsForEntities(
+      await runMutationSideEffectsForEntities(
         ctx.db,
         updatedIds.map((entityId) => ({
           action: "updated" as const,
@@ -92,13 +91,12 @@ export const ingredientEntityAdapter = defineEntityAdapter({
           "ingredient",
           shortcodes.filter((_, index) => updatedSet.has(ids[index]!)),
         ),
-        backgroundBatches,
       };
     },
     delete: async (ctx, shortcodes) => {
       const ids = await ingredientShortcodes.all(ctx.db, shortcodes);
       await deleteIngredients(ctx.db, ids, ctx.actorContext);
-      const backgroundBatches = await runMutationSideEffectsForEntities(
+      await runMutationSideEffectsForEntities(
         ctx.db,
         ids.map((entityId) => ({
           action: "deleted" as const,
@@ -108,7 +106,6 @@ export const ingredientEntityAdapter = defineEntityAdapter({
       );
       return {
         deletedReferences: entityMutationReferences("ingredient", shortcodes),
-        backgroundBatches,
       };
     },
   },
@@ -123,23 +120,21 @@ export const ingredientEntityAdapter = defineEntityAdapter({
     execute: async (ctx, input) => {
       const summary = await mergeIngredients(ctx.db, input, ctx.actorContext);
       const entityId = await ingredientShortcodes.one(ctx.db, input.keepId);
-      const backgroundBatches = [
-        ...(await ctx.services.recipeCosting.dispatchRecompute(
-          summary.affectedRecipeIds,
-          {
-            source: "ingredient.merge",
-            entity: { entityType: "ingredient", entityId },
-          },
-        )),
-        ...(await runMutationSideEffectsForEntities(
-          ctx.db,
-          summary.deletedEntityIds.map((deletedEntityId) => ({
-            action: "deleted" as const,
-            entity: { entity: "ingredient" as const, id: deletedEntityId },
-            source: "ingredient.merge",
-          })),
-        )),
-      ];
+      await ctx.services.recipeCosting.dispatchRecompute(
+        summary.affectedRecipeIds,
+        {
+          source: "ingredient.merge",
+          entity: { entityType: "ingredient", entityId },
+        },
+      );
+      await runMutationSideEffectsForEntities(
+        ctx.db,
+        summary.deletedEntityIds.map((deletedEntityId) => ({
+          action: "deleted" as const,
+          entity: { entity: "ingredient" as const, id: deletedEntityId },
+          source: "ingredient.merge",
+        })),
+      );
       return {
         output: {
           ingredient: await getIngredientByID(ctx.db, entityId),
@@ -147,7 +142,6 @@ export const ingredientEntityAdapter = defineEntityAdapter({
         },
         entityId,
         detachedImageKeys: [],
-        backgroundBatches,
       };
     },
   },

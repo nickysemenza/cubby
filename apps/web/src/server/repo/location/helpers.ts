@@ -5,12 +5,17 @@
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
 import { gardenLocationKind } from "@cubby/schemas/garden-fields";
-import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type LocationId,
+  type ProductId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
   LocationListItemOut,
   LocationListRefOut,
   LocationOut,
+  LocationValuation,
 } from "@cubby/schemas/location";
 import { sumBy } from "es-toolkit";
 
@@ -50,6 +55,7 @@ export const dbLocationToAPI = (
       deletedAt?: Date | null;
     }>;
   },
+  valuations?: ReadonlyMap<LocationId, LocationValuation>,
 ): LocationOut => {
   return {
     id: parseShortcodeFor("location", locationData.shortcode),
@@ -68,7 +74,7 @@ export const dbLocationToAPI = (
     }),
     product: mapLocationIdentityProduct(locationData),
     images: mapImages(locationData.images),
-    valuation: locationData.valuation ?? null,
+    valuation: valuations?.get(locationData.id) ?? null,
     ...extractDbTimestampsFromDBRec(locationData),
   };
 };
@@ -87,8 +93,9 @@ const dbLocationToListRef = (
 export const dbLocationToListAPI = (
   locationData: LocationListDB,
   pricingByProductId: ReadonlyMap<ProductId, ProductPricing>,
+  valuations?: ReadonlyMap<LocationId, LocationValuation>,
 ): LocationListItemOut => ({
-  ...dbLocationToAPI(locationData),
+  ...dbLocationToAPI(locationData, valuations),
   parent:
     locationData.parent && isNotDeleted(locationData.parent)
       ? dbLocationToListRef(locationData.parent)
@@ -124,13 +131,19 @@ export const buildLocationWithChildren = (
   x: LocationWithParentChild,
   excludeId?: string,
   includeParent = true,
+  valuations?: ReadonlyMap<LocationId, LocationValuation>,
 ): InfLocation => {
   const children =
     x.children && x.children.length > 0
       ? x.children
           .filter((child) => child.id !== excludeId && child.deletedAt === null)
           .map((child) =>
-            buildLocationWithChildren(child, excludeId, includeParent),
+            buildLocationWithChildren(
+              child,
+              excludeId,
+              includeParent,
+              valuations,
+            ),
           )
       : [];
 
@@ -155,11 +168,16 @@ export const buildLocationWithChildren = (
     type: parseLocationType(x.type, { id: x.id, name: x.name }),
     product: mapLocationIdentityProduct(x),
     images: mapImages(x.images),
-    valuation: x.valuation ?? null,
+    valuation: valuations?.get(x.id) ?? null,
     children,
     parent:
       includeParent && x.parent
-        ? buildLocationWithChildren(x.parent, excludeId, includeParent)
+        ? buildLocationWithChildren(
+            x.parent,
+            excludeId,
+            includeParent,
+            valuations,
+          )
         : undefined,
     // getLocationById queries childCount directly; the tree builder doesn't,
     // so fall back to the children it already materialized.

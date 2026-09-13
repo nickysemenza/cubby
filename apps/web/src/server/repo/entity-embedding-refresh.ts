@@ -1,10 +1,9 @@
-import { entityRefKey } from "@cubby/schemas/entity";
 import type { FinancialAccountIdentity } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   cookbook,
   entityEmbedding,
@@ -27,7 +26,7 @@ import {
   wish,
   wishCandidate,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 import { solePurchaseForTransaction } from "~/server/repo/financial-transaction-allocations";
 import { loadAllGtins } from "~/server/repo/product/gtin";
 import type { SemanticEmbeddingConfig } from "~/server/semantic/config";
@@ -63,7 +62,7 @@ interface EmbeddingLoadOptions {
 }
 
 type EmbeddingTextLoader = (
-  db: Database,
+  db: Database | DrizzleTransaction,
   options?: EmbeddingLoadOptions,
 ) => Promise<SearchableEntityText[]>;
 
@@ -84,14 +83,14 @@ const withOptionalLimit = <const TConfig extends object>(
  * of its projected text is rewritten, identical or not.
  */
 export async function getStoredEmbeddingHash(
-  db: Database,
+  db: Database | DrizzleTransaction,
   input: {
     entityType: SearchableEntity;
     entityId: string;
     config: SemanticEmbeddingConfig;
   },
 ): Promise<string | null> {
-  const existing = await getDb(db).query.entityEmbedding.findFirst({
+  const existing = await unwrapDb(db).query.entityEmbedding.findFirst({
     where: and(
       eq(entityEmbedding.entityType, input.entityType),
       eq(entityEmbedding.entityId, input.entityId),
@@ -103,43 +102,6 @@ export async function getStoredEmbeddingHash(
     columns: { embeddingHash: true },
   });
   return existing?.embeddingHash ?? null;
-}
-
-/**
- * {@link getStoredEmbeddingHash} for a whole wave, keyed by `entityRefKey`.
- *
- * One query for up to a batch's worth of refs. The pair `(entityType,
- * entityId)` is filtered as two independent `IN` lists rather than as a pair:
- * a row whose id belongs to a different requested type can come back, but no
- * caller can see it, because lookups are by the exact composite key.
- */
-export async function getStoredEmbeddingHashes(
-  db: Database,
-  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
-  config: SemanticEmbeddingConfig,
-): Promise<Map<string, string>> {
-  if (refs.length === 0) return new Map();
-  const rows = await getDb(db).query.entityEmbedding.findMany({
-    where: and(
-      inArray(entityEmbedding.entityType, [
-        ...new Set(refs.map((ref) => ref.entityType)),
-      ]),
-      inArray(entityEmbedding.entityId, [
-        ...new Set(refs.map((ref) => ref.entityId)),
-      ]),
-      eq(entityEmbedding.provider, config.provider),
-      eq(entityEmbedding.model, config.model),
-      eq(entityEmbedding.dimensions, config.dimensions),
-      notDeleted(entityEmbedding),
-    ),
-    columns: { entityType: true, entityId: true, embeddingHash: true },
-  });
-  return new Map(
-    rows.map((row) => [
-      entityRefKey(row.entityType, row.entityId),
-      row.embeddingHash,
-    ]),
-  );
 }
 
 export interface EntityEmbeddingUpsert extends SearchableEntityText {
@@ -164,59 +126,50 @@ const vectorParam = (embedding: number[]): SQL => {
   return sql`${`[${embedding.join(",")}]`}::vector`;
 };
 
-// A batch write of 1536-float vectors is the largest statement this codebase
-// sends; 32 rows keeps it around 0.6 MB of bound parameters.
-const EMBEDDING_UPSERT_CHUNK = 32;
-
 /**
- * {@link upsertEntityEmbedding} for a whole wave: one statement per 32 rows.
+ * Write one vector only if the projection it was computed for is still the
+ * live projection.
  *
- * Deliberately NOT `updateAndReturn`/`insertAndReturn`, and no `RETURNING` at
- * all: that would ship every 1536-float vector back over the wire and re-parse
- * it into a JS array via `pgVector.fromDriver` (~30 KB per write) for a
- * function that returns void. Writes here are already the hot path — each one
- * rewrites a 258 MB HNSW entry. The driver-level `traceQuery` span in db.ts
- * still covers these, so no observability is lost.
+ * The provider call happened outside any transaction, so by the time the
+ * vector arrives the entity may have been edited again or deleted. Joining
+ * the write to `SearchDocument` on the exact text that was embedded makes the
+ * check and the write one statement: a newer projection never receives an
+ * older vector, and a soft-deleted document never gets a vector resurrected.
+ * `"obsolete"` means exactly that — the caller should not retry with the same
+ * vector; the next refresh task (or "Settle now") will embed the current text.
  */
-export async function upsertEntityEmbeddings(
-  db: Database,
-  rows: ReadonlyArray<EntityEmbeddingUpsert>,
-): Promise<void> {
-  for (let index = 0; index < rows.length; index += EMBEDDING_UPSERT_CHUNK) {
-    const chunk = rows.slice(index, index + EMBEDDING_UPSERT_CHUNK);
-    const values = chunk.map(
-      (row) => sql`(
-        ${row.entityType}::text, ${row.entityId}::uuid,
-        ${row.embeddingText}::text, ${row.embeddingHash}::text,
-        ${row.config.provider}::text, ${row.config.model}::text,
-        ${row.config.dimensions}::integer, ${vectorParam(row.embedding)}
-      )`,
-    );
-    await getDb(db).execute(sql`
-      INSERT INTO "EntityEmbedding" (
-        "entityType", "entityId", "embeddingText", "embeddingHash",
-        provider, model, dimensions, embedding, "updatedAt"
-      )
-      SELECT input."entityType", input."entityId", input."embeddingText",
-        input."embeddingHash", input.provider, input.model, input.dimensions,
-        input.embedding, now()
-      FROM (VALUES ${sql.join(values, sql`, `)}) AS input(
-        "entityType", "entityId", "embeddingText", "embeddingHash",
-        provider, model, dimensions, embedding
-      )
-      ON CONFLICT ("entityType", "entityId", provider, model, dimensions)
-        WHERE "deletedAt" IS NULL
-      DO UPDATE SET
-        "embeddingText" = EXCLUDED."embeddingText",
-        "embeddingHash" = EXCLUDED."embeddingHash",
-        embedding = EXCLUDED.embedding,
-        "updatedAt" = now()
-    `);
-  }
+export async function upsertEntityEmbeddingIfCurrent(
+  db: Database | DrizzleTransaction,
+  input: EntityEmbeddingUpsert,
+): Promise<"written" | "obsolete"> {
+  const result = await unwrapDb(db).execute<{ entityId: string }>(sql`
+    INSERT INTO "EntityEmbedding" (
+      "entityType", "entityId", "embeddingText", "embeddingHash",
+      provider, model, dimensions, embedding, "updatedAt"
+    )
+    SELECT sd."entityType", sd."entityId", sd."semanticText",
+      ${input.embeddingHash}::text, ${input.config.provider}::text,
+      ${input.config.model}::text, ${input.config.dimensions}::integer,
+      ${vectorParam(input.embedding)}, now()
+    FROM "SearchDocument" sd
+    WHERE sd."entityType" = ${input.entityType}
+      AND sd."entityId" = ${input.entityId}::uuid
+      AND sd."deletedAt" IS NULL
+      AND sd."semanticText" = ${input.embeddingText}::text
+    ON CONFLICT ("entityType", "entityId", provider, model, dimensions)
+      WHERE "deletedAt" IS NULL
+    DO UPDATE SET
+      "embeddingText" = EXCLUDED."embeddingText",
+      "embeddingHash" = EXCLUDED."embeddingHash",
+      embedding = EXCLUDED.embedding,
+      "updatedAt" = now()
+    RETURNING "entityId"::text AS "entityId"
+  `);
+  return result.rows.length > 0 ? "written" : "obsolete";
 }
 
 export async function upsertEntityEmbedding(
-  db: Database,
+  db: Database | DrizzleTransaction,
   input: SearchableEntityText & {
     config: SemanticEmbeddingConfig;
     embedding: number[];
@@ -230,7 +183,7 @@ export async function upsertEntityEmbedding(
     text: normalizeSearchText(input.embeddingText),
   });
 
-  const existing = await getDb(db).query.entityEmbedding.findFirst({
+  const existing = await unwrapDb(db).query.entityEmbedding.findFirst({
     where: and(
       eq(entityEmbedding.entityType, input.entityType),
       eq(entityEmbedding.entityId, input.entityId),
@@ -263,18 +216,18 @@ export async function upsertEntityEmbedding(
   // hot path: each one rewrites a 258 MB HNSW entry. The driver-level
   // `traceQuery` span in db.ts still covers these, so no observability is lost.
   if (existing) {
-    await getDb(db)
+    await unwrapDb(db)
       .update(entityEmbedding)
       .set(values)
       .where(eq(entityEmbedding.id, existing.id));
     return;
   }
 
-  await getDb(db).insert(entityEmbedding).values(values);
+  await unwrapDb(db).insert(entityEmbedding).values(values);
 }
 
 async function getProductEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
@@ -300,7 +253,7 @@ async function getProductEmbeddingTexts(
     },
     options.limit,
   );
-  const rows = await getDb(db).query.product.findMany(queryConfig);
+  const rows = await unwrapDb(db).query.product.findMany(queryConfig);
   const gtins = await loadAllGtins(
     db,
     rows.map((row) => row.id),
@@ -316,7 +269,7 @@ async function getProductEmbeddingTexts(
 }
 
 async function getWishEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
@@ -344,7 +297,7 @@ async function getWishEmbeddingTexts(
     },
     options.limit,
   );
-  const rows = await getDb(db).query.wish.findMany(queryConfig);
+  const rows = await unwrapDb(db).query.wish.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "wish",
     entityId: row.id,
@@ -365,7 +318,7 @@ async function getWishEmbeddingTexts(
 }
 
 async function getLocationEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
@@ -389,7 +342,7 @@ async function getLocationEmbeddingTexts(
     },
     options.limit,
   );
-  const rows = await getDb(db).query.location.findMany(queryConfig);
+  const rows = await unwrapDb(db).query.location.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "location",
     entityId: row.id,
@@ -398,7 +351,7 @@ async function getLocationEmbeddingTexts(
 }
 
 async function getIngredientEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
@@ -421,7 +374,7 @@ async function getIngredientEmbeddingTexts(
     },
     options.limit,
   );
-  const rows = await getDb(db).query.ingredient.findMany(queryConfig);
+  const rows = await unwrapDb(db).query.ingredient.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "ingredient",
     entityId: row.id,
@@ -430,10 +383,10 @@ async function getIngredientEmbeddingTexts(
 }
 
 async function getRecipeEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const query = getDb(db)
+  const query = unwrapDb(db)
     .select({
       id: recipe.id,
       name: recipe.name,
@@ -478,7 +431,7 @@ async function getRecipeEmbeddingTexts(
 }
 
 async function getCookbookEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
@@ -502,7 +455,7 @@ async function getCookbookEmbeddingTexts(
     },
     options.limit,
   );
-  const rows = await getDb(db).query.cookbook.findMany(queryConfig);
+  const rows = await unwrapDb(db).query.cookbook.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "cookbook",
     entityId: row.id,
@@ -514,10 +467,10 @@ async function getCookbookEmbeddingTexts(
 // searchable identity — aggregated here the same way recipes fold in their
 // ingredient names.
 async function getMealEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const query = getDb(db)
+  const query = unwrapDb(db)
     .select({
       id: meal.id,
       name: meal.name,
@@ -562,10 +515,10 @@ async function getMealEmbeddingTexts(
 }
 
 async function getInventoryEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const query = getDb(db)
+  const query = unwrapDb(db)
     .select({
       id: inventoryEntry.id,
       amount: inventoryEntry.amount,
@@ -621,7 +574,7 @@ async function getInventoryEmbeddingTexts(
 }
 
 async function getProjectEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
@@ -646,7 +599,7 @@ async function getProjectEmbeddingTexts(
     },
     options.limit,
   );
-  const rows = await getDb(db).query.project.findMany(queryConfig);
+  const rows = await unwrapDb(db).query.project.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "project",
     entityId: row.id,
@@ -655,10 +608,10 @@ async function getProjectEmbeddingTexts(
 }
 
 async function getTaskEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const query = getDb(db)
+  const query = unwrapDb(db)
     .select({
       id: task.id,
       name: task.name,
@@ -691,10 +644,10 @@ async function getTaskEmbeddingTexts(
 }
 
 async function getExpenseEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const query = getDb(db)
+  const query = unwrapDb(db)
     .select({
       id: expense.id,
       name: expense.name,
@@ -734,7 +687,7 @@ async function getExpenseEmbeddingTexts(
 }
 
 async function getVendorEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
@@ -752,7 +705,7 @@ async function getVendorEmbeddingTexts(
     },
     options.limit,
   );
-  const rows = await getDb(db).query.vendor.findMany(queryConfig);
+  const rows = await unwrapDb(db).query.vendor.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "vendor",
     entityId: row.id,
@@ -761,10 +714,10 @@ async function getVendorEmbeddingTexts(
 }
 
 async function getPurchaseEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const query = getDb(db)
+  const query = unwrapDb(db)
     .select({
       id: purchase.id,
       vendorName: vendor.name,
@@ -835,7 +788,7 @@ const identityTerms = (identity: FinancialAccountIdentity): string[] => {
 };
 
 async function getFinancialAccountEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
@@ -859,7 +812,7 @@ async function getFinancialAccountEmbeddingTexts(
     },
     options.limit,
   );
-  const rows = await getDb(db).query.financialAccount.findMany(queryConfig);
+  const rows = await unwrapDb(db).query.financialAccount.findMany(queryConfig);
   return rows.map((row) => ({
     entityType: "financialAccount",
     entityId: row.id,
@@ -877,10 +830,10 @@ async function getFinancialAccountEmbeddingTexts(
 }
 
 async function getFinancialTransactionEmbeddingTexts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   options: EmbeddingLoadOptions = {},
 ): Promise<SearchableEntityText[]> {
-  const query = getDb(db)
+  const query = unwrapDb(db)
     .select({
       id: financialTransaction.id,
       merchant: financialTransaction.merchant,
@@ -962,7 +915,7 @@ const embeddingTextLoaders = {
 } satisfies Record<SearchableEntity, EmbeddingTextLoader>;
 
 export async function getEmbeddingTextsForEntityTypes(
-  db: Database,
+  db: Database | DrizzleTransaction,
   entityTypes: SearchableEntity[],
   limit?: number,
 ): Promise<SearchableEntityText[]> {
@@ -985,7 +938,7 @@ export async function getEmbeddingTextsForEntityTypes(
  * wave — 3,945 of them in one production sample.
  */
 export async function getEmbeddingTextsForRefs(
-  db: Database,
+  db: Database | DrizzleTransaction,
   idsByType: ReadonlyMap<SearchableEntity, string[]>,
 ): Promise<SearchableEntityText[]> {
   const chunks = await Promise.all(

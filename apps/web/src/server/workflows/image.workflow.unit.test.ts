@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   attachFileWorkflow,
-  cleanupUnreferencedImagesWorkflow,
   createFileUploadWorkflow,
   cullPendingImagesWorkflow,
   importImageFromUrlWorkflow,
@@ -15,7 +14,6 @@ describe("image workflow commit ownership", () => {
   it("declares storage operations that write image rows as committed", () => {
     for (const workflow of [
       attachFileWorkflow,
-      cleanupUnreferencedImagesWorkflow,
       createFileUploadWorkflow,
       cullPendingImagesWorkflow,
       importImageFromUrlWorkflow,

@@ -48,6 +48,7 @@ import { dbLocationToAPI } from "./helpers";
 import { getHomeLocation } from "./home";
 import { parseLocationType } from "./parse-type";
 import { loadLocationAncestors } from "./tree";
+import { computeLocationValuations } from "./valuation";
 
 // Self-join alias for the child-existence check in `locationParentOptions` —
 // the outer query and the EXISTS subquery both read the `location` table, and
@@ -132,15 +133,18 @@ export const getLocationsByShortcodes = async (
 ): Promise<(LocationOut & { parentName: string | null })[]> => {
   if (shortcodes.length === 0) return [];
   const uppercased = shortcodes.map((s) => s.toUpperCase());
-  const results = await getDb(db).query.location.findMany({
-    where: and(inArray(location.shortcode, uppercased), notDeleted(location)),
-    with: {
-      ...relations.location.withImages.with,
-      parent: true,
-    },
-  });
+  const [results, valuations] = await Promise.all([
+    getDb(db).query.location.findMany({
+      where: and(inArray(location.shortcode, uppercased), notDeleted(location)),
+      with: {
+        ...relations.location.withImages.with,
+        parent: true,
+      },
+    }),
+    computeLocationValuations(db),
+  ]);
   return results.map((r) => ({
-    ...dbLocationToAPI(r),
+    ...dbLocationToAPI(r, valuations),
     parentName: r.parent?.name ?? null,
   }));
 };

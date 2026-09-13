@@ -8,7 +8,6 @@ import {
   locationSearchWorkflow,
   makeTreeWorkflow,
   parentOptionsWorkflow,
-  recomputeValuationsWorkflow,
   subtreeWorkflow,
   valuationSummaryWorkflow,
 } from "~/server/workflows/location.server";
@@ -22,6 +21,5 @@ export const locationHandlers = implementOperationDomain(locationContract, {
   ensureGlobalUnknown: ensureGlobalUnknownWorkflow,
   bulkUpdateParent: bulkUpdateParentWorkflow,
   getByShortcodes: getByShortcodesWorkflow,
-  recomputeValuations: recomputeValuationsWorkflow,
   search: locationSearchWorkflow,
 });

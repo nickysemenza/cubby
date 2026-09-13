@@ -1,64 +1,94 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import {
-  backgroundQueueMessageSchema,
-  QUEUE_MESSAGE_VERSION,
-} from "./queue-messages";
+  backgroundTaskSchema,
+  RECIPE_RECOMPUTE_CHUNK_SIZE,
+} from "./background-tasks";
+import type { RecipeId } from "./identifiers";
+import { mutationSideEffectsSchema } from "./background-jobs";
+import { backgroundTaskMessageSchema } from "./queue-messages";
+import { telemetryMessageV1Schema } from "./telemetry";
+import { testEntityId } from "./test-support/identifiers";
 
-const message = {
-  version: QUEUE_MESSAGE_VERSION,
-  queueType: "background" as const,
-  batchId: "batch-1",
-  jobId: "job-1",
-  kind: "entity-embedding.refresh" as const,
-};
+const requestedAt = "2026-09-12T12:00:00.000Z";
 
-describe("backgroundQueueMessageSchema", () => {
-  it("parses a well-formed wakeup", () => {
-    expect(backgroundQueueMessageSchema.parse(message)).toEqual(message);
+describe("background task messages", () => {
+  it("parses a version-2 message and brands the task's ids", () => {
+    const entityId = testEntityId("product", "embedding");
+    const parsed = backgroundTaskMessageSchema.parse({
+      version: 2,
+      queueType: "background",
+      task: {
+        kind: "entity-embedding.refresh",
+        requestedAt,
+        entityType: "product",
+        entityId,
+      },
+    });
+    if (parsed.task.kind !== "entity-embedding.refresh")
+      throw new Error("wrong kind");
+    // The ref is the branded pair; its id is a union over searchable entities
+    // because the message does not narrow the entity type statically.
+    expectTypeOf(parsed.task.ref.id).toMatchTypeOf<string>();
+    expect(parsed.task.ref).toEqual({ entity: "product", id: entityId });
   });
 
-  it("rejects a stale message version", () => {
-    // Version is a literal, so the schema itself is what retires an old wire
-    // format — the consumer needs no separate version comparison.
+  it("rejects the retired version-1 wakeup instead of treating it as work", () => {
+    const result = backgroundTaskMessageSchema.safeParse({
+      version: 1,
+      queueType: "background",
+      batchId: "b",
+      jobId: "j",
+      kind: "recipe-totals.recompute",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("bounds a recipe recompute task to one chunk", () => {
+    const recipeId = testEntityId("recipe", "totals");
+    const parsed = backgroundTaskSchema.parse({
+      kind: "recipe-totals.recompute",
+      requestedAt,
+      recipeIds: [recipeId],
+    });
+    if (parsed.kind !== "recipe-totals.recompute") throw new Error("wrong");
+    expectTypeOf(parsed.recipeIds).toEqualTypeOf<RecipeId[]>();
     expect(
-      backgroundQueueMessageSchema.safeParse({ ...message, version: 2 })
-        .success,
+      backgroundTaskSchema.safeParse({
+        kind: "recipe-totals.recompute",
+        requestedAt,
+        recipeIds: Array.from({ length: RECIPE_RECOMPUTE_CHUNK_SIZE + 1 }, () =>
+          testEntityId("recipe", "too-many"),
+        ),
+      }).success,
     ).toBe(false);
   });
 
-  it("rejects a telemetry message on the background schema", () => {
+  it("leaves telemetry on its version-1 envelope", () => {
     expect(
-      backgroundQueueMessageSchema.safeParse({
-        ...message,
+      telemetryMessageV1Schema.safeParse({
+        version: 2,
         queueType: "telemetry",
+        eventId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
+        occurredAt: requestedAt,
+        release: "abc",
+        type: "mcp_tool_call",
+        toolName: "x",
+        outcome: "success",
+        registeredAtCall: true,
+        surface: "external_mcp",
+        userId: "u",
+        clientId: "c",
       }).success,
     ).toBe(false);
   });
 
-  it("rejects an unknown job kind", () => {
+  it("keeps the deprecated side-effects field decodable but always empty", () => {
+    expect(mutationSideEffectsSchema.parse({ backgroundBatches: [] })).toEqual({
+      backgroundBatches: [],
+    });
     expect(
-      backgroundQueueMessageSchema.safeParse({ ...message, kind: "nope" })
+      mutationSideEffectsSchema.safeParse({ backgroundBatches: [{ id: "x" }] })
         .success,
     ).toBe(false);
-  });
-
-  it("rejects unknown keys so a payload cannot ride along on the wire", () => {
-    // Payloads live in Postgres; keeping the message strict is what stops one
-    // from being smuggled onto the queue where retries could not inspect it.
-    expect(
-      backgroundQueueMessageSchema.safeParse({
-        ...message,
-        payload: { recipeId: "r1" },
-      }).success,
-    ).toBe(false);
-  });
-
-  it("accepts non-uuid ids, which the Postgres lookup settles instead", () => {
-    expect(
-      backgroundQueueMessageSchema.safeParse({
-        ...message,
-        jobId: "lease-test",
-      }).success,
-    ).toBe(true);
   });
 });

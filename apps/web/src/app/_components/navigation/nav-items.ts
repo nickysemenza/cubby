@@ -152,11 +152,6 @@ export const desktopNav: NavNode[] = [
       { to: "/ai-smoke-test", label: "AI smoke test", icon: Sparkles },
       { to: "/ai-usage", label: "AI usage", icon: Bot },
       { to: "/search/debug", label: "Search debug", icon: Search },
-      {
-        to: "/background-jobs",
-        label: "Background jobs",
-        icon: Database,
-      },
       { to: "/mcp", label: "MCP tools", icon: Plug },
     ],
   },

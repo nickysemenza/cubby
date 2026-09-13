@@ -74,7 +74,10 @@ export const dbInventoryEntryToAPI: (
       lastBulkInventory: location.lastBulkInventory,
       aiDescription: location.aiDescription,
       images: mapImages(location.images),
-      valuation: location.valuation,
+      // Valuation is a whole-tree rollup; an inventory entry's embedded
+      // location is a lightweight identity reference, not a place callers
+      // read this location's own aggregate value from.
+      valuation: null,
       name: location.name,
       aliases: location.aliases ?? [],
       gardenKind: location.gardenKind

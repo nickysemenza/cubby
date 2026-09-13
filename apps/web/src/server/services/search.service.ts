@@ -1,8 +1,6 @@
-import { searchDocumentRepairCoordinatorPayloadSchema } from "@cubby/schemas/background-jobs";
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type RelatedSearchOut,
-  type RepairSearchDocumentsOut,
   type SearchableEntity,
   type SearchHit,
   type SearchQueryInput,
@@ -13,18 +11,9 @@ import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
-import {
-  continueWorkflow,
-  startOrReuseWorkflow,
-} from "~/server/background-workflow";
 import type { Database } from "~/server/db";
-import { findLatestBackgroundWorkflow } from "~/server/repo/background-jobs";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
-import {
-  executeSearchDocumentSql,
-  getSearchDocumentOrphanPage,
-  getSearchDocumentSourceRepairPage,
-} from "~/server/repo/search-document";
+import { executeSearchDocumentSql } from "~/server/repo/search-document";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/semantic/constants";
 import {
@@ -103,204 +92,6 @@ const withThumbnails = async (
     imageUrl: images.get(entityRefKey(candidate.entityType, entityId)) ?? null,
   }));
 };
-
-type SearchDocumentRepairMetadata = z.output<
-  typeof searchDocumentRepairCoordinatorPayloadSchema
->;
-type SearchDocumentRepairMetadataInput = z.input<
-  typeof searchDocumentRepairCoordinatorPayloadSchema
->;
-type SearchDocumentRepairWorkflow = SearchDocumentRepairMetadata["workflow"];
-type SearchDocumentRepairBatch = Awaited<
-  ReturnType<typeof findLatestBackgroundWorkflow>
->;
-
-const readSearchDocumentRepairMetadata = (
-  value: unknown,
-): SearchDocumentRepairMetadata | null => {
-  const parsed = searchDocumentRepairCoordinatorPayloadSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
-};
-
-type SearchDocumentHealthState =
-  | "never-run"
-  | "running"
-  | "completed"
-  | "failed";
-type SearchDocumentHealth = {
-  state: SearchDocumentHealthState;
-  completedAt: Date | null;
-};
-
-const searchDocumentHealth = (
-  batch: SearchDocumentRepairBatch,
-): SearchDocumentHealth => {
-  if (!batch) return { state: "never-run", completedAt: null };
-  if (batch.status === "queued" || batch.status === "running") {
-    return { state: "running", completedAt: null };
-  }
-  return {
-    state: batch.status === "succeeded" ? "completed" : "failed",
-    completedAt: batch.lastJobFinishedAt,
-  };
-};
-
-const searchDocumentFindings = (
-  workflow: SearchDocumentRepairWorkflow | undefined,
-) => {
-  const missing = workflow?.missing ?? 0;
-  const stale = workflow?.stale ?? 0;
-  const orphaned = workflow?.orphaned ?? 0;
-  return { missing, stale, orphaned, total: missing + stale + orphaned };
-};
-
-/** Process one bounded document-repair audit page. */
-export async function continueSearchDocumentRepairWorkflow<Payload>(
-  db: Database,
-  batchId: string,
-  payload: Payload,
-): Promise<"succeeded" | "skipped"> {
-  const metadata = readSearchDocumentRepairMetadata(payload);
-  if (!metadata || metadata.workflow.state === "complete") return "skipped";
-  const page =
-    metadata.workflow.phase === "missing"
-      ? await getSearchDocumentSourceRepairPage(db, [...searchableEntities], {
-          cursor: metadata.workflow.cursor ?? undefined,
-        })
-      : await getSearchDocumentOrphanPage(db, {
-          cursor: metadata.workflow.cursor ?? undefined,
-        });
-  const nextPhase =
-    metadata.workflow.phase === "documents" && !page.nextCursor
-      ? "missing"
-      : metadata.workflow.phase;
-  const complete = metadata.workflow.phase === "missing" && !page.nextCursor;
-  const next: SearchDocumentRepairMetadataInput = {
-    ...metadata,
-    workflow: {
-      ...metadata.workflow,
-      phase: nextPhase,
-      cursor: page.nextCursor,
-      scanned: metadata.workflow.scanned + page.scannedCount,
-      queued:
-        metadata.workflow.queued +
-        (metadata.workflow.phase === "missing" ? page.refs.length : 0),
-      retired:
-        metadata.workflow.retired +
-        ("orphanedCount" in page ? page.orphanedCount : 0),
-      missing:
-        metadata.workflow.missing +
-        ("missingCount" in page ? page.missingCount : 0),
-      stale:
-        metadata.workflow.stale + ("staleCount" in page ? page.staleCount : 0),
-      orphaned:
-        metadata.workflow.orphaned +
-        ("orphanedCount" in page ? page.orphanedCount : 0),
-      state: complete ? "complete" : "active",
-    },
-  };
-  await continueWorkflow(db, {
-    batchId,
-    batchKind: "search-document.repair.coordinator",
-    metadata: next,
-    // Both repair paths use the canonical refresh worker. Missing/stale source
-    // rows are rebuilt; orphan refs resolve missing and are soft-deleted. The
-    // jobs and the page counters are persisted together before delivery.
-    children: page.refs.map((ref) => ({
-      kind: "entity-embedding.refresh" as const,
-      dedupeKey: `search-document.repair:${metadata.workflow.phase}:${ref.entityType}:${ref.entityId}`,
-      payload: ref,
-    })),
-    continuation: complete
-      ? null
-      : {
-          kind: "search-document.repair.coordinator",
-          dedupeKey: `search-document.repair:${batchId}:${metadata.workflow.phase}:${metadata.workflow.scanned}`,
-          payload: next,
-        },
-  });
-  return "succeeded";
-}
-
-/**
- * Durably audit and repair missing, stale, and orphaned search documents through
- * the existing refresh job before doing any domain mutation.
- */
-export async function repairSearchDocuments(
-  db: Database,
-): Promise<RepairSearchDocumentsOut> {
-  const workflow = await startOrReuseWorkflow(db, {
-    kind: "search-document.repair.coordinator",
-    source: "maintenance",
-    dedupeKey: "search-document-repair",
-    metadata: {
-      source: "search.documentRepair",
-      reused: false,
-      workflow: {
-        type: "search-document.repair.coordinator",
-        phase: "documents",
-        cursor: null,
-        scanned: 0,
-        queued: 0,
-        retired: 0,
-        missing: 0,
-        stale: 0,
-        orphaned: 0,
-        state: "active",
-      },
-    },
-    initialJobs: [
-      {
-        kind: "search-document.repair.coordinator",
-        dedupeKey: "search-document-repair:page:0",
-        payload: {
-          source: "search.documentRepair",
-          workflow: {
-            type: "search-document.repair.coordinator",
-            phase: "documents",
-            cursor: null,
-            scanned: 0,
-            queued: 0,
-            retired: 0,
-            missing: 0,
-            stale: 0,
-            orphaned: 0,
-            state: "active",
-          },
-        } satisfies SearchDocumentRepairMetadataInput,
-      },
-    ],
-  });
-  return {
-    batch: workflow.batch,
-    reused: workflow.reused,
-  };
-}
-
-/** Reads only persisted repair workflow metadata; never scans SearchDocument. */
-export async function inspectSearchDocumentHealth(db: Database) {
-  const batch = await findLatestBackgroundWorkflow(
-    db,
-    "search-document.repair.coordinator",
-    "search-document-repair",
-  );
-  const metadata = batch
-    ? readSearchDocumentRepairMetadata(batch.metadata)
-    : null;
-  const workflow = metadata?.workflow;
-  const { state, completedAt } = searchDocumentHealth(batch);
-  return {
-    state,
-    batchId: batch?.id ?? null,
-    findings: searchDocumentFindings(workflow),
-    repaired: {
-      queued: workflow?.queued ?? 0,
-      retired: workflow?.retired ?? 0,
-    },
-    reused: metadata?.reused ?? false,
-    completedAt,
-  } as const;
-}
 
 /** One indexed lexical candidate query; rank before applying the caller limit. */
 export async function findLexicalSearchCandidates(

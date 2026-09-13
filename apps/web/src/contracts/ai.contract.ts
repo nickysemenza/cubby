@@ -9,7 +9,6 @@ import {
   aiUsageSummaryOut,
   approveDetectedInventoryItemInput,
   approveDetectedInventoryItemOut,
-  categoryAuditSchema,
   categorySuggestionInput,
   categorySuggestionSchema,
   detectedInventorySchema,
@@ -105,10 +104,6 @@ export const aiContract = defineContract("ai", {
   usageSummary: query({
     input: aiUsageSummaryInput,
     output: aiUsageSummaryOut,
-  }),
-  auditCategories: mutation({
-    input: zod.undefined(),
-    output: categoryAuditSchema,
   }),
 });
 

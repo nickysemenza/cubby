@@ -414,20 +414,19 @@ const cookbookImportDefinition = defineBulkWorkflow({
         ? context.services.recipeCosting.dispatchRecompute(recipeIds, {
             source: "recipe.importCookbookStream",
           })
-        : [];
+        : 0;
     })
     .effect("sideEffects", async ({ context }, { input }) => {
       const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
-      return recipeIds.length
-        ? runMutationSideEffectsForEntities(
-            context.db,
-            recipeIds.map((id) => ({
-              action: "updated" as const,
-              entity: { entity: "recipe" as const, id },
-              source: "recipe.importCookbookStream",
-            })),
-          )
-        : [];
+      if (recipeIds.length === 0) return;
+      await runMutationSideEffectsForEntities(
+        context.db,
+        recipeIds.map((id) => ({
+          action: "updated" as const,
+          entity: { entity: "recipe" as const, id },
+          source: "recipe.importCookbookStream",
+        })),
+      );
     })
     .output(({ input }): ImportSummary => ({
       succeeded: input.succeeded.filter(({ result }) => result.event.ok).length,
@@ -638,7 +637,7 @@ const notionImportDefinition = defineBulkWorkflow({
         ? context.services.recipeCosting.dispatchRecompute(recipeIds, {
             source: "recipe.importNotionSyncStream",
           })
-        : Promise.resolve([]);
+        : Promise.resolve(0);
     })
     .effect("sideEffects", ({ context }, { input }) => {
       const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
@@ -651,7 +650,7 @@ const notionImportDefinition = defineBulkWorkflow({
               source: "recipe.importNotionSyncStream",
             })),
           )
-        : Promise.resolve([]);
+        : Promise.resolve();
     })
     .output(({ input }): NotionSummary => ({
       succeeded: input.succeeded.filter(({ result }) => result.event.ok).length,
@@ -747,7 +746,7 @@ export const deleteCookbookWorkflow = bindWorkflow(
         ? context.services.recipeCosting.dispatchRecompute(parentIds, {
             source: "recipe.deleteCookbook",
           })
-        : Promise.resolve([]),
+        : Promise.resolve(0),
     )
     .output(({ deleted }) => ({
       deletedRecipes: deleted.deletedRecipeIds.length,

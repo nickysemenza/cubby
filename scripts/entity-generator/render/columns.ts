@@ -189,7 +189,6 @@ export const renderEntityColumnsArtifact = (
     'import { imageStatusValues } from "@cubby/schemas/image";\n' +
     'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
     'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
-    'import type { LocationValuation } from "@cubby/schemas/location";\n' +
     'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +
     'import type { BaseKind } from "@cubby/schemas/problems";\n' +
     'import { productCategoryValues } from "@cubby/schemas/product";\n' +

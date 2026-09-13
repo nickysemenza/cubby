@@ -173,14 +173,9 @@ export const ripple = {
     ["image"],
   ]),
   none: EMPTY_INVALIDATION_TAG_SET,
-  backgroundBatch: exactRippleTags([["background-batch"]]),
   search: exactRippleTags([["search"]]),
-  searchBackgroundBatch: exactRippleTags([["search"], ["background-batch"]]),
-  searchBackgroundBatchProblems: exactRippleTags([
-    ["search"],
-    ["background-batch"],
-    ["problems"],
-  ]),
+  /** Settle now / repair: the awaiting counts, problems, and search all move. */
+  maintenance: exactRippleTags([["maintenance"], ["problems"], ["search"]]),
   problemsSearch: exactRippleTags([["problems"], ["search"]]),
   recommendations: exactRippleTags([["recommendations"]]),
   collection: exactRippleTags([["collection"]]),
@@ -250,9 +245,6 @@ export const ripple = {
    * `inventory`; the equality is real and load-bearing, not coincidental.
    */
   locationReparent: rippleTags(inventoryRipple, [["location"]]),
-  /** Rebuilding every location's persisted valuation rollup also resolves the
-   * Maintenance card that offered it. */
-  locationValuation: rippleTags([["location"], ["problems"], ["dashboard"]]),
 
   // The broad `image` prefix, not an image-list tag: a list-only invalidation
   // doesn't refresh the image DETAIL page after a rename.

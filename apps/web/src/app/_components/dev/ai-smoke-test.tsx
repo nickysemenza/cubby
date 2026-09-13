@@ -1,7 +1,6 @@
 import { agentAskInputSchema, agentResultSchema } from "@cubby/schemas/agent";
 import {
   aiLocationIdInput,
-  categoryAuditSchema,
   categorySuggestionInput,
   categorySuggestionSchema,
   detectedInventorySchema,
@@ -49,7 +48,6 @@ type SmokeResult =
   | z.infer<typeof usdaFoodSuggestionOut>
   | z.infer<typeof productIdentificationSchema>
   | z.infer<typeof detectedInventorySchema>
-  | z.infer<typeof categoryAuditSchema>
   | z.infer<typeof agentResultSchema>;
 
 interface EndpointSpec {
@@ -99,14 +97,6 @@ const SPECS: EndpointSpec[] = [
     model: FAST_TIER_MODEL,
     defaultInput: { ingredientName: "olive oil" },
     run: (i) => ai.suggestUsdaFood.call(usdaFoodSuggestionInput.parse(i)),
-  },
-  {
-    key: "auditCategories",
-    label: "ai.auditCategories",
-    description: "Structured output over your real product catalog",
-    model: REASONING_TIER_MODEL,
-    defaultInput: undefined,
-    run: () => ai.auditCategories.call(),
   },
   {
     key: "identifyProduct",

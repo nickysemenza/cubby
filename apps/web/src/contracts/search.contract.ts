@@ -1,22 +1,22 @@
-import {
-  enqueueEmbeddingBackfillInputSchema,
-  enqueueEmbeddingBackfillOutSchema,
-} from "@cubby/schemas/background-jobs";
+import { searchIndexRepairEventSchema } from "@cubby/schemas/maintenance";
 import {
   relatedSearchGroupsOutSchema,
   relatedSearchOutSchema,
-  repairSearchDocumentsOutSchema,
   requestEmbeddingRefreshInputSchema,
   requestEmbeddingRefreshOutSchema,
   searchDebugOutSchema,
-  searchDocumentMaintenanceSchema,
   searchHitsOut,
   searchQueryInputSchema,
   searchResultGroupsOut,
 } from "@cubby/schemas/search";
 import { z } from "zod";
 
-import { defineContract, mutation, query } from "~/contracts/define";
+import {
+  defineContract,
+  mutation,
+  query,
+  subscription,
+} from "~/contracts/define";
 
 export const searchContract = defineContract("search", {
   find: query({
@@ -26,14 +26,6 @@ export const searchContract = defineContract("search", {
   grouped: query({
     input: searchQueryInputSchema,
     output: searchResultGroupsOut,
-  }),
-  documentHealth: query({
-    input: z.undefined(),
-    output: searchDocumentMaintenanceSchema,
-  }),
-  repairDocuments: mutation({
-    input: z.undefined(),
-    output: repairSearchDocumentsOutSchema,
   }),
   related: query({
     input: searchQueryInputSchema,
@@ -47,12 +39,20 @@ export const searchContract = defineContract("search", {
     input: searchQueryInputSchema,
     output: searchDebugOutSchema,
   }),
-  enqueueEmbeddingBackfill: mutation({
-    input: enqueueEmbeddingBackfillInputSchema,
-    output: enqueueEmbeddingBackfillOutSchema,
-  }),
   requestEmbeddingRefresh: mutation({
     input: requestEmbeddingRefreshInputSchema,
     output: requestEmbeddingRefreshOutSchema,
+  }),
+});
+
+/**
+ * Audit + repair the search index as one cancellable stream: orphaned
+ * documents retired, missing/stale projections rebuilt, embedding refreshes
+ * published. The done event carries this run's counters.
+ */
+export const searchStreamsContract = defineContract("search", {
+  repairIndex: subscription({
+    input: z.undefined(),
+    event: searchIndexRepairEventSchema,
   }),
 });

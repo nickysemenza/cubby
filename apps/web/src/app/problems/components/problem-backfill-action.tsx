@@ -17,8 +17,9 @@ import { ProblemActionButton } from "./problem-action-button";
 
 /**
  * Result-driven toast: which sonner variant to fire and with what message. The
- * message is a ReactNode so a durable action can surface a `<Link>` to
- * `/background-jobs` (like other queued flows), not just plain text.
+ * message stays a ReactNode (rather than a plain string) so a result can be
+ * phrased with inline emphasis, not because it links anywhere — there is no
+ * batch page left to link a durable action's progress to.
  */
 type BackfillToast = { tone: "success" | "info"; message: ReactNode };
 
@@ -41,7 +42,7 @@ export type BackfillButtonProps<TResult> = {
    * (no durable queue) — so the fragility is visible: while running we render a
    * "keep this page open" note, because navigating away / backgrounding the PWA /
    * hitting the Worker CPU limit kills the op with no record. Durable actions
-   * (they enqueue jobs and return a batchId) leave this off.
+   * (they enqueue jobs onto the queue and return once accepted) leave this off.
    */
   foreground?: boolean;
 };

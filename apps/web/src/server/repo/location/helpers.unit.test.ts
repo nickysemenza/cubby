@@ -61,7 +61,6 @@ const baseLocation = {
   aiDescription: null,
   gardenKind: null,
   gardenConditions: null,
-  valuation: null,
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,

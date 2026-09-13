@@ -18,7 +18,6 @@ import {
   reparentLocationsInBulk,
 } from "~/server/repo/location";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
-import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import {
   bindWorkflow,
@@ -29,7 +28,6 @@ import {
 export type LocationWorkflowContext = {
   db: Database;
   actorContext: ActorContext;
-  services: { locationValuation: LocationValuationService };
 };
 
 const shortcodes = bindShortcodeResolver("location");
@@ -155,15 +153,6 @@ export const getByShortcodesWorkflow = defineWorkflowOperation(
       locationShortcodesInput.parse(input).shortcodes,
     ),
 );
-export const recomputeValuationsWorkflow = bindWorkflow(
-  workflow<LocationWorkflowContext, undefined>("location.recomputeValuations")
-    .commit("updated", async ({ context }) =>
-      context.services.locationValuation.recompute(),
-    )
-    .output(({ updated }) => ({ updated })),
-  (context: LocationWorkflowContext) => ({ context, input: undefined }),
-);
-
 export {
   locationBulkUpdateParentInput,
   locationFiltersSchema,

@@ -25,7 +25,6 @@ const event: TelemetryMessageV1 = {
   cacheStatus: "miss",
   entityType: null,
   entityId: null,
-  batchId: null,
 };
 
 describe("emitTelemetry", () => {

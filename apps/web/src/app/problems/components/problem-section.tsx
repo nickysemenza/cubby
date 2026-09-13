@@ -196,6 +196,14 @@ type ProblemSectionProps<T> = {
   /** Read-only explanation of the canonical Problem query. */
   assembly?: ReactNode;
   coverage?: ProblemSectionCoverage;
+  /**
+   * Render nothing at all — not even the empty-state card — when this section
+   * has no items. For a regression guard (referential liveness, dependency
+   * cycles) a healthy zero is the overwhelmingly common case, and a
+   * permanent empty card for a check nobody needs to see is exactly the kind
+   * of always-there chrome that trained everyone to stop reading the page.
+   */
+  hideWhenEmpty?: boolean;
 } & IconProp;
 
 export function ProblemSection<T>({
@@ -211,6 +219,7 @@ export function ProblemSection<T>({
   assembly,
   coverage,
   count,
+  hideWhenEmpty,
 }: ProblemSectionProps<T>) {
   const hasItems = items.length > 0;
   const meter = coverage?.meter;
@@ -231,6 +240,7 @@ export function ProblemSection<T>({
   );
 
   if (!hasItems) {
+    if (hideWhenEmpty) return null;
     return (
       <Card>
         <CardHeader>

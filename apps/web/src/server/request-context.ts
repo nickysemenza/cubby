@@ -24,7 +24,6 @@ import {
   findProductsByFoodIdentifiers,
 } from "~/server/repo/product/lookup";
 import { AvailabilityService } from "~/server/services/availability.service";
-import { LocationValuationService } from "~/server/services/location-valuation.service";
 import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import { USDAService } from "~/server/services/usda.service";
 import { extractTraceContext } from "~/server/tracing";
@@ -52,7 +51,6 @@ export const buildCrudServices = (
   const services = {
     availability: new AvailabilityService(database, usdaClient),
     recipeCosting: new RecipeCostingService(database, usdaClient),
-    locationValuation: new LocationValuationService(database),
   };
 
   return {

@@ -1,4 +1,3 @@
-import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { uniq } from "es-toolkit";
 
@@ -17,9 +16,9 @@ export const recomputeRecipesForPriceAffectedProducts = async (
   recipeCosting: RecipeCostingService,
   productIds: readonly ProductId[],
   source: string,
-): Promise<BackgroundBatchRef[]> => {
+): Promise<number> => {
   const ids = uniq(productIds);
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return 0;
   const ingredientIds = await loadIngredientIdsForProducts(db, ids);
   return await recipeCosting.recomputeForIngredients(uniq(ingredientIds), {
     source,

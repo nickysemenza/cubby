@@ -27,7 +27,6 @@ describe("recordAiUsage", () => {
           entityType: "product",
           entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
         },
-        batchId: "a04c5cf6-707b-4367-b6fa-b924541e8be2",
       },
       { emit },
     );
@@ -41,7 +40,6 @@ describe("recordAiUsage", () => {
         outputTokens: 0,
         entityType: "product",
         entityId: "9d4f70aa-5c8f-4f24-b7f8-d67d28111d86",
-        batchId: "a04c5cf6-707b-4367-b6fa-b924541e8be2",
       }),
     );
   });

@@ -29,28 +29,6 @@ export const basicProblemQueries = [
     },
   }),
   defineProblem({
-    key: "unreferencedImages",
-    problemClass: PROBLEM_CLASS.unreferencedImages,
-    executionLane: "fast",
-    continuation: { kind: "entity-list" },
-    freshness: { kind: "live" },
-    title: "Unreferenced uploaded files",
-    description:
-      "Uploaded files that nothing points at any more — no product, location or record uses them, and they are old enough that an in-progress upload isn't the explanation.",
-    emptyMessage: "Every uploaded file is in use somewhere.",
-    source: {
-      kind: "entity",
-      entity: "image",
-      filters: [
-        { id: "status", value: ["UPLOADED"] },
-        { id: "entity", value: "none" },
-        { id: "createdAt", value: "olderThan1h" },
-      ],
-      sort: [{ id: "createdAt", desc: false }],
-      columnVisibility: { status: true, entity: true, createdAt: true },
-    },
-  }),
-  defineProblem({
     key: "vendorsWithoutLogos",
     problemClass: PROBLEM_CLASS.vendorsWithoutLogos,
     executionLane: "fast",

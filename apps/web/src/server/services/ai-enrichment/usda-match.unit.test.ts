@@ -22,32 +22,12 @@ const lookup: UsdaLookupPort = {
 
 function ports(
   suggest: UsdaMatchPorts<TestDatabase>["suggest"],
-): UsdaMatchPorts<TestDatabase> & {
-  dispatched: Parameters<UsdaMatchPorts<TestDatabase>["dispatchRetries"]>[1][];
-  lookedUp: string[];
-} {
-  const dispatched: Parameters<
-    UsdaMatchPorts<TestDatabase>["dispatchRetries"]
-  >[1][] = [];
-  const lookedUp: string[] = [];
-  return {
-    dispatched,
-    lookedUp,
-    dispatchRetries: async (_database, jobs) => {
-      dispatched.push(jobs);
-      return undefined;
-    },
-    getIngredient: async (_database, id) => {
-      lookedUp.push(id);
-      return { name: "current name" };
-    },
-    suggest,
-    servicesForRetry: async () => ({ usdaService: lookup }),
-  };
+): UsdaMatchPorts<TestDatabase> {
+  return { suggest };
 }
 
 describe("suggestUsdaFoodBatch", () => {
-  it("degrades a failed lookup and schedules exactly its retry", async () => {
+  it("reports a failed lookup as a degraded item, not a thrown error", async () => {
     const ingredientId = testEntityId(
       "ingredient",
       "00000000-0000-4000-8000-000000000001",
@@ -69,14 +49,9 @@ describe("suggestUsdaFoodBatch", () => {
         reasoning: "Lookup failed.",
       },
     ]);
-    expect(adapter.dispatched).toEqual([
-      expect.objectContaining({
-        jobs: [expect.objectContaining({ payload: { ingredientId } })],
-      }),
-    ]);
   });
 
-  it("does not schedule a successful lookup with no match", async () => {
+  it("passes through a successful lookup with no match", async () => {
     const ingredientId = testEntityId(
       "ingredient",
       "00000000-0000-4000-8000-000000000002",
@@ -87,28 +62,18 @@ describe("suggestUsdaFoodBatch", () => {
       reasoning: "No suitable match found.",
     }));
     const service = createUsdaMatchService(adapter);
-    await service.suggestUsdaFoodBatch(lookup, database, [
-      { id: ingredientId, name: "unobtainium" },
-    ]);
-    expect(adapter.dispatched).toEqual([]);
-  });
-});
-
-describe("retryUsdaMatch", () => {
-  it("re-reads the current ingredient name and lets retry failures escape", async () => {
-    const ingredientId = testEntityId(
-      "ingredient",
-      "00000000-0000-4000-8000-000000000003",
-    );
-    const adapter = ports(async (_service, _database, name) => {
-      expect(name).toBe("current name");
-      throw new Error("still down");
-    });
-    const service = createUsdaMatchService(adapter);
     await expect(
-      service.retryUsdaMatch(database, ingredientId),
-    ).rejects.toThrow("still down");
-    expect(adapter.lookedUp).toEqual([ingredientId]);
+      service.suggestUsdaFoodBatch(lookup, database, [
+        { id: ingredientId, name: "unobtainium" },
+      ]),
+    ).resolves.toEqual([
+      {
+        name: "unobtainium",
+        food: null,
+        confidence: "low",
+        reasoning: "No suitable match found.",
+      },
+    ]);
   });
 });
 

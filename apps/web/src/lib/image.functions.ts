@@ -5,5 +5,4 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 export const imageUpload = defineOperationDomain(imageUploadContract, {
   importFromUrl: { invalidates: ripple.image },
   cullPendingImages: { invalidates: ripple.imageCull },
-  cleanupUnreferencedImages: { invalidates: ripple.imageCull },
 });

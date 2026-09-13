@@ -45,7 +45,7 @@ export const expenseEntityAdapter = defineEntityAdapter({
     delete: async (ctx, ids) => {
       const { priceAffectedProductIds, result } =
         await deleteExpensesWithPurchaseEffects(ctx.db, ids, ctx.actorContext);
-      const backgroundBatches = await recomputeRecipesForPriceAffectedProducts(
+      await recomputeRecipesForPriceAffectedProducts(
         ctx.db,
         ctx.services.recipeCosting,
         priceAffectedProductIds,
@@ -56,7 +56,6 @@ export const expenseEntityAdapter = defineEntityAdapter({
           "expense",
           result.deletedIds,
         ),
-        backgroundBatches,
       };
     },
     /** One complete patch, one transaction, then one side-effect fan-out. */
@@ -67,7 +66,7 @@ export const expenseEntityAdapter = defineEntityAdapter({
         data,
         ctx.actorContext,
       );
-      const backgroundBatches = await runMutationSideEffectsForEntities(
+      await runMutationSideEffectsForEntities(
         ctx.db,
         result.updatedIds.map((entityId) => ({
           action: "updated" as const,
@@ -80,7 +79,6 @@ export const expenseEntityAdapter = defineEntityAdapter({
           "expense",
           result.updatedShortcodes,
         ),
-        backgroundBatches,
       };
     },
   },

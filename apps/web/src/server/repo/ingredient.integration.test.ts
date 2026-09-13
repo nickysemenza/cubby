@@ -25,7 +25,6 @@ import {
 } from "~/server/workflows/ingredient.server";
 
 import { getDb, withTransaction } from "./database-helpers";
-import { findOrphanedEntityEmbeddings } from "./entity-embedding";
 import { patchEntityRows } from "./entity-patch";
 import {
   createIngredient,
@@ -506,12 +505,9 @@ describe("ingredient", () => {
     );
 
     // The alias row is HARD-deleted, so its embedding can't be re-read by id —
-    // the only observable proof of cleanup is that it no longer appears as an
-    // orphan (a soft-deleted or genuinely absent embedding both pass; a LIVE
-    // embedding pointing at the now-hard-deleted alias id is exactly the bug).
-    const orphaned = await findOrphanedEntityEmbeddings(ctx.db);
-    expect(orphaned).toEqual([]);
-
+    // the only observable proof of cleanup is that its embedding row was
+    // soft-deleted in the same transaction, asserted directly against the
+    // table rather than through a detector.
     const embeddingRow = await getDb(ctx.db).query.entityEmbedding.findFirst({
       where: eq(entityEmbedding.entityId, alias.id),
     });

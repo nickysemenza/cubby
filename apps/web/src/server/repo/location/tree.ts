@@ -10,11 +10,10 @@ import {
   productId as productIdSchema,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import {
-  type InfLocation,
-  type LocationAncestorOut,
-  type LocationInventoryBreakdownOut,
-  locationValuation,
+import type {
+  InfLocation,
+  LocationAncestorOut,
+  LocationInventoryBreakdownOut,
 } from "@cubby/schemas/location";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -42,6 +41,7 @@ import { parseLocationType } from "~/server/repo/location/parse-type";
 import { buildLocationWithChildren } from "./helpers";
 import type { LocationWithParentChild } from "./internal-types";
 import { loadStockItemsByLocation } from "./stock-items";
+import { computeLocationValuations } from "./valuation";
 
 /** Depth cap shared by both recursive walks over the location tree. */
 const MAX_TREE_DEPTH = 10;
@@ -62,7 +62,6 @@ const locationTreeRowSchema = z.object({
   aiDescription: z.string().nullable(),
   gardenKind: gardenLocationKind.nullable(),
   gardenConditions: z.string().nullable(),
-  valuation: locationValuation.nullable(),
   depth: z.coerce.number().int().nonnegative(),
 });
 
@@ -177,7 +176,17 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
           ),
         })
       : Promise.resolve([]);
-  const allLocationImages = await loadLocationImages();
+  const [allLocationImages, inventoryByLocationId, valuations] =
+    await Promise.all([
+      loadLocationImages(),
+      // One loader for items and their count, so the tree's `directItemCount`
+      // and `inventoryItems` cannot disagree (see `stock-items.ts`).
+      loadStockItemsByLocation(db, locationIds),
+      // A whole-tree compute, not scoped to `locationIds`: a node's valuation
+      // rolls up its ENTIRE subtree, including anything below this query's
+      // anchor (or below a node outside it, for a rootId-anchored subtree).
+      computeLocationValuations(db),
+    ]);
 
   const imagesByLocationId = new Map<
     LocationId,
@@ -188,10 +197,6 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     existing.push(locImg);
     imagesByLocationId.set(locImg.locationId, existing);
   }
-
-  // One loader for items and their count, so the tree's `directItemCount`
-  // and `inventoryItems` cannot disagree (see `stock-items.ts`).
-  const inventoryByLocationId = await loadStockItemsByLocation(db, locationIds);
 
   for (const loc of locationRows) {
     const locationWithRelations: LocationWithParentChild = {
@@ -234,7 +239,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     : rootLocations;
 
   const tree: InfLocation[] = roots.map((x) => {
-    return buildLocationWithChildren(x, undefined, false);
+    return buildLocationWithChildren(x, undefined, false, valuations);
   });
   return tree;
 };

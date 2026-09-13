@@ -6,7 +6,7 @@
  * - Batch UPC image backfill
  */
 
-import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
@@ -45,7 +45,6 @@ import {
 import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
 
 import { importImageFromUPC } from "./image-import";
-import type { LocationValuationService } from "./location-valuation.service";
 import { runMutationSideEffects } from "./mutation-side-effects";
 import type { ProductWriteActions } from "./product.service";
 import type { RecipeCostingService } from "./recipe-costing.service";
@@ -54,7 +53,6 @@ interface ProductWriteServices {
   db: Database;
   product: ProductWriteActions;
   recipeCosting: RecipeCostingService;
-  locationValuation: LocationValuationService;
 }
 
 type UpcProductUpdate = Pick<
@@ -80,7 +78,7 @@ export async function createProductWithSideEffects(
     input,
     actor,
   );
-  const backgroundBatches = await runMutationSideEffects(services.db, {
+  await runMutationSideEffects(services.db, {
     action: "created",
     entity: { entity: "product", id: entityId },
     source: "product.create",
@@ -100,21 +98,19 @@ export async function createProductWithSideEffects(
   }
 
   const ingredientId = product.ingredient?.id;
-  const recipeBatches = ingredientId
-    ? await services.recipeCosting.recomputeForIngredient(
-        await resolveIngredientEntityId(services.db, ingredientId),
-        {
-          source: "product.create",
-          entity: { entityType: "product", entityId },
-        },
-      )
-    : [];
+  if (ingredientId) {
+    await services.recipeCosting.recomputeForIngredient(
+      await resolveIngredientEntityId(services.db, ingredientId),
+      {
+        source: "product.create",
+        entity: { entityType: "product", entityId },
+      },
+    );
+  }
 
   return {
     ...product,
-    sideEffects: {
-      backgroundBatches: [...backgroundBatches, ...recipeBatches],
-    },
+    sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
   };
 }
 
@@ -133,7 +129,7 @@ export async function updateProductWithSideEffects(
     data,
     actor,
   );
-  const backgroundBatches = await runMutationSideEffects(services.db, {
+  await runMutationSideEffects(services.db, {
     action: "updated",
     entity: { entity: "product", id: id },
     source: "product.update",
@@ -144,26 +140,23 @@ export async function updateProductWithSideEffects(
         ingredientId != null,
     ),
   );
-  const recipeBatches =
-    ingredientShortcodes.length > 0
-      ? await services.recipeCosting.recomputeForIngredients(
-          await Promise.all(
-            ingredientShortcodes.map((shortcode) =>
-              resolveIngredientEntityId(services.db, shortcode),
-            ),
-          ),
-          {
-            source: "product.update",
-            entity: { entityType: "product", entityId: id },
-          },
-        )
-      : [];
+  if (ingredientShortcodes.length > 0) {
+    await services.recipeCosting.recomputeForIngredients(
+      await Promise.all(
+        ingredientShortcodes.map((shortcode) =>
+          resolveIngredientEntityId(services.db, shortcode),
+        ),
+      ),
+      {
+        source: "product.update",
+        entity: { entityType: "product", entityId: id },
+      },
+    );
+  }
 
   return {
     ...result,
-    sideEffects: {
-      backgroundBatches: [...backgroundBatches, ...recipeBatches],
-    },
+    sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
   };
 }
 
@@ -197,10 +190,9 @@ export async function applyUpcDataWithSideEffects(
   }
 
   const priceChanged = data.price !== undefined;
-  let backgroundBatches: BackgroundBatchRef[] = [];
   if (Object.keys(data).length > 0) {
     await services.product.updateProduct(input.id, data, actor);
-    backgroundBatches = await runMutationSideEffects(services.db, {
+    await runMutationSideEffects(services.db, {
       action: "updated",
       entity: { entity: "product", id: input.id },
       source: "product.applyUpcData",
@@ -225,21 +217,18 @@ export async function applyUpcDataWithSideEffects(
 
   const result = await services.product.getProductByID(input.id);
   const ingredientId = result.ingredient?.id;
-  const recipeBatches =
-    priceChanged && ingredientId
-      ? await services.recipeCosting.recomputeForIngredient(
-          await resolveIngredientEntityId(services.db, ingredientId),
-          {
-            source: "product.applyUpcData",
-            entity: { entityType: "product", entityId: input.id },
-          },
-        )
-      : [];
+  if (priceChanged && ingredientId) {
+    await services.recipeCosting.recomputeForIngredient(
+      await resolveIngredientEntityId(services.db, ingredientId),
+      {
+        source: "product.applyUpcData",
+        entity: { entityType: "product", entityId: input.id },
+      },
+    );
+  }
   return {
     ...result,
-    sideEffects: {
-      backgroundBatches: [...backgroundBatches, ...recipeBatches],
-    },
+    sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
   };
 }
 

@@ -105,20 +105,26 @@
       "id": "427dd7a2876c4dccbe056d37fa7374ff"
     }
   ],
-  // Generic persisted background jobs offloaded off the request path. Queue
-  // messages are small wakeups (`batchId` + `jobId`); payloads, retries, and
-  // status live in Postgres for introspection and dev parity.
+  // Background tasks offloaded off the request path. A message is the whole
+  // task (recipe totals, an embedding refresh, a location AI refresh); there
+  // is no execution row behind it. Every handler re-checks the derived
+  // state's own freshness marker, so duplicate or redelivered messages are
+  // no-ops, and a message the queue drops after its retries is not lost work:
+  // the stale marker on the source row keeps it visible on the Problems
+  // page's "Awaiting work" card, where "Settle now" republishes it.
   // Create once before first deploy:
   //   wrangler queues create cubby-background
-  //   wrangler queues create cubby-background-dlq
   //   wrangler queues create cubby-telemetry
-  //   wrangler queues create cubby-telemetry-dlq
   //
   // Two queues, not one: consumer settings below are per-queue and the two
   // workloads want opposite values (background trades batching for latency,
   // telemetry the reverse). `max_batch_timeout` is applied before the consumer
   // runs, so a merged queue could not recover it in-handler, and one FIFO
   // backlog would let a telemetry burst delay user-visible work.
+  //
+  // No dead-letter queues, deliberately: a message that exhausted its retries
+  // carries no information the source rows do not already hold, and every
+  // failed attempt was already reported to Sentry by the consumer.
   "queues": {
     "producers": [
       { "binding": "BACKGROUND_QUEUE", "queue": "cubby-background" },
@@ -127,44 +133,22 @@
     "consumers": [
       {
         "queue": "cubby-background",
-        // Batch many wakeups into one invocation while preserving per-message
-        // ack/retry isolation in cf-server.ts.
+        // Batch many tasks into one invocation while preserving per-message
+        // ack/retry isolation in background-tasks/consume.ts.
         "max_batch_size": 10,
         "max_batch_timeout": 0,
-        // Serial delivery is not what makes this safe: the job claim is an
-        // atomic conditional UPDATE (markBackgroundJobRunning) and the workflow
-        // parent-cascade takes a SELECT ... FOR UPDATE on the batch row, so a
-        // duplicate delivery is already rejected rather than raced. Held low
-        // anyway because each concurrent invocation holds its own Hyperdrive
+        // Serial delivery is not what makes this safe — freshness gates are.
+        // Held low because each concurrent invocation holds its own Hyperdrive
         // client, and Neon's connection ceiling is the real limit here.
         "max_concurrency": 3,
-        "max_retries": 3,
-        "dead_letter_queue": "cubby-background-dlq"
+        "max_retries": 3
       },
       {
         "queue": "cubby-telemetry",
         "max_batch_size": 100,
         "max_batch_timeout": 5,
         "max_concurrency": 1,
-        "max_retries": 3,
-        "dead_letter_queue": "cubby-telemetry-dlq"
-      },
-      // Dead letters are drained so exhausted messages are recorded rather than
-      // piling up unseen. Deliberately no `dead_letter_queue` of their own —
-      // this is the last stop, and the handler acks everything.
-      {
-        "queue": "cubby-background-dlq",
-        "max_batch_size": 10,
-        "max_batch_timeout": 5,
-        "max_concurrency": 1,
-        "max_retries": 1
-      },
-      {
-        "queue": "cubby-telemetry-dlq",
-        "max_batch_size": 100,
-        "max_batch_timeout": 5,
-        "max_concurrency": 1,
-        "max_retries": 1
+        "max_retries": 3
       }
     ]
   },

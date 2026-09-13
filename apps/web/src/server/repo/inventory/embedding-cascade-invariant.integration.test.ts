@@ -29,11 +29,10 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
  *  - **Expansion semantics** — `deleteTasks` widens its own id set to live
  *    subtasks, and the cascade must run over the widened set. No type says so.
  *
- * `findOrphanedEntityEmbeddings` is asserted after every case: a shipped
- * Problems detector, not a test helper, catching what types cannot — out-of-band
- * SQL, migrations, and a removal that writes no audit at all. The remaining
- * one-line orphan assertions stay scattered across the suites that own them
- * (expense, cookbook, ingredient, discard, mutation-side-effects).
+ * Every case below asserts directly against `EntityEmbedding` that the
+ * specific row the cascade should have touched was soft-deleted in the same
+ * transaction — the direct-table form of "no orphan," rather than routing
+ * through a detector.
  */
 import { taskCreateInput } from "@cubby/schemas/project";
 import type { SearchableEntity } from "@cubby/schemas/search";
@@ -50,7 +49,6 @@ import {
   taskDependency,
 } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
-import { findOrphanedEntityEmbeddings } from "~/server/repo/entity-embedding";
 import {
   createInventoryEntry,
   deleteInventoryEntries,
@@ -176,7 +174,6 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
     await deleteInventoryEntries(ctx.db, [entryEntityId], TEST_ACTOR);
 
     expect(await embeddingDeletedAt("inventory", entryEntityId)).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
   it("reconcileLocationSession remove leaves no orphan", async () => {
@@ -199,7 +196,6 @@ describe("inventory removal cascades entity embeddings (no orphans)", () => {
     expect(removedIds).toEqual([entryEntityId]);
 
     expect(await embeddingDeletedAt("inventory", entryEntityId)).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });
 
@@ -261,7 +257,6 @@ describe("removal entrypoints reach the shared cascade (no orphans)", () => {
 
     expect(await embeddingDeletedAt("task", parentTaskId)).not.toBeNull();
     expect(await embeddingDeletedAt("task", subtaskId)).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
   // mergeIngredients is the one removal path in the repo that HARD-deletes its
@@ -304,6 +299,5 @@ describe("removal entrypoints reach the shared cascade (no orphans)", () => {
     expect(
       await embeddingDeletedAt("inventory", absorbedEntry.id),
     ).not.toBeNull();
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 });

@@ -110,6 +110,7 @@ import type {
 } from "./internal-types";
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
+import { computeLocationValuations, directValuationSql } from "./valuation";
 
 export const LOCATION_DELETE_EDGE_POLICY = {
   "InventoryEntry.locationId": {
@@ -850,11 +851,7 @@ export const buildLocationWhere = async (
     filters.directItemCountMax !== undefined
       ? notInArray(location.id, locationIdsExceedingInventoryMaximum)
       : undefined,
-    ...rangeConditions(
-      sql`COALESCE((${location.valuation}->>'directValuation')::numeric, 0)`,
-      filters,
-      "valuation",
-    ),
+    ...rangeConditions(directValuationSql, filters, "valuation"),
   ]);
 };
 
@@ -870,16 +867,16 @@ export const locationList = async (
 
   const orderByClause = locationScaffold.orderBy(sorts, {
     groupBy,
-    // `valuation` is a persisted jsonb rollup; sort by direct value because
-    // that is what the list cell renders in compact mode.
+    // `valuation` is computed on read, not a stored column; sort by direct
+    // value because that is what the list cell renders in compact mode.
     resolve: (s) => {
       const dirSql =
         s.direction === "asc" ? "asc nulls last" : "desc nulls last";
       if (s.orderBy === "valuation")
         return [
           s.direction === "asc"
-            ? sql`(${location.valuation}->>'directValuation')::numeric asc nulls last`
-            : sql`(${location.valuation}->>'directValuation')::numeric desc nulls last`,
+            ? sql`${directValuationSql} asc nulls last`
+            : sql`${directValuationSql} desc nulls last`,
         ];
       if (s.orderBy === "inventoryEntries")
         return [
@@ -930,9 +927,15 @@ export const locationList = async (
   const pageProducts = results.flatMap((row) =>
     row.inventoryEntries.map((entry) => entry.product),
   );
-  const pricingByProductId = await loadProductPricing(db, pageProducts);
+  const [pricingByProductId, valuations] = await Promise.all([
+    loadProductPricing(db, pageProducts),
+    // One whole-tree compute per page, not per row: valuation is a rollup over
+    // the WHOLE subtree beneath each location, which a page-scoped query
+    // cannot produce on its own.
+    computeLocationValuations(db),
+  ]);
   const items = results.map((row) =>
-    dbLocationToListAPI(row, pricingByProductId),
+    dbLocationToListAPI(row, pricingByProductId, valuations),
   );
   return { data: items, count: totalCount };
 };
@@ -1321,23 +1324,27 @@ export const getLocationById = async (
   // surface reading this payload (the location hovercard, the Contents
   // header's fallback) report 0 for a location that holds stock directly and
   // has no children to roll up.
-  const [childCountResults, stockItemsByLocationId] = await Promise.all([
-    childIds.length > 0
-      ? dbClient
-          .select({
-            parentId: location.parentId,
-            count: sql<number>`count(*)::int`,
-          })
-          .from(location)
-          .where(
-            and(notDeleted(location), inArray(location.parentId, childIds)),
-          )
-          .groupBy(location.parentId)
-      : [],
-    // Items and count come from the same rows so the resource detail cannot
-    // report `directItemCount: 12` next to `inventoryItems: []` again.
-    loadStockItemsByLocation(db, [id, ...childIds]),
-  ]);
+  const [childCountResults, stockItemsByLocationId, valuations] =
+    await Promise.all([
+      childIds.length > 0
+        ? dbClient
+            .select({
+              parentId: location.parentId,
+              count: sql<number>`count(*)::int`,
+            })
+            .from(location)
+            .where(
+              and(notDeleted(location), inArray(location.parentId, childIds)),
+            )
+            .groupBy(location.parentId)
+        : [],
+      // Items and count come from the same rows so the resource detail cannot
+      // report `directItemCount: 12` next to `inventoryItems: []` again.
+      loadStockItemsByLocation(db, [id, ...childIds]),
+      // A whole-tree compute: this location's own valuation is a rollup over
+      // its entire subtree, which nothing scoped to `id`/`childIds` can produce.
+      computeLocationValuations(db),
+    ]);
 
   for (const row of childCountResults) {
     if (row.parentId) childCountMap[row.parentId] = row.count;
@@ -1360,5 +1367,5 @@ export const getLocationById = async (
     images: res.images,
   };
 
-  return buildLocationWithChildren(locationWithParent, id);
+  return buildLocationWithChildren(locationWithParent, id, true, valuations);
 };

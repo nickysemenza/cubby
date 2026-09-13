@@ -72,7 +72,6 @@ describe("embedTexts over the AI Gateway", () => {
     const vectors = await embedTexts(["eggs", "flour", "butter"], {
       feature: "entity-embedding",
       operation: "entityEmbeddingRefreshBatch",
-      batchId: "00000000-0000-4000-8000-000000000001",
     });
 
     expect(vectors).toHaveLength(3);
@@ -94,7 +93,6 @@ describe("embedTexts over the AI Gateway", () => {
       feature: "entity-embedding",
       operation: "entityEmbeddingRefreshBatch",
       inputCount: 3,
-      batchId: "00000000-0000-4000-8000-000000000001",
     });
   });
 
@@ -125,7 +123,6 @@ describe("embedTexts usage recording", () => {
       operation: string;
       inputTokens: number | null | undefined;
       cacheStatus: string | null | undefined;
-      batchId: string | null | undefined;
     }> = [];
     const { embedTexts, productionEmbeddingPorts } =
       await embedTextsOverFakeGateway(openAiEmbeddingsResponse(1));
@@ -139,7 +136,6 @@ describe("embedTexts usage recording", () => {
           operation: record.operation,
           inputTokens: record.inputTokens,
           cacheStatus: record.cacheStatus,
-          batchId: record.batchId,
         });
       },
     } satisfies EmbeddingPorts;
@@ -150,7 +146,6 @@ describe("embedTexts usage recording", () => {
         db,
         feature: "entity-embedding",
         operation: "entityEmbeddingBackfill",
-        batchId: "00000000-0000-4000-8000-000000000001",
         entity: {
           entityType: "product",
           entityId: "00000000-0000-4000-8000-000000000002",
@@ -167,7 +162,6 @@ describe("embedTexts usage recording", () => {
         operation: "entityEmbeddingBackfill",
         inputTokens: 4,
         cacheStatus: "none",
-        batchId: "00000000-0000-4000-8000-000000000001",
       },
     ]);
   });

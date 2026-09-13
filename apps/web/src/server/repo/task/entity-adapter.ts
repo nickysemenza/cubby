@@ -42,7 +42,7 @@ export const taskEntityAdapter = defineEntityAdapter({
         data,
         ctx.actorContext,
       );
-      const backgroundBatches = await runMutationSideEffectsForEntities(
+      await runMutationSideEffectsForEntities(
         ctx.db,
         result.updatedIds.map((entityId) => ({
           action: "updated" as const,
@@ -55,7 +55,6 @@ export const taskEntityAdapter = defineEntityAdapter({
           "task",
           result.updatedShortcodes,
         ),
-        backgroundBatches,
       };
     },
   },

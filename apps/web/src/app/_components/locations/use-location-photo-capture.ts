@@ -56,10 +56,7 @@ import { useCallback } from "react";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import {
-  makeBatchStatusFetcher,
-  watchBatchesAndInvalidateTags,
-} from "~/lib/background-batch-polling";
+import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
 import { imageUpload } from "~/lib/image.functions";
 
 type LocationMutationResult = { id: LocationShortcode };
@@ -72,16 +69,11 @@ export function useLocationPhotoCapture() {
   );
 
   const invalidate = useCallback(
-    (result?: LocationMutationResult) => {
+    (_result?: LocationMutationResult) => {
       void invalidateOperationTags(queryClient, ripple.location);
-      // The AI description lands later, off the background queue — re-invalidate
-      // when it drains so the description fills in without a reload.
-      void watchBatchesAndInvalidateTags({
-        queryClient,
-        result,
-        invalidateTags: ripple.location,
-        fetchBatchStatus: makeBatchStatusFetcher(queryClient),
-      });
+      // The AI description lands later, off the queue — re-invalidate on a
+      // fixed schedule so the description fills in without a reload.
+      scheduleDeferredInvalidation(queryClient, ripple.location);
     },
     [queryClient],
   );

@@ -92,7 +92,7 @@ describe("RecipeCostingService", () => {
         for await (const event of stream) events.push(event);
         expect(events).toEqual([
           { type: "progress", done: 0, total: 0 },
-          { type: "done", result: { enqueued: 0, total: 0, batchId: null } },
+          { type: "done", result: { enqueued: 0, total: 0 } },
         ]);
       }
     });

@@ -6,7 +6,6 @@ import {
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
-  cleanupOrphanedEmbeddingsWorkflow,
   deleteUnusedIngredientsWorkflow,
   dryRunPruneAliasesWorkflow,
   dryRunReparseWorkflow,
@@ -61,8 +60,6 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
   },
   deleteUnused: (context, input) =>
     deleteUnusedIngredientsWorkflow(context, input),
-  cleanupOrphanedEmbeddings: (context, input) =>
-    cleanupOrphanedEmbeddingsWorkflow(context, input),
 });
 
 export const integrityProblemsHandlers = implementOperationDomain(

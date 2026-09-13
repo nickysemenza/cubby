@@ -54,7 +54,6 @@ async function handler({ request }: { request: Request }) {
           upcLookupClient: ctx.upcLookupClient,
           services: {
             recipeCosting: ctx.services.recipeCosting,
-            locationValuation: ctx.services.locationValuation,
           },
         },
         telemetry: {

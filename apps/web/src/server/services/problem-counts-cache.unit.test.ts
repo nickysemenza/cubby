@@ -8,6 +8,7 @@ import { Database } from "~/server/db";
 
 import {
   getCachedProblemCounts,
+  markProblemCountsDirty,
   type ProblemCountsPort,
   refreshCachedProblemCounts,
 } from "./problem-counts-cache";
@@ -177,5 +178,73 @@ describe("problem-counts KV snapshot", () => {
     ).rejects.toThrow("detector failed");
     expect(values.get("problem-counts:v1")).toBe(previous);
     expect(adapter.put).not.toHaveBeenCalled();
+  });
+
+  describe("dirty mark", () => {
+    const snapshot = (coveredThrough: string) =>
+      JSON.stringify({
+        version: 1,
+        counts: counts(4),
+        computedAt: coveredThrough,
+        coveredThrough,
+      });
+
+    it("serves the snapshot and refreshes once when a mutation marked it dirty", async () => {
+      const fresh = counts(11);
+      countProblems.mockResolvedValue(fresh);
+      const { adapter, values } = memoryCache(
+        snapshot("2026-08-20T17:00:00.000Z"),
+      );
+      await markProblemCountsDirty(
+        adapter,
+        new Date("2026-08-20T17:30:00.000Z"),
+      );
+
+      // Outside a Worker request there is no waitUntil: the refresh runs inline
+      // after the read decided to serve the old snapshot.
+      await expect(
+        getCachedProblemCounts(db, upc, adapter, port),
+      ).resolves.toEqual(counts(4));
+      expect(countProblems).toHaveBeenCalledTimes(1);
+      expect(
+        JSON.parse(values.get("problem-counts:v1") ?? "null"),
+      ).toMatchObject({
+        counts: fresh,
+        coveredThrough: "2026-08-20T17:30:00.000Z",
+      });
+      expect(adapter.put).toHaveBeenCalledWith(
+        "problem-counts:refreshing",
+        "2026-08-20T17:30:00.000Z",
+        { expirationTtl: 60 },
+      );
+    });
+
+    it("coalesces a burst: a held lock means no second detector pass", async () => {
+      countProblems.mockResolvedValue(counts(11));
+      const { adapter, values } = memoryCache(
+        snapshot("2026-08-20T17:00:00.000Z"),
+      );
+      values.set("problem-counts:refreshing", "2026-08-20T17:30:00.000Z");
+      await markProblemCountsDirty(
+        adapter,
+        new Date("2026-08-20T17:31:00.000Z"),
+      );
+      await expect(
+        getCachedProblemCounts(db, upc, adapter, port),
+      ).resolves.toEqual(counts(4));
+      expect(countProblems).not.toHaveBeenCalled();
+    });
+
+    it("ignores a mark older than the snapshot's horizon", async () => {
+      const { adapter } = memoryCache(snapshot("2026-08-20T17:30:00.000Z"));
+      await markProblemCountsDirty(
+        adapter,
+        new Date("2026-08-20T17:00:00.000Z"),
+      );
+      await expect(
+        getCachedProblemCounts(db, upc, adapter, port),
+      ).resolves.toEqual(counts(4));
+      expect(countProblems).not.toHaveBeenCalled();
+    });
   });
 });

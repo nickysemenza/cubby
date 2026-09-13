@@ -11,7 +11,6 @@ describe("Problem diagnostic adapters", () => {
       "orphaned-products",
       "partially-imported-cookbooks",
       "tools-used-outside-ownership",
-      "orphaned-entity-embeddings",
       "entities-missing-embeddings",
       "stale-parent-recipes",
       "weight-sold-products",

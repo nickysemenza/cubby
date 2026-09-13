@@ -37,7 +37,6 @@ describe("PROBLEM_CLASS", () => {
     invalidFinancialJson: "defect",
     locationsWithoutAiDescription: "defect",
     manufacturerSpellingVariants: "defect",
-    orphanedEntityEmbeddings: "defect",
     orphanedProducts: "defect",
     partiallyImportedCookbooks: "defect",
     overdueTasks: "defect",
@@ -58,7 +57,6 @@ describe("PROBLEM_CLASS", () => {
     unclassifiedExpenses: "defect",
     understatedCostMeals: "defect",
     unknownParkedItems: "defect",
-    unreferencedImages: "defect",
     unusedIngredientsWithProduct: "defect",
     unusedIngredientsWithoutProduct: "defect",
 

@@ -1,4 +1,3 @@
-import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 
@@ -28,7 +27,7 @@ export const reparentLocationsInBulk = async (
   actor: ActorContext,
   requestedIds: readonly LocationShortcode[],
   requestedParentId: LocationShortcode | null,
-): Promise<{ updated: number; backgroundBatches: BackgroundBatchRef[] }> => {
+): Promise<{ updated: number }> => {
   if (requestedParentId && requestedIds.includes(requestedParentId)) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
@@ -40,7 +39,7 @@ export const reparentLocationsInBulk = async (
     ? await locationShortcodes.one(db, requestedParentId)
     : null;
   await bulkReparentLocations(db, ids, parentId, actor);
-  const backgroundBatches = await runMutationSideEffectsForEntities(
+  await runMutationSideEffectsForEntities(
     db,
     ids.map((entityId) => ({
       action: "updated" as const,
@@ -48,5 +47,5 @@ export const reparentLocationsInBulk = async (
       source: "location.bulkUpdateParent",
     })),
   );
-  return { updated: ids.length, backgroundBatches };
+  return { updated: ids.length };
 };

@@ -4,7 +4,6 @@ import { inspectWorkflow } from "~/server/workflow-runtime/definition";
 
 import {
   approveDetectedInventoryItemWorkflow,
-  auditCategoriesWorkflow,
   backfillLocationDescriptionsWorkflow,
   describeLocationWorkflow,
   detectInventoryItemsWorkflow,
@@ -52,11 +51,6 @@ describe("AI workflow graphs", () => {
     ).toEqual(["call", "call"]);
     expect(
       inspectWorkflow(suggestIngredientMergeBatchWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["call", "call"]);
-    expect(
-      inspectWorkflow(auditCategoriesWorkflow.definition).steps.map(
         (step) => step.type,
       ),
     ).toEqual(["call", "call"]);

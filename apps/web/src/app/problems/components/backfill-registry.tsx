@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 
 import { backfillProductUpcImagesStream } from "~/app/products/product.functions";
@@ -47,31 +46,19 @@ export const BACKFILL = {
   analyzeDescriptions: def<{
     enqueued: number;
     total: number;
-    batchId: string;
   }>({
     run: backfillLocationDescriptionsStream,
     invalidateTags: ripple.location,
     idleLabel: "Analyze all",
     pendingLabel: "Enqueuing…",
-    // Durable: the work runs on the background-jobs queue, so link the toast there.
+    // Durable: the work runs on the queue, so this reports what was enqueued
+    // rather than waiting for it to finish.
     toastResult: (r) => ({
       tone: r.enqueued > 0 ? "success" : "info",
       message:
-        r.enqueued > 0 ? (
-          <span>
-            Enqueued {r.enqueued} of {pluralize("location", r.total, true)} for
-            analysis.{" "}
-            <Link
-              to="/background-jobs"
-              search={{ batchId: r.batchId }}
-              className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
-            >
-              View progress
-            </Link>
-          </span>
-        ) : (
-          "No locations need analysis."
-        ),
+        r.enqueued > 0
+          ? `Enqueued ${r.enqueued} of ${pluralize("location", r.total, true)} for analysis.`
+          : "No locations need analysis.",
     }),
   }),
 };

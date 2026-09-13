@@ -35,7 +35,11 @@ export const getExecutionCtx = (): WaitUntilContext | undefined =>
 
 export interface ProblemCountsCacheAdapter {
   get(key: string): Promise<string | null>;
-  put(key: string, value: string): Promise<void>;
+  put(
+    key: string,
+    value: string,
+    options?: { expirationTtl?: number },
+  ): Promise<void>;
 }
 
 let cfEnv: Env | undefined;
@@ -71,7 +75,7 @@ export const getProblemCountsCache = ():
   if (!binding) return undefined;
   return {
     get: (key) => binding.get(key),
-    put: (key, value) => binding.put(key, value),
+    put: (key, value, options) => binding.put(key, value, options),
   };
 };
 

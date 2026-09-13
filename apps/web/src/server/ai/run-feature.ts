@@ -56,7 +56,6 @@ export interface AiRunContext<T = unknown> {
   /** The code path placing the call — `suggestCategory`, `select`, … */
   operation: string;
   entity?: { entityType: string; entityId: string } | null;
-  batchId?: string | null;
   /** Whether the *caller's* own cache (AiAnalysis) hit, for the usage row. */
   cacheStatus?: "hit" | "miss" | "none";
   /**
@@ -123,7 +122,6 @@ export function planStructuredRun<T = unknown>(
           operation: ctx.operation,
           cacheStatus: ctx.cacheStatus ?? "none",
           entity: ctx.entity ?? null,
-          batchId: ctx.batchId ?? null,
         })
       : undefined,
   };

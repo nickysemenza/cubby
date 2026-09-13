@@ -139,8 +139,7 @@ describe("discardProductUnits", () => {
     expect(after?.deletedAt).not.toBeNull();
 
     // The removal-path invariant: an entry that leaves must take its search
-    // embedding with it, in the SAME transaction, or
-    // `findOrphanedEntityEmbeddings` reports it. Asserted as "no live row
+    // embedding with it, in the SAME transaction. Asserted as "no live row
     // remains" rather than "a soft-deleted row exists", so the test holds
     // whether or not an embedding had been generated yet.
     const live = await getDb(ctx.db)
