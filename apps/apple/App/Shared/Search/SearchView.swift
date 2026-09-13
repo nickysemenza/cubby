@@ -1,6 +1,5 @@
 import CubbyKit
 import SwiftUI
-import TipKit
 
 /// The Search tab: search-as-you-type across every intent-exposed entity, scoped by kind, with a
 /// scanner sheet for the barcode/ISBN/label path. Owns a `SearchModel` created per host, mirroring
@@ -49,7 +48,6 @@ struct SearchContent: View {
     /// from ⌘F (`CubbyCommands`) does — whether it lands before this view exists (`.task` below)
     /// or after (`.onChange` below).
     @State private var lastHandledFocusRequest = 0
-    private let scanLabelTip = ScanLabelTip()
 
     /// The search-role tab supplies the field on iOS; pinning it in the drawer keeps it visible
     /// while results scroll. macOS has no drawer, so the toolbar field is the only placement.
@@ -61,18 +59,20 @@ struct SearchContent: View {
         #endif
     }
 
+    /// "Search Cubby" unscoped; "Search Products" (etc.) once a kind is picked from the toolbar
+    /// menu below — the segmented `.searchScopes` control this replaced can't fit 15 kinds on
+    /// iPhone without collapsing to "…", so the scope now only shows up here and in the menu.
+    private var searchPrompt: String {
+        guard let scope = search.scope else { return "Search Cubby" }
+        return "Search \(EntityCatalog[scope].plural)"
+    }
+
     var body: some View {
         content
             .porcelainScreen()
             .navigationTitle("Search")
-            .searchable(text: $search.query, placement: Self.searchPlacement, prompt: "Search Cubby")
+            .searchable(text: $search.query, placement: Self.searchPlacement, prompt: searchPrompt)
             .searchFocused($searchFieldFocused)
-            .searchScopes($search.scope) {
-                Text("All").tag(EntityKey?.none)
-                ForEach(EntityCatalog.intentExposed, id: \.key) { descriptor in
-                    Text(descriptor.plural).tag(EntityKey?.some(descriptor.key))
-                }
-            }
             .searchSuggestions {
                 if search.query.isEmpty {
                     ForEach(search.recents) { recent in
@@ -90,6 +90,28 @@ struct SearchContent: View {
             .scrollDismissesKeyboard(.immediately)
             .refreshControl { await search.refreshRecents() }
             .toolbar {
+                // A segmented `.searchScopes` control can't fit 15 intent-exposed kinds on
+                // iPhone without collapsing every label to "…", so the kind picker lives in this
+                // menu instead — filled when a kind is chosen, so the scope reads at a glance.
+                ToolbarItem(placement: .navigation) {
+                    Menu {
+                        Picker("Kind", selection: $search.scope) {
+                            Text("All").tag(EntityKey?.none)
+                            ForEach(EntityCatalog.intentExposed, id: \.key) { descriptor in
+                                Label(descriptor.plural, systemImage: entitySymbol(for: descriptor.key))
+                                    .tag(EntityKey?.some(descriptor.key))
+                            }
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Label(
+                            "Filter by kind",
+                            systemImage: search.scope == nil
+                                ? "line.3.horizontal.decrease.circle"
+                                : "line.3.horizontal.decrease.circle.fill"
+                        )
+                    }
+                }
                 ToolbarItem {
                     Button {
                         scanning = true
@@ -144,19 +166,12 @@ struct SearchContent: View {
     /// The un-searched state: recents alone don't need a big empty view (they show as
     /// suggestions), so this is mostly an invitation to scan instead of type.
     private var emptyState: some View {
-        VStack(spacing: 0) {
-            // Inline rather than a popover on the toolbar button: a popover here would stay up
-            // over a pushed detail screen.
-            TipView(scanLabelTip)
-                .padding(.horizontal, PorcelainTokens.Space.lg)
-                .padding(.top, PorcelainTokens.Space.md)
-            ContentUnavailableView {
-                Label("Search Cubby", systemImage: "magnifyingglass")
-            } description: {
-                Text("Find a product, location, recipe, or anything else.")
-            } actions: {
-                Button("Scan a code") { scanning = true }
-            }
+        ContentUnavailableView {
+            Label("Search Cubby", systemImage: "magnifyingglass")
+        } description: {
+            Text("Find a product, location, recipe, or anything else.")
+        } actions: {
+            Button("Scan a code") { scanning = true }
         }
     }
 

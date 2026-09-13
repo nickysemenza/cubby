@@ -21,6 +21,7 @@ struct CubbyLinkTests {
         #expect(link("cubby://audit?location=LOC-2345") == .audit(location: LocationCode("LOC-2345")))
         #expect(link("cubby://today") == .today)
         #expect(link("cubby://search") == .search)
+        #expect(link("cubby://dev") == .dev)
     }
 
     @Test func rejectsWrongSchemeHostOrScope() {
@@ -55,6 +56,7 @@ struct CubbyLinkTests {
             .audit(location: LocationCode("LOC-2345")),
             .today,
             .search,
+            .dev,
         ]
         for original in links {
             #expect(CubbyLink(url: original.url) == original)

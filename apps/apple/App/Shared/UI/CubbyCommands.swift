@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// App-level keyboard shortcuts: ⌘1…⌘6 select each `AppSection` (macOS menu bar and, since
-/// `Commands` is honoured on iPadOS too, a hardware keyboard there), and ⌘F jumps to Search and
-/// focuses its field.
+/// App-level keyboard shortcuts: ⌘1…⌘N select each tabbed `AppSection` (macOS menu bar and, since
+/// `Commands` is honoured on iPadOS too, a hardware keyboard there), ⌘F jumps to Search and
+/// focuses its field, and ⌘0 opens Dev — off the tab bar on iOS (see `AppSection.tabs`), so it
+/// needs its own shortcut rather than a slot in the numbered loop.
 ///
 /// `Commands` runs outside any window's view hierarchy, so it cannot read `@Environment(AppModel
 /// .self)` — there is one menu bar (or one shortcuts table) shared by every window. `AppModel
@@ -11,7 +12,7 @@ import SwiftUI
 struct CubbyCommands: Commands {
     var body: some Commands {
         CommandGroup(after: .toolbar) {
-            ForEach(Array(AppSection.allCases.enumerated()), id: \.element) { index, section in
+            ForEach(Array(AppSection.tabs.enumerated()), id: \.element) { index, section in
                 Button(section.title) {
                     AppModel.active?.navigator.section = section
                 }
@@ -24,6 +25,10 @@ struct CubbyCommands: Commands {
                 model.navigator.focusSearchRequest += 1
             }
             .keyboardShortcut("f", modifiers: .command)
+            Button("Dev") {
+                AppModel.active?.navigator.openDev()
+            }
+            .keyboardShortcut("0", modifiers: .command)
         }
     }
 }

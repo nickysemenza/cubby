@@ -2,7 +2,6 @@ import CoreSpotlight
 import CubbyKit
 import Nuke
 import SwiftUI
-import TipKit
 
 @main
 struct CubbyApp: App {
@@ -26,10 +25,6 @@ struct CubbyApp: App {
         // excluded from both). `ImageCaches.reset()` wipes both tiers on sign-out and base-URL
         // change, mirroring `SpotlightIndexer.wipe()`.
         ImagePipeline.shared = ImagePipeline(configuration: .withDataCache(name: "cubby-images"))
-        try? Tips.configure([
-            .displayFrequency(.daily),
-            .datastoreLocation(.applicationDefault),
-        ])
     }
 
     var body: some Scene {
