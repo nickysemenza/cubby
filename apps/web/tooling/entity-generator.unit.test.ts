@@ -18,12 +18,17 @@ import {
   readFieldSchemas,
 } from "../../../packages/schemas/src/entity-definitions/definition";
 import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
-import { checkEntityArtifacts } from "../../../scripts/entity-generator/artifacts";
+import {
+  checkEntityArtifacts,
+  generatedHeader,
+} from "../../../scripts/entity-generator/artifacts";
 import { compileEntityDeclarations } from "../../../scripts/entity-generator/compile";
 import { loadEntityDeclarations } from "../../../scripts/entity-generator/declarations";
 import type { CompiledEntity } from "../../../scripts/entity-generator/declarations";
 import { renderEntityArtifacts } from "../../../scripts/entity-generator/render/index";
 import { renderFilterArtifacts } from "../../../scripts/entity-generator/render/filters";
+import { renderKernelBindingsArtifacts } from "../../../scripts/entity-generator/render/kernel-bindings";
+import { renderRelationArtifacts } from "../../../scripts/entity-generator/render/relations";
 import {
   expectedBrowserRouteFiles,
   missingBrowserRouteFiles,
@@ -806,13 +811,20 @@ describe("typed entity compiler", () => {
       join(root, "generated/entity-literal-alpha.gen.ts"),
       "stale",
     );
+    // Extraneous detection reads the generator ownership header, not the
+    // filename: a stray file only counts if it carries that header — which
+    // catches a retired artifact name (nothing in the current artifact list
+    // matches it) exactly as it catches a still-current one.
     await writeFile(
-      join(root, "generated/entity-literal-extra.gen.ts"),
-      "extra",
+      join(root, "generated/entity-retired-name.gen.ts"),
+      `${generatedHeader}export const retired = 1;\n`,
     );
+    // A file with no generator header — even one shaped like a generated
+    // artifact's name — is left alone; it isn't ours to flag.
+    await writeFile(join(root, "generated/notes.gen.ts"), "// just a note\n");
     expect(await checkEntityArtifacts(root, artifacts)).toEqual([
       "stale: generated/entity-literal-alpha.gen.ts",
-      "extraneous: generated/entity-literal-extra.gen.ts",
+      "extraneous: generated/entity-retired-name.gen.ts",
     ]);
   });
 
@@ -820,6 +832,8 @@ describe("typed entity compiler", () => {
     const entities = await loadEntityDeclarations();
     const artifacts = [
       ...renderEntityArtifacts(entities),
+      ...renderRelationArtifacts(entities),
+      ...renderKernelBindingsArtifacts(entities),
       ...renderFilterArtifacts(entities),
     ];
     const artifact = (suffix: string) =>

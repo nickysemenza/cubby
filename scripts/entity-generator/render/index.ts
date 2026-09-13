@@ -13,11 +13,12 @@ import type {
   EntityArtifacts,
   EntityField,
   FilterDescriptor,
-  RelationMutation,
   SourceRef,
 } from "../declarations.ts";
 import { renderEntityColumnsArtifact } from "./columns.ts";
+import { renderRecord } from "./record.ts";
 import { browserRoutes, lowerCamelCase } from "./routes.ts";
+import { kernelEntitiesFor } from "./shared.ts";
 import { renderSwiftEntityCatalog } from "./swift-catalog.ts";
 
 type ContractEntity = CompiledEntity & {
@@ -236,127 +237,10 @@ const renderDerivedFilterFields = (
 };
 
 // One render pass preserves deterministic cross-artifact ordering and hashes.
-// oxlint-disable-next-line eslint/complexity
 export const renderEntityArtifacts = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
   const projections = entityProjectionMaps(entities);
-  const relationMutations = entities.flatMap(
-    (entity) => entity.relationMutations,
-  );
-  const relationMutationKeys = relationMutations.map(
-    ({ entity, relation }) => `${entity}:${relation}`,
-  );
-  if (new Set(relationMutationKeys).size !== relationMutationKeys.length) {
-    throw new EntityDeclarationError("Relation mutation keys must be unique.");
-  }
-  const relationSchemaImports = [
-    ...new Map(
-      relationMutations.map(({ itemSchema }) => [
-        `${itemSchema.module}#${itemSchema.export}`,
-        itemSchema,
-      ]),
-    ).values(),
-  ]
-    .sort((left, right) =>
-      `${left.module}#${left.export}`.localeCompare(
-        `${right.module}#${right.export}`,
-      ),
-    )
-    .map(
-      ({ module, export: exportName }) =>
-        `import { ${exportName} } from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
-  const relationCommandVariant = ({
-    entity,
-    relation,
-    target,
-    itemSchema,
-  }: RelationMutation) =>
-    `z.object({action:z.enum(["attach","detach"]),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),id:shortcodeSchema(${JSON.stringify(entity)}),items:z.array(${itemSchema.export}.extend({id:shortcodeSchema(${JSON.stringify(target)})})).min(1).max(500)}).strict()`;
-  const relationCommandSchema = (
-    audience: "browser" | "mcp" | null,
-  ): string => {
-    const mutations =
-      audience === null
-        ? relationMutations
-        : relationMutations.filter(({ audiences }) =>
-            audiences.includes(audience),
-          );
-    return mutations.length === 0
-      ? "z.never()"
-      : `z.union([\n  ${mutations.map(relationCommandVariant).join(",\n  ")}\n])`;
-  };
-  const relationResultSchema =
-    relationMutations.length === 0
-      ? "z.never()"
-      : `z.union([\n  ${relationMutations
-          .map(
-            ({ entity, relation }) =>
-              `z.object({action:z.enum(["attach","detach"]),entity:z.literal(${JSON.stringify(entity)}),relation:z.literal(${JSON.stringify(relation)}),result:relationMutationOut})`,
-          )
-          .join(",\n  ")}\n])`;
-  const mcpRelationMutations = relationMutations.filter(({ audiences }) =>
-    audiences.includes("mcp"),
-  );
-  const mcpParentIdSchemas = [
-    ...new Set(
-      mcpRelationMutations.map(
-        ({ entity }) => `shortcodeSchema(${JSON.stringify(entity)})`,
-      ),
-    ),
-  ];
-  const mcpItemSchemas = [
-    ...new Set(
-      mcpRelationMutations.map(
-        ({ itemSchema, target }) =>
-          `${itemSchema.export}.extend({id:shortcodeSchema(${JSON.stringify(target)})})`,
-      ),
-    ),
-  ];
-  const schemaUnion = (schemas: readonly string[]) =>
-    schemas.length === 1 ? schemas[0] : `z.union([${schemas.join(",")}])`;
-  const mcpPreviewInputSchema =
-    mcpRelationMutations.length === 0
-      ? "z.never()"
-      : `z.object({action:z.enum(["attach","detach"]),entity:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ entity }) => entity))])}),relation:z.enum(${compactLiteral([...new Set(mcpRelationMutations.map(({ relation }) => relation))])}),id:${schemaUnion(mcpParentIdSchemas)},items:z.array(${schemaUnion(mcpItemSchemas)}).min(1).max(500)}).strict().superRefine((input,ctx)=>{const result=generatedMcpEntityRelationCommandSchema.safeParse(input);if(!result.success){for(const issue of result.error.issues)ctx.addIssue({code:"custom",path:issue.path,message:issue.message});}})`;
-  const relationAdapterImports = [
-    ...new Map(
-      relationMutations.map(({ adapter }) => [
-        `${adapter.module}#${adapter.export}`,
-        adapter,
-      ]),
-    ).values(),
-  ]
-    .sort((left, right) =>
-      `${left.module}#${left.export}`.localeCompare(
-        `${right.module}#${right.export}`,
-      ),
-    )
-    .map(
-      ({ module, export: exportName }) =>
-        `import { ${exportName} } from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
-  const relationRuntimeCases = relationMutations
-    .map(
-      ({ entity, relation, adapter }) =>
-        `    case ${JSON.stringify(`${entity}:${relation}`)}: {\n      const result = await ${adapter.export}.execute(ctx,command.action,command.id,command.items);\n      return {action:command.action,entity:${JSON.stringify(entity)},relation:${JSON.stringify(relation)},result};\n    }`,
-    )
-    .join("\n");
-  const relationTargetCases = relationMutations
-    .map(
-      ({ entity, relation, target }) =>
-        `    case ${JSON.stringify(`${entity}:${relation}`)}: return ${JSON.stringify(target)};`,
-    )
-    .join("\n");
-  const relationPreviewCases = relationMutations
-    .map(
-      ({ entity, relation, adapter }) =>
-        `    case ${JSON.stringify(`${entity}:${relation}`)}: return ${adapter.export}.preview(db,command.action,ownerId,targetIds);`,
-    )
-    .join("\n");
   const imports = new Map<string, Set<string>>();
   for (const { contract, filterSchema } of entities) {
     if (contract === null) continue;
@@ -673,43 +557,8 @@ export const renderEntityArtifacts = (
   const mcpBulkUpdateCommandFactory = bulkUpdateCommandFactoryFor(
     mcpBulkUpdateEntities,
   );
-  const kernelEntities = entities.filter(
-    ({ contract, key, ports }) =>
-      (contract !== null && ports.repository !== null) || key === "image",
-  );
+  const kernelEntities = kernelEntitiesFor(entities);
   const kernelEntityKeys = kernelEntities.map(({ key }) => key);
-  const runtimeAdapterImports = new Map<string, Set<string>>();
-  for (const entity of kernelEntities) {
-    const adapter = entity.ports.repository;
-    if (adapter === null) {
-      throw new EntityDeclarationError(
-        `${entity.key}.ports.repository is required for a kernel entity.`,
-      );
-    }
-    const exports =
-      runtimeAdapterImports.get(adapter.module) ?? new Set<string>();
-    exports.add(adapter.export);
-    runtimeAdapterImports.set(adapter.module, exports);
-  }
-  const runtimeAdapterImportSource = [...runtimeAdapterImports.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(
-      ([module, exports]) =>
-        `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
-  const runtimeBindings = kernelEntities
-    .map(
-      ({ key, ports }) =>
-        `  ${JSON.stringify(key)}: ${ports.repository?.export},`,
-    )
-    .join("\n");
-  const runtimeOperations = kernelEntities
-    .map(
-      ({ key, ports }) =>
-        `  ${JSON.stringify(key)}: defineEntityOperations(${ports.repository?.export}),`,
-    )
-    .join("\n");
   const filterFieldImports = new Map<string, Set<string>>();
   for (const { filterSchema } of entities) {
     if (filterSchema === null) continue;
@@ -1016,46 +865,6 @@ export const renderEntityArtifacts = (
       },
     ];
   });
-  const portExportChecks = [
-    ...new Map(
-      entities.flatMap((entity) => {
-        const { ports } = entity;
-        const refs = [
-          ports.repository,
-          ports.references.label,
-          ports.references.resolver,
-          ports.filters,
-          ports.search.projection,
-          ports.search.semanticText,
-          ports.search.dependentRefresh,
-          ...entity.relationMutations.flatMap(({ itemSchema, adapter }) => [
-            itemSchema,
-            adapter,
-          ]),
-          ...entity.filterDescriptors.flatMap((descriptor) => [
-            descriptor.optionsRef,
-            descriptor.expandRef,
-          ]),
-        ].filter((ref): ref is SourceRef => ref !== null);
-        return refs.map((ref) => [`${ref.module}#${ref.export}`, ref] as const);
-      }),
-    ).values(),
-  ].sort((left, right) =>
-    `${left.module}#${left.export}`.localeCompare(
-      `${right.module}#${right.export}`,
-    ),
-  );
-  const portTypeModuleAliases = new Map(
-    [...new Set(portExportChecks.map((ref) => ref.module))]
-      .sort((left, right) => left.localeCompare(right))
-      .map((module, index) => [module, `entityPortModule${index}`]),
-  );
-  const portTypeImports = [...portTypeModuleAliases.entries()]
-    .map(
-      ([module, alias]) =>
-        `import type * as ${alias} from ${JSON.stringify(module)};`,
-    )
-    .join("\n");
   // Every table with a public shortcode, keyed the same way as SHORTCODE_PREFIX.
   // The Drizzle export name is always lowerCamelCase(dbTable) from the single
   // `~/server/db/schema` module — verified for all current shortcode entities.
@@ -1090,12 +899,19 @@ export const renderEntityArtifacts = (
       relativePath: "packages/shared/src/generated/shortcode-registry.gen.ts",
       source:
         generatedHeader +
-        "// Generated shortcode registry stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const SHORTCODE_PREFIX = ${compactLiteral(shortcodePrefixes)} as const;\n` +
+        renderRecord({
+          name: "SHORTCODE_PREFIX",
+          entries: shortcodePrefixes,
+          comment: "// Generated shortcode registry stays one entity per line.",
+        }) +
         "export type ShortcodeType = keyof typeof SHORTCODE_PREFIX;\n\n" +
         "/** Inbound-only aliases; canonical generation never emits these prefixes. */\n" +
-        "// Generated legacy aliases stay compact.\n// oxfmt-ignore\n" +
-        `export const LEGACY_SHORTCODE_PREFIX = ${compactLiteral(legacyShortcodePrefixes)} as const satisfies Record<string, ShortcodeType>;\n`,
+        renderRecord({
+          name: "LEGACY_SHORTCODE_PREFIX",
+          entries: legacyShortcodePrefixes,
+          satisfies: "Record<string, ShortcodeType>",
+          comment: "// Generated legacy aliases stay compact.",
+        }),
     },
     {
       relativePath:
@@ -1104,12 +920,14 @@ export const renderEntityArtifacts = (
         generatedHeader +
         'import type { Entity } from "../entity";\n' +
         'import type { EntityDescriptor } from "../entity-manifest";\n\n' +
-        "// Generated data stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const generatedEntityManifest = ${compactLiteral(
-          Object.fromEntries(
+        renderRecord({
+          name: "generatedEntityManifest",
+          entries: Object.fromEntries(
             entities.map(({ key, descriptor }) => [key, descriptor]),
           ),
-        )} as const satisfies Record<Entity, EntityDescriptor>;\n`,
+          satisfies: "Record<Entity, EntityDescriptor>",
+          comment: "// Generated data stays one entity per line.",
+        }),
     },
     {
       relativePath: "packages/schemas/src/generated/entity-names.gen.ts",
@@ -1133,15 +951,28 @@ export const renderEntityArtifacts = (
         " * artifact is two orders of magnitude larger.\n" +
         " */\n" +
         "export type EntityNames = { singular: string; plural: string | null };\n\n" +
-        "// Generated names stay one entity per line.\n// oxfmt-ignore\n" +
-        `export const entityNames = ${compactLiteral(
-          Object.fromEntries(
+        "/**\n" +
+        " * Every entity key, in declaration order. The leaf roster: `entity-core`'s\n" +
+        " * `entitySchema` is `z.enum(entityKeys)`, so this tuple carries no `Entity`\n" +
+        " * constraint of its own (the `satisfies` on `entityNames` below is fine —\n" +
+        " * it only reads `Entity` after `entityKeys` is fixed).\n" +
+        " */\n" +
+        renderRecord({
+          name: "entityKeys",
+          entries: entities.map(({ key }) => key),
+        }) +
+        "\n" +
+        renderRecord({
+          name: "entityNames",
+          entries: Object.fromEntries(
             entities.map(({ key, inspector }) => [
               key,
               { singular: inspector.singular, plural: inspector.plural },
             ]),
           ),
-        )} as const satisfies Record<Entity, EntityNames>;\n`,
+          satisfies: "Record<Entity, EntityNames>",
+          comment: "// Generated names stay one entity per line.",
+        }),
     },
     {
       relativePath: "packages/schemas/src/generated/entity-field-model.gen.ts",
@@ -1159,18 +990,26 @@ export const renderEntityArtifacts = (
         "  audit: readonly string[];\n" +
         "  output: readonly string[];\n" +
         "};\n\n" +
-        "// One authoritative field model per compiled entity.\n// oxfmt-ignore\n" +
-        `export const generatedEntityFieldModels = ${compactLiteral(fieldModels)} as const satisfies Record<Entity, GeneratedEntityFieldModel>;\n`,
+        renderRecord({
+          name: "generatedEntityFieldModels",
+          entries: fieldModels,
+          satisfies: "Record<Entity, GeneratedEntityFieldModel>",
+          comment: "// One authoritative field model per compiled entity.",
+        }),
     },
     {
       relativePath: "packages/schemas/src/generated/entity-edit-intents.gen.ts",
       source:
         generatedHeader +
         'import type { Entity } from "../entity-core";\n\n' +
-        "// Editing intents per entity: named field fragments and the ordered\n" +
-        "// intent names each operation accepts (first is the default).\n" +
-        "// oxfmt-ignore\n" +
-        `export const generatedEntityEditIntents = ${compactLiteral(entityEditIntents)} as const satisfies Partial<Record<Entity, { fields: Record<string, readonly string[]>; create: readonly [string, ...string[]]; update: readonly [string, ...string[]] }>>;\n`,
+        renderRecord({
+          name: "generatedEntityEditIntents",
+          entries: entityEditIntents,
+          satisfies:
+            "Partial<Record<Entity, { fields: Record<string, readonly string[]>; create: readonly [string, ...string[]]; update: readonly [string, ...string[]] }>>",
+          comment:
+            "// Editing intents per entity: named field fragments and the ordered\n// intent names each operation accepts (first is the default).",
+        }),
     },
     {
       relativePath:
@@ -1219,8 +1058,14 @@ export const renderEntityArtifacts = (
         " * (correlated subqueries and rollups); `groupable` is the `groupBy` allowlist,\n" +
         " * defaulting to every sortable field when empty.\n" +
         " */\n" +
-        "// Generated sort rosters stay one entity per line.\n// oxfmt-ignore\n" +
-        `export const generatedEntitySort = ${compactLiteral(entitySort)} as const satisfies Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; computed: readonly string[]; groupable: readonly string[] }>>;\n\n` +
+        renderRecord({
+          name: "generatedEntitySort",
+          entries: entitySort,
+          satisfies:
+            "Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; computed: readonly string[]; groupable: readonly string[] }>>",
+          comment: "// Generated sort rosters stay one entity per line.",
+        }) +
+        "\n" +
         "export type GeneratedEntitySortField<E extends keyof typeof generatedEntitySort> =\n" +
         '  (typeof generatedEntitySort)[E]["fields"][number];\n',
     },
@@ -1271,8 +1116,12 @@ export const renderEntityArtifacts = (
         "  filters: EntityPortSourceRef | null;\n" +
         "  search: { projection: EntityPortSourceRef | null; semanticText: EntityPortSourceRef | null; dependentRefresh: EntityPortSourceRef | null };\n" +
         "};\n\n" +
-        "// Generated inspector metadata stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const entityInspectorMetadata = ${compactLiteral(inspectorMetadata)} as const satisfies Record<Entity, EntityInspectorMetadata>;\n`,
+        renderRecord({
+          name: "entityInspectorMetadata",
+          entries: inspectorMetadata,
+          satisfies: "Record<Entity, EntityInspectorMetadata>",
+          comment: "// Generated inspector metadata stays one entity per line.",
+        }),
     },
     {
       relativePath: "apps/web/src/entities/generated/entity-details.gen.ts",
@@ -1491,17 +1340,24 @@ export const renderEntityArtifacts = (
       source:
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n\n' +
-        "// Generated routes stay one entity per line.\n// oxfmt-ignore\n" +
-        `export const generatedBrowserRoutes = ${compactLiteral(
-          Object.fromEntries(
+        renderRecord({
+          name: "generatedBrowserRoutes",
+          entries: Object.fromEntries(
             projections.routes.map((entity) => [
               entity.key,
               browserRoutes(entity),
             ]),
           ),
-        )} as const satisfies Partial<Record<Entity, { basePath: string; routes: { detail: string; list: string } }>>;\n\n` +
-        "// Generated entity roster stays one line.\n// oxfmt-ignore\n" +
-        `export const generatedBrowserCrudEntities = ${compactLiteral(browserCrudEntities)} as const;\n` +
+          satisfies:
+            "Partial<Record<Entity, { basePath: string; routes: { detail: string; list: string } }>>",
+          comment: "// Generated routes stay one entity per line.",
+        }) +
+        "\n" +
+        renderRecord({
+          name: "generatedBrowserCrudEntities",
+          entries: browserCrudEntities,
+          comment: "// Generated entity roster stays one line.",
+        }) +
         "export type GeneratedBrowserCrudEntity = (typeof generatedBrowserCrudEntities)[number];\n",
     },
     {
@@ -1509,17 +1365,28 @@ export const renderEntityArtifacts = (
         "apps/web/src/server/generated/entity-kernel-entities.gen.ts",
       source:
         generatedHeader +
-        "// Generated entity roster stays one line.\n// oxfmt-ignore\n" +
-        `export const generatedEntityKernelEntities = ${compactLiteral(kernelEntityKeys)} as const;\n\n` +
-        "// Generated capabilities stay compact and reviewable.\n// oxfmt-ignore\n" +
-        `export const generatedEntityKernelContractCases = ${compactLiteral(kernelContractCases)} as const;\n\n` +
-        "// Generated MCP exposure is a strict subset of executable kernel actions.\n" +
-        "// oxfmt-ignore\n" +
-        `export const generatedMcpEntityKernelContractCases = ${compactLiteral(mcpKernelContractCases)} as const;\n\n` +
-        "// One generated entity roster per MCP action.\n" +
-        "// oxfmt-ignore\n" +
-        `export const generatedMcpEntityActionEntities = ${compactLiteral(
-          Object.fromEntries(
+        renderRecord({
+          name: "generatedEntityKernelEntities",
+          entries: kernelEntityKeys,
+          comment: "// Generated entity roster stays one line.",
+        }) +
+        "\n" +
+        renderRecord({
+          name: "generatedEntityKernelContractCases",
+          entries: kernelContractCases,
+          comment: "// Generated capabilities stay compact and reviewable.",
+        }) +
+        "\n" +
+        renderRecord({
+          name: "generatedMcpEntityKernelContractCases",
+          entries: mcpKernelContractCases,
+          comment:
+            "// Generated MCP exposure is a strict subset of executable kernel actions.",
+        }) +
+        "\n" +
+        renderRecord({
+          name: "generatedMcpEntityActionEntities",
+          entries: Object.fromEntries(
             [
               "get",
               "list",
@@ -1531,89 +1398,15 @@ export const renderEntityArtifacts = (
               "merge",
             ].map((action) => [action, mcpEntitiesForAction(action)]),
           ),
-        )} as const;\n\n` +
-        "// Generated action rosters stay one line each.\n// oxfmt-ignore\n" +
-        `export const generatedSearchEntityKernelEntities = ${compactLiteral(entitiesForAction("search"))} as const;\n` +
+          comment: "// One generated entity roster per MCP action.",
+        }) +
+        "\n" +
+        renderRecord({
+          name: "generatedSearchEntityKernelEntities",
+          entries: entitiesForAction("search"),
+          comment: "// Generated action rosters stay one line each.",
+        }) +
         `export const generatedMergeEntityKernelEntities = ${compactLiteral(entitiesForAction("merge"))} as const;\n`,
-    },
-    {
-      relativePath:
-        "apps/web/src/server/generated/entity-relation-contracts.gen.ts",
-      source:
-        generatedHeader +
-        'import { relationMutationOut } from "@cubby/schemas/common";\n' +
-        'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
-        'import { shortcodeSchema } from "@cubby/schemas/identifiers";\n' +
-        `${relationSchemaImports}\n` +
-        'import { z } from "zod";\n\n' +
-        "// Generated relation command schemas stay correlated by entity and relation.\n" +
-        `const generatedEntityRelationCommandSchema = ${relationCommandSchema(null)};\n` +
-        `export const generatedBrowserEntityRelationCommandSchema = ${relationCommandSchema("browser")};\n` +
-        `export const generatedMcpEntityRelationCommandSchema = ${relationCommandSchema("mcp")};\n\n` +
-        `export const generatedMcpEntityRelationPreviewInputSchema = ${mcpPreviewInputSchema};\n\n` +
-        `export const generatedEntityRelationMutationResultSchema = ${relationResultSchema};\n\n` +
-        "export type GeneratedEntityRelationCommand = z.infer<typeof generatedEntityRelationCommandSchema>;\n\n" +
-        "/** Resolve generated relation metadata without a parallel hand-written roster. */\n" +
-        "export function generatedEntityRelationTarget(command: GeneratedEntityRelationCommand): ShortcodeEntity {\n" +
-        "  switch (`${command.entity}:${command.relation}`) {\n" +
-        `${relationTargetCases}\n` +
-        "  }\n" +
-        "  throw new Error(`Unsupported relation ${command.entity}:${command.relation}`);\n" +
-        "}\n\n" +
-        "export const generatedEntityRelationItemIds = (command: GeneratedEntityRelationCommand): string[] => command.items.map((item) => item.id);\n",
-    },
-    {
-      relativePath:
-        "apps/web/src/server/generated/entity-relation-bindings.gen.ts",
-      source:
-        generatedHeader +
-        'import type { EntityKernelContext } from "~/server/entity-kernel/adapter";\n' +
-        'import type { Database } from "~/server/db";\n' +
-        'import type { GeneratedEntityRelationCommand } from "~/server/generated/entity-relation-contracts.gen";\n' +
-        'import type { RelationPlan } from "~/server/repo/relation-preflight";\n' +
-        'import type { z } from "zod";\n' +
-        'import { generatedEntityRelationMutationResultSchema } from "~/server/generated/entity-relation-contracts.gen";\n\n' +
-        `${relationAdapterImports}\n\n` +
-        "/** Dispatch is generated from each literal relationship mutation declaration. */\n" +
-        "export async function executeGeneratedRelationMutation(ctx: EntityKernelContext, command: GeneratedEntityRelationCommand): Promise<z.infer<typeof generatedEntityRelationMutationResultSchema>> {\n" +
-        "  switch (`${command.entity}:${command.relation}`) {\n" +
-        `${relationRuntimeCases}\n` +
-        "  }\n" +
-        "  throw new Error(`Unsupported relation mutation ${command.entity}:${command.relation}`);\n" +
-        "}\n\n" +
-        "/** Advisory planning uses the same generated relation-to-adapter dispatch. */\n" +
-        "export async function previewGeneratedRelationMutation(db: Database, command: GeneratedEntityRelationCommand, ownerId: string, targetIds: readonly string[]): Promise<RelationPlan> {\n" +
-        "  switch (`${command.entity}:${command.relation}`) {\n" +
-        `${relationPreviewCases}\n` +
-        "  }\n" +
-        "  throw new Error(`Unsupported relation preview ${command.entity}:${command.relation}`);\n" +
-        "}\n",
-    },
-    {
-      relativePath:
-        "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
-      source:
-        generatedHeader +
-        "// Generated port aliases retain deterministic import order.\n" +
-        'import type { EntityKernelCoreBinding } from "~/server/entity-kernel/adapter";\n' +
-        'import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";\n\n' +
-        'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n\n' +
-        `${portTypeImports}\n\n` +
-        "/** Each literal module/export source reference is checked without a runtime import. */\n" +
-        `type EntityPortExportChecks = readonly [${portExportChecks
-          .map(
-            (ref) =>
-              `typeof ${portTypeModuleAliases.get(ref.module)}[${JSON.stringify(ref.export)}]`,
-          )
-          .join(", ")}];\n\n` +
-        `${runtimeAdapterImportSource}\n\n` +
-        "type CorrelatedEntityKernelBindings = {\n" +
-        "  [E in EntityKernelEntity]: EntityKernelCoreBinding<E>;\n" +
-        "};\n\n" +
-        "// Generated runtime assembly stays one entity per line.\n// oxfmt-ignore\n" +
-        `export const ENTITY_KERNEL_BINDINGS = {\n${runtimeBindings}\n} as const satisfies CorrelatedEntityKernelBindings & { readonly __portExportChecks?: EntityPortExportChecks };\n` +
-        "// Generated operation closures retain each binding's schema correlation.\n// oxfmt-ignore\n" +
-        `export const ENTITY_KERNEL_OPERATIONS = {\n${runtimeOperations}\n} as const;\n`,
     },
     {
       relativePath:

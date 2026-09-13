@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SHORTCODE_TYPES, capitalize, mapRecord } from "@cubby/shared";
 import type { ShortcodeType as ShortcodeEntity } from "@cubby/shared";
 
 export const id = z.uuid().describe("entity identifier");
@@ -11,38 +12,8 @@ const brandedId = <Name extends string>(name: Name) => z.uuid().brand(name);
 export const userId = z.string().min(1).brand("UserId");
 export type UserId = z.infer<typeof userId>;
 
-export const recipeId = brandedId("RecipeId");
-export type RecipeId = z.infer<typeof recipeId>;
-
-export const imageId = brandedId("ImageId");
-export type ImageId = z.infer<typeof imageId>;
-
-export const ingredientId = brandedId("IngredientId");
-export type IngredientId = z.infer<typeof ingredientId>;
-
-export const productId = brandedId("ProductId");
-export type ProductId = z.infer<typeof productId>;
-
-export const locationId = brandedId("LocationId");
-export type LocationId = z.infer<typeof locationId>;
-
-export const inventoryId = brandedId("InventoryId");
-export type InventoryId = z.infer<typeof inventoryId>;
-
-export const cookbookId = brandedId("CookbookId");
-export type CookbookId = z.infer<typeof cookbookId>;
-
-export const mealId = brandedId("MealId");
-export type MealId = z.infer<typeof mealId>;
-
-export const ledgerPartyId = brandedId("LedgerPartyId");
-export type LedgerPartyId = z.infer<typeof ledgerPartyId>;
-
 export const expenseAttributionId = brandedId("ExpenseAttributionId");
 export type ExpenseAttributionId = z.infer<typeof expenseAttributionId>;
-
-export const ledgerTransferId = brandedId("LedgerTransferId");
-export type LedgerTransferId = z.infer<typeof ledgerTransferId>;
 
 export const mealRecipeId = brandedId("MealRecipeId");
 export type MealRecipeId = z.infer<typeof mealRecipeId>;
@@ -51,59 +22,31 @@ export type MealRecipeId = z.infer<typeof mealRecipeId>;
 export const mealRecipePortionId = brandedId("MealRecipePortionId");
 export type MealRecipePortionId = z.infer<typeof mealRecipePortionId>;
 
-export const projectId = brandedId("ProjectId");
-export type ProjectId = z.infer<typeof projectId>;
+/** The Zod brand an entity's private UUID carries: `product` → `ProductId`. */
+type EntityIdBrand<E extends ShortcodeEntity> = `${Capitalize<E>}Id`;
 
-export const taskId = brandedId("TaskId");
-export type TaskId = z.infer<typeof taskId>;
+const entityIdBrand = <E extends ShortcodeEntity>(
+  entity: E,
+): EntityIdBrand<E> => `${capitalize(entity)}Id`;
 
-export const expenseId = brandedId("ExpenseId");
-export type ExpenseId = z.infer<typeof expenseId>;
+type EntityIdSchemaMap = {
+  [E in ShortcodeEntity]: ReturnType<typeof brandedId<EntityIdBrand<E>>>;
+};
 
-export const financialAccountId = brandedId("FinancialAccountId");
-export type FinancialAccountId = z.infer<typeof financialAccountId>;
-
-export const financialTransactionId = brandedId("FinancialTransactionId");
-export type FinancialTransactionId = z.infer<typeof financialTransactionId>;
-
-export const vendorId = brandedId("VendorId");
-export type VendorId = z.infer<typeof vendorId>;
-
-export const purchaseId = brandedId("PurchaseId");
-export type PurchaseId = z.infer<typeof purchaseId>;
-
-export const wishId = brandedId("WishId");
-export type WishId = z.infer<typeof wishId>;
-
-export const plantingId = brandedId("PlantingId");
-export type PlantingId = z.infer<typeof plantingId>;
-
-export const gardenEntryId = brandedId("GardenEntryId");
-export type GardenEntryId = z.infer<typeof gardenEntryId>;
-
-/** Every local entity's private UUID schema, keyed by its manifest entity. */
-export const ENTITY_ID_SCHEMA = {
-  cookbook: cookbookId,
-  expense: expenseId,
-  financialAccount: financialAccountId,
-  financialTransaction: financialTransactionId,
-  image: imageId,
-  ingredient: ingredientId,
-  inventory: inventoryId,
-  ledgerParty: ledgerPartyId,
-  ledgerTransfer: ledgerTransferId,
-  location: locationId,
-  meal: mealId,
-  product: productId,
-  project: projectId,
-  purchase: purchaseId,
-  recipe: recipeId,
-  task: taskId,
-  vendor: vendorId,
-  wish: wishId,
-  planting: plantingId,
-  gardenEntry: gardenEntryId,
-} as const satisfies Record<ShortcodeEntity, z.ZodType>;
+/**
+ * Every local entity's private UUID schema, keyed by its manifest entity and
+ * built from the shortcode registry, so a new entity gets its branded id
+ * without a line here. The per-entity `xId` exports below are these entries.
+ */
+export const ENTITY_ID_SCHEMA =
+  // SAFETY: each entry is `brandedId(brand(entity))` for its own key, i.e.
+  // exactly `EntityIdSchemaMap[entity]`; `.brand<B>()` is a deferred
+  // conditional inside the closure, so the per-key correlation this
+  // construction guarantees is asserted here and checked per entity by
+  // identifier-fields.unit.test.ts.
+  mapRecord(SHORTCODE_TYPES, (entity) =>
+    brandedId(entityIdBrand(entity)),
+  ) as EntityIdSchemaMap;
 
 /** The branded private UUID for one exact local entity. */
 export type EntityId<E extends ShortcodeEntity> = z.infer<
@@ -114,6 +57,49 @@ export type EntityId<E extends ShortcodeEntity> = z.infer<
 export const entityIdSchema = <E extends ShortcodeEntity>(
   entity: E,
 ): (typeof ENTITY_ID_SCHEMA)[E] => ENTITY_ID_SCHEMA[entity];
+
+// Named per-entity exports over the same map — the stable import surface.
+export const recipeId = ENTITY_ID_SCHEMA.recipe;
+export const imageId = ENTITY_ID_SCHEMA.image;
+export const ingredientId = ENTITY_ID_SCHEMA.ingredient;
+export const productId = ENTITY_ID_SCHEMA.product;
+export const locationId = ENTITY_ID_SCHEMA.location;
+export const inventoryId = ENTITY_ID_SCHEMA.inventory;
+export const cookbookId = ENTITY_ID_SCHEMA.cookbook;
+export const mealId = ENTITY_ID_SCHEMA.meal;
+export const ledgerPartyId = ENTITY_ID_SCHEMA.ledgerParty;
+export const ledgerTransferId = ENTITY_ID_SCHEMA.ledgerTransfer;
+export const projectId = ENTITY_ID_SCHEMA.project;
+export const taskId = ENTITY_ID_SCHEMA.task;
+export const expenseId = ENTITY_ID_SCHEMA.expense;
+export const financialAccountId = ENTITY_ID_SCHEMA.financialAccount;
+export const financialTransactionId = ENTITY_ID_SCHEMA.financialTransaction;
+export const vendorId = ENTITY_ID_SCHEMA.vendor;
+export const purchaseId = ENTITY_ID_SCHEMA.purchase;
+export const wishId = ENTITY_ID_SCHEMA.wish;
+export const plantingId = ENTITY_ID_SCHEMA.planting;
+export const gardenEntryId = ENTITY_ID_SCHEMA.gardenEntry;
+
+export type RecipeId = EntityId<"recipe">;
+export type ImageId = EntityId<"image">;
+export type IngredientId = EntityId<"ingredient">;
+export type ProductId = EntityId<"product">;
+export type LocationId = EntityId<"location">;
+export type InventoryId = EntityId<"inventory">;
+export type CookbookId = EntityId<"cookbook">;
+export type MealId = EntityId<"meal">;
+export type LedgerPartyId = EntityId<"ledgerParty">;
+export type LedgerTransferId = EntityId<"ledgerTransfer">;
+export type ProjectId = EntityId<"project">;
+export type TaskId = EntityId<"task">;
+export type ExpenseId = EntityId<"expense">;
+export type FinancialAccountId = EntityId<"financialAccount">;
+export type FinancialTransactionId = EntityId<"financialTransaction">;
+export type VendorId = EntityId<"vendor">;
+export type PurchaseId = EntityId<"purchase">;
+export type WishId = EntityId<"wish">;
+export type PlantingId = EntityId<"planting">;
+export type GardenEntryId = EntityId<"gardenEntry">;
 
 type AnyEntityId = {
   [E in ShortcodeEntity]: EntityId<E>;
@@ -151,48 +137,42 @@ export interface EntityRefFor<E extends ShortcodeEntity> {
   id: EntityId<E>;
 }
 
-type ParsedEntityRef<E extends ShortcodeEntity, Schema extends z.ZodType> = {
-  entity: E;
-  id: z.output<Schema>;
-};
-
-type EntityRefParser = (value: unknown) => EntityRef;
+type EntityRefParser<E extends ShortcodeEntity> = (
+  value: unknown,
+) => EntityRefFor<E>;
 
 const entityRefParser =
-  <E extends ShortcodeEntity, Schema extends z.ZodType>(
-    entity: E,
-    schema: Schema,
-  ) =>
-  (value: unknown): ParsedEntityRef<E, Schema> => ({
-    entity,
-    id: schema.parse(value),
-  });
+  <E extends ShortcodeEntity>(entity: E): EntityRefParser<E> =>
+  (value) => ({ entity, id: parseEntityId(entity, value) });
 
+/**
+ * One parser per entity, keyed by its own literal so the compiler verifies the
+ * `{ entity, id }` correlation per key (see `PARSE_CANONICAL_SHORTCODE` in
+ * @cubby/shared for why this cannot be a `mapRecord`). `satisfies` fails to
+ * compile when an entity is missing.
+ */
 const PARSE_ENTITY_REF = {
-  cookbook: entityRefParser("cookbook", cookbookId),
-  expense: entityRefParser("expense", expenseId),
-  financialAccount: entityRefParser("financialAccount", financialAccountId),
-  financialTransaction: entityRefParser(
-    "financialTransaction",
-    financialTransactionId,
-  ),
-  image: entityRefParser("image", imageId),
-  ingredient: entityRefParser("ingredient", ingredientId),
-  inventory: entityRefParser("inventory", inventoryId),
-  ledgerParty: entityRefParser("ledgerParty", ledgerPartyId),
-  ledgerTransfer: entityRefParser("ledgerTransfer", ledgerTransferId),
-  location: entityRefParser("location", locationId),
-  meal: entityRefParser("meal", mealId),
-  product: entityRefParser("product", productId),
-  project: entityRefParser("project", projectId),
-  purchase: entityRefParser("purchase", purchaseId),
-  recipe: entityRefParser("recipe", recipeId),
-  task: entityRefParser("task", taskId),
-  vendor: entityRefParser("vendor", vendorId),
-  wish: entityRefParser("wish", wishId),
-  planting: entityRefParser("planting", plantingId),
-  gardenEntry: entityRefParser("gardenEntry", gardenEntryId),
-} as const satisfies Record<ShortcodeEntity, EntityRefParser>;
+  cookbook: entityRefParser("cookbook"),
+  expense: entityRefParser("expense"),
+  financialAccount: entityRefParser("financialAccount"),
+  financialTransaction: entityRefParser("financialTransaction"),
+  image: entityRefParser("image"),
+  ingredient: entityRefParser("ingredient"),
+  inventory: entityRefParser("inventory"),
+  ledgerParty: entityRefParser("ledgerParty"),
+  ledgerTransfer: entityRefParser("ledgerTransfer"),
+  location: entityRefParser("location"),
+  meal: entityRefParser("meal"),
+  planting: entityRefParser("planting"),
+  gardenEntry: entityRefParser("gardenEntry"),
+  product: entityRefParser("product"),
+  project: entityRefParser("project"),
+  purchase: entityRefParser("purchase"),
+  recipe: entityRefParser("recipe"),
+  task: entityRefParser("task"),
+  vendor: entityRefParser("vendor"),
+  wish: entityRefParser("wish"),
+} as const satisfies { [E in ShortcodeEntity]: EntityRefParser<E> };
 
 /** Parse and correlate an internal entity discriminator with its UUID brand. */
 export function parseEntityRef<E extends ShortcodeEntity>(

@@ -1,11 +1,19 @@
+import { generatedBrowserRoutes } from "~/entities/generated/entity-routes.gen";
+
 export const UNMATCHED_TRACE_ROUTE = "/:unmatched";
 export const SERVER_FUNCTION_TRACE_ROUTE = "/_serverFn/:functionId";
 
-// This is an observability allowlist, not a router. Static paths must be named
-// explicitly so an identifier introduced by a future route can never become a
-// span name or attribute by default. The generated-route guard in the sibling
-// unit test makes catalog drift fail closed and visible in CI.
+// This is an observability allowlist, not a router. Non-entity static paths
+// are named explicitly so an identifier introduced by a future route can never
+// become a span name or attribute by default; entity list and detail routes
+// come from the generated entity routes so a new entity's `/things` and
+// `/things/:shortcode` templates exist without a line here. Either way the
+// generated-route guard in the sibling unit test makes catalog drift fail
+// closed and visible in CI.
+const ENTITY_ROUTES = Object.values(generatedBrowserRoutes);
+
 const STATIC_TRACE_ROUTES = new Set([
+  ...ENTITY_ROUTES.map(({ routes }) => routes.list),
   "/",
   "/.well-known/oauth-authorization-server",
   "/.well-known/oauth-authorization-server/api/auth",
@@ -26,47 +34,30 @@ const STATIC_TRACE_ROUTES = new Set([
   "/calendar",
   "/collections",
   "/collections/assignments",
-  "/cookbooks",
   "/design",
   "/docs",
   "/entities",
-  "/expenses",
-  "/financial-accounts",
-  "/financial-transactions",
   "/garden",
-  "/garden-entries",
   "/household-contribution",
-  "/images",
-  "/ingredients",
   "/ingredients/equivalences",
   "/ingredients/new",
   "/ingredients/workbench",
-  "/inventory",
   "/inventory/bulk-edit",
   "/inventory/bulk-move",
   "/inventory/new",
   "/inventory/session",
   "/labels",
-  "/ledger-parties",
-  "/ledger-transfers",
-  "/locations",
   "/locations/arrange",
   "/locations/new",
   "/locations/photo-pass",
   "/mcp",
-  "/meals",
   "/meals/shopping-list",
   "/meals/suggestions",
   "/oauth/consent",
   "/pantry-view",
-  "/plantings",
   "/problems",
-  "/products",
   "/products/new",
-  "/projects",
   "/projects/tools",
-  "/purchases",
-  "/recipes",
   "/recipes/compare",
   "/recipes/import",
   "/recipes/new",
@@ -77,35 +68,16 @@ const STATIC_TRACE_ROUTES = new Set([
   "/search/debug",
   "/settings",
   "/statement-rows",
-  "/tasks",
   "/tools",
-  "/usda",
-  "/vendors",
-  "/wishes",
 ]);
 
-const DETAIL_COLLECTIONS = [
-  "cookbooks",
-  "expenses",
-  "financial-accounts",
-  "financial-transactions",
-  "garden-entries",
-  "images",
-  "ingredients",
-  "inventory",
-  "ledger-parties",
-  "ledger-transfers",
-  "locations",
-  "meals",
-  "plantings",
-  "products",
-  "projects",
-  "purchases",
-  "recipes",
-  "tasks",
-  "vendors",
-  "wishes",
-].join("|");
+// Every entity whose detail route is keyed by shortcode; `usda-food` (`/usda/:id`)
+// keeps its own dynamic entries below.
+const DETAIL_COLLECTIONS = ENTITY_ROUTES.filter(({ routes }) =>
+  routes.detail.endsWith("/$shortcode"),
+)
+  .map(({ basePath }) => basePath)
+  .join("|");
 
 const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
   pattern: RegExp;

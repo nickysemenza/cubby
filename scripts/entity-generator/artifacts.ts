@@ -44,8 +44,26 @@ export const sealArtifact = (
   };
 };
 
-const generatedName =
-  /^(?:entity-literal-.+|entity-manifest-data|entity-field-model|entity-field-schemas(?:\.[^.]+)?|entity-sort|entity-edit-intents|entity-field-schema-maps|entity-columns|entity-inspector|entity-details|entity-lists|entity-filter-catalog|entity-filter-bindings|entity-filter-fields|entity-bindings|entity-routes|entity-kernel-bindings|entity-kernel-entities|entity-runtime-ports|filter-search-fields|shortcode-registry|shortcode-tables)\.gen\.ts$|^EntityCatalog\.swift$/;
+// The generator ownership header's first line, shared by every artifact this
+// generator writes (the `.ts` family and `EntityCatalog.swift` alike — the
+// Swift catalog only appends its own `// swift-format-ignore-file` line after
+// it). Matching on this instead of a hand-maintained filename allowlist means
+// a retired artifact name is still caught as extraneous: the stale file on
+// disk keeps carrying the header until something deletes it.
+// SAFETY: generatedHeader is a non-empty literal defined above, so splitting
+// on "\n" always yields at least one element.
+const generatedHeaderMarker = generatedHeader.split("\n")[0] as string;
+
+const carriesGeneratedHeader = async (absolutePath: string) => {
+  try {
+    const content = await readFile(absolutePath, "utf8");
+    return content.startsWith(generatedHeaderMarker);
+  } catch {
+    // Unreadable (permissions, binary, race with a concurrent delete) is
+    // never one of ours to flag.
+    return false;
+  }
+};
 
 const findExtraArtifacts = async (
   root: string,
@@ -64,8 +82,8 @@ const findExtraArtifacts = async (
         const relativePath = `${directory}/${entry.name}`;
         if (
           entry.isFile() &&
-          generatedName.test(entry.name) &&
-          !expected.has(relativePath)
+          !expected.has(relativePath) &&
+          (await carriesGeneratedHeader(resolve(root, relativePath)))
         ) {
           extras.push(relativePath);
         }

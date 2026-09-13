@@ -6,6 +6,7 @@ import type {
   SourceRef,
 } from "../declarations.ts";
 import { entityProjectionMaps } from "./index.ts";
+import { renderRecord } from "./record.ts";
 
 export const renderFilterArtifacts = (
   entities: readonly CompiledEntity[],
@@ -155,9 +156,13 @@ export const renderFilterArtifacts = (
         "  audit: boolean;\n" +
         "  rangeExpanders: readonly string[];\n" +
         "};\n\n" +
-        "// Generated contract cases keep mechanical filter invariants reviewable.\n" +
-        "// Generated filter contract cases stay compact.\n// oxfmt-ignore\n" +
-        `export const generatedEntityFilterContractCases = ${compactLiteral(filterContractCases)} as const satisfies Record<Entity, EntityFilterContractCase>;\n`,
+        renderRecord({
+          name: "generatedEntityFilterContractCases",
+          entries: filterContractCases,
+          satisfies: "Record<Entity, EntityFilterContractCase>",
+          comment:
+            "// Generated contract cases keep mechanical filter invariants reviewable.\n// Generated filter contract cases stay compact.",
+        }),
     },
     {
       relativePath: "apps/web/src/entities/filter-search-fields.gen.ts",
@@ -165,8 +170,13 @@ export const renderFilterArtifacts = (
         generatedHeader +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
         'import { urlStringParam } from "~/lib/search-params";\n\n' +
-        "// Generated data stays one entity per line.\n// oxfmt-ignore\n" +
-        `const entityFilterUrlKeyRoster = ${compactLiteral(roster)} as const satisfies Record<Entity, readonly string[]>;\n` +
+        renderRecord({
+          name: "entityFilterUrlKeyRoster",
+          entries: roster,
+          satisfies: "Record<Entity, readonly string[]>",
+          comment: "// Generated data stays one entity per line.",
+          exported: false,
+        }) +
         "\n" +
         "/** The URL keys an entity accepts for its canonical filter assembly. */\n" +
         "export const entityFilterUrlKeys = (entity: Entity): readonly string[] =>\n" +
