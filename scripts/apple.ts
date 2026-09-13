@@ -1,9 +1,10 @@
 // `pnpm apple <command>` — one entry point for the three Apple products under
 // apps/apple: the `cubby` CLI harness (SwiftPM executable), the macOS app, and
 // the iOS app on a paired iPhone or a simulator. Each command runs the
-// prerequisite generators (build-rust.sh is stamp-cached and a no-op when
-// fresh; xcodegen only when the gitignored project is missing) so a fresh
-// clone works with a single command.
+// prerequisite generators (the cubby-ffi xcframework is Nx-cached by Rust
+// content, so a fresh worktree restores it; xcodegen skips when its spec cache
+// matches) so a fresh clone works with a single command. Every step prints its
+// wall-clock time so a regression in one of them is visible.
 //
 //   pnpm apple cli <args…>   build the CLI incrementally and run it
 //   pnpm apple mac           build Cubby-macOS and open the .app (no LLDB)
@@ -21,7 +22,7 @@
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,11 +85,14 @@ const run = (
   cwd: string = ROOT,
 ) => {
   process.stdout.write(`$ ${program} ${arguments_.join(" ")}\n`);
+  const started = performance.now();
   const result = spawnSync(program, arguments_, { cwd, stdio: "inherit" });
   if (result.error) throw result.error;
   if (result.status !== 0) {
     throw new Error(`${program} exited with status ${result.status}`);
   }
+  const seconds = ((performance.now() - started) / 1000).toFixed(1);
+  process.stdout.write(`==> ${program} (${seconds}s)\n`);
 };
 
 const capture = (program: string, arguments_: readonly string[]): string => {
@@ -105,17 +109,23 @@ const capture = (program: string, arguments_: readonly string[]): string => {
   return result.stdout;
 };
 
-// build-rust.sh defaults to --targets all. Narrower slices (`--targets sim`)
-// are faster once but replace the whole xcframework and change the stamp, so
-// alternating mac/sim/ios launches would rebuild every time and the pre-push
-// `--check` (which uses `all`) would rebuild again. Always `all` here; use the
-// script directly for one-slice iteration.
-const ensureFfi = () => run(join(APPLE, "scripts/build-rust.sh"), []);
+// Always the full three-slice xcframework: it is one Nx cache entry shared by
+// every command and every worktree, where a one-slice build would be a
+// separate entry that the next mac/sim/ios launch cannot reuse. Run
+// build-rust.sh directly for one-slice iteration.
+const ensureFfi = () =>
+  run("node", [join(ROOT, "scripts/ensure-apple-ffi.ts")]);
 
-const ensureProject = () => {
-  if (existsSync(PROJECT)) return;
-  run("xcodegen", ["generate", "--spec", join(APPLE, "project.yml")]);
-};
+// `--use-cache` regenerates only when the spec or its tracked file set
+// changed (or the gitignored project is missing), so a project.yml edit takes
+// effect without deleting Cubby.xcodeproj by hand.
+const ensureProject = () =>
+  run("xcodegen", [
+    "generate",
+    "--spec",
+    join(APPLE, "project.yml"),
+    "--use-cache",
+  ]);
 
 const xcodebuild = (
   scheme: "Cubby-iOS" | "Cubby-macOS",
@@ -137,6 +147,9 @@ const xcodebuild = (
     // device or a rotated team certificate.
     "-allowProvisioningUpdates",
     ...(options.verbose ? [] : ["-quiet"]),
+    // The index store only feeds Xcode's IDE navigation; a command-line build
+    // has no reader for it. Left out of project.yml so GUI builds still index.
+    "COMPILER_INDEX_STORE_ENABLE=NO",
     "build",
   ]);
 
@@ -276,6 +289,11 @@ const pickSimulator = (name: string | undefined) => {
 
 const sim = (options: Options) => {
   const simulator = pickSimulator(options.sim);
+  // Boot returns as soon as the device starts coming up, so kicking it off
+  // first overlaps the boot with the build; bootstatus below waits for it.
+  if (simulator.state !== "Booted") {
+    run("xcrun", ["simctl", "boot", simulator.udid]);
+  }
   ensureFfi();
   ensureProject();
   xcodebuild(
@@ -283,9 +301,7 @@ const sim = (options: Options) => {
     `platform=iOS Simulator,id=${simulator.udid}`,
     options,
   );
-  if (simulator.state !== "Booted") {
-    run("xcrun", ["simctl", "boot", simulator.udid]);
-  }
+  run("xcrun", ["simctl", "bootstatus", simulator.udid, "-b"]);
   run("open", ["-a", "Simulator"]);
   run("xcrun", [
     "simctl",
@@ -305,7 +321,7 @@ const sim = (options: Options) => {
 const gen = () => {
   ensureFfi();
   run(join(APPLE, "scripts/generate-openapi.sh"), []);
-  run("xcodegen", ["generate", "--spec", join(APPLE, "project.yml")]);
+  ensureProject();
 };
 
 const test = () => {

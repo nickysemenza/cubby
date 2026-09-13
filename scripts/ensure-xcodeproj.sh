@@ -6,6 +6,6 @@
 ROOT="${ROOT:-$(git rev-parse --show-toplevel)}"
 SPEC="$ROOT/apps/apple/project.yml"
 if [ -f "$SPEC" ] && command -v xcodegen >/dev/null 2>&1; then
-  xcodegen generate --spec "$SPEC" --quiet >/dev/null 2>&1 \
+  xcodegen generate --spec "$SPEC" --use-cache --quiet >/dev/null 2>&1 \
     || echo "ensure-xcodeproj: xcodegen generate failed; run it by hand" >&2
 fi

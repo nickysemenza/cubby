@@ -137,6 +137,27 @@
       ],
       "outputs": ["{workspaceRoot}/packages/wasm"]
     },
+    "apple-ffi": {
+      "command": "node scripts/ensure-apple-ffi.ts --build",
+      "cache": true,
+      "inputs": [
+        "{workspaceRoot}/cubby-ffi/**/*",
+        "{workspaceRoot}/recipebridge/**/*",
+        "{workspaceRoot}/apps/apple/scripts/build-rust.sh",
+        "{workspaceRoot}/scripts/ensure-apple-ffi.ts",
+        "{workspaceRoot}/scripts/rust-fingerprint.ts",
+        {
+          "externalDependencies": []
+        },
+        {
+          "runtime": "node scripts/ensure-apple-ffi.ts --fingerprint"
+        }
+      ],
+      "outputs": [
+        "{workspaceRoot}/apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework",
+        "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift"
+      ]
+    },
     "http-api": {
       "command": "pnpm --filter @cubby/web generate:http-api:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
       "cache": true

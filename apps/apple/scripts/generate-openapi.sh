@@ -29,20 +29,27 @@ OUT="${ARGS[0]:-$IOS/CubbyKit/Sources/CubbyAPI}"
 SPEC="$ROOT/apps/web/src/lib/generated/http-openapi.gen.json"
 CONFIG="$IOS/openapi/openapi-generator-config.yaml"
 
-GENERATOR_PKG_RESOLVED="$IOS/.generator/Package.resolved"
-GENERATOR_PKG_SWIFT="$IOS/.generator/Package.swift"
-BIN="$(swift build --package-path "$IOS/.generator" -c release --show-bin-path)/swift-openapi-generator"
-# Rebuilding the generator (a full release build of swift-openapi-generator and
-# its dependency graph) takes real time and its output only changes when the
-# generator's own package inputs change. Skip the rebuild when the binary is
-# already newer than both Package.swift and Package.resolved; force it with
-# --rebuild-generator or CUBBY_REBUILD_GENERATOR=1 (e.g. after a toolchain bump
-# that the mtime check can't see).
+# The generator's build products live outside the checkout so every worktree
+# shares one release build of swift-openapi-generator (a full build of it and
+# its dependency graph takes minutes; `.generator` has no targets of its own,
+# so different package roots reuse the same dependency artifacts).
+GENERATOR_SCRATCH="${CUBBY_OPENAPI_GENERATOR_SCRATCH:-$HOME/.cache/cubby/openapi-generator-build}"
+BIN="$(swift build --package-path "$IOS/.generator" --scratch-path "$GENERATOR_SCRATCH" -c release --show-bin-path)/swift-openapi-generator"
+# The binary only changes when the generator package's inputs or the toolchain
+# do, so a content stamp next to it decides whether to rebuild. (An mtime
+# check would rebuild in every fresh worktree, whose checkout is always newer
+# than the shared binary.) Force with --rebuild-generator or
+# CUBBY_REBUILD_GENERATOR=1.
+GENERATOR_STAMP="$BIN.inputs"
+generator_inputs() {
+  cat "$IOS/.generator/Package.swift" "$IOS/.generator/Package.resolved"
+  swift --version 2>&1
+}
 if [ "$REBUILD_GENERATOR" = "1" ] \
   || [ ! -x "$BIN" ] \
-  || [ ! "$BIN" -nt "$GENERATOR_PKG_RESOLVED" ] \
-  || [ ! "$BIN" -nt "$GENERATOR_PKG_SWIFT" ]; then
-  swift build --package-path "$IOS/.generator" --product swift-openapi-generator -c release >/dev/null
+  || [ "$(generator_inputs | shasum -a 256)" != "$(cat "$GENERATOR_STAMP" 2>/dev/null)" ]; then
+  swift build --package-path "$IOS/.generator" --scratch-path "$GENERATOR_SCRATCH" --product swift-openapi-generator -c release >/dev/null
+  generator_inputs | shasum -a 256 > "$GENERATOR_STAMP"
 fi
 
 mkdir -p "$OUT"

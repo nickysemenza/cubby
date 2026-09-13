@@ -197,6 +197,7 @@ test("local checks retain every required gate and keep stateful verification liv
     "fast-tests":
       "pnpm -r --workspace-concurrency=2 test && touch apps/web/.vitest-failures.txt",
     wasm: "pnpm run wasm",
+    "apple-ffi": "node scripts/ensure-apple-ffi.ts --build",
   };
   for (const [name, command] of Object.entries(commands))
     assert.equal(project.targets[name]?.command, command, name);
@@ -252,6 +253,27 @@ test("local checks retain every required gate and keep stateful verification liv
         JSON.stringify(input) === JSON.stringify({ externalDependencies: [] }),
     ),
   );
+  // The xcframework is keyed the same way as the wasm package: Rust content,
+  // not the JS graph, and both restore-with-the-cache outputs are declared so a
+  // fresh worktree never recompiles unchanged Rust.
+  assert.equal(project.targets["apple-ffi"]?.cache, true);
+  assert.deepEqual(project.targets["apple-ffi"]?.outputs, [
+    "{workspaceRoot}/apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework",
+    "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift",
+  ]);
+  for (const input of [
+    "{workspaceRoot}/cubby-ffi/**/*",
+    "{workspaceRoot}/recipebridge/**/*",
+    "{workspaceRoot}/apps/apple/scripts/build-rust.sh",
+    { runtime: "node scripts/ensure-apple-ffi.ts --fingerprint" },
+    { externalDependencies: [] },
+  ])
+    assert.ok(
+      project.targets["apple-ffi"]?.inputs?.some(
+        (candidate) => JSON.stringify(candidate) === JSON.stringify(input),
+      ),
+      JSON.stringify(input),
+    );
   assert.equal(
     readFileSync(".husky/pre-commit", "utf8").trim().endsWith("pnpm check"),
     true,
@@ -272,5 +294,5 @@ test("task caching is bounded and cannot connect to Nx Cloud", () => {
     .parse(JSON.parse(readFileSync("nx.json", "utf8")));
   assert.equal(config.neverConnectToCloud, true);
   assert.equal(config.parallel, 2);
-  assert.equal(config.maxCacheSize, "2GB");
+  assert.equal(config.maxCacheSize, "4GB");
 });
