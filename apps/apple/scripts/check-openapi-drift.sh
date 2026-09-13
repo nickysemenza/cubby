@@ -2,7 +2,7 @@
 # Fails when the committed generated client no longer matches the spec.
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMMITTED="$HERE/../CubbyKit/Sources/CubbyKit/Generated"
+COMMITTED="$HERE/../CubbyKit/Sources/CubbyAPI"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 "$HERE/generate-openapi.sh" "$TMP"

@@ -1,3 +1,4 @@
+import CubbyAPI
 import Foundation
 import Testing
 
@@ -49,7 +50,10 @@ struct MappingTests {
     @Test func resolveStraysInputEncodesMoves() throws {
         let input = ResolveStraysInput(
             target: LocationCode("LOC-2345"),
-            moves: [StrayMove(entryId: InventoryEntryCode("INV-2345")), StrayMove(entryId: InventoryEntryCode("INV-3456"), quantity: 2)]
+            moves: [
+                StrayMove(entryId: InventoryEntryCode("INV-2345")),
+                StrayMove(entryId: InventoryEntryCode("INV-3456"), quantity: 2),
+            ]
         )
         let json = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder.cubby().encode(input))
         #expect(json["targetLocationId"] == "LOC-2345")

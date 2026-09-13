@@ -65,7 +65,7 @@ struct AddPhotoSheet: View {
             .porcelainScreen()
             .navigationTitle("Add photo")
             #if os(iOS)
-            .navigationBarTitleDisplayMode(.inline)
+                .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -89,7 +89,7 @@ struct AddPhotoSheet: View {
             }
         }
         #if os(macOS)
-        .frame(minWidth: 480, minHeight: 520)
+            .frame(minWidth: 480, minHeight: 520)
         #endif
     }
 
@@ -101,7 +101,9 @@ struct AddPhotoSheet: View {
     @ViewBuilder
     private var preview: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow(capture.lifted?.foundSubject == true ? (capture.useLifted ? "Lifted subject" : "Original") : "Photo")
+            Eyebrow(
+                capture.lifted?.foundSubject == true
+                    ? (capture.useLifted ? "Lifted subject" : "Original") : "Photo")
             if let image = capture.chosen {
                 Image(decorative: image, scale: 1)
                     .resizable()
@@ -185,7 +187,9 @@ struct AddPhotoSheet: View {
 #Preview {
     let model = PreviewFixtures.signedInModel()
     AddPhotoSheet(
-        capture: PhotoCaptureModel(client: model.client, entity: .product, entityID: "PRD-2345", entityTitle: "Sample Product", featurePrints: model.featurePrints),
+        capture: PhotoCaptureModel(
+            client: model.client, entity: .product, entityID: "PRD-2345", entityTitle: "Sample Product",
+            featurePrints: model.featurePrints),
         onDone: { _ in }
     )
 }

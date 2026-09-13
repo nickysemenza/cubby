@@ -168,7 +168,8 @@ struct IdentifyResultsSection: View {
                     Panel(padding: 0, spacing: 0) {
                         ForEach(Array(matches.enumerated()), id: \.element.id) { position, match in
                             if position > 0 { PanelDivider(inset: PorcelainTokens.Space.lg + 56) }
-                            NavigationLink(value: Route.entityDetail(.product, id: match.productID.rawValue)) {
+                            NavigationLink(value: Route.entityDetail(.product, id: match.productID.rawValue))
+                            {
                                 CandidateRow(match: match, best: position == 0)
                             }
                             .buttonStyle(.plain)

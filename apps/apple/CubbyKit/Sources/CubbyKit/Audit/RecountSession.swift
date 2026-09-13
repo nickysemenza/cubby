@@ -163,7 +163,9 @@ public final class RecountSession {
         if let parsed = Shortcode.parse(trimmed), parsed.key == .location, let tree {
             switch BinPlan.plan(scanned: LocationCode(parsed.code), anchor: bin.id, in: tree) {
             case .confirm:
-                push(Self.chip(label: tree[LocationCode(parsed.code)]?.name ?? parsed.code, status: .confirmed))
+                push(
+                    Self.chip(label: tree[LocationCode(parsed.code)]?.name ?? parsed.code, status: .confirmed)
+                )
             case .adopt(let adoptable):
                 if !adoptions.contains(where: { $0.id == adoptable.id }) { adoptions.append(adoptable) }
                 push(Self.chip(label: adoptable.name, status: .added))
@@ -182,7 +184,9 @@ public final class RecountSession {
         }
 
         if let index = rowIndex(matching: code) {
-            if let last = lastLocalMatch, last.raw == trimmed, date.timeIntervalSince(last.at) < ScanSession.debounceInterval {
+            if let last = lastLocalMatch, last.raw == trimmed,
+                date.timeIntervalSince(last.at) < ScanSession.debounceInterval
+            {
                 return
             }
             lastLocalMatch = (trimmed, date)
@@ -319,12 +323,15 @@ public final class RecountSession {
 
     private func refetchRows(keepingResolutions: Bool) async {
         guard let bin = currentBin else { return }
-        let staged = keepingResolutions ? Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.resolution) }) : [:]
+        let staged =
+            keepingResolutions ? Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.resolution) }) : [:]
         do {
             let fresh = try await service.stockRows(at: bin.id)
             guard currentBin?.id == bin.id else { return }
             rows = fresh.map { row in
-                RowState(row: row, resolution: staged[row.id] ?? nil, isDuplicate: duplicates.contains(row.product.id))
+                RowState(
+                    row: row, resolution: staged[row.id] ?? nil,
+                    isDuplicate: duplicates.contains(row.product.id))
             }
             report()
         } catch {
@@ -398,7 +405,10 @@ public final class RecountSession {
             switch result.outcome {
             case .queued:
                 if !result.strays.isEmpty, !strays.contains(where: { $0.productID == result.product.id }) {
-                    strays.append(.init(productID: result.product.id, productName: result.product.name, rows: result.strays))
+                    strays.append(
+                        .init(
+                            productID: result.product.id, productName: result.product.name,
+                            rows: result.strays))
                 }
             case .added, .confirmed:
                 // The server wrote to this bin (a new row, or a verified stamp), so the expected
@@ -411,7 +421,8 @@ public final class RecountSession {
 
     private func refetchAndVerify(product: ProductCode) async {
         await refetchRows(keepingResolutions: true)
-        if let index = rows.firstIndex(where: { $0.row.product.id == product }), rows[index].resolution == nil {
+        if let index = rows.firstIndex(where: { $0.row.product.id == product }), rows[index].resolution == nil
+        {
             rows[index].resolution = .verify
             report()
         }

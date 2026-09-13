@@ -10,7 +10,8 @@ import Foundation
 /// "Find <kind> matching <text>" — the one search intent every catalog entity shares.
 struct FindEntityIntent: AppIntent {
     static let title: LocalizedStringResource = "Find in Cubby"
-    static let description = IntentDescription("Searches products, locations, recipes, and everything else in Cubby.")
+    static let description = IntentDescription(
+        "Searches products, locations, recipes, and everything else in Cubby.")
     static let supportedModes: IntentModes = .background
 
     @Parameter(title: "Search for")
@@ -30,7 +31,8 @@ struct FindEntityIntent: AppIntent {
         let kinds = kind?.key.map { [$0] }
         let hits = try await client.search(query, kinds: kinds, limit: 10).compactMap(CubbyEntity.init(hit:))
         if let first = hits.first { RecentEntities.record(first.id) }
-        let dialog: IntentDialog = hits.isEmpty
+        let dialog: IntentDialog =
+            hits.isEmpty
             ? "Nothing in Cubby matches \(query)."
             : "Found \(hits.count) — first is \(hits[0].title)."
         return .result(value: hits, dialog: dialog)
@@ -82,7 +84,8 @@ struct WhereIsProductIntent: AppIntent {
 /// Opens any entity in the app.
 struct OpenEntityIntent: AppIntent {
     static let title: LocalizedStringResource = "Open in Cubby"
-    static let description = IntentDescription("Opens a product, location, recipe, or anything else in Cubby.")
+    static let description = IntentDescription(
+        "Opens a product, location, recipe, or anything else in Cubby.")
     static let supportedModes: IntentModes = .foreground(.immediate)
 
     @Parameter(title: "Item")

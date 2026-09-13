@@ -11,7 +11,8 @@ struct Entity: AsyncParsableCommand {
 
 extension Entity {
     struct List: AsyncParsableCommand {
-        static let configuration = CommandConfiguration(commandName: "list", abstract: "List rows for an entity.")
+        static let configuration = CommandConfiguration(
+            commandName: "list", abstract: "List rows for an entity.")
 
         @OptionGroup var global: GlobalOptions
         @Argument(help: "Entity key, e.g. product, location, usda-food.")
@@ -30,7 +31,8 @@ extension Entity {
                 }
 
                 let context = try CLIContext.make(from: global)
-                let result = try await context.client.list(descriptor, page: page, pageSize: pageSize, sort: sort)
+                let result = try await context.client.list(
+                    descriptor, page: page, pageSize: pageSize, sort: sort)
 
                 if global.json {
                     print(try CLI.prettyJSON(.array(result.items.map(\.raw))))

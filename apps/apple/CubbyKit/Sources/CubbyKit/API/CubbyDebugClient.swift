@@ -30,7 +30,9 @@ public actor CubbyDebugClient {
         if let pathID {
             path = path.replacingOccurrences(of: "{id}", with: pathID)
         }
-        guard var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false) else {
+        guard
+            var components = URLComponents(url: baseURL.appending(path: path), resolvingAgainstBaseURL: false)
+        else {
             throw CubbyAPIError(status: 0, operationID: route.operationID, detail: nil)
         }
         if !query.isEmpty {

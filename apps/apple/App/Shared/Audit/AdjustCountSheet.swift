@@ -23,9 +23,9 @@ struct AdjustCountSheet: View {
                 Section("New count") {
                     HStack(spacing: PorcelainTokens.Space.sm) {
                         TextField("Count", text: $text)
-                    .keyboardDismissBar()
+                            .keyboardDismissBar()
                             #if os(iOS)
-                            .keyboardType(.decimalPad)
+                                .keyboardType(.decimalPad)
                             #endif
                             .font(.porcelainData)
                         Text(unit)
@@ -43,7 +43,7 @@ struct AdjustCountSheet: View {
             }
         }
         #if os(macOS)
-        .frame(minWidth: 320, minHeight: 220)
+            .frame(minWidth: 320, minHeight: 220)
         #endif
     }
 

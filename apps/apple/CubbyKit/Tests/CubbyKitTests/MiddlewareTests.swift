@@ -7,7 +7,9 @@ import Testing
 
 @Suite("CubbyAuthMiddleware")
 struct MiddlewareTests {
-    private func provider(with credential: CubbyCredential?) throws -> (CredentialProvider, InMemorySessionTokenStore) {
+    private func provider(with credential: CubbyCredential?) throws -> (
+        CredentialProvider, InMemorySessionTokenStore
+    ) {
         let store = InMemorySessionTokenStore()
         if let credential { try store.save(credential, for: "localhost:3000") }
         return (CredentialProvider(host: "localhost:3000", store: store), store)

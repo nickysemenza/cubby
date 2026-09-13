@@ -30,7 +30,10 @@ struct CameraPicker: UIViewControllerRepresentable {
             self.dismiss = dismiss
         }
 
-        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
+        ) {
             if let image = info[.originalImage] as? UIImage, let cgImage = image.cgImage {
                 onCapture(cgImage)
             }

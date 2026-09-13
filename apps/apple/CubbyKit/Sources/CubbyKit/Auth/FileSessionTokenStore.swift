@@ -15,7 +15,8 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
 
     /// `~/Library/Application Support/Cubby/credentials.json`.
     public static func standard() -> FileSessionTokenStore {
-        FileSessionTokenStore(fileURL: URL.applicationSupportDirectory.appending(path: "Cubby/credentials.json"))
+        FileSessionTokenStore(
+            fileURL: URL.applicationSupportDirectory.appending(path: "Cubby/credentials.json"))
     }
 
     public func load(for host: String) throws -> CubbyCredential? {
@@ -41,9 +42,11 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
 
     private func write(_ all: [String: CubbyCredential]) throws {
         let directory = fileURL.deletingLastPathComponent()
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try FileManager.default.createDirectory(
+            at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         let data = try JSONEncoder().encode(all)
         try data.write(to: fileURL, options: .atomic)
-        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path(percentEncoded: false))
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600], ofItemAtPath: fileURL.path(percentEncoded: false))
     }
 }

@@ -171,7 +171,9 @@ public final class ScanSession {
         case .queued: break
         }
         if !result.strays.isEmpty, !strays.contains(where: { $0.productID == result.product.id }) {
-            strays.append(QueuedStray(productID: result.product.id, productName: result.product.name, rows: result.strays))
+            strays.append(
+                QueuedStray(
+                    productID: result.product.id, productName: result.product.name, rows: result.strays))
         }
     }
 

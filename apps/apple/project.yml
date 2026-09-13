@@ -62,7 +62,16 @@ targetTemplates:
             localhost:
               NSExceptionAllowsInsecureHTTPLoads: true
         UILaunchScreen: {}
-        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # iOS 26's resize model requires all four orientations, upside-down included (Xcode
+        # warning: "All interface orientations must be supported unless the app requires full
+        # screen"). Do not add UIRequiresFullScreen as a way around this.
+        UISupportedInterfaceOrientations:
+          [
+            UIInterfaceOrientationPortrait,
+            UIInterfaceOrientationPortraitUpsideDown,
+            UIInterfaceOrientationLandscapeLeft,
+            UIInterfaceOrientationLandscapeRight,
+          ]
         LSMinimumSystemVersion: "26.0"
         # Only HTTPS via URLSession (exempt); answers App Store Connect's export-compliance
         # question at upload so every TestFlight build skips the prompt.
@@ -84,6 +93,9 @@ targetTemplates:
       configs:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG"
+          # Surfaces slow type-checking and slow function bodies in the issue navigator so
+          # CubbyKit's ~60k generated lines don't quietly regress compile times.
+          OTHER_SWIFT_FLAGS: "$(inherited) -Xfrontend -warn-long-function-bodies=200 -Xfrontend -warn-long-expression-type-checking=200"
 
 targets:
   Cubby-iOS:
@@ -110,3 +122,19 @@ schemes:
         Cubby-macOS: all
     run:
       config: Debug
+  # Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white
+  # screen on device. These schemes launch without the debugger for fast UI iteration.
+  Cubby-iOS-NoDebugger:
+    build:
+      targets:
+        Cubby-iOS: all
+    run:
+      config: Debug
+      debugEnabled: false
+  Cubby-macOS-NoDebugger:
+    build:
+      targets:
+        Cubby-macOS: all
+    run:
+      config: Debug
+      debugEnabled: false

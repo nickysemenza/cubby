@@ -9,7 +9,8 @@ private final class ListStub: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
-        StubNetworking.startLoading(request, client: client, target: self, handler: Self.handler.withLock { $0 })
+        StubNetworking.startLoading(
+            request, client: client, target: self, handler: Self.handler.withLock { $0 })
     }
     override func stopLoading() {}
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }

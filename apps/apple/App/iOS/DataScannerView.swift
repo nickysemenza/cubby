@@ -82,7 +82,10 @@ struct DataScannerView: UIViewControllerRepresentable {
             self.onRead = onRead
         }
 
-        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+        func dataScanner(
+            _ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem],
+            allItems: [RecognizedItem]
+        ) {
             for item in addedItems {
                 if case .barcode(let barcode) = item, let payload = barcode.payloadStringValue {
                     onRead(payload)

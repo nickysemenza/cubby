@@ -1,3 +1,4 @@
+import CubbyAPI
 import Foundation
 import OpenAPIRuntime
 import OpenAPIURLSession
@@ -36,7 +37,8 @@ public actor CubbyClient {
 
     public func findOrCreateProduct(upc: String, defaultName: String? = nil) async throws -> FoundProduct {
         try await perform {
-            let output = try await api.product_findOrCreateByUPC(body: .json(.init(upc: upc, defaultName: defaultName)))
+            let output = try await api.product_findOrCreateByUPC(
+                body: .json(.init(upc: upc, defaultName: defaultName)))
             return FoundProduct(try output.ok.body.json)
         }
     }
@@ -47,7 +49,8 @@ public actor CubbyClient {
         pageSize: Int = 50,
         at location: LocationCode? = nil
     ) async throws -> ListPage<EntityRow> {
-        var query = Operations.Resources_product_list.Input.Query(page: page, pageSize: pageSize, sort: "-createdAt")
+        var query = Operations.Resources_product_list.Input.Query(
+            page: page, pageSize: pageSize, sort: "-createdAt")
         // A bare `.none` would read as `Optional.none`; `.some` pins it to the filter's own case.
         query.imagePresenceFilter = .some(.none)
         if let location { query.locationIdFilter = [.init(value1: location.rawValue)] }
@@ -63,8 +66,10 @@ public actor CubbyClient {
 
     /// The ids of products that have at least one image, newest first. List rows carry image ids
     /// but no URLs, so the on-device cover index pages ids here and fetches each detail after.
-    public func productIDsWithImages(page: Int = 1, pageSize: Int = 100) async throws -> ListPage<ProductCode> {
-        var query = Operations.Resources_product_list.Input.Query(page: page, pageSize: pageSize, sort: "-createdAt")
+    public func productIDsWithImages(page: Int = 1, pageSize: Int = 100) async throws -> ListPage<ProductCode>
+    {
+        var query = Operations.Resources_product_list.Input.Query(
+            page: page, pageSize: pageSize, sort: "-createdAt")
         query.imagePresenceFilter = .has
         return try await perform {
             let result = try await api.resources_product_list(query: query).ok.body.json
@@ -82,7 +87,8 @@ public actor CubbyClient {
         sort: String? = nil
     ) async throws -> ListPage<EntityRow> {
         try await perform {
-            let result = try await descriptor.listPage(client: api, page: page, pageSize: pageSize, sort: sort)
+            let result = try await descriptor.listPage(
+                client: api, page: page, pageSize: pageSize, sort: sort)
             return ListPage(items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
         }
     }
@@ -131,12 +137,13 @@ public actor CubbyClient {
         }
     }
 
-    /// The product's image ids in display order. The detail payload carries ids only, so this is
-    /// the order `setImageOrder` rewrites — there are no URLs to read here.
+    /// The product's image ids in display order — the order `setImageOrder` rewrites. The detail
+    /// payload's `images` entries carry full `ImageOut` bodies (URLs included); only the id is
+    /// projected out here because that is all this call is for.
     public func productImageIDs(_ product: ProductCode) async throws -> [ImageCode] {
         try await perform {
             let output = try await api.resources_product_get(path: .init(id: product.rawValue))
-            return try output.ok.body.json.images.map { ImageCode($0) }
+            return try output.ok.body.json.images.map { ImageCode($0.id) }
         }
     }
 
@@ -150,14 +157,16 @@ public actor CubbyClient {
 
     public func scan(_ code: ScanCode, at location: LocationCode) async throws -> ScanResult {
         try await perform {
-            let output = try await api.inventory_scanAtLocation(body: .json(.init(location: location, code: code)))
+            let output = try await api.inventory_scanAtLocation(
+                body: .json(.init(location: location, code: code)))
             return ScanResult(try output.ok.body.json)
         }
     }
 
     public func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> StrayResolution {
         try await perform {
-            let output = try await api.inventory_resolveScanStrays(body: .json(.init(target: target, moves: moves)))
+            let output = try await api.inventory_resolveScanStrays(
+                body: .json(.init(target: target, moves: moves)))
             return StrayResolution(try output.ok.body.json)
         }
     }
@@ -170,7 +179,8 @@ public actor CubbyClient {
     ) async throws -> InventoryEntryCode {
         try await perform {
             let output = try await api.resources_inventory_create(
-                body: .json(.init(productId: product.rawValue, locationId: location.rawValue, amount: .init(count)))
+                body: .json(
+                    .init(productId: product.rawValue, locationId: location.rawValue, amount: .init(count)))
             )
             return InventoryEntryCode(try output.created.body.json.item.id)
         }
@@ -241,8 +251,10 @@ public actor CubbyClient {
     // MARK: - Search, dashboards, and the assistant
 
     /// `kinds` narrows to those entity types; `nil` searches every intent-exposed entity.
-    public func search(_ text: String, kinds: [EntityKey]? = nil, limit: Int = 10) async throws -> [SearchHit] {
-        let trimmed = String(text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SearchHit.maxQueryLength))
+    public func search(_ text: String, kinds: [EntityKey]? = nil, limit: Int = 10) async throws -> [SearchHit]
+    {
+        let trimmed = String(
+            text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SearchHit.maxQueryLength))
         guard !trimmed.isEmpty else { return [] }
         var query = Operations.Search_find.Input.Query(
             query: trimmed, limit: min(max(limit, 1), SearchHit.maxLimit)

@@ -6,14 +6,16 @@ import Foundation
 /// The index is built from the product list on first use and cached under the user's caches
 /// directory; `--rebuild` discards it.
 struct Identify: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Rank product covers against an image (Vision feature prints).")
+    static let configuration = CommandConfiguration(
+        abstract: "Rank product covers against an image (Vision feature prints).")
 
     @OptionGroup var global: GlobalOptions
     @Argument(help: "Path to a JPEG/PNG/HEIC image.")
     var imagePath: String
     @Option(help: "How many candidates to print.")
     var limit: Int = 5
-    @Option(name: .customLong("max-products"), help: "How many products to index (most recently created first).")
+    @Option(
+        name: .customLong("max-products"), help: "How many products to index (most recently created first).")
     var maxProducts: Int = 400
     @Flag(help: "Discard the cached index and rebuild it.")
     var rebuild: Bool = false
@@ -36,7 +38,8 @@ struct Identify: AsyncParsableCommand {
                     if result.items.count < 100 { break }
                     page += 1
                 }
-                FileHandle.standardError.write(Data("  \(ids.count) products with images; fetching covers…\n".utf8))
+                FileHandle.standardError.write(
+                    Data("  \(ids.count) products with images; fetching covers…\n".utf8))
                 let client = context.client
                 let (products, firstFailure) = await withTaskGroup(
                     of: Result<ProductSummary, any Error>.self,
@@ -46,7 +49,9 @@ struct Identify: AsyncParsableCommand {
                     func enqueue() {
                         guard let id = iterator.next() else { return }
                         group.addTask {
-                            do { return .success(try await client.product(id)) } catch { return .failure(error) }
+                            do { return .success(try await client.product(id)) } catch {
+                                return .failure(error)
+                            }
                         }
                     }
                     for _ in 0..<6 { enqueue() }
@@ -62,7 +67,8 @@ struct Identify: AsyncParsableCommand {
                     return (collected, failure)
                 }
                 if let firstFailure {
-                    FileHandle.standardError.write(Data("  some detail fetches failed, first error: \(firstFailure.prefix(400))\n".utf8))
+                    FileHandle.standardError.write(
+                        Data("  some detail fetches failed, first error: \(firstFailure.prefix(400))\n".utf8))
                 }
                 let added = await index.build(from: Array(products.prefix(maxProducts))) { done, total in
                     if done % 25 == 0 || done == total {
@@ -79,12 +85,17 @@ struct Identify: AsyncParsableCommand {
             let ranked = try await index.rank(image, limit: limit)
             if global.json {
                 let rows: [JSONValue] = ranked.map {
-                    .object(["productId": .string($0.productID.rawValue), "name": .string($0.name), "distance": .number($0.distance)])
+                    .object([
+                        "productId": .string($0.productID.rawValue), "name": .string($0.name),
+                        "distance": .number($0.distance),
+                    ])
                 }
                 print(try CLI.prettyJSON(.array(rows)))
             } else {
                 for (rank, candidate) in ranked.enumerated() {
-                    print("\(rank + 1). \(candidate.productID.rawValue)  \(String(format: "%.3f", candidate.distance))  \(candidate.name)")
+                    print(
+                        "\(rank + 1). \(candidate.productID.rawValue)  \(String(format: "%.3f", candidate.distance))  \(candidate.name)"
+                    )
                 }
             }
         }

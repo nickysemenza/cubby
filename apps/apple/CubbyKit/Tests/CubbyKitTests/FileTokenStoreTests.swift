@@ -20,7 +20,8 @@ struct FileTokenStoreTests {
         #expect(try store.load(for: "a.example") == .bearer("tok.a"))
         #expect(try store.load(for: "b.example") == .apiKey("cubby_b"))
 
-        let attributes = try FileManager.default.attributesOfItem(atPath: store.fileURL.path(percentEncoded: false))
+        let attributes = try FileManager.default.attributesOfItem(
+            atPath: store.fileURL.path(percentEncoded: false))
         #expect((attributes[.posixPermissions] as? Int) == 0o600)
 
         try store.clear(for: "a.example")

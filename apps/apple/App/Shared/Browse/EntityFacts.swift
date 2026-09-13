@@ -151,7 +151,8 @@ enum EntityFacts {
             guard let value = row.raw[field.key] else { continue }
             switch value {
             case .string(let string) where !string.isEmpty:
-                let display = (field.kind == .date || field.kind == .timestamp) ? (date(value) ?? string) : string
+                let display =
+                    (field.kind == .date || field.kind == .timestamp) ? (date(value) ?? string) : string
                 stats.append(EntityStat(label: field.label, value: display, mono: field.kind == .identifier))
             case .number(let number):
                 stats.append(EntityStat(label: field.label, value: format(number)))

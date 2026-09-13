@@ -59,7 +59,9 @@ struct FeaturePrintIndexTests {
 
 private func pngData(_ image: CGImage) -> Data? {
     let data = NSMutableData()
-    guard let destination = CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil) else { return nil }
+    guard let destination = CGImageDestinationCreateWithData(data, "public.png" as CFString, 1, nil) else {
+        return nil
+    }
     CGImageDestinationAddImage(destination, image, nil)
     return CGImageDestinationFinalize(destination) ? data as Data : nil
 }

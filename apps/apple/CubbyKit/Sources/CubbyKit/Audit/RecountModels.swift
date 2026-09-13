@@ -111,7 +111,9 @@ public struct RecountRow: Sendable, Hashable, Identifiable, Decodable {
     /// row, or `nil` for an empty bin. Compared as dates, returned as the original string.
     public static func snapshotTimestamp(_ rows: [RecountRow]) -> String? {
         let transcoder = LenientISO8601DateTranscoder()
-        let dated = rows.compactMap { row in (try? transcoder.decode(row.updatedAtRaw)).map { (row.updatedAtRaw, $0) } }
+        let dated = rows.compactMap { row in
+            (try? transcoder.decode(row.updatedAtRaw)).map { (row.updatedAtRaw, $0) }
+        }
         if dated.count == rows.count {
             return dated.max { $0.1 < $1.1 }?.0
         }

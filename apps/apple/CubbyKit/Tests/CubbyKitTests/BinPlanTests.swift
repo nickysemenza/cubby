@@ -34,27 +34,39 @@ struct BinPlanTests {
     }
 
     @Test func refusesTheBinBeingCounted() {
-        #expect(BinPlan.plan(scanned: shelf, anchor: shelf, in: tree) == .refuse(reason: .self, message: "That's Shelf A — the one you're counting."))
+        #expect(
+            BinPlan.plan(scanned: shelf, anchor: shelf, in: tree)
+                == .refuse(reason: .self, message: "That's Shelf A — the one you're counting."))
     }
 
     @Test func refusesAncestorsAsCycles() {
-        #expect(BinPlan.plan(scanned: garage, anchor: shelf, in: tree) == .refuse(reason: .ancestor, message: "Garage contains Shelf A — it can't move inside it."))
-        #expect(BinPlan.plan(scanned: garage, anchor: bin2, in: tree) == .refuse(reason: .ancestor, message: "Garage contains Bin 2 — it can't move inside it."))
+        #expect(
+            BinPlan.plan(scanned: garage, anchor: shelf, in: tree)
+                == .refuse(reason: .ancestor, message: "Garage contains Shelf A — it can't move inside it."))
+        #expect(
+            BinPlan.plan(scanned: garage, anchor: bin2, in: tree)
+                == .refuse(reason: .ancestor, message: "Garage contains Bin 2 — it can't move inside it."))
     }
 
     /// Pins the check order: Home is an ancestor of nearly everything.
     @Test func reportsARootAsARootEvenThoughItIsAlsoAnAncestor() {
-        #expect(BinPlan.plan(scanned: home, anchor: shelf, in: tree) == .refuse(reason: .root, message: "Home holds the whole house — it can't sit on a shelf."))
+        #expect(
+            BinPlan.plan(scanned: home, anchor: shelf, in: tree)
+                == .refuse(reason: .root, message: "Home holds the whole house — it can't sit on a shelf."))
     }
 
     @Test func letsHomeItselfBeCounted() {
-        if case .adopt = BinPlan.plan(scanned: bin1, anchor: home, in: tree) {} else {
+        if case .adopt = BinPlan.plan(scanned: bin1, anchor: home, in: tree) {
+        } else {
             Issue.record("expected adopt")
         }
     }
 
     @Test func refusesALabelOutsideTheTree() {
-        if case .refuse(.unknownLabel, _) = BinPlan.plan(scanned: LocationCode("LOC-ZZZZ"), anchor: shelf, in: tree) {} else {
+        if case .refuse(.unknownLabel, _) = BinPlan.plan(
+            scanned: LocationCode("LOC-ZZZZ"), anchor: shelf, in: tree)
+        {
+        } else {
             Issue.record("expected unknownLabel")
         }
     }

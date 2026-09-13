@@ -63,7 +63,10 @@ public enum ImageEncoding {
 
     public static func encode(_ image: CGImage, as format: Format) throws -> Data {
         let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, format.type.identifier as CFString, 1, nil) else {
+        guard
+            let destination = CGImageDestinationCreateWithData(
+                data, format.type.identifier as CFString, 1, nil)
+        else {
             throw Failure.cannotEncode
         }
         var properties: [CFString: Any] = [:]

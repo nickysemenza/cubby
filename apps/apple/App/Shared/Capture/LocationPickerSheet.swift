@@ -65,7 +65,7 @@ struct LocationPickerSheet: View {
             .task { if capture.locations.isEmpty { await capture.loadLocations() } }
         }
         #if os(macOS)
-        .frame(minWidth: 360, minHeight: 420)
+            .frame(minWidth: 360, minHeight: 420)
         #endif
     }
 }

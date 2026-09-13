@@ -29,7 +29,9 @@ public enum SubjectLift {
     /// One context for every lift; creating a `CIContext` per call is the expensive part.
     private static let context = CIContext(options: [.cacheIntermediates: false])
 
-    public static func lift(_ image: CGImage, background: Background = .white, cropToSubject: Bool = true) async throws -> LiftedImage {
+    public static func lift(_ image: CGImage, background: Background = .white, cropToSubject: Bool = true)
+        async throws -> LiftedImage
+    {
         let handler = ImageRequestHandler(image)
         guard let observation = try await handler.perform(GenerateForegroundInstanceMaskRequest()),
             !observation.allInstances.isEmpty

@@ -53,7 +53,8 @@ struct ReconcileBodyTests {
                     id: "PRD-2345", name: "Sample Product", manufacturer: "Sample Manufacturer",
                     createdAt: date, updatedAt: date, images: [], externalIds: [], unitMappings: []
                 ),
-                location: .init(id: "LOC-5678", name: "Bin 1", aliases: [], images: [], createdAt: date, updatedAt: date)
+                location: .init(
+                    id: "LOC-5678", name: "Bin 1", aliases: [], images: [], createdAt: date, updatedAt: date)
             )
             #expect(RecountRow(out).updatedAtRaw == expected)
         }
@@ -68,10 +69,12 @@ struct ReconcileBodyTests {
                 .init(.verify, for: InventoryEntryCode("INV-2345")),
                 .init(.adjust(Amount(value: 2, unit: "each")), for: InventoryEntryCode("INV-3456")),
                 .init(.remove, for: InventoryEntryCode("INV-4567")),
-                .init(.relocate(LocationCode("LOC-9ABC"), name: "Unknown"), for: InventoryEntryCode("INV-5678")),
+                .init(
+                    .relocate(LocationCode("LOC-9ABC"), name: "Unknown"), for: InventoryEntryCode("INV-5678")),
             ]
         )
-        let json = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder.cubby().encode(ReconcileInput(body)))
+        let json = try JSONDecoder().decode(
+            JSONValue.self, from: JSONEncoder.cubby().encode(ReconcileInput(body)))
         #expect(json["locationId"] == "LOC-5678")
         #expect(json["expectedInventoryEntryIds"]?.arrayValue?.count == 2)
         // `packages/schemas/src/inventory.ts` documents this on purpose: the generated payload's
@@ -98,7 +101,9 @@ struct ReconcileBodyTests {
     }
 
     @Test func staleConflictIsRecognised() throws {
-        let error = CubbyAPIError.decode(status: 409, operationID: "inventory.reconcileSession", body: try Fixtures.data(named: "reconcile-stale.json"))
+        let error = CubbyAPIError.decode(
+            status: 409, operationID: "inventory.reconcileSession",
+            body: try Fixtures.data(named: "reconcile-stale.json"))
         #expect(error.isStaleInventory)
         #expect(error.reason == "INVENTORY_STALE")
         #expect(error.detail?.code == "CONFLICT")

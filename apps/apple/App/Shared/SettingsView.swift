@@ -22,8 +22,8 @@ struct SettingsView: View {
                     .font(.porcelainCode)
                     .autocorrectionDisabled()
                     #if os(iOS)
-                    .keyboardType(.URL)
-                    .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .textInputAutocapitalization(.never)
                     #endif
                     .onSubmit(apply)
                     .frame(minHeight: PorcelainTokens.touchTarget - 12)
@@ -48,9 +48,11 @@ struct SettingsView: View {
             } header: {
                 Eyebrow("Server")
             } footer: {
-                Text("Each host keeps its own credential, so switching never sends one server's token to another.")
-                    .font(.porcelainLabel)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                Text(
+                    "Each host keeps its own credential, so switching never sends one server's token to another."
+                )
+                .font(.porcelainLabel)
+                .foregroundStyle(PorcelainTokens.graphiteSecondary)
             }
 
             Section {
@@ -81,7 +83,7 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .onAppear { draftURL = model.baseURL.absoluteString }
         #if os(iOS)
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         #endif
     }
 

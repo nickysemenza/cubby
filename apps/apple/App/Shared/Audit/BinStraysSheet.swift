@@ -25,7 +25,8 @@ struct BinStraysSheet: View {
                     ContentUnavailableView(
                         "Nothing queued",
                         systemImage: "tray",
-                        description: Text("Scans that turn up elsewhere, or a bin scanned as inside this one, queue here.")
+                        description: Text(
+                            "Scans that turn up elsewhere, or a bin scanned as inside this one, queue here.")
                     )
                 }
             }
@@ -39,7 +40,7 @@ struct BinStraysSheet: View {
             }
         }
         #if os(macOS)
-        .frame(minWidth: 360, minHeight: 420)
+            .frame(minWidth: 360, minHeight: 420)
         #endif
     }
 

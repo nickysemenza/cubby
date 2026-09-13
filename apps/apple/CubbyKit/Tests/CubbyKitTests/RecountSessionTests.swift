@@ -8,7 +8,8 @@ import Testing
 /// made" is observable, and can fail the next reconcile as stale.
 final class StubRecountService: RecountService, Sendable {
     enum Call: Equatable, Sendable {
-        case tree, unknown, rows(LocationCode), duplicates, reconcile(LocationCode, snapshot: String?), adopt([LocationCode], LocationCode), scan(String, LocationCode), resolve(LocationCode)
+        case tree, unknown, rows(LocationCode), duplicates, reconcile(LocationCode, snapshot: String?), adopt(
+            [LocationCode], LocationCode), scan(String, LocationCode), resolve(LocationCode)
     }
 
     struct State: Sendable {
@@ -111,7 +112,10 @@ struct RecountSessionTests {
     let bin2 = LocationCode("LOC-6789")
     let shelf = LocationCode("LOC-4567")
 
-    static func row(_ id: String, product: String, name: String, gtin: String? = nil, updated: String, at location: LocationCode = LocationCode("LOC-5678")) -> RecountRow {
+    static func row(
+        _ id: String, product: String, name: String, gtin: String? = nil, updated: String,
+        at location: LocationCode = LocationCode("LOC-5678")
+    ) -> RecountRow {
         RecountRow(
             id: InventoryEntryCode(id), amount: Amount(value: 1, unit: "each"), updatedAtRaw: updated,
             product: .init(id: ProductCode(product), name: name, primaryGtin: gtin),
@@ -126,13 +130,23 @@ struct RecountSessionTests {
             tree: tree,
             rows: [
                 bin1: [
-                    Self.row("INV-2345", product: "PRD-2345", name: "Sample Product", gtin: "00012345678905", updated: "2026-03-02T10:00:00.000Z"),
-                    Self.row("INV-3456", product: "PRD-3456", name: "Other Product", updated: "2026-03-03T10:00:00.000Z"),
+                    Self.row(
+                        "INV-2345", product: "PRD-2345", name: "Sample Product", gtin: "00012345678905",
+                        updated: "2026-03-02T10:00:00.000Z"),
+                    Self.row(
+                        "INV-3456", product: "PRD-3456", name: "Other Product",
+                        updated: "2026-03-03T10:00:00.000Z"),
                 ],
-                bin2: [Self.row("INV-4567", product: "PRD-4567", name: "Deep Product", updated: "2026-03-04T10:00:00.000Z", at: bin2)],
+                bin2: [
+                    Self.row(
+                        "INV-4567", product: "PRD-4567", name: "Deep Product",
+                        updated: "2026-03-04T10:00:00.000Z", at: bin2)
+                ],
             ]
         )
-        service.state.withLock { $0.staleReconciles = staleReconciles; $0.duplicates = [ProductCode("PRD-3456")] }
+        service.state.withLock {
+            $0.staleReconciles = staleReconciles; $0.duplicates = [ProductCode("PRD-3456")]
+        }
         let session = RecountSession(service: service)
         await session.loadTree()
         await session.start(scope: shelf)
@@ -177,9 +191,13 @@ struct RecountSessionTests {
     @Test func unexpectedCodeScansOnceAndQueuesAStray() async throws {
         let (session, service) = try await makeSession()
         service.state.withLock {
-            $0.scanResult = StubScanService.result(.queued, id: "PRD-9999", name: "Unexpected", strays: [
-                Stray(entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"), locationName: "Bin 9", ambiguousQuantity: false)
-            ])
+            $0.scanResult = StubScanService.result(
+                .queued, id: "PRD-9999", name: "Unexpected",
+                strays: [
+                    Stray(
+                        entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"),
+                        locationName: "Bin 9", ambiguousQuantity: false)
+                ])
         }
         session.submit("4006381333931")
         try await settle(session)
@@ -194,7 +212,9 @@ struct RecountSessionTests {
         let (session, service) = try await makeSession()
         service.state.withLock { state in
             state.scanResult = StubScanService.result(.added, id: "PRD-9999", name: "Unexpected")
-            state.rows[bin1]?.append(Self.row("INV-9999", product: "PRD-9999", name: "Unexpected", updated: "2026-03-05T10:00:00.000Z"))
+            state.rows[bin1]?.append(
+                Self.row(
+                    "INV-9999", product: "PRD-9999", name: "Unexpected", updated: "2026-03-05T10:00:00.000Z"))
         }
         session.submit("4006381333931")
         try await settle(session)
@@ -238,8 +258,10 @@ struct RecountSessionTests {
         )
         #expect(service.calls.contains(.adopt([LocationCode("LOC-89AB")], bin1)))
         // Adoption happens after the reconcile, never before.
-        let reconcileIndex = try #require(service.calls.firstIndex { if case .reconcile = $0 { true } else { false } })
-        let adoptIndex = try #require(service.calls.firstIndex { if case .adopt = $0 { true } else { false } })
+        let reconcileIndex = try #require(
+            service.calls.firstIndex { if case .reconcile = $0 { true } else { false } })
+        let adoptIndex = try #require(
+            service.calls.firstIndex { if case .adopt = $0 { true } else { false } })
         #expect(adoptIndex > reconcileIndex)
         #expect(session.summary.verified == 1)
         #expect(session.summary.removed == 1)
@@ -331,14 +353,20 @@ struct RecountSessionTests {
     @Test func resolvingStraysRefetchesTheBin() async throws {
         let (session, service) = try await makeSession()
         service.state.withLock {
-            $0.scanResult = StubScanService.result(.queued, id: "PRD-9999", name: "Unexpected", strays: [
-                Stray(entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"), locationName: "Bin 9", ambiguousQuantity: true)
-            ])
+            $0.scanResult = StubScanService.result(
+                .queued, id: "PRD-9999", name: "Unexpected",
+                strays: [
+                    Stray(
+                        entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"),
+                        locationName: "Bin 9", ambiguousQuantity: true)
+                ])
         }
         session.submit("4006381333931")
         try await settle(session)
         service.state.withLock { state in
-            state.rows[bin1]?.append(Self.row("INV-9999", product: "PRD-9999", name: "Unexpected", updated: "2026-03-06T10:00:00.000Z"))
+            state.rows[bin1]?.append(
+                Self.row(
+                    "INV-9999", product: "PRD-9999", name: "Unexpected", updated: "2026-03-06T10:00:00.000Z"))
         }
         let resolution = try await session.resolveStrays()
         #expect(resolution?.moved == 1)
@@ -349,9 +377,15 @@ struct RecountSessionTests {
 
     @Test func staleAnchorScanIsDroppedAfterAdvancing() async throws {
         let (session, service) = try await makeSession()
-        service.state.withLock { $0.scanResult = StubScanService.result(.queued, id: "PRD-9999", name: "Late", strays: [
-            Stray(entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"), locationName: "Bin 9", ambiguousQuantity: false)
-        ]) }
+        service.state.withLock {
+            $0.scanResult = StubScanService.result(
+                .queued, id: "PRD-9999", name: "Late",
+                strays: [
+                    Stray(
+                        entryId: InventoryEntryCode("INV-9999"), locationId: LocationCode("LOC-89AB"),
+                        locationName: "Bin 9", ambiguousQuantity: false)
+                ])
+        }
         session.submit("4006381333931")
         // Skip before the scan settles: its stray must not land in Bin 2.
         await session.skipBin()

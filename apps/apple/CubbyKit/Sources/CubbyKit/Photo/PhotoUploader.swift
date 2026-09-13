@@ -52,12 +52,17 @@ public actor PhotoUploader {
     private let service: any PhotoService
     private let put: PresignedUpload.Put
 
-    public init(service: any PhotoService, put: @escaping PresignedUpload.Put = { try await PresignedUpload.put($0, to: $1, contentType: $2) }) {
+    public init(
+        service: any PhotoService,
+        put: @escaping PresignedUpload.Put = { try await PresignedUpload.put($0, to: $1, contentType: $2) }
+    ) {
         self.service = service
         self.put = put
     }
 
-    public func upload(_ request: Request, progress: (@Sendable (Step) -> Void)? = nil) async throws -> Outcome {
+    public func upload(_ request: Request, progress: (@Sendable (Step) -> Void)? = nil) async throws
+        -> Outcome
+    {
         progress?(.encoding)
         let scaled = try ImageEncoding.downscaled(request.image, maxPixelSize: request.maxPixelSize)
         let data = try ImageEncoding.encode(scaled, as: request.format)

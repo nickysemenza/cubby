@@ -10,7 +10,10 @@ public struct ProductStockLocation: Sendable, Hashable, Identifiable {
     public let amount: Amount?
     public let placement: String?
 
-    public init(id: String, locationID: LocationCode, locationName: String, ancestorPath: String?, amount: Amount?, placement: String?) {
+    public init(
+        id: String, locationID: LocationCode, locationName: String, ancestorPath: String?, amount: Amount?,
+        placement: String?
+    ) {
         self.id = id
         self.locationID = locationID
         self.locationName = locationName
@@ -31,7 +34,8 @@ public enum ProductRelations {
                 let location = entry["location"],
                 let locationID = location["id"]?.stringValue
             else { return nil }
-            let ancestorNames = location["ancestors"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
+            let ancestorNames =
+                location["ancestors"]?.arrayValue?.compactMap { $0["name"]?.stringValue } ?? []
             return ProductStockLocation(
                 id: id,
                 locationID: LocationCode(locationID),
@@ -52,7 +56,8 @@ public enum ProductRelations {
     }
 
     private static func amount(_ value: JSONValue?) -> Amount? {
-        guard let value, let quantity = value["value"]?.doubleValue, let unit = value["unit"]?.stringValue else { return nil }
+        guard let value, let quantity = value["value"]?.doubleValue, let unit = value["unit"]?.stringValue
+        else { return nil }
         return Amount(value: quantity, unit: unit, upperValue: value["upperValue"]?.doubleValue)
     }
 }

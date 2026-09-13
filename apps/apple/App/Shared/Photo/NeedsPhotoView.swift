@@ -35,7 +35,9 @@ struct NeedsPhotoView: View {
         case .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .failed(let message):
-            ContentUnavailableView("Couldn't load the queue", systemImage: "exclamationmark.triangle", description: Text(message))
+            ContentUnavailableView(
+                "Couldn't load the queue", systemImage: "exclamationmark.triangle", description: Text(message)
+            )
         case .ready:
             ScrollView {
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
@@ -45,11 +47,14 @@ struct NeedsPhotoView: View {
                         LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
                             Button {
                                 capture = PhotoCaptureModel(
-                                    client: model.client, entity: .product, entityID: row.id, entityTitle: row.title,
+                                    client: model.client, entity: .product, entityID: row.id,
+                                    entityTitle: row.title,
                                     featurePrints: model.featurePrints
                                 )
                             } label: {
-                                ActionTile(title: "Add photo", symbol: "camera.badge.ellipsis", detail: "Lift the subject and upload")
+                                ActionTile(
+                                    title: "Add photo", symbol: "camera.badge.ellipsis",
+                                    detail: "Lift the subject and upload")
                             }
                             .buttonStyle(.plain)
                             Button {
@@ -61,9 +66,12 @@ struct NeedsPhotoView: View {
                         }
                     } else {
                         Panel {
-                            Text(needs.added > 0 || needs.skipped > 0 ? "That's the end of the queue." : "Every product has a photo.")
-                                .font(.porcelainTitle)
-                                .foregroundStyle(PorcelainTokens.graphite)
+                            Text(
+                                needs.added > 0 || needs.skipped > 0
+                                    ? "That's the end of the queue." : "Every product has a photo."
+                            )
+                            .font(.porcelainTitle)
+                            .foregroundStyle(PorcelainTokens.graphite)
                             Text("\(needs.added) added · \(needs.skipped) skipped")
                                 .font(.porcelainData)
                                 .foregroundStyle(PorcelainTokens.graphiteSecondary)

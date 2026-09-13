@@ -99,7 +99,8 @@ extension EntityKey {
         case .recipe, .ingredient, .cookbook, .meal: .cook
         case .project, .task, .wish: .plan
         case .vendor, .purchase, .expense, .financialAccount, .financialTransaction,
-            .ledgerParty, .ledgerTransfer: .finance
+            .ledgerParty, .ledgerTransfer:
+            .finance
         }
     }
 }

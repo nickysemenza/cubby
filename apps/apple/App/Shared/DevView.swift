@@ -25,7 +25,7 @@ struct DevView: View {
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
                     Eyebrow("Rust ingredient parser (UniFFI)")
                     TextField("Ingredient line", text: $line)
-                    .keyboardDismissBar()
+                        .keyboardDismissBar()
                         .font(.porcelainCode)
                         .textFieldStyle(.plain)
                         .autocorrectionDisabled()
@@ -126,7 +126,8 @@ struct DevView: View {
         defer { checking = false }
         do {
             let page = try await model.client.list(EntityCatalog[.product], page: 1, pageSize: 1)
-            apiResult = "\(page.meta.totalCount.formatted()) products · first: \(page.items.first?.title ?? "none")"
+            apiResult =
+                "\(page.meta.totalCount.formatted()) products · first: \(page.items.first?.title ?? "none")"
         } catch {
             apiResult = String(describing: error)
             model.handle(error)

@@ -4,7 +4,8 @@ import CubbyKit
 /// Runs Cubby's Rust ingredient parser through the UniFFI bridge. No network, no auth: this is
 /// the smoke test that the xcframework links and the bindings round-trip.
 struct Parse: AsyncParsableCommand {
-    static let configuration = CommandConfiguration(abstract: "Parse an ingredient line with the Rust parser (FFI smoke test).")
+    static let configuration = CommandConfiguration(
+        abstract: "Parse an ingredient line with the Rust parser (FFI smoke test).")
 
     @Flag(help: "Print the parsed structure as JSON.")
     var json: Bool = false

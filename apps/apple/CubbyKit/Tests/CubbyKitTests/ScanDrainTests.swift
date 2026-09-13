@@ -21,7 +21,9 @@ struct ScanDrainTests {
     @Test func worksRunOneAtATimeInOrder() async throws {
         let active = Mutex((now: 0, peak: 0))
         let drain = ScanDrain<String>(anchor: shelf) { read in
-            active.withLock { $0.now += 1; $0.peak = max($0.peak, $0.now) }
+            active.withLock {
+                $0.now += 1; $0.peak = max($0.peak, $0.now)
+            }
             try? await Task.sleep(for: .milliseconds(10))
             active.withLock { $0.now -= 1 }
             return read.raw
