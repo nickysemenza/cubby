@@ -107,6 +107,7 @@ describe("product retaining edges", () => {
     "Expense.productId",
     "InventoryEntry.productId",
     "Location.productId",
+    "Planting.sourceProductId",
     "ProductComponent.componentProductId",
     "ProjectToolUsage.productId",
     "PurchaseProduct.productId",

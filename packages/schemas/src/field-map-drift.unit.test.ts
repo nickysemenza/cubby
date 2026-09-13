@@ -145,6 +145,7 @@ const INTENTIONAL_RESPELLINGS = {
   "product::productUpdateData::externalIds": PARTIAL_REWRAP,
   "product::productUpdateData::usdaUnavailable": PARTIAL_REWRAP,
   "product::productUpdateData::stockTracked": PARTIAL_REWRAP,
+  "product::productUpdateData::growsIngredientId": PARTIAL_REWRAP,
   "product::productUpdateData::pendingImageIds": PARTIAL_REWRAP,
   "product::productUpdateData::removeImageIds":
     ".partial().extend({removeImageIds: z.array(imageShortcode).optional()}) — the .extend() call OVERRIDES the already-.partial()'d generated key with a fresh array literal, not the generated instance",
@@ -410,6 +411,8 @@ const INTENTIONAL_RESPELLINGS = {
   "location::locationUpdateData::productId": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::tags": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::type": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::gardenKind": DERIVE_UPDATE_REWRAP,
+  "location::locationUpdateData::gardenConditions": DERIVE_UPDATE_REWRAP,
   "location::locationUpdateData::imageOrder":
     "deriveUpdateData's `extend` option supplies its own z.array(imageShortcode).optional().describe(...) for this update-only field — a fresh instance, not the generated one",
   "location::locationUpdateData::removeImageIds":

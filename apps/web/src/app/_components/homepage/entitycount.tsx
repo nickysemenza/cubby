@@ -52,10 +52,7 @@ export default function EntityCount() {
   //
   // USDA foods are deliberately NOT here. The strip answers "what does this
   // household have on record"; the USDA total counts rows in a third-party
-  // reference database the household neither owns nor maintains — and at ~2.1M
-  // it was by an order of magnitude the largest number on the page. Dropping it
-  // also restores the exact 8/4/2-column rows the grid below is built for: the
-  // 17th cell had been stranding a full row of dead space at every breakpoint.
+  // reference database the household neither owns nor maintains.
   const cards: { entity: CountableEntity; count: number | undefined }[] =
     countableEntities.map((entity: CountableEntity) => ({
       entity,
@@ -69,7 +66,6 @@ export default function EntityCount() {
 
   return (
     <div className="overflow-hidden border border-[var(--border)] bg-card">
-      {/* 16 cells → exact 8/4/2-column rows at each responsive tier. */}
       <div className="grid grid-cols-2 divide-x divide-y divide-border/60 sm:grid-cols-4 xl:grid-cols-8">
         {cards.map(({ entity, count }) => {
           const def = entities[entity];

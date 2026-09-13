@@ -779,7 +779,7 @@ describe("typed entity compiler", () => {
     const artifact = (suffix: string) =>
       artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))!
         .source;
-    expect(entities).toHaveLength(19);
+    expect(entities).toHaveLength(21);
     expect(artifact("entity-field-schemas.ingredient.gen.ts")).toContain(
       "definition.model.fields[",
     );
@@ -836,6 +836,6 @@ describe("typed entity compiler", () => {
     const entityKeyBody = swiftCatalog
       .split("public enum EntityKey")[1]!
       .split("\n}\n")[0]!;
-    expect(entityKeyBody.match(/^ {2}case /gmu)).toHaveLength(19);
+    expect(entityKeyBody.match(/^ {2}case /gmu)).toHaveLength(21);
   });
 });

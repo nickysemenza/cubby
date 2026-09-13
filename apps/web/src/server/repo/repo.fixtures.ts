@@ -57,8 +57,10 @@ type RecipeIngredientInput = NonNullable<
 
 type ProductFixtureInput<
   Ingredient extends IngredientId | IngredientShortcode | null | undefined,
-> = Omit<ProductCreateInput, "ingredientId"> & {
+  GrowsIngredient extends IngredientId | IngredientShortcode | null | undefined,
+> = Omit<ProductCreateInput, "ingredientId" | "growsIngredientId"> & {
   ingredientId: Ingredient | null;
+  growsIngredientId: GrowsIngredient | null;
 };
 
 /**
@@ -69,12 +71,21 @@ type ProductFixtureInput<
 export const makeProductInput = <
   Ingredient extends IngredientId | IngredientShortcode | null | undefined =
     undefined,
+  GrowsIngredient extends
+    | IngredientId
+    | IngredientShortcode
+    | null
+    | undefined = undefined,
 >(
-  overrides: Omit<Partial<ProductCreateInput>, "ingredientId"> & {
+  overrides: Omit<
+    Partial<ProductCreateInput>,
+    "ingredientId" | "growsIngredientId"
+  > & {
     ingredientId?: Ingredient;
+    growsIngredientId?: GrowsIngredient;
   } = {},
-): ProductFixtureInput<Ingredient> => {
-  const { ingredientId, ...rest } = overrides;
+): ProductFixtureInput<Ingredient, GrowsIngredient> => {
+  const { ingredientId, growsIngredientId, ...rest } = overrides;
   return {
     name: "Test Product",
     aliases: [],
@@ -85,6 +96,7 @@ export const makeProductInput = <
     fdc_id: null,
     expectedQuantity: null,
     ingredientId: ingredientId ?? null,
+    growsIngredientId: growsIngredientId ?? null,
     unitMappings: [],
     externalIds: [],
     ...rest,
@@ -131,10 +143,21 @@ const createProductWithResolvedIngredient = async (
   if (rawIngredientId && !resolvedIngredientId) {
     throw new Error(`fixture: ingredient ${rawIngredientId} not found`);
   }
+  const growsIngredientId = data.growsIngredientId
+    ? await resolveLiveShortcode(db, data.growsIngredientId, "ingredient")
+    : null;
+  if (data.growsIngredientId && !growsIngredientId) {
+    throw new Error(
+      `fixture: growing ingredient ${data.growsIngredientId} not found`,
+    );
+  }
   return createProduct(
     db,
     {
       ...data,
+      growsIngredientId: growsIngredientId
+        ? parseEntityId("ingredient", growsIngredientId)
+        : null,
       ingredientId: resolvedIngredientId
         ? parseEntityId("ingredient", resolvedIngredientId)
         : null,

@@ -439,6 +439,8 @@ const ENTITIES_WITHOUT_RELATED_VIEWS = {
     "ledger transfer relationships are rendered in the household ledger",
   // The one entity with no shortcode, no detail route, and no list table.
   image: "no detail route or list table to hang a preview column on",
+  planting: "garden overview supplies its growing context",
+  gardenEntry: "garden timelines render entries directly",
   // Not a local entity — remote USDA search results, no local edges.
   "usda-food": "remote USDA records have no local relationships",
 } as const satisfies Record<Exclude<Entity, RelatedViewSource>, string>;

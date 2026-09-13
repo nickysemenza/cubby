@@ -11,6 +11,10 @@ import { getDb } from "~/server/repo/database-helpers";
 import { buildExpenseWhereClause } from "~/server/repo/expense/lookup";
 import { buildFinancialAccountWhere } from "~/server/repo/financial-account";
 import { buildFinancialTransactionWhere } from "~/server/repo/financial-transaction";
+import {
+  buildPlantingWhere,
+  buildGardenEntryWhere,
+} from "~/server/repo/garden";
 import { buildImageWhere } from "~/server/repo/image";
 import { buildIngredientListWhere } from "~/server/repo/ingredient/search";
 import { buildInventoryWhere } from "~/server/repo/inventory/crud";
@@ -66,6 +70,8 @@ const COUNT_WHERE = {
   financialTransaction: (db) => buildFinancialTransactionWhere(db, {}),
   image: (db) => buildImageWhere(db, {}),
   wish: (db) => buildWishWhere(db, {}),
+  planting: () => buildPlantingWhere(),
+  gardenEntry: () => buildGardenEntryWhere(),
 } satisfies Record<CountableEntity, CountWhere>;
 
 type EntityCounts = Record<CountableEntity, number>;

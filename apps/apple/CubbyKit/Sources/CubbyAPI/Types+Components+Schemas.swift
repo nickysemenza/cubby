@@ -160,6 +160,7 @@ extension Components {
             case location = "LOCATION"
             case project = "PROJECT"
             case purchase = "PURCHASE"
+            case gardenentry = "GARDENENTRY"
         }
         /// - Remark: Generated from `#/components/schemas/EdgeKey`.
         package typealias EdgeKey = Swift.String
@@ -280,6 +281,489 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionNonZeroAmount`.
         package typealias FinancialTransactionNonZeroAmount = Components.Schemas.WholeCentAmount
+        /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput`.
+        package struct GardenCreatePlantingInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/ingredientId`.
+            package var ingredientId: Components.Schemas.IngredientShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/intendedLocationId`.
+            package var intendedLocationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/status`.
+            package var status: Components.Schemas.PlantingStatus?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/sourceProductId`.
+            package var sourceProductId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/variety`.
+            package var variety: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/quantity`.
+            package var quantity: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/notes`.
+            package var notes: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/plannedWindow`.
+            package var plannedWindow: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/plannedDate`.
+            package var plannedDate: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/sowedOn`.
+            package var sowedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/GardenCreatePlantingInput/transplantedOn`.
+            package var transplantedOn: Components.Schemas.PlainDate?
+            /// Creates a new `GardenCreatePlantingInput`.
+            ///
+            /// - Parameters:
+            ///   - ingredientId:
+            ///   - locationId:
+            ///   - intendedLocationId:
+            ///   - status:
+            ///   - sourceProductId:
+            ///   - variety:
+            ///   - quantity:
+            ///   - notes:
+            ///   - plannedWindow:
+            ///   - plannedDate:
+            ///   - sowedOn:
+            ///   - transplantedOn:
+            package init(
+                ingredientId: Components.Schemas.IngredientShortcode,
+                locationId: Components.Schemas.LocationShortcode? = nil,
+                intendedLocationId: Components.Schemas.LocationShortcode? = nil,
+                status: Components.Schemas.PlantingStatus? = nil,
+                sourceProductId: Components.Schemas.ProductShortcode? = nil,
+                variety: Swift.String? = nil,
+                quantity: Swift.String? = nil,
+                notes: Swift.String? = nil,
+                plannedWindow: Swift.String? = nil,
+                plannedDate: Components.Schemas.PlainDate? = nil,
+                sowedOn: Components.Schemas.PlainDate? = nil,
+                transplantedOn: Components.Schemas.PlainDate? = nil
+            ) {
+                self.ingredientId = ingredientId
+                self.locationId = locationId
+                self.intendedLocationId = intendedLocationId
+                self.status = status
+                self.sourceProductId = sourceProductId
+                self.variety = variety
+                self.quantity = quantity
+                self.notes = notes
+                self.plannedWindow = plannedWindow
+                self.plannedDate = plannedDate
+                self.sowedOn = sowedOn
+                self.transplantedOn = transplantedOn
+            }
+            package enum CodingKeys: String, CodingKey {
+                case ingredientId
+                case locationId
+                case intendedLocationId
+                case status
+                case sourceProductId
+                case variety
+                case quantity
+                case notes
+                case plannedWindow
+                case plannedDate
+                case sowedOn
+                case transplantedOn
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenEntryKind`.
+        @frozen package enum GardenEntryKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case observation = "observation"
+            case harvest = "harvest"
+            case move = "move"
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData`.
+        package struct GardenEntryUpdateData: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/plantingId`.
+            package var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/kind`.
+            package var kind: Components.Schemas.GardenEntryKind?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/observedOn`.
+            package var observedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/note`.
+            package var note: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/harvestAmount`.
+            package var harvestAmount: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/pendingImageIds`.
+            package var pendingImageIds: [Components.Schemas.ImageShortcode]?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/removeImageIds`.
+            package var removeImageIds: [Components.Schemas.ImageShortcode]?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryUpdateData/imageOrder`.
+            package var imageOrder: [Components.Schemas.ImageShortcode]?
+            /// Creates a new `GardenEntryUpdateData`.
+            ///
+            /// - Parameters:
+            ///   - locationId:
+            ///   - plantingId:
+            ///   - kind:
+            ///   - observedOn:
+            ///   - note:
+            ///   - harvestAmount:
+            ///   - pendingImageIds:
+            ///   - removeImageIds:
+            ///   - imageOrder:
+            package init(
+                locationId: Components.Schemas.LocationShortcode? = nil,
+                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                kind: Components.Schemas.GardenEntryKind? = nil,
+                observedOn: Components.Schemas.PlainDate? = nil,
+                note: Swift.String? = nil,
+                harvestAmount: Swift.String? = nil,
+                pendingImageIds: [Components.Schemas.ImageShortcode]? = nil,
+                removeImageIds: [Components.Schemas.ImageShortcode]? = nil,
+                imageOrder: [Components.Schemas.ImageShortcode]? = nil
+            ) {
+                self.locationId = locationId
+                self.plantingId = plantingId
+                self.kind = kind
+                self.observedOn = observedOn
+                self.note = note
+                self.harvestAmount = harvestAmount
+                self.pendingImageIds = pendingImageIds
+                self.removeImageIds = removeImageIds
+                self.imageOrder = imageOrder
+            }
+            package enum CodingKeys: String, CodingKey {
+                case locationId
+                case plantingId
+                case kind
+                case observedOn
+                case note
+                case harvestAmount
+                case pendingImageIds
+                case removeImageIds
+                case imageOrder
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenFinishPlantingInput`.
+        package struct GardenFinishPlantingInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenFinishPlantingInput/plantingId`.
+            package var plantingId: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenFinishPlantingInput/finishedOn`.
+            package var finishedOn: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/GardenFinishPlantingInput/note`.
+            package var note: Swift.String?
+            /// Creates a new `GardenFinishPlantingInput`.
+            ///
+            /// - Parameters:
+            ///   - plantingId:
+            ///   - finishedOn:
+            ///   - note:
+            package init(
+                plantingId: Components.Schemas.PlantingShortcode,
+                finishedOn: Components.Schemas.PlainDate,
+                note: Swift.String? = nil
+            ) {
+                self.plantingId = plantingId
+                self.finishedOn = finishedOn
+                self.note = note
+            }
+            package enum CodingKeys: String, CodingKey {
+                case plantingId
+                case finishedOn
+                case note
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenLocationKind`.
+        @frozen package enum GardenLocationKind: String, Codable, Hashable, Sendable, CaseIterable {
+            case bed = "bed"
+            case tray = "tray"
+            case other = "other"
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenMovePlantingInput`.
+        package struct GardenMovePlantingInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenMovePlantingInput/plantingId`.
+            package var plantingId: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenMovePlantingInput/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenMovePlantingInput/movedOn`.
+            package var movedOn: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/GardenMovePlantingInput/note`.
+            package var note: Swift.String?
+            /// Creates a new `GardenMovePlantingInput`.
+            ///
+            /// - Parameters:
+            ///   - plantingId:
+            ///   - locationId:
+            ///   - movedOn:
+            ///   - note:
+            package init(
+                plantingId: Components.Schemas.PlantingShortcode,
+                locationId: Components.Schemas.LocationShortcode,
+                movedOn: Components.Schemas.PlainDate,
+                note: Swift.String? = nil
+            ) {
+                self.plantingId = plantingId
+                self.locationId = locationId
+                self.movedOn = movedOn
+                self.note = note
+            }
+            package enum CodingKeys: String, CodingKey {
+                case plantingId
+                case locationId
+                case movedOn
+                case note
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput`.
+        package struct GardenRecordEntryInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput/plantingId`.
+            package var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput/kind`.
+            @frozen package enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case observation = "observation"
+                case harvest = "harvest"
+            }
+            /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput/kind`.
+            package var kind: Components.Schemas.GardenRecordEntryInput.KindPayload?
+            /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput/observedOn`.
+            package var observedOn: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput/note`.
+            package var note: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput/harvestAmount`.
+            package var harvestAmount: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenRecordEntryInput/pendingImageIds`.
+            package var pendingImageIds: [Components.Schemas.ImageShortcode]?
+            /// Creates a new `GardenRecordEntryInput`.
+            ///
+            /// - Parameters:
+            ///   - locationId:
+            ///   - plantingId:
+            ///   - kind:
+            ///   - observedOn:
+            ///   - note:
+            ///   - harvestAmount:
+            ///   - pendingImageIds:
+            package init(
+                locationId: Components.Schemas.LocationShortcode,
+                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                kind: Components.Schemas.GardenRecordEntryInput.KindPayload? = nil,
+                observedOn: Components.Schemas.PlainDate,
+                note: Swift.String? = nil,
+                harvestAmount: Swift.String? = nil,
+                pendingImageIds: [Components.Schemas.ImageShortcode]? = nil
+            ) {
+                self.locationId = locationId
+                self.plantingId = plantingId
+                self.kind = kind
+                self.observedOn = observedOn
+                self.note = note
+                self.harvestAmount = harvestAmount
+                self.pendingImageIds = pendingImageIds
+            }
+            package enum CodingKeys: String, CodingKey {
+                case locationId
+                case plantingId
+                case kind
+                case observedOn
+                case note
+                case harvestAmount
+                case pendingImageIds
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenSplitPlantingInput`.
+        package struct GardenSplitPlantingInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenSplitPlantingInput/plantingId`.
+            package var plantingId: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenSplitPlantingInput/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenSplitPlantingInput/movedOn`.
+            package var movedOn: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/GardenSplitPlantingInput/quantity`.
+            package var quantity: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenSplitPlantingInput/note`.
+            package var note: Swift.String?
+            /// Creates a new `GardenSplitPlantingInput`.
+            ///
+            /// - Parameters:
+            ///   - plantingId:
+            ///   - locationId:
+            ///   - movedOn:
+            ///   - quantity:
+            ///   - note:
+            package init(
+                plantingId: Components.Schemas.PlantingShortcode,
+                locationId: Components.Schemas.LocationShortcode,
+                movedOn: Components.Schemas.PlainDate,
+                quantity: Swift.String? = nil,
+                note: Swift.String? = nil
+            ) {
+                self.plantingId = plantingId
+                self.locationId = locationId
+                self.movedOn = movedOn
+                self.quantity = quantity
+                self.note = note
+            }
+            package enum CodingKeys: String, CodingKey {
+                case plantingId
+                case locationId
+                case movedOn
+                case quantity
+                case note
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenStartPlantingInput`.
+        package struct GardenStartPlantingInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenStartPlantingInput/plantingId`.
+            package var plantingId: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenStartPlantingInput/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenStartPlantingInput/startedOn`.
+            package var startedOn: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/GardenStartPlantingInput/startMethod`.
+            @frozen package enum StartMethodPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case sow = "sow"
+                case transplant = "transplant"
+                case existing = "existing"
+            }
+            /// - Remark: Generated from `#/components/schemas/GardenStartPlantingInput/startMethod`.
+            package var startMethod: Components.Schemas.GardenStartPlantingInput.StartMethodPayload
+            /// Creates a new `GardenStartPlantingInput`.
+            ///
+            /// - Parameters:
+            ///   - plantingId:
+            ///   - locationId:
+            ///   - startedOn:
+            ///   - startMethod:
+            package init(
+                plantingId: Components.Schemas.PlantingShortcode,
+                locationId: Components.Schemas.LocationShortcode,
+                startedOn: Components.Schemas.PlainDate,
+                startMethod: Components.Schemas.GardenStartPlantingInput.StartMethodPayload
+            ) {
+                self.plantingId = plantingId
+                self.locationId = locationId
+                self.startedOn = startedOn
+                self.startMethod = startMethod
+            }
+            package enum CodingKeys: String, CodingKey {
+                case plantingId
+                case locationId
+                case startedOn
+                case startMethod
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PlantingStatus`.
+        @frozen package enum PlantingStatus: String, Codable, Hashable, Sendable, CaseIterable {
+            case planned = "planned"
+            case growing = "growing"
+            case finished = "finished"
+        }
+        /// - Remark: Generated from `#/components/schemas/PlantingUpdateData`.
+        package struct PlantingUpdateData: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/ingredientId`.
+            package var ingredientId: Components.Schemas.IngredientShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/sourceProductId`.
+            package var sourceProductId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/intendedLocationId`.
+            package var intendedLocationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/status`.
+            package var status: Components.Schemas.PlantingStatus?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/variety`.
+            package var variety: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/quantity`.
+            package var quantity: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/notes`.
+            package var notes: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/plannedWindow`.
+            package var plannedWindow: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/plannedDate`.
+            package var plannedDate: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/sowedOn`.
+            package var sowedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/transplantedOn`.
+            package var transplantedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingUpdateData/finishedOn`.
+            package var finishedOn: Components.Schemas.PlainDate?
+            /// Creates a new `PlantingUpdateData`.
+            ///
+            /// - Parameters:
+            ///   - ingredientId:
+            ///   - sourceProductId:
+            ///   - locationId:
+            ///   - intendedLocationId:
+            ///   - status:
+            ///   - variety:
+            ///   - quantity:
+            ///   - notes:
+            ///   - plannedWindow:
+            ///   - plannedDate:
+            ///   - sowedOn:
+            ///   - transplantedOn:
+            ///   - finishedOn:
+            package init(
+                ingredientId: Components.Schemas.IngredientShortcode? = nil,
+                sourceProductId: Components.Schemas.ProductShortcode? = nil,
+                locationId: Components.Schemas.LocationShortcode? = nil,
+                intendedLocationId: Components.Schemas.LocationShortcode? = nil,
+                status: Components.Schemas.PlantingStatus? = nil,
+                variety: Swift.String? = nil,
+                quantity: Swift.String? = nil,
+                notes: Swift.String? = nil,
+                plannedWindow: Swift.String? = nil,
+                plannedDate: Components.Schemas.PlainDate? = nil,
+                sowedOn: Components.Schemas.PlainDate? = nil,
+                transplantedOn: Components.Schemas.PlainDate? = nil,
+                finishedOn: Components.Schemas.PlainDate? = nil
+            ) {
+                self.ingredientId = ingredientId
+                self.sourceProductId = sourceProductId
+                self.locationId = locationId
+                self.intendedLocationId = intendedLocationId
+                self.status = status
+                self.variety = variety
+                self.quantity = quantity
+                self.notes = notes
+                self.plannedWindow = plannedWindow
+                self.plannedDate = plannedDate
+                self.sowedOn = sowedOn
+                self.transplantedOn = transplantedOn
+                self.finishedOn = finishedOn
+            }
+            package enum CodingKeys: String, CodingKey {
+                case ingredientId
+                case sourceProductId
+                case locationId
+                case intendedLocationId
+                case status
+                case variety
+                case quantity
+                case notes
+                case plannedWindow
+                case plannedDate
+                case sowedOn
+                case transplantedOn
+                case finishedOn
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenGuideMethod`.
+        @frozen package enum GardenGuideMethod: String, Codable, Hashable, Sendable, CaseIterable {
+            case sow = "sow"
+            case directSow = "direct-sow"
+            case transplant = "transplant"
+            case root = "root"
+            case set = "set"
+            case tuber = "tuber"
+            case rhizome = "rhizome"
+            case bareRoot = "bare-root"
+            case unspecified = "unspecified"
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenGuideMicroclimate`.
+        @frozen package enum GardenGuideMicroclimate: String, Codable, Hashable, Sendable, CaseIterable {
+            case sunny = "sunny"
+            case foggy = "foggy"
+            case bayArea = "bay-area"
+            case unspecified = "unspecified"
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenGuideMonthPart`.
+        @frozen package enum GardenGuideMonthPart: String, Codable, Hashable, Sendable, CaseIterable {
+            case weeks12 = "weeks-1-2"
+            case weeks34 = "weeks-3-4"
+        }
         /// cookbook shortcode, e.g. CKB-4K7M
         ///
         /// - Remark: Generated from `#/components/schemas/CookbookShortcode`.
@@ -296,6 +780,10 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionShortcode`.
         package typealias FinancialTransactionShortcode = Swift.String
+        /// gardenEntry shortcode, e.g. GDE-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/GardenEntryShortcode`.
+        package typealias GardenEntryShortcode = Swift.String
         /// entity identifier
         ///
         /// - Remark: Generated from `#/components/schemas/Id`.
@@ -330,6 +818,10 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/MealShortcode`.
         package typealias MealShortcode = Swift.String
+        /// planting shortcode, e.g. PLT-4K7M
+        ///
+        /// - Remark: Generated from `#/components/schemas/PlantingShortcode`.
+        package typealias PlantingShortcode = Swift.String
         /// product shortcode, e.g. PRD-4K7M
         ///
         /// - Remark: Generated from `#/components/schemas/ProductShortcode`.
@@ -417,7 +909,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InitiateUploadWithoutEntity/size`.
             package var size: Swift.Int
             /// - Remark: Generated from `#/components/schemas/InitiateUploadWithoutEntity/entityType`.
-            package var entityType: Components.Schemas.InputSchema40?
+            package var entityType: Components.Schemas.InputSchema42?
             /// - Remark: Generated from `#/components/schemas/InitiateUploadWithoutEntity/contentType`.
             @frozen package enum ContentTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case imageJpeg = "image/jpeg"
@@ -439,7 +931,7 @@ extension Components {
             package init(
                 filename: Swift.String,
                 size: Swift.Int,
-                entityType: Components.Schemas.InputSchema40? = nil,
+                entityType: Components.Schemas.InputSchema42? = nil,
                 contentType: Components.Schemas.InitiateUploadWithoutEntity.ContentTypePayload
             ) {
                 self.filename = filename
@@ -452,6 +944,51 @@ extension Components {
                 case size
                 case entityType
                 case contentType
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/IngredientUpdateData`.
+        package struct IngredientUpdateData: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/IngredientUpdateData/naKinds`.
+            package var naKinds: [Components.Schemas.BaseKind]?
+            /// - Remark: Generated from `#/components/schemas/IngredientUpdateData/usuallyOnHand`.
+            package var usuallyOnHand: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/IngredientUpdateData/gardenGuideKey`.
+            package var gardenGuideKey: Swift.String?
+            /// New name
+            ///
+            /// - Remark: Generated from `#/components/schemas/IngredientUpdateData/name`.
+            package var name: Swift.String?
+            /// New aliases (replaces existing list)
+            ///
+            /// - Remark: Generated from `#/components/schemas/IngredientUpdateData/aliases`.
+            package var aliases: Components.Schemas.InputSchema45?
+            /// Creates a new `IngredientUpdateData`.
+            ///
+            /// - Parameters:
+            ///   - naKinds:
+            ///   - usuallyOnHand:
+            ///   - gardenGuideKey:
+            ///   - name: New name
+            ///   - aliases: New aliases (replaces existing list)
+            package init(
+                naKinds: [Components.Schemas.BaseKind]? = nil,
+                usuallyOnHand: Swift.Bool? = nil,
+                gardenGuideKey: Swift.String? = nil,
+                name: Swift.String? = nil,
+                aliases: Components.Schemas.InputSchema45? = nil
+            ) {
+                self.naKinds = naKinds
+                self.usuallyOnHand = usuallyOnHand
+                self.gardenGuideKey = gardenGuideKey
+                self.name = name
+                self.aliases = aliases
+            }
+            package enum CodingKeys: String, CodingKey {
+                case naKinds
+                case usuallyOnHand
+                case gardenGuideKey
+                case name
+                case aliases
             }
         }
         /// - Remark: Generated from `#/components/schemas/InventoryCreatePayloadData`.
@@ -620,6 +1157,75 @@ extension Components {
                 case parentId
             }
         }
+        /// - Remark: Generated from `#/components/schemas/LocationCreateInput`.
+        package struct LocationCreateInput: Codable, Hashable, Sendable {
+            /// name of location
+            ///
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/name`.
+            package var name: Swift.String
+            /// Alternate names for this location — searched alongside the name. Replaces the existing list when provided.
+            ///
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/aliases`.
+            package var aliases: Components.Schemas.InputSchema45?
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/tags`.
+            package var tags: Components.Schemas.InputSchema45?
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/type`.
+            package var _type: Components.Schemas.LocationType?
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/gardenKind`.
+            package var gardenKind: Components.Schemas.GardenLocationKind?
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/gardenConditions`.
+            package var gardenConditions: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/productId`.
+            package var productId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/parentId`.
+            package var parentId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/LocationCreateInput/pendingImageIds`.
+            package var pendingImageIds: Components.Schemas.InputSchema56?
+            /// Creates a new `LocationCreateInput`.
+            ///
+            /// - Parameters:
+            ///   - name: name of location
+            ///   - aliases: Alternate names for this location — searched alongside the name. Replaces the existing list when provided.
+            ///   - tags:
+            ///   - _type:
+            ///   - gardenKind:
+            ///   - gardenConditions:
+            ///   - productId:
+            ///   - parentId:
+            ///   - pendingImageIds:
+            package init(
+                name: Swift.String,
+                aliases: Components.Schemas.InputSchema45? = nil,
+                tags: Components.Schemas.InputSchema45? = nil,
+                _type: Components.Schemas.LocationType? = nil,
+                gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                gardenConditions: Swift.String? = nil,
+                productId: Components.Schemas.ProductShortcode? = nil,
+                parentId: Components.Schemas.LocationShortcode? = nil,
+                pendingImageIds: Components.Schemas.InputSchema56? = nil
+            ) {
+                self.name = name
+                self.aliases = aliases
+                self.tags = tags
+                self._type = _type
+                self.gardenKind = gardenKind
+                self.gardenConditions = gardenConditions
+                self.productId = productId
+                self.parentId = parentId
+                self.pendingImageIds = pendingImageIds
+            }
+            package enum CodingKeys: String, CodingKey {
+                case name
+                case aliases
+                case tags
+                case _type = "type"
+                case gardenKind
+                case gardenConditions
+                case productId
+                case parentId
+                case pendingImageIds
+            }
+        }
         /// type of location (room, container, etc)
         ///
         /// - Remark: Generated from `#/components/schemas/LocationType`.
@@ -642,25 +1248,29 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/name`.
             package var name: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/aliases`.
-            package var aliases: Components.Schemas.InputSchema43?
+            package var aliases: Components.Schemas.InputSchema45?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/tags`.
-            package var tags: Components.Schemas.InputSchema43?
+            package var tags: Components.Schemas.InputSchema45?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/type`.
             package var _type: Components.Schemas.LocationType?
+            /// - Remark: Generated from `#/components/schemas/LocationUpdateData/gardenKind`.
+            package var gardenKind: Components.Schemas.GardenLocationKind?
+            /// - Remark: Generated from `#/components/schemas/LocationUpdateData/gardenConditions`.
+            package var gardenConditions: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/productId`.
             package var productId: Components.Schemas.ProductShortcode?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/parentId`.
             package var parentId: Components.Schemas.LocationShortcode?
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/pendingImageIds`.
-            package var pendingImageIds: Components.Schemas.InputSchema52?
+            package var pendingImageIds: Components.Schemas.InputSchema56?
             /// Image ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.
             ///
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/removeImageIds`.
-            package var removeImageIds: Components.Schemas.InputSchema52?
+            package var removeImageIds: Components.Schemas.InputSchema56?
             /// existing image ids in display order; first = cover
             ///
             /// - Remark: Generated from `#/components/schemas/LocationUpdateData/imageOrder`.
-            package var imageOrder: Components.Schemas.InputSchema52?
+            package var imageOrder: Components.Schemas.InputSchema56?
             /// Creates a new `LocationUpdateData`.
             ///
             /// - Parameters:
@@ -668,6 +1278,8 @@ extension Components {
             ///   - aliases:
             ///   - tags:
             ///   - _type:
+            ///   - gardenKind:
+            ///   - gardenConditions:
             ///   - productId:
             ///   - parentId:
             ///   - pendingImageIds:
@@ -675,19 +1287,23 @@ extension Components {
             ///   - imageOrder: existing image ids in display order; first = cover
             package init(
                 name: Swift.String? = nil,
-                aliases: Components.Schemas.InputSchema43? = nil,
-                tags: Components.Schemas.InputSchema43? = nil,
+                aliases: Components.Schemas.InputSchema45? = nil,
+                tags: Components.Schemas.InputSchema45? = nil,
                 _type: Components.Schemas.LocationType? = nil,
+                gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                gardenConditions: Swift.String? = nil,
                 productId: Components.Schemas.ProductShortcode? = nil,
                 parentId: Components.Schemas.LocationShortcode? = nil,
-                pendingImageIds: Components.Schemas.InputSchema52? = nil,
-                removeImageIds: Components.Schemas.InputSchema52? = nil,
-                imageOrder: Components.Schemas.InputSchema52? = nil
+                pendingImageIds: Components.Schemas.InputSchema56? = nil,
+                removeImageIds: Components.Schemas.InputSchema56? = nil,
+                imageOrder: Components.Schemas.InputSchema56? = nil
             ) {
                 self.name = name
                 self.aliases = aliases
                 self.tags = tags
                 self._type = _type
+                self.gardenKind = gardenKind
+                self.gardenConditions = gardenConditions
                 self.productId = productId
                 self.parentId = parentId
                 self.pendingImageIds = pendingImageIds
@@ -699,6 +1315,8 @@ extension Components {
                 case aliases
                 case tags
                 case _type = "type"
+                case gardenKind
+                case gardenConditions
                 case productId
                 case parentId
                 case pendingImageIds
@@ -838,6 +1456,8 @@ extension Components {
             package var category: Components.Schemas.ProductCategory?
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/ingredientId`.
             package var ingredientId: Components.Schemas.IngredientShortcode?
+            /// - Remark: Generated from `#/components/schemas/ProductUpdateData/growsIngredientId`.
+            package var growsIngredientId: Components.Schemas.IngredientShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/price`.
             package var price: Components.Schemas.PositiveMoney?
             /// - Remark: Generated from `#/components/schemas/ProductUpdateData/unitMappings`.
@@ -869,6 +1489,7 @@ extension Components {
             ///   - expectedQuantity:
             ///   - category:
             ///   - ingredientId:
+            ///   - growsIngredientId:
             ///   - price:
             ///   - unitMappings:
             ///   - externalIds:
@@ -890,6 +1511,7 @@ extension Components {
                 expectedQuantity: Swift.Double? = nil,
                 category: Components.Schemas.ProductCategory? = nil,
                 ingredientId: Components.Schemas.IngredientShortcode? = nil,
+                growsIngredientId: Components.Schemas.IngredientShortcode? = nil,
                 price: Components.Schemas.PositiveMoney? = nil,
                 unitMappings: [Components.Schemas.UnitMappingInput]? = nil,
                 externalIds: Components.Schemas.ExternalIdInputs? = nil,
@@ -911,6 +1533,7 @@ extension Components {
                 self.expectedQuantity = expectedQuantity
                 self.category = category
                 self.ingredientId = ingredientId
+                self.growsIngredientId = growsIngredientId
                 self.price = price
                 self.unitMappings = unitMappings
                 self.externalIds = externalIds
@@ -933,6 +1556,7 @@ extension Components {
                 case expectedQuantity
                 case category
                 case ingredientId
+                case growsIngredientId
                 case price
                 case unitMappings
                 case externalIds
@@ -1037,11 +1661,11 @@ extension Components {
             /// Document ids to detach. Detaching DELETES the stored file when nothing else references it — there is no restore, and the id will not resolve again.
             ///
             /// - Remark: Generated from `#/components/schemas/PurchaseUpdateData/removeImageIds`.
-            package var removeImageIds: Components.Schemas.InputSchema52?
+            package var removeImageIds: Components.Schemas.InputSchema56?
             /// existing document ids in display order
             ///
             /// - Remark: Generated from `#/components/schemas/PurchaseUpdateData/imageOrder`.
-            package var imageOrder: Components.Schemas.InputSchema52?
+            package var imageOrder: Components.Schemas.InputSchema56?
             /// Creates a new `PurchaseUpdateData`.
             ///
             /// - Parameters:
@@ -1062,8 +1686,8 @@ extension Components {
                 statedTotal: Components.Schemas.WholeCentAmount? = nil,
                 notes: Swift.String? = nil,
                 pendingImageIds: [Components.Schemas.ImageShortcode]? = nil,
-                removeImageIds: Components.Schemas.InputSchema52? = nil,
-                imageOrder: Components.Schemas.InputSchema52? = nil
+                removeImageIds: Components.Schemas.InputSchema56? = nil,
+                imageOrder: Components.Schemas.InputSchema56? = nil
             ) {
                 self.vendorId = vendorId
                 self.orderId = orderId
@@ -1416,7 +2040,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value1`.
                 package var value1: Components.Schemas.ProductFindOrCreateByCodeInput?
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value2`.
-                package var value2: Components.Schemas.InputSchema140?
+                package var value2: Components.Schemas.InputSchema144?
                 /// Creates a new `CodePayload`.
                 ///
                 /// - Parameters:
@@ -1424,7 +2048,7 @@ extension Components {
                 ///   - value2:
                 package init(
                     value1: Components.Schemas.ProductFindOrCreateByCodeInput? = nil,
-                    value2: Components.Schemas.InputSchema140? = nil
+                    value2: Components.Schemas.InputSchema144? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -1953,29 +2577,29 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/schemas/JsonValue`.
         package typealias JsonValue = OpenAPIRuntime.OpenAPIValueContainer
-        /// - Remark: Generated from `#/components/schemas/input_schema40`.
-        package typealias InputSchema40 = Components.Schemas.EntityImage
-        /// - Remark: Generated from `#/components/schemas/input_schema43`.
-        package typealias InputSchema43 = [Swift.String]
-        /// - Remark: Generated from `#/components/schemas/input_schema52`.
-        package typealias InputSchema52 = [Components.Schemas.ImageShortcode]
-        /// - Remark: Generated from `#/components/schemas/input_schema140`.
-        package struct InputSchema140: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema140/kind`.
+        /// - Remark: Generated from `#/components/schemas/input_schema42`.
+        package typealias InputSchema42 = Components.Schemas.EntityImage
+        /// - Remark: Generated from `#/components/schemas/input_schema45`.
+        package typealias InputSchema45 = [Swift.String]
+        /// - Remark: Generated from `#/components/schemas/input_schema56`.
+        package typealias InputSchema56 = [Components.Schemas.ImageShortcode]
+        /// - Remark: Generated from `#/components/schemas/input_schema144`.
+        package struct InputSchema144: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema144/kind`.
             @frozen package enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case product = "product"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema140/kind`.
-            package var kind: Components.Schemas.InputSchema140.KindPayload
-            /// - Remark: Generated from `#/components/schemas/input_schema140/value`.
+            /// - Remark: Generated from `#/components/schemas/input_schema144/kind`.
+            package var kind: Components.Schemas.InputSchema144.KindPayload
+            /// - Remark: Generated from `#/components/schemas/input_schema144/value`.
             package var value: Components.Schemas.ProductShortcode
-            /// Creates a new `InputSchema140`.
+            /// Creates a new `InputSchema144`.
             ///
             /// - Parameters:
             ///   - kind:
             ///   - value:
             package init(
-                kind: Components.Schemas.InputSchema140.KindPayload,
+                kind: Components.Schemas.InputSchema144.KindPayload,
                 value: Components.Schemas.ProductShortcode
             ) {
                 self.kind = kind
@@ -2412,6 +3036,10 @@ extension Components {
             package var image: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/wish`.
             package var wish: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/planting`.
+            package var planting: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/gardenEntry`.
+            package var gardenEntry: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/usdaFoods`.
             package var usdaFoods: Swift.Int
             /// Creates a new `DashboardCountsOut`.
@@ -2433,6 +3061,8 @@ extension Components {
             ///   - financialTransaction:
             ///   - image:
             ///   - wish:
+            ///   - planting:
+            ///   - gardenEntry:
             ///   - usdaFoods:
             package init(
                 product: Swift.Int,
@@ -2451,6 +3081,8 @@ extension Components {
                 financialTransaction: Swift.Int,
                 image: Swift.Int,
                 wish: Swift.Int,
+                planting: Swift.Int,
+                gardenEntry: Swift.Int,
                 usdaFoods: Swift.Int
             ) {
                 self.product = product
@@ -2469,6 +3101,8 @@ extension Components {
                 self.financialTransaction = financialTransaction
                 self.image = image
                 self.wish = wish
+                self.planting = planting
+                self.gardenEntry = gardenEntry
                 self.usdaFoods = usdaFoods
             }
             package enum CodingKeys: String, CodingKey {
@@ -2488,6 +3122,8 @@ extension Components {
                 case financialTransaction
                 case image
                 case wish
+                case planting
+                case gardenEntry
                 case usdaFoods
             }
             package init(from decoder: any Swift.Decoder) throws {
@@ -2556,6 +3192,14 @@ extension Components {
                     Swift.Int.self,
                     forKey: .wish
                 )
+                self.planting = try container.decode(
+                    Swift.Int.self,
+                    forKey: .planting
+                )
+                self.gardenEntry = try container.decode(
+                    Swift.Int.self,
+                    forKey: .gardenEntry
+                )
                 self.usdaFoods = try container.decode(
                     Swift.Int.self,
                     forKey: .usdaFoods
@@ -2577,6 +3221,8 @@ extension Components {
                     "financialTransaction",
                     "image",
                     "wish",
+                    "planting",
+                    "gardenEntry",
                     "usdaFoods"
                 ])
             }
@@ -3945,6 +4591,1588 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/FinancialTransactionAllocations`.
         package typealias FinancialTransactionAllocations = [Components.Schemas.FinancialTransactionAllocationInput]
+        /// - Remark: Generated from `#/components/schemas/GardenEntriesOut`.
+        package struct GardenEntriesOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenEntriesOut/items`.
+            package var items: [Components.Schemas.GardenEntryOut]
+            /// - Remark: Generated from `#/components/schemas/GardenEntriesOut/hasMore`.
+            package var hasMore: Swift.Bool
+            /// Creates a new `GardenEntriesOut`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - hasMore:
+            package init(
+                items: [Components.Schemas.GardenEntryOut],
+                hasMore: Swift.Bool
+            ) {
+                self.items = items
+                self.hasMore = hasMore
+            }
+            package enum CodingKeys: String, CodingKey {
+                case items
+                case hasMore
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    [Components.Schemas.GardenEntryOut].self,
+                    forKey: .items
+                )
+                self.hasMore = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .hasMore
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items",
+                    "hasMore"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut`.
+        package struct GardenEntryListItemOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/id`.
+            package var id: Components.Schemas.GardenEntryShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/plantingId`.
+            package var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/kind`.
+            package var kind: Components.Schemas.GardenEntryKind
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/observedOn`.
+            package var observedOn: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/note`.
+            package var note: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/harvestAmount`.
+            package var harvestAmount: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/images`.
+            package var images: Components.Schemas.OutputSchema31
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/createdAt`.
+            package var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListItemOut/updatedAt`.
+            package var updatedAt: Foundation.Date
+            /// Creates a new `GardenEntryListItemOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - locationId:
+            ///   - plantingId:
+            ///   - kind:
+            ///   - observedOn:
+            ///   - note:
+            ///   - harvestAmount:
+            ///   - images:
+            ///   - createdAt:
+            ///   - updatedAt:
+            package init(
+                id: Components.Schemas.GardenEntryShortcode,
+                locationId: Components.Schemas.LocationShortcode,
+                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                kind: Components.Schemas.GardenEntryKind,
+                observedOn: Components.Schemas.PlainDate,
+                note: Swift.String? = nil,
+                harvestAmount: Swift.String? = nil,
+                images: Components.Schemas.OutputSchema31,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.locationId = locationId
+                self.plantingId = plantingId
+                self.kind = kind
+                self.observedOn = observedOn
+                self.note = note
+                self.harvestAmount = harvestAmount
+                self.images = images
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case locationId
+                case plantingId
+                case kind
+                case observedOn
+                case note
+                case harvestAmount
+                case images
+                case createdAt
+                case updatedAt
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.GardenEntryShortcode.self,
+                    forKey: .id
+                )
+                self.locationId = try container.decode(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .locationId
+                )
+                self.plantingId = try container.decodeIfPresent(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .plantingId
+                )
+                self.kind = try container.decode(
+                    Components.Schemas.GardenEntryKind.self,
+                    forKey: .kind
+                )
+                self.observedOn = try container.decode(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .observedOn
+                )
+                self.note = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .note
+                )
+                self.harvestAmount = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .harvestAmount
+                )
+                self.images = try container.decode(
+                    Components.Schemas.OutputSchema31.self,
+                    forKey: .images
+                )
+                self.createdAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .createdAt
+                )
+                self.updatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .updatedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "locationId",
+                    "plantingId",
+                    "kind",
+                    "observedOn",
+                    "note",
+                    "harvestAmount",
+                    "images",
+                    "createdAt",
+                    "updatedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenEntryOut`.
+        package struct GardenEntryOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/id`.
+            package var id: Components.Schemas.GardenEntryShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/plantingId`.
+            package var plantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/kind`.
+            package var kind: Components.Schemas.GardenEntryKind
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/observedOn`.
+            package var observedOn: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/note`.
+            package var note: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/harvestAmount`.
+            package var harvestAmount: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/images`.
+            package var images: Components.Schemas.OutputSchema31
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/createdAt`.
+            package var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/GardenEntryOut/updatedAt`.
+            package var updatedAt: Foundation.Date
+            /// Creates a new `GardenEntryOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - locationId:
+            ///   - plantingId:
+            ///   - kind:
+            ///   - observedOn:
+            ///   - note:
+            ///   - harvestAmount:
+            ///   - images:
+            ///   - createdAt:
+            ///   - updatedAt:
+            package init(
+                id: Components.Schemas.GardenEntryShortcode,
+                locationId: Components.Schemas.LocationShortcode,
+                plantingId: Components.Schemas.PlantingShortcode? = nil,
+                kind: Components.Schemas.GardenEntryKind,
+                observedOn: Components.Schemas.PlainDate,
+                note: Swift.String? = nil,
+                harvestAmount: Swift.String? = nil,
+                images: Components.Schemas.OutputSchema31,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.locationId = locationId
+                self.plantingId = plantingId
+                self.kind = kind
+                self.observedOn = observedOn
+                self.note = note
+                self.harvestAmount = harvestAmount
+                self.images = images
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case locationId
+                case plantingId
+                case kind
+                case observedOn
+                case note
+                case harvestAmount
+                case images
+                case createdAt
+                case updatedAt
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.GardenEntryShortcode.self,
+                    forKey: .id
+                )
+                self.locationId = try container.decode(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .locationId
+                )
+                self.plantingId = try container.decodeIfPresent(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .plantingId
+                )
+                self.kind = try container.decode(
+                    Components.Schemas.GardenEntryKind.self,
+                    forKey: .kind
+                )
+                self.observedOn = try container.decode(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .observedOn
+                )
+                self.note = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .note
+                )
+                self.harvestAmount = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .harvestAmount
+                )
+                self.images = try container.decode(
+                    Components.Schemas.OutputSchema31.self,
+                    forKey: .images
+                )
+                self.createdAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .createdAt
+                )
+                self.updatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .updatedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "locationId",
+                    "plantingId",
+                    "kind",
+                    "observedOn",
+                    "note",
+                    "harvestAmount",
+                    "images",
+                    "createdAt",
+                    "updatedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenLocationSummaryOut`.
+        package struct GardenLocationSummaryOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenLocationSummaryOut/id`.
+            package var id: Components.Schemas.LocationShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenLocationSummaryOut/name`.
+            package var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenLocationSummaryOut/gardenKind`.
+            package var gardenKind: Components.Schemas.GardenLocationKind?
+            /// - Remark: Generated from `#/components/schemas/GardenLocationSummaryOut/gardenConditions`.
+            package var gardenConditions: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenLocationSummaryOut/plantings`.
+            package var plantings: [Components.Schemas.GardenPlantingOut]
+            /// Creates a new `GardenLocationSummaryOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - gardenKind:
+            ///   - gardenConditions:
+            ///   - plantings:
+            package init(
+                id: Components.Schemas.LocationShortcode,
+                name: Swift.String,
+                gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                gardenConditions: Swift.String? = nil,
+                plantings: [Components.Schemas.GardenPlantingOut]
+            ) {
+                self.id = id
+                self.name = name
+                self.gardenKind = gardenKind
+                self.gardenConditions = gardenConditions
+                self.plantings = plantings
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case gardenKind
+                case gardenConditions
+                case plantings
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.gardenKind = try container.decodeIfPresent(
+                    Components.Schemas.GardenLocationKind.self,
+                    forKey: .gardenKind
+                )
+                self.gardenConditions = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .gardenConditions
+                )
+                self.plantings = try container.decode(
+                    [Components.Schemas.GardenPlantingOut].self,
+                    forKey: .plantings
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name",
+                    "gardenKind",
+                    "gardenConditions",
+                    "plantings"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenOptionsOut`.
+        package struct GardenOptionsOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/LocationsPayload`.
+            package struct LocationsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/LocationsPayload/id`.
+                package var id: Components.Schemas.LocationShortcode
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/LocationsPayload/name`.
+                package var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/LocationsPayload/gardenKind`.
+                package var gardenKind: Components.Schemas.GardenLocationKind?
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/LocationsPayload/gardenConditions`.
+                package var gardenConditions: Swift.String?
+                /// Creates a new `LocationsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                ///   - gardenKind:
+                ///   - gardenConditions:
+                package init(
+                    id: Components.Schemas.LocationShortcode,
+                    name: Swift.String,
+                    gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                    gardenConditions: Swift.String? = nil
+                ) {
+                    self.id = id
+                    self.name = name
+                    self.gardenKind = gardenKind
+                    self.gardenConditions = gardenConditions
+                }
+                package enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                    case gardenKind
+                    case gardenConditions
+                }
+                package init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Components.Schemas.LocationShortcode.self,
+                        forKey: .id
+                    )
+                    self.name = try container.decode(
+                        Swift.String.self,
+                        forKey: .name
+                    )
+                    self.gardenKind = try container.decodeIfPresent(
+                        Components.Schemas.GardenLocationKind.self,
+                        forKey: .gardenKind
+                    )
+                    self.gardenConditions = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .gardenConditions
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "name",
+                        "gardenKind",
+                        "gardenConditions"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/locations`.
+            package typealias LocationsPayload = [Components.Schemas.GardenOptionsOut.LocationsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/locations`.
+            package var locations: Components.Schemas.GardenOptionsOut.LocationsPayload
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/IngredientsPayload`.
+            package struct IngredientsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/IngredientsPayload/id`.
+                package var id: Components.Schemas.IngredientShortcode
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/IngredientsPayload/name`.
+                package var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/IngredientsPayload/gardenGuideKey`.
+                package var gardenGuideKey: Swift.String?
+                /// Creates a new `IngredientsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                ///   - gardenGuideKey:
+                package init(
+                    id: Components.Schemas.IngredientShortcode,
+                    name: Swift.String,
+                    gardenGuideKey: Swift.String? = nil
+                ) {
+                    self.id = id
+                    self.name = name
+                    self.gardenGuideKey = gardenGuideKey
+                }
+                package enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                    case gardenGuideKey
+                }
+                package init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Components.Schemas.IngredientShortcode.self,
+                        forKey: .id
+                    )
+                    self.name = try container.decode(
+                        Swift.String.self,
+                        forKey: .name
+                    )
+                    self.gardenGuideKey = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .gardenGuideKey
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "name",
+                        "gardenGuideKey"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/ingredients`.
+            package typealias IngredientsPayload = [Components.Schemas.GardenOptionsOut.IngredientsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/ingredients`.
+            package var ingredients: Components.Schemas.GardenOptionsOut.IngredientsPayload
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/ProductsPayload`.
+            package struct ProductsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/ProductsPayload/id`.
+                package var id: Components.Schemas.ProductShortcode
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/ProductsPayload/name`.
+                package var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/ProductsPayload/growsIngredientId`.
+                package var growsIngredientId: Components.Schemas.IngredientShortcode?
+                /// Creates a new `ProductsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                ///   - growsIngredientId:
+                package init(
+                    id: Components.Schemas.ProductShortcode,
+                    name: Swift.String,
+                    growsIngredientId: Components.Schemas.IngredientShortcode? = nil
+                ) {
+                    self.id = id
+                    self.name = name
+                    self.growsIngredientId = growsIngredientId
+                }
+                package enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                    case growsIngredientId
+                }
+                package init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Components.Schemas.ProductShortcode.self,
+                        forKey: .id
+                    )
+                    self.name = try container.decode(
+                        Swift.String.self,
+                        forKey: .name
+                    )
+                    self.growsIngredientId = try container.decodeIfPresent(
+                        Components.Schemas.IngredientShortcode.self,
+                        forKey: .growsIngredientId
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "name",
+                        "growsIngredientId"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/products`.
+            package typealias ProductsPayload = [Components.Schemas.GardenOptionsOut.ProductsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/GardenOptionsOut/products`.
+            package var products: Components.Schemas.GardenOptionsOut.ProductsPayload
+            /// Creates a new `GardenOptionsOut`.
+            ///
+            /// - Parameters:
+            ///   - locations:
+            ///   - ingredients:
+            ///   - products:
+            package init(
+                locations: Components.Schemas.GardenOptionsOut.LocationsPayload,
+                ingredients: Components.Schemas.GardenOptionsOut.IngredientsPayload,
+                products: Components.Schemas.GardenOptionsOut.ProductsPayload
+            ) {
+                self.locations = locations
+                self.ingredients = ingredients
+                self.products = products
+            }
+            package enum CodingKeys: String, CodingKey {
+                case locations
+                case ingredients
+                case products
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.locations = try container.decode(
+                    Components.Schemas.GardenOptionsOut.LocationsPayload.self,
+                    forKey: .locations
+                )
+                self.ingredients = try container.decode(
+                    Components.Schemas.GardenOptionsOut.IngredientsPayload.self,
+                    forKey: .ingredients
+                )
+                self.products = try container.decode(
+                    Components.Schemas.GardenOptionsOut.ProductsPayload.self,
+                    forKey: .products
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "locations",
+                    "ingredients",
+                    "products"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenOverviewOut`.
+        package struct GardenOverviewOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenOverviewOut/locations`.
+            package var locations: [Components.Schemas.GardenLocationSummaryOut]
+            /// - Remark: Generated from `#/components/schemas/GardenOverviewOut/finished`.
+            package var finished: [Components.Schemas.GardenPlantingOut]
+            /// - Remark: Generated from `#/components/schemas/GardenOverviewOut/unassigned`.
+            package var unassigned: [Components.Schemas.GardenPlantingOut]
+            /// Creates a new `GardenOverviewOut`.
+            ///
+            /// - Parameters:
+            ///   - locations:
+            ///   - finished:
+            ///   - unassigned:
+            package init(
+                locations: [Components.Schemas.GardenLocationSummaryOut],
+                finished: [Components.Schemas.GardenPlantingOut],
+                unassigned: [Components.Schemas.GardenPlantingOut]
+            ) {
+                self.locations = locations
+                self.finished = finished
+                self.unassigned = unassigned
+            }
+            package enum CodingKeys: String, CodingKey {
+                case locations
+                case finished
+                case unassigned
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.locations = try container.decode(
+                    [Components.Schemas.GardenLocationSummaryOut].self,
+                    forKey: .locations
+                )
+                self.finished = try container.decode(
+                    [Components.Schemas.GardenPlantingOut].self,
+                    forKey: .finished
+                )
+                self.unassigned = try container.decode(
+                    [Components.Schemas.GardenPlantingOut].self,
+                    forKey: .unassigned
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "locations",
+                    "finished",
+                    "unassigned"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenPlantingOut`.
+        package struct GardenPlantingOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/id`.
+            package var id: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/ingredientId`.
+            package var ingredientId: Components.Schemas.IngredientShortcode
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/sourceProductId`.
+            package var sourceProductId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/intendedLocationId`.
+            package var intendedLocationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/parentPlantingId`.
+            package var parentPlantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/status`.
+            package var status: Components.Schemas.PlantingStatus
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/variety`.
+            package var variety: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/quantity`.
+            package var quantity: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/notes`.
+            package var notes: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/plannedWindow`.
+            package var plannedWindow: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/plannedDate`.
+            package var plannedDate: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/sowedOn`.
+            package var sowedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/transplantedOn`.
+            package var transplantedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/finishedOn`.
+            package var finishedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/createdAt`.
+            package var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/updatedAt`.
+            package var updatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/ingredientName`.
+            package var ingredientName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/gardenGuideKey`.
+            package var gardenGuideKey: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/sourceProductName`.
+            package var sourceProductName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/locationName`.
+            package var locationName: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenPlantingOut/intendedLocationName`.
+            package var intendedLocationName: Swift.String?
+            /// Creates a new `GardenPlantingOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - ingredientId:
+            ///   - sourceProductId:
+            ///   - locationId:
+            ///   - intendedLocationId:
+            ///   - parentPlantingId:
+            ///   - status:
+            ///   - variety:
+            ///   - quantity:
+            ///   - notes:
+            ///   - plannedWindow:
+            ///   - plannedDate:
+            ///   - sowedOn:
+            ///   - transplantedOn:
+            ///   - finishedOn:
+            ///   - createdAt:
+            ///   - updatedAt:
+            ///   - ingredientName:
+            ///   - gardenGuideKey:
+            ///   - sourceProductName:
+            ///   - locationName:
+            ///   - intendedLocationName:
+            package init(
+                id: Components.Schemas.PlantingShortcode,
+                ingredientId: Components.Schemas.IngredientShortcode,
+                sourceProductId: Components.Schemas.ProductShortcode? = nil,
+                locationId: Components.Schemas.LocationShortcode? = nil,
+                intendedLocationId: Components.Schemas.LocationShortcode? = nil,
+                parentPlantingId: Components.Schemas.PlantingShortcode? = nil,
+                status: Components.Schemas.PlantingStatus,
+                variety: Swift.String? = nil,
+                quantity: Swift.String? = nil,
+                notes: Swift.String? = nil,
+                plannedWindow: Swift.String? = nil,
+                plannedDate: Components.Schemas.PlainDate? = nil,
+                sowedOn: Components.Schemas.PlainDate? = nil,
+                transplantedOn: Components.Schemas.PlainDate? = nil,
+                finishedOn: Components.Schemas.PlainDate? = nil,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date,
+                ingredientName: Swift.String,
+                gardenGuideKey: Swift.String? = nil,
+                sourceProductName: Swift.String? = nil,
+                locationName: Swift.String? = nil,
+                intendedLocationName: Swift.String? = nil
+            ) {
+                self.id = id
+                self.ingredientId = ingredientId
+                self.sourceProductId = sourceProductId
+                self.locationId = locationId
+                self.intendedLocationId = intendedLocationId
+                self.parentPlantingId = parentPlantingId
+                self.status = status
+                self.variety = variety
+                self.quantity = quantity
+                self.notes = notes
+                self.plannedWindow = plannedWindow
+                self.plannedDate = plannedDate
+                self.sowedOn = sowedOn
+                self.transplantedOn = transplantedOn
+                self.finishedOn = finishedOn
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+                self.ingredientName = ingredientName
+                self.gardenGuideKey = gardenGuideKey
+                self.sourceProductName = sourceProductName
+                self.locationName = locationName
+                self.intendedLocationName = intendedLocationName
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case ingredientId
+                case sourceProductId
+                case locationId
+                case intendedLocationId
+                case parentPlantingId
+                case status
+                case variety
+                case quantity
+                case notes
+                case plannedWindow
+                case plannedDate
+                case sowedOn
+                case transplantedOn
+                case finishedOn
+                case createdAt
+                case updatedAt
+                case ingredientName
+                case gardenGuideKey
+                case sourceProductName
+                case locationName
+                case intendedLocationName
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .id
+                )
+                self.ingredientId = try container.decode(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .ingredientId
+                )
+                self.sourceProductId = try container.decodeIfPresent(
+                    Components.Schemas.ProductShortcode.self,
+                    forKey: .sourceProductId
+                )
+                self.locationId = try container.decodeIfPresent(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .locationId
+                )
+                self.intendedLocationId = try container.decodeIfPresent(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .intendedLocationId
+                )
+                self.parentPlantingId = try container.decodeIfPresent(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .parentPlantingId
+                )
+                self.status = try container.decode(
+                    Components.Schemas.PlantingStatus.self,
+                    forKey: .status
+                )
+                self.variety = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .variety
+                )
+                self.quantity = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .quantity
+                )
+                self.notes = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .notes
+                )
+                self.plannedWindow = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .plannedWindow
+                )
+                self.plannedDate = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .plannedDate
+                )
+                self.sowedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .sowedOn
+                )
+                self.transplantedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .transplantedOn
+                )
+                self.finishedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .finishedOn
+                )
+                self.createdAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .createdAt
+                )
+                self.updatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .updatedAt
+                )
+                self.ingredientName = try container.decode(
+                    Swift.String.self,
+                    forKey: .ingredientName
+                )
+                self.gardenGuideKey = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .gardenGuideKey
+                )
+                self.sourceProductName = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .sourceProductName
+                )
+                self.locationName = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .locationName
+                )
+                self.intendedLocationName = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .intendedLocationName
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "ingredientId",
+                    "sourceProductId",
+                    "locationId",
+                    "intendedLocationId",
+                    "parentPlantingId",
+                    "status",
+                    "variety",
+                    "quantity",
+                    "notes",
+                    "plannedWindow",
+                    "plannedDate",
+                    "sowedOn",
+                    "transplantedOn",
+                    "finishedOn",
+                    "createdAt",
+                    "updatedAt",
+                    "ingredientName",
+                    "gardenGuideKey",
+                    "sourceProductName",
+                    "locationName",
+                    "intendedLocationName"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PlantingListItemOut`.
+        package struct PlantingListItemOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/id`.
+            package var id: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/ingredientId`.
+            package var ingredientId: Components.Schemas.IngredientShortcode
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/sourceProductId`.
+            package var sourceProductId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/intendedLocationId`.
+            package var intendedLocationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/parentPlantingId`.
+            package var parentPlantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/status`.
+            package var status: Components.Schemas.PlantingStatus
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/variety`.
+            package var variety: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/quantity`.
+            package var quantity: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/notes`.
+            package var notes: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/plannedWindow`.
+            package var plannedWindow: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/plannedDate`.
+            package var plannedDate: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/sowedOn`.
+            package var sowedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/transplantedOn`.
+            package var transplantedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/finishedOn`.
+            package var finishedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/createdAt`.
+            package var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PlantingListItemOut/updatedAt`.
+            package var updatedAt: Foundation.Date
+            /// Creates a new `PlantingListItemOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - ingredientId:
+            ///   - sourceProductId:
+            ///   - locationId:
+            ///   - intendedLocationId:
+            ///   - parentPlantingId:
+            ///   - status:
+            ///   - variety:
+            ///   - quantity:
+            ///   - notes:
+            ///   - plannedWindow:
+            ///   - plannedDate:
+            ///   - sowedOn:
+            ///   - transplantedOn:
+            ///   - finishedOn:
+            ///   - createdAt:
+            ///   - updatedAt:
+            package init(
+                id: Components.Schemas.PlantingShortcode,
+                ingredientId: Components.Schemas.IngredientShortcode,
+                sourceProductId: Components.Schemas.ProductShortcode? = nil,
+                locationId: Components.Schemas.LocationShortcode? = nil,
+                intendedLocationId: Components.Schemas.LocationShortcode? = nil,
+                parentPlantingId: Components.Schemas.PlantingShortcode? = nil,
+                status: Components.Schemas.PlantingStatus,
+                variety: Swift.String? = nil,
+                quantity: Swift.String? = nil,
+                notes: Swift.String? = nil,
+                plannedWindow: Swift.String? = nil,
+                plannedDate: Components.Schemas.PlainDate? = nil,
+                sowedOn: Components.Schemas.PlainDate? = nil,
+                transplantedOn: Components.Schemas.PlainDate? = nil,
+                finishedOn: Components.Schemas.PlainDate? = nil,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.ingredientId = ingredientId
+                self.sourceProductId = sourceProductId
+                self.locationId = locationId
+                self.intendedLocationId = intendedLocationId
+                self.parentPlantingId = parentPlantingId
+                self.status = status
+                self.variety = variety
+                self.quantity = quantity
+                self.notes = notes
+                self.plannedWindow = plannedWindow
+                self.plannedDate = plannedDate
+                self.sowedOn = sowedOn
+                self.transplantedOn = transplantedOn
+                self.finishedOn = finishedOn
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case ingredientId
+                case sourceProductId
+                case locationId
+                case intendedLocationId
+                case parentPlantingId
+                case status
+                case variety
+                case quantity
+                case notes
+                case plannedWindow
+                case plannedDate
+                case sowedOn
+                case transplantedOn
+                case finishedOn
+                case createdAt
+                case updatedAt
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .id
+                )
+                self.ingredientId = try container.decode(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .ingredientId
+                )
+                self.sourceProductId = try container.decodeIfPresent(
+                    Components.Schemas.ProductShortcode.self,
+                    forKey: .sourceProductId
+                )
+                self.locationId = try container.decodeIfPresent(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .locationId
+                )
+                self.intendedLocationId = try container.decodeIfPresent(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .intendedLocationId
+                )
+                self.parentPlantingId = try container.decodeIfPresent(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .parentPlantingId
+                )
+                self.status = try container.decode(
+                    Components.Schemas.PlantingStatus.self,
+                    forKey: .status
+                )
+                self.variety = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .variety
+                )
+                self.quantity = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .quantity
+                )
+                self.notes = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .notes
+                )
+                self.plannedWindow = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .plannedWindow
+                )
+                self.plannedDate = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .plannedDate
+                )
+                self.sowedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .sowedOn
+                )
+                self.transplantedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .transplantedOn
+                )
+                self.finishedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .finishedOn
+                )
+                self.createdAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .createdAt
+                )
+                self.updatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .updatedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "ingredientId",
+                    "sourceProductId",
+                    "locationId",
+                    "intendedLocationId",
+                    "parentPlantingId",
+                    "status",
+                    "variety",
+                    "quantity",
+                    "notes",
+                    "plannedWindow",
+                    "plannedDate",
+                    "sowedOn",
+                    "transplantedOn",
+                    "finishedOn",
+                    "createdAt",
+                    "updatedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PlantingOut`.
+        package struct PlantingOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/id`.
+            package var id: Components.Schemas.PlantingShortcode
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/ingredientId`.
+            package var ingredientId: Components.Schemas.IngredientShortcode
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/sourceProductId`.
+            package var sourceProductId: Components.Schemas.ProductShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/locationId`.
+            package var locationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/intendedLocationId`.
+            package var intendedLocationId: Components.Schemas.LocationShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/parentPlantingId`.
+            package var parentPlantingId: Components.Schemas.PlantingShortcode?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/status`.
+            package var status: Components.Schemas.PlantingStatus
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/variety`.
+            package var variety: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/quantity`.
+            package var quantity: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/notes`.
+            package var notes: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/plannedWindow`.
+            package var plannedWindow: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/plannedDate`.
+            package var plannedDate: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/sowedOn`.
+            package var sowedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/transplantedOn`.
+            package var transplantedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/finishedOn`.
+            package var finishedOn: Components.Schemas.PlainDate?
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/createdAt`.
+            package var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/PlantingOut/updatedAt`.
+            package var updatedAt: Foundation.Date
+            /// Creates a new `PlantingOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - ingredientId:
+            ///   - sourceProductId:
+            ///   - locationId:
+            ///   - intendedLocationId:
+            ///   - parentPlantingId:
+            ///   - status:
+            ///   - variety:
+            ///   - quantity:
+            ///   - notes:
+            ///   - plannedWindow:
+            ///   - plannedDate:
+            ///   - sowedOn:
+            ///   - transplantedOn:
+            ///   - finishedOn:
+            ///   - createdAt:
+            ///   - updatedAt:
+            package init(
+                id: Components.Schemas.PlantingShortcode,
+                ingredientId: Components.Schemas.IngredientShortcode,
+                sourceProductId: Components.Schemas.ProductShortcode? = nil,
+                locationId: Components.Schemas.LocationShortcode? = nil,
+                intendedLocationId: Components.Schemas.LocationShortcode? = nil,
+                parentPlantingId: Components.Schemas.PlantingShortcode? = nil,
+                status: Components.Schemas.PlantingStatus,
+                variety: Swift.String? = nil,
+                quantity: Swift.String? = nil,
+                notes: Swift.String? = nil,
+                plannedWindow: Swift.String? = nil,
+                plannedDate: Components.Schemas.PlainDate? = nil,
+                sowedOn: Components.Schemas.PlainDate? = nil,
+                transplantedOn: Components.Schemas.PlainDate? = nil,
+                finishedOn: Components.Schemas.PlainDate? = nil,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.ingredientId = ingredientId
+                self.sourceProductId = sourceProductId
+                self.locationId = locationId
+                self.intendedLocationId = intendedLocationId
+                self.parentPlantingId = parentPlantingId
+                self.status = status
+                self.variety = variety
+                self.quantity = quantity
+                self.notes = notes
+                self.plannedWindow = plannedWindow
+                self.plannedDate = plannedDate
+                self.sowedOn = sowedOn
+                self.transplantedOn = transplantedOn
+                self.finishedOn = finishedOn
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case ingredientId
+                case sourceProductId
+                case locationId
+                case intendedLocationId
+                case parentPlantingId
+                case status
+                case variety
+                case quantity
+                case notes
+                case plannedWindow
+                case plannedDate
+                case sowedOn
+                case transplantedOn
+                case finishedOn
+                case createdAt
+                case updatedAt
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .id
+                )
+                self.ingredientId = try container.decode(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .ingredientId
+                )
+                self.sourceProductId = try container.decodeIfPresent(
+                    Components.Schemas.ProductShortcode.self,
+                    forKey: .sourceProductId
+                )
+                self.locationId = try container.decodeIfPresent(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .locationId
+                )
+                self.intendedLocationId = try container.decodeIfPresent(
+                    Components.Schemas.LocationShortcode.self,
+                    forKey: .intendedLocationId
+                )
+                self.parentPlantingId = try container.decodeIfPresent(
+                    Components.Schemas.PlantingShortcode.self,
+                    forKey: .parentPlantingId
+                )
+                self.status = try container.decode(
+                    Components.Schemas.PlantingStatus.self,
+                    forKey: .status
+                )
+                self.variety = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .variety
+                )
+                self.quantity = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .quantity
+                )
+                self.notes = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .notes
+                )
+                self.plannedWindow = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .plannedWindow
+                )
+                self.plannedDate = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .plannedDate
+                )
+                self.sowedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .sowedOn
+                )
+                self.transplantedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .transplantedOn
+                )
+                self.finishedOn = try container.decodeIfPresent(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .finishedOn
+                )
+                self.createdAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .createdAt
+                )
+                self.updatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .updatedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "ingredientId",
+                    "sourceProductId",
+                    "locationId",
+                    "intendedLocationId",
+                    "parentPlantingId",
+                    "status",
+                    "variety",
+                    "quantity",
+                    "notes",
+                    "plannedWindow",
+                    "plannedDate",
+                    "sowedOn",
+                    "transplantedOn",
+                    "finishedOn",
+                    "createdAt",
+                    "updatedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenGuide`.
+        package struct GardenGuide: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenGuide/key`.
+            package var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenGuide/name`.
+            package var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenGuide/aliases`.
+            package var aliases: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/GardenGuide/windows`.
+            package var windows: [Components.Schemas.GardenGuideWindow]
+            /// - Remark: Generated from `#/components/schemas/GardenGuide/notes`.
+            package var notes: Swift.String?
+            /// Creates a new `GardenGuide`.
+            ///
+            /// - Parameters:
+            ///   - key:
+            ///   - name:
+            ///   - aliases:
+            ///   - windows:
+            ///   - notes:
+            package init(
+                key: Swift.String,
+                name: Swift.String,
+                aliases: [Swift.String],
+                windows: [Components.Schemas.GardenGuideWindow],
+                notes: Swift.String? = nil
+            ) {
+                self.key = key
+                self.name = name
+                self.aliases = aliases
+                self.windows = windows
+                self.notes = notes
+            }
+            package enum CodingKeys: String, CodingKey {
+                case key
+                case name
+                case aliases
+                case windows
+                case notes
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.key = try container.decode(
+                    Swift.String.self,
+                    forKey: .key
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.aliases = try container.decode(
+                    [Swift.String].self,
+                    forKey: .aliases
+                )
+                self.windows = try container.decode(
+                    [Components.Schemas.GardenGuideWindow].self,
+                    forKey: .windows
+                )
+                self.notes = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .notes
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "key",
+                    "name",
+                    "aliases",
+                    "windows",
+                    "notes"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenGuideSource`.
+        package struct GardenGuideSource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenGuideSource/id`.
+            package var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenGuideSource/name`.
+            package var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenGuideSource/url`.
+            package var url: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenGuideSource/publishedOrRevised`.
+            package var publishedOrRevised: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/GardenGuideSource/reviewedAt`.
+            package var reviewedAt: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenGuideSource/basedOn`.
+            package var basedOn: [Swift.String]
+            /// - Remark: Generated from `#/components/schemas/GardenGuideSource/notes`.
+            package var notes: Swift.String?
+            /// Creates a new `GardenGuideSource`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - url:
+            ///   - publishedOrRevised:
+            ///   - reviewedAt:
+            ///   - basedOn:
+            ///   - notes:
+            package init(
+                id: Swift.String,
+                name: Swift.String,
+                url: Swift.String,
+                publishedOrRevised: Swift.String? = nil,
+                reviewedAt: Swift.String,
+                basedOn: [Swift.String],
+                notes: Swift.String? = nil
+            ) {
+                self.id = id
+                self.name = name
+                self.url = url
+                self.publishedOrRevised = publishedOrRevised
+                self.reviewedAt = reviewedAt
+                self.basedOn = basedOn
+                self.notes = notes
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case url
+                case publishedOrRevised
+                case reviewedAt
+                case basedOn
+                case notes
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Swift.String.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.url = try container.decode(
+                    Swift.String.self,
+                    forKey: .url
+                )
+                self.publishedOrRevised = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .publishedOrRevised
+                )
+                self.reviewedAt = try container.decode(
+                    Swift.String.self,
+                    forKey: .reviewedAt
+                )
+                self.basedOn = try container.decode(
+                    [Swift.String].self,
+                    forKey: .basedOn
+                )
+                self.notes = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .notes
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name",
+                    "url",
+                    "publishedOrRevised",
+                    "reviewedAt",
+                    "basedOn",
+                    "notes"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenGuideWindow`.
+        package struct GardenGuideWindow: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenGuideWindow/sourceId`.
+            package var sourceId: Swift.String
+            /// - Remark: Generated from `#/components/schemas/GardenGuideWindow/microclimate`.
+            package var microclimate: Components.Schemas.GardenGuideMicroclimate
+            /// - Remark: Generated from `#/components/schemas/GardenGuideWindow/method`.
+            package var method: Components.Schemas.GardenGuideMethod
+            /// - Remark: Generated from `#/components/schemas/GardenGuideWindow/months`.
+            package var months: [Swift.Int]
+            /// - Remark: Generated from `#/components/schemas/GardenGuideWindow/monthPart`.
+            package var monthPart: Components.Schemas.GardenGuideMonthPart?
+            /// - Remark: Generated from `#/components/schemas/GardenGuideWindow/notes`.
+            package var notes: Swift.String?
+            /// Creates a new `GardenGuideWindow`.
+            ///
+            /// - Parameters:
+            ///   - sourceId:
+            ///   - microclimate:
+            ///   - method:
+            ///   - months:
+            ///   - monthPart:
+            ///   - notes:
+            package init(
+                sourceId: Swift.String,
+                microclimate: Components.Schemas.GardenGuideMicroclimate,
+                method: Components.Schemas.GardenGuideMethod,
+                months: [Swift.Int],
+                monthPart: Components.Schemas.GardenGuideMonthPart? = nil,
+                notes: Swift.String? = nil
+            ) {
+                self.sourceId = sourceId
+                self.microclimate = microclimate
+                self.method = method
+                self.months = months
+                self.monthPart = monthPart
+                self.notes = notes
+            }
+            package enum CodingKeys: String, CodingKey {
+                case sourceId
+                case microclimate
+                case method
+                case months
+                case monthPart
+                case notes
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.sourceId = try container.decode(
+                    Swift.String.self,
+                    forKey: .sourceId
+                )
+                self.microclimate = try container.decode(
+                    Components.Schemas.GardenGuideMicroclimate.self,
+                    forKey: .microclimate
+                )
+                self.method = try container.decode(
+                    Components.Schemas.GardenGuideMethod.self,
+                    forKey: .method
+                )
+                self.months = try container.decode(
+                    [Swift.Int].self,
+                    forKey: .months
+                )
+                self.monthPart = try container.decodeIfPresent(
+                    Components.Schemas.GardenGuideMonthPart.self,
+                    forKey: .monthPart
+                )
+                self.notes = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .notes
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "sourceId",
+                    "microclimate",
+                    "method",
+                    "months",
+                    "monthPart",
+                    "notes"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenGuidesDocument`.
+        package struct GardenGuidesDocument: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenGuidesDocument/schemaVersion`.
+            package var schemaVersion: Swift.Double
+            /// - Remark: Generated from `#/components/schemas/GardenGuidesDocument/sources`.
+            package var sources: [Components.Schemas.GardenGuideSource]
+            /// - Remark: Generated from `#/components/schemas/GardenGuidesDocument/guides`.
+            package var guides: [Components.Schemas.GardenGuide]
+            /// Creates a new `GardenGuidesDocument`.
+            ///
+            /// - Parameters:
+            ///   - schemaVersion:
+            ///   - sources:
+            ///   - guides:
+            package init(
+                schemaVersion: Swift.Double,
+                sources: [Components.Schemas.GardenGuideSource],
+                guides: [Components.Schemas.GardenGuide]
+            ) {
+                self.schemaVersion = schemaVersion
+                self.sources = sources
+                self.guides = guides
+            }
+            package enum CodingKeys: String, CodingKey {
+                case schemaVersion
+                case sources
+                case guides
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.schemaVersion = try container.decode(
+                    Swift.Double.self,
+                    forKey: .schemaVersion
+                )
+                self.sources = try container.decode(
+                    [Components.Schemas.GardenGuideSource].self,
+                    forKey: .sources
+                )
+                self.guides = try container.decode(
+                    [Components.Schemas.GardenGuide].self,
+                    forKey: .guides
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "schemaVersion",
+                    "sources",
+                    "guides"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ImageAssociation`.
         package struct ImageAssociation: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ImageAssociation/entityType`.
@@ -4527,11 +6755,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientListItemOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/IngredientListItemOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/IngredientListItemOut/naKinds`.
-            package var naKinds: Components.Schemas.OutputSchema79
+            package var naKinds: Components.Schemas.OutputSchema97
             /// - Remark: Generated from `#/components/schemas/IngredientListItemOut/usuallyOnHand`.
             package var usuallyOnHand: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/IngredientListItemOut/gardenGuideKey`.
+            package var gardenGuideKey: Swift.String?
             /// - Remark: Generated from `#/components/schemas/IngredientListItemOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/IngredientListItemOut/updatedAt`.
@@ -4550,6 +6780,7 @@ extension Components {
             ///   - aliases:
             ///   - naKinds:
             ///   - usuallyOnHand:
+            ///   - gardenGuideKey:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - product:
@@ -4558,9 +6789,10 @@ extension Components {
             package init(
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                naKinds: Components.Schemas.OutputSchema79,
+                aliases: Components.Schemas.InputSchema45,
+                naKinds: Components.Schemas.OutputSchema97,
                 usuallyOnHand: Swift.Bool,
+                gardenGuideKey: Swift.String? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 product: [Components.Schemas.ProductWithMappingsOut],
@@ -4572,6 +6804,7 @@ extension Components {
                 self.aliases = aliases
                 self.naKinds = naKinds
                 self.usuallyOnHand = usuallyOnHand
+                self.gardenGuideKey = gardenGuideKey
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.product = product
@@ -4584,6 +6817,7 @@ extension Components {
                 case aliases
                 case naKinds
                 case usuallyOnHand
+                case gardenGuideKey
                 case createdAt
                 case updatedAt
                 case product
@@ -4601,16 +6835,20 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.naKinds = try container.decode(
-                    Components.Schemas.OutputSchema79.self,
+                    Components.Schemas.OutputSchema97.self,
                     forKey: .naKinds
                 )
                 self.usuallyOnHand = try container.decode(
                     Swift.Bool.self,
                     forKey: .usuallyOnHand
+                )
+                self.gardenGuideKey = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .gardenGuideKey
                 )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
@@ -4638,11 +6876,118 @@ extension Components {
                     "aliases",
                     "naKinds",
                     "usuallyOnHand",
+                    "gardenGuideKey",
                     "createdAt",
                     "updatedAt",
                     "product",
                     "appearsInRecipes",
                     "ownRecipeCount"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/IngredientOut`.
+        package struct IngredientOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/id`.
+            package var id: Components.Schemas.IngredientShortcode
+            /// Ingredient name
+            ///
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/name`.
+            package var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/aliases`.
+            package var aliases: Components.Schemas.InputSchema45
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/naKinds`.
+            package var naKinds: Components.Schemas.OutputSchema97
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/usuallyOnHand`.
+            package var usuallyOnHand: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/gardenGuideKey`.
+            package var gardenGuideKey: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/createdAt`.
+            package var createdAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/IngredientOut/updatedAt`.
+            package var updatedAt: Foundation.Date
+            /// Creates a new `IngredientOut`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name: Ingredient name
+            ///   - aliases:
+            ///   - naKinds:
+            ///   - usuallyOnHand:
+            ///   - gardenGuideKey:
+            ///   - createdAt:
+            ///   - updatedAt:
+            package init(
+                id: Components.Schemas.IngredientShortcode,
+                name: Swift.String,
+                aliases: Components.Schemas.InputSchema45,
+                naKinds: Components.Schemas.OutputSchema97,
+                usuallyOnHand: Swift.Bool,
+                gardenGuideKey: Swift.String? = nil,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.name = name
+                self.aliases = aliases
+                self.naKinds = naKinds
+                self.usuallyOnHand = usuallyOnHand
+                self.gardenGuideKey = gardenGuideKey
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case aliases
+                case naKinds
+                case usuallyOnHand
+                case gardenGuideKey
+                case createdAt
+                case updatedAt
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.aliases = try container.decode(
+                    Components.Schemas.InputSchema45.self,
+                    forKey: .aliases
+                )
+                self.naKinds = try container.decode(
+                    Components.Schemas.OutputSchema97.self,
+                    forKey: .naKinds
+                )
+                self.usuallyOnHand = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .usuallyOnHand
+                )
+                self.gardenGuideKey = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .gardenGuideKey
+                )
+                self.createdAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .createdAt
+                )
+                self.updatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .updatedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name",
+                    "aliases",
+                    "naKinds",
+                    "usuallyOnHand",
+                    "gardenGuideKey",
+                    "createdAt",
+                    "updatedAt"
                 ])
             }
         }
@@ -4655,11 +7000,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/IngredientWithFoodOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/IngredientWithFoodOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/IngredientWithFoodOut/naKinds`.
-            package var naKinds: Components.Schemas.OutputSchema79
+            package var naKinds: Components.Schemas.OutputSchema97
             /// - Remark: Generated from `#/components/schemas/IngredientWithFoodOut/usuallyOnHand`.
             package var usuallyOnHand: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/IngredientWithFoodOut/gardenGuideKey`.
+            package var gardenGuideKey: Swift.String?
             /// - Remark: Generated from `#/components/schemas/IngredientWithFoodOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/IngredientWithFoodOut/updatedAt`.
@@ -4680,6 +7027,7 @@ extension Components {
             ///   - aliases:
             ///   - naKinds:
             ///   - usuallyOnHand:
+            ///   - gardenGuideKey:
             ///   - createdAt:
             ///   - updatedAt:
             ///   - recipe:
@@ -4689,9 +7037,10 @@ extension Components {
             package init(
                 id: Components.Schemas.IngredientShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                naKinds: Components.Schemas.OutputSchema79,
+                aliases: Components.Schemas.InputSchema45,
+                naKinds: Components.Schemas.OutputSchema97,
                 usuallyOnHand: Swift.Bool,
+                gardenGuideKey: Swift.String? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 recipe: Components.Schemas.RecipeTopLevel? = nil,
@@ -4704,6 +7053,7 @@ extension Components {
                 self.aliases = aliases
                 self.naKinds = naKinds
                 self.usuallyOnHand = usuallyOnHand
+                self.gardenGuideKey = gardenGuideKey
                 self.createdAt = createdAt
                 self.updatedAt = updatedAt
                 self.recipe = recipe
@@ -4717,6 +7067,7 @@ extension Components {
                 case aliases
                 case naKinds
                 case usuallyOnHand
+                case gardenGuideKey
                 case createdAt
                 case updatedAt
                 case recipe
@@ -4735,16 +7086,20 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.naKinds = try container.decode(
-                    Components.Schemas.OutputSchema79.self,
+                    Components.Schemas.OutputSchema97.self,
                     forKey: .naKinds
                 )
                 self.usuallyOnHand = try container.decode(
                     Swift.Bool.self,
                     forKey: .usuallyOnHand
+                )
+                self.gardenGuideKey = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .gardenGuideKey
                 )
                 self.createdAt = try container.decode(
                     Foundation.Date.self,
@@ -4776,6 +7131,7 @@ extension Components {
                     "aliases",
                     "naKinds",
                     "usuallyOnHand",
+                    "gardenGuideKey",
                     "createdAt",
                     "updatedAt",
                     "recipe",
@@ -4984,7 +7340,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/id`.
             package var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/amount`.
-            package var amount: Components.Schemas.OutputSchema92
+            package var amount: Components.Schemas.OutputSchema111
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/valuation`.
@@ -4994,7 +7350,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/verifiedAt`.
             package var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/placement`.
-            package var placement: Components.Schemas.OutputSchema96
+            package var placement: Components.Schemas.OutputSchema115
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/InventoryEntryOut/updatedAt`.
@@ -5011,10 +7367,10 @@ extension Components {
             ///   - updatedAt:
             package init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema92,
+                amount: Components.Schemas.OutputSchema111,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema96,
+                placement: Components.Schemas.OutputSchema115,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date
             ) {
@@ -5042,7 +7398,7 @@ extension Components {
                     forKey: .id
                 )
                 self.amount = try container.decode(
-                    Components.Schemas.OutputSchema92.self,
+                    Components.Schemas.OutputSchema111.self,
                     forKey: .amount
                 )
                 self.valuation = try container.decodeIfPresent(
@@ -5054,7 +7410,7 @@ extension Components {
                     forKey: .verifiedAt
                 )
                 self.placement = try container.decode(
-                    Components.Schemas.OutputSchema96.self,
+                    Components.Schemas.OutputSchema115.self,
                     forKey: .placement
                 )
                 self.createdAt = try container.decode(
@@ -5081,7 +7437,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryListItemOut/id`.
             package var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryListItemOut/amount`.
-            package var amount: Components.Schemas.OutputSchema92
+            package var amount: Components.Schemas.OutputSchema111
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryListItemOut/valuation`.
@@ -5091,7 +7447,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryListItemOut/verifiedAt`.
             package var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryListItemOut/placement`.
-            package var placement: Components.Schemas.OutputSchema96
+            package var placement: Components.Schemas.OutputSchema115
             /// - Remark: Generated from `#/components/schemas/InventoryListItemOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/InventoryListItemOut/updatedAt`.
@@ -5114,10 +7470,10 @@ extension Components {
             ///   - location:
             package init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema92,
+                amount: Components.Schemas.OutputSchema111,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema96,
+                placement: Components.Schemas.OutputSchema115,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 product: Components.Schemas.InventoryListProductOut,
@@ -5151,7 +7507,7 @@ extension Components {
                     forKey: .id
                 )
                 self.amount = try container.decode(
-                    Components.Schemas.OutputSchema92.self,
+                    Components.Schemas.OutputSchema111.self,
                     forKey: .amount
                 )
                 self.valuation = try container.decodeIfPresent(
@@ -5163,7 +7519,7 @@ extension Components {
                     forKey: .verifiedAt
                 )
                 self.placement = try container.decode(
-                    Components.Schemas.OutputSchema96.self,
+                    Components.Schemas.OutputSchema115.self,
                     forKey: .placement
                 )
                 self.createdAt = try container.decode(
@@ -5415,7 +7771,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/id`.
             package var id: Components.Schemas.InventoryShortcode
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/amount`.
-            package var amount: Components.Schemas.OutputSchema92
+            package var amount: Components.Schemas.OutputSchema111
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/valuation`.
@@ -5425,7 +7781,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/verifiedAt`.
             package var verifiedAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/placement`.
-            package var placement: Components.Schemas.OutputSchema96
+            package var placement: Components.Schemas.OutputSchema115
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/InventoryWithLocationAndProductOut/updatedAt`.
@@ -5448,10 +7804,10 @@ extension Components {
             ///   - location:
             package init(
                 id: Components.Schemas.InventoryShortcode,
-                amount: Components.Schemas.OutputSchema92,
+                amount: Components.Schemas.OutputSchema111,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema96,
+                placement: Components.Schemas.OutputSchema115,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 product: Components.Schemas.InventoryDetailProductOut,
@@ -5485,7 +7841,7 @@ extension Components {
                     forKey: .id
                 )
                 self.amount = try container.decode(
-                    Components.Schemas.OutputSchema92.self,
+                    Components.Schemas.OutputSchema111.self,
                     forKey: .amount
                 )
                 self.valuation = try container.decodeIfPresent(
@@ -5497,7 +7853,7 @@ extension Components {
                     forKey: .verifiedAt
                 )
                 self.placement = try container.decode(
-                    Components.Schemas.OutputSchema96.self,
+                    Components.Schemas.OutputSchema115.self,
                     forKey: .placement
                 )
                 self.createdAt = try container.decode(
@@ -6047,7 +8403,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/aliases`.
-            package var aliases: Components.Schemas.InputSchema43 {
+            package var aliases: Components.Schemas.InputSchema45 {
                 get  {
                     self.storage.value.aliases
                 }
@@ -6056,7 +8412,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/tags`.
-            package var tags: Components.Schemas.OutputSchema102? {
+            package var tags: Components.Schemas.OutputSchema121? {
                 get  {
                     self.storage.value.tags
                 }
@@ -6071,6 +8427,24 @@ extension Components {
                 }
                 _modify {
                     yield &self.storage.value._type
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/InfLocation/gardenKind`.
+            package var gardenKind: Components.Schemas.GardenLocationKind? {
+                get  {
+                    self.storage.value.gardenKind
+                }
+                _modify {
+                    yield &self.storage.value.gardenKind
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/InfLocation/gardenConditions`.
+            package var gardenConditions: Swift.String? {
+                get  {
+                    self.storage.value.gardenConditions
+                }
+                _modify {
+                    yield &self.storage.value.gardenConditions
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/product`.
@@ -6103,7 +8477,7 @@ extension Components {
                 }
             }
             /// - Remark: Generated from `#/components/schemas/InfLocation/images`.
-            package var images: Components.Schemas.OutputSchema30 {
+            package var images: Components.Schemas.OutputSchema31 {
                 get  {
                     self.storage.value.images
                 }
@@ -6262,6 +8636,8 @@ extension Components {
             ///   - aliases:
             ///   - tags:
             ///   - _type:
+            ///   - gardenKind:
+            ///   - gardenConditions:
             ///   - product:
             ///   - lastBulkInventory: When last verified in an audit session (null = never)
             ///   - aiDescription:
@@ -6278,13 +8654,15 @@ extension Components {
             package init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                tags: Components.Schemas.OutputSchema102? = nil,
+                aliases: Components.Schemas.InputSchema45,
+                tags: Components.Schemas.OutputSchema121? = nil,
                 _type: Components.Schemas.LocationType? = nil,
+                gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                gardenConditions: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema30,
+                images: Components.Schemas.OutputSchema31,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -6301,6 +8679,8 @@ extension Components {
                     aliases: aliases,
                     tags: tags,
                     _type: _type,
+                    gardenKind: gardenKind,
+                    gardenConditions: gardenConditions,
                     product: product,
                     lastBulkInventory: lastBulkInventory,
                     aiDescription: aiDescription,
@@ -6322,6 +8702,8 @@ extension Components {
                 case aliases
                 case tags
                 case _type = "type"
+                case gardenKind
+                case gardenConditions
                 case product
                 case lastBulkInventory
                 case aiDescription
@@ -6352,11 +8734,15 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/name`.
                 var name: Swift.String
                 /// - Remark: Generated from `#/components/schemas/InfLocation/aliases`.
-                var aliases: Components.Schemas.InputSchema43
+                var aliases: Components.Schemas.InputSchema45
                 /// - Remark: Generated from `#/components/schemas/InfLocation/tags`.
-                var tags: Components.Schemas.OutputSchema102?
+                var tags: Components.Schemas.OutputSchema121?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/type`.
                 var _type: Components.Schemas.LocationType?
+                /// - Remark: Generated from `#/components/schemas/InfLocation/gardenKind`.
+                var gardenKind: Components.Schemas.GardenLocationKind?
+                /// - Remark: Generated from `#/components/schemas/InfLocation/gardenConditions`.
+                var gardenConditions: Swift.String?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/product`.
                 var product: Components.Schemas.LocationIdentityProductOut?
                 /// When last verified in an audit session (null = never)
@@ -6366,7 +8752,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/InfLocation/aiDescription`.
                 var aiDescription: Swift.String?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/images`.
-                var images: Components.Schemas.OutputSchema30
+                var images: Components.Schemas.OutputSchema31
                 /// - Remark: Generated from `#/components/schemas/InfLocation/valuation`.
                 var valuation: Components.Schemas.LocationValuation?
                 /// - Remark: Generated from `#/components/schemas/InfLocation/createdAt`.
@@ -6450,13 +8836,15 @@ extension Components {
                 init(
                     id: Components.Schemas.LocationShortcode,
                     name: Swift.String,
-                    aliases: Components.Schemas.InputSchema43,
-                    tags: Components.Schemas.OutputSchema102? = nil,
+                    aliases: Components.Schemas.InputSchema45,
+                    tags: Components.Schemas.OutputSchema121? = nil,
                     _type: Components.Schemas.LocationType? = nil,
+                    gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                    gardenConditions: Swift.String? = nil,
                     product: Components.Schemas.LocationIdentityProductOut? = nil,
                     lastBulkInventory: Foundation.Date? = nil,
                     aiDescription: Swift.String? = nil,
-                    images: Components.Schemas.OutputSchema30,
+                    images: Components.Schemas.OutputSchema31,
                     valuation: Components.Schemas.LocationValuation? = nil,
                     createdAt: Foundation.Date,
                     updatedAt: Foundation.Date,
@@ -6472,6 +8860,8 @@ extension Components {
                     self.aliases = aliases
                     self.tags = tags
                     self._type = _type
+                    self.gardenKind = gardenKind
+                    self.gardenConditions = gardenConditions
                     self.product = product
                     self.lastBulkInventory = lastBulkInventory
                     self.aiDescription = aiDescription
@@ -6498,16 +8888,24 @@ extension Components {
                         forKey: .name
                     )
                     self.aliases = try container.decode(
-                        Components.Schemas.InputSchema43.self,
+                        Components.Schemas.InputSchema45.self,
                         forKey: .aliases
                     )
                     self.tags = try container.decodeIfPresent(
-                        Components.Schemas.OutputSchema102.self,
+                        Components.Schemas.OutputSchema121.self,
                         forKey: .tags
                     )
                     self._type = try container.decodeIfPresent(
                         Components.Schemas.LocationType.self,
                         forKey: ._type
+                    )
+                    self.gardenKind = try container.decodeIfPresent(
+                        Components.Schemas.GardenLocationKind.self,
+                        forKey: .gardenKind
+                    )
+                    self.gardenConditions = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .gardenConditions
                     )
                     self.product = try container.decodeIfPresent(
                         Components.Schemas.LocationIdentityProductOut.self,
@@ -6522,7 +8920,7 @@ extension Components {
                         forKey: .aiDescription
                     )
                     self.images = try container.decode(
-                        Components.Schemas.OutputSchema30.self,
+                        Components.Schemas.OutputSchema31.self,
                         forKey: .images
                     )
                     self.valuation = try container.decodeIfPresent(
@@ -6567,6 +8965,8 @@ extension Components {
                         "aliases",
                         "tags",
                         "type",
+                        "gardenKind",
+                        "gardenConditions",
                         "product",
                         "lastBulkInventory",
                         "aiDescription",
@@ -6728,11 +9128,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/tags`.
-            package var tags: Components.Schemas.OutputSchema102?
+            package var tags: Components.Schemas.OutputSchema121?
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/type`.
             package var _type: Components.Schemas.LocationType?
+            /// - Remark: Generated from `#/components/schemas/LocationListItemOut/gardenKind`.
+            package var gardenKind: Components.Schemas.GardenLocationKind?
+            /// - Remark: Generated from `#/components/schemas/LocationListItemOut/gardenConditions`.
+            package var gardenConditions: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/product`.
             package var product: Components.Schemas.LocationIdentityProductOut?
             /// When last verified in an audit session (null = never)
@@ -6742,7 +9146,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/aiDescription`.
             package var aiDescription: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/images`.
-            package var images: Components.Schemas.OutputSchema30
+            package var images: Components.Schemas.OutputSchema31
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/valuation`.
             package var valuation: Components.Schemas.LocationValuation?
             /// - Remark: Generated from `#/components/schemas/LocationListItemOut/createdAt`.
@@ -7021,6 +9425,8 @@ extension Components {
             ///   - aliases:
             ///   - tags:
             ///   - _type:
+            ///   - gardenKind:
+            ///   - gardenConditions:
             ///   - product:
             ///   - lastBulkInventory: When last verified in an audit session (null = never)
             ///   - aiDescription:
@@ -7034,13 +9440,15 @@ extension Components {
             package init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                tags: Components.Schemas.OutputSchema102? = nil,
+                aliases: Components.Schemas.InputSchema45,
+                tags: Components.Schemas.OutputSchema121? = nil,
                 _type: Components.Schemas.LocationType? = nil,
+                gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                gardenConditions: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema30,
+                images: Components.Schemas.OutputSchema31,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
@@ -7053,6 +9461,8 @@ extension Components {
                 self.aliases = aliases
                 self.tags = tags
                 self._type = _type
+                self.gardenKind = gardenKind
+                self.gardenConditions = gardenConditions
                 self.product = product
                 self.lastBulkInventory = lastBulkInventory
                 self.aiDescription = aiDescription
@@ -7070,6 +9480,8 @@ extension Components {
                 case aliases
                 case tags
                 case _type = "type"
+                case gardenKind
+                case gardenConditions
                 case product
                 case lastBulkInventory
                 case aiDescription
@@ -7092,16 +9504,24 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.tags = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema102.self,
+                    Components.Schemas.OutputSchema121.self,
                     forKey: .tags
                 )
                 self._type = try container.decodeIfPresent(
                     Components.Schemas.LocationType.self,
                     forKey: ._type
+                )
+                self.gardenKind = try container.decodeIfPresent(
+                    Components.Schemas.GardenLocationKind.self,
+                    forKey: .gardenKind
+                )
+                self.gardenConditions = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .gardenConditions
                 )
                 self.product = try container.decodeIfPresent(
                     Components.Schemas.LocationIdentityProductOut.self,
@@ -7116,7 +9536,7 @@ extension Components {
                     forKey: .aiDescription
                 )
                 self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
+                    Components.Schemas.OutputSchema31.self,
                     forKey: .images
                 )
                 self.valuation = try container.decodeIfPresent(
@@ -7149,6 +9569,8 @@ extension Components {
                     "aliases",
                     "tags",
                     "type",
+                    "gardenKind",
+                    "gardenConditions",
                     "product",
                     "lastBulkInventory",
                     "aiDescription",
@@ -7220,11 +9642,15 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/LocationOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/LocationOut/tags`.
-            package var tags: Components.Schemas.OutputSchema102?
+            package var tags: Components.Schemas.OutputSchema121?
             /// - Remark: Generated from `#/components/schemas/LocationOut/type`.
             package var _type: Components.Schemas.LocationType?
+            /// - Remark: Generated from `#/components/schemas/LocationOut/gardenKind`.
+            package var gardenKind: Components.Schemas.GardenLocationKind?
+            /// - Remark: Generated from `#/components/schemas/LocationOut/gardenConditions`.
+            package var gardenConditions: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationOut/product`.
             package var product: Components.Schemas.LocationIdentityProductOut?
             /// When last verified in an audit session (null = never)
@@ -7234,7 +9660,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationOut/aiDescription`.
             package var aiDescription: Swift.String?
             /// - Remark: Generated from `#/components/schemas/LocationOut/images`.
-            package var images: Components.Schemas.OutputSchema30
+            package var images: Components.Schemas.OutputSchema31
             /// - Remark: Generated from `#/components/schemas/LocationOut/valuation`.
             package var valuation: Components.Schemas.LocationValuation?
             /// - Remark: Generated from `#/components/schemas/LocationOut/createdAt`.
@@ -7249,6 +9675,8 @@ extension Components {
             ///   - aliases:
             ///   - tags:
             ///   - _type:
+            ///   - gardenKind:
+            ///   - gardenConditions:
             ///   - product:
             ///   - lastBulkInventory: When last verified in an audit session (null = never)
             ///   - aiDescription:
@@ -7259,13 +9687,15 @@ extension Components {
             package init(
                 id: Components.Schemas.LocationShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                tags: Components.Schemas.OutputSchema102? = nil,
+                aliases: Components.Schemas.InputSchema45,
+                tags: Components.Schemas.OutputSchema121? = nil,
                 _type: Components.Schemas.LocationType? = nil,
+                gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                gardenConditions: Swift.String? = nil,
                 product: Components.Schemas.LocationIdentityProductOut? = nil,
                 lastBulkInventory: Foundation.Date? = nil,
                 aiDescription: Swift.String? = nil,
-                images: Components.Schemas.OutputSchema30,
+                images: Components.Schemas.OutputSchema31,
                 valuation: Components.Schemas.LocationValuation? = nil,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date
@@ -7275,6 +9705,8 @@ extension Components {
                 self.aliases = aliases
                 self.tags = tags
                 self._type = _type
+                self.gardenKind = gardenKind
+                self.gardenConditions = gardenConditions
                 self.product = product
                 self.lastBulkInventory = lastBulkInventory
                 self.aiDescription = aiDescription
@@ -7289,6 +9721,8 @@ extension Components {
                 case aliases
                 case tags
                 case _type = "type"
+                case gardenKind
+                case gardenConditions
                 case product
                 case lastBulkInventory
                 case aiDescription
@@ -7308,16 +9742,24 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.tags = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema102.self,
+                    Components.Schemas.OutputSchema121.self,
                     forKey: .tags
                 )
                 self._type = try container.decodeIfPresent(
                     Components.Schemas.LocationType.self,
                     forKey: ._type
+                )
+                self.gardenKind = try container.decodeIfPresent(
+                    Components.Schemas.GardenLocationKind.self,
+                    forKey: .gardenKind
+                )
+                self.gardenConditions = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .gardenConditions
                 )
                 self.product = try container.decodeIfPresent(
                     Components.Schemas.LocationIdentityProductOut.self,
@@ -7332,7 +9774,7 @@ extension Components {
                     forKey: .aiDescription
                 )
                 self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
+                    Components.Schemas.OutputSchema31.self,
                     forKey: .images
                 )
                 self.valuation = try container.decodeIfPresent(
@@ -7353,6 +9795,8 @@ extension Components {
                     "aliases",
                     "tags",
                     "type",
+                    "gardenKind",
+                    "gardenConditions",
                     "product",
                     "lastBulkInventory",
                     "aiDescription",
@@ -7374,9 +9818,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/LocationValuation/totalItemCount`.
             package var totalItemCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/LocationValuation/direct`.
-            package var direct: Components.Schemas.OutputSchema110
+            package var direct: Components.Schemas.OutputSchema131
             /// - Remark: Generated from `#/components/schemas/LocationValuation/total`.
-            package var total: Components.Schemas.OutputSchema110
+            package var total: Components.Schemas.OutputSchema131
             /// - Remark: Generated from `#/components/schemas/LocationValuation/installed`.
             package struct InstalledPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/LocationValuation/installed/directValuation`.
@@ -7517,8 +9961,8 @@ extension Components {
                 totalValuation: Components.Schemas.Money,
                 directItemCount: Swift.Int,
                 totalItemCount: Swift.Int,
-                direct: Components.Schemas.OutputSchema110,
-                total: Components.Schemas.OutputSchema110,
+                direct: Components.Schemas.OutputSchema131,
+                total: Components.Schemas.OutputSchema131,
                 installed: Components.Schemas.LocationValuation.InstalledPayload? = nil,
                 container: Components.Schemas.LocationValuation.ContainerPayload? = nil
             ) {
@@ -7560,11 +10004,11 @@ extension Components {
                     forKey: .totalItemCount
                 )
                 self.direct = try container.decode(
-                    Components.Schemas.OutputSchema110.self,
+                    Components.Schemas.OutputSchema131.self,
                     forKey: .direct
                 )
                 self.total = try container.decode(
-                    Components.Schemas.OutputSchema110.self,
+                    Components.Schemas.OutputSchema131.self,
                     forKey: .total
                 )
                 self.installed = try container.decodeIfPresent(
@@ -8322,7 +10766,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/totals`.
             package var totals: Components.Schemas.MealTotals?
             /// - Remark: Generated from `#/components/schemas/RecipeDetailMcpOut/images`.
-            package var images: Components.Schemas.OutputSchema30
+            package var images: Components.Schemas.OutputSchema31
             /// Creates a new `RecipeDetailMcpOut`.
             ///
             /// - Parameters:
@@ -8352,7 +10796,7 @@ extension Components {
                 notes: Components.Schemas.RecipeNotes? = nil,
                 sections: Components.Schemas.RecipeSectionsOut,
                 totals: Components.Schemas.MealTotals? = nil,
-                images: Components.Schemas.OutputSchema30
+                images: Components.Schemas.OutputSchema31
             ) {
                 self.id = id
                 self.name = name
@@ -8434,7 +10878,7 @@ extension Components {
                     forKey: .totals
                 )
                 self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
+                    Components.Schemas.OutputSchema31.self,
                     forKey: .images
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -9289,9 +11733,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/tags`.
-            package var tags: Components.Schemas.InputSchema43
+            package var tags: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/primaryGtin`.
             package var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/fdc_id`.
@@ -9306,10 +11750,12 @@ extension Components {
             package var expectedQuantity: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/category`.
             package var category: Components.Schemas.ProductCategory?
+            /// - Remark: Generated from `#/components/schemas/ProductListItemOut/growsIngredientId`.
+            package var growsIngredientId: Components.Schemas.IngredientShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/images`.
-            package var images: Components.Schemas.OutputSchema30
+            package var images: Components.Schemas.OutputSchema31
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/externalIds`.
-            package var externalIds: Components.Schemas.OutputSchema31
+            package var externalIds: Components.Schemas.OutputSchema32
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/price`.
@@ -9329,7 +11775,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/unitMappings`.
             package var unitMappings: [Components.Schemas.UnitMappingOut]
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/ingredient`.
-            package var ingredient: Components.Schemas.OutputSchema150?
+            package var ingredient: Components.Schemas.OutputSchema171?
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/inventoryEntry`.
             package var inventoryEntry: [Components.Schemas.ProductListInventoryEntryOut]
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/expenseCount`.
@@ -9360,6 +11806,7 @@ extension Components {
             ///   - notes:
             ///   - expectedQuantity:
             ///   - category:
+            ///   - growsIngredientId:
             ///   - images:
             ///   - externalIds:
             ///   - price: Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
@@ -9382,8 +11829,8 @@ extension Components {
             package init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                tags: Components.Schemas.InputSchema43,
+                aliases: Components.Schemas.InputSchema45,
+                tags: Components.Schemas.InputSchema45,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -9391,8 +11838,9 @@ extension Components {
                 notes: Swift.String? = nil,
                 expectedQuantity: Swift.Double? = nil,
                 category: Components.Schemas.ProductCategory? = nil,
-                images: Components.Schemas.OutputSchema30,
-                externalIds: Components.Schemas.OutputSchema31,
+                growsIngredientId: Components.Schemas.IngredientShortcode? = nil,
+                images: Components.Schemas.OutputSchema31,
+                externalIds: Components.Schemas.OutputSchema32,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -9401,7 +11849,7 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 unitMappings: [Components.Schemas.UnitMappingOut],
-                ingredient: Components.Schemas.OutputSchema150? = nil,
+                ingredient: Components.Schemas.OutputSchema171? = nil,
                 inventoryEntry: [Components.Schemas.ProductListInventoryEntryOut],
                 expenseCount: Swift.Int,
                 componentCount: Swift.Int,
@@ -9422,6 +11870,7 @@ extension Components {
                 self.notes = notes
                 self.expectedQuantity = expectedQuantity
                 self.category = category
+                self.growsIngredientId = growsIngredientId
                 self.images = images
                 self.externalIds = externalIds
                 self.price = price
@@ -9454,6 +11903,7 @@ extension Components {
                 case notes
                 case expectedQuantity
                 case category
+                case growsIngredientId
                 case images
                 case externalIds
                 case price
@@ -9485,11 +11935,11 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.tags = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .tags
                 )
                 self.primaryGtin = try container.decodeIfPresent(
@@ -9520,12 +11970,16 @@ extension Components {
                     Components.Schemas.ProductCategory.self,
                     forKey: .category
                 )
+                self.growsIngredientId = try container.decodeIfPresent(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .growsIngredientId
+                )
                 self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
+                    Components.Schemas.OutputSchema31.self,
                     forKey: .images
                 )
                 self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema31.self,
+                    Components.Schemas.OutputSchema32.self,
                     forKey: .externalIds
                 )
                 self.price = try container.decodeIfPresent(
@@ -9561,7 +12015,7 @@ extension Components {
                     forKey: .unitMappings
                 )
                 self.ingredient = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema150.self,
+                    Components.Schemas.OutputSchema171.self,
                     forKey: .ingredient
                 )
                 self.inventoryEntry = try container.decode(
@@ -9608,6 +12062,7 @@ extension Components {
                     "notes",
                     "expectedQuantity",
                     "category",
+                    "growsIngredientId",
                     "images",
                     "externalIds",
                     "price",
@@ -9820,9 +12275,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/tags`.
-            package var tags: Components.Schemas.InputSchema43
+            package var tags: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/primaryGtin`.
             package var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/fdc_id`.
@@ -9837,10 +12292,12 @@ extension Components {
             package var expectedQuantity: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/category`.
             package var category: Components.Schemas.ProductCategory?
+            /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/growsIngredientId`.
+            package var growsIngredientId: Components.Schemas.IngredientShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/images`.
-            package var images: Components.Schemas.OutputSchema30
+            package var images: Components.Schemas.OutputSchema31
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/externalIds`.
-            package var externalIds: Components.Schemas.OutputSchema31
+            package var externalIds: Components.Schemas.OutputSchema32
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductTopLevelOut/price`.
@@ -9873,6 +12330,7 @@ extension Components {
             ///   - notes:
             ///   - expectedQuantity:
             ///   - category:
+            ///   - growsIngredientId:
             ///   - images:
             ///   - externalIds:
             ///   - price: Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
@@ -9886,8 +12344,8 @@ extension Components {
             package init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                tags: Components.Schemas.InputSchema43,
+                aliases: Components.Schemas.InputSchema45,
+                tags: Components.Schemas.InputSchema45,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -9895,8 +12353,9 @@ extension Components {
                 notes: Swift.String? = nil,
                 expectedQuantity: Swift.Double? = nil,
                 category: Components.Schemas.ProductCategory? = nil,
-                images: Components.Schemas.OutputSchema30,
-                externalIds: Components.Schemas.OutputSchema31,
+                growsIngredientId: Components.Schemas.IngredientShortcode? = nil,
+                images: Components.Schemas.OutputSchema31,
+                externalIds: Components.Schemas.OutputSchema32,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -9917,6 +12376,7 @@ extension Components {
                 self.notes = notes
                 self.expectedQuantity = expectedQuantity
                 self.category = category
+                self.growsIngredientId = growsIngredientId
                 self.images = images
                 self.externalIds = externalIds
                 self.price = price
@@ -9940,6 +12400,7 @@ extension Components {
                 case notes
                 case expectedQuantity
                 case category
+                case growsIngredientId
                 case images
                 case externalIds
                 case price
@@ -9962,11 +12423,11 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.tags = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .tags
                 )
                 self.primaryGtin = try container.decodeIfPresent(
@@ -9997,12 +12458,16 @@ extension Components {
                     Components.Schemas.ProductCategory.self,
                     forKey: .category
                 )
+                self.growsIngredientId = try container.decodeIfPresent(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .growsIngredientId
+                )
                 self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
+                    Components.Schemas.OutputSchema31.self,
                     forKey: .images
                 )
                 self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema31.self,
+                    Components.Schemas.OutputSchema32.self,
                     forKey: .externalIds
                 )
                 self.price = try container.decodeIfPresent(
@@ -10049,6 +12514,7 @@ extension Components {
                     "notes",
                     "expectedQuantity",
                     "category",
+                    "growsIngredientId",
                     "images",
                     "externalIds",
                     "price",
@@ -10071,9 +12537,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/tags`.
-            package var tags: Components.Schemas.InputSchema43
+            package var tags: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/primaryGtin`.
             package var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/fdc_id`.
@@ -10088,10 +12554,12 @@ extension Components {
             package var expectedQuantity: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/category`.
             package var category: Components.Schemas.ProductCategory?
+            /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/growsIngredientId`.
+            package var growsIngredientId: Components.Schemas.IngredientShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/images`.
-            package var images: Components.Schemas.OutputSchema30
+            package var images: Components.Schemas.OutputSchema31
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/externalIds`.
-            package var externalIds: Components.Schemas.OutputSchema31
+            package var externalIds: Components.Schemas.OutputSchema32
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/price`.
@@ -10111,13 +12579,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/coverImageUrl`.
             package var coverImageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/ingredient`.
-            package var ingredient: Components.Schemas.OutputSchema150?
+            package var ingredient: Components.Schemas.OutputSchema171?
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/unitMappings`.
             package var unitMappings: [Components.Schemas.UnitMappingOut]
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/inventoryEntry`.
-            package var inventoryEntry: [Components.Schemas.OutputSchema154]
+            package var inventoryEntry: [Components.Schemas.OutputSchema175]
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/servingAsLocations`.
-            package var servingAsLocations: [Components.Schemas.OutputSchema156]
+            package var servingAsLocations: [Components.Schemas.OutputSchema177]
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/componentCount`.
             package var componentCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/food`.
@@ -10146,6 +12614,7 @@ extension Components {
             ///   - notes:
             ///   - expectedQuantity:
             ///   - category:
+            ///   - growsIngredientId:
             ///   - images:
             ///   - externalIds:
             ///   - price: Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
@@ -10170,8 +12639,8 @@ extension Components {
             package init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                tags: Components.Schemas.InputSchema43,
+                aliases: Components.Schemas.InputSchema45,
+                tags: Components.Schemas.InputSchema45,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -10179,8 +12648,9 @@ extension Components {
                 notes: Swift.String? = nil,
                 expectedQuantity: Swift.Double? = nil,
                 category: Components.Schemas.ProductCategory? = nil,
-                images: Components.Schemas.OutputSchema30,
-                externalIds: Components.Schemas.OutputSchema31,
+                growsIngredientId: Components.Schemas.IngredientShortcode? = nil,
+                images: Components.Schemas.OutputSchema31,
+                externalIds: Components.Schemas.OutputSchema32,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -10189,10 +12659,10 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 coverImageUrl: Swift.String? = nil,
-                ingredient: Components.Schemas.OutputSchema150? = nil,
+                ingredient: Components.Schemas.OutputSchema171? = nil,
                 unitMappings: [Components.Schemas.UnitMappingOut],
-                inventoryEntry: [Components.Schemas.OutputSchema154],
-                servingAsLocations: [Components.Schemas.OutputSchema156],
+                inventoryEntry: [Components.Schemas.OutputSchema175],
+                servingAsLocations: [Components.Schemas.OutputSchema177],
                 componentCount: Swift.Int,
                 food: Components.Schemas.FoodSummary? = nil,
                 recipeUsages: [Components.Schemas.RecipeUsageOut],
@@ -10212,6 +12682,7 @@ extension Components {
                 self.notes = notes
                 self.expectedQuantity = expectedQuantity
                 self.category = category
+                self.growsIngredientId = growsIngredientId
                 self.images = images
                 self.externalIds = externalIds
                 self.price = price
@@ -10246,6 +12717,7 @@ extension Components {
                 case notes
                 case expectedQuantity
                 case category
+                case growsIngredientId
                 case images
                 case externalIds
                 case price
@@ -10279,11 +12751,11 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.tags = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .tags
                 )
                 self.primaryGtin = try container.decodeIfPresent(
@@ -10314,12 +12786,16 @@ extension Components {
                     Components.Schemas.ProductCategory.self,
                     forKey: .category
                 )
+                self.growsIngredientId = try container.decodeIfPresent(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .growsIngredientId
+                )
                 self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
+                    Components.Schemas.OutputSchema31.self,
                     forKey: .images
                 )
                 self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema31.self,
+                    Components.Schemas.OutputSchema32.self,
                     forKey: .externalIds
                 )
                 self.price = try container.decodeIfPresent(
@@ -10355,7 +12831,7 @@ extension Components {
                     forKey: .coverImageUrl
                 )
                 self.ingredient = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema150.self,
+                    Components.Schemas.OutputSchema171.self,
                     forKey: .ingredient
                 )
                 self.unitMappings = try container.decode(
@@ -10363,11 +12839,11 @@ extension Components {
                     forKey: .unitMappings
                 )
                 self.inventoryEntry = try container.decode(
-                    [Components.Schemas.OutputSchema154].self,
+                    [Components.Schemas.OutputSchema175].self,
                     forKey: .inventoryEntry
                 )
                 self.servingAsLocations = try container.decode(
-                    [Components.Schemas.OutputSchema156].self,
+                    [Components.Schemas.OutputSchema177].self,
                     forKey: .servingAsLocations
                 )
                 self.componentCount = try container.decode(
@@ -10410,6 +12886,7 @@ extension Components {
                     "notes",
                     "expectedQuantity",
                     "category",
+                    "growsIngredientId",
                     "images",
                     "externalIds",
                     "price",
@@ -10443,9 +12920,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/tags`.
-            package var tags: Components.Schemas.InputSchema43
+            package var tags: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/primaryGtin`.
             package var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/fdc_id`.
@@ -10460,10 +12937,12 @@ extension Components {
             package var expectedQuantity: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/category`.
             package var category: Components.Schemas.ProductCategory?
+            /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/growsIngredientId`.
+            package var growsIngredientId: Components.Schemas.IngredientShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/images`.
-            package var images: Components.Schemas.OutputSchema30
+            package var images: Components.Schemas.OutputSchema31
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/externalIds`.
-            package var externalIds: Components.Schemas.OutputSchema31
+            package var externalIds: Components.Schemas.OutputSchema32
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsAndFoodOut/price`.
@@ -10500,6 +12979,7 @@ extension Components {
             ///   - notes:
             ///   - expectedQuantity:
             ///   - category:
+            ///   - growsIngredientId:
             ///   - images:
             ///   - externalIds:
             ///   - price: Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
@@ -10515,8 +12995,8 @@ extension Components {
             package init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                tags: Components.Schemas.InputSchema43,
+                aliases: Components.Schemas.InputSchema45,
+                tags: Components.Schemas.InputSchema45,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -10524,8 +13004,9 @@ extension Components {
                 notes: Swift.String? = nil,
                 expectedQuantity: Swift.Double? = nil,
                 category: Components.Schemas.ProductCategory? = nil,
-                images: Components.Schemas.OutputSchema30,
-                externalIds: Components.Schemas.OutputSchema31,
+                growsIngredientId: Components.Schemas.IngredientShortcode? = nil,
+                images: Components.Schemas.OutputSchema31,
+                externalIds: Components.Schemas.OutputSchema32,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -10548,6 +13029,7 @@ extension Components {
                 self.notes = notes
                 self.expectedQuantity = expectedQuantity
                 self.category = category
+                self.growsIngredientId = growsIngredientId
                 self.images = images
                 self.externalIds = externalIds
                 self.price = price
@@ -10573,6 +13055,7 @@ extension Components {
                 case notes
                 case expectedQuantity
                 case category
+                case growsIngredientId
                 case images
                 case externalIds
                 case price
@@ -10597,11 +13080,11 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.tags = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .tags
                 )
                 self.primaryGtin = try container.decodeIfPresent(
@@ -10632,12 +13115,16 @@ extension Components {
                     Components.Schemas.ProductCategory.self,
                     forKey: .category
                 )
+                self.growsIngredientId = try container.decodeIfPresent(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .growsIngredientId
+                )
                 self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
+                    Components.Schemas.OutputSchema31.self,
                     forKey: .images
                 )
                 self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema31.self,
+                    Components.Schemas.OutputSchema32.self,
                     forKey: .externalIds
                 )
                 self.price = try container.decodeIfPresent(
@@ -10692,6 +13179,7 @@ extension Components {
                     "notes",
                     "expectedQuantity",
                     "category",
+                    "growsIngredientId",
                     "images",
                     "externalIds",
                     "price",
@@ -10716,9 +13204,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/name`.
             package var name: Swift.String
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/aliases`.
-            package var aliases: Components.Schemas.InputSchema43
+            package var aliases: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/tags`.
-            package var tags: Components.Schemas.InputSchema43
+            package var tags: Components.Schemas.InputSchema45
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/primaryGtin`.
             package var primaryGtin: Components.Schemas.Gtin?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/fdc_id`.
@@ -10733,10 +13221,12 @@ extension Components {
             package var expectedQuantity: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/category`.
             package var category: Components.Schemas.ProductCategory?
+            /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/growsIngredientId`.
+            package var growsIngredientId: Components.Schemas.IngredientShortcode?
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/images`.
-            package var images: Components.Schemas.OutputSchema30
+            package var images: Components.Schemas.OutputSchema31
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/externalIds`.
-            package var externalIds: Components.Schemas.OutputSchema31
+            package var externalIds: Components.Schemas.OutputSchema32
             /// Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
             ///
             /// - Remark: Generated from `#/components/schemas/ProductWithMappingsOut/price`.
@@ -10771,6 +13261,7 @@ extension Components {
             ///   - notes:
             ///   - expectedQuantity:
             ///   - category:
+            ///   - growsIngredientId:
             ///   - images:
             ///   - externalIds:
             ///   - price: Manual per-item valuation/replacement-price override; null resumes the Expense-derived fallback.
@@ -10785,8 +13276,8 @@ extension Components {
             package init(
                 id: Components.Schemas.ProductShortcode,
                 name: Swift.String,
-                aliases: Components.Schemas.InputSchema43,
-                tags: Components.Schemas.InputSchema43,
+                aliases: Components.Schemas.InputSchema45,
+                tags: Components.Schemas.InputSchema45,
                 primaryGtin: Components.Schemas.Gtin? = nil,
                 fdcId: Components.Schemas.FdcId? = nil,
                 manufacturer: Swift.String,
@@ -10794,8 +13285,9 @@ extension Components {
                 notes: Swift.String? = nil,
                 expectedQuantity: Swift.Double? = nil,
                 category: Components.Schemas.ProductCategory? = nil,
-                images: Components.Schemas.OutputSchema30,
-                externalIds: Components.Schemas.OutputSchema31,
+                growsIngredientId: Components.Schemas.IngredientShortcode? = nil,
+                images: Components.Schemas.OutputSchema31,
+                externalIds: Components.Schemas.OutputSchema32,
                 price: Components.Schemas.Money? = nil,
                 pricing: Components.Schemas.ProductPricingOut,
                 usdaUnavailable: Swift.Bool? = nil,
@@ -10817,6 +13309,7 @@ extension Components {
                 self.notes = notes
                 self.expectedQuantity = expectedQuantity
                 self.category = category
+                self.growsIngredientId = growsIngredientId
                 self.images = images
                 self.externalIds = externalIds
                 self.price = price
@@ -10841,6 +13334,7 @@ extension Components {
                 case notes
                 case expectedQuantity
                 case category
+                case growsIngredientId
                 case images
                 case externalIds
                 case price
@@ -10864,11 +13358,11 @@ extension Components {
                     forKey: .name
                 )
                 self.aliases = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .aliases
                 )
                 self.tags = try container.decode(
-                    Components.Schemas.InputSchema43.self,
+                    Components.Schemas.InputSchema45.self,
                     forKey: .tags
                 )
                 self.primaryGtin = try container.decodeIfPresent(
@@ -10899,12 +13393,16 @@ extension Components {
                     Components.Schemas.ProductCategory.self,
                     forKey: .category
                 )
+                self.growsIngredientId = try container.decodeIfPresent(
+                    Components.Schemas.IngredientShortcode.self,
+                    forKey: .growsIngredientId
+                )
                 self.images = try container.decode(
-                    Components.Schemas.OutputSchema30.self,
+                    Components.Schemas.OutputSchema31.self,
                     forKey: .images
                 )
                 self.externalIds = try container.decode(
-                    Components.Schemas.OutputSchema31.self,
+                    Components.Schemas.OutputSchema32.self,
                     forKey: .externalIds
                 )
                 self.price = try container.decodeIfPresent(
@@ -10955,6 +13453,7 @@ extension Components {
                     "notes",
                     "expectedQuantity",
                     "category",
+                    "growsIngredientId",
                     "images",
                     "externalIds",
                     "price",
@@ -11606,9 +14105,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskOut/parentTaskName`.
             package var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskOut/blockedByIds`.
-            package var blockedByIds: Components.Schemas.OutputSchema168
+            package var blockedByIds: Components.Schemas.OutputSchema189
             /// - Remark: Generated from `#/components/schemas/TaskOut/blockingIds`.
-            package var blockingIds: Components.Schemas.OutputSchema168
+            package var blockingIds: Components.Schemas.OutputSchema189
             /// - Remark: Generated from `#/components/schemas/TaskOut/subtaskCount`.
             package var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskOut/doneSubtaskCount`.
@@ -11653,8 +14152,8 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema168,
-                blockingIds: Components.Schemas.OutputSchema168,
+                blockedByIds: Components.Schemas.OutputSchema189,
+                blockingIds: Components.Schemas.OutputSchema189,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
                 createdAt: Foundation.Date,
@@ -11756,11 +14255,11 @@ extension Components {
                     forKey: .parentTaskName
                 )
                 self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema168.self,
+                    Components.Schemas.OutputSchema189.self,
                     forKey: .blockedByIds
                 )
                 self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema168.self,
+                    Components.Schemas.OutputSchema189.self,
                     forKey: .blockingIds
                 )
                 self.subtaskCount = try container.decode(
@@ -14992,7 +17491,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MeasureEstimateComplete/upper`.
             package var upper: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/MeasureEstimateComplete/coverage`.
-            package var coverage: Components.Schemas.OutputSchema44
+            package var coverage: Components.Schemas.OutputSchema45
             /// Creates a new `MeasureEstimateComplete`.
             ///
             /// - Parameters:
@@ -15004,7 +17503,7 @@ extension Components {
                 status: Components.Schemas.MeasureEstimateComplete.StatusPayload,
                 lower: Swift.Double,
                 upper: Swift.Double? = nil,
-                coverage: Components.Schemas.OutputSchema44
+                coverage: Components.Schemas.OutputSchema45
             ) {
                 self.status = status
                 self.lower = lower
@@ -15032,7 +17531,7 @@ extension Components {
                     forKey: .upper
                 )
                 self.coverage = try container.decode(
-                    Components.Schemas.OutputSchema44.self,
+                    Components.Schemas.OutputSchema45.self,
                     forKey: .coverage
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -15056,7 +17555,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/MeasureEstimatePartial/upper`.
             package var upper: Swift.Double?
             /// - Remark: Generated from `#/components/schemas/MeasureEstimatePartial/coverage`.
-            package var coverage: Components.Schemas.OutputSchema44
+            package var coverage: Components.Schemas.OutputSchema45
             /// Creates a new `MeasureEstimatePartial`.
             ///
             /// - Parameters:
@@ -15068,7 +17567,7 @@ extension Components {
                 status: Components.Schemas.MeasureEstimatePartial.StatusPayload,
                 lower: Swift.Double,
                 upper: Swift.Double? = nil,
-                coverage: Components.Schemas.OutputSchema44
+                coverage: Components.Schemas.OutputSchema45
             ) {
                 self.status = status
                 self.lower = lower
@@ -15096,7 +17595,7 @@ extension Components {
                     forKey: .upper
                 )
                 self.coverage = try container.decode(
-                    Components.Schemas.OutputSchema44.self,
+                    Components.Schemas.OutputSchema45.self,
                     forKey: .coverage
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -15903,7 +18402,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/id`.
             package var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/amounts`.
-            package var amounts: Components.Schemas.OutputSchema126
+            package var amounts: Components.Schemas.OutputSchema147
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/rawLine`.
             package var rawLine: Swift.String?
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutIngredient/modifier`.
@@ -16004,7 +18503,7 @@ extension Components {
             ///   - ingredient:
             package init(
                 id: Swift.String,
-                amounts: Components.Schemas.OutputSchema126,
+                amounts: Components.Schemas.OutputSchema147,
                 rawLine: Swift.String? = nil,
                 modifier: Swift.String? = nil,
                 createdAt: Foundation.Date,
@@ -16038,7 +18537,7 @@ extension Components {
                     forKey: .id
                 )
                 self.amounts = try container.decode(
-                    Components.Schemas.OutputSchema126.self,
+                    Components.Schemas.OutputSchema147.self,
                     forKey: .amounts
                 )
                 self.rawLine = try container.decodeIfPresent(
@@ -16084,7 +18583,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/id`.
             package var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/amounts`.
-            package var amounts: Components.Schemas.OutputSchema126
+            package var amounts: Components.Schemas.OutputSchema147
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/rawLine`.
             package var rawLine: Swift.String?
             /// - Remark: Generated from `#/components/schemas/RecipeSectionIngredientOutRecipe/modifier`.
@@ -16114,7 +18613,7 @@ extension Components {
             ///   - recipe:
             package init(
                 id: Swift.String,
-                amounts: Components.Schemas.OutputSchema126,
+                amounts: Components.Schemas.OutputSchema147,
                 rawLine: Swift.String? = nil,
                 modifier: Swift.String? = nil,
                 createdAt: Foundation.Date,
@@ -16148,7 +18647,7 @@ extension Components {
                     forKey: .id
                 )
                 self.amounts = try container.decode(
-                    Components.Schemas.OutputSchema126.self,
+                    Components.Schemas.OutputSchema147.self,
                     forKey: .amounts
                 )
                 self.rawLine = try container.decodeIfPresent(
@@ -16184,6 +18683,74 @@ extension Components {
                     "updatedAt",
                     "type",
                     "recipe"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLocation`.
+        package struct GeneratedEntityMutationCreateResultLocation: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLocation/action`.
+            @frozen package enum ActionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case create = "create"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLocation/action`.
+            package var action: Components.Schemas.GeneratedEntityMutationCreateResultLocation.ActionPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLocation/entity`.
+            @frozen package enum EntityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case location = "location"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLocation/entity`.
+            package var entity: Components.Schemas.GeneratedEntityMutationCreateResultLocation.EntityPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLocation/item`.
+            package var item: Components.Schemas.LocationOut
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationCreateResultLocation/sideEffects`.
+            package var sideEffects: Components.Schemas.MutationSideEffects
+            /// Creates a new `GeneratedEntityMutationCreateResultLocation`.
+            ///
+            /// - Parameters:
+            ///   - action:
+            ///   - entity:
+            ///   - item:
+            ///   - sideEffects:
+            package init(
+                action: Components.Schemas.GeneratedEntityMutationCreateResultLocation.ActionPayload,
+                entity: Components.Schemas.GeneratedEntityMutationCreateResultLocation.EntityPayload,
+                item: Components.Schemas.LocationOut,
+                sideEffects: Components.Schemas.MutationSideEffects
+            ) {
+                self.action = action
+                self.entity = entity
+                self.item = item
+                self.sideEffects = sideEffects
+            }
+            package enum CodingKeys: String, CodingKey {
+                case action
+                case entity
+                case item
+                case sideEffects
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.action = try container.decode(
+                    Components.Schemas.GeneratedEntityMutationCreateResultLocation.ActionPayload.self,
+                    forKey: .action
+                )
+                self.entity = try container.decode(
+                    Components.Schemas.GeneratedEntityMutationCreateResultLocation.EntityPayload.self,
+                    forKey: .entity
+                )
+                self.item = try container.decode(
+                    Components.Schemas.LocationOut.self,
+                    forKey: .item
+                )
+                self.sideEffects = try container.decode(
+                    Components.Schemas.MutationSideEffects.self,
+                    forKey: .sideEffects
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "action",
+                    "entity",
+                    "item",
+                    "sideEffects"
                 ])
             }
         }
@@ -16391,6 +18958,74 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultIngredient`.
+        package struct GeneratedEntityMutationUpdateResultIngredient: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultIngredient/action`.
+            @frozen package enum ActionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case update = "update"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultIngredient/action`.
+            package var action: Components.Schemas.GeneratedEntityMutationUpdateResultIngredient.ActionPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultIngredient/entity`.
+            @frozen package enum EntityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case ingredient = "ingredient"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultIngredient/entity`.
+            package var entity: Components.Schemas.GeneratedEntityMutationUpdateResultIngredient.EntityPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultIngredient/item`.
+            package var item: Components.Schemas.IngredientOut
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultIngredient/sideEffects`.
+            package var sideEffects: Components.Schemas.MutationSideEffects
+            /// Creates a new `GeneratedEntityMutationUpdateResultIngredient`.
+            ///
+            /// - Parameters:
+            ///   - action:
+            ///   - entity:
+            ///   - item:
+            ///   - sideEffects:
+            package init(
+                action: Components.Schemas.GeneratedEntityMutationUpdateResultIngredient.ActionPayload,
+                entity: Components.Schemas.GeneratedEntityMutationUpdateResultIngredient.EntityPayload,
+                item: Components.Schemas.IngredientOut,
+                sideEffects: Components.Schemas.MutationSideEffects
+            ) {
+                self.action = action
+                self.entity = entity
+                self.item = item
+                self.sideEffects = sideEffects
+            }
+            package enum CodingKeys: String, CodingKey {
+                case action
+                case entity
+                case item
+                case sideEffects
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.action = try container.decode(
+                    Components.Schemas.GeneratedEntityMutationUpdateResultIngredient.ActionPayload.self,
+                    forKey: .action
+                )
+                self.entity = try container.decode(
+                    Components.Schemas.GeneratedEntityMutationUpdateResultIngredient.EntityPayload.self,
+                    forKey: .entity
+                )
+                self.item = try container.decode(
+                    Components.Schemas.IngredientOut.self,
+                    forKey: .item
+                )
+                self.sideEffects = try container.decode(
+                    Components.Schemas.MutationSideEffects.self,
+                    forKey: .sideEffects
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "action",
+                    "entity",
+                    "item",
+                    "sideEffects"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultLocation`.
         package struct GeneratedEntityMutationUpdateResultLocation: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultLocation/action`.
@@ -16513,6 +19148,142 @@ extension Components {
                 )
                 self.item = try container.decode(
                     Components.Schemas.PurchaseOut.self,
+                    forKey: .item
+                )
+                self.sideEffects = try container.decode(
+                    Components.Schemas.MutationSideEffects.self,
+                    forKey: .sideEffects
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "action",
+                    "entity",
+                    "item",
+                    "sideEffects"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPlanting`.
+        package struct GeneratedEntityMutationUpdateResultPlanting: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPlanting/action`.
+            @frozen package enum ActionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case update = "update"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPlanting/action`.
+            package var action: Components.Schemas.GeneratedEntityMutationUpdateResultPlanting.ActionPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPlanting/entity`.
+            @frozen package enum EntityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case planting = "planting"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPlanting/entity`.
+            package var entity: Components.Schemas.GeneratedEntityMutationUpdateResultPlanting.EntityPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPlanting/item`.
+            package var item: Components.Schemas.PlantingOut
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultPlanting/sideEffects`.
+            package var sideEffects: Components.Schemas.MutationSideEffects
+            /// Creates a new `GeneratedEntityMutationUpdateResultPlanting`.
+            ///
+            /// - Parameters:
+            ///   - action:
+            ///   - entity:
+            ///   - item:
+            ///   - sideEffects:
+            package init(
+                action: Components.Schemas.GeneratedEntityMutationUpdateResultPlanting.ActionPayload,
+                entity: Components.Schemas.GeneratedEntityMutationUpdateResultPlanting.EntityPayload,
+                item: Components.Schemas.PlantingOut,
+                sideEffects: Components.Schemas.MutationSideEffects
+            ) {
+                self.action = action
+                self.entity = entity
+                self.item = item
+                self.sideEffects = sideEffects
+            }
+            package enum CodingKeys: String, CodingKey {
+                case action
+                case entity
+                case item
+                case sideEffects
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.action = try container.decode(
+                    Components.Schemas.GeneratedEntityMutationUpdateResultPlanting.ActionPayload.self,
+                    forKey: .action
+                )
+                self.entity = try container.decode(
+                    Components.Schemas.GeneratedEntityMutationUpdateResultPlanting.EntityPayload.self,
+                    forKey: .entity
+                )
+                self.item = try container.decode(
+                    Components.Schemas.PlantingOut.self,
+                    forKey: .item
+                )
+                self.sideEffects = try container.decode(
+                    Components.Schemas.MutationSideEffects.self,
+                    forKey: .sideEffects
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "action",
+                    "entity",
+                    "item",
+                    "sideEffects"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry`.
+        package struct GeneratedEntityMutationUpdateResultGardenEntry: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry/action`.
+            @frozen package enum ActionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case update = "update"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry/action`.
+            package var action: Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry.ActionPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry/entity`.
+            @frozen package enum EntityPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case gardenEntry = "gardenEntry"
+            }
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry/entity`.
+            package var entity: Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry.EntityPayload
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry/item`.
+            package var item: Components.Schemas.GardenEntryOut
+            /// - Remark: Generated from `#/components/schemas/GeneratedEntityMutationUpdateResultGardenEntry/sideEffects`.
+            package var sideEffects: Components.Schemas.MutationSideEffects
+            /// Creates a new `GeneratedEntityMutationUpdateResultGardenEntry`.
+            ///
+            /// - Parameters:
+            ///   - action:
+            ///   - entity:
+            ///   - item:
+            ///   - sideEffects:
+            package init(
+                action: Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry.ActionPayload,
+                entity: Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry.EntityPayload,
+                item: Components.Schemas.GardenEntryOut,
+                sideEffects: Components.Schemas.MutationSideEffects
+            ) {
+                self.action = action
+                self.entity = entity
+                self.item = item
+                self.sideEffects = sideEffects
+            }
+            package enum CodingKeys: String, CodingKey {
+                case action
+                case entity
+                case item
+                case sideEffects
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.action = try container.decode(
+                    Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry.ActionPayload.self,
+                    forKey: .action
+                )
+                self.entity = try container.decode(
+                    Components.Schemas.GeneratedEntityMutationUpdateResultGardenEntry.EntityPayload.self,
+                    forKey: .entity
+                )
+                self.item = try container.decode(
+                    Components.Schemas.GardenEntryOut.self,
                     forKey: .item
                 )
                 self.sideEffects = try container.decode(
@@ -17448,6 +20219,82 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PlantingListPage`.
+        package struct PlantingListPage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PlantingListPage/items`.
+            package var items: [Components.Schemas.PlantingListItemOut]
+            /// - Remark: Generated from `#/components/schemas/PlantingListPage/meta`.
+            package var meta: Components.Schemas.ListPageMeta
+            /// Creates a new `PlantingListPage`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - meta:
+            package init(
+                items: [Components.Schemas.PlantingListItemOut],
+                meta: Components.Schemas.ListPageMeta
+            ) {
+                self.items = items
+                self.meta = meta
+            }
+            package enum CodingKeys: String, CodingKey {
+                case items
+                case meta
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    [Components.Schemas.PlantingListItemOut].self,
+                    forKey: .items
+                )
+                self.meta = try container.decode(
+                    Components.Schemas.ListPageMeta.self,
+                    forKey: .meta
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items",
+                    "meta"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/GardenEntryListPage`.
+        package struct GardenEntryListPage: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListPage/items`.
+            package var items: [Components.Schemas.GardenEntryListItemOut]
+            /// - Remark: Generated from `#/components/schemas/GardenEntryListPage/meta`.
+            package var meta: Components.Schemas.ListPageMeta
+            /// Creates a new `GardenEntryListPage`.
+            ///
+            /// - Parameters:
+            ///   - items:
+            ///   - meta:
+            package init(
+                items: [Components.Schemas.GardenEntryListItemOut],
+                meta: Components.Schemas.ListPageMeta
+            ) {
+                self.items = items
+                self.meta = meta
+            }
+            package enum CodingKeys: String, CodingKey {
+                case items
+                case meta
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.items = try container.decode(
+                    [Components.Schemas.GardenEntryListItemOut].self,
+                    forKey: .items
+                )
+                self.meta = try container.decode(
+                    Components.Schemas.ListPageMeta.self,
+                    forKey: .meta
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "items",
+                    "meta"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/output_schema19`.
         @frozen package enum OutputSchema19: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/output_schema19/UnitMappingWithMetadataFood`.
@@ -17491,17 +20338,17 @@ extension Components {
                 }
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema30`.
-        package typealias OutputSchema30 = [Components.Schemas.ImageOut]
         /// - Remark: Generated from `#/components/schemas/output_schema31`.
-        package typealias OutputSchema31 = [Components.Schemas.ExternalIdOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema44`.
-        package struct OutputSchema44: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema44/covered`.
+        package typealias OutputSchema31 = [Components.Schemas.ImageOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema32`.
+        package typealias OutputSchema32 = [Components.Schemas.ExternalIdOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema45`.
+        package struct OutputSchema45: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema45/covered`.
             package var covered: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema44/total`.
+            /// - Remark: Generated from `#/components/schemas/output_schema45/total`.
             package var total: Swift.Int
-            /// Creates a new `OutputSchema44`.
+            /// Creates a new `OutputSchema45`.
             ///
             /// - Parameters:
             ///   - covered:
@@ -17533,19 +20380,19 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema79`.
-        package typealias OutputSchema79 = [Components.Schemas.BaseKind]
+        /// - Remark: Generated from `#/components/schemas/output_schema97`.
+        package typealias OutputSchema97 = [Components.Schemas.BaseKind]
         /// Quantity on hand
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema92`.
-        package struct OutputSchema92: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema92/value`.
+        /// - Remark: Generated from `#/components/schemas/output_schema111`.
+        package struct OutputSchema111: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema111/value`.
             package var value: Swift.Double
-            /// - Remark: Generated from `#/components/schemas/output_schema92/unit`.
+            /// - Remark: Generated from `#/components/schemas/output_schema111/unit`.
             package var unit: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema92/upperValue`.
+            /// - Remark: Generated from `#/components/schemas/output_schema111/upperValue`.
             package var upperValue: Swift.Double?
-            /// Creates a new `OutputSchema92`.
+            /// Creates a new `OutputSchema111`.
             ///
             /// - Parameters:
             ///   - value:
@@ -17588,21 +20435,21 @@ extension Components {
         }
         /// 'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema96`.
-        package typealias OutputSchema96 = Components.Schemas.InventoryPlacement
+        /// - Remark: Generated from `#/components/schemas/output_schema115`.
+        package typealias OutputSchema115 = Components.Schemas.InventoryPlacement
         /// Namespaced Collection tags assigned directly to this location
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema102`.
-        package typealias OutputSchema102 = Components.Schemas.InputSchema43
-        /// - Remark: Generated from `#/components/schemas/output_schema110`.
-        package struct OutputSchema110: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema110/priced`.
+        /// - Remark: Generated from `#/components/schemas/output_schema121`.
+        package typealias OutputSchema121 = Components.Schemas.InputSchema45
+        /// - Remark: Generated from `#/components/schemas/output_schema131`.
+        package struct OutputSchema131: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema131/priced`.
             package var priced: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema110/missingPricing`.
+            /// - Remark: Generated from `#/components/schemas/output_schema131/missingPricing`.
             package var missingPricing: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/output_schema110/miscNoPrice`.
+            /// - Remark: Generated from `#/components/schemas/output_schema131/miscNoPrice`.
             package var miscNoPrice: Swift.Int
-            /// Creates a new `OutputSchema110`.
+            /// Creates a new `OutputSchema131`.
             ///
             /// - Parameters:
             ///   - priced:
@@ -17643,23 +20490,23 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema126`.
-        package typealias OutputSchema126 = [Components.Schemas.Amount]
-        /// - Remark: Generated from `#/components/schemas/output_schema150`.
-        package struct OutputSchema150: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema150/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema147`.
+        package typealias OutputSchema147 = [Components.Schemas.Amount]
+        /// - Remark: Generated from `#/components/schemas/output_schema171`.
+        package struct OutputSchema171: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema171/id`.
             package var id: Components.Schemas.IngredientShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema150/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema171/name`.
             package var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema150/aliases`.
+            /// - Remark: Generated from `#/components/schemas/output_schema171/aliases`.
             package var aliases: [Swift.String]
-            /// - Remark: Generated from `#/components/schemas/output_schema150/naKinds`.
+            /// - Remark: Generated from `#/components/schemas/output_schema171/naKinds`.
             package var naKinds: [Components.Schemas.BaseKind]
-            /// - Remark: Generated from `#/components/schemas/output_schema150/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema171/createdAt`.
             package var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema150/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema171/updatedAt`.
             package var updatedAt: Foundation.Date
-            /// Creates a new `OutputSchema150`.
+            /// Creates a new `OutputSchema171`.
             ///
             /// - Parameters:
             ///   - id:
@@ -17727,63 +20574,67 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema154`.
-        package struct OutputSchema154: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema154/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema175`.
+        package struct OutputSchema175: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema175/id`.
             package var id: Components.Schemas.InventoryShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema154/amount`.
+            /// - Remark: Generated from `#/components/schemas/output_schema175/amount`.
             package var amount: Components.Schemas.Amount
-            /// - Remark: Generated from `#/components/schemas/output_schema154/valuation`.
+            /// - Remark: Generated from `#/components/schemas/output_schema175/valuation`.
             package var valuation: Components.Schemas.Money?
             /// When last verified in an audit session (null = never)
             ///
-            /// - Remark: Generated from `#/components/schemas/output_schema154/verifiedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema175/verifiedAt`.
             package var verifiedAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/output_schema154/placement`.
+            /// - Remark: Generated from `#/components/schemas/output_schema175/placement`.
             @frozen package enum PlacementPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case stock = "stock"
                 case installed = "installed"
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema154/placement`.
-            package var placement: Components.Schemas.OutputSchema154.PlacementPayload
-            /// - Remark: Generated from `#/components/schemas/output_schema154/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema175/placement`.
+            package var placement: Components.Schemas.OutputSchema175.PlacementPayload
+            /// - Remark: Generated from `#/components/schemas/output_schema175/createdAt`.
             package var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema154/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema175/updatedAt`.
             package var updatedAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema154/location`.
+            /// - Remark: Generated from `#/components/schemas/output_schema175/location`.
             package struct LocationPayload: Codable, Hashable, Sendable {
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/id`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/id`.
                 package var id: Components.Schemas.LocationShortcode
                 /// name of location
                 ///
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/name`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/name`.
                 package var name: Swift.String
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/aliases`.
-                package var aliases: Components.Schemas.InputSchema43
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/tags`.
-                package var tags: Components.Schemas.OutputSchema102?
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/type`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/aliases`.
+                package var aliases: Components.Schemas.InputSchema45
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/tags`.
+                package var tags: Components.Schemas.OutputSchema121?
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/type`.
                 package var _type: Components.Schemas.LocationType?
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/product`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/gardenKind`.
+                package var gardenKind: Components.Schemas.GardenLocationKind?
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/gardenConditions`.
+                package var gardenConditions: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/product`.
                 package var product: Components.Schemas.LocationIdentityProductOut?
                 /// When last verified in an audit session (null = never)
                 ///
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/lastBulkInventory`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/lastBulkInventory`.
                 package var lastBulkInventory: Foundation.Date?
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/aiDescription`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/aiDescription`.
                 package var aiDescription: Swift.String?
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/images`.
-                package var images: Components.Schemas.OutputSchema30
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/valuation`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/images`.
+                package var images: Components.Schemas.OutputSchema31
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/valuation`.
                 package var valuation: Components.Schemas.LocationValuation?
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/createdAt`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/createdAt`.
                 package var createdAt: Foundation.Date
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/updatedAt`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/updatedAt`.
                 package var updatedAt: Foundation.Date
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/displayImage`.
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/displayImage`.
                 package var displayImage: Components.Schemas.ImageUrlSummary?
-                /// - Remark: Generated from `#/components/schemas/output_schema154/location/ancestors`.
-                package var ancestors: [Components.Schemas.OutputSchema155]
+                /// - Remark: Generated from `#/components/schemas/output_schema175/location/ancestors`.
+                package var ancestors: [Components.Schemas.OutputSchema176]
                 /// Creates a new `LocationPayload`.
                 ///
                 /// - Parameters:
@@ -17792,6 +20643,8 @@ extension Components {
                 ///   - aliases:
                 ///   - tags:
                 ///   - _type:
+                ///   - gardenKind:
+                ///   - gardenConditions:
                 ///   - product:
                 ///   - lastBulkInventory: When last verified in an audit session (null = never)
                 ///   - aiDescription:
@@ -17804,24 +20657,28 @@ extension Components {
                 package init(
                     id: Components.Schemas.LocationShortcode,
                     name: Swift.String,
-                    aliases: Components.Schemas.InputSchema43,
-                    tags: Components.Schemas.OutputSchema102? = nil,
+                    aliases: Components.Schemas.InputSchema45,
+                    tags: Components.Schemas.OutputSchema121? = nil,
                     _type: Components.Schemas.LocationType? = nil,
+                    gardenKind: Components.Schemas.GardenLocationKind? = nil,
+                    gardenConditions: Swift.String? = nil,
                     product: Components.Schemas.LocationIdentityProductOut? = nil,
                     lastBulkInventory: Foundation.Date? = nil,
                     aiDescription: Swift.String? = nil,
-                    images: Components.Schemas.OutputSchema30,
+                    images: Components.Schemas.OutputSchema31,
                     valuation: Components.Schemas.LocationValuation? = nil,
                     createdAt: Foundation.Date,
                     updatedAt: Foundation.Date,
                     displayImage: Components.Schemas.ImageUrlSummary? = nil,
-                    ancestors: [Components.Schemas.OutputSchema155]
+                    ancestors: [Components.Schemas.OutputSchema176]
                 ) {
                     self.id = id
                     self.name = name
                     self.aliases = aliases
                     self.tags = tags
                     self._type = _type
+                    self.gardenKind = gardenKind
+                    self.gardenConditions = gardenConditions
                     self.product = product
                     self.lastBulkInventory = lastBulkInventory
                     self.aiDescription = aiDescription
@@ -17838,6 +20695,8 @@ extension Components {
                     case aliases
                     case tags
                     case _type = "type"
+                    case gardenKind
+                    case gardenConditions
                     case product
                     case lastBulkInventory
                     case aiDescription
@@ -17859,16 +20718,24 @@ extension Components {
                         forKey: .name
                     )
                     self.aliases = try container.decode(
-                        Components.Schemas.InputSchema43.self,
+                        Components.Schemas.InputSchema45.self,
                         forKey: .aliases
                     )
                     self.tags = try container.decodeIfPresent(
-                        Components.Schemas.OutputSchema102.self,
+                        Components.Schemas.OutputSchema121.self,
                         forKey: .tags
                     )
                     self._type = try container.decodeIfPresent(
                         Components.Schemas.LocationType.self,
                         forKey: ._type
+                    )
+                    self.gardenKind = try container.decodeIfPresent(
+                        Components.Schemas.GardenLocationKind.self,
+                        forKey: .gardenKind
+                    )
+                    self.gardenConditions = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .gardenConditions
                     )
                     self.product = try container.decodeIfPresent(
                         Components.Schemas.LocationIdentityProductOut.self,
@@ -17883,7 +20750,7 @@ extension Components {
                         forKey: .aiDescription
                     )
                     self.images = try container.decode(
-                        Components.Schemas.OutputSchema30.self,
+                        Components.Schemas.OutputSchema31.self,
                         forKey: .images
                     )
                     self.valuation = try container.decodeIfPresent(
@@ -17903,7 +20770,7 @@ extension Components {
                         forKey: .displayImage
                     )
                     self.ancestors = try container.decode(
-                        [Components.Schemas.OutputSchema155].self,
+                        [Components.Schemas.OutputSchema176].self,
                         forKey: .ancestors
                     )
                     try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -17912,6 +20779,8 @@ extension Components {
                         "aliases",
                         "tags",
                         "type",
+                        "gardenKind",
+                        "gardenConditions",
                         "product",
                         "lastBulkInventory",
                         "aiDescription",
@@ -17924,9 +20793,9 @@ extension Components {
                     ])
                 }
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema154/location`.
-            package var location: Components.Schemas.OutputSchema154.LocationPayload
-            /// Creates a new `OutputSchema154`.
+            /// - Remark: Generated from `#/components/schemas/output_schema175/location`.
+            package var location: Components.Schemas.OutputSchema175.LocationPayload
+            /// Creates a new `OutputSchema175`.
             ///
             /// - Parameters:
             ///   - id:
@@ -17942,10 +20811,10 @@ extension Components {
                 amount: Components.Schemas.Amount,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema154.PlacementPayload,
+                placement: Components.Schemas.OutputSchema175.PlacementPayload,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
-                location: Components.Schemas.OutputSchema154.LocationPayload
+                location: Components.Schemas.OutputSchema175.LocationPayload
             ) {
                 self.id = id
                 self.amount = amount
@@ -17985,7 +20854,7 @@ extension Components {
                     forKey: .verifiedAt
                 )
                 self.placement = try container.decode(
-                    Components.Schemas.OutputSchema154.PlacementPayload.self,
+                    Components.Schemas.OutputSchema175.PlacementPayload.self,
                     forKey: .placement
                 )
                 self.createdAt = try container.decode(
@@ -17997,7 +20866,7 @@ extension Components {
                     forKey: .updatedAt
                 )
                 self.location = try container.decode(
-                    Components.Schemas.OutputSchema154.LocationPayload.self,
+                    Components.Schemas.OutputSchema175.LocationPayload.self,
                     forKey: .location
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -18012,17 +20881,17 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema155`.
-        package struct OutputSchema155: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema155/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema176`.
+        package struct OutputSchema176: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema176/id`.
             package var id: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema155/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema176/name`.
             package var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema155/type`.
+            /// - Remark: Generated from `#/components/schemas/output_schema176/type`.
             package var _type: Components.Schemas.LocationType?
-            /// - Remark: Generated from `#/components/schemas/output_schema155/displayImage`.
+            /// - Remark: Generated from `#/components/schemas/output_schema176/displayImage`.
             package var displayImage: Components.Schemas.ImageUrlSummary?
-            /// Creates a new `OutputSchema155`.
+            /// Creates a new `OutputSchema176`.
             ///
             /// - Parameters:
             ///   - id:
@@ -18072,19 +20941,19 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema156`.
-        package struct OutputSchema156: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema156/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema177`.
+        package struct OutputSchema177: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema177/id`.
             package var id: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema156/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema177/name`.
             package var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema156/type`.
+            /// - Remark: Generated from `#/components/schemas/output_schema177/type`.
             package var _type: Components.Schemas.LocationType?
-            /// - Remark: Generated from `#/components/schemas/output_schema156/displayImage`.
+            /// - Remark: Generated from `#/components/schemas/output_schema177/displayImage`.
             package var displayImage: Components.Schemas.ImageUrlSummary?
-            /// - Remark: Generated from `#/components/schemas/output_schema156/ancestors`.
-            package var ancestors: [Components.Schemas.OutputSchema155]
-            /// Creates a new `OutputSchema156`.
+            /// - Remark: Generated from `#/components/schemas/output_schema177/ancestors`.
+            package var ancestors: [Components.Schemas.OutputSchema176]
+            /// Creates a new `OutputSchema177`.
             ///
             /// - Parameters:
             ///   - id:
@@ -18097,7 +20966,7 @@ extension Components {
                 name: Swift.String,
                 _type: Components.Schemas.LocationType? = nil,
                 displayImage: Components.Schemas.ImageUrlSummary? = nil,
-                ancestors: [Components.Schemas.OutputSchema155]
+                ancestors: [Components.Schemas.OutputSchema176]
             ) {
                 self.id = id
                 self.name = name
@@ -18131,7 +21000,7 @@ extension Components {
                     forKey: .displayImage
                 )
                 self.ancestors = try container.decode(
-                    [Components.Schemas.OutputSchema155].self,
+                    [Components.Schemas.OutputSchema176].self,
                     forKey: .ancestors
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -18143,7 +21012,7 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema168`.
-        package typealias OutputSchema168 = [Components.Schemas.TaskShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema189`.
+        package typealias OutputSchema189 = [Components.Schemas.TaskShortcode]
     }
 }

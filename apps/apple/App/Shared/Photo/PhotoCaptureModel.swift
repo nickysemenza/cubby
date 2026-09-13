@@ -71,7 +71,9 @@ final class PhotoCaptureModel {
     }
 
     func upload() async {
-        guard let image = chosen, phase == .ready else { return }
+        // A failed upload leaves the selected image intact so the sheet can offer a real retry.
+        // The confirmation button intentionally stays available in that state.
+        guard let image = chosen, phase == .ready || isFailed else { return }
         phase = .uploading(.encoding)
         do {
             let outcome = try await uploader.upload(
@@ -95,6 +97,11 @@ final class PhotoCaptureModel {
         } catch {
             phase = .failed(String(describing: error))
         }
+    }
+
+    private var isFailed: Bool {
+        if case .failed = phase { return true }
+        return false
     }
 
     private func lift(_ image: CGImage) async {

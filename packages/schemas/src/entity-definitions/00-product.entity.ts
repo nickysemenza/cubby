@@ -222,6 +222,18 @@ export default defineEntity({
         },
       },
       {
+        key: "growsIngredientId",
+        kind: "identifier",
+        nullable: true,
+        label: "Grows",
+        reference: { entity: "ingredient" },
+        validation: {
+          read: ingredientShortcode.nullable(),
+          create: ingredientShortcode.nullable().optional(),
+          update: ingredientShortcode.nullable().optional(),
+        },
+      },
+      {
         key: "price",
         kind: "number",
         nullable: true,
@@ -546,6 +558,7 @@ export default defineEntity({
       { key: "updatedAt", default: "now", specialized: "updated-at" },
       "deletedAt",
       { key: "ingredientId", reference: "ingredient" },
+      { key: "growsIngredientId", reference: "ingredient" },
       { key: "category", specialized: "enum:category" },
       {
         key: "tags",
@@ -576,6 +589,7 @@ export default defineEntity({
       "expectedQuantity",
       "category",
       "ingredientId",
+      "growsIngredientId",
       "price",
       "unitMappings",
       "externalIds",
@@ -596,6 +610,7 @@ export default defineEntity({
       "expectedQuantity",
       "category",
       "ingredientId",
+      "growsIngredientId",
       "price",
       "unitMappings",
       "externalIds",
@@ -617,6 +632,7 @@ export default defineEntity({
       "model",
       "expectedQuantity",
       "ingredientId",
+      "growsIngredientId",
       "price",
     ],
     sort: {
@@ -694,6 +710,7 @@ export default defineEntity({
       "notes",
       "expectedQuantity",
       "category",
+      "growsIngredientId",
       "images",
       "externalIds",
       "price",
@@ -1260,6 +1277,19 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Product.ingredientId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "grows-ingredient",
+      label: "Grows ingredient",
+      target: "ingredient",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Product.growsIngredientId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Product.growsIngredientId", direction: "incoming" }],
       },
     },
     {

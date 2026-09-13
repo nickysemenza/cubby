@@ -23,6 +23,7 @@ import {
   Package,
   Receipt,
   ReceiptText,
+  Sprout,
   Store,
   Users,
 } from "lucide-react";
@@ -692,6 +693,26 @@ const entityDefinitions = withEntityNames({
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
     list: {
       defaultSort: "createdAt",
+    },
+  },
+  planting: {
+    ...generatedBrowserRoutes.planting,
+    lucideIcon: Sprout,
+    color: INK.positive,
+    detail: { commonSections: ["history"] },
+    sortableFields: ["createdAt", "updatedAt"],
+    list: {
+      defaultSort: "createdAt",
+    },
+  },
+  gardenEntry: {
+    ...generatedBrowserRoutes.gardenEntry,
+    lucideIcon: CalendarDays,
+    color: INK.positive,
+    detail: { commonSections: ["images", "history"] },
+    sortableFields: ["observedOn", "createdAt"],
+    list: {
+      defaultSort: "observedOn",
     },
   },
 } as const) satisfies Record<BrowserRoutedEntity, EntityDefinition>;

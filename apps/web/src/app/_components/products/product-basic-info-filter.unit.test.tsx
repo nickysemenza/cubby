@@ -29,6 +29,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   category: "tools",
   upc: null,
   fdc_id: null,
+  growsIngredientId: null,
   primaryGtin: null,
   expectedQuantity: null,
   ingredient: {

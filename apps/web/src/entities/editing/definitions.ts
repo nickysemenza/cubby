@@ -450,6 +450,49 @@ export const entityEditRegistry: EntityEditRegistry = {
     create: ["capture", "full"],
     update: ["full", "identity", "parent"],
   })),
+  planting: buildDefinition("planting", (f) => ({
+    fields: f.fieldsFrom(["capture", "full"], {
+      ingredientId: { required: true },
+      notes: "nullableText",
+    }),
+    create: {
+      capture: {
+        defaults: { ingredientId: "", locationId: null, status: "planned" },
+      },
+      full: { defaults: { ingredientId: "", status: "planned" } },
+    },
+    update: { full: { acceptsSeed: true } },
+  })),
+  gardenEntry: buildDefinition("gardenEntry", (f) => ({
+    fields: f.fieldsFrom(["capture", "full"], {
+      locationId: { required: true },
+      observedOn: { required: true },
+      note: "nullableText",
+      harvestAmount: "nullableText",
+    }),
+    create: {
+      capture: {
+        defaults: {
+          locationId: "",
+          observedOn: householdLocalDate(),
+          note: null,
+          pendingImageIds: [],
+        },
+      },
+      full: {
+        defaults: {
+          locationId: "",
+          plantingId: null,
+          kind: "observation",
+          observedOn: householdLocalDate(),
+          note: null,
+          harvestAmount: null,
+          pendingImageIds: [],
+        },
+      },
+    },
+    update: { full: { acceptsSeed: true } },
+  })),
   recipe: buildDefinition("recipe", (f) => ({
     fields: f.fieldsFrom(["full"], {
       name: "trimmedName",

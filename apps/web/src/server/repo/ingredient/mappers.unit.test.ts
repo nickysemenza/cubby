@@ -51,6 +51,7 @@ const baseProduct = {
   tags: [],
   upc: null,
   fdc_id: null,
+  growsIngredientId: null,
   model: null,
   notes: null,
   expectedQuantity: null,
@@ -71,6 +72,7 @@ const baseIngredient = {
   aliases: ["flour"],
   naKinds: [],
   usuallyOnHand: false,
+  gardenGuideKey: null,
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: DELETED_AT,
@@ -148,6 +150,7 @@ describe("ingredient product mappers", () => {
       aliases: ["flour"],
       naKinds: [],
       usuallyOnHand: false,
+      gardenGuideKey: null,
       createdAt: CREATED_AT,
       updatedAt: UPDATED_AT,
     });

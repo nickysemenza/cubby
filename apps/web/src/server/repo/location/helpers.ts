@@ -4,6 +4,7 @@
  */
 
 import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
+import { gardenLocationKind } from "@cubby/schemas/garden-fields";
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InfLocation,
@@ -57,6 +58,10 @@ export const dbLocationToAPI = (
     name: locationData.name,
     aliases: locationData.aliases ?? [],
     tags: locationData.tags ?? [],
+    gardenKind: locationData.gardenKind
+      ? gardenLocationKind.parse(locationData.gardenKind)
+      : null,
+    gardenConditions: locationData.gardenConditions ?? null,
     type: parseLocationType(locationData.type, {
       id: locationData.id,
       name: locationData.name,
@@ -142,6 +147,8 @@ export const buildLocationWithChildren = (
     name: x.name,
     aliases: x.aliases ?? [],
     tags: x.tags ?? [],
+    gardenKind: x.gardenKind ? gardenLocationKind.parse(x.gardenKind) : null,
+    gardenConditions: x.gardenConditions ?? null,
     id: parseShortcodeFor("location", x.shortcode),
     lastBulkInventory: x.lastBulkInventory,
     aiDescription: x.aiDescription ?? null,

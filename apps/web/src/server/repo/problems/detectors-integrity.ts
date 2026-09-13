@@ -96,7 +96,7 @@ const EXPECTED_HARD_DELETE_ONLY_TABLES = new Set([
 ]);
 
 /** The must-target-live edges this audit checks, derived (not hand-maintained) should equal this. */
-const EXPECTED_EDGE_COUNT = 60;
+const EXPECTED_EDGE_COUNT = 70;
 
 /**
  * Derive one {@link EdgeAuditSpec} per `must-target-live` edge in

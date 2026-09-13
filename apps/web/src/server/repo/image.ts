@@ -45,6 +45,7 @@ import type {
 } from "~/server/db/entity-incoming-edges";
 import {
   cookbook,
+  gardenEntryImage,
   image,
   location,
   locationImage,
@@ -442,6 +443,17 @@ const imageReferenceCondition = (
           joinReferenceWhere(purchaseImage.imageId, notDeleted(purchaseImage)),
         ),
     ),
+    "GardenEntryImage.imageId": exists(
+      dbc
+        .select({ one: sql`1` })
+        .from(gardenEntryImage)
+        .where(
+          joinReferenceWhere(
+            gardenEntryImage.imageId,
+            notDeleted(gardenEntryImage),
+          ),
+        ),
+    ),
   } satisfies Record<IncomingEdgeKey<"image">, SQL>;
 
   return or(...Object.values(byEdge))!;
@@ -762,6 +774,12 @@ export const IMAGE_HARD_DELETE = {
     description:
       "The purchase's image association is removed along with the image.",
   },
+  "GardenEntryImage.imageId": {
+    code: "deleteRow",
+    effect: "hard-delete",
+    description:
+      "The garden entry's image association is removed with the image.",
+  },
 } satisfies IncomingEdgePolicy<"image", OperationDisposition>;
 
 type ImageEdgeOperation = {
@@ -920,6 +938,27 @@ const IMAGE_EDGE_OPERATIONS = {
       return rows.map(({ imageId }) => imageId);
     },
     joinColumn: purchaseImage.imageId,
+  },
+  "GardenEntryImage.imageId": {
+    clear: async (tx, imageIds) => {
+      await tx
+        .delete(gardenEntryImage)
+        .where(inArray(gardenEntryImage.imageId, imageIds));
+    },
+    findReferenced: async (dbc, imageIds) => {
+      const rows = await dbc
+        .select({ imageId: gardenEntryImage.imageId })
+        .from(gardenEntryImage)
+        .where(
+          and(
+            isNotNull(gardenEntryImage.imageId),
+            imageIds ? inArray(gardenEntryImage.imageId, imageIds) : undefined,
+            notDeleted(gardenEntryImage),
+          ),
+        );
+      return rows.map(({ imageId }) => imageId);
+    },
+    joinColumn: gardenEntryImage.imageId,
   },
 } satisfies Record<IncomingEdgeKey<"image">, ImageEdgeOperation>;
 

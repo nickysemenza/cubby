@@ -130,6 +130,14 @@ export const inventoryShortcode = makeShortcodeSchema(
   "InventoryShortcode",
 );
 export const imageShortcode = makeShortcodeSchema("image", "ImageShortcode");
+export const plantingShortcode = makeShortcodeSchema(
+  "planting",
+  "PlantingShortcode",
+);
+export const gardenEntryShortcode = makeShortcodeSchema(
+  "gardenEntry",
+  "GardenEntryShortcode",
+);
 export const locationShortcode = makeShortcodeSchema(
   "location",
   "LocationShortcode",
@@ -167,6 +175,8 @@ const SHORTCODE_SCHEMA = {
   financialAccount: financialAccountShortcode,
   financialTransaction: financialTransactionShortcode,
   image: imageShortcode,
+  planting: plantingShortcode,
+  gardenEntry: gardenEntryShortcode,
   ingredient: ingredientShortcode,
   inventory: inventoryShortcode,
   ledgerParty: ledgerPartyShortcode,
@@ -217,6 +227,8 @@ export type FinancialTransactionShortcode = z.infer<
   typeof financialTransactionShortcode
 >;
 export type ImageShortcode = z.infer<typeof imageShortcode>;
+export type PlantingShortcode = z.infer<typeof plantingShortcode>;
+export type GardenEntryShortcode = z.infer<typeof gardenEntryShortcode>;
 export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
 export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
 export type LedgerPartyShortcode = z.infer<typeof ledgerPartyShortcode>;
@@ -256,6 +268,11 @@ const GENERATE_SHORTCODE = {
     SHORTCODE_PREFIX.financialTransaction,
   ),
   image: shortcodeGenerator(imageShortcode, SHORTCODE_PREFIX.image),
+  planting: shortcodeGenerator(plantingShortcode, SHORTCODE_PREFIX.planting),
+  gardenEntry: shortcodeGenerator(
+    gardenEntryShortcode,
+    SHORTCODE_PREFIX.gardenEntry,
+  ),
   ingredient: shortcodeGenerator(
     ingredientShortcode,
     SHORTCODE_PREFIX.ingredient,
@@ -367,6 +384,10 @@ const PARSE_CANONICAL_SHORTCODE = {
     parsedShortcodeFor("vendor", vendorShortcode.parse(code), legacy),
   wish: (code: string, legacy: boolean) =>
     parsedShortcodeFor("wish", wishShortcode.parse(code), legacy),
+  planting: (code: string, legacy: boolean) =>
+    parsedShortcodeFor("planting", plantingShortcode.parse(code), legacy),
+  gardenEntry: (code: string, legacy: boolean) =>
+    parsedShortcodeFor("gardenEntry", gardenEntryShortcode.parse(code), legacy),
 } as const satisfies Record<
   ShortcodeType,
   (code: string, legacy: boolean) => ParsedShortcode

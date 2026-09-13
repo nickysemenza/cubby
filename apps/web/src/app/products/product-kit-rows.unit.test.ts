@@ -20,6 +20,7 @@ const productAt = (shortcode: string, componentCount = 0) =>
     tags: [],
     primaryGtin: null,
     fdc_id: null,
+    growsIngredientId: null,
     manufacturer: "Test",
     model: null,
     notes: null,

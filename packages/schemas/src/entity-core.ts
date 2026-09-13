@@ -20,5 +20,7 @@ export const entitySchema = z.enum([
   "wish",
   "usda-food",
   "image",
+  "planting",
+  "gardenEntry",
 ]);
 export type Entity = z.infer<typeof entitySchema>;

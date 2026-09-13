@@ -92,6 +92,12 @@ export const ENTITY_EDGE_SEMANTICS = {
         "The emailed invoice PDF or a photo of the paper receipt attached to a purchase.",
       liveness: { kind: "must-target-live" },
     },
+    "GardenEntryImage.imageId": {
+      role: "media",
+      label: "garden entry photos",
+      description: "A full-scene photo attached to a dated garden entry.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   recipe: {
     "RecipeSection.recipeId": {
@@ -143,6 +149,19 @@ export const ENTITY_EDGE_SEMANTICS = {
       label: "products",
       description:
         "A purchasable product mapped to this ingredient — the one hop nutrition and costing resolve through (ingredient → product → fdc_id), never a direct link.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Product.growsIngredientId": {
+      role: "reference",
+      label: "garden source products",
+      description:
+        "A seed packet, seedling, or plant product can name the ingredient it grows without becoming edible inventory.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Planting.ingredientId": {
+      role: "history",
+      label: "plantings",
+      description: "A garden planting retains the crop ingredient it records.",
       liveness: { kind: "must-target-live" },
     },
   },
@@ -296,6 +315,13 @@ export const ENTITY_EDGE_SEMANTICS = {
         "A rebuildable conversion-graph projection owned by this product.",
       liveness: { kind: "must-target-live" },
     },
+    "Planting.sourceProductId": {
+      role: "history",
+      label: "source products",
+      description:
+        "A planting can retain the seed packet, seedling, or plant it came from.",
+      liveness: { kind: "must-target-live" },
+    },
   },
   location: {
     "InventoryEntry.locationId": {
@@ -315,6 +341,26 @@ export const ENTITY_EDGE_SEMANTICS = {
       label: "sub-locations",
       description:
         "A child location nested under this one in the house → room → shelf → bin tree, enforced by the Location parent self-FK.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Planting.locationId": {
+      role: "contents",
+      label: "current plantings",
+      description: "A growing planting is currently in this garden location.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Planting.intendedLocationId": {
+      role: "reference",
+      label: "planned plantings",
+      description:
+        "A planned planting can name the bed or tray it is intended for.",
+      liveness: { kind: "must-target-live" },
+    },
+    "GardenEntry.locationId": {
+      role: "history",
+      label: "garden entries",
+      description:
+        "A garden entry retains the location where the observation happened.",
       liveness: { kind: "must-target-live" },
     },
   },
@@ -490,6 +536,31 @@ export const ENTITY_EDGE_SEMANTICS = {
       role: "metadata",
       label: "source claims",
       description: "Canonical external evidence claimed by this transfer.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
+  planting: {
+    "Planting.parentPlantingId": {
+      role: "history",
+      label: "split plantings",
+      description:
+        "A child planting retains the source planting that it was split from.",
+      liveness: { kind: "must-target-live" },
+    },
+    "GardenEntry.plantingId": {
+      role: "history",
+      label: "garden entries",
+      description:
+        "Garden observations and harvests retain the planting they describe.",
+      liveness: { kind: "must-target-live" },
+    },
+  },
+  gardenEntry: {
+    "GardenEntryImage.gardenEntryId": {
+      role: "media",
+      label: "entry photos",
+      description:
+        "Photos attached to this garden entry have no independent meaning once it is removed.",
       liveness: { kind: "must-target-live" },
     },
   },

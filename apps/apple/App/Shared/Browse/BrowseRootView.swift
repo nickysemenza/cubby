@@ -11,6 +11,25 @@ struct BrowseRootView: View {
 
     var body: some View {
         List {
+            Section {
+                NavigationLink {
+                    GardenRootView()
+                } label: {
+                    HStack(spacing: PorcelainTokens.Space.md) {
+                        Image(systemName: "leaf")
+                            .foregroundStyle(PorcelainTokens.cobalt)
+                            .frame(width: 20)
+                        Text("Garden")
+                            .font(.porcelainBody)
+                        Spacer()
+                    }
+                    .frame(minHeight: PorcelainTokens.touchTarget)
+                }
+                .listRowInsets(browseRowInsets)
+                .porcelainListRow()
+            } header: {
+                headerTitle("Garden")
+            }
             ForEach(AppDomain.allCases) { domain in
                 let group = descriptors(in: domain)
                 if !group.rows.isEmpty || !group.unlisted.isEmpty {
@@ -43,9 +62,14 @@ struct BrowseRootView: View {
 
     @ViewBuilder
     private func header(for domain: AppDomain) -> some View {
+        headerTitle(domain.title, domain: domain)
+    }
+
+    @ViewBuilder
+    private func headerTitle(_ title: String, domain: AppDomain? = nil) -> some View {
         HStack(spacing: PorcelainTokens.Space.sm) {
-            DomainMark(domain)
-            Eyebrow(domain.title)
+            if let domain { DomainMark(domain) }
+            Eyebrow(title)
             Spacer()
         }
         .padding(.top, PorcelainTokens.Space.lg)
@@ -169,6 +193,8 @@ func entitySymbol(for key: EntityKey) -> String {
     case .wish: "star"
     case .usdaFood: "leaf.fill"
     case .image: "photo"
+    case .planting: "leaf"
+    case .gardenEntry: "text.badge.plus"
     }
 }
 

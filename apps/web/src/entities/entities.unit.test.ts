@@ -46,6 +46,8 @@ describe("entity sortableFields", () => {
       wish: generatedEntitySort.wish.fields,
       "usda-food": usdaFoodSortableFields,
       image: generatedEntitySort.image.fields,
+      planting: generatedEntitySort.planting.fields,
+      gardenEntry: generatedEntitySort.gardenEntry.fields,
     });
   });
 });

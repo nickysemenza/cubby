@@ -40,6 +40,8 @@ export const ENTITY_NOT_FOUND_REASON = {
   task: "TASK_NOT_FOUND",
   vendor: "VENDOR_NOT_FOUND",
   wish: "WISH_NOT_FOUND",
+  planting: "PLANTING_NOT_FOUND",
+  gardenEntry: "GARDEN_ENTRY_NOT_FOUND",
 } as const satisfies Record<ShortcodeEntity, AppErrorReason>;
 
 /**
@@ -96,4 +98,6 @@ export const ENTITY_LABEL = {
   task: sentenceCaseEntityLabel("task"),
   vendor: sentenceCaseEntityLabel("vendor"),
   wish: sentenceCaseEntityLabel("wish"),
+  planting: sentenceCaseEntityLabel("planting"),
+  gardenEntry: sentenceCaseEntityLabel("gardenEntry"),
 } satisfies Record<ShortcodeEntity, string>;

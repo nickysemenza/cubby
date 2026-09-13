@@ -17,6 +17,7 @@ extension EntityKey {
         case .expense: [.create, .delete, .get, .list, .update]
         case .financialAccount: [.create, .delete, .get, .list, .update]
         case .financialTransaction: [.create, .delete, .get, .list, .update]
+        case .gardenEntry: [.create, .delete, .get, .list, .update]
         case .image: [.delete, .update]
         case .ingredient: [.create, .delete, .get, .list, .update]
         case .inventory: [.create, .delete, .get, .list, .update]
@@ -24,6 +25,7 @@ extension EntityKey {
         case .ledgerTransfer: [.create, .delete, .get, .list, .update]
         case .location: [.create, .delete, .get, .list, .update]
         case .meal: [.create, .delete, .get, .list, .update]
+        case .planting: [.create, .delete, .get, .list, .update]
         case .product: [.create, .delete, .get, .list, .update]
         case .project: [.create, .delete, .get, .list, .update]
         case .purchase: [.create, .delete, .get, .list, .update]
@@ -59,6 +61,14 @@ extension EntityDescriptor {
             )
         case .financialTransaction:
             let page = try await client.resources_financialTransaction_list(
+                query: .init(page: page, pageSize: pageSize, sort: sort)
+            ).ok.body.json
+            return ListPage(
+                items: try page.items.map(JSONValue.init(encoding:)),
+                meta: PageMeta(page.meta)
+            )
+        case .gardenEntry:
+            let page = try await client.resources_gardenEntry_list(
                 query: .init(page: page, pageSize: pageSize, sort: sort)
             ).ok.body.json
             return ListPage(
@@ -107,6 +117,14 @@ extension EntityDescriptor {
             )
         case .meal:
             let page = try await client.resources_meal_list(
+                query: .init(page: page, pageSize: pageSize, sort: sort)
+            ).ok.body.json
+            return ListPage(
+                items: try page.items.map(JSONValue.init(encoding:)),
+                meta: PageMeta(page.meta)
+            )
+        case .planting:
+            let page = try await client.resources_planting_list(
                 query: .init(page: page, pageSize: pageSize, sort: sort)
             ).ok.body.json
             return ListPage(
@@ -182,6 +200,8 @@ extension EntityDescriptor {
             return try JSONValue(encoding: try await client.resources_financialAccount_get(path: .init(id: id)).ok.body.json)
         case .financialTransaction:
             return try JSONValue(encoding: try await client.resources_financialTransaction_get(path: .init(id: id)).ok.body.json)
+        case .gardenEntry:
+            return try JSONValue(encoding: try await client.resources_gardenEntry_get(path: .init(id: id)).ok.body.json)
         case .ingredient:
             return try JSONValue(encoding: try await client.resources_ingredient_get(path: .init(id: id)).ok.body.json)
         case .inventory:
@@ -194,6 +214,8 @@ extension EntityDescriptor {
             return try JSONValue(encoding: try await client.resources_location_get(path: .init(id: id)).ok.body.json)
         case .meal:
             return try JSONValue(encoding: try await client.resources_meal_get(path: .init(id: id)).ok.body.json)
+        case .planting:
+            return try JSONValue(encoding: try await client.resources_planting_get(path: .init(id: id)).ok.body.json)
         case .product:
             return try JSONValue(encoding: try await client.resources_product_get(path: .init(id: id)).ok.body.json)
         case .project:
@@ -216,6 +238,10 @@ extension EntityDescriptor {
     /// body declares it (the same set `OperationRoute.imageAttachableEntities` lists).
     func attachImages(_ imageIds: [String], to id: String, client: Client) async throws {
         switch key {
+        case .gardenEntry:
+            _ = try await client.resources_gardenEntry_update(
+                path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
+            ).ok
         case .location:
             _ = try await client.resources_location_update(
                 path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
@@ -239,6 +265,10 @@ extension EntityDescriptor {
     /// `resources.<key>.update` with only `imageOrder` set.
     func setImageOrder(_ imageIds: [String], on id: String, client: Client) async throws {
         switch key {
+        case .gardenEntry:
+            _ = try await client.resources_gardenEntry_update(
+                path: .init(id: id), body: .json(.init(imageOrder: imageIds))
+            ).ok
         case .location:
             _ = try await client.resources_location_update(
                 path: .init(id: id), body: .json(.init(imageOrder: imageIds))

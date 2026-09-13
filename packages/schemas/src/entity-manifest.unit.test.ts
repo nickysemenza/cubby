@@ -29,6 +29,7 @@ const IMAGE_KEY = {
   location: "LOCATION",
   project: "PROJECT",
   purchase: "PURCHASE",
+  gardenEntry: "GARDENENTRY",
 } satisfies Partial<Record<Entity, string>>;
 
 describe("entity manifest", () => {
@@ -125,6 +126,8 @@ describe("entity manifest", () => {
       "financialTransaction",
       "wish",
       "expense",
+      "planting",
+      "gardenEntry",
     ]);
     expect(sorted(auditEntitySchema.options)).toEqual(
       sorted(auditableEntities),
@@ -149,6 +152,8 @@ describe("entity manifest", () => {
       "wish",
       "expense",
       "image",
+      "planting",
+      "gardenEntry",
     ]);
   });
 
@@ -160,6 +165,7 @@ describe("entity manifest", () => {
       "location",
       "project",
       "purchase",
+      "gardenEntry",
     ]);
     expect(sorted(imageEntities.map((e) => IMAGE_KEY[e] ?? e))).toEqual(
       sorted(entityImage.options),

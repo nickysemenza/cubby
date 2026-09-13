@@ -37,7 +37,9 @@ export type LocationListDB = LocationSelect & {
   children: Array<LocationSelect>;
   inventoryEntries: Array<
     typeof inventoryEntry.$inferSelect & {
-      product: ProductSelect & { externalIds?: MappableProductExternalId[] };
+      product: ProductSelect & {
+        externalIds?: MappableProductExternalId[];
+      };
     }
   >;
   images: Array<{

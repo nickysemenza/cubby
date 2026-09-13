@@ -26,6 +26,7 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   image,
   locationImage,
+  gardenEntryImage,
   productImage,
   projectImage,
   purchaseImage,
@@ -328,6 +329,16 @@ export const imageJoinBindings = {
     parentIdColumn: purchaseImage.purchaseId,
     insertRow: (purchaseId, imageId, sortOrder) => ({
       purchaseId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
+  gardenEntry: defineImageJoinBinding({
+    table: gardenEntryImage,
+    parentIdColumn: gardenEntryImage.gardenEntryId,
+    insertRow: (gardenEntryId, imageId, sortOrder) => ({
+      gardenEntryId,
       imageId,
       sortOrder,
     }),

@@ -125,6 +125,7 @@ export const dbIngredientToTopLevel = (
   aliases: ingredientData.aliases,
   naKinds: ingredientData.naKinds,
   usuallyOnHand: ingredientData.usuallyOnHand,
+  gardenGuideKey: ingredientData.gardenGuideKey,
   createdAt: ingredientData.createdAt,
   updatedAt: ingredientData.updatedAt,
 });

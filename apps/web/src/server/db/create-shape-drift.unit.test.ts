@@ -72,6 +72,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
       "records the FinancialTransactions that evidence the transfer",
   },
   location: { pendingImageIds: "writes LocationImage rows" },
+  gardenEntry: { pendingImageIds: "writes GardenEntryImage rows" },
   meal: { recipes: "writes MealRecipe rows" },
   product: {
     upc: "barcode write slot; lands in ProductExternalId, not on Product",
