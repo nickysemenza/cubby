@@ -14,6 +14,7 @@ describe("assertTestRunContract", () => {
 
   it("rejects empty lanes and unexecuted tests", () => {
     expect(() => assertTestRunContract([])).toThrow("discovered no tests");
+    expect(() => assertTestRunContract([], { allowEmpty: true })).not.toThrow();
     expect(() =>
       assertTestRunContract([{ name: "focused later", state: "skipped" }]),
     ).toThrow("focused later");

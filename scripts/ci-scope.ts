@@ -128,7 +128,9 @@ const sharedRootExact = new Set([
   "codecov.yml",
   "docker-compose.yml",
   "knip.json",
+  "nx.json",
   "package.json",
+  "project.json",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
   "security-audit-allowlist.json",
@@ -173,10 +175,11 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
       startsWithAny(path, sharedRootPrefixes),
   );
 
-  const web =
-    unknown ||
-    sharedRoot ||
-    active.some((path) => startsWithAny(path, webPrefixes));
+  // `web` says the web app may be affected (shared root config and unknown
+  // paths count); `webSource` says a web source path itself changed, which is
+  // what `vitest --changed` can select tests for.
+  const webSource = active.some((path) => startsWithAny(path, webPrefixes));
+  const web = unknown || sharedRoot || webSource;
   const aux =
     unknown ||
     sharedRoot ||
@@ -237,6 +240,7 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
   return {
     inert: active.length === 0,
     web,
+    webSource,
     rust,
     wasm,
     ffi,
@@ -256,6 +260,7 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
 
 export type PushCheck =
   | "all-tests"
+  | "fast-tests"
   | "web-tests"
   | "postgres"
   | "e2e"
@@ -266,15 +271,18 @@ export type PushCheck =
 
 export type RustManifest = "recipebridge/Cargo.toml" | "cubby-ffi/Cargo.toml";
 
+// `--changed` selects tests that import a changed web source file; a shared
+// root or unknown change has none, so it runs the whole fast tier instead.
+const webLane = (scope: ReturnType<typeof classifyPaths>): PushCheck =>
+  scope.postgres ? "postgres" : scope.webSource ? "web-tests" : "fast-tests";
+
 // Shared by selectVerifyChecks' non-full path and the (highRisk-free) push
 // selection below: callers decide when highRisk should escalate to full.
 function scopedChecks(
   scope: ReturnType<typeof classifyPaths>,
 ): readonly PushCheck[] {
   return [
-    ...(scope.web
-      ? ([scope.postgres ? "postgres" : "web-tests"] as const)
-      : []),
+    ...(scope.web ? [webLane(scope)] : []),
     ...(scope.cloudflare || scope.e2e ? (["cloudflare"] as const) : []),
     ...(scope.e2e ? (["e2e"] as const) : []),
     ...(scope.aux ? (["aux"] as const) : []),
@@ -317,9 +325,7 @@ export function selectPushChecks(paths: readonly string[]): PushSelection {
   const known = classifyPaths(paths.filter(isKnownCodePath));
 
   const checks: PushCheck[] = [
-    ...(scope.web
-      ? ([known.postgres ? "postgres" : "web-tests"] as const)
-      : []),
+    ...(scope.web ? [webLane(known)] : []),
     ...(scope.cloudflare || known.e2e ? (["cloudflare"] as const) : []),
     ...(known.e2e ? (["e2e"] as const) : []),
     ...(scope.aux ? (["aux"] as const) : []),
@@ -526,6 +532,8 @@ const runPushCheck = (
   switch (check) {
     case "all-tests":
       return run("pnpm", ["test:all"]);
+    case "fast-tests":
+      return run("pnpm", ["test"]);
     case "web-tests":
       return run("pnpm", ["test:changed", base]);
     case "postgres":

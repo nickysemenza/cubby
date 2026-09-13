@@ -10,6 +10,7 @@ test("agent, documentation, and editor-only changes are inert", () => {
   assert.deepEqual(classifyPaths([".claude/skills/example/SKILL.md"]), {
     inert: true,
     web: false,
+    webSource: false,
     rust: false,
     wasm: false,
     ffi: false,
@@ -35,6 +36,7 @@ test("a web-only change runs web CI without auxiliary or Rust work", () => {
   assert.deepEqual(classifyPaths(["apps/web/src/server.ts"]), {
     inert: false,
     web: true,
+    webSource: true,
     rust: false,
     wasm: false,
     ffi: false,
@@ -124,6 +126,7 @@ test("a novel path fails safe to every suite and worker", () => {
   assert.deepEqual(classifyPaths(["new-system/config.toml"]), {
     inert: false,
     web: true,
+    webSource: false,
     rust: true,
     wasm: true,
     ffi: true,
@@ -276,8 +279,21 @@ test("pre-push never escalates to the full suite", () => {
     selectPushChecks(["apps/web/src/server/repo/inventory/update.ts"]).checks,
     ["postgres", "cloudflare"],
   );
+  // Shared root config has no web source for `--changed` to select from, so
+  // it runs the whole fast tier — never `all-tests`, rust, or apple.
   assert.deepEqual(selectPushChecks(["scripts/ci-scope.ts"]).checks, [
-    "web-tests",
+    "fast-tests",
+    "cloudflare",
+    "aux",
+  ]);
+  assert.deepEqual(selectPushChecks(["nx.json"]).checks, [
+    "fast-tests",
+    "cloudflare",
+    "aux",
+  ]);
+  assert.equal(selectPushChecks(["nx.json"]).warning, undefined);
+  assert.deepEqual(selectVerifyChecks([".oxlintrc.json"]), [
+    "fast-tests",
     "cloudflare",
     "aux",
   ]);
@@ -285,7 +301,7 @@ test("pre-push never escalates to the full suite", () => {
 
 test("unknown paths in push mode run the JavaScript gates and warn", () => {
   const result = selectPushChecks(["new-system/config.toml"]);
-  assert.deepEqual(result.checks, ["web-tests", "cloudflare", "aux"]);
+  assert.deepEqual(result.checks, ["fast-tests", "cloudflare", "aux"]);
   assert.deepEqual(result.manifests, []);
   assert.match(result.warning ?? "", /verify:local/);
   assert.match(result.warning ?? "", /new-system\/config\.toml/);

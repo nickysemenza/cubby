@@ -11,6 +11,8 @@ export default class TestRunContractReporter implements Reporter {
           state: testCase.result().state,
         })),
       ),
+      // The reporter runs in the main vitest process, so argv is the CLI's.
+      { allowEmpty: process.argv.includes("--changed") },
     );
   }
 }
