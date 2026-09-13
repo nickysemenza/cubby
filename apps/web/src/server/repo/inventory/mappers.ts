@@ -113,7 +113,10 @@ export const dbInventoryEntryToAPI: (
 export const dbInventoryEntryToListAPI: (
   inventoryentry: InventoryEntryListDB,
   pricing: ProductPricing,
-) => z.infer<typeof inventoryListItemOut> = (inventoryentry, pricing) => {
+) => Omit<z.infer<typeof inventoryListItemOut>, "displayImages"> = (
+  inventoryentry,
+  pricing,
+) => {
   const { product, location } = inventoryentry;
 
   return {

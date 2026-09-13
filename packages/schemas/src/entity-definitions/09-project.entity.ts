@@ -493,6 +493,7 @@ export default defineEntity({
     create: { module: "@cubby/schemas/project", export: "projectCreateInput" },
     update: { module: "@cubby/schemas/project", export: "projectUpdateData" },
     output: { module: "@cubby/schemas/project", export: "projectOut" },
+    list: { module: "@cubby/schemas/project", export: "projectListItemOut" },
   },
   filters: {
     audit: true,

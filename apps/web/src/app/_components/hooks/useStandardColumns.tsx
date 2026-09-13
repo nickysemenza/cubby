@@ -1,3 +1,4 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
@@ -22,7 +23,6 @@ import {
   type FilterConfig,
   multiSelectFilterFn,
   type RowLinkResolver,
-  rowImages,
 } from "../data-table/columnHelpers";
 import { buildSelectColumn } from "../data-table/row-selection";
 import {
@@ -53,7 +53,10 @@ interface BaseListRow {
   id: string;
   name?: string | null;
   createdAt?: string | Date;
-  images?: Array<{ id: string; url: string; filename: string }>;
+  /** Only Product and Recipe declare the standard "image" display (see the
+   *  manifest), and both list rows carry the server-resolved `displayImages`
+   *  contract — `createImageColumn` reads it directly, no per-entity rule. */
+  displayImages?: DisplayImageSummary[];
 }
 
 interface UseStandardColumnsOptions<TData extends BaseListRow> {
@@ -271,17 +274,7 @@ export function useStandardColumns<TData extends BaseListRow>({
             withManifestFilter(
               createImageColumn(columnHelper, {
                 entity,
-                // The one asserted `rowImages`. `TData` is unbound here, so a
-                // conditional "optional only when the row has images" would defer
-                // and fail to resolve; the assertion holds because only `product`
-                // and `recipe` declare the standard image display, and both carry
-                // a required `images` on their list row. Any new entity opting in
-                // must add one too — or pass its own cascade resolver.
-                // SAFETY: the manifest allows the standard image column only for
-                // Product and Recipe list rows, which require their own images.
-                getImages: rowImages as (
-                  row: TData,
-                ) => ReturnType<typeof rowImages>,
+                getImages: (row) => row.displayImages ?? [],
               }),
               "image",
             ),

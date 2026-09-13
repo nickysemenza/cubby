@@ -1,7 +1,4 @@
-import {
-  type IngredientListItem,
-  ingredientCoverImage,
-} from "@cubby/schemas/ingredient";
+import type { IngredientListItem } from "@cubby/schemas/ingredient";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { uniq } from "es-toolkit";
@@ -176,18 +173,7 @@ export function IngredientList() {
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<IngredientListItem>((add) => {
-        add(
-          createImageColumn(columnHelper, {
-            entity: "ingredient",
-            // An ingredient has no images of its own, so this borrows the photo of
-            // a product it maps to — the images are already joined for the Product
-            // column's pill. Without it every row rendered the carrot placeholder.
-            getImages: (ingredient) => {
-              const cover = ingredientCoverImage(ingredient);
-              return cover ? [cover] : [];
-            },
-          }),
-        );
+        add(createImageColumn(columnHelper, { entity: "ingredient" }));
         createEntityDisplayColumns(
           "ingredient",
           columnHelper,

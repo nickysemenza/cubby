@@ -10,7 +10,7 @@ import {
   projectKindSchema,
   type ExpenseOut,
   type ProjectFilters,
-  type ProjectOut,
+  type ProjectListItemOut,
   type ProjectStatus,
   projectStatusSchema,
   type TaskOut,
@@ -123,7 +123,6 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy, type FilterValue } from "~/entities/filters";
-import { image } from "~/entities/image.functions";
 import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
@@ -1161,12 +1160,12 @@ export function ExpenseList({
  * `nameSuffix` sits in useStandardColumns' columns-`useMemo` dependency array
  * — an inline arrow would churn the memo every render.
  */
-const subProjectCountSuffix = (row: ProjectOut): ReactNode =>
+const subProjectCountSuffix = (row: ProjectListItemOut): ReactNode =>
   row.childProjectIds.length > 0 ? (
     <Badge variant="outline">{row.childProjectIds.length} sub</Badge>
   ) : undefined;
 
-const projectIconPrefix = (row: ProjectOut): ReactNode => (
+const projectIconPrefix = (row: ProjectListItemOut): ReactNode => (
   <ProjectMark icon={row.icon} />
 );
 
@@ -1190,7 +1189,7 @@ export function ProjectTable({
   const isTree = mode === "tree";
   const projectRowsConfig = useMemo(
     () => ({
-      nest: (rows: ProjectOut[]): ProjectTreeRow[] =>
+      nest: (rows: ProjectListItemOut[]): ProjectTreeRow[] =>
         isTree
           ? buildProjectTree(rows)
           : rows.map((project) => ({ ...project, subRows: [] })),
@@ -1205,11 +1204,6 @@ export function ProjectTable({
     [],
   );
   const projectOptions = useDeferredFilterOptions("project");
-  const [projectIds, setProjectIds] = useState<string[]>([]);
-  const { data: projectImages } = useQuery({
-    ...image.projectSummaries.queryOptions({ projectIds }),
-    enabled: projectIds.length > 0,
-  });
   const filterOptions = useFilterOptions({
     project: projectOptions,
     projectLocations: locations.map((value) => ({ value, label: value })),
@@ -1236,12 +1230,7 @@ export function ProjectTable({
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<ProjectTreeRow>((add) => {
-        add(
-          createImageColumn(columnHelper, {
-            entity: "project",
-            getImages: (project) => projectImages?.[project.id] ?? [],
-          }),
-        );
+        add(createImageColumn(columnHelper, { entity: "project" }));
         add(
           createFilterableSelectColumn(columnHelper, "status", {
             header: "Status",
@@ -1392,11 +1381,11 @@ export function ProjectTable({
         );
       }),
     // oxlint-disable-next-line react/exhaustive-deps -- updateProjectMutation changes every render but is functionally stable
-    [columnHelper, projectImages],
+    [columnHelper],
   );
 
   const listQueryOptions = useCallback<
-    ListQueryOptionsFn<ProjectFilters, ProjectOut>
+    ListQueryOptionsFn<ProjectFilters, ProjectListItemOut>
   >(
     (params) => {
       if (!isTree) return entityListFor("project").listQueryPlan(params);
@@ -1416,7 +1405,7 @@ export function ProjectTable({
   const { workbench, data, totalCount, inspection } = useEntityList<
     ProjectTreeRow,
     ProjectFilters,
-    ProjectOut
+    ProjectListItemOut
   >({
     entity: "project",
     preview: { responsiveInspector: true },
@@ -1440,17 +1429,6 @@ export function ProjectTable({
     inspectorToggle,
   } = inspection;
   const { table } = workbench;
-
-  // Hydrate covers only for loaded rows.
-  useEffect(() => {
-    const next = data.map((project) => project.id).sort();
-    setProjectIds((current) =>
-      current.length === next.length &&
-      current.every((id, index) => id === next[index])
-        ? current
-        : next,
-    );
-  }, [data]);
 
   // Expand once on search entry so nested matches are visible without fighting users.
   const searching = Boolean(table.getColumn("name")?.getFilterValue());

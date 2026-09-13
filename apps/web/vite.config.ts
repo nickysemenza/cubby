@@ -5,7 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
-import { defineConfig, type Plugin, type PluginOption } from "vite";
+import { defineConfig, loadEnv, type Plugin, type PluginOption } from "vite";
 import wasm from "vite-plugin-wasm";
 import { isGitWorktree } from "./tooling/git-worktree.ts";
 import { mcpAppAsset } from "./tooling/mcp-app-asset.ts";
@@ -33,7 +33,19 @@ const sourceDate = execFileSync(
 const sourceBranch =
   process.env.CUBBY_SOURCE_BRANCH ||
   execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
-const r2PublicUrl = readR2PublicUrlFromWrangler();
+const wranglerR2PublicUrl = readR2PublicUrlFromWrangler();
+/**
+ * The client's transform gate must name the host the SERVER stamps on image
+ * URLs, or `transformedImageUrl` passes every URL through untouched. Builds
+ * take wrangler.jsonc (the deployed Worker's origin); the dev server takes the
+ * same `.env` `R2_PUBLIC_URL` the server reads, which points at the dev bucket
+ * — a different host, so with the wrangler value alone dev never downsized.
+ */
+const resolveR2PublicUrl = (command: "build" | "serve", mode: string) =>
+  command === "serve"
+    ? (loadEnv(mode, import.meta.dirname, "R2_PUBLIC_URL").R2_PUBLIC_URL ??
+      wranglerR2PublicUrl)
+    : wranglerR2PublicUrl;
 
 const clientCodeSplittingGroups = [
   {
@@ -176,7 +188,8 @@ function cfSentryShim(): Plugin {
   };
 }
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command, mode }) => {
+  const r2PublicUrl = resolveR2PublicUrl(command, mode);
   // CF Workers build: use @cloudflare/vite-plugin (Vite Environment API).
   // Dev server runs without a deploy plugin (plain Node.js via vite dev).
   const deployPlugin: PluginOption[] = [];

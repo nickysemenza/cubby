@@ -13,6 +13,10 @@ struct PhotoAttachment: Identifiable {
 
 struct PhotoAttachmentImage: View {
     let photo: PhotoAttachment
+    /// The box's point width this image renders at, or nil for an unbounded original (the
+    /// full-size preview). Forwarded to `ImageTransform.transformed` so a given rendered size
+    /// always requests the same CF-transformed rung as the web client.
+    let renderedWidth: CGFloat?
     @State private var retry = 0
 
     var body: some View {
@@ -21,7 +25,8 @@ struct PhotoAttachmentImage: View {
             Image(decorative: image, scale: 1).resizable().scaledToFit()
                 .accessibilityLabel(photo.filename)
         case .remote(let url):
-            AsyncImage(url: url) { phase in
+            let displayURL = renderedWidth.map { ImageTransform.transformed(url, renderedWidth: $0) } ?? url
+            AsyncImage(url: displayURL) { phase in
                 switch phase {
                 case .success(let image): image.resizable().scaledToFit()
                 case .failure:
@@ -51,7 +56,7 @@ struct PhotoBatch: View {
                     Button {
                         selection = Selection(id: photo.id)
                     } label: {
-                        PhotoAttachmentImage(photo: photo)
+                        PhotoAttachmentImage(photo: photo, renderedWidth: 160)
                             .frame(maxWidth: .infinity).frame(height: 110)
                             .background(PorcelainTokens.inset)
                             .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
@@ -86,7 +91,7 @@ struct PhotoPreview: View {
             if photos.indices.contains(index) {
                 let photo = photos[index]
                 VStack(spacing: 12) {
-                    PhotoAttachmentImage(photo: photo)
+                    PhotoAttachmentImage(photo: photo, renderedWidth: nil)
                         .id(photo.id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     HStack {

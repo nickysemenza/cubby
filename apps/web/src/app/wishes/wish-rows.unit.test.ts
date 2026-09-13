@@ -1,5 +1,5 @@
 import { testShortcode } from "@cubby/schemas/testing";
-import type { WishCandidateOut, WishOut } from "@cubby/schemas/wish";
+import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 
 import { wishPriceRange } from "./wish-price-range";
@@ -22,12 +22,13 @@ const candidate = (
 const wish = (
   shortcode: string,
   candidates: WishCandidateOut[] = [],
-): WishOut => ({
+): WishListItemOut => ({
   id: testShortcode("wish", shortcode),
   name: `Wish ${shortcode}`,
   notes: null,
   acquiredAt: null,
   candidates,
+  displayImages: [],
   createdAt: new Date("2026-01-01"),
   updatedAt: new Date("2026-01-01"),
 });

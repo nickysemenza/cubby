@@ -1,3 +1,4 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import {
   canonicalExternalIdUrl,
   externalIdKind,
@@ -363,12 +364,14 @@ const deriveProductQuantitySummary = (
 
 export const dbProductToListAPI = (
   productData: ProductListDB,
+  displayImages: DisplayImageSummary[],
 ): ProductListItem => {
   const inventoryEntry = mapProductListInventoryEntries(
     productData.inventoryEntry,
   );
   const result = {
     ...mapDbProductToTopLevel(productData),
+    displayImages,
     ingredient:
       productData.ingredient && isNotDeleted(productData.ingredient)
         ? mapDbProductIngredient(productData.ingredient)

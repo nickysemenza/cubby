@@ -124,7 +124,6 @@ export const LocationGalleryCard = function LocationGalleryCard({
                   to="/images/$shortcode"
                   params={{ shortcode: image.id }}
                   size={28}
-                  previewSize={240}
                 />
               ))}
             </Row>
@@ -192,7 +191,6 @@ function ProductPreviewImage({ product }: { product: ProductPreview }) {
         to="/products/$shortcode"
         params={{ shortcode: product.id }}
         size={32}
-        previewSize={200}
       />
     );
   }

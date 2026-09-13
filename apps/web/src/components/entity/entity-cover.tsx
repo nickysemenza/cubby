@@ -7,6 +7,13 @@ import { ImageWithPreview } from "~/components/ui/image-with-preview";
 import { EntityIcon } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 
+/**
+ * Deliberately structural, not `DisplayImageSummary` — callers pass both a
+ * list row's server-resolved `displayImages` (branded `ImageShortcode` id)
+ * and a non-list row's own `images[]`/cascade-resolved cover (plain string
+ * id). The branded id would reject the latter, and no single schema covers
+ * both — see `ImageThumbnail`'s `ImageData`.
+ */
 interface CoverImage {
   id: string;
   url: string;
@@ -91,7 +98,6 @@ export function EntityCover({
           lazyPreview={lazyPreview}
           fallback={mediaFallback}
           displayWidth={size ?? 64}
-          previewSize={400}
           fit={fit}
           className="absolute inset-0 h-full w-full rounded-none border-0"
         />

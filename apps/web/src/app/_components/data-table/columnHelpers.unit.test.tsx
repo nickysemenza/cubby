@@ -1,3 +1,5 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import { testShortcode } from "@cubby/schemas/testing";
 import { flexRender, type RowData, useTable } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { type ReactNode, useMemo } from "react";
@@ -514,6 +516,57 @@ describe("createImageColumn", () => {
     expect(container.querySelector("img")).toHaveAttribute(
       "src",
       expect.stringContaining("photo.png"),
+    );
+  });
+
+  it("defaults to `row.displayImages` when `getImages` is omitted", () => {
+    // The server-resolved list contract every `displayImages` manifest
+    // entity's list row carries — `getImages` is only for a table of a
+    // non-list shape.
+    type DisplayImagesRow = {
+      id: string;
+      displayImages: DisplayImageSummary[];
+    };
+    const column = createImageColumn(
+      createCubbyColumnHelper<DisplayImagesRow>(),
+      { entity: "product" },
+    );
+
+    function DisplayImagesHarness() {
+      const table = useTable({
+        features: cubbyTableFeatures,
+        data: [
+          {
+            id: "PRD-1",
+            displayImages: [
+              {
+                id: testShortcode("image", "IMG-1"),
+                url: "https://example.com/cover.png",
+              },
+            ],
+          },
+        ],
+        columns: columnForTable(column),
+      });
+      const cell = table.getRowModel().rows[0]?.getVisibleCells()[0];
+      if (!cell) throw new Error("expected one row with one cell");
+      return (
+        <table>
+          <tbody>
+            <tr>
+              <td>
+                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    const { container } = render(<DisplayImagesHarness />);
+    expect(container.querySelector("img")).toHaveAttribute(
+      "src",
+      expect.stringContaining("cover.png"),
     );
   });
 });

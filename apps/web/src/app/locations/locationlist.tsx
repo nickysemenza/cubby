@@ -1,6 +1,5 @@
 import {
   type LocationListItemOut,
-  locationCoverImage,
   locationType,
 } from "@cubby/schemas/location";
 import { getLocationTypeColor } from "@cubby/shared";
@@ -77,17 +76,7 @@ export function LocationList() {
       createCubbyColumnCollection<LocationListItemOut>((add) => {
         const customColumns = createCubbyColumnCollection<LocationListItemOut>(
           (add) => {
-            add(
-              createImageColumn(columnHelper, {
-                entity: "location",
-                // A bin that IS a photographed tote should show the tote. The default
-                // accessor only reads `row.images`, so those rendered the placeholder.
-                getImages: (location) => {
-                  const cover = locationCoverImage(location);
-                  return cover ? [cover] : [];
-                },
-              }),
-            );
+            add(createImageColumn(columnHelper, { entity: "location" }));
             add(
               createNameColumn(columnHelper, "location", "name", {
                 // Keeps the default w-64. This used to be a bare `min-w-0` so the

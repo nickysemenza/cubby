@@ -87,6 +87,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { stockOnly } from "~/server/repo/inventory/placement";
@@ -934,7 +935,7 @@ export const locationList = async (
     // cannot produce on its own.
     computeLocationValuations(db),
   ]);
-  const items = results.map((row) =>
+  const items = await withDisplayImages(db, "location", results, (row) =>
     dbLocationToListAPI(row, pricingByProductId, valuations),
   );
   return { data: items, count: totalCount };

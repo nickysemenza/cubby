@@ -1,4 +1,4 @@
-import type { WishCandidateOut, WishOut } from "@cubby/schemas/wish";
+import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
 
 /**
  * A row in the wishlist table: either a Wish, or one of its candidate Tool
@@ -19,9 +19,9 @@ export type WishRow =
       kind: "wish";
       id: string;
       entityType: "wish";
-      previewId: WishOut["id"];
+      previewId: WishListItemOut["id"];
       name: string;
-      wish: WishOut;
+      wish: WishListItemOut;
       subRows: WishRow[];
     }
   | {
@@ -41,7 +41,7 @@ export type WishRow =
  * is false and the name column renders its leaf spacer instead of a chevron
  * that opens nothing.
  */
-export const buildWishRows = (wishes: readonly WishOut[]): WishRow[] =>
+export const buildWishRows = (wishes: readonly WishListItemOut[]): WishRow[] =>
   wishes.map((wish) => ({
     kind: "wish",
     id: wish.id,

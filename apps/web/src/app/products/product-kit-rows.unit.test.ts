@@ -15,6 +15,7 @@ const productId = (seed: string) => testShortcode("product", seed);
 const productAt = (shortcode: string, componentCount = 0) =>
   productListItemOut.parse({
     id: testShortcode("product", shortcode),
+    displayImages: [],
     name: `Product ${shortcode}`,
     aliases: [],
     tags: [],

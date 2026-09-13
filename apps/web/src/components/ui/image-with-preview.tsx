@@ -8,6 +8,53 @@ import {
 } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
+/**
+ * Every hover-preview popup renders at one size so the same photo previewed
+ * from a table cell, a picker option and the arrange board is one transform
+ * URL (the 640 rung — also what grid tiles and card covers request).
+ */
+const PREVIEW_PX = 256;
+
+/**
+ * The hover popup itself — one look at the image at `PREVIEW_PX`. Shared with
+ * tiles that must own their trigger element (`ArrangeThumb`) so the popup's
+ * size and pointer rules are written once.
+ */
+export function ImagePreviewPopup({
+  src,
+  alt,
+  side = "right",
+  positionerClassName,
+}: {
+  src: string;
+  alt: string;
+  side?: "top" | "right" | "bottom" | "left";
+  positionerClassName?: string;
+}) {
+  return (
+    <TooltipContent
+      side={side}
+      positionerClassName={positionerClassName}
+      // max-w-none: the tooltip popup's default max-w-xs (320px) silently
+      // clips any PREVIEW_PX above 320 — the "weird crop".
+      // pointer-events-none: the popup is purely a look at the image, and it
+      // is portalled over whatever surface the thumbnail sits in — on the
+      // arrange board that surface is a drag-and-drop hit-test area, and on a
+      // combobox it is the option list.
+      className="bg-popover pointer-events-none max-w-none border-[var(--border)] overflow-hidden rounded-none border p-0"
+    >
+      <div className="relative" style={{ width: PREVIEW_PX, height: PREVIEW_PX }}>
+        <Image
+          src={src}
+          alt={alt}
+          displayWidth={PREVIEW_PX}
+          className="absolute inset-0 h-full w-full bg-card object-contain"
+        />
+      </div>
+    </TooltipContent>
+  );
+}
+
 export interface ImageWithPreviewProps {
   /** Image source URL */
   src: string;
@@ -19,8 +66,6 @@ export interface ImageWithPreviewProps {
   params?: Record<string, string>;
   /** Thumbnail size in pixels (default: 40) */
   size?: number;
-  /** Preview popup size in pixels (default: 200) */
-  previewSize?: number;
   /** Which side to show the preview (default: "right") */
   previewSide?: "top" | "right" | "bottom" | "left";
   /** Delay mounting the preview until the first open */
@@ -31,7 +76,7 @@ export interface ImageWithPreviewProps {
   fallback?: ReactNode;
   /**
    * Overrides the thumbnail's CF-transform width, which otherwise follows
-   * `size` or the 40px default. The popup always transforms at `previewSize`.
+   * `size` or the 40px default. The popup always renders at `PREVIEW_PX`.
    * Set this when `className` renders a different width.
    */
   displayWidth?: number;
@@ -61,7 +106,6 @@ export function ImageWithPreview({
   to,
   params,
   size,
-  previewSize = 200,
   previewSide = "right",
   lazyPreview = false,
   className,
@@ -106,29 +150,12 @@ export function ImageWithPreview({
           )}
         />
       </TooltipTrigger>
-      <TooltipContent
+      <ImagePreviewPopup
+        src={src}
+        alt={alt}
         side={previewSide}
         positionerClassName={previewPositionerClassName}
-        // max-w-none: the tooltip popup's default max-w-xs (320px) silently
-        // clips any previewSize above 320 — the "weird crop".
-        // pointer-events-none: the popup is purely a look at the image, and it
-        // is portalled over whatever surface the thumbnail sits in — on the
-        // arrange board that surface is a drag-and-drop hit-test area, and on a
-        // combobox it is the option list.
-        className="bg-popover pointer-events-none max-w-none border-[var(--border)] overflow-hidden rounded-none border p-0"
-      >
-        <div
-          className="relative"
-          style={{ width: previewSize, height: previewSize }}
-        >
-          <Image
-            src={src}
-            alt={alt}
-            displayWidth={previewSize}
-            className="absolute inset-0 h-full w-full bg-card object-contain"
-          />
-        </div>
-      </TooltipContent>
+      />
     </Tooltip>
   );
 }

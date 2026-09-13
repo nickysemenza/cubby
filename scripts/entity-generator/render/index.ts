@@ -720,6 +720,7 @@ export const renderEntityArtifacts = (
           auditable: entity.descriptor.auditable === true,
           hasImages: entity.descriptor.hasImages === true,
           imageStorage: entity.descriptor.imageStorage,
+          displayImages: entity.descriptor.displayImages === true,
           countable: entity.descriptor.countable === true,
           kernelActions,
           filterUrlKeys: entity.filterUrlKeys,
@@ -1111,6 +1112,7 @@ export const renderEntityArtifacts = (
         "  auditable: boolean;\n" +
         "  hasImages: boolean;\n" +
         '  imageStorage: false | "gallery" | "cover";\n' +
+        "  displayImages: boolean;\n" +
         "  countable: boolean;\n" +
         '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge")[];\n' +
         "  filterUrlKeys: readonly string[];\n" +

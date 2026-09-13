@@ -1,4 +1,4 @@
-import type { WishFilters, WishOut } from "@cubby/schemas/wish";
+import type { WishFilters, WishListItemOut } from "@cubby/schemas/wish";
 import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { ImageIcon } from "lucide-react";
@@ -17,7 +17,6 @@ import type { ListQueryOptionsFn } from "~/app/_components/hooks/usePaginatedTab
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
-  useHydratedProductImagesForAll,
 } from "~/app/_components/products/product-image-summaries";
 import { ImageThumbnail } from "~/app/_components/table/ImageThumbnail";
 import { usePageCount } from "~/components/page/Page";
@@ -54,7 +53,7 @@ const CANDIDATE_STOCK_OPTIONS = [
  */
 /** Stable empty default — `useFilterOptions` needs a referentially fixed miss. */
 const NO_FILTER_OPTIONS: FilterableComboboxItem[] = [];
-const wishListQueryOptions: ListQueryOptionsFn<WishFilters, WishOut> = (
+const wishListQueryOptions: ListQueryOptionsFn<WishFilters, WishListItemOut> = (
   params,
 ) => entityListFor("wish").listQueryPlan(params);
 
@@ -280,7 +279,7 @@ export function WishList() {
   const { workbench, data, totalCount, inspection } = useEntityList<
     WishRow,
     WishFilters,
-    WishOut
+    WishListItemOut
   >({
     entity: "wish",
     queryOptions: wishListQueryOptions,
@@ -347,29 +346,16 @@ export function WishList() {
 
 function WishRowCover({ row }: { row: WishRow }) {
   return row.kind === "wish" ? (
-    <WishCandidatesCover candidates={row.wish.candidates} />
-  ) : (
-    <CandidateCover productId={row.productId} />
-  );
-}
-
-function WishCandidatesCover({
-  candidates,
-}: {
-  candidates: WishOut["candidates"];
-}) {
-  const productIds = useMemo(
-    () => candidates.map((candidate) => candidate.id),
-    [candidates],
-  );
-  const images = useHydratedProductImagesForAll(productIds);
-  return (
     <ImageThumbnail
-      images={images}
+      // The server merges every candidate's photos in candidate order, so a
+      // collapsed wish's "+N" badge reads as it did when this merged covers.
+      images={row.wish.displayImages}
       alt="Candidate product image"
       lazyPreview
       entity="product"
     />
+  ) : (
+    <CandidateCover productId={row.productId} />
   );
 }
 

@@ -194,7 +194,7 @@ struct EntityDetailContent: View {
                     .aspectRatio(4.0 / 3.0, contentMode: .fit)
                     .frame(maxWidth: .infinity, maxHeight: heroMaxHeight)
                     .overlay {
-                        PhotoAttachmentImage(photo: photo)
+                        PhotoAttachmentImage(photo: photo, renderedWidth: PorcelainTokens.readingWidth)
                     }
                     .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
                     .overlay(

@@ -1,7 +1,10 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import type { ExpenseFilters, ExpenseOut } from "@cubby/schemas/project";
+import type {
+  ExpenseFilters,
+  ExpenseListItemOut,
+} from "@cubby/schemas/project";
 import {
   and,
   gt,
@@ -32,6 +35,7 @@ import {
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { disposalPurchaseIds } from "~/server/repo/product/ownership";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
@@ -401,7 +405,7 @@ export const expenseList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-): Promise<{ data: ExpenseOut[]; count: number }> => {
+): Promise<{ data: ExpenseListItemOut[]; count: number }> => {
   const whereClause = await buildExpenseWhereClause(db, filters);
 
   const orderByArray = expenseScaffold.orderBy(sorts, {
@@ -422,5 +426,8 @@ export const expenseList = async (
     count: () => countWhere(db, expense, whereClause),
   });
 
-  return { data: rows.map(dbExpenseToAPI), count };
+  return {
+    data: await withDisplayImages(db, "expense", rows, dbExpenseToAPI),
+    count,
+  };
 };

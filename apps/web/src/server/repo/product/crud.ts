@@ -104,6 +104,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
 import { resolveEntityDisplayImages } from "~/server/repo/entity-display-image";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import {
   productAcquisitionDateFilterSql,
@@ -128,7 +129,6 @@ import {
   resolveAllPresent,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
-import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
 import {
   currentProductConversionCoverageCondition,
@@ -988,11 +988,15 @@ export const productList = async (
     db,
     pricedResults,
   );
-  const products = ledgeredResults.map((prod) =>
-    dbProductToListAPI({
-      ...prod,
-      dataQuality: qualities.get(prod.id)!,
-    }),
+  const products = await withDisplayImages(
+    db,
+    "product",
+    ledgeredResults,
+    (prod, displayImages) =>
+      dbProductToListAPI(
+        { ...prod, dataQuality: qualities.get(prod.id)! },
+        displayImages,
+      ),
   );
 
   const priceSum = Number(aggregates[0]?.priceSum ?? 0);
@@ -1009,42 +1013,25 @@ export const productList = async (
 };
 
 /**
- * First displayable product image in explicit display order, loaded once for a
- * batch of picker or relationship rows. This intentionally returns only the
- * cover URL; full image projections still use `getProductImagesByProductIds`.
+ * A product's cover URL for a batch of picker or relationship rows: `[0]` of
+ * the shared display-image policy (`resolveEntityDisplayImages`), so a picker
+ * row, a list thumbnail and a search hit can never disagree about which photo
+ * is the cover. Full image projections still use `getProductImagesByProductIds`.
  */
 export const getProductCoverImageUrlsByProductIds = async (
   db: Database,
   ids: ProductId[],
 ): Promise<Map<ProductId, string>> => {
-  const byId = new Map<ProductId, string>();
-  if (ids.length === 0) return byId;
-
-  const rows = await getDb(db)
-    .select({ productId: productImage.productId, key: image.key })
-    .from(productImage)
-    .innerJoin(image, eq(image.id, productImage.imageId))
-    .where(
-      and(
-        inArray(productImage.productId, ids),
-        notDeleted(productImage),
-        notDeleted(image),
-        displayableImageWhere,
-      ),
-    )
-    .orderBy(
-      productImage.productId,
-      asc(productImage.sortOrder),
-      asc(productImage.createdAt),
-      asc(productImage.id),
-    );
-
-  for (const row of rows) {
-    if (!byId.has(row.productId)) {
-      byId.set(row.productId, getR2PublicUrl(row.key));
-    }
-  }
-  return byId;
+  const covers = await resolveEntityDisplayImages(
+    db,
+    ids.map((entityId) => ({ entityType: "product", entityId })),
+  );
+  return new Map(
+    ids.flatMap((id) => {
+      const cover = covers.get(entityRefKey("product", id));
+      return cover ? [[id, cover.url]] : [];
+    }),
+  );
 };
 
 /**

@@ -8,6 +8,7 @@ import { productShortcode, wishShortcode } from "./identifiers";
 export { wishCandidateOut, type WishCandidateOut } from "./wish-fields";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import { wishRelatedFilterFields } from "./related-view";
+import { displayImagesField } from "./display-images";
 
 export const wishCreateInput = z.object(generatedWishFieldSchemas.create);
 export type WishCreateInput = z.infer<typeof wishCreateInput>;
@@ -25,6 +26,11 @@ export const wishOut = z.object({
   ...generatedWishFieldSchemas.read,
 });
 export type WishOut = z.infer<typeof wishOut>;
+
+export const wishListItemOut = wishOut.extend({
+  displayImages: displayImagesField,
+});
+export type WishListItemOut = z.infer<typeof wishListItemOut>;
 
 export const wishFilterFields = {
   ...auditDateFilterFields,

@@ -35,6 +35,11 @@ export const entityDescriptor = z.object({
   hasImages: z.boolean(),
   /** How images attach: an ordered `<Entity>Image` gallery, one cover FK, or none. */
   imageStorage: z.union([z.literal(false), z.enum(["gallery", "cover"])]),
+  /**
+   * The list row carries a server-resolved `displayImages` array — its own
+   * photos, or a linked product's when `capabilities.images` is `"borrowed"`.
+   */
+  displayImages: z.boolean(),
   searchable: z.boolean(),
   countable: z.boolean(),
   countFilter: z.enum(["recipeIdNull"]).optional(),
@@ -144,6 +149,8 @@ const entitiesWithTrait = <K extends BooleanTrait>(
 
 export const auditableEntities = entitiesWithTrait("auditable");
 export const imageEntities = entitiesWithTrait("hasImages");
+/** Entities whose list rows carry `displayImages` (own or borrowed photos). */
+export const displayImageEntities = entitiesWithTrait("displayImages");
 
 type EntityWithImageStorage<S extends "gallery" | "cover"> = {
   [E in Entity]: EntityManifest[E] extends { imageStorage: S } ? E : never;

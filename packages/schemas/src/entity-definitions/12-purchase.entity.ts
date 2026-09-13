@@ -425,6 +425,7 @@ export default defineEntity({
     },
     update: { module: "@cubby/schemas/purchase", export: "purchaseUpdateData" },
     output: { module: "@cubby/schemas/purchase", export: "purchaseOut" },
+    list: { module: "@cubby/schemas/purchase", export: "purchaseListItemOut" },
   },
   filters: {
     audit: true,

@@ -43,11 +43,17 @@ extension EntityDescriptor {
         )
     }
 
-    /// The resolved `coverImageUrl` — a public R2 URL — and nothing else: every payload's
-    /// `images` is an array of image shortcodes, not of image objects, so there is no URL to
-    /// fall back to. Only `resources.product.get` derives a cover, so every other entity's row
-    /// has no image.
+    /// The server resolves every image-bearing entity's displayable images, in display order,
+    /// into `displayImages: [{id, url}]` on the list row — the entity's own gallery/cover, or a
+    /// linked product's photos for ingredient/inventory/expense/wish, with a location→identity
+    /// product or cookbook→physical copy fallback. `displayImages[0].url` is the list contract
+    /// for every such entity and wins first; native code derives no cover of its own.
+    /// `coverImageUrl` is a leftover on detail/picker shapes that never grew a `displayImages`
+    /// field, and is checked second.
     private static func imageURL(from object: JSONValue) -> URL? {
+        if let first = object["displayImages"]?[0]?["url"]?.stringValue {
+            return URL(string: first)
+        }
         guard let cover = object["coverImageUrl"]?.stringValue else { return nil }
         return URL(string: cover)
     }

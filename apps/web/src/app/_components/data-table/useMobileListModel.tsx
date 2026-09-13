@@ -143,6 +143,11 @@ function hasRenderableContent(content: ReactNode): boolean {
 }
 
 const mobileImageRowSchema = z.object({
+  // The server-resolved list contract (own or borrowed photos) — every
+  // `displayImages` manifest entity's list row carries this.
+  displayImages: z.array(z.unknown()).optional(),
+  // Non-list shapes (purchase products, kit components, project tools) still
+  // carry their own `images[]`, so this stays alongside `displayImages`.
   images: z.array(z.unknown()).optional(),
   imageUrl: z.string().nullish(),
   product: z.object({ images: z.array(z.unknown()).optional() }).optional(),
@@ -167,6 +172,9 @@ function rowHasImage(original: RowData): boolean {
   const parsed = mobileImageRowSchema.safeParse(original);
   if (!parsed.success) return false;
   const row = parsed.data;
+  if (Array.isArray(row.displayImages) && row.displayImages.length > 0) {
+    return true;
+  }
   if (Array.isArray(row.images) && row.images.length > 0) return true;
   if (row.imageUrl && row.imageUrl.length > 0) return true;
   const nested = row.product?.images;

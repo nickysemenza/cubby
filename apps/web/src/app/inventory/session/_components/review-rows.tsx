@@ -43,7 +43,7 @@ export function LocationReviewCard({
             <Image
               src={location.images[0].url}
               alt={location.name}
-              displayWidth={96}
+              displayWidth={48}
               className="h-full w-full object-cover"
             />
           ) : (
@@ -101,7 +101,7 @@ export function ItemReviewCard({
           <Image
             src={product.images.find(isDisplayableImageFile)?.url}
             alt={product.name}
-            displayWidth={96}
+            displayWidth={48}
             className="size-12 shrink-0 border border-[var(--border)] object-cover"
           />
           <div className="min-w-0 flex-1">

@@ -61,13 +61,14 @@ describe("Image", () => {
 
   const BUCKET_SRC = `${__R2_PUBLIC_URL__}/cubby/images/a.jpg`;
 
-  it("requests a CF transform + 2x srcSet when displayWidth is set on a bucket URL", () => {
-    render(<Image src={BUCKET_SRC} alt="p" displayWidth={400} />);
+  it("requests the snapped CF transform (no srcSet) when displayWidth is set on a bucket URL", () => {
+    render(<Image src={BUCKET_SRC} alt="p" displayWidth={40} />);
     const img = screen.getByRole("img", { name: "p" });
+    // 40px rendered → 2× = 80 → snaps up to the 128 rung.
     expect(img.getAttribute("src")).toBe(
-      `${__R2_PUBLIC_URL__}/cdn-cgi/image/width=400,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg`,
+      `${__R2_PUBLIC_URL__}/cdn-cgi/image/width=128,quality=80,format=auto,fit=scale-down/cubby/images/a.jpg`,
     );
-    expect(img.getAttribute("srcset")).toContain("width=800"); // 2x
+    expect(img.getAttribute("srcset")).toBeNull();
   });
 
   it("uses the original src (no srcSet) when displayWidth is omitted", () => {

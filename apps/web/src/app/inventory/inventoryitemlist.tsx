@@ -1,7 +1,6 @@
 import { displayGtin } from "@cubby/schemas/external-id";
 import type { inventoryListItemOut } from "@cubby/schemas/inventory";
 import { getRouteApi, Link } from "@tanstack/react-router";
-import { ImageIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { z } from "zod";
 
@@ -21,6 +20,7 @@ import { multiSelectFilterFn } from "~/entities/filters";
 import {
   createCurrencyColumn,
   createEditableAmountColumn,
+  createImageColumn,
   createSingleEntityInlineLinkColumn,
   createTimestampColumn,
 } from "../_components/data-table/columnHelpers";
@@ -38,28 +38,16 @@ import { InventoryShelf } from "../_components/inventory/inventory-shelf";
 import { InventoryValuationSummary } from "../_components/locations/inventory-valuation-summary";
 import { CategoryLabel } from "../_components/products/CategoryLabel";
 import { productCategoryOptionsWithTheme } from "../_components/products/product-category-icons";
-import {
-  ProductImageSummariesProvider,
-  useHydratedProductImages,
-} from "../_components/products/product-image-summaries";
-import { ImageThumbnail } from "../_components/table/ImageThumbnail";
+// Still needed here: `InventoryShelf` (the shelf view rendered below) reads
+// per-product images from this same provider via `useHydratedProductImages`.
+// Only the table's own "image" column stopped needing the hook — it now
+// reads the list row's server-resolved `displayImages` directly.
+import { ProductImageSummariesProvider } from "../_components/products/product-image-summaries";
 import { TableLink } from "../_components/table/TableLink";
 
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 
 const inventoryRoute = getRouteApi("/_authenticated/inventory/");
-
-function InventoryProductImageCell({ productId }: { productId: string }) {
-  const images = useHydratedProductImages(productId);
-  return (
-    <ImageThumbnail
-      images={images}
-      alt="Image"
-      lazyPreview={true}
-      entity="inventory"
-    />
-  );
-}
 
 /**
  * An inventory entry is about its product, so product verbs — "add another of
@@ -120,19 +108,9 @@ export function InventoryItemList() {
     () =>
       createCubbyColumnCollection<InventoryListItem>((add) => {
         add(
-          columnHelper.accessor((row) => row.product.id, {
-            id: "image",
-            header: () => (
-              <ImageIcon className="size-3 text-muted-foreground" />
-            ),
-            enableSorting: false,
-            meta: {
-              className: "h-px w-10 overflow-hidden px-0 py-0",
-              mobile: { slot: "image", priority: -10 },
-            },
-            cell: (info) => (
-              <InventoryProductImageCell productId={info.getValue()} />
-            ),
+          createImageColumn(columnHelper, {
+            entity: "inventory",
+            className: "w-10",
           }),
         );
         add(

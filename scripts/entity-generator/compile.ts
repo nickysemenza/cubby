@@ -668,8 +668,14 @@ const declarationDescriptor = (
   descriptor.softDelete = declaration.capabilities.softDelete;
   if (declaration.route === null) descriptor.browserRoutes = false;
   descriptor.auditable = declaration.capabilities.auditable;
-  descriptor.hasImages = declaration.capabilities.images !== false;
-  descriptor.imageStorage = declaration.capabilities.images;
+  descriptor.hasImages =
+    declaration.capabilities.images === "gallery" ||
+    declaration.capabilities.images === "cover";
+  descriptor.imageStorage =
+    declaration.capabilities.images === "borrowed"
+      ? false
+      : declaration.capabilities.images;
+  descriptor.displayImages = declaration.capabilities.images !== false;
   descriptor.searchable = declaration.search.enabled;
   descriptor.countable = declaration.capabilities.countable;
   descriptor.relationships = serializedDeclarationRelations(

@@ -117,13 +117,14 @@ export const RECIPE_DELETE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"recipe", OperationDisposition>;
 
+import { withDisplayImages } from "~/server/repo/entity-display-image";
+
 import {
   dbRecipeToAPI,
   dbRecipeToAPIGraph,
   dbRecipeToListAPI,
   liveMealCountForRecipeSql,
   liveSectionCountForRecipeSql,
-  recipeListCoverImageRelation,
 } from "./helpers";
 import type { RecipeFilters } from "./internal-types";
 import { recipeMetaToColumns } from "./meta";
@@ -525,7 +526,8 @@ export const recipeList = async (
 
   const { take, skip } = recipeScaffold.page(pagination);
 
-  // List reads fetch flat rows, one cover, and scalar meal count; never full graphs.
+  // List reads fetch flat rows and scalar counts; never full graphs. The
+  // thumbnail comes from the display-image resolver, not an images join.
   const { data: results, count: totalCount } = await executeListQueryWithCount({
     kind: readIntent,
     rows: () =>
@@ -534,9 +536,6 @@ export const recipeList = async (
         orderBy: orderByClause,
         limit: take,
         offset: skip,
-        with: {
-          images: recipeListCoverImageRelation,
-        },
         extras: {
           mealCount: sql<number>`${sql.raw(
             liveMealCountForRecipeSql('"recipe"."id"'),
@@ -549,7 +548,12 @@ export const recipeList = async (
     count: () => countWhere(db, recipe, whereClause),
   });
 
-  const items = results.map(dbRecipeToListAPI);
+  const items = await withDisplayImages(
+    db,
+    "recipe",
+    results,
+    dbRecipeToListAPI,
+  );
   return { data: items, count: totalCount };
 };
 

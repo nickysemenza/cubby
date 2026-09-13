@@ -3,7 +3,7 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProjectFilters,
   ProjectOptionsOut,
-  ProjectOut,
+  ProjectListItemOut,
 } from "@cubby/schemas/project";
 import { parseShortcode } from "@cubby/shared";
 import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
@@ -20,6 +20,7 @@ import {
   notDeleted,
   presenceCondition,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
@@ -330,7 +331,7 @@ export const projectList = async (
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
 ): Promise<{
-  data: ProjectOut[];
+  data: ProjectListItemOut[];
   count: number;
   sums: { costEstimate: number };
 }> => {
@@ -373,7 +374,9 @@ export const projectList = async (
     projectDependencyIds(db, ids),
   ]);
 
-  const data = rows.map((row) => hydrateProjectRow(row, projectContext, deps));
+  const data = await withDisplayImages(db, "project", rows, (row) =>
+    hydrateProjectRow(row, projectContext, deps),
+  );
 
   return { data, count, sums };
 };

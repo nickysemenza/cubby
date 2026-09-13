@@ -98,6 +98,7 @@ export const taskCompletionSchema = z.enum(taskCompletionValues);
 export type TaskCompletion = z.infer<typeof taskCompletionSchema>;
 
 import { costTypeSchema } from "./expense-fields";
+import { displayImagesField } from "./display-images";
 export { costTypeValues, costTypeSchema } from "./expense-fields";
 export type { CostType } from "./expense-fields";
 
@@ -261,12 +262,17 @@ export const projectOut = z.object({
 });
 export type ProjectOut = z.infer<typeof projectOut>;
 
+export const projectListItemOut = projectOut.extend({
+  displayImages: displayImagesField,
+});
+export type ProjectListItemOut = z.infer<typeof projectListItemOut>;
+
 export const projectTreeInput = z.object({
   filters: projectFiltersSchema,
   ...sortPaginationFields,
 });
 export const projectTreeOut = createPaginatedResponseSchemaWithContext(
-  projectOut,
+  projectListItemOut,
   "project",
 );
 
@@ -616,6 +622,11 @@ export type ExpenseSortField = GeneratedEntitySortField<"expense">;
 
 export const expenseOut = z.object(generatedExpenseFieldSchemas.read);
 export type ExpenseOut = z.infer<typeof expenseOut>;
+
+export const expenseListItemOut = expenseOut.extend({
+  displayImages: displayImagesField,
+});
+export type ExpenseListItemOut = z.infer<typeof expenseListItemOut>;
 
 export const expenseChargeContextOut = z
   .object({

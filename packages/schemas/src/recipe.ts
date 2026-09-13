@@ -20,7 +20,7 @@ import {
   ingredientShortcode,
   recipeShortcode,
 } from "./identifiers";
-import { imageOut } from "./image";
+import { displayImagesField } from "./display-images";
 import { imageUrlSummary } from "./image-summary";
 import {
   createPaginatedResponseSchema,
@@ -206,11 +206,10 @@ export const recipeListItemOut = z.object({
   /** Live sections. Cheap correlated scalar — the section GRAPH is not on the
    *  list path (dropping it was the ~4.7s over-fetch fix). */
   sectionCount: z.number().int(),
-  // Single cover image only (sortOrder-first, limit 1) — the list only ever
-  // renders a thumbnail, and loading every image was the over-fetch the
-  // `totals` comment above already dropped `.sections` for. Backs the
-  // standard image column (createImageColumn).
-  images: z.array(imageOut),
+  // The list only ever renders a thumbnail, so the section graph AND the full
+  // image projection stay off this path (loading every image was the same
+  // over-fetch the `totals` comment above dropped `.sections` for).
+  displayImages: displayImagesField,
 });
 export type RecipeListItem = z.infer<typeof recipeListItemOut>;
 
@@ -236,25 +235,11 @@ export const recipeDryRunRecomputeTotalsOut = z.object({
   total: z.number().int().nonnegative(),
 });
 
-export const cookbookSummary = z.object(generatedCookbookFieldSchemas.read);
+export const cookbookSummary = z.object({
+  ...generatedCookbookFieldSchemas.read,
+  displayImages: displayImagesField,
+});
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
-
-/**
- * The cover that represents a cookbook: its own cover, else the cover of the
- * physical copy on the shelf.
- *
- * `cookbookSummary.product.coverUrl` is already resolved server-side for every
- * summary and had no reader until this existed, so a cookbook whose only
- * photograph lived on its linked Product rendered the empty placeholder.
- *
- * Resolves a URL rather than an `ImageOut` — unlike the location and ingredient
- * cascades, both of cookbook's sources are already-flattened `coverUrl`
- * strings, so there is nothing for `firstDisplayableImage` to filter.
- */
-export const cookbookCoverImage = (book: {
-  coverUrl: string | null;
-  product: { coverUrl: string | null } | null;
-}): string | null => book.coverUrl ?? book.product?.coverUrl ?? null;
 
 export type SectionIngredientType = z.infer<
   typeof sectionIngredientOut

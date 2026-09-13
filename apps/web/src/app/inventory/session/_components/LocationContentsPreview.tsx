@@ -37,7 +37,7 @@ export function LocationContentsPreview({ items }: { items: InventoryItem[] }) {
             key={item.id}
             src={item.product.images.find(isDisplayableImageFile)?.url}
             alt={productDisplayName(item.product.name)}
-            displayWidth={64}
+            displayWidth={32}
             className="size-8 shrink-0 border border-[var(--border)] object-cover"
           />
         ))}

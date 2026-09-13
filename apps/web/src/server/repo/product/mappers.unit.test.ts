@@ -272,7 +272,7 @@ describe("product mappers", () => {
       ],
     } satisfies ProductListDB;
 
-    const result = dbProductToListAPI(row);
+    const result = dbProductToListAPI(row, []);
 
     expect(result).toMatchObject({
       id: testShortcode("product", "PRD-TEST"),
@@ -324,7 +324,7 @@ describe("product mappers", () => {
       expenseTotal: -12.75,
     } satisfies ProductListDB;
 
-    const result = dbProductToListAPI(row);
+    const result = dbProductToListAPI(row, []);
 
     // A net-negative product (refunds/disposals outweighing acquisitions) is
     // real in this ledger and must survive the mapper untouched.
@@ -583,19 +583,19 @@ describe("on-hand counts units in service as locations", () => {
     }) satisfies ProductListDB;
 
   it("sums loose stock and in-use locations against the ledger", () => {
-    const result = dbProductToListAPI(stockedRow(2, 1));
+    const result = dbProductToListAPI(stockedRow(2, 1), []);
     expect(result.onHandUnits).toBe(3);
     expect(result.quantityVariance).toBe(0);
   });
 
   it("counts locations even when nothing is on a shelf", () => {
-    const result = dbProductToListAPI(stockedRow(3, null));
+    const result = dbProductToListAPI(stockedRow(3, null), []);
     expect(result.onHandUnits).toBe(3);
     expect(result.quantityVariance).toBe(0);
   });
 
   it("stays null when there is neither stock nor a location", () => {
-    const result = dbProductToListAPI(stockedRow(0, null));
+    const result = dbProductToListAPI(stockedRow(0, null), []);
     expect(result.onHandUnits).toBeNull();
     expect(result.quantityVariance).toBeNull();
   });

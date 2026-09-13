@@ -1,3 +1,4 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
 import { buildNutrition } from "@cubby/schemas/nutrition";
@@ -16,13 +17,10 @@ import type {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import { recipeImage } from "~/server/db/schema";
 import {
-  imageOrder,
   type MappableImageRecord,
   mapImages,
   mapRelation,
-  notDeleted,
 } from "~/server/repo/database-helpers";
 
 import type {
@@ -86,16 +84,6 @@ export const liveMealCountForRecipeSql = (recipeRef: string): string =>
   `(SELECT count(*) FROM "MealRecipe" mr ` +
   `JOIN "Meal" m ON m."id" = mr."mealId" AND m."deletedAt" IS NULL ` +
   `WHERE mr."recipeId" = ${recipeRef} AND mr."deletedAt" IS NULL)`;
-
-// Keep cover ordering aligned with the detail gallery.
-export const recipeListCoverImageRelation = {
-  where: notDeleted(recipeImage),
-  orderBy: imageOrder,
-  limit: 1,
-  with: {
-    image: true,
-  },
-} as const;
 
 type RecipeSectionIngredientWithRecipe =
   typeof recipeSectionIngredient.$inferSelect & {
@@ -204,7 +192,7 @@ export const dbRecipeToTopLevel = (
 
 type RecipeShallowOut = Omit<
   RecipeListItem,
-  "mealCount" | "sectionCount" | "images"
+  "mealCount" | "sectionCount" | "displayImages"
 >;
 
 const recipeTotalsForRead = (
@@ -228,18 +216,20 @@ export const dbRecipeToAPIShallow: (
 export type RecipeListDB = RecipeSelect & {
   mealCount: number | string;
   sectionCount: number | string;
-  images?: RecipeImageRow[] | null;
 };
 
-export const dbRecipeToListAPI = (recipeData: RecipeListDB): RecipeListItem => {
-  const { mealCount, sectionCount, images, ...rest } = recipeData;
+export const dbRecipeToListAPI = (
+  recipeData: RecipeListDB,
+  displayImages: DisplayImageSummary[],
+): RecipeListItem => {
+  const { mealCount, sectionCount, ...rest } = recipeData;
   return {
     ...dbRecipeToAPIShallow(rest),
     // count() returns bigint (string over the wire), so coerce — mirrors the
     // ingredient list's appearsInRecipes/recipeCount handling.
     mealCount: Number(mealCount),
     sectionCount: Number(sectionCount),
-    images: mapRecipeImages(images ?? undefined),
+    displayImages,
   };
 };
 

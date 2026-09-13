@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { EntityPreviewLink } from "~/app/_components/EntityPreviewLink";
 import { Row } from "~/components/layout";
-import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
+import { transformedImageUrl } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 import { vendorMonogram } from "~/lib/vendor-logo";
 
@@ -82,7 +82,6 @@ export function VendorMark({
     >
       <img
         src={transformedImageUrl(url, MARK_PX)}
-        srcSet={transformedSrcSet(url, MARK_PX)}
         alt=""
         loading="lazy"
         onError={() => setFailedUrl(url)}

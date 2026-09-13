@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { PhotoViewer } from "~/app/_components/photos/photo-viewer";
-import { transformedImageUrl, transformedSrcSet } from "~/lib/image-url";
+import { transformedImageUrl } from "~/lib/image-url";
 import { cn } from "~/lib/utils";
 
 interface ImageGalleryProps {
@@ -94,7 +94,6 @@ export function ImageGallery({ images, className }: ImageGalleryProps) {
             >
               <img
                 src={transformedImageUrl(image.url, 800)}
-                srcSet={transformedSrcSet(image.url, 800)}
                 alt={image.filename}
                 className="aspect-video w-full bg-card object-contain md:aspect-[4/3]"
                 loading={index === 0 ? "eager" : "lazy"}
