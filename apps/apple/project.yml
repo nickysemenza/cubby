@@ -62,12 +62,13 @@ targetTemplates:
             localhost:
               NSExceptionAllowsInsecureHTTPLoads: true
         UILaunchScreen: {}
-        # iOS 26's resize model requires all orientations (Xcode warning: "All interface
-        # orientations must be supported unless the app requires full screen"). Do not add
-        # UIRequiresFullScreen as a way around this.
+        # iOS 26's resize model requires all four orientations, upside-down included (Xcode
+        # warning: "All interface orientations must be supported unless the app requires full
+        # screen"). Do not add UIRequiresFullScreen as a way around this.
         UISupportedInterfaceOrientations:
           [
             UIInterfaceOrientationPortrait,
+            UIInterfaceOrientationPortraitUpsideDown,
             UIInterfaceOrientationLandscapeLeft,
             UIInterfaceOrientationLandscapeRight,
           ]

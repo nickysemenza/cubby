@@ -40,7 +40,10 @@ let package = Package(
             // ~58k generated lines is what makes LLDB stall on launch (see apps/apple/CLAUDE.md's
             // "Debugging on device"). `unsafeFlags` is safe because CubbyKit is only ever
             // consumed as a local path dependency, never as a versioned remote package.
-            swiftSettings: [.unsafeFlags(["-gline-tables-only"])]
+            // -suppress-warnings: the generator spells `package import struct Foundation.URL`
+            // for every file, and the compiler warns that no package-level declaration needs
+            // it; generated code is regenerated, never fixed by hand, so its warnings are noise.
+            swiftSettings: [.unsafeFlags(["-gline-tables-only", "-suppress-warnings"])]
         ),
         .target(
             name: "CubbyKit",
