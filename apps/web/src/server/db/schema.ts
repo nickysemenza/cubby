@@ -899,6 +899,54 @@ export const planting = pgTable(
   ],
 );
 
+/**
+ * Confirmed location intervals for a Planting. These are an internal journal
+ * projection rather than a generic entity: sequence is the stable public-free
+ * identity used when correcting dates without changing the recorded moves.
+ */
+export const plantingLocationPeriod = pgTable(
+  "PlantingLocationPeriod",
+  {
+    id: pkUuid(),
+    plantingId: uuid("plantingId")
+      .notNull()
+      .references(() => planting.id),
+    locationId: uuid("locationId")
+      .notNull()
+      .references(() => location.id),
+    sourceGardenEntryId: uuid("sourceGardenEntryId").references(
+      () => gardenEntry.id,
+    ),
+    sequence: integer("sequence").notNull(),
+    inLocationSince: date("inLocationSince", { mode: "string" }).notNull(),
+    endedOn: date("endedOn", { mode: "string" }),
+    startKind: text("startKind").notNull().default("actual"),
+    ...baseTimestamps(),
+  },
+  (table) => [
+    check(
+      "PlantingLocationPeriod_startKind_check",
+      sql`${table.startKind} in ('actual', 'recorded')`,
+    ),
+    uniqueIndex("PlantingLocationPeriod_plantingId_sequence_key").on(
+      table.plantingId,
+      table.sequence,
+    ),
+    uniqueIndex("PlantingLocationPeriod_open_planting_key")
+      .on(table.plantingId)
+      .where(sql`${table.endedOn} is null`),
+    index("PlantingLocationPeriod_plantingId_idx").on(table.plantingId),
+    index("PlantingLocationPeriod_locationId_dates_idx").on(
+      table.locationId,
+      table.inLocationSince,
+      table.endedOn,
+    ),
+    index("PlantingLocationPeriod_sourceGardenEntryId_idx").on(
+      table.sourceGardenEntryId,
+    ),
+  ],
+);
+
 export const gardenEntry = pgTable(
   "GardenEntry",
   generatedGardenEntryColumns({
@@ -1930,6 +1978,7 @@ export const locationRelations = relations(location, ({ one, many }) => ({
   intendedPlantings: many(planting, {
     relationName: "PlantingIntendedLocation",
   }),
+  plantingLocationPeriods: many(plantingLocationPeriod),
   gardenEntries: many(gardenEntry),
 }));
 
@@ -1958,8 +2007,27 @@ export const plantingRelations = relations(planting, ({ one, many }) => ({
     relationName: "PlantingParent",
   }),
   childPlantings: many(planting, { relationName: "PlantingParent" }),
+  locationPeriods: many(plantingLocationPeriod),
   entries: many(gardenEntry),
 }));
+
+export const plantingLocationPeriodRelations = relations(
+  plantingLocationPeriod,
+  ({ one }) => ({
+    planting: one(planting, {
+      fields: [plantingLocationPeriod.plantingId],
+      references: [planting.id],
+    }),
+    location: one(location, {
+      fields: [plantingLocationPeriod.locationId],
+      references: [location.id],
+    }),
+    sourceGardenEntry: one(gardenEntry, {
+      fields: [plantingLocationPeriod.sourceGardenEntryId],
+      references: [gardenEntry.id],
+    }),
+  }),
+);
 
 export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
   location: one(location, {
@@ -1971,6 +2039,7 @@ export const gardenEntryRelations = relations(gardenEntry, ({ one, many }) => ({
     references: [planting.id],
   }),
   images: many(gardenEntryImage),
+  locationPeriodsStarted: many(plantingLocationPeriod),
 }));
 
 export const inventoryEntryRelations = relations(inventoryEntry, ({ one }) => ({

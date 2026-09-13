@@ -7,13 +7,18 @@ import {
   gardenEntry,
   inventoryEntry,
   planting,
+  plantingLocationPeriod,
   product,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   createPlanting,
+  correctLocationDates,
+  backfillGardenLocationPeriods,
   finishPlanting,
   gardenEntries,
+  gardenJournal,
+  gardenLocationHistory,
   movePlanting,
   recordGardenEntry,
   splitPlanting,
@@ -73,6 +78,12 @@ describe("garden workflows", () => {
       sowedOn: null,
       transplantedOn: null,
     });
+    expect(
+      (await gardenLocationHistory(ctx.db, { plantingId: tree.id })).periods[0],
+    ).toMatchObject({
+      locationId: tree.locationId,
+      startKind: "recorded",
+    });
     const crop = await createIngredient(
       ctx.db,
       { name: "Garden test tomato" },
@@ -128,6 +139,73 @@ describe("garden workflows", () => {
       movedOn: "2026-09-20",
     });
     expect(moved.transplantedOn).toBe("2026-09-20");
+    expect(
+      await gardenLocationHistory(ctx.db, { plantingId: planned.id }),
+    ).toMatchObject({
+      periods: [
+        {
+          sequence: 0,
+          locationId: tray.id,
+          inLocationSince: "2026-09-12",
+          endedOn: "2026-09-20",
+          startKind: "actual",
+        },
+        {
+          sequence: 1,
+          locationId: bed.id,
+          inLocationSince: "2026-09-20",
+          endedOn: null,
+          startKind: "actual",
+        },
+      ],
+    });
+    const bedOverview = await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      kind: "observation",
+      observedOn: "2026-10-06",
+      note: "Whole-bed overview",
+      pendingImageIds: [],
+    });
+    const otherPlanting = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    const otherPlantingEntry = await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      plantingId: otherPlanting.id,
+      kind: "observation",
+      observedOn: "2026-10-06",
+      note: "Another tomato",
+      pendingImageIds: [],
+    });
+    expect(
+      (
+        await gardenJournal(ctx.db, {
+          plantingId: planned.id,
+          includeBedContext: false,
+          page: 1,
+        })
+      ).items.find((entry) => entry.id === bedOverview.id),
+    ).toBeUndefined();
+    expect(
+      (
+        await gardenJournal(ctx.db, {
+          plantingId: planned.id,
+          includeBedContext: true,
+          page: 1,
+        })
+      ).items.find((entry) => entry.id === bedOverview.id),
+    ).toMatchObject({ context: "bed", locationName: bed.name });
+    expect(
+      (
+        await gardenJournal(ctx.db, {
+          plantingId: planned.id,
+          includeBedContext: true,
+          page: 1,
+        })
+      ).items.find((entry) => entry.id === otherPlantingEntry.id),
+    ).toBeUndefined();
     const child = await splitPlanting(ctx.db, {
       plantingId: planned.id,
       locationId: tray.id,
@@ -140,6 +218,40 @@ describe("garden workflows", () => {
       sowedOn: "2026-09-12",
       locationId: tray.id,
     });
+    const moveEntry = (
+      await gardenEntries(ctx.db, { plantingId: planned.id, page: 1 })
+    ).items.find((entry) => entry.kind === "move");
+    expect(moveEntry).toBeDefined();
+    const moveEntryId = await resolveLiveShortcode(
+      ctx.db,
+      moveEntry!.id,
+      "gardenEntry",
+    );
+    expect(moveEntryId).not.toBeNull();
+    await expect(
+      updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", moveEntryId!),
+        { observedOn: "2026-09-19" },
+      ),
+    ).rejects.toBeDefined();
+    const bedOverviewId = await resolveLiveShortcode(
+      ctx.db,
+      bedOverview.id,
+      "gardenEntry",
+    );
+    expect(bedOverviewId).not.toBeNull();
+    expect(
+      await updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", bedOverviewId!),
+        {
+          locationId: tray.id,
+          plantingId: child.id,
+          observedOn: "2026-10-07",
+        },
+      ),
+    ).toMatchObject({ locationId: tray.id, plantingId: child.id });
     for (const { observedOn, harvestAmount } of [
       { observedOn: "2026-10-05", harvestAmount: "6 tomatoes" },
       { observedOn: "2026-10-12", harvestAmount: "handful" },
@@ -222,18 +334,84 @@ describe("garden workflows", () => {
       history.items.filter((entry) => entry.kind === "harvest"),
     ).toHaveLength(2);
     expect(moved.status).toBe("growing");
+    const correctedHistory = await correctLocationDates(ctx.db, {
+      plantingId: planned.id,
+      periods: [
+        {
+          sequence: 0,
+          inLocationSince: "2026-09-12",
+          endedOn: "2026-09-19",
+        },
+        {
+          sequence: 1,
+          inLocationSince: "2026-09-19",
+          endedOn: null,
+        },
+      ],
+    });
+    expect(correctedHistory.periods[1]).toMatchObject({
+      inLocationSince: "2026-09-19",
+      startKind: "actual",
+    });
+    await expect(
+      correctLocationDates(ctx.db, {
+        plantingId: planned.id,
+        periods: [
+          {
+            sequence: 0,
+            inLocationSince: "2026-09-12",
+            endedOn: "2026-09-18",
+          },
+          {
+            sequence: 1,
+            inLocationSince: "2026-09-19",
+            endedOn: null,
+          },
+        ],
+      }),
+    ).rejects.toBeDefined();
+    expect(
+      (
+        await gardenEntries(ctx.db, { plantingId: planned.id, page: 1 })
+      ).items.find((entry) => entry.kind === "move"),
+    ).toMatchObject({ observedOn: "2026-09-19" });
+    const parentId = await resolveLiveShortcode(ctx.db, planned.id, "planting");
+    expect(parentId).not.toBeNull();
     const finished = await finishPlanting(ctx.db, {
       plantingId: planned.id,
       finishedOn: "2026-11-01",
     });
     expect(finished.status).toBe("finished");
+    const correctedFinishedHistory = await correctLocationDates(ctx.db, {
+      plantingId: planned.id,
+      periods: [
+        {
+          sequence: 0,
+          inLocationSince: "2026-09-12",
+          endedOn: "2026-09-19",
+        },
+        {
+          sequence: 1,
+          inLocationSince: "2026-09-19",
+          endedOn: "2026-11-02",
+        },
+      ],
+    });
+    expect(correctedFinishedHistory.periods[1]).toMatchObject({
+      endedOn: "2026-11-02",
+    });
+    const correctedFinishedPlanting = await getDb(
+      ctx.db,
+    ).query.planting.findFirst({
+      where: eq(planting.id, parseEntityId("planting", parentId!)),
+      columns: { finishedOn: true },
+    });
+    expect(correctedFinishedPlanting?.finishedOn).toBe("2026-11-02");
     expect(
       (await gardenEntries(ctx.db, { plantingId: child.id, page: 1 })).items,
     ).not.toHaveLength(0);
-    const parentId = await resolveLiveShortcode(ctx.db, planned.id, "planting");
     const childId = await resolveLiveShortcode(ctx.db, child.id, "planting");
     const trayId = await resolveLiveShortcode(ctx.db, tray.id, "location");
-    expect(parentId).not.toBeNull();
     expect(childId).not.toBeNull();
     const rows = await getDb(ctx.db)
       .select({ locationId: gardenEntry.locationId })
@@ -257,5 +435,108 @@ describe("garden workflows", () => {
           .where(notDeleted(inventoryEntry))
       )[0]?.count ?? 0;
     expect(inventoryAfter).toBe(inventoryBefore);
+  });
+
+  it("backfills conservative current-location facts and rejects inverted transitions", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Garden backfill crop" },
+      TEST_ACTOR,
+    );
+    const tray = await location("Garden backfill tray", "tray");
+    const planned = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned" },
+      TEST_ACTOR,
+    );
+    await startPlanting(ctx.db, {
+      plantingId: planned.id,
+      locationId: tray.id,
+      startedOn: "2026-09-12",
+      startMethod: "sow",
+    });
+    const plantingId = await resolveLiveShortcode(
+      ctx.db,
+      planned.id,
+      "planting",
+    );
+    expect(plantingId).not.toBeNull();
+    await getDb(ctx.db)
+      .delete(plantingLocationPeriod)
+      .where(eq(plantingLocationPeriod.plantingId, plantingId!));
+    await backfillGardenLocationPeriods(ctx.db);
+    await backfillGardenLocationPeriods(ctx.db);
+    expect(
+      await gardenLocationHistory(ctx.db, { plantingId: planned.id }),
+    ).toMatchObject({
+      periods: [
+        {
+          sequence: 0,
+          locationId: tray.id,
+          endedOn: null,
+          startKind: "recorded",
+        },
+      ],
+    });
+    const guarded = await createPlanting(
+      ctx.db,
+      {
+        ingredientId: crop.id,
+        locationId: tray.id,
+        status: "growing",
+        inLocationSince: "2026-09-20",
+      },
+      TEST_ACTOR,
+    );
+    await expect(
+      movePlanting(ctx.db, {
+        plantingId: guarded.id,
+        locationId: tray.id,
+        movedOn: "2026-09-19",
+      }),
+    ).rejects.toBeDefined();
+    await expect(
+      finishPlanting(ctx.db, {
+        plantingId: guarded.id,
+        finishedOn: "2026-09-19",
+      }),
+    ).rejects.toBeDefined();
+    const finished = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned" },
+      TEST_ACTOR,
+    );
+    await startPlanting(ctx.db, {
+      plantingId: finished.id,
+      locationId: tray.id,
+      startedOn: "2026-09-12",
+      startMethod: "sow",
+    });
+    await finishPlanting(ctx.db, {
+      plantingId: finished.id,
+      finishedOn: "2026-10-01",
+    });
+    const finishedId = await resolveLiveShortcode(
+      ctx.db,
+      finished.id,
+      "planting",
+    );
+    expect(finishedId).not.toBeNull();
+    await getDb(ctx.db)
+      .delete(plantingLocationPeriod)
+      .where(eq(plantingLocationPeriod.plantingId, finishedId!));
+    await backfillGardenLocationPeriods(ctx.db);
+    expect(
+      await gardenLocationHistory(ctx.db, { plantingId: finished.id }),
+    ).toMatchObject({
+      periods: [
+        {
+          locationId: tray.id,
+          inLocationSince: "2026-10-01",
+          endedOn: "2026-10-01",
+          startKind: "recorded",
+        },
+      ],
+    });
   });
 });

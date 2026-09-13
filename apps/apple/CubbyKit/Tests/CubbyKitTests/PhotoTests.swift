@@ -113,8 +113,12 @@ final class StubPhotoService: PhotoService, Sendable {
 
     let calls = Mutex<[Call]>([])
     let existing: [ImageCode]
+    let remainingMarkFailures: Mutex<Int>
 
-    init(existing: [ImageCode] = []) { self.existing = existing }
+    init(existing: [ImageCode] = [], markFailures: Int = 0) {
+        self.existing = existing
+        remainingMarkFailures = Mutex(markFailures)
+    }
 
     func record(_ call: Call) { calls.withLock { $0.append(call) } }
 
@@ -127,7 +131,15 @@ final class StubPhotoService: PhotoService, Sendable {
             url: URL(string: "https://images.example/x.jpg")!)
     }
 
-    func markUploaded(_ id: ImageCode) async throws { record(.mark(id)) }
+    func markUploaded(_ id: ImageCode) async throws {
+        record(.mark(id))
+        let shouldFail = remainingMarkFailures.withLock { count in
+            guard count > 0 else { return false }
+            count -= 1
+            return true
+        }
+        if shouldFail { throw URLError(.networkConnectionLost) }
+    }
 
     func attachImages(_ ids: [ImageCode], to entity: EntityKey, id: String) async throws {
         record(.attach(ids, entity, id))
@@ -198,10 +210,32 @@ struct PhotoUploaderTests {
         let uploader = PhotoUploader(service: service) { _, _, _ in
             throw CubbyAPIError(status: 403, operationID: "presigned.put", detail: nil)
         }
-        await #expect(throws: CubbyAPIError.self) {
+        await #expect(throws: PhotoUploader.Failure.self) {
             _ = try await uploader.upload(.init(image: image, entity: .product, entityID: "PRD-2345"))
         }
         #expect(service.calls.withLock { $0 }.count == 1)
+    }
+
+    @Test func retriesMarkingWithoutUploadingTheSuccessfulPhotoAgain() async throws {
+        let service = StubPhotoService(markFailures: 1)
+        let uploader = PhotoUploader(service: service) { data, url, contentType in
+            service.record(.put(url, contentType, data.count))
+        }
+        let request = PhotoUploader.Request(image: image, entity: .product, entityID: "PRD-2345")
+        var checkpoint: PhotoUploader.Checkpoint?
+        do {
+            _ = try await uploader.upload(request)
+            Issue.record("Expected the first mark to fail")
+        } catch let failure as PhotoUploader.Failure {
+            checkpoint = try #require(failure.checkpoint)
+        }
+        let resumed = try #require(checkpoint)
+        _ = try await uploader.upload(request, resuming: resumed)
+        let calls = service.calls.withLock { $0 }
+        #expect(calls.filter { if case .create = $0 { true } else { false } }.count == 1)
+        #expect(calls.filter { if case .put = $0 { true } else { false } }.count == 1)
+        #expect(calls.filter { if case .mark = $0 { true } else { false } }.count == 2)
+        #expect(calls.filter { if case .attach = $0 { true } else { false } }.count == 1)
     }
 
     @Test func imageUploadDecodes() throws {
@@ -229,9 +263,9 @@ struct GardenImageUploaderTests {
 
         #expect(ids == [ImageCode("IMG-2345"), ImageCode("IMG-2345")])
         let calls = service.calls.withLock { $0 }
-        #expect(calls.count == 6)
+        #expect(calls.count == 4)
         #expect(calls.filter { if case .attach = $0 { true } else { false } }.isEmpty)
-        #expect(calls.filter { if case .mark = $0 { true } else { false } }.count == 2)
+        #expect(calls.filter { if case .mark = $0 { true } else { false } }.isEmpty)
     }
 }
 

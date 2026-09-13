@@ -13,9 +13,14 @@ import { gardenPlantingOut } from "./planting";
 export {
   gardenEntryKind,
   gardenLocationKind,
+  plantingLocationStartKind,
   plantingStatus,
 } from "./garden-fields";
-import { gardenLocationKind, plantingStatus } from "./garden-fields";
+import {
+  gardenLocationKind,
+  plantingLocationStartKind,
+  plantingStatus,
+} from "./garden-fields";
 
 export {
   gardenEntryCreateInput,
@@ -54,6 +59,8 @@ export const gardenCreatePlantingInput = z.object({
   locationId: locationShortcode.nullable().optional(),
   intendedLocationId: locationShortcode.nullable().optional(),
   status: plantingStatus.default("planned"),
+  inLocationSince: plainDate.nullable().optional(),
+  inLocationSinceKind: plantingLocationStartKind.default("actual"),
   ...optionalPlantingDetails,
 });
 export const gardenRecordEntryInput = z.object({
@@ -99,6 +106,44 @@ export const gardenEntriesOut = z.object({
   hasMore: z.boolean(),
 });
 
+export const gardenJournalInput = z.object({
+  plantingId: plantingShortcode,
+  includeBedContext: z.boolean().default(false),
+  page: z.number().int().positive().default(1),
+});
+export const gardenJournalEntryOut = gardenEntryOut.extend({
+  context: z.enum(["direct", "bed"]),
+});
+export const gardenJournalOut = z.object({
+  items: z.array(gardenJournalEntryOut),
+  hasMore: z.boolean(),
+});
+
+export const gardenLocationHistoryInput = z.object({
+  plantingId: plantingShortcode,
+});
+export const gardenLocationPeriodOut = z.object({
+  sequence: z.number().int().nonnegative(),
+  locationId: locationShortcode,
+  locationName: z.string(),
+  inLocationSince: plainDate,
+  endedOn: plainDate.nullable(),
+  startKind: plantingLocationStartKind,
+});
+export const gardenLocationHistoryOut = z.object({
+  periods: z.array(gardenLocationPeriodOut),
+});
+export const gardenCorrectLocationDatesInput = z.object({
+  plantingId: plantingShortcode,
+  periods: z.array(
+    z.object({
+      sequence: z.number().int().nonnegative(),
+      inLocationSince: plainDate,
+      endedOn: plainDate.nullable().optional(),
+    }),
+  ),
+});
+
 export const gardenLocationSummaryOut = z.object({
   id: locationShortcode,
   name: z.string(),
@@ -132,6 +177,15 @@ export const gardenOptionsOut = z.object({
       id: productShortcode,
       name: z.string(),
       growsIngredientId: ingredientShortcode.nullable(),
+    }),
+  ),
+  plantings: z.array(
+    z.object({
+      id: plantingShortcode,
+      name: z.string(),
+      locationId: locationShortcode.nullable(),
+      locationName: z.string().nullable(),
+      status: plantingStatus,
     }),
   ),
 });

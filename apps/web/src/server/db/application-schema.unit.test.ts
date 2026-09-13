@@ -7,7 +7,11 @@ import { z } from "zod";
 import * as schema from "./schema";
 
 it("preserves the physical application schema across model compilation", async () => {
-  const snapshot = generateDrizzleJson(schema);
+  // Drizzle occasionally adds undefined metadata keys between package releases.
+  // The checked-in JSON snapshot intentionally represents only serialized DDL.
+  const snapshot = z
+    .record(z.string(), z.unknown())
+    .parse(JSON.parse(JSON.stringify(generateDrizzleJson(schema))));
   const baseline = z
     .json()
     .parse(

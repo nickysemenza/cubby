@@ -19,6 +19,7 @@ import { EntryForm } from "./entry-form";
 import { GardenGuide } from "./garden-guide";
 import { GardenTimeline } from "./garden-timeline";
 import type { GardenLocation } from "./location-form";
+import { PlantingLocationHistory } from "./location-history";
 import {
   PlantingActionForm,
   plantingActionLabels,
@@ -45,13 +46,17 @@ function PlantingFacts({
 }) {
   return (
     <>
-      <Row gap="sm" align="center" wrap>
-        <h2 className="text-lg font-semibold">
+      <p className="text-sm">
+        Crop:{" "}
+        <Link
+          to="/ingredients/$shortcode"
+          params={{ shortcode: planting.ingredientId }}
+          className="underline"
+        >
           {cropName}
-          {planting.variety ? ` · ${planting.variety}` : ""}
-        </h2>
-        <Badge variant="secondary">{planting.status}</Badge>
-      </Row>
+        </Link>
+        {planting.variety ? ` · ${planting.variety}` : ""}
+      </p>
       <p className="text-sm">
         {location ? (
           <Link
@@ -126,17 +131,6 @@ function PlantingActions({
 }) {
   return (
     <Row gap="sm" wrap>
-      <Button variant="outline" onClick={() => onOpen("edit")}>
-        Edit planting
-      </Button>
-      {planting.locationId && (
-        <Button onClick={() => onOpen("entry")}>
-          Note, photos, or harvest
-        </Button>
-      )}
-      {planting.status === "planned" && (
-        <Button onClick={() => onOpen("start")}>Start planting</Button>
-      )}
       {planting.status === "growing" && (
         <>
           <Button variant="outline" onClick={() => onOpen("move")}>
@@ -248,30 +242,95 @@ export function PlantingDetail({
   );
   return (
     <>
+      <Stack gap="md" className="mb-6">
+        <Row gap="sm" align="center" wrap>
+          <h2 className="text-lg font-semibold">
+            {crop.data?.name ?? "Planting"}
+            {planting.variety ? ` · ${planting.variety}` : ""}
+          </h2>
+          <Badge variant="secondary">{planting.status}</Badge>
+        </Row>
+        {location.data && (
+          <Link
+            to="/locations/$shortcode"
+            params={{ shortcode: location.data.id }}
+            className="text-sm underline"
+          >
+            {location.data.name}
+          </Link>
+        )}
+        <Row gap="sm" wrap>
+          {planting.locationId && (
+            <Button onClick={() => setDialog("entry")}>
+              Add photos / Log entry
+            </Button>
+          )}
+          {planting.status === "planned" && (
+            <Button onClick={() => setDialog("start")}>Start planting</Button>
+          )}
+          <Button variant="outline" onClick={() => setDialog("edit")}>
+            Edit planting
+          </Button>
+          {planting.locationId && (
+            <Link
+              to="/garden-entries"
+              search={{ locationId: planting.locationId }}
+              className="content-center text-sm underline"
+            >
+              Bed journal
+            </Link>
+          )}
+        </Row>
+      </Stack>
       <DetailSections
         showEntityActions={false}
         rawData={planting}
         sections={[
           {
-            id: "overview",
-            title: "Planting",
-            icon: Sprout,
-            placement: "primary",
-            content: overview,
-          },
-          {
             id: "garden-history",
-            title: "Garden history",
+            title: "Journal",
             icon: History,
             placement: "primary",
             content: <GardenTimeline plantingId={planting.id} />,
+          },
+          {
+            id: "overview",
+            title: "Planting details",
+            icon: Sprout,
+            placement: "supporting",
+            content: (
+              <details>
+                <summary className="cursor-pointer py-2 text-sm font-medium">
+                  Dates, source, and planting actions
+                </summary>
+                <Stack gap="md" className="pt-3">
+                  {overview}
+                </Stack>
+              </details>
+            ),
+          },
+          {
+            id: "location-history",
+            title: "Location history",
+            icon: History,
+            placement: "supporting",
+            content: <PlantingLocationHistory plantingId={planting.id} />,
           },
           {
             id: "planting-guide",
             title: "Local planting guide",
             icon: BookOpen,
             placement: "supporting",
-            content: <GardenGuide guideKey={crop.data?.gardenGuideKey} />,
+            content: (
+              <details>
+                <summary className="cursor-pointer py-2 text-sm font-medium">
+                  View planting windows and sources
+                </summary>
+                <div className="pt-3">
+                  <GardenGuide guideKey={crop.data?.gardenGuideKey} />
+                </div>
+              </details>
+            ),
           },
         ]}
       />

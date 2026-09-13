@@ -197,6 +197,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "financialTransaction.vendorInference": async () =>
     (await import("~/server/finance-browser.server"))
       .financialTransactionHandlers.operations.vendorInference,
+  "garden.correctLocationDates": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .correctLocationDates,
   "garden.createPlanting": async () =>
     (await import("~/server/garden-browser.server")).gardenHandlers.operations
       .createPlanting,
@@ -209,6 +212,12 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "garden.guides": async () =>
     (await import("~/server/garden-browser.server")).gardenHandlers.operations
       .guides,
+  "garden.journal": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .journal,
+  "garden.locationHistory": async () =>
+    (await import("~/server/garden-browser.server")).gardenHandlers.operations
+      .locationHistory,
   "garden.movePlanting": async () =>
     (await import("~/server/garden-browser.server")).gardenHandlers.operations
       .movePlanting,

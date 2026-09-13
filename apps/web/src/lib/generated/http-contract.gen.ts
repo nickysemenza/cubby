@@ -324,6 +324,11 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     garden: {
+      correctLocationDates: rpcMutation(
+        "garden",
+        "correctLocationDates",
+        contracts.gardenContract.ops["correctLocationDates"],
+      ),
       createPlanting: rpcMutation(
         "garden",
         "createPlanting",
@@ -343,6 +348,16 @@ export const httpContract = httpContractBuilder.router(
         "garden",
         "guides",
         contracts.gardenContract.ops["guides"],
+      ),
+      journal: rpcQuery(
+        "garden",
+        "journal",
+        contracts.gardenContract.ops["journal"],
+      ),
+      locationHistory: rpcQuery(
+        "garden",
+        "locationHistory",
+        contracts.gardenContract.ops["locationHistory"],
       ),
       movePlanting: rpcMutation(
         "garden",

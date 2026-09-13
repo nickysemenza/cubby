@@ -28,6 +28,7 @@
     "ai:eval": "tsx scripts/ai-eval.ts",
     "db:ensure-extensions": "tsx scripts/ensure-db-extensions.ts",
     "db:preflight-entity-integrity": "tsx scripts/preflight-entity-relationship-integrity.ts",
+    "db:backfill-garden-location-periods": "tsx scripts/backfill-garden-location-periods.ts",
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:studio": "drizzle-kit studio",

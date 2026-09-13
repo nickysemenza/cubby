@@ -31,6 +31,12 @@ const PLANTING_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "A planting with garden entries cannot be deleted.",
   },
+  "PlantingLocationPeriod.plantingId": {
+    code: "block-location-history",
+    effect: "block",
+    description:
+      "A planting with confirmed location history cannot be deleted.",
+  },
 } as const;
 
 const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
@@ -38,6 +44,12 @@ const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
     code: "soft-delete-association",
     effect: "soft-delete",
     description: "Garden entry image associations are removed with the entry.",
+  },
+  "PlantingLocationPeriod.sourceGardenEntryId": {
+    code: "block-location-history-source",
+    effect: "block",
+    description:
+      "A structural entry remains attached to confirmed location history.",
   },
 } as const;
 

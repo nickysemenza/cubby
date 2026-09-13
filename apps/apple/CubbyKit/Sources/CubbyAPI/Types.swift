@@ -17,6 +17,9 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/dashboard/counts`.
     /// - Remark: Generated from `#/paths//api/v1/dashboard/counts/get(dashboard.counts)`.
     func dashboard_counts(_ input: Operations.Dashboard_counts.Input) async throws -> Operations.Dashboard_counts.Output
+    /// - Remark: HTTP `POST /api/v1/garden/correctLocationDates`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/correctLocationDates/post(garden.correctLocationDates)`.
+    func garden_correctLocationDates(_ input: Operations.Garden_correctLocationDates.Input) async throws -> Operations.Garden_correctLocationDates.Output
     /// - Remark: HTTP `POST /api/v1/garden/createPlanting`.
     /// - Remark: Generated from `#/paths//api/v1/garden/createPlanting/post(garden.createPlanting)`.
     func garden_createPlanting(_ input: Operations.Garden_createPlanting.Input) async throws -> Operations.Garden_createPlanting.Output
@@ -29,6 +32,12 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/garden/guides`.
     /// - Remark: Generated from `#/paths//api/v1/garden/guides/get(garden.guides)`.
     func garden_guides(_ input: Operations.Garden_guides.Input) async throws -> Operations.Garden_guides.Output
+    /// - Remark: HTTP `GET /api/v1/garden/journal`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/journal/get(garden.journal)`.
+    func garden_journal(_ input: Operations.Garden_journal.Input) async throws -> Operations.Garden_journal.Output
+    /// - Remark: HTTP `GET /api/v1/garden/locationHistory`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/locationHistory/get(garden.locationHistory)`.
+    func garden_locationHistory(_ input: Operations.Garden_locationHistory.Input) async throws -> Operations.Garden_locationHistory.Output
     /// - Remark: HTTP `POST /api/v1/garden/movePlanting`.
     /// - Remark: Generated from `#/paths//api/v1/garden/movePlanting/post(garden.movePlanting)`.
     func garden_movePlanting(_ input: Operations.Garden_movePlanting.Input) async throws -> Operations.Garden_movePlanting.Output
@@ -283,6 +292,17 @@ extension APIProtocol {
     package func dashboard_counts(headers: Operations.Dashboard_counts.Input.Headers = .init()) async throws -> Operations.Dashboard_counts.Output {
         try await dashboard_counts(Operations.Dashboard_counts.Input(headers: headers))
     }
+    /// - Remark: HTTP `POST /api/v1/garden/correctLocationDates`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/correctLocationDates/post(garden.correctLocationDates)`.
+    package func garden_correctLocationDates(
+        headers: Operations.Garden_correctLocationDates.Input.Headers = .init(),
+        body: Operations.Garden_correctLocationDates.Input.Body? = nil
+    ) async throws -> Operations.Garden_correctLocationDates.Output {
+        try await garden_correctLocationDates(Operations.Garden_correctLocationDates.Input(
+            headers: headers,
+            body: body
+        ))
+    }
     /// - Remark: HTTP `POST /api/v1/garden/createPlanting`.
     /// - Remark: Generated from `#/paths//api/v1/garden/createPlanting/post(garden.createPlanting)`.
     package func garden_createPlanting(
@@ -320,6 +340,28 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//api/v1/garden/guides/get(garden.guides)`.
     package func garden_guides(headers: Operations.Garden_guides.Input.Headers = .init()) async throws -> Operations.Garden_guides.Output {
         try await garden_guides(Operations.Garden_guides.Input(headers: headers))
+    }
+    /// - Remark: HTTP `GET /api/v1/garden/journal`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/journal/get(garden.journal)`.
+    package func garden_journal(
+        query: Operations.Garden_journal.Input.Query,
+        headers: Operations.Garden_journal.Input.Headers = .init()
+    ) async throws -> Operations.Garden_journal.Output {
+        try await garden_journal(Operations.Garden_journal.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/garden/locationHistory`.
+    /// - Remark: Generated from `#/paths//api/v1/garden/locationHistory/get(garden.locationHistory)`.
+    package func garden_locationHistory(
+        query: Operations.Garden_locationHistory.Input.Query,
+        headers: Operations.Garden_locationHistory.Input.Headers = .init()
+    ) async throws -> Operations.Garden_locationHistory.Output {
+        try await garden_locationHistory(Operations.Garden_locationHistory.Input(
+            query: query,
+            headers: headers
+        ))
     }
     /// - Remark: HTTP `POST /api/v1/garden/movePlanting`.
     /// - Remark: Generated from `#/paths//api/v1/garden/movePlanting/post(garden.movePlanting)`.

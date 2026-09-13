@@ -24,6 +24,15 @@ public protocol GardenService: Sendable {
     func setGardenProduct(id: String, growsIngredientID: String?) async throws
     func setGardenIngredient(id: String, guideKey: String?) async throws
     func updateGardenPlanting(_ input: EditGardenPlanting) async throws
-    func gardenEntries() async throws -> [GardenEntry]
+    func gardenEntries(locationID: String?, plantingID: String?, page: Int) async throws -> (
+        items: [GardenEntry], hasMore: Bool
+    )
+    func gardenJournal(
+        plantingID: String, includeBedContext: Bool, page: Int
+    ) async throws -> (items: [GardenJournalEntry], hasMore: Bool)
+    func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriod]
+    func correctGardenLocationDates(
+        plantingID: String, periods: [GardenLocationPeriod]
+    ) async throws -> [GardenLocationPeriod]
     func updateGardenEntry(_ input: EditGardenEntry) async throws
 }

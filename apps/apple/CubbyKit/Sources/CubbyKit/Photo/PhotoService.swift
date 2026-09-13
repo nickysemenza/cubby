@@ -31,7 +31,7 @@ extension EntityDescriptor {
 public protocol PhotoService: Sendable {
     func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey)
         async throws -> ImageUpload
-    /// Never skipped: an image left `PENDING` is culled by the server.
+    /// Finalizes standalone uploads. Garden entry attachment finalizes its pending batch atomically.
     func markUploaded(_ id: ImageCode) async throws
     /// Attaches uploaded images to any entity whose update body takes `pendingImageIds`; throws
     /// `EntityOperationError.unsupported` for one that does not.

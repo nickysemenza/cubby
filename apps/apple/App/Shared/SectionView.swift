@@ -19,7 +19,13 @@ struct SectionView: View {
         .navigationDestination(for: Route.self) { route in
             switch route {
             case .entityList(let key): EntityListView(key: key)
-            case .entityDetail(let key, let id): EntityDetailView(key: key, id: id)
+            case .entityDetail(let key, let id):
+                switch key {
+                case .planting: GardenPlantingRouteView(id: id)
+                case .gardenEntry: GardenEntryRouteView(id: id)
+                default: EntityDetailView(key: key, id: id)
+                }
+            case .gardenBedJournal(let id): GardenBedJournalView(locationID: id)
             case .audit(let locationID): AuditRootView(locationID: locationID)
             case .needsPhoto(let locationID): NeedsPhotoView(locationID: locationID)
             }

@@ -5,17 +5,18 @@ import {
 } from "@cubby/schemas/garden";
 import { imageShortcode } from "@cubby/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
-import { Grid, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
-import { Image } from "~/components/ui/image";
+import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
+import EntityImageList from "~/app/_components/EntityImageList";
+import { Stack } from "~/components/layout";
 import { NativeSelect } from "~/components/ui/native-select";
 import { entityMutation } from "~/entities/entity-mutation.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { getErrorMessage } from "~/lib/error-utils";
 import { householdLocalDate } from "~/lib/household-date";
 
+import { EntryContextFields } from "./entry-context-fields";
 import { GardenField, GardenFormActions, GardenNotes } from "./garden-fields";
 import {
   GardenPhotos,
@@ -28,6 +29,14 @@ const productionOperations = {
   recordEntry: garden.recordEntry,
   mutate: entityMutation.mutate,
 };
+function initialEntryFields(entry?: GardenEntryOut) {
+  return {
+    kind: entry?.kind ?? "observation",
+    observedOn: entry?.observedOn ?? householdLocalDate(),
+    note: entry?.note ?? "",
+    harvestAmount: entry?.harvestAmount ?? "",
+  };
+}
 export function EntryForm({
   locationId,
   plantingId,
@@ -35,6 +44,7 @@ export function EntryForm({
   onSaved,
   onCancel,
   operations = productionOperations,
+  loadOptions,
 }: {
   locationId: string;
   plantingId?: string;
@@ -42,31 +52,42 @@ export function EntryForm({
   onSaved: () => void;
   onCancel: () => void;
   operations?: typeof productionOperations;
+  loadOptions?: typeof garden.options;
 }) {
-  const [kind, setKind] = useState(entry?.kind ?? "observation");
-  const [observedOn, setObservedOn] = useState(
-    entry?.observedOn ?? householdLocalDate(),
-  );
-  const [note, setNote] = useState(entry?.note ?? "");
-  const [harvestAmount, setHarvestAmount] = useState(
-    entry?.harvestAmount ?? "",
-  );
+  const [place, setPlace] = useState<ComboboxItem | null>({
+    id: entry?.locationId ?? locationId,
+    name: entry?.locationName ?? "Selected location",
+  });
+  const [crop, setCrop] = useState<ComboboxItem | null>(() => {
+    const id = entry ? entry.plantingId : plantingId;
+    return id ? { id, name: entry?.plantingName ?? "Selected planting" } : null;
+  });
+  const initial = initialEntryFields(entry);
+  const [kind, setKind] = useState(initial.kind);
+  const [observedOn, setObservedOn] = useState(initial.observedOn);
+  const [note, setNote] = useState(initial.note);
+  const [harvestAmount, setHarvestAmount] = useState(initial.harvestAmount);
   const [photos, setPhotos] = useState<GardenPhotoDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [removedImages, setRemovedImages] = useState<string[]>([]);
+  const saving = useRef(false);
+  const isMove = entry?.kind === "move";
   // Saving the batch is deliberately sequential: failed uploads leave both the form and completed uploads intact.
   const save = useMutation({
     meta: { invalidates: ripple.garden },
     mutationFn: async () => {
       const data = {
-        locationId: entry?.locationId ?? locationId,
-        plantingId: entry?.plantingId ?? plantingId ?? null,
+        locationId: place?.id,
+        plantingId: crop?.id ?? null,
         kind,
         observedOn,
         note: note.trim() || null,
         harvestAmount: kind === "harvest" ? harvestAmount.trim() || null : null,
       };
-      const pendingImageIds = await uploadGardenPhotos(photos);
+      if (!place) throw new Error("Choose the location where this happened.");
+      const pendingImageIds = await uploadGardenPhotos(photos, undefined, () =>
+        setPhotos([...photos]),
+      );
       if (entry) {
         await operations.mutate.call({
           entity: "gardenEntry",
@@ -86,16 +107,29 @@ export function EntryForm({
     },
     onSuccess: onSaved,
     onError: (error) => setError(getErrorMessage(error)),
+    onSettled: () => {
+      saving.current = false;
+    },
   });
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
+        if (saving.current) return;
+        saving.current = true;
         setError(null);
         save.mutate();
       }}
     >
       <Stack gap="lg">
+        <EntryContextFields
+          location={place}
+          planting={crop}
+          onLocationChange={setPlace}
+          onPlantingChange={setCrop}
+          disabled={save.isPending || isMove}
+          loadOptions={loadOptions}
+        />
         <Stack gap="sm">
           <label htmlFor="garden-entry-kind">Entry type</label>
           <NativeSelect
@@ -106,11 +140,11 @@ export function EntryForm({
                 event.target.value === "harvest" ? "harvest" : "observation",
               )
             }
-            disabled={entry?.kind === "move"}
+            disabled={save.isPending || isMove}
           >
             <option value="observation">Note or photos</option>
             <option value="harvest">Harvest</option>
-            {entry?.kind === "move" && <option value="move">Move</option>}
+            {isMove && <option value="move">Move</option>}
           </NativeSelect>
         </Stack>
         <GardenField
@@ -119,43 +153,41 @@ export function EntryForm({
           value={observedOn}
           onChange={setObservedOn}
           required
+          disabled={save.isPending || isMove}
         />
+        {isMove && (
+          <p className="text-sm text-muted-foreground">
+            Correct move dates in the planting’s location history so its journal
+            stays consistent.
+          </p>
+        )}
         {kind === "harvest" && (
           <GardenField
             label="Harvest amount (optional)"
             value={harvestAmount}
             onChange={setHarvestAmount}
             placeholder="A handful, 6 tomatoes, 300 g…"
+            disabled={save.isPending}
           />
         )}
-        <GardenNotes value={note} onChange={setNote} />
+        <GardenNotes
+          value={note}
+          onChange={setNote}
+          disabled={save.isPending}
+        />
         {entry && entry.images.length > 0 && (
-          <Grid cols="pair" gap="md">
-            {entry.images
-              .filter((image) => !removedImages.includes(image.id))
-              .map((image) => (
-                <Stack key={image.id} gap="sm">
-                  <a href={image.url} target="_blank" rel="noreferrer">
-                    <Image
-                      src={image.url}
-                      alt="Garden observation"
-                      displayWidth={240}
-                      className="h-40 w-full rounded-md object-contain"
-                    />
-                  </a>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={save.isPending}
-                    onClick={() =>
-                      setRemovedImages((current) => [...current, image.id])
-                    }
-                  >
-                    Remove photo
-                  </Button>
-                </Stack>
-              ))}
-          </Grid>
+          <EntityImageList
+            images={entry.images.filter(
+              (image) => !removedImages.includes(image.id),
+            )}
+            showViewAllButton={false}
+            imageFit="contain"
+            onRemove={
+              save.isPending
+                ? undefined
+                : (id) => setRemovedImages((current) => [...current, id])
+            }
+          />
         )}
         <GardenPhotos
           photos={photos}
