@@ -1,10 +1,17 @@
+import {
+  FILTER_KINDS,
+  WAYFINDING_DOMAINS,
+} from "../../../packages/schemas/src/entity-definitions/definition.ts";
+import {
+  SHORTCODE_BODY_LENGTH,
+  SHORTCODE_CHARS,
+} from "../../../packages/shared/src/shortcode-alphabet.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import {
   entityFieldControlKinds,
   entityFieldKinds,
 } from "../../../packages/schemas/src/entity-definitions/definition.ts";
-import { filterKinds } from "../compile.ts";
 
 /** Per-entity kernel action roster, as built for `entity-kernel-*` artifacts. */
 export type SwiftKernelContractCases = Readonly<
@@ -202,6 +209,7 @@ const renderEntityDescriptorLiteral = (
   // sets one today; fall back to `singular` rather than widen the Swift
   // field to Optional for a case that has never occurred.
   const plural = entity.inspector.plural ?? entity.inspector.singular;
+  const countable = entity.descriptor.countable === true;
   return (
     `  EntityDescriptor(\n` +
     `    key: .${swiftCaseName(entity.key)},\n` +
@@ -210,6 +218,9 @@ const renderEntityDescriptorLiteral = (
     `    basePath: ${swiftString(entity.route.basePath)},\n` +
     `    shortcodePrefix: ${swiftOptionalString(entity.shortcode)},\n` +
     `    titleField: ${swiftString(entity.inspector.titleField)},\n` +
+    `    domain: ${entity.inspector.domain === null ? "nil" : `.${entity.inspector.domain}`},\n` +
+    `    sfSymbol: ${swiftString(entity.inspector.icons.sfSymbol)},\n` +
+    `    countable: ${countable ? "true" : "false"},\n` +
     `    fields: ${fields.length === 0 ? "[]" : `[\n      ${fields}\n    ]`},\n` +
     `    filters: ${filters.length === 0 ? "[]" : `[\n      ${filters}\n    ]`},\n` +
     `    actions: [${orderedActions.map((action) => `.${swiftCaseName(action)}`).join(", ")}]\n` +
@@ -243,7 +254,7 @@ export const renderSwiftEntityCatalog = (
   );
   const entityFilterKindEnum = renderStringEnum(
     "EntityFilterKind",
-    filterKinds,
+    FILTER_KINDS,
   );
   // One static per entity rather than a single ~900-line array literal:
   // Release/WMO spent ~650 s inside the SIL optimizer's COWArrayOpt pass
@@ -296,6 +307,10 @@ export const renderSwiftEntityCatalog = (
     "  public let label: String?\n" +
     "  public let options: [FilterOption]?\n" +
     "}\n\n" +
+    "/// The five wayfinding lines, from `WAYFINDING_DOMAINS` in the entity definitions.\n" +
+    "public enum WayfindingDomain: String, Codable, Sendable, CaseIterable {\n" +
+    `${WAYFINDING_DOMAINS.map((domain) => `  case ${domain}`).join("\n")}\n` +
+    "}\n\n" +
     "public struct EntityDescriptor: Codable, Sendable {\n" +
     "  public let key: EntityKey\n" +
     "  public let singular: String\n" +
@@ -303,11 +318,18 @@ export const renderSwiftEntityCatalog = (
     "  public let basePath: String\n" +
     "  public let shortcodePrefix: String?\n" +
     "  public let titleField: String\n" +
+    "  /// The wayfinding line this entity's records live on; nil for one on no line (image).\n" +
+    "  public let domain: WayfindingDomain?\n" +
+    "  /// SF Symbol name from the declaration's `presentation.icons.sfSymbol`.\n" +
+    "  public let sfSymbol: String\n" +
+    "  public let countable: Bool\n" +
     "  public let fields: [FieldDescriptor]\n" +
     "  public let filters: [FilterDescriptor]\n" +
     "  public let actions: Set<EntityAction>\n" +
     "}\n\n" +
     "public enum EntityCatalog {\n" +
+    `  public static let shortcodeAlphabet: String = "${SHORTCODE_CHARS}"\n` +
+    `  public static let shortcodeBodyLength = ${SHORTCODE_BODY_LENGTH}\n\n` +
     `${descriptors}\n\n` +
     `  public static let all: [EntityDescriptor] = [\n${allEntries}\n  ]\n\n` +
     "  private static let byKey: [EntityKey: EntityDescriptor] = Dictionary(\n" +

@@ -1,3 +1,4 @@
+import { capitalize } from "@cubby/shared";
 import type { LinkProps } from "@tanstack/react-router";
 
 import { completeNavLeaves, findActiveTo } from "./nav-items";
@@ -33,10 +34,7 @@ function segmentMatches(pathname: string, prefix: string) {
 function titleFromPath(pathname: string) {
   const segment = pathname.split("/").filter(Boolean)[0];
   if (!segment) return "Cubby";
-  return segment
-    .split("-")
-    .map((word) => `${word.charAt(0).toUpperCase()}${word.slice(1)}`)
-    .join(" ");
+  return segment.split("-").map(capitalize).join(" ");
 }
 
 function labelForPath(pathname: string) {

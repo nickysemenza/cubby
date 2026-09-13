@@ -8,7 +8,17 @@ export default defineEntity({
   route: { basePath: "cookbooks" },
   table: "Cookbook",
   identifiers: { brand: "CookbookId", shortcode: "CKB-", legacy: null },
-  presentation: { titleField: "book" },
+  presentation: {
+    titleField: "book",
+    domain: "cook",
+    description: "Imported and maintained recipe collections.",
+    emptyState: {
+      title: "No cookbooks yet",
+      description:
+        "Drag an EPUB cookbook into the Recipes import page and Cubby will extract its recipes.",
+    },
+    icons: { lucide: "BookOpen", sfSymbol: "book.closed" },
+  },
   model: {
     fields: [
       { key: "id", kind: "identifier", readKey: null },
@@ -223,7 +233,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: true,
+    images: "cover",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: false },

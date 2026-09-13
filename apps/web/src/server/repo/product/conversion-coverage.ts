@@ -1,5 +1,6 @@
 /** Persistence seam for the catalog-wide conversion projection. */
 import type { ProductId } from "@cubby/schemas/identifiers";
+import type { ProductConversionCoverageFreshness } from "@cubby/schemas/problems";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -39,20 +40,11 @@ export type ProductConversionCoverageProjection = {
 };
 
 /**
- * The catalog-level truthfulness signal for filters backed by the conversion
- * projection. A ready row from another engine version is deliberately stale:
- * the list filters fail closed in that case, so reporting it as fresh would
- * turn a partial result into a healthy-looking empty Problem.
+ * Re-exported so existing importers (`product/index.ts`,
+ * `problem-views.service.ts`, `problems.service.ts`) don't need to reach past
+ * this repo seam into `@cubby/schemas/problems` directly.
  */
-export type ProductConversionCoverageFreshness = {
-  state: "fresh" | "stale" | "unavailable";
-  computedAt: Date | null;
-  expectedEngineVersion: string;
-  readyCount: number;
-  staleCount: number;
-  unavailableCount: number;
-  missingCount: number;
-};
+export type { ProductConversionCoverageFreshness };
 
 /**
  * Read only the small projection metadata relation. This never evaluates the

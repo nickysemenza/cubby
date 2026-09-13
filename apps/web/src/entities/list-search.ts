@@ -67,19 +67,37 @@ import {
  * returns a `Record<string, …>` whose keys are invisible to `Route.useSearch()`
  * and `<Link search={…}>`. Keeping the overrides a literal type parameter is
  * what makes those keys statically known at every call site.
+ *
+ * `strip` builds the route's `stripSearchParams` default object alongside the
+ * schema: every key in it becomes `{ [key]: undefined }`, and — because
+ * `Strip` is constrained to `keyof T` — a key that no longer exists on the
+ * overrides is a compile error instead of a stale entry that silently never
+ * strips (the failure mode a hand-mirrored `xSearchDefaults` object had no
+ * defense against). A schema whose canonical default isn't `undefined` (a
+ * renderer keyed by string, say) leaves that key out of `strip` and spreads a
+ * manual override onto `defaults` at the call site.
  */
-function listSearchSchema<T extends z.ZodRawShape>(
-  entity: BrowserRoutedEntity,
-  overrides: T,
-) {
+function listSearchSchema<
+  T extends z.ZodRawShape,
+  const Strip extends readonly (keyof T)[] = [],
+>(entity: BrowserRoutedEntity, overrides: T, options?: { strip: Strip }) {
   // `tableSearchFields` is spread between the manifest and the overrides. No
   // entity re-declares one of its keys (`sort` / `page` / `pageSize` /
   // `worklist`) today; one that did would silently lose to this fragment.
-  return z.object({
+  const schema = z.object({
     ...entityFilterSearchFields(entity),
     ...tableSearchFields,
     ...overrides,
   });
+  const strip = options?.strip ?? [];
+  type Defaults = { [K in Strip[number]]: undefined };
+  // SAFETY: built as exactly one `[key, undefined]` entry per key in `strip`,
+  // i.e. `{ [K in Strip[number]]: undefined }`; `Object.fromEntries` widens to
+  // `{ [k: string]: undefined }` and can't see that correlation.
+  const defaults = Object.fromEntries(
+    strip.map((key) => [key, undefined]),
+  ) as Defaults;
+  return { schema, defaults };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -88,39 +106,44 @@ function listSearchSchema<T extends z.ZodRawShape>(
 
 const PRODUCT_LIST_VIEWS = ["table", "shelf", "events", "lifecycles"] as const;
 
-export const productSearchSchema = listSearchSchema("product", {
-  view: z.enum(PRODUCT_LIST_VIEWS).optional().catch(undefined),
-  movementFrom: plainDate.optional().catch(undefined),
-  movementTo: plainDate.optional().catch(undefined),
-  movementOrder: z.enum(["asc", "desc"]).optional().catch(undefined),
-  category: urlEnumListParam(
-    z.union([
-      z.enum(productCategoryValues),
-      z.literal(FILTER_ANY),
-      z.literal(FILTER_NONE),
-    ]),
-  ),
-  // Navigated to programmatically (the "Fits With" tag chips; the Problems
-  // page's manufacturer-spelling cards), so these need literal key types.
-  tags: urlStringParam,
-  manufacturer: urlStringParam,
-  model: urlStringParam,
-  ingredient: urlShortcodeListParam("ingredient"),
-});
-
-export const productSearchDefaults = {
-  category: undefined,
-  view: undefined,
-  movementFrom: undefined,
-  movementTo: undefined,
-  movementOrder: undefined,
-} as const;
+export const { schema: productSearchSchema, defaults: productSearchDefaults } =
+  listSearchSchema(
+    "product",
+    {
+      view: z.enum(PRODUCT_LIST_VIEWS).optional().catch(undefined),
+      movementFrom: plainDate.optional().catch(undefined),
+      movementTo: plainDate.optional().catch(undefined),
+      movementOrder: z.enum(["asc", "desc"]).optional().catch(undefined),
+      category: urlEnumListParam(
+        z.union([
+          z.enum(productCategoryValues),
+          z.literal(FILTER_ANY),
+          z.literal(FILTER_NONE),
+        ]),
+      ),
+      // Navigated to programmatically (the "Fits With" tag chips; the Problems
+      // page's manufacturer-spelling cards), so these need literal key types.
+      tags: urlStringParam,
+      manufacturer: urlStringParam,
+      model: urlStringParam,
+      ingredient: urlShortcodeListParam("ingredient"),
+    },
+    {
+      strip: [
+        "category",
+        "view",
+        "movementFrom",
+        "movementTo",
+        "movementOrder",
+      ],
+    },
+  );
 
 /* -------------------------------------------------------------------------- */
 /* Inventory                                                                   */
 /* -------------------------------------------------------------------------- */
 
-export const inventorySearchSchema = listSearchSchema("inventory", {
+export const { schema: inventorySearchSchema } = listSearchSchema("inventory", {
   productId: urlShortcodeParam("product"),
   locationId: urlShortcodeParam("location"),
 });
@@ -131,16 +154,21 @@ export const LOCATION_LIST_VIEWS = [
   "visualizations",
 ] as const;
 
-export const locationSearchSchema = listSearchSchema("location", {
-  view: z.enum(LOCATION_LIST_VIEWS).optional().catch(undefined),
-  type: urlEnumListParam(z.enum(locationTypeValues)),
-  product: urlShortcodeListParam("product"),
-  parent: urlShortcodeListParam("location"),
-});
+export const {
+  schema: locationSearchSchema,
+  defaults: locationSearchDefaults,
+} = listSearchSchema(
+  "location",
+  {
+    view: z.enum(LOCATION_LIST_VIEWS).optional().catch(undefined),
+    type: urlEnumListParam(z.enum(locationTypeValues)),
+    product: urlShortcodeListParam("product"),
+    parent: urlShortcodeListParam("location"),
+  },
+  { strip: ["view"] },
+);
 
-export const locationSearchDefaults = { view: undefined } as const;
-
-export const imageListSearchSchema = listSearchSchema("image", {
+export const { schema: imageListSearchSchema } = listSearchSchema("image", {
   status: urlEnumListParam(ImageStatus),
 });
 
@@ -148,21 +176,27 @@ export const imageListSearchSchema = listSearchSchema("image", {
 /* Kitchen                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export const recipeListSearchSchema = listSearchSchema("recipe", {
+export const { schema: recipeListSearchSchema } = listSearchSchema("recipe", {
   tags: urlStringParam,
   source: urlShortcodeListParam("cookbook"),
   sourceType: urlEnumListParam(z.enum(recipeSourceValues)),
 });
 
 /** Ingredients now use the same generated filter/search contract as every list route. */
-export const ingredientListSearchSchema = listSearchSchema("ingredient", {});
+export const { schema: ingredientListSearchSchema } = listSearchSchema(
+  "ingredient",
+  {},
+);
 
-export const wishSearchSchema = listSearchSchema("wish", {
-  q: urlStringParam,
-  ...createDialogSearchField,
-});
-
-export const wishSearchDefaults = { q: undefined, create: undefined } as const;
+export const { schema: wishSearchSchema, defaults: wishSearchDefaults } =
+  listSearchSchema(
+    "wish",
+    {
+      q: urlStringParam,
+      ...createDialogSearchField,
+    },
+    { strip: ["q", "create"] },
+  );
 
 /* -------------------------------------------------------------------------- */
 /* Projects and tasks                                                          */
@@ -193,95 +227,110 @@ const commaSeparatedArray = <T extends z.ZodType>(itemSchema: T) =>
       : value;
   }, z.array(itemSchema).optional());
 
-export const projectSearchSchema = listSearchSchema("project", {
-  // Absent `statuses` is unrestricted. Invalid enum values fail this route's
-  // validation instead of being forwarded as a widened server query.
-  statuses: commaSeparatedArray(projectStatusSchema),
-  kinds: commaSeparatedArray(projectKindSchema),
-  locations: commaSeparatedArray(z.string()),
-  parent: urlShortcodeListParam("project"),
-  date: dateFilterParam,
-  view: urlStringParam,
-  rows: rowsRendererParam,
-  // Quick-capture deep link (navbar "+" / command palette) — there is no
-  // /projects/new route, so the create dialog is opened by this param.
-  create: z.boolean().optional().catch(undefined),
-  // ProjectTable's sort/page URL sync writes to this route already — a
-  // strict validateSearch without these would strip them.
-  completed: completionYearParam,
-}).transform(({ view, ...rest }) => {
-  const normalized = normalizeProjectRenderer(view);
-  return {
-    ...rest,
-    ...normalized,
-    statuses: normalized.statuses ?? rest.statuses,
-  };
-});
+const projectSearch = listSearchSchema(
+  "project",
+  {
+    // Absent `statuses` is unrestricted. Invalid enum values fail this route's
+    // validation instead of being forwarded as a widened server query.
+    statuses: commaSeparatedArray(projectStatusSchema),
+    kinds: commaSeparatedArray(projectKindSchema),
+    locations: commaSeparatedArray(z.string()),
+    parent: urlShortcodeListParam("project"),
+    date: dateFilterParam,
+    view: urlStringParam,
+    rows: rowsRendererParam,
+    // Quick-capture deep link (navbar "+" / command palette) — there is no
+    // /projects/new route, so the create dialog is opened by this param.
+    create: z.boolean().optional().catch(undefined),
+    // ProjectTable's sort/page URL sync writes to this route already — a
+    // strict validateSearch without these would strip them.
+    completed: completionYearParam,
+  },
+  { strip: ["statuses", "kinds", "locations", "date", "completed", "create"] },
+);
 
+export const projectSearchSchema = projectSearch.schema.transform(
+  ({ view, ...rest }) => {
+    const normalized = normalizeProjectRenderer(view);
+    return {
+      ...rest,
+      ...normalized,
+      statuses: normalized.statuses ?? rest.statuses,
+    };
+  },
+);
+
+// `view`/`rows` have a canonical non-`undefined` default (the renderer a bare
+// route falls back to), so they're spread on top instead of joining `strip`.
 export const projectSearchDefaults = {
-  statuses: undefined,
-  kinds: undefined,
-  locations: undefined,
-  date: undefined,
-  completed: undefined,
+  ...projectSearch.defaults,
   view: "overview",
   rows: "flat",
-  create: undefined,
 } as const;
 
 const taskStatusParam = urlStringParam
   .refine(isValidTaskStatusFilter, "Invalid task status filter")
   .catch(undefined);
 
-export const taskSearchSchema = listSearchSchema("task", {
-  q: urlStringParam,
-  status: taskStatusParam,
-  trade: urlEnumListParam(tradeSchema),
-  project: urlShortcodeListParam("project"),
-  parentTask: urlShortcodeListParam("task"),
-  // Declared by name as well as through the manifest so typed links can set an
-  // exact product scope and the visible "For" presence filter.
-  productId: urlShortcodeListParam("product"),
-  subjectProduct: urlShortcodeListParam("product"),
-  view: urlStringParam,
-  // Board layout: column axis + swimlane axis. `lane` is normalized to only
-  // apply when `cols === "status"` inside TasksBoardView.
-  cols: z.enum(["status", "project", "trade"]).optional().catch(undefined),
-  lane: z.enum(["project", "trade"]).optional().catch(undefined),
-  // Quick-capture deep link (navbar "+" / command palette) — there is no
-  // /tasks/new route, so the create dialog is opened by this param.
-  create: z.boolean().optional().catch(undefined),
-}).transform(({ view, ...rest }) => {
-  const normalized = normalizeTaskRenderer(view);
-  if (normalized.clearFilters) {
+const taskSearch = listSearchSchema(
+  "task",
+  {
+    q: urlStringParam,
+    status: taskStatusParam,
+    trade: urlEnumListParam(tradeSchema),
+    project: urlShortcodeListParam("project"),
+    parentTask: urlShortcodeListParam("task"),
+    // Declared by name as well as through the manifest so typed links can set
+    // an exact product scope and the visible "For" presence filter.
+    productId: urlShortcodeListParam("product"),
+    subjectProduct: urlShortcodeListParam("product"),
+    view: urlStringParam,
+    // Board layout: column axis + swimlane axis. `lane` is normalized to only
+    // apply when `cols === "status"` inside TasksBoardView.
+    cols: z.enum(["status", "project", "trade"]).optional().catch(undefined),
+    lane: z.enum(["project", "trade"]).optional().catch(undefined),
+    // Quick-capture deep link (navbar "+" / command palette) — there is no
+    // /tasks/new route, so the create dialog is opened by this param.
+    create: z.boolean().optional().catch(undefined),
+  },
+  {
+    strip: [
+      "q",
+      "productId",
+      "subjectProduct",
+      "view",
+      "cols",
+      "lane",
+      "create",
+    ],
+  },
+);
+
+export const taskSearchSchema = taskSearch.schema.transform(
+  ({ view, ...rest }) => {
+    const normalized = normalizeTaskRenderer(view);
+    if (normalized.clearFilters) {
+      return {
+        ...rest,
+        view: normalized.view,
+        q: undefined,
+        status: undefined,
+        project: undefined,
+        parentTask: undefined,
+        dueDate: undefined,
+        trade: undefined,
+        subjectProduct: undefined,
+        productId: undefined,
+      };
+    }
     return {
       ...rest,
-      view: normalized.view,
-      q: undefined,
-      status: undefined,
-      project: undefined,
-      parentTask: undefined,
-      dueDate: undefined,
-      trade: undefined,
-      subjectProduct: undefined,
-      productId: undefined,
+      ...normalized,
     };
-  }
-  return {
-    ...rest,
-    ...normalized,
-  };
-});
+  },
+);
 
-export const taskSearchDefaults = {
-  q: undefined,
-  productId: undefined,
-  subjectProduct: undefined,
-  view: undefined,
-  cols: undefined,
-  lane: undefined,
-  create: undefined,
-} as const;
+export const taskSearchDefaults = taskSearch.defaults;
 
 /* -------------------------------------------------------------------------- */
 /* Money                                                                       */
@@ -326,40 +375,77 @@ function withExpenseListView<TSearch extends object>(
  * ("has"/"none"), deliberately a separate key since the product column's filter
  * offers presence rather than a specific-product select.
  */
-export const expenseSearchSchema = listSearchSchema("expense", {
-  // Deliberately a loose string, not `z.enum(EXPENSE_LIST_VIEWS)`: a legacy
-  // `?view=planned` must survive validation long enough for the transform below
-  // to translate it. The transform is what narrows this to a renderer.
-  view: urlStringParam,
-  q: urlStringParam,
-  trade: urlEnumListParam(tradeSchema),
-  costType: urlEnumListParam(costTypeSchema),
-  lineKind: urlEnumListParam(expenseLineKindSchema),
-  lineBasis: urlEnumListParam(expenseLineBasisSchema),
-  cost: urlStringParam,
-  project: urlShortcodeListParam("project"),
-  subprojects: urlStringParam,
-  future: urlEnumListParam(z.enum(["true", "false"])),
-  date: urlStringParam,
-  dateFrom: urlStringParam,
-  dateTo: urlStringParam,
-  productId: urlShortcodeListParam("product"),
-  product: urlStringParam,
-  // `order` (the manifest's `orderIdExact` url key) and `vendor` are set
-  // together as a pair by the "Same Order" section and the ledger's Order #
-  // cell — an order id only identifies an order within one vendor. Declared
-  // by name so those `<Link search={{ order, vendor }}>` calls typecheck.
-  order: urlStringParam,
-  vendor: urlShortcodeListParam("vendor"),
-  orderId: urlStringParam,
-  // Deep link from a charge's own detail page — the exact-charge scope,
-  // same treatment as `productId` above.
-  purchaseId: urlStringParam,
-  ...expenseAnalyzeSearchFields,
-  // Quick-capture deep link (navbar "+" / command palette) — there is no
-  // /expenses/new route, so the create dialog is opened by this param.
-  create: z.boolean().optional().catch(undefined),
-}).transform(
+const expenseSearch = listSearchSchema(
+  "expense",
+  {
+    // Deliberately a loose string, not `z.enum(EXPENSE_LIST_VIEWS)`: a legacy
+    // `?view=planned` must survive validation long enough for the transform
+    // below to translate it. The transform is what narrows this to a
+    // renderer.
+    view: urlStringParam,
+    q: urlStringParam,
+    trade: urlEnumListParam(tradeSchema),
+    costType: urlEnumListParam(costTypeSchema),
+    lineKind: urlEnumListParam(expenseLineKindSchema),
+    lineBasis: urlEnumListParam(expenseLineBasisSchema),
+    cost: urlStringParam,
+    project: urlShortcodeListParam("project"),
+    subprojects: urlStringParam,
+    future: urlEnumListParam(z.enum(["true", "false"])),
+    date: urlStringParam,
+    dateFrom: urlStringParam,
+    dateTo: urlStringParam,
+    productId: urlShortcodeListParam("product"),
+    product: urlStringParam,
+    // `order` (the manifest's `orderIdExact` url key) and `vendor` are set
+    // together as a pair by the "Same Order" section and the ledger's Order #
+    // cell — an order id only identifies an order within one vendor. Declared
+    // by name so those `<Link search={{ order, vendor }}>` calls typecheck.
+    order: urlStringParam,
+    vendor: urlShortcodeListParam("vendor"),
+    orderId: urlStringParam,
+    // Deep link from a charge's own detail page — the exact-charge scope,
+    // same treatment as `productId` above.
+    purchaseId: urlStringParam,
+    ...expenseAnalyzeSearchFields,
+    // Quick-capture deep link (navbar "+" / command palette) — there is no
+    // /expenses/new route, so the create dialog is opened by this param.
+    create: z.boolean().optional().catch(undefined),
+  },
+  {
+    strip: [
+      "q",
+      "view",
+      "cost",
+      "trade",
+      "costType",
+      "lineKind",
+      "lineBasis",
+      "project",
+      "subprojects",
+      "future",
+      "date",
+      "dateFrom",
+      "dateTo",
+      "productId",
+      "product",
+      "order",
+      "vendor",
+      "orderId",
+      "purchaseId",
+      "analyzeRows",
+      "analyzeColumns",
+      "analyzeMetric",
+      "analyzeCompare",
+      "analyzeShow",
+      "create",
+    ],
+  },
+);
+
+export const expenseSearchDefaults = expenseSearch.defaults;
+
+export const expenseSearchSchema = expenseSearch.schema.transform(
   ({
     view,
     analyzeRows,
@@ -412,34 +498,6 @@ export const expenseSearchSchema = listSearchSchema("expense", {
   },
 );
 
-export const expenseSearchDefaults = {
-  q: undefined,
-  view: undefined,
-  cost: undefined,
-  trade: undefined,
-  costType: undefined,
-  lineKind: undefined,
-  lineBasis: undefined,
-  project: undefined,
-  subprojects: undefined,
-  future: undefined,
-  date: undefined,
-  dateFrom: undefined,
-  dateTo: undefined,
-  productId: undefined,
-  product: undefined,
-  order: undefined,
-  vendor: undefined,
-  orderId: undefined,
-  purchaseId: undefined,
-  analyzeRows: undefined,
-  analyzeColumns: undefined,
-  analyzeMetric: undefined,
-  analyzeCompare: undefined,
-  analyzeShow: undefined,
-  create: undefined,
-} as const;
-
 /**
  * The ledger preloader has no use for the selected renderer or Analyze-only
  * URL controls. Keep them outside its client-navigation loader payload: Start
@@ -464,79 +522,92 @@ export function expenseListLoaderDeps(
   };
 }
 
-export const vendorSearchSchema = listSearchSchema("vendor", {
-  q: urlStringParam,
-  ...createDialogSearchField,
-});
+export const { schema: vendorSearchSchema, defaults: vendorSearchDefaults } =
+  listSearchSchema(
+    "vendor",
+    {
+      q: urlStringParam,
+      ...createDialogSearchField,
+    },
+    { strip: ["create", "q"] },
+  );
 
-export const vendorSearchDefaults = {
-  create: undefined,
-  q: undefined,
-} as const;
+export const {
+  schema: purchaseSearchSchema,
+  defaults: purchaseSearchDefaults,
+} = listSearchSchema(
+  "purchase",
+  {
+    q: urlStringParam,
+    label: urlStringParam,
+    vendor: urlShortcodeListParam("vendor"),
+    orderId: urlStringParam,
+    date: urlStringParam,
+    statedTotal: urlStringParam,
+    lines: urlStringParam,
+    lineTotal: urlStringParam,
+    reconciliation: urlStringParam,
+    documents: urlStringParam,
+    transactions: urlStringParam,
+    dataQuality: urlStringParam,
+    dataGaps: urlStringParam,
+    lineTotalMin: urlStringParam,
+    lineTotalMax: urlStringParam,
+    ...createDialogSearchField,
+  },
+  {
+    strip: [
+      "create",
+      "q",
+      "label",
+      "vendor",
+      "orderId",
+      "date",
+      "statedTotal",
+      "lines",
+      "lineTotal",
+      "reconciliation",
+      "documents",
+      "transactions",
+      "dataQuality",
+      "dataGaps",
+      "lineTotalMin",
+      "lineTotalMax",
+    ],
+  },
+);
 
-export const purchaseSearchSchema = listSearchSchema("purchase", {
-  q: urlStringParam,
-  label: urlStringParam,
-  vendor: urlShortcodeListParam("vendor"),
-  orderId: urlStringParam,
-  date: urlStringParam,
-  statedTotal: urlStringParam,
-  lines: urlStringParam,
-  lineTotal: urlStringParam,
-  reconciliation: urlStringParam,
-  documents: urlStringParam,
-  transactions: urlStringParam,
-  dataQuality: urlStringParam,
-  dataGaps: urlStringParam,
-  lineTotalMin: urlStringParam,
-  lineTotalMax: urlStringParam,
-  ...createDialogSearchField,
-});
+export const {
+  schema: ledgerPartySearchSchema,
+  defaults: ledgerPartySearchDefaults,
+} = listSearchSchema(
+  "ledgerParty",
+  {
+    q: urlStringParam,
+    kind: urlEnumListParam(ledgerPartyKind),
+  },
+  { strip: ["q", "kind"] },
+);
 
-export const purchaseSearchDefaults = {
-  create: undefined,
-  q: undefined,
-  label: undefined,
-  vendor: undefined,
-  orderId: undefined,
-  date: undefined,
-  statedTotal: undefined,
-  lines: undefined,
-  lineTotal: undefined,
-  reconciliation: undefined,
-  documents: undefined,
-  transactions: undefined,
-  dataQuality: undefined,
-  dataGaps: undefined,
-  lineTotalMin: undefined,
-  lineTotalMax: undefined,
-} as const;
+export const {
+  schema: ledgerTransferSearchSchema,
+  defaults: ledgerTransferSearchDefaults,
+} = listSearchSchema(
+  "ledgerTransfer",
+  {
+    fromPartyId: urlShortcodeListParam("ledgerParty"),
+    toPartyId: urlShortcodeListParam("ledgerParty"),
+    dateFrom: urlStringParam,
+    dateTo: urlStringParam,
+  },
+  { strip: ["fromPartyId", "toPartyId", "dateFrom", "dateTo"] },
+);
 
-export const ledgerPartySearchSchema = listSearchSchema("ledgerParty", {
-  q: urlStringParam,
-  kind: urlEnumListParam(ledgerPartyKind),
-});
-
-export const ledgerPartySearchDefaults = {
-  q: undefined,
-  kind: undefined,
-} as const;
-
-export const ledgerTransferSearchSchema = listSearchSchema("ledgerTransfer", {
-  fromPartyId: urlShortcodeListParam("ledgerParty"),
-  toPartyId: urlShortcodeListParam("ledgerParty"),
-  dateFrom: urlStringParam,
-  dateTo: urlStringParam,
-});
-
-export const ledgerTransferSearchDefaults = {
-  fromPartyId: undefined,
-  toPartyId: undefined,
-  dateFrom: undefined,
-  dateTo: undefined,
-} as const;
-
-export const financialAccountSearchSchema = listSearchSchema(
+/** Both finance rosters share the same stripped defaults. */
+export const {
+  schema: financialAccountSearchSchema,
+  defaults: financeSearchDefaults,
+} = listSearchSchema(
   "financialAccount",
   {
     q: urlStringParam,
@@ -544,9 +615,10 @@ export const financialAccountSearchSchema = listSearchSchema(
     provisional: urlEnumListParam(z.enum(["true", "false"])),
     ...createDialogSearchField,
   },
+  { strip: ["q", "create"] },
 );
 
-export const financialTransactionSearchSchema = listSearchSchema(
+export const { schema: financialTransactionSearchSchema } = listSearchSchema(
   "financialTransaction",
   {
     q: urlStringParam,
@@ -557,10 +629,5 @@ export const financialTransactionSearchSchema = listSearchSchema(
     purchaseId: urlShortcodeListParam("purchase"),
     ...createDialogSearchField,
   },
+  { strip: ["q", "create"] },
 );
-
-/** Both finance rosters share the same stripped defaults. */
-export const financeSearchDefaults = {
-  q: undefined,
-  create: undefined,
-} as const;

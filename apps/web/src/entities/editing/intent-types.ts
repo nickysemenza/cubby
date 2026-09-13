@@ -1,69 +1,10 @@
 import type { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
-import type {
-  FinancialAccountCreateInput,
-  FinancialAccountUpdateData,
-} from "@cubby/schemas/financial-account";
-import type {
-  FinancialTransactionCreateInput,
-  FinancialTransactionUpdateData,
-} from "@cubby/schemas/financial-transaction";
-import {
-  gardenEntryCreateInput,
-  gardenEntryUpdateData,
-  plantingCreateInput,
-  plantingUpdateData,
-} from "@cubby/schemas/garden";
-import type {
-  IngredientCreateInput,
-  IngredientUpdateInput,
-} from "@cubby/schemas/ingredient";
-import type {
-  InventoryUpdateInput,
-  inventoryCreatePayloadData,
-} from "@cubby/schemas/inventory";
-import type {
-  LedgerPartyCreateInput,
-  LedgerPartyUpdateData,
-} from "@cubby/schemas/ledger-party";
-import type {
-  LedgerTransferCreateInput,
-  LedgerTransferUpdateData,
-} from "@cubby/schemas/ledger-transfer";
-import type {
-  LocationCreateInput,
-  LocationUpdateInput,
-} from "@cubby/schemas/location";
-import type { MealCreateInput, MealUpdateInput } from "@cubby/schemas/meal";
-import type {
-  ProductCreateInput,
-  ProductUpdateInput,
-} from "@cubby/schemas/product";
-import type {
-  ExpenseCreateInput,
-  ExpenseUpdateData,
-  ProjectCreateInput,
-  ProjectUpdateData,
-  TaskCreateInput,
-  TaskUpdateData,
-} from "@cubby/schemas/project";
-import type {
-  PurchaseCreateInput,
-  PurchaseUpdateData,
-} from "@cubby/schemas/purchase";
-import type {
-  RecipeCreateInput,
-  RecipeUpdateInput,
-} from "@cubby/schemas/recipe";
-import type {
-  VendorCreateInput,
-  VendorUpdateInput,
-} from "@cubby/schemas/vendor";
-import type { WishCreateInput, WishUpdateData } from "@cubby/schemas/wish";
+import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { z } from "zod";
 
-import type { EntityMutationOutputByEntity } from "../generated/entity-mutation-results.gen";
+import type { EntitySchemaBindingMap } from "~/server/generated/entity-bindings.gen";
 
-type UpdateData<T> = T extends { data: infer D } ? D : never;
+import type { EntityMutationOutputByEntity } from "../generated/entity-mutation-results.gen";
 
 type FinancialAccountEditorFields = {
   kind: "credit_card" | "bank_account" | "stored_value" | "cash" | "other";
@@ -75,47 +16,6 @@ type FinancialAccountEditorFields = {
   last4: string;
 };
 
-/** Draft keys and values exposed to RHF callers. Intents select subsets at
- * runtime; callers can no longer invent field names or incompatible values. */
-interface EntityEditDraftMap {
-  product: Partial<ProductCreateInput & UpdateData<ProductUpdateInput>>;
-  ingredient: Partial<
-    IngredientCreateInput & UpdateData<IngredientUpdateInput>
-  >;
-  inventory: Partial<
-    z.infer<typeof inventoryCreatePayloadData> &
-      UpdateData<InventoryUpdateInput>
-  >;
-  location: Partial<LocationCreateInput & UpdateData<LocationUpdateInput>>;
-  recipe: Partial<RecipeCreateInput & UpdateData<RecipeUpdateInput>>;
-  meal: Partial<MealCreateInput & UpdateData<MealUpdateInput>>;
-  project: Partial<ProjectCreateInput & ProjectUpdateData>;
-  task: Partial<TaskCreateInput & TaskUpdateData>;
-  expense: Partial<ExpenseCreateInput & ExpenseUpdateData> & {
-    lineKind?: ExpenseCreateInput["lineKind"] | "auto";
-  };
-  ledgerParty: Partial<LedgerPartyCreateInput & LedgerPartyUpdateData>;
-  ledgerTransfer: Partial<LedgerTransferCreateInput & LedgerTransferUpdateData>;
-  vendor: Partial<VendorCreateInput & UpdateData<VendorUpdateInput>>;
-  purchase: Partial<PurchaseCreateInput & PurchaseUpdateData>;
-  financialAccount: Partial<
-    FinancialAccountCreateInput &
-      FinancialAccountUpdateData &
-      FinancialAccountEditorFields
-  >;
-  financialTransaction: Partial<
-    FinancialTransactionCreateInput & FinancialTransactionUpdateData
-  >;
-  wish: Partial<WishCreateInput & WishUpdateData>;
-  planting: Partial<
-    z.infer<typeof plantingCreateInput> & z.infer<typeof plantingUpdateData>
-  >;
-  gardenEntry: Partial<
-    z.infer<typeof gardenEntryCreateInput> &
-      z.infer<typeof gardenEntryUpdateData>
-  >;
-}
-
 type GeneratedIntents = typeof generatedEntityEditIntents;
 /** Intent names per operation, from the entity declarations. */
 type EntityEditIntentCatalog = {
@@ -126,47 +26,42 @@ type EntityEditIntentCatalog = {
   };
 };
 
-interface EntityEditCreateInputMap {
-  product: ProductCreateInput;
-  ingredient: IngredientCreateInput;
-  inventory: z.infer<typeof inventoryCreatePayloadData>;
-  location: LocationCreateInput;
-  recipe: RecipeCreateInput;
-  meal: MealCreateInput;
-  project: ProjectCreateInput;
-  task: TaskCreateInput;
-  expense: ExpenseCreateInput;
-  vendor: VendorCreateInput;
-  purchase: PurchaseCreateInput;
-  financialAccount: FinancialAccountCreateInput;
-  financialTransaction: FinancialTransactionCreateInput;
-  ledgerParty: LedgerPartyCreateInput;
-  ledgerTransfer: LedgerTransferCreateInput;
-  wish: WishCreateInput;
-  planting: z.infer<typeof plantingCreateInput>;
-  gardenEntry: z.infer<typeof gardenEntryCreateInput>;
-}
+type SchemaOutput<S> = S extends z.ZodType ? z.infer<S> : never;
 
-interface EntityEditUpdateInputMap {
-  product: UpdateData<ProductUpdateInput>;
-  ingredient: UpdateData<IngredientUpdateInput>;
-  inventory: UpdateData<InventoryUpdateInput>;
-  location: UpdateData<LocationUpdateInput>;
-  recipe: UpdateData<RecipeUpdateInput>;
-  meal: UpdateData<MealUpdateInput>;
-  project: ProjectUpdateData;
-  task: TaskUpdateData;
-  expense: ExpenseUpdateData;
-  vendor: UpdateData<VendorUpdateInput>;
-  purchase: PurchaseUpdateData;
-  financialAccount: FinancialAccountUpdateData;
-  financialTransaction: FinancialTransactionUpdateData;
-  ledgerParty: LedgerPartyUpdateData;
-  ledgerTransfer: LedgerTransferUpdateData;
-  wish: WishUpdateData;
-  planting: z.infer<typeof plantingUpdateData>;
-  gardenEntry: z.infer<typeof gardenEntryUpdateData>;
-}
+/**
+ * Create/update input types per editable entity, read off the generated
+ * schema bindings — the same `createInput`/`updateInput` schemas
+ * `mutation-data.ts` parses with at runtime, so the editor's types and its
+ * validation cannot disagree. Type-only: nothing from `~/server` is loaded.
+ */
+type EntityEditCreateInputMap = {
+  [E in TypedEditableEntity]: SchemaOutput<
+    EntitySchemaBindingMap[E]["createInput"]
+  >;
+};
+
+type EntityEditUpdateInputMap = {
+  [E in TypedEditableEntity]: SchemaOutput<
+    EntitySchemaBindingMap[E]["updateInput"]
+  >;
+};
+
+/** Editor-only draft fields with no counterpart in the entity's schemas. */
+type EntityEditDraftExtras = {
+  expense: { lineKind?: ExpenseCreateInput["lineKind"] | "auto" };
+  financialAccount: Partial<FinancialAccountEditorFields>;
+};
+
+/** Draft keys and values exposed to RHF callers. Intents select subsets at
+ * runtime; callers can no longer invent field names or incompatible values. */
+type EntityEditDraftMap = {
+  [E in TypedEditableEntity]: Partial<
+    EntityEditCreateInputMap[E] & EntityEditUpdateInputMap[E]
+  > &
+    (E extends keyof EntityEditDraftExtras
+      ? EntityEditDraftExtras[E]
+      : unknown);
+};
 
 type EntityEditSpecification<E extends keyof EntityEditIntentCatalog> = {
   record: { id: string } & EntityEditDraftMap[E];

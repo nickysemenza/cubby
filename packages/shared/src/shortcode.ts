@@ -1,5 +1,10 @@
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
+import { mapRecord, recordKeys } from "./record";
+import { capitalize } from "./text-case";
+import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
+
+export { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
 import {
   LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_PREFIX,
@@ -12,14 +17,7 @@ export {
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
 
-/**
- * Character set: 31 chars — the digits and uppercase letters minus the
- * scan/OCR-confusable ones (0/O, 1/I/L). Four of them give 31^4 = 923,521
- * codes per prefix, against a largest table of ~1,800 rows.
- */
-export const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-
-const BODY_PATTERN = `[${SHORTCODE_CHARS}]{4}`;
+const BODY_PATTERN = `[${SHORTCODE_CHARS}]{${SHORTCODE_BODY_LENGTH}}`;
 const BODY_RE = new RegExp(`^${BODY_PATTERN}$`);
 
 /** Every canonical prefix that may legitimately cross an API or MCP boundary. */
@@ -105,92 +103,34 @@ const makeShortcodeSchema = <T extends ShortcodeType, B extends string>(
     .describe(`${type} shortcode, e.g. ${SHORTCODE_PREFIX[type]}4K7M`)
     .brand<B>(brand);
 
-export const cookbookShortcode = makeShortcodeSchema(
-  "cookbook",
-  "CookbookShortcode",
-);
-export const expenseShortcode = makeShortcodeSchema(
-  "expense",
-  "ExpenseShortcode",
-);
-export const financialAccountShortcode = makeShortcodeSchema(
-  "financialAccount",
-  "FinancialAccountShortcode",
-);
-export const financialTransactionShortcode = makeShortcodeSchema(
-  "financialTransaction",
-  "FinancialTransactionShortcode",
-);
-export const ingredientShortcode = makeShortcodeSchema(
-  "ingredient",
-  "IngredientShortcode",
-);
-export const inventoryShortcode = makeShortcodeSchema(
-  "inventory",
-  "InventoryShortcode",
-);
-export const imageShortcode = makeShortcodeSchema("image", "ImageShortcode");
-export const plantingShortcode = makeShortcodeSchema(
-  "planting",
-  "PlantingShortcode",
-);
-export const gardenEntryShortcode = makeShortcodeSchema(
-  "gardenEntry",
-  "GardenEntryShortcode",
-);
-export const locationShortcode = makeShortcodeSchema(
-  "location",
-  "LocationShortcode",
-);
-export const ledgerPartyShortcode = makeShortcodeSchema(
-  "ledgerParty",
-  "LedgerPartyShortcode",
-);
-export const ledgerTransferShortcode = makeShortcodeSchema(
-  "ledgerTransfer",
-  "LedgerTransferShortcode",
-);
-export const mealShortcode = makeShortcodeSchema("meal", "MealShortcode");
-export const productShortcode = makeShortcodeSchema(
-  "product",
-  "ProductShortcode",
-);
-export const projectShortcode = makeShortcodeSchema(
-  "project",
-  "ProjectShortcode",
-);
-export const purchaseShortcode = makeShortcodeSchema(
-  "purchase",
-  "PurchaseShortcode",
-);
-export const recipeShortcode = makeShortcodeSchema("recipe", "RecipeShortcode");
-export const taskShortcode = makeShortcodeSchema("task", "TaskShortcode");
-export const vendorShortcode = makeShortcodeSchema("vendor", "VendorShortcode");
-export const wishShortcode = makeShortcodeSchema("wish", "WishShortcode");
+/** Every shortcode entity, in generated-registry order. */
+export const SHORTCODE_TYPES: readonly ShortcodeType[] =
+  recordKeys(SHORTCODE_PREFIX);
 
-/** Every shortcode schema, keyed by entity — the lookup behind `shortcodeSchema`. */
-const SHORTCODE_SCHEMA = {
-  cookbook: cookbookShortcode,
-  expense: expenseShortcode,
-  financialAccount: financialAccountShortcode,
-  financialTransaction: financialTransactionShortcode,
-  image: imageShortcode,
-  planting: plantingShortcode,
-  gardenEntry: gardenEntryShortcode,
-  ingredient: ingredientShortcode,
-  inventory: inventoryShortcode,
-  ledgerParty: ledgerPartyShortcode,
-  ledgerTransfer: ledgerTransferShortcode,
-  location: locationShortcode,
-  meal: mealShortcode,
-  product: productShortcode,
-  project: projectShortcode,
-  purchase: purchaseShortcode,
-  recipe: recipeShortcode,
-  task: taskShortcode,
-  vendor: vendorShortcode,
-  wish: wishShortcode,
-} as const satisfies Record<ShortcodeType, z.ZodType>;
+/** The Zod brand an entity's shortcode schema carries: `product` → `ProductShortcode`. */
+type ShortcodeBrand<T extends ShortcodeType> = `${Capitalize<T>}Shortcode`;
+
+const shortcodeBrand = <T extends ShortcodeType>(type: T): ShortcodeBrand<T> =>
+  `${capitalize(type)}Shortcode`;
+
+type ShortcodeSchemaFor<T extends ShortcodeType> = ReturnType<
+  typeof makeShortcodeSchema<T, ShortcodeBrand<T>>
+>;
+
+/**
+ * Every shortcode schema, keyed by entity — the lookup behind `shortcodeSchema`
+ * and the per-entity exports below. Built from the generated prefix registry,
+ * so a new entity gets its schema (and brand) without a line here.
+ */
+type ShortcodeSchemaMap = { [T in ShortcodeType]: ShortcodeSchemaFor<T> };
+// SAFETY: each entry is `makeShortcodeSchema(type, brand(type))` for its own
+// key, i.e. exactly `ShortcodeSchemaFor<type>`; the builder's `.brand<B>()` is
+// a deferred conditional inside a generic closure, so the compiler cannot
+// prove the per-key correlation this construction guarantees.
+// shortcode.unit.test.ts asserts it per entity at the type level.
+const SHORTCODE_SCHEMA = mapRecord(SHORTCODE_TYPES, (type) =>
+  makeShortcodeSchema(type, shortcodeBrand(type)),
+) as ShortcodeSchemaMap;
 
 /**
  * The shortcode schema for an entity, preserving its exact branded type through
@@ -218,84 +158,57 @@ export function parseShortcodeFor<TInput>(
   return SHORTCODE_SCHEMA[type].parse(value);
 }
 
-export type CookbookShortcode = z.infer<typeof cookbookShortcode>;
-export type ExpenseShortcode = z.infer<typeof expenseShortcode>;
-export type FinancialAccountShortcode = z.infer<
-  typeof financialAccountShortcode
->;
-export type FinancialTransactionShortcode = z.infer<
-  typeof financialTransactionShortcode
->;
-export type ImageShortcode = z.infer<typeof imageShortcode>;
-export type PlantingShortcode = z.infer<typeof plantingShortcode>;
-export type GardenEntryShortcode = z.infer<typeof gardenEntryShortcode>;
-export type IngredientShortcode = z.infer<typeof ingredientShortcode>;
-export type InventoryShortcode = z.infer<typeof inventoryShortcode>;
-export type LedgerPartyShortcode = z.infer<typeof ledgerPartyShortcode>;
-export type LedgerTransferShortcode = z.infer<typeof ledgerTransferShortcode>;
-export type LocationShortcode = z.infer<typeof locationShortcode>;
-export type MealShortcode = z.infer<typeof mealShortcode>;
-export type ProductShortcode = z.infer<typeof productShortcode>;
-export type ProjectShortcode = z.infer<typeof projectShortcode>;
-export type PurchaseShortcode = z.infer<typeof purchaseShortcode>;
-export type RecipeShortcode = z.infer<typeof recipeShortcode>;
-export type TaskShortcode = z.infer<typeof taskShortcode>;
-export type VendorShortcode = z.infer<typeof vendorShortcode>;
-export type WishShortcode = z.infer<typeof wishShortcode>;
+// Named per-entity exports over the same map. These are the stable import
+// surface (>150 sites name `productShortcode` / `ProductShortcode`); each is
+// the map entry, never a second `makeShortcodeSchema` call.
+export const cookbookShortcode = SHORTCODE_SCHEMA.cookbook;
+export const expenseShortcode = SHORTCODE_SCHEMA.expense;
+export const financialAccountShortcode = SHORTCODE_SCHEMA.financialAccount;
+export const financialTransactionShortcode =
+  SHORTCODE_SCHEMA.financialTransaction;
+export const imageShortcode = SHORTCODE_SCHEMA.image;
+export const ingredientShortcode = SHORTCODE_SCHEMA.ingredient;
+export const inventoryShortcode = SHORTCODE_SCHEMA.inventory;
+export const ledgerPartyShortcode = SHORTCODE_SCHEMA.ledgerParty;
+export const ledgerTransferShortcode = SHORTCODE_SCHEMA.ledgerTransfer;
+export const locationShortcode = SHORTCODE_SCHEMA.location;
+export const mealShortcode = SHORTCODE_SCHEMA.meal;
+export const plantingShortcode = SHORTCODE_SCHEMA.planting;
+export const gardenEntryShortcode = SHORTCODE_SCHEMA.gardenEntry;
+export const productShortcode = SHORTCODE_SCHEMA.product;
+export const projectShortcode = SHORTCODE_SCHEMA.project;
+export const purchaseShortcode = SHORTCODE_SCHEMA.purchase;
+export const recipeShortcode = SHORTCODE_SCHEMA.recipe;
+export const taskShortcode = SHORTCODE_SCHEMA.task;
+export const vendorShortcode = SHORTCODE_SCHEMA.vendor;
+export const wishShortcode = SHORTCODE_SCHEMA.wish;
+
+export type CookbookShortcode = ShortcodeFor<"cookbook">;
+export type ExpenseShortcode = ShortcodeFor<"expense">;
+export type FinancialAccountShortcode = ShortcodeFor<"financialAccount">;
+export type FinancialTransactionShortcode =
+  ShortcodeFor<"financialTransaction">;
+export type ImageShortcode = ShortcodeFor<"image">;
+export type IngredientShortcode = ShortcodeFor<"ingredient">;
+export type InventoryShortcode = ShortcodeFor<"inventory">;
+export type LedgerPartyShortcode = ShortcodeFor<"ledgerParty">;
+export type LedgerTransferShortcode = ShortcodeFor<"ledgerTransfer">;
+export type LocationShortcode = ShortcodeFor<"location">;
+export type MealShortcode = ShortcodeFor<"meal">;
+export type PlantingShortcode = ShortcodeFor<"planting">;
+export type GardenEntryShortcode = ShortcodeFor<"gardenEntry">;
+export type ProductShortcode = ShortcodeFor<"product">;
+export type ProjectShortcode = ShortcodeFor<"project">;
+export type PurchaseShortcode = ShortcodeFor<"purchase">;
+export type RecipeShortcode = ShortcodeFor<"recipe">;
+export type TaskShortcode = ShortcodeFor<"task">;
+export type VendorShortcode = ShortcodeFor<"vendor">;
+export type WishShortcode = ShortcodeFor<"wish">;
 
 /** Any entity's shortcode, for surfaces that hold a code before resolving it. */
 export type AnyShortcode = z.infer<(typeof SHORTCODE_SCHEMA)[ShortcodeType]>;
 
-const shortcodeBody = customAlphabet(SHORTCODE_CHARS, 4);
-
-const shortcodeGenerator =
-  <Schema extends z.ZodType>(
-    schema: Schema,
-    prefix: string,
-  ): (() => z.output<Schema>) =>
-  () =>
-    schema.parse(`${prefix}${shortcodeBody()}`);
-
-const GENERATE_SHORTCODE = {
-  cookbook: shortcodeGenerator(cookbookShortcode, SHORTCODE_PREFIX.cookbook),
-  expense: shortcodeGenerator(expenseShortcode, SHORTCODE_PREFIX.expense),
-  financialAccount: shortcodeGenerator(
-    financialAccountShortcode,
-    SHORTCODE_PREFIX.financialAccount,
-  ),
-  financialTransaction: shortcodeGenerator(
-    financialTransactionShortcode,
-    SHORTCODE_PREFIX.financialTransaction,
-  ),
-  image: shortcodeGenerator(imageShortcode, SHORTCODE_PREFIX.image),
-  planting: shortcodeGenerator(plantingShortcode, SHORTCODE_PREFIX.planting),
-  gardenEntry: shortcodeGenerator(
-    gardenEntryShortcode,
-    SHORTCODE_PREFIX.gardenEntry,
-  ),
-  ingredient: shortcodeGenerator(
-    ingredientShortcode,
-    SHORTCODE_PREFIX.ingredient,
-  ),
-  inventory: shortcodeGenerator(inventoryShortcode, SHORTCODE_PREFIX.inventory),
-  ledgerParty: shortcodeGenerator(
-    ledgerPartyShortcode,
-    SHORTCODE_PREFIX.ledgerParty,
-  ),
-  ledgerTransfer: shortcodeGenerator(
-    ledgerTransferShortcode,
-    SHORTCODE_PREFIX.ledgerTransfer,
-  ),
-  location: shortcodeGenerator(locationShortcode, SHORTCODE_PREFIX.location),
-  meal: shortcodeGenerator(mealShortcode, SHORTCODE_PREFIX.meal),
-  product: shortcodeGenerator(productShortcode, SHORTCODE_PREFIX.product),
-  project: shortcodeGenerator(projectShortcode, SHORTCODE_PREFIX.project),
-  purchase: shortcodeGenerator(purchaseShortcode, SHORTCODE_PREFIX.purchase),
-  recipe: shortcodeGenerator(recipeShortcode, SHORTCODE_PREFIX.recipe),
-  task: shortcodeGenerator(taskShortcode, SHORTCODE_PREFIX.task),
-  vendor: shortcodeGenerator(vendorShortcode, SHORTCODE_PREFIX.vendor),
-  wish: shortcodeGenerator(wishShortcode, SHORTCODE_PREFIX.wish),
-} as const satisfies Record<ShortcodeType, () => AnyShortcode>;
+const shortcodeBody = customAlphabet(SHORTCODE_CHARS, SHORTCODE_BODY_LENGTH);
 
 /**
  * Generate a shortcode for `type`. Uniqueness is NOT checked here — the DB
@@ -305,7 +218,9 @@ export function generateShortcode<T extends ShortcodeType>(
   type: T,
 ): ShortcodeFor<T>;
 export function generateShortcode(type: ShortcodeType): AnyShortcode {
-  return GENERATE_SHORTCODE[type]();
+  return SHORTCODE_SCHEMA[type].parse(
+    `${SHORTCODE_PREFIX[type]}${shortcodeBody()}`,
+  );
 }
 
 interface ParsedShortcodeFor<T extends ShortcodeType> {
@@ -324,74 +239,59 @@ export type ParsedShortcode = {
   [T in ShortcodeType]: ParsedShortcodeFor<T>;
 }[ShortcodeType];
 
-const parsedShortcodeFor = <T extends ShortcodeType>(
-  type: T,
-  shortcode: ShortcodeFor<T>,
-  legacy: boolean,
-): ParsedShortcodeFor<T> => ({ type, shortcode, legacy });
+/**
+ * One parser closure per entity, each typed to return its own
+ * `ParsedShortcodeFor<T>`. Indexing the table with a union key and calling
+ * the result yields the distributed union `ParsedShortcode`; a single generic
+ * function would return `ParsedShortcodeFor<ShortcodeType>` — two independent
+ * unions — and lose the discriminated-union guarantee. Guarded by the
+ * type-level test in shortcode.unit.test.ts.
+ */
+const shortcodeParser =
+  <T extends ShortcodeType>(type: T) =>
+  (code: string, legacy: boolean): ParsedShortcodeFor<T> => ({
+    type,
+    shortcode: parseShortcodeFor(type, code),
+    legacy,
+  });
 
 /**
- * Entity-specific closure adapters keep the runtime prefix lookup correlated
- * with the exact schema. A generic lookup would widen `{ type, shortcode }` to
- * two independent unions and lose the discriminated-union guarantee.
+ * One parser per entity, each keyed by its own literal so the compiler can
+ * verify that `PARSE_CANONICAL_SHORTCODE[type]` returns `ParsedShortcodeFor`
+ * of that exact type. Indexing with a union key and calling the result yields
+ * the distributed union `ParsedShortcode`; a single generic call with a union
+ * argument would return `ParsedShortcodeFor<ShortcodeType>` — two independent
+ * unions — and a map built by `mapRecord` would need a cast into a branded
+ * type, which the unsafe-identifier guard rightly rejects. So this stays a
+ * literal-keyed list; `satisfies` fails to compile when an entity is missing.
  */
 const PARSE_CANONICAL_SHORTCODE = {
-  cookbook: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("cookbook", cookbookShortcode.parse(code), legacy),
-  expense: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("expense", expenseShortcode.parse(code), legacy),
-  financialAccount: (code: string, legacy: boolean) =>
-    parsedShortcodeFor(
-      "financialAccount",
-      financialAccountShortcode.parse(code),
-      legacy,
-    ),
-  financialTransaction: (code: string, legacy: boolean) =>
-    parsedShortcodeFor(
-      "financialTransaction",
-      financialTransactionShortcode.parse(code),
-      legacy,
-    ),
-  image: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("image", imageShortcode.parse(code), legacy),
-  ingredient: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("ingredient", ingredientShortcode.parse(code), legacy),
-  inventory: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("inventory", inventoryShortcode.parse(code), legacy),
-  ledgerParty: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("ledgerParty", ledgerPartyShortcode.parse(code), legacy),
-  ledgerTransfer: (code: string, legacy: boolean) =>
-    parsedShortcodeFor(
-      "ledgerTransfer",
-      ledgerTransferShortcode.parse(code),
-      legacy,
-    ),
-  location: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("location", locationShortcode.parse(code), legacy),
-  meal: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("meal", mealShortcode.parse(code), legacy),
-  product: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("product", productShortcode.parse(code), legacy),
-  project: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("project", projectShortcode.parse(code), legacy),
-  purchase: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("purchase", purchaseShortcode.parse(code), legacy),
-  recipe: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("recipe", recipeShortcode.parse(code), legacy),
-  task: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("task", taskShortcode.parse(code), legacy),
-  vendor: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("vendor", vendorShortcode.parse(code), legacy),
-  wish: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("wish", wishShortcode.parse(code), legacy),
-  planting: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("planting", plantingShortcode.parse(code), legacy),
-  gardenEntry: (code: string, legacy: boolean) =>
-    parsedShortcodeFor("gardenEntry", gardenEntryShortcode.parse(code), legacy),
-} as const satisfies Record<
-  ShortcodeType,
-  (code: string, legacy: boolean) => ParsedShortcode
->;
+  cookbook: shortcodeParser("cookbook"),
+  expense: shortcodeParser("expense"),
+  financialAccount: shortcodeParser("financialAccount"),
+  financialTransaction: shortcodeParser("financialTransaction"),
+  image: shortcodeParser("image"),
+  ingredient: shortcodeParser("ingredient"),
+  inventory: shortcodeParser("inventory"),
+  ledgerParty: shortcodeParser("ledgerParty"),
+  ledgerTransfer: shortcodeParser("ledgerTransfer"),
+  location: shortcodeParser("location"),
+  meal: shortcodeParser("meal"),
+  planting: shortcodeParser("planting"),
+  gardenEntry: shortcodeParser("gardenEntry"),
+  product: shortcodeParser("product"),
+  project: shortcodeParser("project"),
+  purchase: shortcodeParser("purchase"),
+  recipe: shortcodeParser("recipe"),
+  task: shortcodeParser("task"),
+  vendor: shortcodeParser("vendor"),
+  wish: shortcodeParser("wish"),
+} as const satisfies {
+  [T in ShortcodeType]: (
+    code: string,
+    legacy: boolean,
+  ) => ParsedShortcodeFor<T>;
+};
 
 /**
  * Parse a shortcode into its entity type and canonical form, accepting both

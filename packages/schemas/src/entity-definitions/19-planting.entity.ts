@@ -16,7 +16,17 @@ export default defineEntity({
   route: { basePath: "plantings" },
   table: "Planting",
   identifiers: { brand: "PlantingId", shortcode: "PLT-", legacy: null },
-  presentation: { titleField: "variety" },
+  presentation: {
+    titleField: "variety",
+    domain: "house",
+    description: "Crops growing now and planned for later.",
+    emptyState: {
+      title: "No plantings yet",
+      description:
+        "Record what is growing now or plan the next crop for one of your garden locations.",
+    },
+    icons: { lucide: "Sprout", sfSymbol: "leaf" },
+  },
   model: {
     fields: [
       {

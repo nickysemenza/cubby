@@ -16,7 +16,20 @@ export default defineEntity({
   route: { basePath: "inventory" },
   table: "InventoryEntry",
   identifiers: { brand: "InventoryId", shortcode: "INV-", legacy: null },
-  presentation: { titleField: "name" },
+  // Inventory has no name field; `amount` (the quantity on hand) is the
+  // lead value shown for a row — the closest thing to a title it has.
+  presentation: {
+    titleField: "amount",
+    domain: "pantry",
+    description: "Approximate quantities at physical locations.",
+    emptyState: {
+      title: "Your cubbies are empty",
+      description:
+        "Start tracking what you have and where it lives. Scan a barcode or add it by hand.",
+      actionLabel: "Add to Inventory",
+    },
+    icons: { lucide: "Package", sfSymbol: "cube.box" },
+  },
   model: {
     fields: [
       {

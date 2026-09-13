@@ -10,10 +10,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import {
-  type CollectionAssignmentSearch,
-  CollectionAssignmentMatrix,
-} from "./collection-assignment-matrix";
+import { CollectionAssignmentMatrix } from "./collection-assignment-matrix";
+import type { CollectionAssignmentSearch } from "./collection-assignment-search";
 import { collection } from "./collection.functions";
 
 const baseMatrix: CollectionMatrixOut = {

@@ -17,7 +17,18 @@ export default defineEntity({
   route: { basePath: "meals" },
   table: "Meal",
   identifiers: { brand: "MealId", shortcode: "MEL-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "plan",
+    description: "Dated meal plans and preparation records.",
+    emptyState: {
+      title: "No meals planned",
+      description:
+        "Plan recipes onto your calendar to see costs add up and build a shopping list.",
+      actionLabel: "Plan a Meal",
+    },
+    icons: { lucide: "CalendarDays", sfSymbol: "fork.knife.circle" },
+  },
   model: {
     fields: [
       {

@@ -25,12 +25,10 @@ import {
 
 export type ProductPricing = ProductTopLevelOut["pricing"];
 
-export type PricingAggregate = {
-  knownCost: number;
-  knownExpenseCount: number;
-  unknownExpenseCount: number;
-  knownUnitCount: number;
-};
+export type PricingAggregate = Omit<
+  z.infer<typeof pricingAggregateRowSchema>,
+  "productId"
+>;
 
 const EMPTY_AGGREGATE: PricingAggregate = {
   knownCost: 0,

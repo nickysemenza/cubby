@@ -26,7 +26,10 @@ import {
   getIngredientByName,
   getIngredientsByIDs,
 } from "~/server/services/ingredient.service";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import {
   bindWorkflow,
   defineWorkflowOperation,
@@ -121,16 +124,16 @@ export const resolveOrCreateWorkflow = bindWorkflow(
     .effect("effects", async ({ context }, { ingredients }) =>
       runMutationSideEffectsForEntities(
         context,
-        ingredients
-          .filter((ingredient) => ingredient.created)
-          .map((ingredient) => ({
-            action: "created" as const,
-            entity: {
-              entity: "ingredient" as const,
-              id: parseEntityId("ingredient", ingredient.entityId),
-            },
-            source: "ingredient.resolveOrCreate",
-          })),
+        mutationEvents(
+          "ingredient",
+          "created",
+          ingredients
+            .filter((ingredient) => ingredient.created)
+            .map((ingredient) =>
+              parseEntityId("ingredient", ingredient.entityId),
+            ),
+          "ingredient.resolveOrCreate",
+        ),
       ),
     )
     .output(({ ingredients }) => ingredients),

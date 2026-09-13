@@ -10,7 +10,18 @@ export default defineEntity({
   route: { basePath: "vendors" },
   table: "Vendor",
   identifiers: { brand: "VendorId", shortcode: "VEN-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "finance",
+    description: "Sources for purchases and expense evidence.",
+    emptyState: {
+      title: "No vendors yet",
+      description:
+        "Track the places money goes \u2014 retailers, contractors, suppliers \u2014 so every purchase and expense can point at one.",
+      actionLabel: "Add Vendor",
+    },
+    icons: { lucide: "Store", sfSymbol: "storefront" },
+  },
   model: {
     fields: [
       {

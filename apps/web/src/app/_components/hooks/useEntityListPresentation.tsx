@@ -5,7 +5,7 @@ import { useStore } from "@tanstack/react-store";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
 
-import { browserEntityDefinition } from "~/entities/entities";
+import { browserEntityDefinition, defaultSortFor } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 
 import type { EntityActionSubject } from "../actions/entity-actions";
@@ -86,7 +86,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     () => browserEntityDefinition(entity).list,
     [entity],
   );
-  const defaultSort = listConfig?.defaultSort ?? "createdAt";
+  const defaultSort = defaultSortFor(entity);
   // The registry declares direction alongside the field, so a name-sorted
   // roster opens A→Z instead of the table's blanket descending default.
   const defaultSortDesc = listConfig?.defaultSortDirection !== "asc";

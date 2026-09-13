@@ -22,7 +22,7 @@ import {
   type LocationId,
   type PlantingId,
 } from "@cubby/schemas/identifiers";
-import type { SortParams } from "@cubby/schemas/pagination";
+import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   and,
   asc,
@@ -53,6 +53,8 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   associatePendingImages,
   applyImageOrder,
+  countWhere,
+  executeListQueryWithCount,
   imageJoinBindings,
   mapImages,
   type MappableImageRecord,
@@ -60,6 +62,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   resolveAllOrThrow,
   resolveLiveShortcode,
@@ -764,77 +767,73 @@ export const updateGardenEntryDetails = async (
     return getGardenEntry(tx, id);
   });
 
+const plantingScaffold = listScaffold("planting", planting);
+
 export const plantingList = async (
   db: Database,
-  pagination: { page: number; pageSize: number },
+  pagination: PaginationParams,
   sorts: SortParams[] = [],
 ) => {
-  const sort = sorts[0];
-  const order =
-    sort?.orderBy === "updatedAt"
-      ? sort.direction === "asc"
-        ? asc(planting.updatedAt)
-        : desc(planting.updatedAt)
-      : sort?.direction === "asc"
-        ? asc(planting.createdAt)
-        : desc(planting.createdAt);
-  const rows = await unwrapDb(db).query.planting.findMany({
-    where: buildPlantingWhere(),
-    with: {
-      ingredient: { columns: { shortcode: true } },
-      sourceProduct: { columns: { shortcode: true } },
-      location: { columns: { shortcode: true } },
-      intendedLocation: { columns: { shortcode: true } },
-      parentPlanting: { columns: { shortcode: true } },
-    },
-    orderBy: [order],
-    limit: pagination.pageSize,
-    offset: (pagination.page - 1) * pagination.pageSize,
+  const where = buildPlantingWhere();
+  const orderByArray = plantingScaffold.orderBy(sorts);
+  const { take, skip } = plantingScaffold.page(pagination);
+  const { data: rows, count } = await executeListQueryWithCount({
+    kind: "page",
+    rows: () =>
+      unwrapDb(db).query.planting.findMany({
+        where,
+        with: {
+          ingredient: { columns: { shortcode: true } },
+          sourceProduct: { columns: { shortcode: true } },
+          location: { columns: { shortcode: true } },
+          intendedLocation: { columns: { shortcode: true } },
+          parentPlanting: { columns: { shortcode: true } },
+        },
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+      }),
+    count: () => countWhere(db, planting, where),
   });
-  const countRow = (
-    await unwrapDb(db)
-      .select({ count: sql<number>`count(*)` })
-      .from(planting)
-      .where(buildPlantingWhere())
-  )[0];
-  return { data: rows.map(mapPlanting), count: Number(countRow?.count ?? 0) };
+  return { data: rows.map(mapPlanting), count };
 };
+
+const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
 
 export const gardenEntryList = async (
   db: Database,
-  pagination: { page: number; pageSize: number },
+  pagination: PaginationParams,
   sorts: SortParams[] = [],
 ) => {
-  const sort = sorts[0];
-  const order =
-    sort?.orderBy === "createdAt"
-      ? sort.direction === "asc"
-        ? asc(gardenEntry.createdAt)
-        : desc(gardenEntry.createdAt)
-      : sort?.direction === "asc"
-        ? asc(gardenEntry.observedOn)
-        : desc(gardenEntry.observedOn);
-  const rows = await unwrapDb(db).query.gardenEntry.findMany({
-    where: buildGardenEntryWhere(),
-    with: {
-      location: { columns: { shortcode: true, name: true } },
-      planting: {
-        columns: { shortcode: true, variety: true },
-        with: { ingredient: { columns: { name: true } } },
-      },
-      images: { with: { image: true } },
-    },
-    orderBy: [order, desc(gardenEntry.createdAt)],
-    limit: pagination.pageSize,
-    offset: (pagination.page - 1) * pagination.pageSize,
+  const where = buildGardenEntryWhere();
+  // `createdAt desc` is a deliberate stable tiebreak (was hard-coded as a
+  // second `orderBy` entry alongside whichever field the caller picked) — a
+  // `tieBreaker`, not a `resolve` special-case, so it can't swallow a second
+  // user-requested sort (see `buildOrderBy`'s doc comment).
+  const orderByArray = gardenEntryScaffold.orderBy(sorts, {
+    tieBreaker: desc(gardenEntry.createdAt),
   });
-  const countRow = (
-    await unwrapDb(db)
-      .select({ count: sql<number>`count(*)` })
-      .from(gardenEntry)
-      .where(buildGardenEntryWhere())
-  )[0];
-  return { data: rows.map(mapEntry), count: Number(countRow?.count ?? 0) };
+  const { take, skip } = gardenEntryScaffold.page(pagination);
+  const { data: rows, count } = await executeListQueryWithCount({
+    kind: "page",
+    rows: () =>
+      unwrapDb(db).query.gardenEntry.findMany({
+        where,
+        with: {
+          location: { columns: { shortcode: true, name: true } },
+          planting: {
+            columns: { shortcode: true, variety: true },
+            with: { ingredient: { columns: { name: true } } },
+          },
+          images: { with: { image: true } },
+        },
+        orderBy: orderByArray,
+        limit: take,
+        offset: skip,
+      }),
+    count: () => countWhere(db, gardenEntry, where),
+  });
+  return { data: rows.map(mapEntry), count };
 };
 
 export const gardenOverview = async (db: Database) => {

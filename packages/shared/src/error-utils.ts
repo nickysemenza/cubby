@@ -1,3 +1,6 @@
+import { mapRecord } from "./record";
+import { SHORTCODE_TYPES, type ShortcodeType } from "./shortcode";
+import { screamingSnake, type ScreamingSnake } from "./text-case";
 /**
  * Portable error utilities with no transport dependency.
  */
@@ -25,6 +28,16 @@ export function getErrorMessage<TError>(error: TError): string {
   return "An unknown error occurred";
 }
 
+/** `product` → `PRODUCT_NOT_FOUND`, keyed and typed per entity. */
+export const entityNotFoundReason = <T extends ShortcodeType>(
+  entity: T,
+): `${ScreamingSnake<T>}_NOT_FOUND` => `${screamingSnake(entity)}_NOT_FOUND`;
+
+const ENTITY_NOT_FOUND_ERRORS = mapRecord(
+  SHORTCODE_TYPES.map(entityNotFoundReason),
+  () => "NOT_FOUND" as const,
+);
+
 /**
  * App error definitions: key = reason, value = HTTP-style error code string.
  * The web app's `createAppError` exposes these as transport-neutral codes, so
@@ -34,29 +47,11 @@ export const AppErrors = {
   // Auth
   UNAUTHORIZED: "UNAUTHORIZED",
 
-  // Entity not found
-  RECIPE_NOT_FOUND: "NOT_FOUND",
-  COOKBOOK_NOT_FOUND: "NOT_FOUND",
-  INVENTORY_NOT_FOUND: "NOT_FOUND",
-  IMAGE_NOT_FOUND: "NOT_FOUND",
-  PRODUCT_NOT_FOUND: "NOT_FOUND",
-  LOCATION_NOT_FOUND: "NOT_FOUND",
-  INGREDIENT_NOT_FOUND: "NOT_FOUND",
-  MEAL_NOT_FOUND: "NOT_FOUND",
-  LEDGER_PARTY_NOT_FOUND: "NOT_FOUND",
-  LEDGER_TRANSFER_NOT_FOUND: "NOT_FOUND",
+  // Entity not found — one `<ENTITY>_NOT_FOUND` per shortcode entity, derived
+  // from the registry so a new entity gets its reason without a line here.
+  ...ENTITY_NOT_FOUND_ERRORS,
   MEAL_RECIPE_NOT_FOUND: "NOT_FOUND",
   BACKGROUND_BATCH_NOT_FOUND: "NOT_FOUND",
-  PROJECT_NOT_FOUND: "NOT_FOUND",
-  TASK_NOT_FOUND: "NOT_FOUND",
-  EXPENSE_NOT_FOUND: "NOT_FOUND",
-  VENDOR_NOT_FOUND: "NOT_FOUND",
-  PURCHASE_NOT_FOUND: "NOT_FOUND",
-  FINANCIAL_ACCOUNT_NOT_FOUND: "NOT_FOUND",
-  FINANCIAL_TRANSACTION_NOT_FOUND: "NOT_FOUND",
-  WISH_NOT_FOUND: "NOT_FOUND",
-  PLANTING_NOT_FOUND: "NOT_FOUND",
-  GARDEN_ENTRY_NOT_FOUND: "NOT_FOUND",
 
   // Constraint violations
   LOCATION_CYCLE_DETECTED: "PRECONDITION_FAILED",

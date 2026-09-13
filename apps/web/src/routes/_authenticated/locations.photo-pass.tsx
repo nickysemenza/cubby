@@ -1,9 +1,7 @@
-import { locationShortcode } from "@cubby/schemas/identifiers";
-import { locationType } from "@cubby/schemas/location";
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
-import { z } from "zod";
 
+import { photoPassSearchSchema } from "~/app/locations/photo-pass/photo-pass-search";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
@@ -23,16 +21,6 @@ const PhotoPassWorkbench = lazy(() =>
   })),
 );
 
-const searchSchema = z.object({
-  /** Scope the walk to this location's descendants. */
-  parent: locationShortcode.optional().catch(undefined),
-  /** `house` = the whole missing-photo backlog; `scan` = QR-driven, no queue. */
-  scope: z.enum(["house", "scan"]).optional().catch(undefined),
-  /** Include locations that already have a photo — a deliberate re-shoot. */
-  all: z.boolean().optional().catch(undefined),
-  type: z.array(locationType).optional().catch(undefined),
-});
-
 const searchDefaults = {
   parent: undefined,
   scope: undefined,
@@ -41,7 +29,7 @@ const searchDefaults = {
 } as const;
 
 export const Route = createFileRoute("/_authenticated/locations/photo-pass")({
-  validateSearch: searchSchema,
+  validateSearch: photoPassSearchSchema,
   search: { middlewares: [stripSearchParams(searchDefaults)] },
   pendingComponent: DetailPagePending,
   errorComponent: RouteErrorComponent,

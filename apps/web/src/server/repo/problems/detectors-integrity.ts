@@ -54,6 +54,7 @@
 import { entityRefKey, type Entity } from "@cubby/schemas/entity";
 import type {
   EdgeRole,
+  EdgeSemantics,
   ReferentialLivenessViolation,
 } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
@@ -121,15 +122,14 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
     const semanticsMap = ENTITY_EDGE_SEMANTICS[targetEntity];
 
     for (const [edgeKey, edge] of Object.entries(edgeMap)) {
-      const semantics = Object.entries(semanticsMap).find(
-        ([semanticsKey]) => semanticsKey === edgeKey,
-      )?.[1];
-      if (!semantics) {
-        throw new Error(
-          `No ENTITY_EDGE_SEMANTICS entry for "${edgeKey}" (target entity "${targetEntity}") — ` +
-            "INCOMING_EDGES and ENTITY_EDGE_SEMANTICS have drifted out of key parity.",
-        );
-      }
+      // SAFETY: INCOMING_EDGES and ENTITY_EDGE_SEMANTICS are both real typed
+      // projections of the same ENTITY_EDGES source (entity-edges.ts), so
+      // their key sets are identical by construction — no runtime parity
+      // check needed here, unlike when they were two independently
+      // hand-kept maps.
+      const semantics = (semanticsMap as Record<string, EdgeSemantics>)[
+        edgeKey
+      ]!;
       if (semantics.liveness.kind === "allow-target-deleted") continue;
 
       const column = edge.column;

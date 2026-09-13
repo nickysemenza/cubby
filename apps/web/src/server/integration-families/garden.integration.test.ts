@@ -18,9 +18,11 @@ import {
   correctLocationDates,
   finishPlanting,
   gardenEntries,
+  gardenEntryList,
   gardenJournal,
   gardenLocationHistory,
   movePlanting,
+  plantingList,
   recordGardenEntry,
   splitPlanting,
   startPlanting,
@@ -671,5 +673,112 @@ describe("garden workflows", () => {
         ),
       }),
     ).toHaveLength(1);
+  });
+
+  it("plantingList honors a two-column sort, not just sorts[0]", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Garden sort crop" },
+      TEST_ACTOR,
+    );
+    const bed = await location("Garden sort bed", "bed");
+    const first = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    const second = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    const firstId = await resolveLiveShortcode(ctx.db, first.id, "planting");
+    const secondId = await resolveLiveShortcode(ctx.db, second.id, "planting");
+    // Force a tie on the primary sort column (createdAt) — `updatedAt`, the
+    // second requested sort column, must be what decides their relative order.
+    const tiedCreatedAt = new Date("2026-01-01T00:00:00Z");
+    await getDb(ctx.db)
+      .update(planting)
+      .set({
+        createdAt: tiedCreatedAt,
+        updatedAt: new Date("2026-01-01T00:00:00Z"),
+      })
+      .where(eq(planting.id, firstId!));
+    await getDb(ctx.db)
+      .update(planting)
+      .set({
+        createdAt: tiedCreatedAt,
+        updatedAt: new Date("2026-01-02T00:00:00Z"),
+      })
+      .where(eq(planting.id, secondId!));
+
+    const { data } = await plantingList(
+      ctx.db,
+      { pageIndex: 0, pageSize: 200 },
+      [
+        { orderBy: "createdAt", direction: "asc" },
+        { orderBy: "updatedAt", direction: "desc" },
+      ],
+    );
+    const ids = data.map((row) => row.id);
+    const firstIndex = ids.indexOf(first.id);
+    const secondIndex = ids.indexOf(second.id);
+    expect(firstIndex).toBeGreaterThanOrEqual(0);
+    expect(secondIndex).toBeGreaterThanOrEqual(0);
+    // Before the shared list-scaffold rewrite, `plantingList` only ever read
+    // `sorts[0]`, so the `updatedAt` tiebreak below would have been ignored.
+    expect(secondIndex).toBeLessThan(firstIndex);
+  });
+
+  it("gardenEntryList honors a two-column sort, not just sorts[0]", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Garden entry sort crop" },
+      TEST_ACTOR,
+    );
+    const bed = await location("Garden entry sort bed", "bed");
+    const sowed = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    // Same `observedOn` for both — the primary sort column ties, so the
+    // second requested column (`createdAt`) must decide their order.
+    const observedOn = "2026-06-01";
+    const firstEntry = await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      plantingId: sowed.id,
+      kind: "observation",
+      observedOn,
+      note: "First same-day entry",
+      pendingImageIds: [],
+    });
+    const secondEntry = await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      plantingId: sowed.id,
+      kind: "observation",
+      observedOn,
+      note: "Second same-day entry",
+      pendingImageIds: [],
+    });
+
+    const { data } = await gardenEntryList(
+      ctx.db,
+      { pageIndex: 0, pageSize: 200 },
+      [
+        { orderBy: "observedOn", direction: "asc" },
+        { orderBy: "createdAt", direction: "asc" },
+      ],
+    );
+    const ids = data.map((row) => row.id);
+    const firstIndex = ids.indexOf(firstEntry.id);
+    const secondIndex = ids.indexOf(secondEntry.id);
+    expect(firstIndex).toBeGreaterThanOrEqual(0);
+    expect(secondIndex).toBeGreaterThanOrEqual(0);
+    // Before the shared list-scaffold rewrite, `gardenEntryList` only ever
+    // read `sorts[0]` and unconditionally appended a hard-coded
+    // `createdAt desc` — this asc request on the second column would have
+    // been ignored and the order reversed.
+    expect(firstIndex).toBeLessThan(secondIndex);
   });
 });

@@ -35,6 +35,7 @@ function food(overrides: FoodOverrides): FoodSummaryWithLinkedProducts {
   const { fdc_id, description, ...rest } = overrides;
   return {
     fdc_id,
+    description,
     foodInfo: { data_type: "sr_legacy_food", description },
     legacyFoodInfo: { ndb_number: 1100 },
     brandedFoodInfo: null,

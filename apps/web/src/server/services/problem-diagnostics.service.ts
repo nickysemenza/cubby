@@ -9,7 +9,10 @@
  * canonical relation internally, but count callers never invoke sample.
  */
 
-import type { ProductWithTitleDerivableSize } from "@cubby/schemas/problems";
+import type {
+  ProductWithTitleDerivableSize,
+  UpcEnrichmentFreshness,
+} from "@cubby/schemas/problems";
 import type { ProjectAttentionItem } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entities/problem-query";
@@ -42,10 +45,7 @@ import {
   findToolsUsedOutsideOwnership,
 } from "~/server/repo/problems";
 import { computeAttentionItems } from "~/server/repo/project";
-import {
-  readCachedUpcLookups,
-  type UpcEnrichmentFreshness,
-} from "~/server/repo/upc-lookup-cache";
+import { readCachedUpcLookups } from "~/server/repo/upc-lookup-cache";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/semantic/embeddings";
 

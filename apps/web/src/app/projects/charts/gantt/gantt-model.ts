@@ -20,6 +20,7 @@ import {
   type TaskStatus,
   type Trade,
 } from "@cubby/schemas/project";
+import { capitalize } from "@cubby/shared";
 import { groupBy, keyBy } from "es-toolkit";
 
 import { buildForest, type Forest, foldForest } from "../../project-forest";
@@ -285,7 +286,7 @@ function buildTaskRow(task: TaskOut, depth: number): GanttTaskRow {
 
 function kindLabel(kind: string): string {
   if (kind === OTHER_KIND_KEY) return "Other";
-  return kind.charAt(0).toUpperCase() + kind.slice(1);
+  return capitalize(kind);
 }
 
 function globalExtent(projects: readonly ProjectOut[]): DayRange | null {

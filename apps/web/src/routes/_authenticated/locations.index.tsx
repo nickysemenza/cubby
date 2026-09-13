@@ -23,6 +23,7 @@ import {
 } from "~/components/ui/view-switcher";
 import { ensureEntityListSsr } from "~/entities/entity-list-ssr";
 import { getEntityFilters } from "~/entities/filter-manifest";
+import { filterUrlKey } from "~/entities/filters";
 import {
   type LOCATION_LIST_VIEWS,
   locationSearchDefaults,
@@ -60,8 +61,7 @@ function LocationsPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const tableFiltersActive = getEntityFilters("location").some((filter) =>
     Object.entries(search).some(
-      ([key, value]) =>
-        key === (filter.urlKey ?? filter.columnId) && Boolean(value),
+      ([key, value]) => key === filterUrlKey(filter) && Boolean(value),
     ),
   );
 

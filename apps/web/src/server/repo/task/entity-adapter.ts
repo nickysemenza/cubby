@@ -2,7 +2,10 @@ import {
   defineEntityAdapter,
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 import {
   createTask,
@@ -44,11 +47,7 @@ export const taskEntityAdapter = defineEntityAdapter({
       );
       await runMutationSideEffectsForEntities(
         ctx.db,
-        result.updatedIds.map((entityId) => ({
-          action: "updated" as const,
-          entity: { entity: "task" as const, id: entityId },
-          source: "task.bulkUpdate",
-        })),
+        mutationEvents("task", "updated", result.updatedIds, "task.bulkUpdate"),
       );
       return {
         updatedReferences: entityMutationReferences(

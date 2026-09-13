@@ -61,14 +61,14 @@ public actor PhotoUploader {
     }
 
     private let service: any PhotoService
-    private let put: PresignedUpload.Put
+    private let pending: PendingImageUpload
 
     public init(
         service: any PhotoService,
         put: @escaping PresignedUpload.Put = { try await PresignedUpload.put($0, to: $1, contentType: $2) }
     ) {
         self.service = service
-        self.put = put
+        pending = PendingImageUpload(service: service, put: put)
     }
 
     public func upload(
@@ -114,15 +114,17 @@ public actor PhotoUploader {
         let scaled = try ImageEncoding.downscaled(request.image, maxPixelSize: request.maxPixelSize)
         let data = try ImageEncoding.encode(scaled, as: request.format)
 
-        progress?(.presigning)
         let filename = "\(request.filenameBase).\(request.format.fileExtension)"
-        let upload = try await service.createUpload(
-            filename: filename, size: data.count, format: request.format, entity: request.entity
-        )
+        let result = try await pending.upload(
+            data, filename: filename, format: request.format, entity: request.entity
+        ) { phase in
+            switch phase {
+            case .presigning: progress?(.presigning)
+            case .uploading: progress?(.uploading)
+            }
+        }
 
-        progress?(.uploading)
-        try await put(data, upload.uploadUrl, request.format.contentType)
-
-        return Checkpoint(outcome: Outcome(imageID: upload.imageId, url: upload.url, byteCount: data.count))
+        return Checkpoint(
+            outcome: Outcome(imageID: result.imageID, url: result.url, byteCount: data.count))
     }
 }

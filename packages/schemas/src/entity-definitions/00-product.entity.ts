@@ -30,7 +30,20 @@ export default defineEntity({
   route: { basePath: "products" },
   table: "Product",
   identifiers: { brand: "ProductId", shortcode: "PRD-", legacy: "P-" },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    // Pantry/Inventory wayfinding, not a Product status colour; USDA data
+    // follows the product catalog onto the same line.
+    domain: "pantry",
+    description: "Specific household products and their identity.",
+    emptyState: {
+      title: "Nothing on the shelves yet",
+      description:
+        "Add the things you own to track what you have and what it's worth. Scan a barcode or add one by hand.",
+      actionLabel: "Add Product",
+    },
+    icons: { lucide: "Barcode", sfSymbol: "shippingbox" },
+  },
   model: {
     fields: [
       {
@@ -1566,7 +1579,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: true,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

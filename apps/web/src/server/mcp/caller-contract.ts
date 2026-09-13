@@ -1,90 +1,9 @@
 import type { z } from "zod";
 
-import type { McpWorkflowCaller } from "./workflow-caller";
+import { type McpWorkflowCaller, callerMethodRoster } from "./workflow-caller";
 
 type UnparsedMcpCaller = Parameters<z.ZodType["parse"]>[0];
 interface CallerPropertyOwner {}
-
-type CallerMethodRoster = {
-  [Domain in keyof McpWorkflowCaller]: {
-    [Method in keyof McpWorkflowCaller[Domain]]: true;
-  };
-};
-
-const callerMethodRoster = {
-  auditLog: { list: true },
-  dataQuality: { setException: true, clearException: true },
-  entityIntegrity: { previewOperation: true },
-  expense: { analytics: true, match: true },
-  financialTransaction: { previewStatementImport: true },
-  householdContribution: {
-    ledger: true,
-    project: true,
-    suggestTransferPairs: true,
-  },
-  image: { attachFile: true, createFileUpload: true },
-  ingredient: { recipeUsages: true, resolveOrCreate: true },
-  inventory: { moveEntries: true },
-  meal: {
-    getPreparations: true,
-    addRecipe: true,
-    updateRecipe: true,
-    removeRecipe: true,
-    getShoppingList: true,
-    savePreparation: true,
-  },
-  problems: {
-    getFast: true,
-    getCounts: true,
-    getByType: true,
-    getViews: true,
-    getCoverage: true,
-    getUpc: true,
-    getTracker: true,
-  },
-  product: {
-    externalIdCollisions: true,
-    resolveNames: true,
-    patchExternalIds: true,
-    verifyImages: true,
-    lookupUpc: true,
-    findOrCreateByUPC: true,
-    projectUses: true,
-    components: true,
-  },
-  project: {
-    resources: true,
-    toolSuggestions: true,
-    repointUses: true,
-    dashboardSummary: true,
-    portfolioAnalytics: true,
-  },
-  purchase: {
-    link: true,
-    split: true,
-    products: true,
-    reclassifyDocument: true,
-  },
-  recipe: {
-    scrape: true,
-    insertImport: true,
-    getAllTags: true,
-    explainCosting: true,
-  },
-  search: { find: true, related: true, similar: true },
-  statementRow: {
-    list: true,
-    summary: true,
-    imports: true,
-    drift: true,
-    record: true,
-    update: true,
-    delete: true,
-  },
-  suggestions: { getMakeable: true },
-  task: { listActionable: true, summary: true },
-  usda: { getByAlternateID: true },
-} as const satisfies CallerMethodRoster;
 
 function isObject(value: UnparsedMcpCaller): value is CallerPropertyOwner {
   return typeof value === "object" && value !== null;

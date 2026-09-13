@@ -1,7 +1,20 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { allEntities } from "@cubby/schemas/entity-manifest";
+import {
+  entityPresentation,
+  type WayfindingDomain,
+} from "@cubby/schemas/entity-presentation";
 
 /** The stable wayfinding families used by the Porcelain Transit shell. */
-export type WayfindingDomain = "cook" | "pantry" | "plan" | "house" | "finance";
+export type { WayfindingDomain };
+
+/**
+ * The entities whose records live on a line, from each declaration's
+ * `presentation.domain`. Route roots below stay hand-listed: they include
+ * workbench routes (`/scan`, `/calendar`) that belong to no entity.
+ */
+const entitiesOn = (domain: WayfindingDomain): readonly Entity[] =>
+  allEntities.filter((entity) => entityPresentation[entity].domain === domain);
 
 export type DomainWayfinding = {
   id: WayfindingDomain;
@@ -21,7 +34,7 @@ export const DOMAIN_WAYFINDING = {
     label: "Cook",
     accentToken: "--domain-cook",
     surfaceToken: "--domain-cook-surface",
-    entities: ["recipe", "cookbook", "ingredient"],
+    entities: entitiesOn("cook"),
     routeRoots: ["/recipes", "/cookbooks", "/ingredients"],
   },
   pantry: {
@@ -29,9 +42,7 @@ export const DOMAIN_WAYFINDING = {
     label: "Pantry",
     accentToken: "--domain-pantry",
     surfaceToken: "--domain-pantry-surface",
-    // Products are intentionally Pantry/Inventory wayfinding, not a Product
-    // status color. USDA data follows the Product catalog here as well.
-    entities: ["product", "inventory", "location", "usda-food"],
+    entities: entitiesOn("pantry"),
     routeRoots: [
       "/products",
       "/inventory",
@@ -47,7 +58,7 @@ export const DOMAIN_WAYFINDING = {
     label: "Plan",
     accentToken: "--domain-plan",
     surfaceToken: "--domain-plan-surface",
-    entities: ["meal", "wish"],
+    entities: entitiesOn("plan"),
     routeRoots: ["/calendar", "/meals", "/wishes"],
   },
   house: {
@@ -55,7 +66,7 @@ export const DOMAIN_WAYFINDING = {
     label: "House",
     accentToken: "--domain-house",
     surfaceToken: "--domain-house-surface",
-    entities: ["project", "task", "planting", "gardenEntry"],
+    entities: entitiesOn("house"),
     routeRoots: [
       "/projects",
       "/tools",
@@ -70,15 +81,7 @@ export const DOMAIN_WAYFINDING = {
     label: "Finance",
     accentToken: "--domain-finance",
     surfaceToken: "--domain-finance-surface",
-    entities: [
-      "expense",
-      "purchase",
-      "vendor",
-      "financialAccount",
-      "financialTransaction",
-      "ledgerParty",
-      "ledgerTransfer",
-    ],
+    entities: entitiesOn("finance"),
     routeRoots: [
       "/expenses",
       "/purchases",
@@ -120,11 +123,7 @@ export function domainForRoute(pathname: string): WayfindingDomain | null {
 
 /** Product classification intentionally resolves to Pantry. */
 export function domainForEntity(entity: Entity): WayfindingDomain | null {
-  return (
-    domainEntries.find((domain) =>
-      domain.entities.some((candidate) => candidate === entity),
-    )?.id ?? null
-  );
+  return entityPresentation[entity].domain;
 }
 
 export function domainWayfinding(domain: WayfindingDomain): DomainWayfinding {

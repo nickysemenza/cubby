@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./collection-tag": "./src/collection-tag.ts",
-    "./external-fetch": "./src/external-fetch.ts"
+    "./external-fetch": "./src/external-fetch.ts",
+    "./text-case": "./src/text-case.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

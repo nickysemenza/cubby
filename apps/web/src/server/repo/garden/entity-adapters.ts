@@ -97,14 +97,7 @@ export const plantingEntityAdapter = defineEntityAdapter({
     get: async (ctx, shortcode) =>
       getPlanting(ctx.db, await plantings.one(ctx.db, shortcode)),
     list: (ctx, _filters, sorts, pagination) =>
-      plantingList(
-        ctx.readDb,
-        {
-          page: pagination.pageIndex + 1,
-          pageSize: pagination.pageSize,
-        },
-        sorts,
-      ),
+      plantingList(ctx.readDb, pagination, sorts),
     create: async (ctx, data) => {
       const output = await createPlanting(ctx.db, data, ctx.actorContext);
       return { output, entityId: await plantings.one(ctx.db, output.id) };
@@ -148,14 +141,7 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
     get: async (ctx, shortcode) =>
       getGardenEntry(ctx.db, await entries.one(ctx.db, shortcode)),
     list: (ctx, _filters, sorts, pagination) =>
-      gardenEntryList(
-        ctx.readDb,
-        {
-          page: pagination.pageIndex + 1,
-          pageSize: pagination.pageSize,
-        },
-        sorts,
-      ),
+      gardenEntryList(ctx.readDb, pagination, sorts),
     create: async (ctx, data) => {
       if (data.kind === "move") {
         throw new Error("Move entries are created by planting workflows.");

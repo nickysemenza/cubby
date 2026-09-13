@@ -28,6 +28,7 @@ import {
 } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
 import {
+  mutationEvents,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
@@ -46,11 +47,7 @@ export const linkExpensesToPurchaseWorkflow = bindWorkflow(
     .effect("effects", ({ context }, { expenseIds }) =>
       runMutationSideEffectsForEntities(
         context.db,
-        expenseIds.map((entityId) => ({
-          action: "updated" as const,
-          entity: { entity: "expense" as const, id: entityId },
-          source: "purchase.link",
-        })),
+        mutationEvents("expense", "updated", expenseIds, "purchase.link"),
       ),
     )
     .output(({ link }) => link),
@@ -81,22 +78,14 @@ export const splitExpenseWorkflow = bindWorkflow(
       async ({ context }, { references: { originalRef, newIds } }) => {
         await runMutationSideEffectsForEntities(context.db, [
           ...(originalRef?.entity === "expense"
-            ? [
-                {
-                  action: "deleted" as const,
-                  entity: {
-                    entity: "expense" as const,
-                    id: parseEntityId("expense", originalRef.id),
-                  },
-                  source: "purchase.split",
-                },
-              ]
+            ? mutationEvents(
+                "expense",
+                "deleted",
+                [parseEntityId("expense", originalRef.id)],
+                "purchase.split",
+              )
             : []),
-          ...newIds.map((entityId) => ({
-            action: "created" as const,
-            entity: { entity: "expense" as const, id: entityId },
-            source: "purchase.split",
-          })),
+          ...mutationEvents("expense", "created", newIds, "purchase.split"),
         ]);
       },
     )

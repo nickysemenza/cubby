@@ -273,7 +273,7 @@ export async function lookupShortcodes(
  * below for audit-log display. Different semantics — don't fold it into the
  * type-label consolidation.
  */
-const DISPLAY_NAME_COLUMN = {
+export const DISPLAY_NAME_COLUMN = {
   cookbook: cookbook.name,
   expense: expense.name,
   financialAccount: financialAccount.name,
@@ -295,6 +295,38 @@ const DISPLAY_NAME_COLUMN = {
   vendor: vendor.name,
   wish: wish.name,
 } as const satisfies Record<ShortcodeEntity, PgColumn | null>;
+
+/**
+ * Entities where `DISPLAY_NAME_COLUMN` deliberately differs from the storage
+ * column behind the entity's `titleField` (`packages/schemas/src/
+ * entity-definitions/*.entity.ts` `presentation.titleField`) — each with the
+ * override column (or `null`, meaning no single column at all) and a
+ * one-line reason. Every entry here is a considered choice, not drift — see
+ * `shortcode-resolver-labels.unit.test.ts` for the parity check this backs.
+ */
+export const LABEL_COLUMN_OVERRIDES = {
+  gardenEntry: {
+    column: gardenEntry.kind,
+    reason:
+      "titleField (note) is free-text and often blank; kind is a short, always-present label",
+  },
+  planting: {
+    column: planting.status,
+    reason: "titleField (variety) is nullable text; status is always present",
+  },
+  inventory: {
+    column: null,
+    reason:
+      "titleField (amount) is a bare number; inventoryEntryLabels() below builds a relational 'product · location' label instead",
+  },
+  ledgerTransfer: {
+    column: null,
+    reason:
+      "titleField (fromPartyName) is a read-only value joined from LedgerParty, not a physical LedgerTransfer column",
+  },
+} satisfies Partial<
+  Record<ShortcodeEntity, { column: PgColumn | null; reason: string }>
+>;
 
 /** Batched UUID-to-label lookup; rows without a label are omitted. */
 export async function lookupEntityLabels(

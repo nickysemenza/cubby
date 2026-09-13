@@ -26,6 +26,11 @@
  * `projectNameOptions`. Ranking against the raw override columns is what made
  * suggestions miss: most projects leave them null, and a hand-typed one goes
  * stale the moment the work runs long.
+ *
+ * Deliberately NOT `Pick<ProjectOptionsOut, ...>`: this pure module (see file
+ * header — no `~/`-aliased imports, so the unit-test project can import it)
+ * has its own backtest fixtures with plain, non-shortcode-looking ids
+ * ("kitchen-remodel"), which a branded `ProjectShortcode` field would reject.
  */
 export interface SuggestableProject {
   id: string;

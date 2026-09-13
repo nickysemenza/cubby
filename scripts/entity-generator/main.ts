@@ -9,18 +9,27 @@ import {
   EntityDeclarationError,
   loadEntityDeclarations,
 } from "./declarations.ts";
+import type { CompiledEntity } from "./declarations.ts";
 import { renderEntityArtifacts } from "./render/index.ts";
 import { renderFilterArtifacts } from "./render/filters.ts";
+import { renderKernelBindingsArtifacts } from "./render/kernel-bindings.ts";
+import { renderRelationArtifacts } from "./render/relations.ts";
 import { missingBrowserRouteFiles } from "./render/routes.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+const renderAllArtifacts = (entities: readonly CompiledEntity[]) => [
+  ...renderEntityArtifacts(entities),
+  ...renderRelationArtifacts(entities),
+  ...renderKernelBindingsArtifacts(entities),
+  ...renderFilterArtifacts(entities),
+];
+
 const generateEntityArtifacts = async (root = ROOT) => {
   const entities = await loadEntityDeclarations();
-  const artifacts = [
-    ...renderEntityArtifacts(entities),
-    ...renderFilterArtifacts(entities),
-  ].map((artifact) => sealArtifact(root, artifact));
+  const artifacts = renderAllArtifacts(entities).map((artifact) =>
+    sealArtifact(root, artifact),
+  );
   return { entities, artifacts };
 };
 
@@ -36,10 +45,7 @@ const main = async () => {
   }
   if (check) {
     const entities = await loadEntityDeclarations();
-    const artifacts = [
-      ...renderEntityArtifacts(entities),
-      ...renderFilterArtifacts(entities),
-    ];
+    const artifacts = renderAllArtifacts(entities);
     const problems = await checkSealedEntityArtifacts(ROOT, artifacts);
     if (problems.length > 0) {
       throw new EntityDeclarationError(

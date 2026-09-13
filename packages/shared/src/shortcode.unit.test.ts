@@ -5,6 +5,7 @@ import {
   LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_CHARS,
   SHORTCODE_PREFIX,
+  type LocationShortcode,
   type ProductShortcode,
   type ShortcodeFor,
   type ShortcodeType,
@@ -138,6 +139,30 @@ describe("parseShortcode", () => {
     const parsed = parseShortcode("PRD-4K7M");
     if (parsed?.type === "product") {
       expectTypeOf(parsed.shortcode).toEqualTypeOf<ProductShortcode>();
+    }
+  });
+
+  /**
+   * The schema and parser tables are built by `mapRecord` and cast to their
+   * per-entity mapped types (see the SAFETY comments in shortcode.ts). These
+   * assertions are what make that cast honest: every entity's brand is its
+   * own, so a product code can never satisfy a location parameter, and the
+   * parsed union narrows per entity rather than collapsing to one brand.
+   */
+  it("keeps every entity's brand distinct through the derived tables", () => {
+    expectTypeOf<ShortcodeFor<"product">>().not.toEqualTypeOf<
+      ShortcodeFor<"location">
+    >();
+    expectTypeOf<ProductShortcode>().not.toMatchTypeOf<LocationShortcode>();
+    const parsed = parseShortcode("LOC-4K7M");
+    if (parsed?.type === "location") {
+      expectTypeOf(parsed.shortcode).toEqualTypeOf<LocationShortcode>();
+      expectTypeOf(parsed.shortcode).not.toEqualTypeOf<ProductShortcode>();
+    }
+    for (const entity of ENTITIES) {
+      expect(shortcodeSchema(entity).description).toContain(
+        SHORTCODE_PREFIX[entity],
+      );
     }
   });
 

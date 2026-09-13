@@ -16,7 +16,16 @@ export default defineEntity({
   route: { basePath: "usda", detailParam: "id" },
   table: null,
   identifiers: { brand: null, shortcode: null, legacy: null },
-  presentation: { titleField: "description" },
+  presentation: {
+    titleField: "description",
+    domain: "pantry",
+    description: "USDA foods available for product nutrition links.",
+    emptyState: {
+      title: "Nothing found in the USDA database",
+      description: "Search for a food to pull in its nutrition details.",
+    },
+    icons: { lucide: "Apple", sfSymbol: "leaf.fill" },
+  },
   model: {
     fields: [
       {
@@ -26,6 +35,19 @@ export default defineEntity({
         display: { list: true, detail: true },
         validation: {
           read: fdcId,
+          create: null,
+          update: null,
+        },
+      },
+      {
+        // The food's name, lifted out of `foodInfo` when the web layer enriches
+        // a USDA row so a generic surface (native row titles, `titleField`, the
+        // `description` sort) can read it without knowing the JSON shape.
+        key: "description",
+        kind: "text",
+        label: "Description",
+        validation: {
+          read: z.string(),
           create: null,
           update: null,
         },
@@ -118,6 +140,7 @@ export default defineEntity({
     audit: [],
     output: [
       "fdc_id",
+      "description",
       "brandedFoodInfo",
       "foodInfo",
       "legacyFoodInfo",

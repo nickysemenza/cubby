@@ -1,5 +1,5 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
-import type { EntityRef } from "@cubby/schemas/identifiers";
+import type { EntityId, EntityRef } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
   SearchableEntityRef,
@@ -48,7 +48,8 @@ const mutationSideEffectEntities = [
   "image",
 ] as const;
 
-type MutationSideEffectEntity = (typeof mutationSideEffectEntities)[number];
+export type MutationSideEffectEntity =
+  (typeof mutationSideEffectEntities)[number];
 export type MutationSideEffectEntityRef = EntityRef<MutationSideEffectEntity>;
 
 export type MutationSideEffectEvent = {
@@ -670,3 +671,59 @@ export async function runMutationSideEffectsForEntities(
     ports,
   );
 }
+
+/**
+ * One monomorphic ref builder per entity — each closure's `entity` is its own
+ * string literal, so `{ entity: "product", id }` is checked directly against
+ * `EntityRefFor<"product">` with no union to distribute over. A single
+ * generic builder can't do this: constructing `MutationSideEffectEntityRef`
+ * (branded via `EntityId`, itself a `z.infer` of a branded schema) for an
+ * opaque generic `E` needs a cast, and the unsafe-identifier guard rejects
+ * any assertion into a branded-schema-derived type. Same shape of workaround
+ * as `PARSE_CANONICAL_SHORTCODE` in `shortcode.ts`; indexing this by a
+ * generic `E extends MutationSideEffectEntity` (below) correlates the result
+ * back to `EntityId<E>` the same way `shortcodeSchema` indexes
+ * `SHORTCODE_SCHEMA`.
+ */
+type EntityRefBuilderMap = {
+  [E in MutationSideEffectEntity]: (
+    id: EntityId<E>,
+  ) => MutationSideEffectEntityRef;
+};
+
+const ENTITY_REF_BUILDER: EntityRefBuilderMap = {
+  product: (id) => ({ entity: "product", id }),
+  location: (id) => ({ entity: "location", id }),
+  ingredient: (id) => ({ entity: "ingredient", id }),
+  recipe: (id) => ({ entity: "recipe", id }),
+  cookbook: (id) => ({ entity: "cookbook", id }),
+  inventory: (id) => ({ entity: "inventory", id }),
+  meal: (id) => ({ entity: "meal", id }),
+  project: (id) => ({ entity: "project", id }),
+  task: (id) => ({ entity: "task", id }),
+  vendor: (id) => ({ entity: "vendor", id }),
+  purchase: (id) => ({ entity: "purchase", id }),
+  financialAccount: (id) => ({ entity: "financialAccount", id }),
+  financialTransaction: (id) => ({ entity: "financialTransaction", id }),
+  expense: (id) => ({ entity: "expense", id }),
+  wish: (id) => ({ entity: "wish", id }),
+  image: (id) => ({ entity: "image", id }),
+};
+
+/**
+ * Build one `MutationSideEffectEvent` per id, sharing an entity type, action,
+ * and source — the shape every entity adapter's delete/update/create side
+ * effect dispatch repeats per id before handing the batch to
+ * `runMutationSideEffectsForEntities`.
+ */
+export const mutationEvents = <E extends MutationSideEffectEntity>(
+  entity: E,
+  action: MutationAction,
+  ids: readonly EntityId<E>[],
+  source: string,
+): MutationSideEffectEvent[] =>
+  ids.map((id) => ({
+    action,
+    entity: ENTITY_REF_BUILDER[entity](id),
+    source,
+  }));

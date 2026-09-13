@@ -92,9 +92,6 @@ const PROJECT_LOCATIONS_HAND_ARRAY =
   "hand-written z.array(z.string()).optional() variant of project's own `locations` field (filter/scope/roster context), not a reference to generatedProjectFieldSchemas.{create,update,read}.locations";
 const TASK_EXPENSE_SHARED_MODULE_COLLISION =
   "task/expense's own generated field — generatedTaskFieldSchemas/generatedExpenseFieldSchemas are composed inside project.ts (see the file header note above MODULE_OVERRIDES on shared-module collisions); this key already references its OWN entity's generated map correctly, it just coincidentally shares a name with project's generated field and this walk runs per canonical module";
-const PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE =
-  "re-declared by hand immediately after the initial ...generatedPurchaseFieldSchemas.read spread earlier in the same object literal, so this hand-written instance shadows (and makes dead) the generated one already spread in — real duplication, candidate for follow-up cleanup (see report)";
-
 const INTENTIONAL_RESPELLINGS = {
   // --- product.ts: reviewed and intentional -------------------------------
   "product::productQuickCreatePayload::name":
@@ -562,11 +559,9 @@ const INTENTIONAL_RESPELLINGS = {
   "project::toolGalleryInventoryEntryOut::id":
     "coincidental key-name collision: the embedded INVENTORY entry's own id, not project's own id",
 
-  // --- purchase: purchaseOut re-declares its own generated read fields by
-  // hand immediately after spreading them (see PURCHASE_OUT_SHADOWED_BY_
-  // HAND_REDECLARE) — a real, worth-fixing duplication; product-embedded
-  // purchase-history rows also hand-copy purchase's own fields; filters use
-  // entityFilterList/oneOrMany multi-value variants over generated scalars ---
+  // --- purchase: product-embedded purchase-history rows hand-copy purchase's
+  // own fields; filters use entityFilterList/oneOrMany multi-value variants
+  // over generated scalars ---
   "purchase::productPurchaseOut::displayLabel":
     "product-purchase-history row hand-copies purchase's own displayLabel field for a product-embedded projection, rather than referencing generatedPurchaseFieldSchemas.read directly",
   "purchase::productPurchaseOut::orderId":
@@ -583,20 +578,6 @@ const INTENTIONAL_RESPELLINGS = {
     "multi-value filter (oneOrMany(purchaseReconciliation)) over the read field's single-value enum",
   "purchase::purchaseFiltersSchema::vendorId":
     "shortcode-list filter spelled as entityFilterList(vendorShortcode) over the generated scalar vendorId field",
-  "purchase::purchaseOut::createdAt": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::documentCount":
-    PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::expenseCount":
-    PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::images": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::orderUrl": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::reconciliation":
-    PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::unpricedExpenseCount":
-    PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::updatedAt": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::vendorLogo": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
-  "purchase::purchaseOut::vendorName": PURCHASE_OUT_SHADOWED_BY_HAND_REDECLARE,
   "purchase::purchaseUpdateData::imageOrder": HAND_WRITTEN_IMAGE_ID_ARRAY,
   "purchase::purchaseUpdateData::removeImageIds": HAND_WRITTEN_IMAGE_ID_ARRAY,
 

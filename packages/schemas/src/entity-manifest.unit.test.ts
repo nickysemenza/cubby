@@ -249,7 +249,7 @@ describe("entity manifest", () => {
       expect(metadata.references).toEqual(entityReferences(entity));
     }
     expect(entityInspectorMetadata.purchase.titleField).toBe("displayLabel");
-    expect(entityInspectorMetadata.inventory.titleField).toBe("name");
+    expect(entityInspectorMetadata.inventory.titleField).toBe("amount");
     expect(entityInspectorMetadata.product).toMatchObject({
       auditable: true,
       hasImages: true,

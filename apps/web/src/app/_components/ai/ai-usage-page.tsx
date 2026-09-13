@@ -17,7 +17,7 @@ import {
 } from "~/components/ui/table";
 import { useHydrated } from "~/hooks/useHydrated";
 import { ai } from "~/lib/ai.functions";
-import { formatCount } from "~/lib/utils";
+import { formatCount, formatCurrency } from "~/lib/utils";
 
 const supportedEntityTypes = [
   "product",
@@ -26,13 +26,6 @@ const supportedEntityTypes = [
   "ingredient",
   "inventory",
 ] as const;
-
-const usdFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 4,
-  maximumFractionDigits: 6,
-});
 
 type SupportedEntityType = (typeof supportedEntityTypes)[number];
 
@@ -56,7 +49,9 @@ function formatTokens(value: number | null | undefined): string {
 }
 
 function formatUsd(value: number | null | undefined): string {
-  return value == null ? "unpriced" : usdFormatter.format(value);
+  return value == null
+    ? "unpriced"
+    : formatCurrency(value, 6, { minimumFractionDigits: 4 });
 }
 
 function formatMs(value: number): string {

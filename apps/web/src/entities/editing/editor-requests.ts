@@ -19,6 +19,32 @@ type MutableDraft<E extends EditableEntity> = {
   -readonly [K in keyof EntityEditDraft<E>]?: EntityEditDraft<E>[K];
 };
 
+/**
+ * A create-intent "capture" dialog request with no fields beyond an optional
+ * seed — the request every entity with no bespoke capture logic needs.
+ * Entities whose capture request derives fields from its input (context,
+ * defaulted seed values) keep their own hand-written builder below instead
+ * of folding into this one.
+ */
+function captureRequest<E extends EditableEntity>(
+  entity: E,
+  seed?: MutableDraft<E>,
+): DialogRequest<E> {
+  // SAFETY: `DialogRequest<E>`'s `intent` is `EntityEditIntent<E, "create">`,
+  // a per-entity lookup the compiler can't verify includes `"capture"` for an
+  // opaque generic `E`; every caller below only ever instantiates this with
+  // an entity whose editing registry declares `"capture"` as a valid create
+  // intent (the same set the hand-written builders it replaces used
+  // directly).
+  const request = {
+    entity,
+    operation: "create",
+    intent: "capture",
+  } as DialogRequest<E>;
+  if (seed !== undefined) request.seed = seed;
+  return request;
+}
+
 export const mealCaptureRequest = (input?: {
   date?: string;
 }): DialogRequest<"meal"> => ({
@@ -94,27 +120,19 @@ export const projectCaptureRequest = (input?: {
   };
 };
 
-export const vendorCaptureRequest = (): DialogRequest<"vendor"> => ({
-  entity: "vendor",
-  operation: "create",
-  intent: "capture",
-});
+export const vendorCaptureRequest = (): DialogRequest<"vendor"> =>
+  captureRequest("vendor");
 
 export const purchaseCaptureRequest = (input?: {
   vendorId?: VendorShortcode | null;
-}): DialogRequest<"purchase"> => ({
-  entity: "purchase",
-  operation: "create",
-  intent: "capture",
-  seed: input?.vendorId ? { vendorId: input.vendorId } : undefined,
-});
+}): DialogRequest<"purchase"> =>
+  captureRequest(
+    "purchase",
+    input?.vendorId ? { vendorId: input.vendorId } : undefined,
+  );
 
 export const financialAccountCaptureRequest =
-  (): DialogRequest<"financialAccount"> => ({
-    entity: "financialAccount",
-    operation: "create",
-    intent: "capture",
-  });
+  (): DialogRequest<"financialAccount"> => captureRequest("financialAccount");
 
 export const financialAccountEditRequest = (
   account: FinancialAccountOut,
@@ -134,11 +152,8 @@ export const financialAccountEditRequest = (
 });
 
 export const financialTransactionCaptureRequest =
-  (): DialogRequest<"financialTransaction"> => ({
-    entity: "financialTransaction",
-    operation: "create",
-    intent: "capture",
-  });
+  (): DialogRequest<"financialTransaction"> =>
+    captureRequest("financialTransaction");
 
 export const financialTransactionEditRequest = (
   transaction: FinancialTransactionOut,

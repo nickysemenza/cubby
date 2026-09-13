@@ -1,6 +1,6 @@
 import {
   defineEntityAdapter,
-  entityMutationReferences,
+  deletedWithImages,
 } from "~/server/entity-kernel/adapter";
 
 import {
@@ -26,10 +26,11 @@ export const projectEntityAdapter = defineEntityAdapter({
       const { detachedImageKeys, deletedImageShortcodes } =
         await deleteProjects(ctx.db, ids, ctx.actorContext);
       return {
-        deletedReferences: [
-          ...entityMutationReferences("project", ids),
-          ...entityMutationReferences("image", deletedImageShortcodes),
-        ],
+        deletedReferences: deletedWithImages(
+          "project",
+          ids,
+          deletedImageShortcodes,
+        ),
         detachedImageKeys,
       };
     },

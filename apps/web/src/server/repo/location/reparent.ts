@@ -4,7 +4,10 @@ import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 import { bulkReparentLocations } from "./crud";
 
@@ -41,11 +44,7 @@ export const reparentLocationsInBulk = async (
   await bulkReparentLocations(db, ids, parentId, actor);
   await runMutationSideEffectsForEntities(
     db,
-    ids.map((entityId) => ({
-      action: "updated" as const,
-      entity: { entity: "location" as const, id: entityId },
-      source: "location.bulkUpdateParent",
-    })),
+    mutationEvents("location", "updated", ids, "location.bulkUpdateParent"),
   );
   return { updated: ids.length };
 };

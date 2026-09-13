@@ -760,7 +760,13 @@ const problemsCoverageFields = {
   productsWithTitleDerivableSize: z.array(productWithTitleDerivableSizeSchema),
 };
 
-const conversionCoverageFreshnessSchema = z.object({
+/**
+ * The catalog-level truthfulness signal for filters backed by the conversion
+ * projection. A ready row from another engine version is deliberately stale:
+ * the list filters fail closed in that case, so reporting it as fresh would
+ * turn a partial result into a healthy-looking empty Problem.
+ */
+export const conversionCoverageFreshnessSchema = z.object({
   state: z.enum(["fresh", "stale", "unavailable"]),
   computedAt: z.date().nullable(),
   expectedEngineVersion: z.string(),
@@ -769,6 +775,9 @@ const conversionCoverageFreshnessSchema = z.object({
   unavailableCount: z.number().int().nonnegative(),
   missingCount: z.number().int().nonnegative(),
 });
+export type ProductConversionCoverageFreshness = z.infer<
+  typeof conversionCoverageFreshnessSchema
+>;
 
 export const problemsCoverageSchema = z.object({
   ...problemsCoverageFields,

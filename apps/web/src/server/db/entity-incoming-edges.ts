@@ -1,37 +1,18 @@
 /**
- * Pure fact table of incoming foreign-key edges per entity — for every entity
- * `E`, every column (on some other table, usually a join table) that carries a
- * live reference to `E.id`.
+ * `INCOMING_EDGES` — the physical-fact half of `ENTITY_EDGES`
+ * (`./entity-edges.ts`), projected down to what a SQL builder needs: the FK
+ * `column` itself, plus `unconstrained`/`note`. `ENTITY_EDGES` is the single
+ * source of truth; this is a real typed projection of it (not a second
+ * hand-kept map), so it can never drift from `ENTITY_EDGE_SEMANTICS`
+ * (`./entity-edge-semantics.ts`, the other projection) — both are built from
+ * the same per-edge entries, so their key sets are identical by construction,
+ * with no runtime parity check required.
  *
- * Lives in `server/db`, not `packages/schemas`: the values are `AnyColumn`
- * references into `schema.ts`, and schemas cannot import `drizzle-orm/pg-core`
- * (see the CLAUDE.md layering note on the WASM/schemas boundary — this is the
- * same shape of rule, one level down).
- *
- * **The map holds edges only — no disposition.** What a caller should DO with
- * an edge (hard-delete the row, null the FK, refuse the parent delete, ignore
- * it entirely) is not a property of the edge itself: `image`'s six edges
- * disposition differently under a hard delete (`deleteRow`/`clearFk` — see
- * `IMAGE_HARD_DELETE` in repo/image.ts) than they would under some other
- * operation, and `product`'s six edges split into acquisition/history/metadata
- * roles differently again depending on which predicate is asking. A per-edge
- * global disposition would be wrong on the facts, not merely weak. Each
- * operation that cares owns an `IncomingEdgePolicy<E, ...>` (or a stable role
- * map keyed by it), so a new edge here is a compile error at every operation
- * until it has been given a disposition there. The runtime key-set guard lives
- * in `repo/entity-edge-operation-policies.unit.test.ts`; the corresponding
- * repository integration tests backstop the actual SQL behavior.
- *
- * Cross-checked against schema.ts by entity-manifest-fk.unit.test.ts, which
- * introspects every `pgTable` in schema.ts and asserts:
- *   1. every real FK it finds pointing at an entity's table is declared here
- *      (the assertion that would have caught `PurchaseImage.imageId` missing
- *      from `image`'s edges — the bug this file exists to prevent recurring);
- *   2. every edge declared here that introspection does NOT find is marked
- *      `unconstrained` (catches typos/renames); and
- *   3. every FK target that is neither an entity nor in the test's
- *      `NON_ENTITY_FK_TARGETS` allowlist fails, forcing a one-line
- *      justification for stepping outside the entity graph.
+ * `IncomingEdgeKey<E>` stays a literal-key type (not widened to `string`):
+ * every `IncomingEdgePolicy<E, ...>` an operation declares (there are 23 of
+ * them) `satisfies`-checks its own keys against this, so a new edge is a
+ * compile error at every operation until it has been given a disposition
+ * there.
  */
 
 import type { Entity } from "@cubby/schemas/entity";
@@ -41,51 +22,8 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import type { AnyColumn } from "drizzle-orm";
 
-import {
-  cookbook,
-  expense,
-  expenseAttribution,
-  financialAccount,
-  financialTransaction,
-  financialTransactionAllocation,
-  gardenEntry,
-  gardenEntryImage,
-  ingredient,
-  inventoryEntry,
-  ledgerSourceClaim,
-  ledgerTransfer,
-  location,
-  locationImage,
-  mealRecipe,
-  mealRecipePortion,
-  product,
-  productComponent,
-  productConversionCoverage,
-  productExternalId,
-  productImage,
-  productUnitMappings,
-  project,
-  projectDependency,
-  projectImage,
-  projectToolUsage,
-  purchase,
-  purchaseImage,
-  purchaseProduct,
-  recipe,
-  recipeImage,
-  recipeSection,
-  recipeSectionIngredient,
-  planting,
-  plantingLocationPeriod,
-  statementRow,
-  task,
-  taskDependency,
-  vendor,
-  wishCandidate,
-} from "./schema";
-
-/** `${pgTable name}.${column name}` — e.g. `"PurchaseImage.imageId"`. */
-type EdgeKey<C extends AnyColumn> = `${C["_"]["tableName"]}.${C["_"]["name"]}`;
+import type { EntityEdge } from "./entity-edges";
+import { ENTITY_EDGES } from "./entity-edges";
 
 export interface IncomingEdge {
   /** The FK column, on the referencing table, that points at this entity's `id`. */
@@ -101,182 +39,47 @@ export interface IncomingEdge {
   note?: string;
 }
 
-/**
- * Forces every entry's key to equal `EdgeKey<its own column>`. Drizzle
- * preserves a concretely-declared column's table name and column name as
- * literal string types (see `productImage.imageId`'s inferred type), so
- * key↔column correspondence is checkable even though completeness of the edge
- * SET is not — a mis-keyed entry (wrong table, wrong column, a typo) fails to
- * satisfy this and is a compile error at the `edges({...})` call site. Set
- * completeness is entity-manifest-fk.unit.test.ts's job, not this type's.
- */
-type WellKeyed<T extends Record<string, IncomingEdge>> = {
-  [K in keyof T]: K extends EdgeKey<T[K]["column"]> ? unknown : never;
-};
-
-function edges<T extends Record<string, IncomingEdge>>(t: T & WellKeyed<T>): T {
-  return t;
+/** Drop an `EntityEdge`'s stable-semantics fields, keeping only the physical facts. */
+function projectIncomingEdges<T extends Record<string, EntityEdge>>(
+  edgeMap: T,
+): { [K in keyof T]: IncomingEdge } {
+  // SAFETY: same keys as `edgeMap`, each value the physical subset of that
+  // key's edge — `fromEntries` erases the keys the mapped type restores.
+  return Object.fromEntries(
+    Object.entries(edgeMap).map(([key, edge]) => [
+      key,
+      {
+        column: edge.column,
+        unconstrained: edge.unconstrained,
+        note: edge.note,
+      },
+    ]),
+  ) as { [K in keyof T]: IncomingEdge };
 }
 
 export const INCOMING_EDGES = {
-  cookbook: edges({
-    "Recipe.cookbookId": { column: recipe.cookbookId },
-  }),
-  image: edges({
-    "Cookbook.coverImageId": { column: cookbook.coverImageId },
-    "Vendor.logoImageId": { column: vendor.logoImageId },
-    "ProductImage.imageId": { column: productImage.imageId },
-    "LocationImage.imageId": { column: locationImage.imageId },
-    "RecipeImage.imageId": { column: recipeImage.imageId },
-    "ProjectImage.imageId": { column: projectImage.imageId },
-    "PurchaseImage.imageId": { column: purchaseImage.imageId },
-    "GardenEntryImage.imageId": { column: gardenEntryImage.imageId },
-  }),
-  recipe: edges({
-    "RecipeSection.recipeId": { column: recipeSection.recipeId },
-    "Ingredient.recipeId": { column: ingredient.recipeId },
-    "MealRecipe.recipeId": { column: mealRecipe.recipeId },
-    "RecipeImage.recipeId": { column: recipeImage.recipeId },
-  }),
-  ingredient: edges({
-    "RecipeSectionIngredient.ingredientId": {
-      column: recipeSectionIngredient.ingredientId,
-    },
-    "Product.ingredientId": { column: product.ingredientId },
-    "Product.growsIngredientId": { column: product.growsIngredientId },
-    "Planting.ingredientId": { column: planting.ingredientId },
-  }),
-  meal: edges({
-    "MealRecipe.mealId": { column: mealRecipe.mealId },
-    "MealRecipePortion.mealId": { column: mealRecipePortion.mealId },
-  }),
-  ledgerParty: edges({
-    "ExpenseAttribution.ledgerPartyId": {
-      column: expenseAttribution.ledgerPartyId,
-    },
-    "FinancialAccount.ledgerPartyId": {
-      column: financialAccount.ledgerPartyId,
-    },
-    "LedgerTransfer.fromPartyId": { column: ledgerTransfer.fromPartyId },
-    "LedgerTransfer.toPartyId": { column: ledgerTransfer.toPartyId },
-    "MealRecipePortion.ledgerPartyId": {
-      column: mealRecipePortion.ledgerPartyId,
-    },
-  }),
-  product: edges({
-    "ProductExternalId.productId": { column: productExternalId.productId },
-    "ProductUnitMappings.productId": {
-      column: productUnitMappings.productId,
-    },
-    "InventoryEntry.productId": { column: inventoryEntry.productId },
-    "ProductImage.productId": { column: productImage.productId },
-    "Expense.productId": { column: expense.productId },
-    "Task.subjectProductId": { column: task.subjectProductId },
-    "ProjectToolUsage.productId": { column: projectToolUsage.productId },
-    "PurchaseProduct.productId": { column: purchaseProduct.productId },
-    "WishCandidate.productId": { column: wishCandidate.productId },
-    "Location.productId": { column: location.productId },
-    "Cookbook.productId": { column: cookbook.productId },
-    "ProductComponent.parentProductId": {
-      column: productComponent.parentProductId,
-    },
-    "ProductComponent.componentProductId": {
-      column: productComponent.componentProductId,
-    },
-    "ProductConversionCoverage.productId": {
-      column: productConversionCoverage.productId,
-    },
-    "Planting.sourceProductId": { column: planting.sourceProductId },
-  }),
-  location: edges({
-    "InventoryEntry.locationId": { column: inventoryEntry.locationId },
-    "LocationImage.locationId": { column: locationImage.locationId },
-    "Location.parentId": { column: location.parentId },
-    "Planting.locationId": { column: planting.locationId },
-    "Planting.intendedLocationId": { column: planting.intendedLocationId },
-    "GardenEntry.locationId": { column: gardenEntry.locationId },
-    "PlantingLocationPeriod.locationId": {
-      column: plantingLocationPeriod.locationId,
-    },
-  }),
-  project: edges({
-    "Project.parentProjectId": { column: project.parentProjectId },
-    "ProjectDependency.projectId": { column: projectDependency.projectId },
-    "ProjectDependency.blockedByProjectId": {
-      column: projectDependency.blockedByProjectId,
-    },
-    "Task.projectId": { column: task.projectId },
-    "Expense.projectId": { column: expense.projectId },
-    "ProjectImage.projectId": { column: projectImage.projectId },
-    "ProjectToolUsage.projectId": { column: projectToolUsage.projectId },
-  }),
-  task: edges({
-    "Task.parentTaskId": { column: task.parentTaskId },
-    "TaskDependency.taskId": { column: taskDependency.taskId },
-    "TaskDependency.blockedByTaskId": {
-      column: taskDependency.blockedByTaskId,
-    },
-  }),
-  vendor: edges({
-    "Purchase.vendorId": { column: purchase.vendorId },
-  }),
-  purchase: edges({
-    "Expense.purchaseId": { column: expense.purchaseId },
-    "PurchaseImage.purchaseId": { column: purchaseImage.purchaseId },
-    "PurchaseProduct.purchaseId": { column: purchaseProduct.purchaseId },
-    "FinancialTransactionAllocation.purchaseId": {
-      column: financialTransactionAllocation.purchaseId,
-    },
-  }),
-  financialAccount: edges({
-    "FinancialTransaction.accountId": {
-      column: financialTransaction.accountId,
-    },
-    "StatementRow.accountId": { column: statementRow.accountId },
-  }),
-  financialTransaction: edges({
-    "FinancialTransactionAllocation.transactionId": {
-      column: financialTransactionAllocation.transactionId,
-    },
-  }),
-  wish: edges({
-    "WishCandidate.wishId": { column: wishCandidate.wishId },
-  }),
-  expense: edges({
-    "ExpenseAttribution.expenseId": { column: expenseAttribution.expenseId },
-    "LedgerSourceClaim.expenseId": { column: ledgerSourceClaim.expenseId },
-  }),
-  ledgerTransfer: edges({
-    "FinancialTransaction.ledgerTransferId": {
-      column: financialTransaction.ledgerTransferId,
-    },
-    "LedgerSourceClaim.ledgerTransferId": {
-      column: ledgerSourceClaim.ledgerTransferId,
-    },
-  }),
-  planting: edges({
-    "Planting.parentPlantingId": { column: planting.parentPlantingId },
-    "GardenEntry.plantingId": { column: gardenEntry.plantingId },
-    "PlantingLocationPeriod.plantingId": {
-      column: plantingLocationPeriod.plantingId,
-    },
-  }),
-  gardenEntry: edges({
-    "GardenEntryImage.gardenEntryId": {
-      column: gardenEntryImage.gardenEntryId,
-    },
-    "PlantingLocationPeriod.sourceGardenEntryId": {
-      column: plantingLocationPeriod.sourceGardenEntryId,
-    },
-  }),
-  // No table carries a live FK at these two: `inventory` is a leaf stock row,
-  // and `usda-food` has no
-  // local table at all (it's resolved at query time via `product.fdc_id`, a
-  // cross-system id link rather than a DB FK — see usda-link-resolved-at-
-  // query-time).
-  inventory: edges({}),
-  "usda-food": edges({}),
-} as const satisfies Record<Entity, Record<string, IncomingEdge>>;
+  cookbook: projectIncomingEdges(ENTITY_EDGES.cookbook),
+  image: projectIncomingEdges(ENTITY_EDGES.image),
+  recipe: projectIncomingEdges(ENTITY_EDGES.recipe),
+  ingredient: projectIncomingEdges(ENTITY_EDGES.ingredient),
+  meal: projectIncomingEdges(ENTITY_EDGES.meal),
+  ledgerParty: projectIncomingEdges(ENTITY_EDGES.ledgerParty),
+  product: projectIncomingEdges(ENTITY_EDGES.product),
+  location: projectIncomingEdges(ENTITY_EDGES.location),
+  project: projectIncomingEdges(ENTITY_EDGES.project),
+  task: projectIncomingEdges(ENTITY_EDGES.task),
+  vendor: projectIncomingEdges(ENTITY_EDGES.vendor),
+  purchase: projectIncomingEdges(ENTITY_EDGES.purchase),
+  financialAccount: projectIncomingEdges(ENTITY_EDGES.financialAccount),
+  financialTransaction: projectIncomingEdges(ENTITY_EDGES.financialTransaction),
+  wish: projectIncomingEdges(ENTITY_EDGES.wish),
+  expense: projectIncomingEdges(ENTITY_EDGES.expense),
+  ledgerTransfer: projectIncomingEdges(ENTITY_EDGES.ledgerTransfer),
+  planting: projectIncomingEdges(ENTITY_EDGES.planting),
+  gardenEntry: projectIncomingEdges(ENTITY_EDGES.gardenEntry),
+  inventory: projectIncomingEdges(ENTITY_EDGES.inventory),
+  "usda-food": projectIncomingEdges(ENTITY_EDGES["usda-food"]),
+} satisfies Record<Entity, Record<string, IncomingEdge>>;
 
 /** The declared incoming-edge keys for entity `E` — e.g. `IncomingEdgeKey<"image">`. */
 export type IncomingEdgeKey<E extends Entity> =

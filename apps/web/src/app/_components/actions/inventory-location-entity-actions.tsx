@@ -1,17 +1,15 @@
 import {
-  inventoryShortcode,
-  locationShortcode,
-} from "@cubby/schemas/identifiers";
-import {
   type LocationListItemOut,
   locationListItemOut,
   locationOut,
 } from "@cubby/schemas/location";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback, useRef, useState } from "react";
-import { z } from "zod";
 
-import type { InventoryDialogItem } from "../inventory/dialog-item";
+import {
+  type InventoryDialogItem,
+  inventoryDialogItemSchema,
+} from "../inventory/dialog-item";
 import { MoveInventoryDialog } from "../inventory/move-inventory-dialog";
 import { BulkReparentLocationsDialog } from "../locations/bulk-reparent-locations-dialog";
 import { typeSupportsQrCode } from "../locations/location-type-theme";
@@ -19,15 +17,8 @@ import { VerbMenuItem } from "./action-verb-ui";
 import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 
-const inventoryMoveRow = z.object({
-  id: inventoryShortcode,
-  amount: z.object({ value: z.number(), unit: z.string() }),
-  location: z.object({ id: locationShortcode, name: z.string() }),
-  product: z.object({ name: z.string() }),
-});
-
 const asInventoryItem = (row: EntityActionRow): InventoryDialogItem | null => {
-  const parsed = inventoryMoveRow.safeParse(row);
+  const parsed = inventoryDialogItemSchema.safeParse(row);
   return parsed.success ? parsed.data : null;
 };
 

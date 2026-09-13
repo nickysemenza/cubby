@@ -5,6 +5,7 @@ import { compileEntity, validateEntityIdentities } from "./compile.ts";
 import { browserRoutes } from "./render/routes.ts";
 import type {
   EntityDeclarationMetadata,
+  EntityPresentation,
   EntityFieldControlKind,
   EntityFieldKind,
   EntityStorageDefaultKind,
@@ -168,11 +169,10 @@ export type CompiledEntity = Readonly<{
   key: string;
   shortcode: string | null;
   legacyShortcode: string | null;
-  inspector: Readonly<{
-    singular: string;
-    plural: string | null;
-    titleField: string;
-  }>;
+  /** Names plus the declaration's `presentation` block, passed through as one unit. */
+  inspector: Readonly<
+    { singular: string; plural: string | null } & EntityPresentation
+  >;
   descriptor: DeclarationObject;
   contract: Readonly<{
     create: SourceRef | null;

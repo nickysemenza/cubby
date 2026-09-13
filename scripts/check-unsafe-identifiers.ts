@@ -72,10 +72,15 @@ type ModuleInfo = {
 };
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts"]);
-// Xcode/SwiftPM build output lives in-tree (`apps/apple/DerivedData`, `.build`) and
-// contains package checkouts with dangling symlinks that `statSync` cannot follow.
+// Xcode/SwiftPM build output lives in-tree (`apps/apple/DerivedData`, `.build`)
+// and contains package checkouts with dangling symlinks; `.claude` holds agent
+// worktrees (whole extra checkouts with their own build output); the
+// Rust/generator build directories hold checked-out dependencies. None of it
+// is our source.
 const IGNORED_DIRECTORIES = new Set([
   ".build",
+  ".claude",
+  ".generator",
   ".git",
   ".next",
   ".turbo",
@@ -83,6 +88,7 @@ const IGNORED_DIRECTORIES = new Set([
   "DerivedData",
   "dist",
   "node_modules",
+  "target",
 ]);
 const UNSAFE_HELPER = /^unsafe(?:[A-Z][A-Za-z0-9]*)?(?:Id|Shortcode)$/u;
 const TESTING_MODULE = "@cubby/schemas/testing";
@@ -925,7 +931,8 @@ const sourceFilesUnder = (path: string, options: ScanOptions): string[] => {
   if (!stat.isDirectory() || IGNORED_DIRECTORIES.has(basename(path))) return [];
   return readdirSync(path, { withFileTypes: true }).flatMap((entry) => {
     const child = resolve(path, entry.name);
-    return entry.isDirectory() && IGNORED_DIRECTORIES.has(entry.name)
+    return entry.isSymbolicLink() ||
+      (entry.isDirectory() && IGNORED_DIRECTORIES.has(entry.name))
       ? []
       : sourceFilesUnder(child, options);
   });

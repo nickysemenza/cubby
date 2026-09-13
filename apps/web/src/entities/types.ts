@@ -138,13 +138,6 @@ export interface EntityDefinition {
   lucideIcon: LucideIcon;
   color: EntityColor;
   routes: EntityRoutes;
-  /**
-   * Dependency-free client projection of the server sort contracts. Route
-   * loaders only need these field names; importing every entity schema here
-   * would pull validation graphs into the eager route tree, so the arrays stay
-   * hand-listed and a drift test pins them to the canonical schema exports.
-   */
-  sortableFields: readonly string[];
   detail?: EntityDetailConfig;
   list?: EntityListConfig;
   mergeable?: MergeableConfig;

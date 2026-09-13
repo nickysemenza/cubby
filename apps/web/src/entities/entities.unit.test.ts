@@ -5,50 +5,31 @@ import {
 import { entityNames } from "@cubby/schemas/entity-names";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
-import { usdaFoodSortableFields } from "@cubby/schemas/usda";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
 import {
   browserEntityDefinition,
+  defaultSortFor,
   type EntityDetailRoute,
   entities,
   entityLabel,
   isBrowserRoutedEntity,
 } from "./entities";
 
-describe("entity sortableFields", () => {
-  it("stays in sync with the canonical server schema contracts", () => {
-    // The registry hand-lists these so route loaders never import the entity
-    // schemas (validation graphs in the eager route tree); this is the pin.
-    const declared = Object.fromEntries(
-      browserRoutedEntities.map((entity) => [
-        entity,
-        entities[entity].sortableFields,
-      ]),
-    );
-    expect(declared).toEqual({
-      ingredient: generatedEntitySort.ingredient.fields,
-      product: generatedEntitySort.product.fields,
-      recipe: generatedEntitySort.recipe.fields,
-      cookbook: [],
-      location: generatedEntitySort.location.fields,
-      inventory: generatedEntitySort.inventory.fields,
-      meal: generatedEntitySort.meal.fields,
-      ledgerParty: generatedEntitySort.ledgerParty.fields,
-      ledgerTransfer: generatedEntitySort.ledgerTransfer.fields,
-      project: generatedEntitySort.project.fields,
-      task: generatedEntitySort.task.fields,
-      vendor: generatedEntitySort.vendor.fields,
-      purchase: generatedEntitySort.purchase.fields,
-      expense: generatedEntitySort.expense.fields,
-      financialAccount: generatedEntitySort.financialAccount.fields,
-      financialTransaction: generatedEntitySort.financialTransaction.fields,
-      wish: generatedEntitySort.wish.fields,
-      "usda-food": usdaFoodSortableFields,
-      image: generatedEntitySort.image.fields,
-      planting: generatedEntitySort.planting.fields,
-      gardenEntry: generatedEntitySort.gardenEntry.fields,
-    });
+describe("defaultSortFor", () => {
+  it("falls back to the generated default when the registry has no override", () => {
+    // `product` has no `list.defaultSort` override (WS4 dropped the
+    // redundant hand-listed copies that matched the generated default).
+    expect(
+      browserEntityDefinition("product").list?.defaultSort,
+    ).toBeUndefined();
+    expect(defaultSortFor("product")).toBe(generatedEntitySort.product.default);
+    expect(defaultSortFor("product")).toBe("createdAt");
+  });
+
+  it("keeps vendor's deliberate override to spend, not the generated name default", () => {
+    expect(generatedEntitySort.vendor.default).toBe("name");
+    expect(defaultSortFor("vendor")).toBe("spend");
   });
 });
 

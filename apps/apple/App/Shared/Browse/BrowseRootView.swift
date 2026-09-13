@@ -172,31 +172,9 @@ private struct EntityBrowseRow: View {
 }
 
 /// SF Symbol per entity key, used by Browse rows, `DomainMark`, and the list/detail empty states.
-/// Falls back to a generic grid glyph for anything not mapped here.
+/// Read off the generated catalog (`presentation.icons.sfSymbol` in the entity declarations).
 func entitySymbol(for key: EntityKey) -> String {
-    switch key {
-    case .product: "shippingbox"
-    case .recipe: "fork.knife"
-    case .ingredient: "leaf"
-    case .cookbook: "book.closed"
-    case .location: "mappin.and.ellipse"
-    case .inventory: "cube.box"
-    case .meal: "fork.knife.circle"
-    case .project: "hammer"
-    case .task: "checklist"
-    case .vendor: "storefront"
-    case .purchase: "cart"
-    case .expense: "dollarsign.circle"
-    case .financialAccount: "building.columns"
-    case .financialTransaction: "arrow.left.arrow.right"
-    case .ledgerParty: "person.2"
-    case .ledgerTransfer: "arrow.left.arrow.right.circle"
-    case .wish: "star"
-    case .usdaFood: "leaf.fill"
-    case .image: "photo"
-    case .planting: "leaf"
-    case .gardenEntry: "text.badge.plus"
-    }
+    EntityCatalog[key].sfSymbol
 }
 
 #Preview {

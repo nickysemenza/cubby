@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import {
   defineEntityAdapter,
+  deletedWithImages,
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
@@ -16,7 +17,10 @@ import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import {
   createProductWithSideEffects,
   updateProductWithSideEffects,
@@ -93,21 +97,18 @@ export const productEntityAdapter = defineEntityAdapter({
       await Promise.all([
         runMutationSideEffectsForEntities(
           ctx.db,
-          ids.map((entityId) => ({
-            action: "deleted" as const,
-            entity: { entity: "product" as const, id: entityId },
-            source: "product.delete",
-          })),
+          mutationEvents("product", "deleted", ids, "product.delete"),
         ),
         ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
           source: "product.delete",
         }),
       ]);
       return {
-        deletedReferences: [
-          ...entityMutationReferences("product", shortcodes),
-          ...entityMutationReferences("image", deletedImageShortcodes),
-        ],
+        deletedReferences: deletedWithImages(
+          "product",
+          shortcodes,
+          deletedImageShortcodes,
+        ),
         detachedImageKeys,
       };
     },
@@ -137,11 +138,7 @@ export const productEntityAdapter = defineEntityAdapter({
       );
       await runMutationSideEffectsForEntities(
         ctx.db,
-        ids.map((entityId) => ({
-          action: "updated" as const,
-          entity: { entity: "product" as const, id: entityId },
-          source: "product.bulkUpdate",
-        })),
+        mutationEvents("product", "updated", ids, "product.bulkUpdate"),
       );
       return {
         updatedReferences: entityMutationReferences(
@@ -167,16 +164,18 @@ export const productEntityAdapter = defineEntityAdapter({
       const summary = await mergeProducts(ctx.db, input, ctx.actorContext);
       await Promise.all([
         runMutationSideEffectsForEntities(ctx.db, [
-          {
-            action: "updated" as const,
-            entity: { entity: "product" as const, id: summary.keepEntityId },
-            source: "product.merge",
-          },
-          ...summary.deletedEntityIds.map((entityId) => ({
-            action: "deleted" as const,
-            entity: { entity: "product" as const, id: entityId },
-            source: "product.merge",
-          })),
+          ...mutationEvents(
+            "product",
+            "updated",
+            [summary.keepEntityId],
+            "product.merge",
+          ),
+          ...mutationEvents(
+            "product",
+            "deleted",
+            summary.deletedEntityIds,
+            "product.merge",
+          ),
         ]),
         ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
           source: "product.merge",

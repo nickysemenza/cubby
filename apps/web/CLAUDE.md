@@ -8,6 +8,11 @@ only when making UI or visual decisions.
   [web runtime rules](../../docs/agents/web-runtime.md).
 - **Colors, images, spacing, layout, tables, entity names, page shell:**
   [web UI contracts](../../docs/agents/web-ui.md).
+- A hand-written `interface`/`type` for data that crosses a runtime boundary
+  (an API response, persisted JSON, a Zod-validated row) is allowed only when
+  no `z.object` schema exists for that exact shape — otherwise derive it with
+  `z.infer`. A narrower subset of a schema is `Pick`/`Omit` of the inferred
+  type, not a re-typed copy.
 
 Run the narrowest affected web test tier; browser seams earn E2E only when lower
 tiers cannot observe the failure.

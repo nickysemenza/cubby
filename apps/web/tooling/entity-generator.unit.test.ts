@@ -18,12 +18,17 @@ import {
   readFieldSchemas,
 } from "../../../packages/schemas/src/entity-definitions/definition";
 import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
-import { checkEntityArtifacts } from "../../../scripts/entity-generator/artifacts";
+import {
+  checkEntityArtifacts,
+  generatedHeader,
+} from "../../../scripts/entity-generator/artifacts";
 import { compileEntityDeclarations } from "../../../scripts/entity-generator/compile";
 import { loadEntityDeclarations } from "../../../scripts/entity-generator/declarations";
 import type { CompiledEntity } from "../../../scripts/entity-generator/declarations";
 import { renderEntityArtifacts } from "../../../scripts/entity-generator/render/index";
 import { renderFilterArtifacts } from "../../../scripts/entity-generator/render/filters";
+import { renderKernelBindingsArtifacts } from "../../../scripts/entity-generator/render/kernel-bindings";
+import { renderRelationArtifacts } from "../../../scripts/entity-generator/render/relations";
 import {
   expectedBrowserRouteFiles,
   missingBrowserRouteFiles,
@@ -68,20 +73,28 @@ const expectDeclaredEntityParity = (
   }
 };
 
+const presentation = {
+  titleField: "name",
+  domain: null,
+  description: "Alpha records.",
+  emptyState: { title: "No alphas", description: "Add one." },
+  icons: { lucide: "Box", sfSymbol: "cube" },
+} as const;
+
 const base = {
   key: "alpha",
   names: { singular: "Alpha", plural: "Alphas" },
   route: null,
   table: null,
   identifiers: { brand: null, shortcode: null, legacy: null },
-  presentation: { titleField: "name" },
+  presentation,
   fields: null,
   filters: { descriptors: [] },
   relations: [],
   search: { enabled: false },
   capabilities: {
     auditable: false,
-    images: false,
+    images: false as const,
     countable: false,
     softDelete: false,
     delete: null,
@@ -479,6 +492,52 @@ describe("typed entity compiler", () => {
     ).toBe("resources");
   });
 
+  it("validates titleField against the read projection, not model field keys", () => {
+    // `readKey` renames a field for output; `titleField` must resolve through
+    // that rename (cookbook's `name` field reads out as `book`, so
+    // `titleField: "book"` is legal) rather than matching a raw model key. A
+    // second, always-readable field keeps the read projection non-empty so
+    // the "no readable fields at all" exemption doesn't mask these cases.
+    const compileWithReadKey = (readKey: string | null) =>
+      compileEntityDeclarations([
+        {
+          ...base,
+          presentation: { ...presentation, titleField: "book" },
+          model: {
+            ...model,
+            fields: [
+              { ...model.fields[0], readKey },
+              { key: "other", kind: "text", validation: { read: z.string() } },
+            ],
+          },
+        },
+      ]);
+    expect(compileWithReadKey("book")[0]?.inspector.titleField).toBe("book");
+    expect(() => compileWithReadKey(null)).toThrow(
+      /titleField "book" for entity "alpha" must be a read-projection key/,
+    );
+    expect(() => compileWithReadKey("name")).toThrow(
+      /titleField "book" for entity "alpha" must be a read-projection key/,
+    );
+  });
+
+  it("skips titleField validation when the entity has no readable fields", () => {
+    // A storage-only field set (every field's readKey is null) has no read
+    // projection to validate a titleField against; this must compile rather
+    // than reject a value that can never be satisfied.
+    const entity = compileEntityDeclarations([
+      {
+        ...base,
+        presentation,
+        model: {
+          ...model,
+          fields: [{ ...model.fields[0], readKey: null }],
+        },
+      },
+    ])[0]!;
+    expect(entity.inspector.titleField).toBe("name");
+  });
+
   it("rejects duplicate entity and shortcode identities", () => {
     expect(() => compileEntityDeclarations([base, base])).toThrow(
       "Duplicate entity key alpha",
@@ -760,13 +819,20 @@ describe("typed entity compiler", () => {
       join(root, "generated/entity-literal-alpha.gen.ts"),
       "stale",
     );
+    // Extraneous detection reads the generator ownership header, not the
+    // filename: a stray file only counts if it carries that header — which
+    // catches a retired artifact name (nothing in the current artifact list
+    // matches it) exactly as it catches a still-current one.
     await writeFile(
-      join(root, "generated/entity-literal-extra.gen.ts"),
-      "extra",
+      join(root, "generated/entity-retired-name.gen.ts"),
+      `${generatedHeader}export const retired = 1;\n`,
     );
+    // A file with no generator header — even one shaped like a generated
+    // artifact's name — is left alone; it isn't ours to flag.
+    await writeFile(join(root, "generated/notes.gen.ts"), "// just a note\n");
     expect(await checkEntityArtifacts(root, artifacts)).toEqual([
       "stale: generated/entity-literal-alpha.gen.ts",
-      "extraneous: generated/entity-literal-extra.gen.ts",
+      "extraneous: generated/entity-retired-name.gen.ts",
     ]);
   });
 
@@ -774,12 +840,13 @@ describe("typed entity compiler", () => {
     const entities = await loadEntityDeclarations();
     const artifacts = [
       ...renderEntityArtifacts(entities),
+      ...renderRelationArtifacts(entities),
+      ...renderKernelBindingsArtifacts(entities),
       ...renderFilterArtifacts(entities),
     ];
     const artifact = (suffix: string) =>
       artifacts.find(({ relativePath }) => relativePath.endsWith(suffix))!
         .source;
-    expect(entities).toHaveLength(21);
     expect(artifact("entity-field-schemas.ingredient.gen.ts")).toContain(
       "definition.model.fields[",
     );
@@ -836,6 +903,11 @@ describe("typed entity compiler", () => {
     const entityKeyBody = swiftCatalog
       .split("public enum EntityKey")[1]!
       .split("\n}\n")[0]!;
-    expect(entityKeyBody.match(/^ {2}case /gmu)).toHaveLength(21);
+    const rawValues = [
+      ...entityKeyBody.matchAll(/^ {2}case \w+ = "([^"]*)"/gmu),
+    ].map((match) => match[1]!);
+    expect(new Set(rawValues)).toEqual(
+      new Set(entities.map((entity) => entity.key)),
+    );
   });
 });

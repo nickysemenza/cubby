@@ -20,7 +20,18 @@ export default defineEntity({
   route: { basePath: "purchases" },
   table: "Purchase",
   identifiers: { brand: "PurchaseId", shortcode: "PUR-", legacy: null },
-  presentation: { titleField: "displayLabel" },
+  presentation: {
+    titleField: "displayLabel",
+    domain: "finance",
+    description: "Orders and their itemized expense lines.",
+    emptyState: {
+      title: "No purchases yet",
+      description:
+        "A purchase is created automatically the first time an expense records a vendor. Add one directly to file its invoice ahead of time.",
+      actionLabel: "New Purchase",
+    },
+    icons: { lucide: "Receipt", sfSymbol: "cart" },
+  },
   model: {
     fields: [
       {
@@ -153,6 +164,7 @@ export default defineEntity({
         },
       },
       {
+        // Resolved through the join; null only if the vendor was soft-deleted.
         key: "vendorName",
         kind: "text",
         nullable: true,
@@ -173,6 +185,10 @@ export default defineEntity({
         },
       },
       {
+        // Link out to the vendor's own order page, derived at read time from
+        // `vendor.orderUrlTemplate` + `orderId` (see `purchaseOrderUrl`). Read-only
+        // and absent from the create/update shapes — nothing stores it, and null
+        // simply means this order isn't linkable.
         key: "orderUrl",
         kind: "text",
         nullable: true,
@@ -193,6 +209,7 @@ export default defineEntity({
         },
       },
       {
+        // Live Expenses whose cost has not been recorded yet.
         key: "unpricedExpenseCount",
         kind: "number",
         validation: {
@@ -202,6 +219,9 @@ export default defineEntity({
         },
       },
       {
+        // `SUM(cost)` over this purchase's live expenses. THIS is the purchase's
+        // spend; `statedTotal` is only what the paperwork claimed. They may
+        // legitimately disagree — see the reconciliation note on `statedTotal`.
         key: "expenseTotal",
         kind: "number",
         display: { list: true },
@@ -222,6 +242,7 @@ export default defineEntity({
         },
       },
       {
+        // Settlement evidence only; never participates in spend rollups.
         key: "financialReconciliation",
         kind: "json",
         validation: {
@@ -826,7 +847,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: true,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

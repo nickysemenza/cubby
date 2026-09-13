@@ -19,7 +19,18 @@ export default defineEntity({
   route: { basePath: "projects" },
   table: "Project",
   identifiers: { brand: "ProjectId", shortcode: "PRJ-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "house",
+    description: "Household work grouped into durable projects.",
+    emptyState: {
+      title: "No projects yet",
+      description:
+        "Track household projects from planning to done \u2014 budget, timeline, and every task and expense along the way.",
+      actionLabel: "New Project",
+    },
+    icons: { lucide: "Hammer", sfSymbol: "hammer" },
+  },
   model: {
     fields: [
       {
@@ -924,7 +935,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: true,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

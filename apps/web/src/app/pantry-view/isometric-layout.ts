@@ -193,6 +193,14 @@ export function getItemHeight(category: ProductCategory | null): number {
 
 // ─── Room Building ──────────────────────────────────────────────────────────
 
+/**
+ * Deliberately NOT `Pick<InventoryListItemOut, ...>`: `id` here is a plain
+ * string (unit-test fixtures construct rows with opaque local ids like
+ * `"inventory-1"`, not branded `InventoryShortcode` values), and `amount` is
+ * the minimal `{ value, unit }` the canvas actually reads — not the full
+ * `amount` codec, which carries an extra `upperValue` refinement this layout
+ * has no use for.
+ */
 export interface InventoryData {
   id: string;
   amount: { value: number; unit: string };
