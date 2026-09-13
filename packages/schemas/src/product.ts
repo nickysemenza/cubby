@@ -1,9 +1,6 @@
 import { productTopLevelOut } from "./product-output-fields";
-import {
-  inventoryPlacementValues,
-  UNSPECIFIED_MANUFACTURER,
-} from "@cubby/shared";
-import { foodSummary, upc } from "@cubby/usda-schemas";
+import { inventoryPlacementValues } from "@cubby/shared";
+import { foodSummary, foodSummaryMcpOut, upc } from "@cubby/usda-schemas";
 import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { productRelatedFilterFields } from "./related-view";
@@ -26,12 +23,7 @@ import {
   positiveMoney,
   positiveMoneyNullable,
 } from "./money";
-import {
-  externalIdKind,
-  externalIdOut,
-  externalIdSource,
-  gtin,
-} from "./external-id";
+import { externalIdKind, externalIdOut, externalIdSource } from "./external-id";
 import { isbn } from "./isbn";
 import {
   cookbookShortcode,
@@ -181,6 +173,45 @@ export const productCreateManyInput = z
   .array(productCreateInput)
   .min(1)
   .max(50);
+
+/**
+ * Lookup-only name resolution for imports: "which of these receipt lines already
+ * has a Product?" without minting anything. The ingredient twin
+ * (`resolve_ingredients`) creates on miss because an ingredient is just a
+ * name; a Product is identity plus cost basis, so the create stays a separate,
+ * deliberate call after the agent has read the candidates.
+ */
+export const productResolveNamesInput = z.object({
+  names: z.array(z.string().min(1)).min(1).max(200),
+});
+export type ProductResolveNamesInput = z.infer<typeof productResolveNamesInput>;
+
+export const productResolveCandidateOut = z.object({
+  id: productShortcode,
+  name: generatedProductFieldSchemas.read.name,
+  manufacturer: generatedProductFieldSchemas.read.manufacturer,
+  category: generatedProductFieldSchemas.read.category,
+  // Same value-space narrowing as `productPickerItemOut.price` — the
+  // candidates ARE picker rows.
+  price: positiveMoneyNullable,
+  coverImageUrl: z.string().nullable(),
+});
+export type ProductResolveCandidateOut = z.infer<
+  typeof productResolveCandidateOut
+>;
+
+export const productResolveNameOut = z.object({
+  /** The requested name, trimmed, as the caller sent it. */
+  name: z.string(),
+  /**
+   * True when `candidates` are case-insensitive name/alias equals. False means
+   * the candidates come from a contains search and need a human read.
+   */
+  exact: z.boolean(),
+  candidates: z.array(productResolveCandidateOut),
+});
+export const productResolveNamesOut = z.array(productResolveNameOut);
+export type ProductResolveNamesOut = z.infer<typeof productResolveNamesOut>;
 
 export const productMarkUsdaUnavailableManyInput = z.object({
   ids: z.array(productShortcode).min(1).max(100),
@@ -671,6 +702,7 @@ export const productWithMappingsAndFoodMcpEntityOut =
   productWithMappingsAndFoodOut.extend({
     externalIds: z.array(productExternalIdMcpEntityOut),
     unitMappings: z.array(productUnitMappingMcpEntityOut),
+    food: foodSummaryMcpOut.nullable(),
   });
 
 export const productPickerItemOut = z.object({
@@ -825,6 +857,7 @@ export const productWithFoodMcpEntityOut = productWithFoodOut.extend({
   externalIds: z.array(productExternalIdMcpEntityOut),
   unitMappings: z.array(productUnitMappingMcpEntityOut),
   recipeUsages: z.array(recipeUsageMcpEntityOut),
+  food: foodSummaryMcpOut.nullable(),
 });
 
 /** Generic MCP create/update result with storage-only child identifiers removed. */
@@ -954,19 +987,17 @@ export const productCategoryDistributionOut = z.array(
 );
 
 export const productQuickCreatePayload = z.object({
-  // `name`/`manufacturer` deliberately diverge from the generated create
-  // field (see INTENTIONAL_RESPELLINGS in field-map-drift.unit.test.ts):
-  // quick-create keeps its own label, and defaults manufacturer instead of
-  // requiring it.
+  // `name` deliberately diverges from the generated create field (see
+  // INTENTIONAL_RESPELLINGS in field-map-drift.unit.test.ts): quick-create
+  // keeps its own label.
   name: requiredName("Product name"),
-  manufacturer: z.string().default(UNSPECIFIED_MANUFACTURER),
-  // `upc`/`expectedQuantity` deliberately loosen/tighten the generated
-  // create field (also registered): quick-create allows omitting upc
-  // entirely, and constrains expectedQuantity to a positive integer.
-  upc: gtin.nullable().optional(),
+  // `expectedQuantity` deliberately tightens the generated create field (also
+  // registered) to a positive integer.
   expectedQuantity: z.number().int().positive().nullable().optional(),
   // These are unchanged copies of the generated create field — reference it
   // directly rather than re-declaring the same schema.
+  manufacturer: generatedProductFieldSchemas.create.manufacturer,
+  upc: generatedProductFieldSchemas.create.upc,
   isbn: generatedProductFieldSchemas.create.isbn,
   model: generatedProductFieldSchemas.create.model,
   notes: generatedProductFieldSchemas.create.notes,

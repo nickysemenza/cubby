@@ -16,6 +16,7 @@ import { uniq } from "es-toolkit";
 
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import { observeOperationPhase } from "~/server/observed-request";
 
 import type { UsdaFoodLookupPort } from "../clients/usda";
@@ -197,10 +198,20 @@ export const createProductWithFood = async (
     actor,
   );
   const productId = await resolveCreatedOrInvariant(db, "product", product.id);
-  return {
-    output: await getProductWithFood(db, usdaClient, productId),
-    entityId: productId,
-  };
+  try {
+    return {
+      output: await getProductWithFood(db, usdaClient, productId),
+      entityId: productId,
+    };
+  } catch (error) {
+    // The row is committed at this point. A bare rethrow reads as "the create
+    // failed" and gets retried into a duplicate; say what actually happened.
+    throw createAppError(
+      "WRITE_COMMITTED_READBACK_FAILED",
+      `Product ${product.id} was created, but reading it back failed. Do not create it again; fetch it by id.`,
+      error,
+    );
+  }
 };
 
 export const updateProductWithFood = async (

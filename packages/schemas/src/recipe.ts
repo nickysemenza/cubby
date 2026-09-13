@@ -89,6 +89,26 @@ export type RecipeUsage = z.infer<typeof recipeUsageOut>;
 /** Public entity-tool projection; the usage row has no public shortcode. */
 export const recipeUsageMcpEntityOut = recipeUsageOut.omit({ id: true });
 
+/**
+ * Recipe reference as embedded in MCP ingredient reads: identity plus the
+ * planning-relevant scalars, minus `notes`/`meta`/`source`/timestamps. A
+ * cookbook headnote repeats once per usage row, and an ingredient in 45 recipes
+ * shipped ~100KB of prose an agent never needs — `entity get recipe` still
+ * returns the full recipe.
+ */
+export const recipeRefMcpEntityOut = recipeTopLevel.pick({
+  id: true,
+  name: true,
+  yield: true,
+  servings: true,
+  tags: true,
+});
+export type RecipeRefMcpEntityOut = z.infer<typeof recipeRefMcpEntityOut>;
+
+export const recipeUsageRefMcpEntityOut = recipeUsageMcpEntityOut.extend({
+  recipe: recipeRefMcpEntityOut,
+});
+
 export const sectionLineFields = {
   // Declared exception: a recipe section/line id has no shortcode.
   id: z.uuid(),

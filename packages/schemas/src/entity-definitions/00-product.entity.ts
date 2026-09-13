@@ -1,4 +1,5 @@
 import { defineEntity } from "./definition.js";
+import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { dataQuality } from "@cubby/schemas/data-quality";
 import {
@@ -86,7 +87,7 @@ export default defineEntity({
         control: { kind: "text" },
         validation: {
           read: null,
-          create: gtin.nullable(),
+          create: gtin.nullable().optional(),
           update: gtin.nullable().optional(),
         },
       },
@@ -138,7 +139,10 @@ export default defineEntity({
         },
         validation: {
           read: z.string(),
-          create: z.string(),
+          // Defaults rather than requires: most generic groceries and
+          // receipt lines have no maker, and demanding an explicit
+          // "(unspecified)" from every MCP create only produced typos.
+          create: z.string().default(UNSPECIFIED_MANUFACTURER),
           update: z.string().optional(),
         },
       },
@@ -183,7 +187,7 @@ export default defineEntity({
         // create/update-only.
         validation: {
           read: z.number().nullable(),
-          create: z.number().nullable(),
+          create: z.number().nullable().optional(),
           update: z.number().nullable().optional(),
         },
       },
@@ -217,7 +221,7 @@ export default defineEntity({
         display: { detail: true, detailOrder: 8 },
         validation: {
           read: null,
-          create: ingredientShortcode.nullable(),
+          create: ingredientShortcode.nullable().optional(),
           update: ingredientShortcode.nullable().optional(),
         },
       },

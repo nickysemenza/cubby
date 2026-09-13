@@ -22,7 +22,8 @@ import { baseKind } from "./problems";
 import {
   recipeRefOut,
   recipeTopLevel,
-  recipeUsageMcpEntityOut,
+  recipeRefMcpEntityOut,
+  recipeUsageRefMcpEntityOut,
   recipeUsageOut,
 } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
@@ -145,7 +146,9 @@ export type IngredientWithFoodOut = z.infer<typeof ingredientWithFoodOut>;
 
 /** Generic MCP entity detail with storage-only child identifiers removed. */
 export const ingredientWithFoodMcpEntityOut = ingredientWithFoodOut.extend({
-  recipeUsages: z.array(recipeUsageMcpEntityOut),
+  recipe: recipeRefMcpEntityOut.nullable(),
+  recipeUsages: z.array(recipeUsageRefMcpEntityOut),
+  appearsInRecipes: z.array(recipeRefMcpEntityOut),
   product: z.array(productWithMappingsAndFoodMcpEntityOut),
 });
 

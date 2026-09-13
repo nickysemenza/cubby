@@ -18,7 +18,7 @@ import {
 import { ledgerPartyKind } from "./ledger-party";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import { mealDate, mealScale, mealYieldGrams } from "./meal-shared";
-import { nutritionTotals } from "./nutrition";
+import { nutritionTotals, nutritionTotalsPartial } from "./nutrition";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import { mealRecipeOut, mealTotals } from "./meal-fields";
 import {
@@ -216,25 +216,29 @@ const mealRecipePreparationSourceSummaryOut = z.object({
   unassignedGrams: z.number().nullable(),
 });
 
+const preparedHereMatchesSourceSummary = [
+  (preparation: { preparedHere: boolean; sourceSummary: unknown }) =>
+    preparation.preparedHere === (preparation.sourceSummary !== null),
+  "sourceSummary is available exactly when the preparation was prepared here",
+] as const;
+
+const mealRecipePreparationFields = {
+  mealRecipeId,
+  preparedHere: z.boolean(),
+  sourceMeal: mealPreparationSourceMealOut,
+  recipe: z.object({ id: recipeShortcode, name: z.string() }),
+  scale: mealScale,
+  estimatedYieldGrams: mealYieldGrams.nullable(),
+  actualYieldGrams: mealYieldGrams.nullable(),
+  yieldBasis: mealPreparationYieldBasis,
+  totals: nutritionTotals,
+  sourceSummary: mealRecipePreparationSourceSummaryOut.nullable(),
+  portions: z.array(mealRecipePreparationPortionOut),
+};
+
 export const mealRecipePreparationOut = z
-  .object({
-    mealRecipeId,
-    preparedHere: z.boolean(),
-    sourceMeal: mealPreparationSourceMealOut,
-    recipe: z.object({ id: recipeShortcode, name: z.string() }),
-    scale: mealScale,
-    estimatedYieldGrams: mealYieldGrams.nullable(),
-    actualYieldGrams: mealYieldGrams.nullable(),
-    yieldBasis: mealPreparationYieldBasis,
-    totals: nutritionTotals,
-    sourceSummary: mealRecipePreparationSourceSummaryOut.nullable(),
-    portions: z.array(mealRecipePreparationPortionOut),
-  })
-  .refine(
-    (preparation) =>
-      preparation.preparedHere === (preparation.sourceSummary !== null),
-    "sourceSummary is available exactly when the preparation was prepared here",
-  );
+  .object(mealRecipePreparationFields)
+  .refine(...preparedHereMatchesSourceSummary);
 export type MealRecipePreparationOut = z.infer<typeof mealRecipePreparationOut>;
 
 const mealPreparationTotalsPartOut = z.object({
@@ -251,6 +255,50 @@ export const getMealPreparationsOut = z.object({
   }),
 });
 export type GetMealPreparationsOut = z.infer<typeof getMealPreparationsOut>;
+
+export const mealPreparationNutritionDetail = z.enum(["full", "kcal", "none"]);
+export type MealPreparationNutritionDetail = z.infer<
+  typeof mealPreparationNutritionDetail
+>;
+
+export const getMealPreparationsMcpInput = getMealPreparationsInput.extend({
+  nutrition: mealPreparationNutritionDetail.default("full"),
+});
+
+/**
+ * `get_meal_preparations` over MCP: the same shape as {@link getMealPreparationsOut}
+ * but every `totals.nutrition` may be a subset of the 22 nutrient keys. One
+ * meal read carries (1 + preparations + portions + 2) totals objects; at 22
+ * estimates each that was ~10KB to answer "is this portion confirmed?". The
+ * HTTP route and the web UI keep the exhaustive shape.
+ */
+export const getMealPreparationsMcpOut = z.object({
+  mealId: mealShortcode,
+  preparations: z.array(
+    z
+      .object({
+        ...mealRecipePreparationFields,
+        totals: nutritionTotalsPartial,
+        portions: z.array(
+          mealRecipePreparationPortionOut.extend({
+            totals: nutritionTotalsPartial,
+          }),
+        ),
+      })
+      .refine(...preparedHereMatchesSourceSummary),
+  ),
+  totals: z.object({
+    confirmed: mealPreparationTotalsPartOut.extend({
+      totals: nutritionTotalsPartial,
+    }),
+    projected: mealPreparationTotalsPartOut.extend({
+      totals: nutritionTotalsPartial,
+    }),
+  }),
+});
+export type GetMealPreparationsMcpOut = z.infer<
+  typeof getMealPreparationsMcpOut
+>;
 
 export const saveMealRecipePreparationOut = z.object({
   mealRecipeId,

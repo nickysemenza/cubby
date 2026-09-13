@@ -3,6 +3,7 @@ import {
   type productExternalIdCollisionInput,
   productExternalIdCollisionsOut,
   type productFindOrCreateByUPCInput,
+  type productResolveNamesInput,
 } from "@cubby/schemas/product";
 import type { z } from "zod";
 
@@ -60,6 +61,7 @@ import {
   findOrCreateProductByUpcWorkflow,
   listProductComponentsWorkflow,
   listProductProjectUsesWorkflow,
+  resolveProductNamesWorkflow,
 } from "~/server/workflows/product.server";
 import {
   projectDashboardSummaryWorkflow,
@@ -200,6 +202,8 @@ export const createMcpWorkflowCaller = (
     getTracker: () => findTrackerProblemsWorkflow(context),
   },
   product: {
+    resolveNames: (input: z.output<typeof productResolveNamesInput>) =>
+      resolveProductNamesWorkflow(context, input),
     externalIdCollisions: (
       input: z.output<typeof productExternalIdCollisionInput>,
     ) =>

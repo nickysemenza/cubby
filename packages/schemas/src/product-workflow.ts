@@ -26,6 +26,8 @@ import {
   productQuantitySummariesOut,
   productQuantitySummaryBatchInput,
   productQuickCreatePayload,
+  productResolveNamesInput,
+  productResolveNamesOut,
   productShortcodeListOut,
   productShortcodesInput,
   productSummariesInput,
@@ -114,6 +116,10 @@ export const productBackfillUpcImagesEvent = z.discriminatedUnion("type", [
 
 export const productWorkflowSchemas = {
   search: { input: productSearchInput, output: productSearchOut },
+  resolveNames: {
+    input: productResolveNamesInput,
+    output: productResolveNamesOut,
+  },
   summaries: { input: productSummariesInput, output: productSummariesOut },
   quantitySummaries: {
     input: productQuantitySummaryBatchInput,

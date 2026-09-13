@@ -27,9 +27,9 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
   not the mechanism: it fires only for an adjustment-like name on a Product-less
   Expense and never re-runs on rename. Read the kind back off the write response
   instead of assuming it.
-  **`lineKind` is a documented, optional field on `create_expenses`,
-  `update_expenses`, and `split_expense` (per part)** — all three store it
-  and echo it back. `splitExpenseInput.parts` carries an optional `lineKind`,
+  **`lineKind` is a documented, optional field on `entity create expense`,
+  `entity update expense`, and `split_expense` (per part)** — all three store
+  it and echo it back. `splitExpenseInput.parts` carries an optional `lineKind`,
   and `splitExpense` resolves `part.lineKind ?? infer(...)`, so an explicit
   kind on a part wins over inference: splitting a receipt with an `Outside
   Delivery` part typed `shipping` stores `shipping`, even though that name
@@ -102,12 +102,14 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
    range, record count, vendor, source type, whether prices are unit or extended,
    and whether it is vendor paperwork or settlement evidence.
 2. Resolve the Vendor, then start the completeness audit with
-   `list_purchases({dataStatus:"needs_data",vendorId,dateFrom,dateTo})`. Narrow
-   with `dataGap` to the checks this source can actually close — `needs_data` is
-   dominated by `primary_document`, which is usually not actionable and not a
-   worklist (see Documents and exceptions). Scope `list_expenses`, other
-   `list_purchases` reads, and `list_financial_transactions` to the same
-   vendor/evidence window.
+   `entity {action:"list", entity:"purchase", filters:{dataStatus:"needs_data",
+   vendorId, dateFrom, dateTo}}`. Narrow with `dataGap` to the checks this
+   source can actually close — `needs_data` is dominated by `primary_document`,
+   which is usually not actionable and not a worklist (see Documents and
+   exceptions). Scope `entity list expense`, other purchase lists, and
+   `entity list financialTransaction` to the same vendor/evidence window. For
+   "does a Product for this line already exist?", call `resolve_products` with
+   every line name at once — it never creates.
 3. Run `match_expenses` before proposing new Expense rows. It ranks candidates;
    it never verifies or writes. Read candidate descriptions, vendor, order ID,
    date, and amount rather than accepting a score.
@@ -117,12 +119,14 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
    approves confirmed writes and automatic promotions across technical batch
    boundaries. Obtain a separate decision for every other category; never
    silently omit an eligible Product candidate.
-5. Execute homogeneous work with `create_purchases`, `update_purchases`,
-   `create_expenses`, `update_expenses`, `create_products`, `update_products`,
-   or `create_financial_transactions`. Batches contain at most 50 items and are
-   best-effort: inspect each ordered result, retry only failed items, and do not
-   treat partial success as complete. Serialize dependent Purchase/Expense
-   mutations and re-read their rows after each structural or destructive write.
+5. Execute writes through the entity kernel: `entity {action:"create"|"update",
+   entity:"purchase"|"expense"|"product"|"financialTransaction", …}` for one
+   row, or `entity_batch {items:[…]}` for up to 50 create/update commands in
+   one call. A batch is best-effort and sequential: inspect each ordered result,
+   retry only failed items, and do not treat partial success as complete.
+   Serialize dependent Purchase/Expense mutations (create the Purchase, then
+   batch its Expenses) and re-read their rows after each structural or
+   destructive write.
 6. Re-read touched Purchases and reconcile evidence. Never alter Expenses merely
    to make a reconciliation label look clean.
 7. Report source-row coverage (matched, created, updated, skipped, conflicted,
@@ -133,15 +137,15 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
 
 - Create or update `Expense` for money. Use `Purchase` only for order/receipt
   identity, vendor documents, notes, date, order ID, and stated total.
-- `create_expenses` and `update_expenses` may resolve a vendor name and order ID,
-  but use an existing `purchaseId` for several rows belonging to one order-less
-  Purchase. Do not repeatedly rewrite vendor/order fields on an order-less row.
+- `entity create expense` / `entity update expense` may resolve a vendor name
+  and order ID, but use an existing `purchaseId` for several rows belonging to
+  one order-less Purchase. Do not repeatedly rewrite vendor/order fields on an order-less row.
 - Make a new Vendor deliberately when its identity should include website or
   notes. Reuse the roster's exact spelling; do not mint a near duplicate.
 - Use `split_expense` for a real aggregate Expense that needs per-product cost
   basis. Use `link_expenses_to_purchase` for several existing Expenses on one
-  Purchase, and `merge_entity` with `entity: "purchase"` only after explicit
-  approval.
+  Purchase, and `entity {action:"merge", entity:"purchase", …}` only after
+  explicit approval.
 - Reconcile every proposed split against the vendor's own stated order total
   before writing it, and refuse the order when it does not agree. `split_expense`
   does not validate that parts sum to anything, so this assertion is the only
@@ -154,9 +158,11 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
   route a partially-linked Purchase to review — its existing links usually encode
   a human decision that a bulk matcher will silently overwrite.
 - For duplicate cleanup, call `preview_entity_operation`, delete only the bogus
-  Expenses, re-read to verify the Purchase is empty, then use
-  `delete_empty_purchases`. Deleting a Purchase never removes spend; do not use
-  it while Expenses or Financial Transactions remain.
+  Expenses, re-read to verify the Purchase is empty, then
+  `entity {action:"delete", entity:"purchase", ids:[…]}`. Deleting a Purchase
+  never removes spend — but it does not refuse either: live Expenses and
+  Financial Transactions are **detached** (their `purchaseId` cleared) and left
+  as orphan rows, so never delete while any remain.
 - Before replacing a human-entered aggregate Expense with source-derived detail,
   snapshot its title, date, `costType`, trade, project, notes, URL, and future
   status. Write the exact meaningful title to `Purchase.displayLabel`; store only
@@ -229,9 +235,11 @@ a fuzzy or generic name is not.
   candidate must be promoted, explicitly skipped, conflicted, or presented for
   a decision.
 
-- Use the rich `create_products` surface in one call. Include
-  category, manufacturer, maker model, tags, price/mappings, and typed external
-  IDs when verified.
+- Use the rich `entity create product` surface in one call (or `entity_batch`
+  for a receipt's worth). Include category, manufacturer, maker model, tags,
+  price/mappings, and typed external IDs when verified; `upc`,
+  `expectedQuantity`, and `ingredientId` may be omitted, and `manufacturer`
+  defaults to `(unspecified)`.
 - Keep products with the same name but different brands separate. The SupplyHouse
   `PVBC100-075` and `429-131` examples are two Products, not two slots on one
   Product.
@@ -264,10 +272,10 @@ warrant a one-off script instead.
    as a clean `ready_to_create` with tying amounts, so a totals check will not
    catch it.
 4. Submit only approved `ready_to_create` rows through
-   `create_financial_transactions`, passing `sourceRefs` (plural, an array) on
-   the create itself — it is accepted and persisted there. Use
-   `update_financial_transactions` to backfill only rows that were created
-   without one. The singular `sourceRef` is silently discarded either way. Never
+   `entity create financialTransaction` (or `entity_batch`), passing
+   `sourceRefs` (plural, an array) on the create itself — it is accepted and
+   persisted there. Use `entity update financialTransaction` to backfill only
+   rows that were created without one. The singular `sourceRef` is silently discarded either way. Never
    attach a ref to a `pending` row; the hash is date-derived and will move when
    it posts.
 5. Leave `already_recorded` untouched. Review `possible_existing`,

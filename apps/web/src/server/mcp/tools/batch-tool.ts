@@ -3,6 +3,11 @@ import type { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
 import {
+  type EntityKernelContext,
+  entityKernelContextSchema,
+} from "~/server/entity-kernel";
+
+import {
   type Caller,
   describeToolError,
   getCaller,
@@ -90,9 +95,14 @@ export function registerBatchTool<
       items: Array<z.output<TItemInput>>,
       ctx: z.core.$RefinementCtx,
     ) => void;
+    /**
+     * `context` is the request's entity-kernel capability (same as
+     * `registerRouterTool`); workflow-shaped batches ignore it and use `caller`.
+     */
     run: (
       caller: Caller,
       item: z.output<TItemInput>,
+      context: EntityKernelContext | undefined,
     ) => Promise<z.output<TItemOutput>>;
   },
 ): void {
@@ -121,12 +131,16 @@ export function registerBatchTool<
     telemetryEntity: config.telemetryEntity,
     handler: async (params, extra) => {
       const caller = getCaller(extra);
+      const context =
+        extra.authInfo?.extra?.entityKernel === undefined
+          ? undefined
+          : entityKernelContextSchema.parse(extra.authInfo.extra.entityKernel);
       const results: Array<BatchResult<z.output<TItemOutput>>> = [];
 
       for (const [index, item] of params.items.entries()) {
         try {
           const produced = config.itemOutputSchema.parse(
-            await config.run(caller, item),
+            await config.run(caller, item, context),
           );
           const success: BatchSuccess<z.output<TItemOutput>> = {
             index,

@@ -160,6 +160,7 @@ extension OperationRoute {
         OperationRoute(operationID: "product.purchases", method: .get, path: "/api/v1/product/purchases", pathParameters: [], queryParameters: ["productId"], hasBody: false),
         OperationRoute(operationID: "product.quantitySummaries", method: .get, path: "/api/v1/product/quantitySummaries", pathParameters: [], queryParameters: ["ids"], hasBody: false),
         OperationRoute(operationID: "product.quickCreate", method: .post, path: "/api/v1/product/quickCreate", pathParameters: [], queryParameters: [], hasBody: true),
+        OperationRoute(operationID: "product.resolveNames", method: .get, path: "/api/v1/product/resolveNames", pathParameters: [], queryParameters: ["names"], hasBody: false),
         OperationRoute(operationID: "product.search", method: .post, path: "/api/v1/product/search", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "product.setProjectUses", method: .post, path: "/api/v1/product/setProjectUses", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "product.summaries", method: .get, path: "/api/v1/product/summaries", pathParameters: [], queryParameters: ["ids", "include"], hasBody: false),

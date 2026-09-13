@@ -16,15 +16,18 @@ import {
   entitySearchResultSchema,
 } from "~/server/entity-kernel/contracts";
 import {
+  generatedMcpEntityCreateCommandSchema,
   generatedMcpEntityGetResultSchema,
   generatedMcpEntityListResultSchema,
   generatedMcpEntityMergeResultSchema,
   generatedMcpEntityMutationCreateResultSchema,
   generatedMcpEntityMutationUpdateResultSchema,
+  generatedMcpEntityUpdateCommandSchema,
 } from "~/server/generated/entity-bindings.gen";
 
 import { getEntityKernelContext } from "../kernel-context";
 import {
+  registerBatchTool,
   registerMcpTool,
   READ_ONLY_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
@@ -46,6 +49,21 @@ const entityToolOutput = z.union([
   entityDeleteResultSchema,
   entityBulkUpdateResultSchema,
   entityRelationMutationResultSchema,
+]);
+
+/**
+ * `entity_batch` carries create and update commands only. Delete and bulkUpdate
+ * already take `ids[]`; merge, attach and detach are deliberate one-at-a-time
+ * decisions. Each item is the ordinary kernel command, so the per-entity input
+ * schema, side effects and error shape are exactly those of `entity`.
+ */
+const entityBatchItemInput = z.union([
+  generatedMcpEntityCreateCommandSchema,
+  generatedMcpEntityUpdateCommandSchema,
+]);
+const entityBatchItemOutput = z.union([
+  generatedMcpEntityMutationCreateResultSchema,
+  generatedMcpEntityMutationUpdateResultSchema,
 ]);
 
 type EntityResult = z.infer<typeof entityToolOutput>;
@@ -102,7 +120,7 @@ export function registerEntityTools(
   registerMcpTool(server, {
     name: "entity",
     description:
-      "Read or mutate one supported household entity through { command }. Read entities://catalog first: it publishes the supported entity list and exact action union. This replaces per-entity CRUD tools; workflow-shaped tools remain separate.",
+      "Read or mutate one supported household entity through { command }. Read entities://catalog first: it publishes the supported entity list and exact action union. This replaces per-entity CRUD tools; workflow-shaped tools remain separate. For many creates/updates in one call use entity_batch.",
     inputSchema: entityToolInput,
     outputSchema: entityToolOutput,
     annotations: WRITE_DESTRUCTIVE_CLOSED,
@@ -111,5 +129,21 @@ export function registerEntityTools(
       entityToolOutput.parse(
         await runEntity(getEntityKernelContext(extra), params.command),
       ),
+  });
+
+  registerBatchTool(server, {
+    name: "entity_batch",
+    description:
+      "Run up to 50 entity create/update commands in request order, each with the same validation, side effects and result shape as the `entity` tool. Items succeed or fail independently — a failed item does not stop or roll back the others — so read every result. Use this instead of 50 separate `entity` calls when importing a receipt's lines or promoting a batch of products.",
+    itemInputSchema: entityBatchItemInput,
+    itemOutputSchema: entityBatchItemOutput,
+    projectReference: (result) => result.item.id,
+    annotations: WRITE_DESTRUCTIVE_CLOSED,
+    telemetryEntity: ({ items }) => items[0]?.entity,
+    run: async (_caller, item, context) => {
+      if (!context)
+        throw new Error("Authenticated entity-kernel context is missing");
+      return entityBatchItemOutput.parse(await runEntity(context, item));
+    },
   });
 }

@@ -49,6 +49,7 @@ import {
   productMcpOut,
   type ProductMcpOut,
 } from "./product";
+import { measureEstimate } from "./nutrition";
 import {
   mcpRecipeCreateInput,
   mcpRecipeUpdateInput,
@@ -198,7 +199,34 @@ export const scrapeRecipeMcpOut = importRecipeSchema;
 
 export const recipeDetailMcpOut = recipeOut;
 
-export const recipeCostingExplainMcpOut = recipeCostingExplain;
+export const recipeCostingExplainDetail = z.enum(["full", "lines"]);
+export type RecipeCostingExplainDetail = z.infer<
+  typeof recipeCostingExplainDetail
+>;
+
+/**
+ * `explain_recipe_costing` with `detail: "lines"`: the per-line diagnostics
+ * without the two 22-nutrient totals blocks and the drift record. The totals
+ * are what `entity get recipe` already returns; an agent chasing "which line
+ * is uncovered" only needs the diagnostics plus a coverage headline.
+ */
+export const recipeCostingExplainLinesOut = z.object({
+  detail: z.literal("lines"),
+  persisted: recipeCostingExplain.shape.persisted.omit({ totals: true }),
+  computed: recipeCostingExplain.shape.computed.omit({ totals: true }),
+  coverage: z.object({
+    cost: measureEstimate,
+    kcal: measureEstimate,
+  }),
+});
+export type RecipeCostingExplainLinesOut = z.infer<
+  typeof recipeCostingExplainLinesOut
+>;
+
+export const recipeCostingExplainMcpOut = z.union([
+  recipeCostingExplain.extend({ detail: z.literal("full").optional() }),
+  recipeCostingExplainLinesOut,
+]);
 
 export const problemsTypeSliceOut = z.object({
   type: z.string(),

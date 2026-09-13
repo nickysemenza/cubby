@@ -44,6 +44,7 @@ const callerMethodRoster = {
   },
   product: {
     externalIdCollisions: true,
+    resolveNames: true,
     patchExternalIds: true,
     verifyImages: true,
     lookupUpc: true,

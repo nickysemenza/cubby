@@ -5,6 +5,7 @@ import {
   productLookupUpcOut,
   productMcpDetailOut,
   productMcpOut,
+  productResolveNamesInput,
 } from "@cubby/schemas/product";
 import { productComponentsInput } from "@cubby/schemas/product-components";
 import { upc } from "@cubby/usda-schemas";
@@ -27,7 +28,16 @@ import {
   slimProductDetail,
   WRITE_CLOSED,
 } from "./_shared";
-import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
+import {
+  fromContract,
+  mcpItemsEnvelope,
+  mcpResultsEnvelope,
+} from "./contract-envelope";
+
+/** `{results}` over `product.resolveNames`'s own output — see `mcpResultsEnvelope`. */
+const productResolveNamesMcpOut = mcpResultsEnvelope(
+  fromContract(productContract.ops.resolveNames),
+);
 
 /**
  * `lookup_upc` over the slim product projection.
@@ -161,6 +171,18 @@ export function registerProductTools(server: McpServer) {
       });
       return respond(product, slimProduct);
     },
+  });
+
+  registerRouterTool(server, {
+    name: "resolve_products",
+    description:
+      "Look up which of a list of names already exist as Products, WITHOUT creating anything. Each name gets `exact: true` with the case-insensitive name/alias matches, or `exact: false` with up to 3 contains-search candidates to read by hand. Use it as the dedup pass before an import creates Products (a receipt's lines in one call); the create stays a separate, deliberate `entity`/`entity_batch` call. Unlike resolve_ingredients this never mints a row, because a Product is identity plus cost basis, not just a name.",
+    inputSchema: productResolveNamesInput,
+    outputSchema: productResolveNamesMcpOut,
+    annotations: READ_ONLY_CLOSED,
+    call: async (caller, params) => ({
+      results: await caller.product.resolveNames({ names: params.names }),
+    }),
   });
 
   registerRouterTool(server, {

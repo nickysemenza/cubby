@@ -49,6 +49,18 @@ export const nutritionTotals = z.object({
 });
 export type NutritionTotals = z.infer<typeof nutritionTotals>;
 
+/**
+ * Totals whose nutrient record may be a subset of the 22 keys — the shape an
+ * MCP read publishes when the caller asked for `kcal` only or no nutrition.
+ * `z.record` over an enum key is exhaustive in Zod 4; `partialRecord` is the
+ * only way to say "some of these keys".
+ */
+export const nutritionTotalsPartial = z.object({
+  cost: measureEstimate,
+  nutrition: z.partialRecord(nutrientKey, measureEstimate),
+});
+export type NutritionTotalsPartial = z.infer<typeof nutritionTotalsPartial>;
+
 export const nutritionBasis = z.enum(["whole", "serving"]);
 export type NutritionBasis = z.infer<typeof nutritionBasis>;
 

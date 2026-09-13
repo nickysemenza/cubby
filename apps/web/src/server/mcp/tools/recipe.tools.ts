@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/import-recipe";
 import {
   recipeAvailabilityMcpOut,
+  recipeCostingExplainDetail,
   recipeCostingExplainMcpOut,
   recipesUsingIngredientOut,
   scrapeRecipeMcpOut,
@@ -186,10 +187,27 @@ export function registerRecipeTools(server: McpServer) {
   registerRouterTool(server, {
     name: "explain_recipe_costing",
     description:
-      "Explain a recipe's cost/calorie totals with per-ingredient diagnostics.",
-    inputSchema: z.object({ id: idParam("recipe") }),
+      'Explain a recipe\'s cost/calorie totals with per-ingredient diagnostics. `detail: "lines"` drops the two full nutrient-totals blocks and the drift record and returns only the per-line diagnostics plus a cost/kcal coverage headline — use it when hunting the uncovered line, not the number.',
+    inputSchema: z.object({
+      id: idParam("recipe"),
+      detail: recipeCostingExplainDetail.default("full"),
+    }),
     outputSchema: recipeCostingExplainMcpOut,
     annotations: READ_ONLY_CLOSED,
-    call: (caller, params) => caller.recipe.explainCosting({ id: params.id }),
+    call: async (caller, params) => {
+      const explain = await caller.recipe.explainCosting({ id: params.id });
+      if (params.detail === "full") return explain;
+      const { totals: _persistedTotals, ...persisted } = explain.persisted;
+      const { totals: computedTotals, ...computed } = explain.computed;
+      return {
+        detail: "lines" as const,
+        persisted,
+        computed,
+        coverage: {
+          cost: computedTotals.cost,
+          kcal: computedTotals.nutrition.kcal,
+        },
+      };
+    },
   });
 }

@@ -19,11 +19,10 @@ received into inventory before enrichment.
 
 For a general stocked-product backlog sweep:
 
-1. Call `search_products` with:
-   - `inventoryPresenceFilter: "has"`
-   - `imagePresenceFilter: "none"`
-   - `sort: "identity_strength"`
-   - `pageSize: 25`
+1. Call `entity {action:"list", entity:"product", …}` with:
+   - `filters: { inventoryPresenceFilter: "has", imagePresenceFilter: "none" }`
+   - `sort: { orderBy: "identity_strength", direction: "desc" }`
+   - `pagination: { pageSize: 25 }`
 2. The server ranks strongest identities first:
    - UPC/EAN/GTIN;
    - ASIN or another exact external ID;
@@ -81,11 +80,11 @@ record. Put maker-issued model/MPN in `model`; retailer SKUs belong in typed
 
 ## Apply metadata safely
 
-`create_products` silently snaps `manufacturer` to the
+`entity create product` silently snaps `manufacturer` to the
 established spelling already in use among live Products
 (`resolveEstablishedManufacturer` in `server/repo/label-canonical.ts`) — a
 returned `manufacturer` that differs from what you typed is expected, not a
-bug. `update_products` deliberately does **not** auto-snap, so before writing a
+bug. `entity update product` deliberately does **not** auto-snap, so before writing a
 manual manufacturer correction, check what spelling is already established
 rather than assuming your typed value will be normalized.
 
@@ -94,10 +93,11 @@ Read the current product immediately before writing. Use
 batch) for identifier-only changes: upsert a precise
 `(source, kind)` slot and remove only an explicitly obsolete slot with its
 exact `expectedExternalId`. It preserves all unrelated identifiers and refuses
-the whole patch if the live slot changed. Use `update_products.externalIds` only
+the whole patch if the live slot changed. Use `entity update product` `data.externalIds` only
 when intentionally replacing the complete set; if so, preserve every desired
 identifier and remove MCP-only timestamps.
-When a researched item is absent, create it once with rich `create_products`:
+When a researched item is absent, create it once with a rich `entity create product`
+(or one `entity_batch` for several):
 include manufacturer, model, category, aliases/tags, notes,
 expected quantity, price/mappings, UPC/FDC link, and verified external IDs.
 Do not create then update merely to add those fields. Product creation does not
@@ -105,7 +105,7 @@ receive the item into inventory.
 
 Before adding an identifier, call `find_product_external_id_collisions` in exact
 mode with `identifiers: [{ source, kind, externalId }]`. A `collision` requires
-manual resolution — usually `merge_entity` with `entity: "product"`, folding
+manual resolution — usually `entity {action:"merge", entity:"product", …}`, folding
 the duplicate into the
 proven Product rather than reassigning the identifier by hand; `unique` names
 the current owner; `missing` is safe to add to the proven Product. Keep broad
@@ -142,7 +142,7 @@ accumulating the intended writes; then apply them in one call each:
 | Phase | Call | Items |
 | --- | --- | --- |
 | Collision check | `find_product_external_id_collisions` | up to 100 identifier tuples |
-| Metadata + identity | `update_products` | up to 50 |
+| Metadata + identity | `entity_batch` (update commands) | up to 50 |
 | Identifier slots only | `patch_products_external_ids` | up to 50 |
 | Cover images | `attach_files` | up to 50, each with its own `entityId` |
 | Verification | `verify_products_images` | up to 20 |
@@ -164,7 +164,7 @@ Two rules keep the batching honest:
   items that already succeeded from double-attaching.
 
 Stay singular when a product needs judgment mid-write — a gallery that drifted, a
-collision that needs `merge_entity`, a cover replacement whose `imageOrder` you
+collision that needs `entity merge product`, a cover replacement whose `imageOrder` you
 must compute from a fresh read. Batching is for the settled majority.
 
 ## Attach one cover image
@@ -195,7 +195,7 @@ overwriting identity with it. Confirm the split actually exists before applying
 this — a component with no separate retail variant (a battery sold under one
 model whether kitted or not) takes the listing's UPC normally.
 
-Read `get_product` immediately before attachment and snapshot its images,
+Read `entity get product` immediately before attachment and snapshot its images,
 cover, display order, count, and metadata. Attach once per product — via
 `attach_file`, or as one item of an `attach_files` batch — with the product's
 `PRD-` shortcode, `expectedImageCount`, and a deterministic retry key:
@@ -217,9 +217,9 @@ count. For cover replacement, never detach the old cover first.
 
 Call `verify_product_images` after attachment — or `verify_products_images` for
 the whole batch — and use the returned detailed Product rather than making a
-redundant immediate `get_product` call. Confirm the gallery is the snapshot plus
-the new verified file. Only then send one `update_products` call (a one-item
-array) with any `removeImageIds` and complete `imageOrder`; verify
+redundant immediate `entity get product` call. Confirm the gallery is the
+snapshot plus the new verified file. Only then send one `entity update product`
+call with any `removeImageIds` and complete `imageOrder`; verify
 again after that change. Confirm:
 
 - UPC, model, manufacturer, metadata, and every prior external ID survived;

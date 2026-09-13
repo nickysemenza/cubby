@@ -156,3 +156,35 @@ source.
   the contract *is* fixed-scope. Leave the existing shape alone unless the user
   asks; do not merge them silently, and do not set either `statedTotal` to the
   full contract value.
+
+## Weee!
+
+- Order pages (`weee.com/en/order/detail/<id>`) need the logged-in browser. The
+  page text lists every line as `<title> / Item price: $x |Qty: n / $ext`, then
+  `Subtotal`, `Coupon`, `Taxes` (always $0 — grocery), `Service fee`, `Delivery
+  fee`, `Guaranteed delivery`, `Tip`, `WeeeCash Applied`, `Payment total`,
+  `Order total`, `Payment method`, `Refunded amount`. Book the coupon as
+  `discount`, guaranteed delivery as `fee`, tip as `tip`.
+- Product images are on the page but hydrate late: query
+  `[data-testid="wid-order-detail-product-image"]` after ~2.5 s. `alt` is
+  `weee_<listing title>`; the `src` ends in `!c152x152_q80.auto` — strip from
+  `!` for the 1200–1350 px original, which needs no auth and attaches by url.
+  No product ids or links are exposed on the order page; the public
+  `weee.com/en/search?keyword=…` (no login) gives result cards with the same
+  CDN image and the numeric product id in the `/product/<slug>/<id>` href —
+  record that id as a `weee` / `retailer_sku` external id.
+- **Refunds for missing items are NOT card credits.** They land as WeeeCash
+  wallet balance and are spent as `WeeeCash Applied -$x` tender on a later
+  order; `Order total ≠ Payment total` is the tell. Model the wallet as one
+  `stored_value` FinancialAccount, book the refund as a negative `principal`
+  line (`productQuantity: -1`) plus a `refund` transaction on the wallet, and
+  the later spend as a `purchase` transaction on the wallet beside the card's.
+- Card descriptors: Monarch `WEEE INC.`, Copilot `Weee Inc` and `Grocery Weee!`.
+- Listing titles drift over the years for one SKU (`LKK Soy Sauce 500ml` →
+  `Lee Kum Kee Premium Soy Sauce 500 ml`, Aroy-D `13oz` → `14 oz` for the same
+  400 ml can). Alias the product with the older title rather than minting a
+  twin, and say so in the Expense note.
+- Older orders (2021) can freeze the browser renderer so every scripting tool
+  times out and sibling weee.com tabs hang with it. Have the operator copy the
+  page text and paste it; images then come from the public search above.
+
