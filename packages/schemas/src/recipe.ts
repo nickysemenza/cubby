@@ -20,7 +20,8 @@ import {
   ingredientShortcode,
   recipeShortcode,
 } from "./identifiers";
-import { displayImagesField, imageUrlSummary } from "./image-summary";
+import { displayImagesField } from "./display-images";
+import { imageUrlSummary } from "./image-summary";
 import {
   createPaginatedResponseSchema,
   entityFilterList,
@@ -239,23 +240,6 @@ export const cookbookSummary = z.object({
   displayImages: displayImagesField,
 });
 export type CookbookSummary = z.infer<typeof cookbookSummary>;
-
-/**
- * The cover that represents a cookbook: its own cover, else the cover of the
- * physical copy on the shelf.
- *
- * `cookbookSummary.product.coverUrl` is already resolved server-side for every
- * summary and had no reader until this existed, so a cookbook whose only
- * photograph lived on its linked Product rendered the empty placeholder.
- *
- * Resolves a URL rather than an `ImageOut` — unlike the location and ingredient
- * cascades, both of cookbook's sources are already-flattened `coverUrl`
- * strings, so there is nothing for `firstDisplayableImage` to filter.
- */
-export const cookbookCoverImage = (book: {
-  coverUrl: string | null;
-  product: { coverUrl: string | null } | null;
-}): string | null => book.coverUrl ?? book.product?.coverUrl ?? null;
 
 export type SectionIngredientType = z.infer<
   typeof sectionIngredientOut

@@ -1,4 +1,5 @@
 import type { Amount } from "@cubby/schemas/codec";
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import type { Entity } from "@cubby/schemas/entity";
 import {
   type LocationShortcode,
@@ -103,6 +104,7 @@ import {
 import { nameLabel } from "./name-label";
 import type {
   CubbyCellContext as CellContext,
+  CubbyColumnDef,
   CubbyColumnHelper as ColumnHelper,
   CubbyRow as TableRow,
 } from "./table-features";
@@ -466,25 +468,69 @@ export function createUpdatedAtColumn<T extends BaseRow>(
   });
 }
 
+interface CreateImageColumnOptions<T> {
+  /** Entity type for colored placeholder icon when no image */
+  entity: Entity;
+  /** How this row resolves its thumbnail. Defaults to `row.displayImages` —
+   *  the server-resolved list contract (own gallery/cover, or a borrowed
+   *  entity's photos) that every `displayImages` manifest entity's list row
+   *  carries. Pass `getImages` only for a table of a non-list shape whose rows
+   *  still carry their own `images[]` (purchase products, kit components,
+   *  project tools) — name `rowImages` at the call site for those, or a
+   *  cascade resolver when the row borrows a linked entity's cover. */
+  getImages?: (row: T) => Array<{ id: string; url: string; filename?: string }>;
+  /** Custom className for the column (default: "px-0 py-0 h-px") */
+  className?: string;
+  /** Mobile projection metadata override */
+  mobile?: MobileColumnMeta;
+}
+
+/** A row carrying the server-resolved `displayImages` list contract — the
+ *  default `getImages` source. */
+interface DisplayImagesRow {
+  displayImages: DisplayImageSummary[];
+}
+
+/**
+ * Runtime twin of `DisplayImagesRow` for a table whose row type is narrower
+ * than the rows it actually receives (the expense list's `ColumnHelper` is
+ * typed to `ExpenseOut` so it can share column factories with the project
+ * page's embedded expense table). A predicate, not an assertion: the guard
+ * scripts forbid asserting into a branded-id shape.
+ */
+export const hasDisplayImages = <T extends BaseRow>(
+  row: T,
+): row is T & DisplayImagesRow =>
+  "displayImages" in row && Array.isArray(row.displayImages);
+
+type ImageColumnDef<T extends BaseRow> = CubbyColumnDef<
+  T,
+  Array<{ id: string; url: string; filename?: string }>
+>;
+
+export function createImageColumn<T extends BaseRow & DisplayImagesRow>(
+  columnHelper: ColumnHelper<T>,
+  options: CreateImageColumnOptions<T>,
+): ImageColumnDef<T>;
 export function createImageColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
-  options: {
-    /** Entity type for colored placeholder icon when no image */
-    entity: Entity;
-    /** How this row resolves its thumbnail. Required, never defaulted: pass
-     *  `rowImages` when the row owns its images, or a cascade resolver
-     *  (`locationCoverImage`, `ingredientCoverImage`) when it borrows a linked
-     *  entity's. Omitting it used to yield a permanently-empty column. */
+  options: CreateImageColumnOptions<T> & {
     getImages: (
       row: T,
     ) => Array<{ id: string; url: string; filename?: string }>;
-    /** Custom className for the column (default: "px-0 py-0 h-px") */
-    className?: string;
-    /** Mobile projection metadata override */
-    mobile?: MobileColumnMeta;
   },
+): ImageColumnDef<T>;
+export function createImageColumn<T extends BaseRow>(
+  columnHelper: ColumnHelper<T>,
+  options: CreateImageColumnOptions<T>,
 ) {
-  const { entity, getImages } = options;
+  const { entity } = options;
+  // Only the first overload (`T extends DisplayImagesRow`) omits `getImages`,
+  // so every row reaching the default actually carries `displayImages` — the
+  // implementation signature just can't say so, hence the runtime predicate.
+  const getImages =
+    options.getImages ??
+    ((row: T) => (hasDisplayImages(row) ? row.displayImages : []));
 
   return columnHelper.accessor((row) => getImages(row), {
     id: "image",

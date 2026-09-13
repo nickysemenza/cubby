@@ -98,7 +98,7 @@ export const taskCompletionSchema = z.enum(taskCompletionValues);
 export type TaskCompletion = z.infer<typeof taskCompletionSchema>;
 
 import { costTypeSchema } from "./expense-fields";
-import { displayImagesField } from "./image-summary";
+import { displayImagesField } from "./display-images";
 export { costTypeValues, costTypeSchema } from "./expense-fields";
 export type { CostType } from "./expense-fields";
 
@@ -272,7 +272,7 @@ export const projectTreeInput = z.object({
   ...sortPaginationFields,
 });
 export const projectTreeOut = createPaginatedResponseSchemaWithContext(
-  projectOut,
+  projectListItemOut,
   "project",
 );
 

@@ -1,3 +1,4 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import {
   canonicalExternalIdUrl,
   externalIdKind,
@@ -5,7 +6,6 @@ import {
 } from "@cubby/schemas/external-id";
 import { gardenLocationKind } from "@cubby/schemas/garden-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { DisplayImageSummary } from "@cubby/schemas/image-summary";
 import type {
   InventoryListProductOut,
   ProductInventoryEmbedOut,

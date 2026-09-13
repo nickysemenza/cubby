@@ -76,7 +76,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false, // or "gallery" (an `<Entity>Image` join table) | "cover" (one `coverImageId`)
+    images: false, // or "gallery" (an `<Entity>Image` join table) | "cover" (one `coverImageId`) | "borrowed" (a linked product's photos)
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
@@ -132,9 +132,16 @@ all read it; none of them keep a per-entity list of their own.
 
 `capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
 table, bound in `apps/web/src/server/repo/database-helpers/crud.ts`
-`imageJoinBindings`, whose keys are checked against `GalleryEntity`) or
-`"cover"` (a single `coverImageId` column, cookbook). The manifest keeps the
-boolean `hasImages` alongside `imageStorage`.
+`imageJoinBindings`, whose keys are checked against `GalleryEntity`),
+`"cover"` (a single `coverImageId` column, cookbook) or `"borrowed"` (no
+storage of its own; ingredient, inventory, expense and wish show a linked
+product's photos). The manifest keeps the storage boolean `hasImages`
+(`gallery`/`cover`) alongside `imageStorage`, and derives `displayImages`
+(`images !== false`): every such entity's list schema carries a
+server-resolved `displayImages: [{ id, url }]` attached by `withDisplayImages`
+in its list function — the one display-image policy
+(`apps/web/src/server/repo/entity-display-image.ts`) that web thumbnails,
+native rows, search hits and hover cards all read. No client derives a cover.
 
 `extensions.ports` is the explicit seam map for entity-wide behavior the
 compiler must not infer: the kernel repository binding, entity label and

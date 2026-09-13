@@ -242,6 +242,9 @@ describe("location mappers", () => {
     ]);
     expect(result.inventoryEntries[0]).not.toHaveProperty("productId");
     expect(result.inventoryEntries[0]?.product).not.toHaveProperty("deletedAt");
-    expect(locationListItemOut.parse(result)).toEqual(result);
+    // `displayImages` is attached by `withDisplayImages` in the list function,
+    // not by this mapper, so the contract parse gets it here.
+    const listRow = { ...result, displayImages: [] };
+    expect(locationListItemOut.parse(listRow)).toEqual(listRow);
   });
 });

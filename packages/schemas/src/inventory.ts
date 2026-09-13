@@ -32,7 +32,7 @@ import {
 import { unitMappingOut } from "./unitmapping";
 import { inventoryPlacement as cycleSafeInventoryPlacement } from "./inventory-fields";
 import { generatedInventoryItemFieldSchemas } from "./generated/entity-field-schemas.inventory.gen";
-import { displayImagesField } from "./image-summary";
+import { displayImagesField } from "./display-images";
 
 export { positiveAmount } from "./codec";
 

@@ -43892,7 +43892,7 @@
           "items": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ProjectOut"
+              "$ref": "#/components/schemas/ProjectListItemOut"
             }
           }
         },

@@ -10,7 +10,6 @@ import {
   productShortcode,
   recipeShortcode,
 } from "./identifiers";
-import { firstDisplayableImage, type ImageOut } from "./image";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   productWithMappingsAndFoodMcpEntityOut,
@@ -27,7 +26,7 @@ import {
   recipeUsageOut,
 } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
-import { displayImagesField } from "./image-summary";
+import { displayImagesField } from "./display-images";
 
 export const ingredientBaseFields = {
   name: generatedIngredientFieldSchemas.read.name,
@@ -199,29 +198,6 @@ export type IngredientListItem = z.infer<typeof ingredientListItemOut>;
 export const ingredientListItemMcpEntityOut = ingredientListItemOut.extend({
   product: z.array(productWithMappingsMcpEntityOut),
 });
-
-/**
- * The image that represents an ingredient: the first displayable photo across
- * the products it maps to.
- *
- * An ingredient has no image relation of its own, so before this the leading
- * thumbnail column rendered the same carrot on every row — the linked products'
- * images were already joined by `relations.ingredient.list` and fetched on
- * every request, with nothing reading them.
- *
- * Scans ALL linked products rather than `product[0]`, so an ingredient whose
- * first product is unphotographed still shows a sibling's photo. The thumbnail
- * may therefore come from a different product than the one the PRODUCT column's
- * pill names: deliberate, because this column answers "what does this
- * ingredient look like", not "which SKU is canonical".
- *
- * Structurally typed rather than taking an `IngredientListItem`, so the list
- * row, the detail read and the hover-card view-model all satisfy it.
- */
-export const ingredientCoverImage = (ing: {
-  product: { images: ImageOut[] }[];
-}): ImageOut | null =>
-  firstDisplayableImage<ImageOut>(...ing.product.map((p) => p.images));
 
 export const enrichmentFixKind = z.enum([
   "no-product",

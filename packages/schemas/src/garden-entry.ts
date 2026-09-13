@@ -3,7 +3,7 @@ import { z } from "zod";
 import { gardenEntryShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
 import { generatedGardenEntryFieldSchemas } from "./generated/entity-field-schemas.gardenEntry.gen";
-import { displayImagesField } from "./image-summary";
+import { displayImagesField } from "./display-images";
 
 export const gardenEntryCreateInput = z.object(
   generatedGardenEntryFieldSchemas.create,

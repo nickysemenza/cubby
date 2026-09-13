@@ -31,12 +31,16 @@ import {
   type PaginationParams,
   type SortParams,
 } from "@cubby/schemas/pagination";
-import type { ProjectFilters, ProjectOut } from "@cubby/schemas/project";
+import type {
+  ProjectFilters,
+  ProjectListItemOut,
+} from "@cubby/schemas/project";
 import { and, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { project } from "~/server/db/schema";
 import { getDb } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 
 import { projectDependencyIds } from "./analytics";
 import { hydrateProjectRow } from "./helpers";
@@ -62,7 +66,7 @@ export const projectTreePage = async (
   sorts: SortParams[],
   pagination: PaginationParams,
 ): Promise<{
-  data: ProjectOut[];
+  data: ProjectListItemOut[];
   count: number;
   sums: { costEstimate: number };
 }> => {
@@ -141,7 +145,9 @@ export const projectTreePage = async (
   ]);
 
   return {
-    data: rows.map((row) => hydrateProjectRow(row, projectContext, deps)),
+    data: await withDisplayImages(db, "project", rows, (row) =>
+      hydrateProjectRow(row, projectContext, deps),
+    ),
     count: roots.length,
     sums,
   };

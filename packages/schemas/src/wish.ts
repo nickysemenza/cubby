@@ -8,7 +8,7 @@ import { productShortcode, wishShortcode } from "./identifiers";
 export { wishCandidateOut, type WishCandidateOut } from "./wish-fields";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
 import { wishRelatedFilterFields } from "./related-view";
-import { displayImagesField } from "./image-summary";
+import { displayImagesField } from "./display-images";
 
 export const wishCreateInput = z.object(generatedWishFieldSchemas.create);
 export type WishCreateInput = z.infer<typeof wishCreateInput>;

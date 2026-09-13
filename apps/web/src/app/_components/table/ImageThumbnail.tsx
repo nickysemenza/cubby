@@ -2,6 +2,13 @@ import type { Entity } from "@cubby/schemas/entity";
 
 import { EntityCover } from "~/components/entity/entity-cover";
 
+/**
+ * Deliberately structural, not `DisplayImageSummary` — this renders both a
+ * list row's server-resolved `displayImages` (branded `ImageShortcode` id,
+ * no `filename`) and a non-list row's own `images[]` (`rowImages`: plain
+ * string id, required `filename`, optional `contentType`). No single zod
+ * schema covers both, and the branded id would reject the latter.
+ */
 interface ImageData {
   id: string;
   url: string;

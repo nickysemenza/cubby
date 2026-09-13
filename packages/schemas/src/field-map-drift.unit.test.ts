@@ -492,6 +492,14 @@ const INTENTIONAL_RESPELLINGS = {
   "project::expenseOut::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::expenseOut::notes": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::expenseOut::updatedAt": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  // expenseListItemOut = expenseOut + displayImages, same shared-module collision.
+  "project::expenseListItemOut::createdAt":
+    TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseListItemOut::id": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseListItemOut::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseListItemOut::notes": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::expenseListItemOut::updatedAt":
+    TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::expenseUpdateData::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::expenseUpdateData::notes": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::expenseUpdateInput::id": TASK_EXPENSE_SHARED_MODULE_COLLISION,
@@ -631,8 +639,6 @@ const INTENTIONAL_RESPELLINGS = {
   "recipe::recipeInstructionInput::id":
     "coincidental key-name collision: an instruction ROW's own optional edit-target uuid (id.optional()), not recipe's own shortcode id",
   "recipe::recipeListItemOut::createdAt": RECIPE_TOP_LEVEL_FIELDS,
-  "recipe::recipeListItemOut::images":
-    "list-row cover-image projection (z.array(imageOut), capped to the sortOrder-first cover per the file comment — the ~4.7s over-fetch fix) — hand-declared fresh, not the generated read.images instance",
   "recipe::recipeListItemOut::name": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeListItemOut::notes": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeListItemOut::servings": RECIPE_TOP_LEVEL_FIELDS,

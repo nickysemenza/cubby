@@ -8,8 +8,8 @@
  */
 
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { DisplayImageSummary } from "@cubby/schemas/image-summary";
 import type { IngredientOut } from "@cubby/schemas/ingredient";
 import {
   type IngredientListItem,

@@ -43,7 +43,8 @@ import {
   ImageStatus,
   ImageStorageStatus,
 } from "./image";
-import { displayImagesField, imageUrlSummary } from "./image-summary";
+import { displayImagesField } from "./display-images";
+import { imageUrlSummary } from "./image-summary";
 import {
   locationAncestorFields,
   locationAncestorOut,

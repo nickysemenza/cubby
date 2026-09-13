@@ -1,6 +1,7 @@
 import { EntityCover } from "~/components/entity/entity-cover";
 
 interface CardThumbnailProps {
+  // Structural, not `DisplayImageSummary` — see `EntityCover`'s `CoverImage`.
   images: Array<{ id: string; url: string }>;
   alt?: string;
   /** TanStack Router path for clicking the thumbnail */

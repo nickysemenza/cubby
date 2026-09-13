@@ -1,4 +1,4 @@
-import type { ProjectOut } from "@cubby/schemas/project";
+import type { ProjectListItemOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
@@ -8,9 +8,10 @@ import { buildProjectTree } from "./project-tree";
  * every other field is a fixed, valid default the builder never reads.
  * Readable seeds are converted to deterministic, schema-valid project
  * shortcodes; callers should assert against the resulting fixture values. */
-function proj(id: string, parentProjectId?: string): ProjectOut {
+function proj(id: string, parentProjectId?: string): ProjectListItemOut {
   return {
     id: testShortcode("project", id),
+    displayImages: [],
     name: id,
     status: "planning",
     kind: null,

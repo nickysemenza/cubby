@@ -1,3 +1,4 @@
+import CubbyKit
 import SwiftUI
 
 /// A cover image in a 6pt rounded rect with a hairline. The placeholder is inset tone plus the
@@ -12,7 +13,8 @@ struct Thumb: View {
             .fill(PorcelainTokens.inset)
             .overlay {
                 if let url {
-                    AsyncImage(url: url) { phase in
+                    let displayURL = ImageTransform.transformed(url, renderedWidth: size)
+                    AsyncImage(url: displayURL) { phase in
                         if case .success(let image) = phase {
                             image.resizable().scaledToFill()
                         } else {

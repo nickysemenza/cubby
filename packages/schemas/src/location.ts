@@ -34,7 +34,7 @@ import {
   locationType,
   locationValuation,
 } from "./location-fields";
-import { displayImagesField } from "./image-summary";
+import { displayImagesField } from "./display-images";
 
 export {
   locationIdentityProductOut,

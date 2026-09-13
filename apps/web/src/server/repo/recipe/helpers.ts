@@ -1,6 +1,6 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
-import type { DisplayImageSummary } from "@cubby/schemas/image-summary";
 import { buildNutrition } from "@cubby/schemas/nutrition";
 import type {
   RecipeGraphOut,

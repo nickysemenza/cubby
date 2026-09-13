@@ -42,7 +42,22 @@ struct EntityRowTests {
         #expect(row?.title == "PRD-2345")
     }
 
-    @Test func imageURLPrefersCoverImageUrl() {
+    @Test func imageURLPrefersDisplayImagesFirstEntry() {
+        let object: JSONValue = [
+            "id": "PRD-2345",
+            "name": "Sample",
+            "displayImages": [
+                ["id": "IMG-1", "url": "https://images.example/first.jpg"],
+                ["id": "IMG-2", "url": "https://images.example/second.jpg"],
+            ],
+            "coverImageUrl": "https://images.example/cover.jpg",
+            "images": [["status": "UPLOADED", "url": "https://images.example/other.jpg"]],
+        ]
+        let row = product.row(from: object)
+        #expect(row?.imageURL == URL(string: "https://images.example/first.jpg"))
+    }
+
+    @Test func imageURLFallsBackToCoverImageUrlWhenDisplayImagesAbsent() {
         let object: JSONValue = [
             "id": "PRD-2345",
             "name": "Sample",
@@ -53,9 +68,30 @@ struct EntityRowTests {
         #expect(row?.imageURL == URL(string: "https://images.example/cover.jpg"))
     }
 
-    /// Every payload's `images` field is now `[ImageShortcode]` (bare ids), not `[{id,url,status}]`
-    /// — there is no URL left to fall back to, even when a test object still shapes `images` the
-    /// old way. Only `coverImageUrl` (present on `resources.product.get`) supplies `imageURL`.
+    @Test func imageURLFallsBackToCoverImageUrlWhenDisplayImagesEmpty() {
+        let object: JSONValue = [
+            "id": "PRD-2345",
+            "name": "Sample",
+            "displayImages": [],
+            "coverImageUrl": "https://images.example/cover.jpg",
+        ]
+        let row = product.row(from: object)
+        #expect(row?.imageURL == URL(string: "https://images.example/cover.jpg"))
+    }
+
+    @Test func imageURLNilWhenDisplayImagesEmptyAndNoCover() {
+        let object: JSONValue = [
+            "id": "PRD-2345",
+            "name": "Sample",
+            "displayImages": [],
+        ]
+        let row = product.row(from: object)
+        #expect(row?.imageURL == nil)
+    }
+
+    /// A bare `images` array of `{status,url}` objects — the pre-`displayImages` shape some
+    /// payloads still carry — is never read for `imageURL`; only `displayImages` and
+    /// `coverImageUrl` are.
     @Test func imageURLIsNilWithoutACoverRegardlessOfImages() {
         let object: JSONValue = [
             "id": "PRD-2345",

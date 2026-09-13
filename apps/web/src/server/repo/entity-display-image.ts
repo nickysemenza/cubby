@@ -1,9 +1,7 @@
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { type Entity, entityRefKey, entitySchema } from "@cubby/schemas/entity";
 import { imageShortcode } from "@cubby/schemas/identifiers";
-import type {
-  DisplayImageSummary,
-  ImageUrlSummary,
-} from "@cubby/schemas/image-summary";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 

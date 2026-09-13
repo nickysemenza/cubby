@@ -9,6 +9,7 @@
     "./collection": "./src/collection.ts",
     "./cookbook": "./src/cookbook.ts",
     "./cookbook-fields": "./src/cookbook-fields.ts",
+    "./display-images": "./src/display-images.ts",
     "./import-recipe": "./src/import-recipe.ts",
     "./entity": "./src/entity.ts",
     "./entity-core": "./src/entity-core.ts",

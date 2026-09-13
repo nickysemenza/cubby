@@ -31,6 +31,8 @@ import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { purchaseLabel } from "~/lib/purchase-label";
 
 import {
+  createImageColumn,
+  hasDisplayImages,
   createProductLinkColumn,
   createProjectLinkColumn,
 } from "../_components/data-table/columnHelpers";
@@ -42,10 +44,6 @@ import { useFilterOptions } from "../_components/hooks/useFilterOptions";
 import { useNameEditable } from "../_components/hooks/useNameEditable";
 import type { ListQueryOptionsFn } from "../_components/hooks/usePaginatedTableCore";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
-import {
-  createExpenseProductImageColumn,
-  ExpenseProductImages,
-} from "./expense-product-image-column";
 import { ExpenseSummaryStrip } from "./expense-summary-strip";
 import { expense } from "./expense.functions";
 
@@ -191,7 +189,20 @@ export function ExpenseList() {
   const columns = useMemo(
     () =>
       createCubbyColumnCollection<ExpenseOut>((add) => {
-        add(createExpenseProductImageColumn(columnHelper));
+        add(
+          createImageColumn(columnHelper, {
+            entity: "expense",
+            // This list's ColumnHelper stays typed to the narrower `ExpenseOut`
+            // so it interoperates with the cost/date/costType/etc. column
+            // factories shared with the project detail page's embedded expense
+            // table (`~/app/projects/shared.tsx`'s `ExpenseList`), whose rows
+            // come from a chart-data projection that never carries images.
+            // This page's own data comes from `entityListFor("expense")`, i.e.
+            // `expenseListItemOut` rows, which do carry `displayImages`.
+            getImages: (row) =>
+              hasDisplayImages(row) ? row.displayImages : [],
+          }),
+        );
         createEntityDisplayColumns(
           "expense",
           columnHelper,
@@ -399,21 +410,23 @@ export function ExpenseList() {
   // whose input is a union with a query skip sentinel, so it would land on
   // `unknown` — and `currentFilters` goes straight to `expense.analytics`,
   // which wants the real shape.
-  const { workbench, currentFilters, totalCount, data, inspection } =
-    useEntityList<ExpenseOut, ExpenseFilters>({
-      entity: "expense",
-      preview: { responsiveInspector: true },
-      queryOptions: listQueryOptions,
-      filterOptions: projectFilterOptions,
-      columns,
-      // The expense contract's own list query, delete, and invalidation fan-out.
-      deletable: true,
-      nameEditable,
-      // Purchase is visible by default; its Order # detail remains opt-in.
-      // `lineBasis` reads "Line item" on all but a handful of rows, so the column
-      // is dead weight by default; its header filter is the surface that matters.
-      initialColumnVisibility: { orderId: false, lineBasis: false },
-    });
+  const { workbench, currentFilters, totalCount, inspection } = useEntityList<
+    ExpenseOut,
+    ExpenseFilters
+  >({
+    entity: "expense",
+    preview: { responsiveInspector: true },
+    queryOptions: listQueryOptions,
+    filterOptions: projectFilterOptions,
+    columns,
+    // The expense contract's own list query, delete, and invalidation fan-out.
+    deletable: true,
+    nameEditable,
+    // Purchase is visible by default; its Order # detail remains opt-in.
+    // `lineBasis` reads "Line item" on all but a handful of rows, so the column
+    // is dead weight by default; its header filter is the surface that matters.
+    initialColumnVisibility: { orderId: false, lineBasis: false },
+  });
   const {
     onRowClick,
     onRowHover,
@@ -468,26 +481,24 @@ export function ExpenseList() {
         adjustmentsNet={analyticsQuery.data?.adjustments.net}
         className="mb-4"
       />
-      <ExpenseProductImages rows={data}>
-        <ListWorkbench
-          model={workbench}
-          contextualStatus={scopeChips}
-          ariaLabel="Expenses Table"
-          onRowClick={onRowClick}
-          onRowHover={onRowHover}
-          onRowHoverEnd={onRowHoverEnd}
-          currentRowId={preview?.id}
-          desktopInspector={dockedInspector}
-          inspectorToggle={inspectorToggle}
-          showCellSelectionStats
-          filterOptionHints={facetOptionHints}
-          getRowClassName={(row) =>
-            row.original.lineKind === "principal"
-              ? undefined
-              : "bg-[var(--row-zebra)] text-muted-foreground"
-          }
-        />
-      </ExpenseProductImages>
+      <ListWorkbench
+        model={workbench}
+        contextualStatus={scopeChips}
+        ariaLabel="Expenses Table"
+        onRowClick={onRowClick}
+        onRowHover={onRowHover}
+        onRowHoverEnd={onRowHoverEnd}
+        currentRowId={preview?.id}
+        desktopInspector={dockedInspector}
+        inspectorToggle={inspectorToggle}
+        showCellSelectionStats
+        filterOptionHints={facetOptionHints}
+        getRowClassName={(row) =>
+          row.original.lineKind === "principal"
+            ? undefined
+            : "bg-[var(--row-zebra)] text-muted-foreground"
+        }
+      />
       <PreviewSheet />
     </div>
   );

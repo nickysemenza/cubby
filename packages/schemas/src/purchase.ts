@@ -31,7 +31,7 @@ import {
   PRODUCT_QUANTITY_DESCRIPTION,
   tradeSchema,
 } from "./project";
-import { displayImagesField } from "./image-summary";
+import { displayImagesField } from "./display-images";
 
 export const splitExpenseOut = z.array(expenseOut);
 

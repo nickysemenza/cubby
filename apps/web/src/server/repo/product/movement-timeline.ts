@@ -311,7 +311,7 @@ export async function getProductMovementTimeline(
         name: item.name,
         manufacturer: item.manufacturer,
         category: item.category,
-        coverImageUrl: item.images[0]?.url ?? null,
+        coverImageUrl: item.displayImages[0]?.url ?? null,
         usedOnProjects: (usagesByProduct[privateId] ?? [])
           .map((row) => ({
             id: parseShortcodeFor("project", row.projectCode),
