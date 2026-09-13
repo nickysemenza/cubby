@@ -5,6 +5,13 @@ import SwiftUI
 @main
 struct CubbyApp: App {
     @State private var model: AppModel
+    #if os(iOS)
+        // Home-screen Quick Actions (`UIApplicationShortcutItems`): the adaptor constructs
+        // `AppDelegate` — and this app value's other stored properties, including `model` above —
+        // before `UIApplicationMain` starts the scene lifecycle, so `AppModel.active` is already
+        // set by the time `SceneDelegate.scene(_:willConnectTo:options:)` can run.
+        @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
 
     init() {
         // Before anything else so a crash during model setup is still reported.

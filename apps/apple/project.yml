@@ -138,6 +138,21 @@ targets:
     templateAttributes:
       plat: iOS
     platform: iOS
+    # Home-screen Quick Actions. `AppDelegate`/`SceneDelegate` (App/iOS/AppDelegate.swift) map
+    # `shortcutItem.type` back through `CubbyLink`, so each type here must be a valid `cubby://`
+    # link. iOS-only: merged (deep-merge, not replaced) with the shared template's `info.properties`.
+    info:
+      properties:
+        UIApplicationShortcutItems:
+          - UIApplicationShortcutItemType: cubby://capture
+            UIApplicationShortcutItemTitle: Scan
+            UIApplicationShortcutItemIconSymbolName: barcode.viewfinder
+          - UIApplicationShortcutItemType: cubby://audit
+            UIApplicationShortcutItemTitle: Start audit
+            UIApplicationShortcutItemIconSymbolName: checklist
+          - UIApplicationShortcutItemType: cubby://search
+            UIApplicationShortcutItemTitle: Search
+            UIApplicationShortcutItemIconSymbolName: magnifyingglass
   Cubby-macOS:
     templates: [CubbyApp]
     templateAttributes:

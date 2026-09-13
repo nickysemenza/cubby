@@ -15,6 +15,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.8.0"),
         .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.1.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
+        .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
     ],
     targets: [
         // Rust FFI: the xcframework is produced by apps/apple/scripts/build-rust.sh (gitignored);
@@ -52,6 +53,7 @@ let package = Package(
                 "CubbyFFI",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
             ]
         ),
         .executableTarget(

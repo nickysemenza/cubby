@@ -160,6 +160,40 @@ struct ScanCodeIntent: AppIntent {
     }
 }
 
+/// Resolves a scanned or spoken code the same way Search's field does: a Cubby label or barcode
+/// opens directly, several matches or an unrecognized code fall through to Search with the code
+/// prefilled rather than guessing.
+struct LookUpCodeIntent: AppIntent {
+    static let title: LocalizedStringResource = "Look Up a Code"
+    static let description = IntentDescription(
+        "Resolves a barcode, ISBN, or Cubby label and opens what it finds.")
+    static let supportedModes: IntentModes = .foreground(.immediate)
+
+    @Parameter(title: "Code")
+    var code: String
+
+    nonisolated static var parameterSummary: some ParameterSummary {
+        Summary("Look up \(\.$code)")
+    }
+
+    func perform() async throws -> some IntentResult {
+        let client = try await IntentContext.client()
+        let outcome = try await CodeLookup(service: client).resolve(code)
+        switch outcome {
+        case .link(let link):
+            await IntentContext.open(link)
+        case .products(let rows, _) where rows.count == 1:
+            if let row = rows.first {
+                RecentEntities.record(row.id)
+                await IntentContext.open(.entity(.product, id: row.id))
+            }
+        case .products, .unknownCode, .text:
+            await IntentContext.openSearch(prefilling: code)
+        }
+        return .result()
+    }
+}
+
 nonisolated struct CubbyShortcuts: AppShortcutsProvider {
     static let shortcutTileColor: ShortcutTileColor = .navy
 
@@ -198,6 +232,12 @@ nonisolated struct CubbyShortcuts: AppShortcutsProvider {
             phrases: ["Scan into \(.applicationName)"],
             shortTitle: "Scan",
             systemImageName: "barcode.viewfinder"
+        )
+        AppShortcut(
+            intent: LookUpCodeIntent(),
+            phrases: ["Look up a code in \(.applicationName)"],
+            shortTitle: "Look up",
+            systemImageName: "number.square"
         )
     }
 }

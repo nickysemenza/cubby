@@ -82,6 +82,21 @@ struct EntityListView: View {
                 NavigationLink(value: Route.entityDetail(key, id: row.id)) {
                     EntityRowView(key: key, row: row)
                 }
+                .contextMenu {
+                    Button {
+                        Clipboard.copy(appModel.webURL(for: row.id).absoluteString)
+                    } label: {
+                        Label("Copy link", systemImage: "link")
+                    }
+                    Button {
+                        Clipboard.copy(row.id)
+                    } label: {
+                        Label("Copy shortcode", systemImage: "number")
+                    }
+                    ShareLink(item: appModel.webURL(for: row.id)) {
+                        Label("Share…", systemImage: "square.and.arrow.up")
+                    }
+                }
                 .porcelainListRow()
             }
             if let meta = model.meta, meta.totalCount > loadedRows.count {

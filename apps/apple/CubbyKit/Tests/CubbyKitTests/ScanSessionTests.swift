@@ -67,6 +67,32 @@ private func settle(_ session: ScanSession, timeout: Duration = .seconds(2)) asy
 struct ScanSessionTests {
     let shelf = LocationCode("LOC-2345")
 
+    @Test func shelfAnnotationsFollowWhatEachCodeResolvedTo() async throws {
+        let service = StubScanService { code, _ in
+            code.value == "4006381333931"
+                ? StubScanService.result(.queued, id: "PRD-3456", name: "Elsewhere Thing")
+                : StubScanService.result(.added, name: "Bulbs")
+        }
+        let session = ScanSession(service: service, location: shelf)
+        #expect(session.annotation(forScanned: "012345678905") == nil)
+        session.submit("012345678905")
+        #expect(session.annotation(forScanned: "012345678905")?.tone == .pending)
+        try await settle(session)
+        session.submit("012345678905", at: .now + 10)
+        session.submit("4006381333931")
+        try await settle(session)
+
+        // A UPC-A read and its zero-padded spelling are the same entry.
+        #expect(
+            session.annotation(forScanned: "012345678905")
+                == ShelfAnnotation(title: "Bulbs", detail: "Added ×2", tone: .verified))
+        #expect(session.annotation(forScanned: "4006381333931")?.tone == .unexpected)
+        #expect(session.annotation(forScanned: "LOC-2345") == nil)
+
+        session.reset()
+        #expect(session.annotation(forScanned: "012345678905") == nil)
+    }
+
     @Test func scansDrainOneAtATime() async throws {
         let service = StubScanService { _, _ in
             try await Task.sleep(for: .milliseconds(20))

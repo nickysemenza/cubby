@@ -12,6 +12,12 @@ final class Navigator {
     var paths: [AppSection: [Route]] = [:]
     /// Set by a `capture?location=` link; `CaptureView` takes it once its locations have loaded.
     var pendingCaptureLocation: LocationCode?
+    /// A code found while looking something up elsewhere (Search's scan sheet), destined for
+    /// Capture's manual-entry field. `CaptureView` only ever loads this into the text field — it
+    /// never submits it, so stock never changes without an explicit tap.
+    var pendingCaptureCode: String?
+    /// A query typed or spoken elsewhere (an intent's fallback), for `SearchView` to prefill.
+    var pendingSearchQuery: String?
 
     func path(for section: AppSection) -> Binding<[Route]> {
         Binding(
@@ -44,5 +50,15 @@ final class Navigator {
     func takeCaptureLocation() -> LocationCode? {
         defer { pendingCaptureLocation = nil }
         return pendingCaptureLocation
+    }
+
+    func takeCaptureCode() -> String? {
+        defer { pendingCaptureCode = nil }
+        return pendingCaptureCode
+    }
+
+    func takeSearchQuery() -> String? {
+        defer { pendingSearchQuery = nil }
+        return pendingSearchQuery
     }
 }
