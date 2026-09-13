@@ -14,6 +14,7 @@
     "./entity-core": "./src/entity-core.ts",
     "./entity-manifest": "./src/entity-manifest.ts",
     "./entity-names": "./src/generated/entity-names.gen.ts",
+    "./entity-presentation": "./src/generated/entity-presentation.gen.ts",
     "./entity-sort": "./src/generated/entity-sort.gen.ts",
     "./entity-edit-intents": "./src/generated/entity-edit-intents.gen.ts",
     "./entity-field-schema-maps": "./src/generated/entity-field-schema-maps.gen.ts",

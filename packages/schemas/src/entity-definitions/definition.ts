@@ -37,6 +37,22 @@ export type EntityStorageDefaultKind =
   (typeof entityStorageDefaultKinds)[number];
 
 /**
+ * The five wayfinding lines. Declared here so `presentation.domain` is a
+ * closed vocabulary the browser shell and the native app both derive from.
+ */
+export const WAYFINDING_DOMAINS = [
+  "cook",
+  "pantry",
+  "plan",
+  "house",
+  "finance",
+] as const;
+export type WayfindingDomain = (typeof WAYFINDING_DOMAINS)[number];
+export type EntityPresentation = z.output<
+  ReturnType<typeof metadataSchemas>["presentation"]
+>;
+
+/**
  * Executable entity declarations deliberately carry Zod instances.  This
  * schema validates the surrounding serializable metadata without parsing,
  * cloning, or reconstructing those instances, so defaults and refinements
@@ -243,8 +259,36 @@ const metadataSchemas = () => {
     })
     .strict();
 
+  // Everything a generic surface needs to present an entity — and nothing a
+  // surface computes. Kept data-only (strings and enums) so the eager client
+  // roster and the Swift catalog can carry it verbatim.
   const entityPresentationMetadataSchema = z
-    .object({ titleField: nonEmptyString() })
+    .object({
+      titleField: nonEmptyString(),
+      /**
+       * The wayfinding line an entity's records live on, or `null` for one
+       * that belongs to no line (image). Drives nav grouping, domain colours
+       * and the native shell's sections.
+       */
+      domain: z.enum(WAYFINDING_DOMAINS).nullable(),
+      /** One sentence for the records catalog and nav. */
+      description: nonEmptyString(),
+      emptyState: z
+        .object({
+          title: nonEmptyString(),
+          description: nonEmptyString(),
+          actionLabel: nonEmptyString().optional(),
+        })
+        .strict(),
+      icons: z
+        .object({
+          /** A `lucide-react` export name; the browser registry resolves it. */
+          lucide: nonEmptyString(),
+          /** An SF Symbol name for the native app. */
+          sfSymbol: nonEmptyString(),
+        })
+        .strict(),
+    })
     .strict();
 
   const entityDeleteMetadataSchema = z
@@ -261,7 +305,14 @@ const metadataSchemas = () => {
   const entityCapabilitiesMetadataSchema = z
     .object({
       auditable: z.boolean({ error: "must be a boolean" }),
-      images: z.boolean({ error: "must be a boolean" }),
+      /**
+       * `gallery`: a `<Entity>Image` join table of ordered photos; `cover`: a
+       * single `coverImageId` on the row; `false`: no images. The manifest's
+       * boolean `hasImages` is `images !== false`.
+       */
+      images: z.union([z.literal(false), z.enum(["gallery", "cover"])], {
+        error: 'must be false, "gallery" or "cover"',
+      }),
       countable: z.boolean({ error: "must be a boolean" }),
       softDelete: z.boolean({ error: "must be a boolean" }),
       delete: entityDeleteMetadataSchema.nullable(),
@@ -499,6 +550,7 @@ const metadataSchemas = () => {
     field: entityFieldMetadataSchema,
     fieldModel: entityFieldModelMetadataSchema,
     storage: entityStorageMetadataSchema,
+    presentation: entityPresentationMetadataSchema,
   };
 };
 

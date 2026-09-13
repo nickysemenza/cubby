@@ -1,4 +1,8 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  type EntityPresentation,
+  entityPresentation,
+} from "@cubby/schemas/entity-presentation";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 
@@ -17,131 +21,17 @@ import { EntityIcon, entities } from "~/entities/entities";
 
 import type { CubbyTable as Table } from "./table-features";
 
-interface EntityEmptyConfig {
-  title: string;
-  description: string;
-  actionLabel?: string;
-}
+/**
+ * Empty-state copy comes from each declaration's `presentation.emptyState`
+ * (packages/schemas/src/entity-definitions/*.entity.ts). Nothing here is
+ * per-entity: a new entity brings its own title, description and optional
+ * create label, and the drift guard in `actions/action-items.unit.test.ts`
+ * still checks every `actionLabel` resolves to something to click.
+ */
+type EntityEmptyConfig = EntityPresentation["emptyState"];
 
-const entityEmptyConfig = {
-  recipe: {
-    title: "Your recipe book awaits",
-    description:
-      "Start a collection of recipes you love. Import one from a URL, or write it from scratch.",
-    actionLabel: "Create Recipe",
-  },
-  cookbook: {
-    title: "No cookbooks yet",
-    description:
-      "Drag an EPUB cookbook into the Recipes import page and Cubby will extract its recipes.",
-  },
-  product: {
-    title: "Nothing on the shelves yet",
-    description:
-      "Add the things you own to track what you have and what it's worth. Scan a barcode or add one by hand.",
-    actionLabel: "Add Product",
-  },
-  ingredient: {
-    title: "Your pantry list is empty",
-    description:
-      "Build a list of ingredients to connect your recipes with what's in stock.",
-    actionLabel: "Add Ingredient",
-  },
-  location: {
-    title: "Nowhere to put things yet",
-    description:
-      "Create spaces to organize where everything lives — pantry, fridge, garage, you decide.",
-    actionLabel: "Create Location",
-  },
-  planting: {
-    title: "No plantings yet",
-    description:
-      "Record what is growing now or plan the next crop for one of your garden locations.",
-  },
-  gardenEntry: {
-    title: "No garden entries yet",
-    description:
-      "Add a dated observation, harvest, or photo batch to keep a simple garden history.",
-  },
-  inventory: {
-    title: "Your cubbies are empty",
-    description:
-      "Start tracking what you have and where it lives. Scan a barcode or add it by hand.",
-    actionLabel: "Add to Inventory",
-  },
-  meal: {
-    title: "No meals planned",
-    description:
-      "Plan recipes onto your calendar to see costs add up and build a shopping list.",
-    actionLabel: "Plan a Meal",
-  },
-  project: {
-    title: "No projects yet",
-    description:
-      "Track household projects from planning to done — budget, timeline, and every task and expense along the way.",
-    actionLabel: "New Project",
-  },
-  task: {
-    title: "No tasks yet",
-    description:
-      "Break a project down into steps, or jot down a one-off to get to later.",
-    actionLabel: "New Task",
-  },
-  vendor: {
-    title: "No vendors yet",
-    description:
-      "Track the places money goes — retailers, contractors, suppliers — so every purchase and expense can point at one.",
-    actionLabel: "Add Vendor",
-  },
-  purchase: {
-    title: "No purchases yet",
-    description:
-      "A purchase is created automatically the first time an expense records a vendor. Add one directly to file its invoice ahead of time.",
-    actionLabel: "New Purchase",
-  },
-  expense: {
-    title: "No expenses yet",
-    description:
-      "Log what you've bought (or plan to) to keep a project's running cost honest.",
-    actionLabel: "New Expense",
-  },
-  ledgerParty: {
-    title: "No ledger parties yet",
-    description:
-      "Household members, guests, and the household itself as a whole show up here once a contribution or transfer names them.",
-  },
-  ledgerTransfer: {
-    title: "No transfers yet",
-    description:
-      "A transfer records money moving between ledger parties after the fact, with its own evidence — logged from the household contribution ledger.",
-  },
-  financialAccount: {
-    title: "No financial accounts yet",
-    description:
-      "Add an account to retain statement and receipt evidence for settlement.",
-    actionLabel: "New Account",
-  },
-  financialTransaction: {
-    title: "No financial transactions yet",
-    description:
-      "Record settlement evidence without changing the expense ledger.",
-    actionLabel: "New Transaction",
-  },
-  wish: {
-    title: "No tool wishes yet",
-    description:
-      "Keep a tool idea open-ended or compare a few Products before deciding.",
-    actionLabel: "Add Wish",
-  },
-  image: {
-    title: "No photos yet",
-    description: "Add photos to attach them to recipes, products, and places.",
-  },
-  "usda-food": {
-    title: "Nothing found in the USDA database",
-    description: "Search for a food to pull in its nutrition details.",
-  },
-} satisfies Record<BrowserRoutedEntity, EntityEmptyConfig>;
+const entityEmptyConfig = (entity: BrowserRoutedEntity): EntityEmptyConfig =>
+  entityPresentation[entity].emptyState;
 
 interface EntityEmptyStateProps {
   entity: BrowserRoutedEntity;
@@ -158,7 +48,7 @@ export function EntityEmptyState({
     return <FilteredEmptyState onClearFilters={onClearFilters} />;
   }
 
-  const config: EntityEmptyConfig = entityEmptyConfig[entity];
+  const config = entityEmptyConfig(entity);
   const entityDef = entities[entity];
 
   if (!config || !entityDef) {
@@ -243,10 +133,3 @@ export function isNarrowed<TData extends RowData>(
     (table.options.meta?.urlScopeCount ?? 0) > 0
   );
 }
-
-/**
- * Exposed for the drift guard in `actions/action-items.unit.test.ts`, which
- * asserts every declared `actionLabel` resolves somewhere to click. Not for
- * rendering — read the config through this module's components.
- */
-export const entityEmptyConfigForTest = entityEmptyConfig;

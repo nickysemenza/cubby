@@ -42,7 +42,18 @@ export default defineEntity({
   },
   // Financial transactions have no name field; `merchant` is the
   // human-identifying label for a transaction row.
-  presentation: { titleField: "merchant" },
+  presentation: {
+    titleField: "merchant",
+    domain: "finance",
+    description: "Imported and matched settlement activity.",
+    emptyState: {
+      title: "No financial transactions yet",
+      description:
+        "Record settlement evidence without changing the expense ledger.",
+      actionLabel: "New Transaction",
+    },
+    icons: { lucide: "CreditCard", sfSymbol: "arrow.left.arrow.right" },
+  },
   model: {
     fields: [
       {

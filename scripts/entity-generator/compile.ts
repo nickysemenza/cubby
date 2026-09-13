@@ -674,7 +674,8 @@ const declarationDescriptor = (
   descriptor.softDelete = declaration.capabilities.softDelete;
   if (declaration.route === null) descriptor.browserRoutes = false;
   descriptor.auditable = declaration.capabilities.auditable;
-  descriptor.hasImages = declaration.capabilities.images;
+  descriptor.hasImages = declaration.capabilities.images !== false;
+  descriptor.imageStorage = declaration.capabilities.images;
   descriptor.searchable = declaration.search.enabled;
   descriptor.countable = declaration.capabilities.countable;
   descriptor.relationships = serializedDeclarationRelations(
@@ -786,7 +787,7 @@ export const compileEntity = (
   const inspector = {
     singular: declaration.names.singular,
     plural: declaration.names.plural,
-    titleField: declaration.presentation.titleField,
+    ...declaration.presentation,
   };
   const filters = declaration.filters;
   const filterAudit = filters.audit === undefined ? false : filters.audit;

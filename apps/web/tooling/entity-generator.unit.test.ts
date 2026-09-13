@@ -73,20 +73,28 @@ const expectDeclaredEntityParity = (
   }
 };
 
+const presentation = {
+  titleField: "name",
+  domain: null,
+  description: "Alpha records.",
+  emptyState: { title: "No alphas", description: "Add one." },
+  icons: { lucide: "Box", sfSymbol: "cube" },
+} as const;
+
 const base = {
   key: "alpha",
   names: { singular: "Alpha", plural: "Alphas" },
   route: null,
   table: null,
   identifiers: { brand: null, shortcode: null, legacy: null },
-  presentation: { titleField: "name" },
+  presentation,
   fields: null,
   filters: { descriptors: [] },
   relations: [],
   search: { enabled: false },
   capabilities: {
     auditable: false,
-    images: false,
+    images: false as const,
     countable: false,
     softDelete: false,
     delete: null,
@@ -494,7 +502,7 @@ describe("typed entity compiler", () => {
       compileEntityDeclarations([
         {
           ...base,
-          presentation: { titleField: "book" },
+          presentation: { ...presentation, titleField: "book" },
           model: {
             ...model,
             fields: [
@@ -520,7 +528,7 @@ describe("typed entity compiler", () => {
     const entity = compileEntityDeclarations([
       {
         ...base,
-        presentation: { titleField: "name" },
+        presentation,
         model: {
           ...model,
           fields: [{ ...model.fields[0], readKey: null }],

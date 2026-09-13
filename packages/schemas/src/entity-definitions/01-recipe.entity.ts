@@ -18,7 +18,18 @@ export default defineEntity({
   route: { basePath: "recipes" },
   table: "Recipe",
   identifiers: { brand: "RecipeId", shortcode: "RCP-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "cook",
+    description: "Recipes, their sections, and composition.",
+    emptyState: {
+      title: "Your recipe book awaits",
+      description:
+        "Start a collection of recipes you love. Import one from a URL, or write it from scratch.",
+      actionLabel: "Create Recipe",
+    },
+    icons: { lucide: "ChefHat", sfSymbol: "fork.knife" },
+  },
   model: {
     fields: [
       {
@@ -656,7 +667,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: true,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

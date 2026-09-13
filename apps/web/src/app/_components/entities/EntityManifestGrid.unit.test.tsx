@@ -73,3 +73,31 @@ describe("EntityInspector shortcode contracts", () => {
     expect(screen.getByText("specialized list · detail")).toBeInTheDocument();
   });
 });
+
+describe("EntityInspector presentation", () => {
+  it("shows the declaration's presentation block for a gallery entity", () => {
+    render(<EntityInspector entity="product" count={12} />);
+
+    expect(screen.getByText("pantry")).toBeInTheDocument();
+    expect(
+      screen.getByText("Specific household products and their identity."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Barcode")).toBeInTheDocument();
+    expect(screen.getByText("shippingbox")).toBeInTheDocument();
+    expect(screen.getByText("Nothing on the shelves yet")).toBeInTheDocument();
+    expect(screen.getByText("Add Product")).toBeInTheDocument();
+    expect(
+      screen.getByText("gallery (ordered join table)"),
+    ).toBeInTheDocument();
+  });
+
+  it("distinguishes cover-only images and an entity on no wayfinding line", () => {
+    const { rerender } = render(
+      <EntityInspector entity="cookbook" count={2} />,
+    );
+    expect(screen.getByText("cover (single coverImageId)")).toBeInTheDocument();
+
+    rerender(<EntityInspector entity="image" count={5} />);
+    expect(screen.getByText("none (no wayfinding line)")).toBeInTheDocument();
+  });
+});

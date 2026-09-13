@@ -13,7 +13,18 @@ export default defineEntity({
   route: { basePath: "tasks" },
   table: "Task",
   identifiers: { brand: "TaskId", shortcode: "TSK-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "house",
+    description: "Concrete work, schedules, and completion state.",
+    emptyState: {
+      title: "No tasks yet",
+      description:
+        "Break a project down into steps, or jot down a one-off to get to later.",
+      actionLabel: "New Task",
+    },
+    icons: { lucide: "ListChecks", sfSymbol: "checklist" },
+  },
   model: {
     fields: [
       {

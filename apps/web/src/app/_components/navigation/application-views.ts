@@ -1,4 +1,11 @@
-import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  type BrowserRoutedEntity,
+  browserRoutedEntities,
+} from "@cubby/schemas/entity-manifest";
+import {
+  WAYFINDING_DOMAINS,
+  entityPresentation,
+} from "@cubby/schemas/entity-presentation";
 import type { LinkProps } from "@tanstack/react-router";
 import {
   ArrowLeftRight,
@@ -232,52 +239,34 @@ export const activityViews = [
   },
 ] as const satisfies readonly ActivityViewDefinition[];
 
-const recordDomain = (entity: BrowserRoutedEntity): WayfindingDomain => {
-  const domain = domainForEntity(entity);
-  if (!domain) throw new Error(`Record ${entity} has no navigation domain`);
-  return domain;
-};
+/**
+ * Images have a Records destination but intentionally no route wayfinding
+ * (`presentation.domain: null`); the catalog files them under Pantry.
+ */
+const recordDomain = (entity: BrowserRoutedEntity): WayfindingDomain =>
+  domainForEntity(entity) ?? "pantry";
 
-const recordView = (
-  entity: BrowserRoutedEntity,
-  description: string,
-): RecordViewDefinition => ({
+const recordView = (entity: BrowserRoutedEntity): RecordViewDefinition => ({
   entity,
-  // Images have a Records destination but intentionally no route wayfinding.
-  domain: entity === "image" ? "pantry" : recordDomain(entity),
+  domain: recordDomain(entity),
   to: entities[entity].routes.list,
   label: entities[entity].pluralLabel,
-  description,
+  description: entityPresentation[entity].description,
   icon: entities[entity].lucideIcon,
 });
 
-/** Every browser-routed entity appears exactly once in the Records catalog. */
-export const recordViews = [
-  recordView("recipe", "Recipes, their sections, and composition."),
-  recordView("cookbook", "Imported and maintained recipe collections."),
-  recordView("ingredient", "Canonical cooking ingredients and aliases."),
-  recordView("product", "Specific household products and their identity."),
-  recordView("inventory", "Approximate quantities at physical locations."),
-  recordView("location", "The hierarchy of household storage places."),
-  recordView("image", "Images attached to household records."),
-  recordView("usda-food", "USDA foods available for product nutrition links."),
-  recordView("meal", "Dated meal plans and preparation records."),
-  recordView("wish", "Wanted items and candidate products."),
-  recordView("project", "Household work grouped into durable projects."),
-  recordView("task", "Concrete work, schedules, and completion state."),
-  recordView("planting", "Crops growing now and planned for later."),
-  recordView("gardenEntry", "Dated garden photos, observations, and harvests."),
-  recordView("vendor", "Sources for purchases and expense evidence."),
-  recordView("purchase", "Orders and their itemized expense lines."),
-  recordView("expense", "The authoritative record of household spend."),
-  recordView("financialAccount", "Accounts that provide settlement evidence."),
-  recordView(
-    "financialTransaction",
-    "Imported and matched settlement activity.",
-  ),
-  recordView("ledgerParty", "People represented in the contribution ledger."),
-  recordView("ledgerTransfer", "Transfers recorded between ledger parties."),
-] as const satisfies readonly RecordViewDefinition[];
+/**
+ * Every browser-routed entity appears exactly once in the Records catalog,
+ * grouped by wayfinding line in shell order and, within a line, in
+ * declaration order. Copy and grouping come from each declaration's
+ * `presentation`; nothing here is per-entity.
+ */
+export const recordViews: readonly RecordViewDefinition[] =
+  WAYFINDING_DOMAINS.flatMap((domain) =>
+    browserRoutedEntities
+      .filter((entity) => recordDomain(entity) === domain)
+      .map(recordView),
+  );
 
 export function recordViewFor(
   entity: BrowserRoutedEntity,

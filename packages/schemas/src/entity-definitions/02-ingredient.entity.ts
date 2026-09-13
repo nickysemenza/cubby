@@ -8,7 +8,18 @@ export default defineEntity({
   route: { basePath: "ingredients" },
   table: "Ingredient",
   identifiers: { brand: "IngredientId", shortcode: "ING-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "cook",
+    description: "Canonical cooking ingredients and aliases.",
+    emptyState: {
+      title: "Your pantry list is empty",
+      description:
+        "Build a list of ingredients to connect your recipes with what's in stock.",
+      actionLabel: "Add Ingredient",
+    },
+    icons: { lucide: "Carrot", sfSymbol: "leaf" },
+  },
   model: {
     fields: [
       {

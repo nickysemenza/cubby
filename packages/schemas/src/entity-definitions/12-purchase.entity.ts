@@ -20,7 +20,18 @@ export default defineEntity({
   route: { basePath: "purchases" },
   table: "Purchase",
   identifiers: { brand: "PurchaseId", shortcode: "PUR-", legacy: null },
-  presentation: { titleField: "displayLabel" },
+  presentation: {
+    titleField: "displayLabel",
+    domain: "finance",
+    description: "Orders and their itemized expense lines.",
+    emptyState: {
+      title: "No purchases yet",
+      description:
+        "A purchase is created automatically the first time an expense records a vendor. Add one directly to file its invoice ahead of time.",
+      actionLabel: "New Purchase",
+    },
+    icons: { lucide: "Receipt", sfSymbol: "cart" },
+  },
   model: {
     fields: [
       {
@@ -826,7 +837,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: true,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

@@ -16,7 +16,16 @@ export default defineEntity({
   route: { basePath: "usda", detailParam: "id" },
   table: null,
   identifiers: { brand: null, shortcode: null, legacy: null },
-  presentation: { titleField: "description" },
+  presentation: {
+    titleField: "description",
+    domain: "pantry",
+    description: "USDA foods available for product nutrition links.",
+    emptyState: {
+      title: "Nothing found in the USDA database",
+      description: "Search for a food to pull in its nutrition details.",
+    },
+    icons: { lucide: "Apple", sfSymbol: "leaf.fill" },
+  },
   model: {
     fields: [
       {

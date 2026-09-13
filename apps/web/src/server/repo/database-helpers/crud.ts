@@ -1,8 +1,8 @@
+import type { GalleryEntity } from "@cubby/schemas/entity-manifest";
 /**
  * Database CRUD helper functions.
  * Insert, update, and batch operations with proper error handling.
  */
-
 import type { ImageId } from "@cubby/schemas/identifiers";
 import type {
   AnyColumn,
@@ -283,6 +283,13 @@ const defineImageJoinBinding = <
   binding: ImageJoinBinding<TTable, TParentColumn>,
 ) => binding;
 
+/**
+ * One binding per entity whose declaration says `images: "gallery"` — the
+ * `satisfies Record<GalleryEntity, …>` fails to compile when a gallery entity
+ * has no `<Entity>Image` binding here (cookbook is `"cover"`: a single
+ * `coverImageId`, no join table). Each value's precise shape is pinned by
+ * `defineImageJoinBinding`; the key roster is what this checks.
+ */
 export const imageJoinBindings = {
   product: defineImageJoinBinding({
     table: productImage,
@@ -344,7 +351,7 @@ export const imageJoinBindings = {
     }),
     sortOrderUpdate: (sortOrder) => ({ sortOrder }),
   }),
-} as const;
+} as const satisfies Record<GalleryEntity, { table: ImageJoinTable }>;
 
 export async function associatePendingImages<
   TTable extends ImageJoinTable,

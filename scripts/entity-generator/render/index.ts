@@ -712,15 +712,14 @@ export const renderEntityArtifacts = (
       return [
         entity.key,
         {
-          singular: entity.inspector.singular,
-          plural: entity.inspector.plural,
-          titleField: entity.inspector.titleField,
+          ...entity.inspector,
           shortcodePrefix: entity.shortcode,
           legacyShortcodePrefix: entity.legacyShortcode,
           searchable: entity.descriptor.searchable === true,
           browserRouted: entity.descriptor.browserRoutes !== false,
           auditable: entity.descriptor.auditable === true,
           hasImages: entity.descriptor.hasImages === true,
+          imageStorage: entity.descriptor.imageStorage,
           countable: entity.descriptor.countable === true,
           kernelActions,
           filterUrlKeys: entity.filterUrlKeys,
@@ -930,6 +929,36 @@ export const renderEntityArtifacts = (
         }),
     },
     {
+      relativePath: "packages/schemas/src/generated/entity-presentation.gen.ts",
+      source:
+        generatedHeader +
+        'import type { Entity } from "../entity-core";\n' +
+        'import type { EntityPresentation } from "../entity-definitions/definition";\n\n' +
+        'export { WAYFINDING_DOMAINS } from "../entity-definitions/definition";\n' +
+        'export type { EntityPresentation, WayfindingDomain } from "../entity-definitions/definition";\n\n' +
+        "/**\n" +
+        " * Each entity's `presentation` block, verbatim: domain, description,\n" +
+        " * empty-state copy, icon names, title field. Data only — like\n" +
+        " * `entityNames`, this is for eagerly-loaded client code (the entity\n" +
+        " * registry, navigation, empty states) that must not pull the inspector.\n" +
+        " */\n" +
+        renderRecord({
+          name: "entityPresentation",
+          entries: Object.fromEntries(
+            entities.map(({ key, inspector }) => {
+              const {
+                singular: _singular,
+                plural: _plural,
+                ...presentation
+              } = inspector;
+              return [key, presentation];
+            }),
+          ),
+          satisfies: "Record<Entity, EntityPresentation>",
+          comment: "// Generated presentation stays one entity per line.",
+        }),
+    },
+    {
       relativePath: "packages/schemas/src/generated/entity-names.gen.ts",
       source:
         generatedHeader +
@@ -1079,16 +1108,17 @@ export const renderEntityArtifacts = (
       source:
         generatedHeader +
         'import type { Entity } from "../entity";\n\n' +
-        "export type EntityInspectorMetadata = {\n" +
+        'import type { EntityPresentation } from "../entity-definitions/definition";\n\n' +
+        "export type EntityInspectorMetadata = EntityPresentation & {\n" +
         "  singular: string;\n" +
         "  plural: string | null;\n" +
-        "  titleField: string;\n" +
         "  shortcodePrefix: string | null;\n" +
         "  legacyShortcodePrefix: string | null;\n" +
         "  searchable: boolean;\n" +
         "  browserRouted: boolean;\n" +
         "  auditable: boolean;\n" +
         "  hasImages: boolean;\n" +
+        '  imageStorage: false | "gallery" | "cover";\n' +
         "  countable: boolean;\n" +
         '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge")[];\n' +
         "  filterUrlKeys: readonly string[];\n" +

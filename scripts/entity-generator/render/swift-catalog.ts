@@ -1,3 +1,4 @@
+import { WAYFINDING_DOMAINS } from "../../../packages/schemas/src/entity-definitions/definition.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import {
@@ -211,6 +212,8 @@ const renderEntityDescriptorLiteral = (
     `    basePath: ${swiftString(entity.route.basePath)},\n` +
     `    shortcodePrefix: ${swiftOptionalString(entity.shortcode)},\n` +
     `    titleField: ${swiftString(entity.inspector.titleField)},\n` +
+    `    domain: ${entity.inspector.domain === null ? "nil" : `.${entity.inspector.domain}`},\n` +
+    `    sfSymbol: ${swiftString(entity.inspector.icons.sfSymbol)},\n` +
     `    countable: ${countable ? "true" : "false"},\n` +
     `    fields: ${fields.length === 0 ? "[]" : `[\n      ${fields}\n    ]`},\n` +
     `    filters: ${filters.length === 0 ? "[]" : `[\n      ${filters}\n    ]`},\n` +
@@ -298,6 +301,10 @@ export const renderSwiftEntityCatalog = (
     "  public let label: String?\n" +
     "  public let options: [FilterOption]?\n" +
     "}\n\n" +
+    "/// The five wayfinding lines, from `WAYFINDING_DOMAINS` in the entity definitions.\n" +
+    "public enum WayfindingDomain: String, Codable, Sendable, CaseIterable {\n" +
+    `${WAYFINDING_DOMAINS.map((domain) => `  case ${domain}`).join("\n")}\n` +
+    "}\n\n" +
     "public struct EntityDescriptor: Codable, Sendable {\n" +
     "  public let key: EntityKey\n" +
     "  public let singular: String\n" +
@@ -305,6 +312,10 @@ export const renderSwiftEntityCatalog = (
     "  public let basePath: String\n" +
     "  public let shortcodePrefix: String?\n" +
     "  public let titleField: String\n" +
+    "  /// The wayfinding line this entity's records live on; nil for one on no line (image).\n" +
+    "  public let domain: WayfindingDomain?\n" +
+    "  /// SF Symbol name from the declaration's `presentation.icons.sfSymbol`.\n" +
+    "  public let sfSymbol: String\n" +
     "  public let countable: Bool\n" +
     "  public let fields: [FieldDescriptor]\n" +
     "  public let filters: [FilterDescriptor]\n" +

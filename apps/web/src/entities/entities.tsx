@@ -4,6 +4,7 @@ import type {
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { entityNames } from "@cubby/schemas/entity-names";
+import { entityPresentation } from "@cubby/schemas/entity-presentation";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
@@ -19,6 +20,7 @@ import {
   Heart,
   Image,
   ListChecks,
+  type LucideIcon,
   type LucideProps,
   MapPin,
   Package,
@@ -189,13 +191,45 @@ const newRouteExtensions = {
  * The other twelve coincide with a naive plural, which is exactly the trap —
  * `pluralize` is already a dependency and gets all four of those wrong.
  *
- * Names are stamped BEFORE the definition spreads in, so an entity that has a
- * genuine reason to depart can still say so and win.
+ * Names and the lucide icon (from `presentation.icons.lucide`) are stamped
+ * BEFORE the definition spreads in, so an entity that has a genuine reason to
+ * depart can still say so and win.
  */
 type EntityDefinitionSeed = Pick<
   EntityDefinition,
-  "basePath" | "lucideIcon" | "color" | "routes"
+  "basePath" | "color" | "routes"
 >;
+
+/**
+ * The `lucide-react` icons the declarations name in `presentation.icons.lucide`.
+ * Keyed by that literal union, so a declaration naming an icon this map does
+ * not import fails to compile here — the compiler cannot import lucide, this
+ * is where the name is checked. Imports stay explicit so the bundle carries
+ * only these glyphs.
+ */
+type DeclaredLucideIcon =
+  (typeof entityPresentation)[BrowserRoutedEntity]["icons"]["lucide"];
+const LUCIDE_ICONS = {
+  Apple,
+  ArrowLeftRight,
+  Barcode,
+  BookOpen,
+  CalendarDays,
+  Carrot,
+  ChefHat,
+  CreditCard,
+  Hammer,
+  Heart,
+  Image,
+  ListChecks,
+  MapPin,
+  Package,
+  Receipt,
+  ReceiptText,
+  Sprout,
+  Store,
+  Users,
+} satisfies Record<DeclaredLucideIcon, LucideIcon>;
 const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
   Object.hasOwn(entityNames, value);
 
@@ -207,6 +241,7 @@ const withEntityNames = <
   [Entity in keyof Definitions & BrowserRoutedEntity]: {
     label: (typeof entityNames)[Entity]["singular"];
     pluralLabel: (typeof entityNames)[Entity]["plural"];
+    lucideIcon: LucideIcon;
   } & Definitions[Entity];
 } =>
   // SAFETY: the runtime key guard preserves every entity key, while
@@ -220,6 +255,7 @@ const withEntityNames = <
         {
           label: entityNames[entity].singular,
           pluralLabel: entityNames[entity].plural,
+          lucideIcon: LUCIDE_ICONS[entityPresentation[entity].icons.lucide],
           ...definition,
         },
       ];
@@ -231,7 +267,6 @@ const withEntityNames = <
 const entityDefinitions = withEntityNames({
   ingredient: {
     ...generatedBrowserRoutes.ingredient,
-    lucideIcon: Carrot,
     color: {
       accent: INK.slate.accent,
       bg: "bg-warning/20",
@@ -263,7 +298,6 @@ const entityDefinitions = withEntityNames({
   },
   product: {
     ...generatedBrowserRoutes.product,
-    lucideIcon: Barcode,
     color: INK.primary,
     routes: {
       ...generatedBrowserRoutes.product.routes,
@@ -302,7 +336,6 @@ const entityDefinitions = withEntityNames({
   },
   recipe: {
     ...generatedBrowserRoutes.recipe,
-    lucideIcon: ChefHat,
     color: INK.primary,
     routes: {
       ...generatedBrowserRoutes.recipe.routes,
@@ -315,14 +348,12 @@ const entityDefinitions = withEntityNames({
   },
   cookbook: {
     ...generatedBrowserRoutes.cookbook,
-    lucideIcon: BookOpen,
     color: INK.primary,
     // Keyed by FK id (rename-safe); no generic list columns or "new" form
     // (cookbooks are created by EPUB import, not a create form).
   },
   location: {
     ...generatedBrowserRoutes.location,
-    lucideIcon: MapPin,
     color: INK.slate,
     routes: {
       ...generatedBrowserRoutes.location.routes,
@@ -335,7 +366,6 @@ const entityDefinitions = withEntityNames({
   },
   inventory: {
     ...generatedBrowserRoutes.inventory,
-    lucideIcon: Package,
     color: INK.primary,
     routes: {
       ...generatedBrowserRoutes.inventory.routes,
@@ -347,7 +377,6 @@ const entityDefinitions = withEntityNames({
   },
   meal: {
     ...generatedBrowserRoutes.meal,
-    lucideIcon: CalendarDays,
     // Neutral, not amber: the status ramp is reserved for entities whose accent
     // encodes state, and a meal's encodes none. Amber is also already spent on
     // overdue/planned expenses inside the same planning calendar, so a meal
@@ -360,7 +389,6 @@ const entityDefinitions = withEntityNames({
   },
   project: {
     ...generatedBrowserRoutes.project,
-    lucideIcon: Hammer,
     color: INK.plum,
     // No "new" route — projects are created from a dialog on the list page
     // (mirrors meal), not a dedicated /projects/new form.
@@ -368,13 +396,11 @@ const entityDefinitions = withEntityNames({
   },
   task: {
     ...generatedBrowserRoutes.task,
-    lucideIcon: ListChecks,
     color: INK.slate,
     detail: { commonSections: ["history"] },
   },
   vendor: {
     ...generatedBrowserRoutes.vendor,
-    lucideIcon: Store,
     // A quiet roster, not a live money surface — same neutral as location/task.
     color: INK.slate,
     detail: { commonSections: ["history"] },
@@ -413,7 +439,6 @@ const entityDefinitions = withEntityNames({
   },
   purchase: {
     ...generatedBrowserRoutes.purchase,
-    lucideIcon: Receipt,
     color: INK.primary,
     // A Purchase carries its documents (invoices/receipts), like
     // project's photos — same commonSections shape.
@@ -449,13 +474,11 @@ const entityDefinitions = withEntityNames({
   },
   expense: {
     ...generatedBrowserRoutes.expense,
-    lucideIcon: ReceiptText,
     color: INK.primary,
     detail: { commonSections: ["history"] },
   },
   ledgerParty: {
     ...generatedBrowserRoutes.ledgerParty,
-    lucideIcon: Users,
     color: INK.slate,
     detail: { commonSections: ["history"] },
     list: {
@@ -465,14 +488,12 @@ const entityDefinitions = withEntityNames({
   },
   ledgerTransfer: {
     ...generatedBrowserRoutes.ledgerTransfer,
-    lucideIcon: ArrowLeftRight,
     color: INK.primary,
     detail: { commonSections: ["history"] },
   },
   financialAccount: {
     dialogLabel: "Account",
     ...generatedBrowserRoutes.financialAccount,
-    lucideIcon: CreditCard,
     color: INK.slate,
     detail: { commonSections: ["history"] },
     list: {
@@ -484,7 +505,6 @@ const entityDefinitions = withEntityNames({
   financialTransaction: {
     dialogLabel: "Transaction",
     ...generatedBrowserRoutes.financialTransaction,
-    lucideIcon: CreditCard,
     color: INK.primary,
     detail: { commonSections: ["history"] },
     list: {
@@ -493,13 +513,11 @@ const entityDefinitions = withEntityNames({
   },
   wish: {
     ...generatedBrowserRoutes.wish,
-    lucideIcon: Heart,
     color: INK.plum,
     detail: { commonSections: ["history"] },
   },
   "usda-food": {
     ...generatedBrowserRoutes["usda-food"],
-    lucideIcon: Apple,
     color: INK.positive,
     // USDA foods are read-only, no detail/list conventions needed
     list: {
@@ -510,7 +528,6 @@ const entityDefinitions = withEntityNames({
   },
   image: {
     ...generatedBrowserRoutes.image,
-    lucideIcon: Image,
     color: {
       accent: INK.slate.accent,
       bg: "bg-muted",
@@ -522,13 +539,11 @@ const entityDefinitions = withEntityNames({
   },
   planting: {
     ...generatedBrowserRoutes.planting,
-    lucideIcon: Sprout,
     color: INK.positive,
     detail: { commonSections: ["history"] },
   },
   gardenEntry: {
     ...generatedBrowserRoutes.gardenEntry,
-    lucideIcon: CalendarDays,
     color: INK.positive,
     detail: { commonSections: ["images", "history"] },
   },

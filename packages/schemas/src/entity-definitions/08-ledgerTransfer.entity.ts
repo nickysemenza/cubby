@@ -22,7 +22,20 @@ export default defineEntity({
   identifiers: { brand: "LedgerTransferId", shortcode: "LTR-", legacy: null },
   // Ledger transfers have no name field; `fromPartyName` is the most
   // identifying human-readable value a transfer carries.
-  presentation: { titleField: "fromPartyName" },
+  presentation: {
+    titleField: "fromPartyName",
+    domain: "finance",
+    description: "Transfers recorded between ledger parties.",
+    emptyState: {
+      title: "No transfers yet",
+      description:
+        "A transfer records money moving between ledger parties after the fact, with its own evidence \u2014 logged from the household contribution ledger.",
+    },
+    icons: {
+      lucide: "ArrowLeftRight",
+      sfSymbol: "arrow.left.arrow.right.circle",
+    },
+  },
   model: {
     fields: [
       {

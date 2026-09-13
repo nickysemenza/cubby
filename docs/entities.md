@@ -45,7 +45,13 @@ export default defineEntity({
   route: { basePath: "examples" },
   table: "Example",
   identifiers: { brand: "ExampleId", shortcode: "EXM-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "pantry",
+    description: "One sentence for the records catalog.",
+    emptyState: { title: "No examples yet", description: "…", actionLabel: "New Example" },
+    icons: { lucide: "Box", sfSymbol: "cube" },
+  },
   fields: {
     create: { module: "@cubby/schemas/example", export: "exampleCreateInput" },
     update: { module: "@cubby/schemas/example", export: "exampleUpdateInput" },
@@ -70,7 +76,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: false, // or "gallery" (an `<Entity>Image` join table) | "cover" (one `coverImageId`)
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
@@ -111,6 +117,24 @@ The exact accepted keys are enforced by the compiler. Source references name a
 module and export; they do not import implementations into the declaration. `fields.detail`
 is optional and falls back to `fields.output`; declare it when the current
 detail read carries enriched relations or computed fields.
+
+`presentation` is everything a generic surface needs to *present* the entity
+and nothing a surface computes: `titleField` (a read-projection key — the
+compiler rejects one that is not), `domain` (a `WAYFINDING_DOMAINS` line or
+`null` for an entity on no line), `description`, `emptyState` copy, and icon
+names (`lucide` is checked against the browser registry's icon map at compile
+time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
+as `entityPresentation` (`packages/schemas/src/generated/entity-presentation.gen.ts`,
+data only, safe for eagerly-loaded client code), spreads it into the inspector,
+and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. Navigation
+grouping, the Records catalog, empty states and the native shell's sections
+all read it; none of them keep a per-entity list of their own.
+
+`capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
+table, bound in `apps/web/src/server/repo/database-helpers/crud.ts`
+`imageJoinBindings`, whose keys are checked against `GalleryEntity`) or
+`"cover"` (a single `coverImageId` column, cookbook). The manifest keeps the
+boolean `hasImages` alongside `imageStorage`.
 
 `extensions.ports` is the explicit seam map for entity-wide behavior the
 compiler must not infer: the kernel repository binding, entity label and

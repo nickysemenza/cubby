@@ -18,7 +18,18 @@ export default defineEntity({
   route: { basePath: "locations" },
   table: "Location",
   identifiers: { brand: "LocationId", shortcode: "LOC-", legacy: "L-" },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "pantry",
+    description: "The hierarchy of household storage places.",
+    emptyState: {
+      title: "Nowhere to put things yet",
+      description:
+        "Create spaces to organize where everything lives \u2014 pantry, fridge, garage, you decide.",
+      actionLabel: "Create Location",
+    },
+    icons: { lucide: "MapPin", sfSymbol: "mappin.and.ellipse" },
+  },
   model: {
     fields: [
       {
@@ -605,7 +616,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: true,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

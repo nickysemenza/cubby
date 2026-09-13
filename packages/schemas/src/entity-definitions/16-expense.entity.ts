@@ -30,7 +30,18 @@ export default defineEntity({
   route: { basePath: "expenses" },
   table: "Expense",
   identifiers: { brand: "ExpenseId", shortcode: "EXP-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "finance",
+    description: "The authoritative record of household spend.",
+    emptyState: {
+      title: "No expenses yet",
+      description:
+        "Log what you've bought (or plan to) to keep a project's running cost honest.",
+      actionLabel: "New Expense",
+    },
+    icons: { lucide: "ReceiptText", sfSymbol: "dollarsign.circle" },
+  },
   model: {
     fields: [
       {

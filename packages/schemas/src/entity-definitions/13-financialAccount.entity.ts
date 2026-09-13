@@ -14,7 +14,18 @@ export default defineEntity({
   route: { basePath: "financial-accounts" },
   table: "FinancialAccount",
   identifiers: { brand: "FinancialAccountId", shortcode: "FAC-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "finance",
+    description: "Accounts that provide settlement evidence.",
+    emptyState: {
+      title: "No financial accounts yet",
+      description:
+        "Add an account to retain statement and receipt evidence for settlement.",
+      actionLabel: "New Account",
+    },
+    icons: { lucide: "CreditCard", sfSymbol: "building.columns" },
+  },
   model: {
     fields: [
       {

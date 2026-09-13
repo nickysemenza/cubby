@@ -5,6 +5,7 @@ import {
   entityManifest,
   entityReferences,
 } from "@cubby/schemas/entity-manifest";
+import type { EntityPresentation } from "@cubby/schemas/entity-presentation";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Minus, Stamp } from "lucide-react";
 import { type ReactNode, useId } from "react";
@@ -27,6 +28,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import {
+  EntityIcon,
   browserEntityDefinition,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
@@ -383,6 +385,43 @@ function RelationshipContract({ entity }: { entity: Entity }) {
   ));
 }
 
+function PresentationSection({ entity }: { entity: Entity }) {
+  const metadata = entityInspectorMetadata[entity];
+  // The `as const` roster types each entity's block exactly; widen once so an
+  // optional `actionLabel` reads the same for every entity.
+  const emptyState: EntityPresentation["emptyState"] = metadata.emptyState;
+  const images =
+    metadata.imageStorage === false
+      ? dash
+      : metadata.imageStorage === "gallery"
+        ? "gallery (ordered join table)"
+        : "cover (single coverImageId)";
+  return (
+    <Section title="Presentation">
+      <ContractRows
+        rows={[
+          ["Title field", <code key="title">{metadata.titleField}</code>],
+          ["Domain", metadata.domain ?? "none (no wayfinding line)"],
+          ["Description", metadata.description],
+          [
+            "Icons",
+            <span key="icons" className="inline-flex items-center gap-2">
+              <EntityIcon entity={entity} className="size-4" />
+              <code>{metadata.icons.lucide}</code>
+              <span className="text-muted-foreground/60">·</span>
+              <code>{metadata.icons.sfSymbol}</code>
+            </span>,
+          ],
+          ["Empty state", emptyState.title],
+          ["Empty copy", emptyState.description],
+          ["Empty action", emptyState.actionLabel ?? dash],
+          ["Images", images],
+        ]}
+      />
+    </Section>
+  );
+}
+
 export function EntityInspector({
   entity,
   count,
@@ -438,11 +477,12 @@ export function EntityInspector({
             ["Route", route?.detail ?? "No browser detail route"],
             ["Table", descriptor.dbTable ?? dash],
             ["ID brand", descriptor.idBrand ?? dash],
-            ["Presentation", metadata.titleField],
             ["Live rows", count ?? "Unavailable"],
           ]}
         />
       </Section>
+
+      <PresentationSection entity={entity} />
 
       <Section title="Physical identifiers">
         <ContractRows

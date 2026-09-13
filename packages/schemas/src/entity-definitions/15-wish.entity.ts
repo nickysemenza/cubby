@@ -8,7 +8,18 @@ export default defineEntity({
   route: { basePath: "wishes" },
   table: "Wish",
   identifiers: { brand: "WishId", shortcode: "WSH-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "plan",
+    description: "Wanted items and candidate products.",
+    emptyState: {
+      title: "No tool wishes yet",
+      description:
+        "Keep a tool idea open-ended or compare a few Products before deciding.",
+      actionLabel: "Add Wish",
+    },
+    icons: { lucide: "Heart", sfSymbol: "star" },
+  },
   model: {
     fields: [
       {

@@ -33,6 +33,8 @@ export const entityDescriptor = z.object({
   browserRoutes: z.boolean().optional(),
   auditable: z.boolean(),
   hasImages: z.boolean(),
+  /** How images attach: an ordered `<Entity>Image` gallery, one cover FK, or none. */
+  imageStorage: z.union([z.literal(false), z.enum(["gallery", "cover"])]),
   searchable: z.boolean(),
   countable: z.boolean(),
   countFilter: z.enum(["recipeIdNull"]).optional(),
@@ -142,6 +144,18 @@ const entitiesWithTrait = <K extends BooleanTrait>(
 
 export const auditableEntities = entitiesWithTrait("auditable");
 export const imageEntities = entitiesWithTrait("hasImages");
+
+type EntityWithImageStorage<S extends "gallery" | "cover"> = {
+  [E in Entity]: EntityManifest[E] extends { imageStorage: S } ? E : never;
+}[Entity];
+/** Entities whose images live in an ordered `<Entity>Image` join table. */
+export type GalleryEntity = EntityWithImageStorage<"gallery">;
+export const galleryEntities: readonly GalleryEntity[] = Object.freeze(
+  allEntities.filter(
+    (entity): entity is GalleryEntity =>
+      descriptorFor(entity).imageStorage === "gallery",
+  ),
+);
 export const searchableEntities = entitiesWithTrait("searchable");
 export const countableEntities = entitiesWithTrait("countable");
 

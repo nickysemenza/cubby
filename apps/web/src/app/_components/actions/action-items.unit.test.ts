@@ -1,10 +1,13 @@
 import { allEntities } from "@cubby/schemas/entity-manifest";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
+import {
+  type EntityPresentation,
+  entityPresentation,
+} from "@cubby/schemas/entity-presentation";
 import { describe, expect, it } from "vitest";
 
 import { entities } from "~/entities/entities";
 
-import { entityEmptyConfigForTest } from "../data-table/entity-empty-states";
 import {
   actionItems,
   actionsForSurface,
@@ -64,9 +67,13 @@ describe("createActionFor", () => {
  */
 describe("empty-state call-to-actions are reachable", () => {
   it.each(
-    Object.entries(entityEmptyConfigForTest).flatMap(([entity, config]) =>
-      "actionLabel" in config ? [[entity, config.actionLabel] as const] : [],
-    ),
+    browserRoutedEntities.flatMap((entity) => {
+      const emptyState: EntityPresentation["emptyState"] =
+        entityPresentation[entity].emptyState;
+      return emptyState.actionLabel === undefined
+        ? []
+        : [[entity, emptyState.actionLabel] as const];
+    }),
   )("%s (%s) resolves a create target", (entity) => {
     const browserEntity = browserRoutedEntities.find(
       (candidate) => candidate === entity,

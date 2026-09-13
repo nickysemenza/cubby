@@ -17,7 +17,17 @@ export default defineEntity({
   route: { basePath: "garden-entries" },
   table: "GardenEntry",
   identifiers: { brand: "GardenEntryId", shortcode: "GDE-", legacy: null },
-  presentation: { titleField: "note" },
+  presentation: {
+    titleField: "note",
+    domain: "house",
+    description: "Dated garden photos, observations, and harvests.",
+    emptyState: {
+      title: "No garden entries yet",
+      description:
+        "Add a dated observation, harvest, or photo batch to keep a simple garden history.",
+    },
+    icons: { lucide: "CalendarDays", sfSymbol: "text.badge.plus" },
+  },
   model: {
     fields: [
       {
@@ -279,7 +289,7 @@ export default defineEntity({
   search: { enabled: false },
   capabilities: {
     auditable: true,
-    images: true,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

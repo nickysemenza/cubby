@@ -8,7 +8,17 @@ export default defineEntity({
   route: { basePath: "ledger-parties" },
   table: "LedgerParty",
   identifiers: { brand: "LedgerPartyId", shortcode: "LPY-", legacy: null },
-  presentation: { titleField: "name" },
+  presentation: {
+    titleField: "name",
+    domain: "finance",
+    description: "People represented in the contribution ledger.",
+    emptyState: {
+      title: "No ledger parties yet",
+      description:
+        "Household members, guests, and the household itself as a whole show up here once a contribution or transfer names them.",
+    },
+    icons: { lucide: "Users", sfSymbol: "person.2" },
+  },
   model: {
     fields: [
       {

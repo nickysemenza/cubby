@@ -23,7 +23,17 @@ export default defineEntity({
   route: { basePath: "images" },
   table: "Image",
   identifiers: { brand: "ImageId", shortcode: "IMG-", legacy: null },
-  presentation: { titleField: "filename" },
+  presentation: {
+    titleField: "filename",
+    domain: null,
+    description: "Images attached to household records.",
+    emptyState: {
+      title: "No photos yet",
+      description:
+        "Add photos to attach them to recipes, products, and places.",
+    },
+    icons: { lucide: "Image", sfSymbol: "photo" },
+  },
   model: {
     fields: [
       {

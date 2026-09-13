@@ -90,18 +90,26 @@ enum AppDomain: String, CaseIterable, Identifiable {
     }
 }
 
+extension AppDomain {
+    /// The declaration vocabulary has five lines; the native shell draws four. Pantry marks
+    /// exist as a token (`pantryGreen`) but not as a navigation group, so pantry records file
+    /// under House here.
+    init(_ domain: WayfindingDomain) {
+        self =
+            switch domain {
+            case .cook: .cook
+            case .plan: .plan
+            case .finance: .finance
+            case .house, .pantry: .house
+            }
+    }
+}
+
 extension EntityKey {
-    /// Which domain line an entity belongs to. Ingredients stay on Cook: the pantry line is about
-    /// stock on hand, and an ingredient is a recipe-side identity.
+    /// Which domain line an entity belongs to, from `presentation.domain` in the entity
+    /// declarations. An entity on no line (image) files under House.
     var domain: AppDomain {
-        switch self {
-        case .product, .inventory, .location, .usdaFood, .image, .planting, .gardenEntry: .house
-        case .recipe, .ingredient, .cookbook, .meal: .cook
-        case .project, .task, .wish: .plan
-        case .vendor, .purchase, .expense, .financialAccount, .financialTransaction,
-            .ledgerParty, .ledgerTransfer:
-            .finance
-        }
+        EntityCatalog[self].domain.map(AppDomain.init) ?? .house
     }
 }
 
