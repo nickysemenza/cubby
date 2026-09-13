@@ -152,6 +152,11 @@ presentation. `model.storage` declares stored columns; `create`, `update`,
 `output`, `bulk`, and `audit` select fields for their respective consumers.
 The generator emits field schemas and storage factories; canonical schemas
 compose those generated fields with explicit relationship and domain validators.
+Each `entity-field-schemas.<entity>.gen.ts` map is `fieldSchemasOf(definition)`:
+the create/update/read schemas are read off the declaration by roster key at
+load time (never by field index, so a mid-roster insert cannot shift another
+field's schema) and are the declaration's own Zod instances, which is what the
+field-map-drift test checks.
 Generic MCP inputs reuse the canonical create/update contracts. MCP output
 contracts name their audience-specific projections explicitly, which can extend
 canonical outputs; specialized tool digests retain their own projections.

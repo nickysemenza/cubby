@@ -832,19 +832,6 @@ export const renderEntityArtifacts = (
       throw new EntityDeclarationError(
         `${entity.key} has no declaration module.`,
       );
-    const schemaMap = (
-      mode: "create" | "update" | "read",
-      keys: readonly string[],
-    ) =>
-      `{${keys
-        .map((key) => {
-          const index = fieldModel.fields.findIndex(
-            (field) => field.key === key,
-          );
-          const field = fieldByKey(entity, key);
-          return `${JSON.stringify(mode === "read" ? (field.readKey ?? key) : key)}:definition.model.fields[${index}].validation.${mode}`;
-        })
-        .join(",")}}`;
     const prefix = `generated${entity.inspector.singular.replaceAll(" ", "")}`;
     const filterFields = renderDerivedFilterFields(entity, fieldModel.fields);
     return [
@@ -853,11 +840,16 @@ export const renderEntityArtifacts = (
         source:
           generatedHeader +
           `import definition from ${JSON.stringify(declaration.path)};\n` +
+          'import { fieldSchemasOf } from "../entity-definitions/definition";\n' +
           filterFields.imports +
           (declaration.enumExports.length
             ? `export {${declaration.enumExports.join(",")}} from ${JSON.stringify(declaration.path)};\n`
             : "") +
-          `export const ${prefix}FieldSchemas = {create:${schemaMap("create", fieldModel.create)},update:${schemaMap("update", fieldModel.update)},read:${schemaMap("read", fieldModel.output)}} as const;\n` +
+          // Keyed by roster, not field index: `fieldSchemasOf` reads each
+          // schema by key at load time, so inserting a field mid-declaration
+          // cannot shift another field's schema. The rosters were validated
+          // complete above; the runtime lookup throws on a missing schema.
+          `export const ${prefix}FieldSchemas = fieldSchemasOf(definition);\n` +
           (filterFields.entries.length
             ? `export const ${prefix}FilterFields = {${filterFields.entries.join(",")}} as const;\n`
             : ""),
