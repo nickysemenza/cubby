@@ -288,6 +288,8 @@ extension GardenCreateInput {
             locationId: input.locationID,
             intendedLocationId: input.intendedLocationID,
             status: .init(rawValue: input.status.rawValue),
+            inLocationSince: input.inLocationSince.map(GardenPlainDate.string),
+            inLocationSinceKind: .init(rawValue: input.inLocationSinceKind.rawValue)!,
             sourceProductId: input.productID,
             variety: input.variety,
             quantity: input.quantity,
@@ -295,9 +297,7 @@ extension GardenCreateInput {
             plannedWindow: input.plannedWindow,
             plannedDate: input.plannedDate.map(GardenPlainDate.string),
             sowedOn: input.sownAt.map(GardenPlainDate.string),
-            transplantedOn: input.transplantedAt.map(GardenPlainDate.string),
-            inLocationSince: input.inLocationSince.map(GardenPlainDate.string),
-            inLocationSinceKind: .init(rawValue: input.inLocationSinceKind.rawValue)!
+            transplantedOn: input.transplantedAt.map(GardenPlainDate.string)
         )
     }
 }

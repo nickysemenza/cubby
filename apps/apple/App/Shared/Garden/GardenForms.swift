@@ -983,10 +983,10 @@ private struct GardenLocationHistoryView: View {
     var body: some View {
         Form {
             if let error = history.error {
-                ContentUnavailableView(
-                    "Couldn't load location history", systemImage: "exclamationmark.triangle",
-                    description: Text(error)
-                ) {
+                VStack(spacing: PorcelainTokens.Space.sm) {
+                    ContentUnavailableView(
+                        "Couldn't load location history", systemImage: "exclamationmark.triangle",
+                        description: Text(error))
                     Button("Retry") {
                         Task {
                             await history.load(); revised = history.periods

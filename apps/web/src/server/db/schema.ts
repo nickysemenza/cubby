@@ -900,9 +900,9 @@ export const planting = pgTable(
 );
 
 /**
- * Confirmed location intervals for a Planting. These are an internal journal
- * projection rather than a generic entity: sequence is the stable public-free
- * identity used when correcting dates without changing the recorded moves.
+ * Confirmed location history, which cannot be reconstructed from a planting's
+ * current location. Journals derive bed context from these stored intervals.
+ * Sequence identifies an interval when correcting dates without changing moves.
  */
 export const plantingLocationPeriod = pgTable(
   "PlantingLocationPeriod",

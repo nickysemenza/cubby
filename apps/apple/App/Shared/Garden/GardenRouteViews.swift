@@ -183,7 +183,8 @@ struct GardenBedJournalView: View {
         .sheet(isPresented: $adding, onDismiss: { Task { await load(reset: true) } }) {
             if let garden, let locationID {
                 GardenEntrySheet(
-                    model: garden, target: .location(.init(id: locationID, name: locationName)),
+                    model: garden,
+                    target: .location(.init(id: locationID, name: locationName, plantings: [])),
                     uploader: GardenImageUploader(service: appModel.client))
             }
         }

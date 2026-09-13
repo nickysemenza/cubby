@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import {
   gardenEntry,
   inventoryEntry,
@@ -10,6 +11,7 @@ import {
   plantingLocationPeriod,
   product,
 } from "~/server/db/schema";
+import type { EntityKernelContext } from "~/server/entity-kernel";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   createPlanting,
@@ -24,6 +26,7 @@ import {
   startPlanting,
   updateGardenEntryDetails,
 } from "~/server/repo/garden";
+import { plantingEntityAdapter } from "~/server/repo/garden/entity-adapters";
 import { createPendingImageRecord } from "~/server/repo/image";
 import { createIngredient } from "~/server/repo/ingredient";
 import { createLocation } from "~/server/repo/location";
@@ -36,6 +39,22 @@ import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
 describe("garden workflows", () => {
   const ctx = withTestDb();
+
+  const plantingDeleteContext = (db: Database): EntityKernelContext => ({
+    db,
+    readDb: db,
+    actorContext: TEST_ACTOR,
+    // SAFETY: planting deletion never reads enrichment clients.
+    usdaClient: undefined as never,
+    // SAFETY: planting deletion never reads enrichment clients.
+    upcLookupClient: undefined as never,
+    services: {
+      // SAFETY: planting deletion never invokes recipe side effects.
+      recipeCosting: undefined as never,
+      // SAFETY: planting deletion never invokes location valuation.
+      locationValuation: undefined as never,
+    },
+  });
 
   const location = (name: string, gardenKind: "bed" | "tray") =>
     createLocation(
@@ -590,5 +609,69 @@ describe("garden workflows", () => {
         ],
       }),
     ).rejects.toBeDefined();
+  });
+
+  it("removes internal periods only when planting deletion can complete", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Garden deletion crop" },
+      TEST_ACTOR,
+    );
+    const bed = await location("Garden deletion bed", "bed");
+    const deletable = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    const deletableId = await resolveLiveShortcode(
+      ctx.db,
+      deletable.id,
+      "planting",
+    );
+    expect(deletableId).not.toBeNull();
+    await plantingEntityAdapter.repository.delete(
+      plantingDeleteContext(ctx.db),
+      [deletable.id],
+    );
+    expect(
+      await getDb(ctx.db).query.plantingLocationPeriod.findMany({
+        where: eq(
+          plantingLocationPeriod.plantingId,
+          parseEntityId("planting", deletableId!),
+        ),
+      }),
+    ).toHaveLength(0);
+    const blocked = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    const blockedId = await resolveLiveShortcode(
+      ctx.db,
+      blocked.id,
+      "planting",
+    );
+    expect(blockedId).not.toBeNull();
+    await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      plantingId: blocked.id,
+      kind: "observation",
+      observedOn: "2026-09-12",
+      note: "Retained garden history",
+      pendingImageIds: [],
+    });
+    await expect(
+      plantingEntityAdapter.repository.delete(plantingDeleteContext(ctx.db), [
+        blocked.id,
+      ]),
+    ).rejects.toBeDefined();
+    expect(
+      await getDb(ctx.db).query.plantingLocationPeriod.findMany({
+        where: eq(
+          plantingLocationPeriod.plantingId,
+          parseEntityId("planting", blockedId!),
+        ),
+      }),
+    ).toHaveLength(1);
   });
 });

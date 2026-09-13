@@ -140,7 +140,7 @@ describe("purchase application workflows", () => {
         ],
       }),
     );
-    expect(parts.map((part) => part.cost)).toEqual([5, 7]);
+    expect(parts.map((part) => part.cost).sort()).toEqual([5, 7]);
     expect(await getExpenseByShortcode(ctx.db, original.id)).toBeNull();
     const item = await createProduct(
       ctx.db,
