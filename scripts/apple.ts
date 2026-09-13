@@ -30,6 +30,11 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const APPLE = join(ROOT, "apps/apple");
 const KIT = join(APPLE, "CubbyKit");
+// Frozen-lockfile semantics for the swift CLI: without this every build and
+// test re-resolves and rewrites CubbyKit/Package.resolved (only the originHash,
+// which differs per tool and checkout path). Pins change only via a deliberate
+// `swift package update` in CubbyKit.
+const FROZEN = "--force-resolved-versions";
 const PROJECT = join(APPLE, "Cubby.xcodeproj");
 // Pinned so product paths are deterministic; `DerivedData/` is already in
 // apps/apple/.gitignore.
@@ -164,7 +169,7 @@ const productPath = (platformDirectory: string) =>
 
 const cli = (options: Options) => {
   ensureFfi();
-  run("swift", ["build", "--package-path", KIT, "--product", "cubby"]);
+  run("swift", ["build", "--package-path", KIT, "--product", "cubby", FROZEN]);
   const binary = join(KIT, ".build/debug/cubby");
   const result = spawnSync(binary, options.rest, { stdio: "inherit" });
   if (result.error) throw result.error;
@@ -330,7 +335,7 @@ const gen = () => {
 
 const test = () => {
   ensureFfi();
-  run("swift", ["test", "--package-path", KIT]);
+  run("swift", ["test", "--package-path", KIT, FROZEN]);
 };
 
 // ---------------------------------------------------------------------------

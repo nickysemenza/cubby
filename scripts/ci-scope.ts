@@ -504,7 +504,16 @@ const runAppleCheck = () => {
     "--recursive",
     ...swiftFormatTargets(),
   ]);
-  run("swift", ["test", "--package-path", "apps/apple/CubbyKit"]);
+  // A bare `swift test` re-resolves and rewrites CubbyKit/Package.resolved
+  // (only the originHash, which differs per tool and checkout path), leaving
+  // the tree dirty after every push. Frozen-lockfile semantics instead: pins
+  // change only via a deliberate `swift package update` in CubbyKit.
+  run("swift", [
+    "test",
+    "--package-path",
+    "apps/apple/CubbyKit",
+    "--force-resolved-versions",
+  ]);
   run("apps/apple/scripts/check-openapi-drift.sh", []);
   // Same DerivedData as `pnpm apple`, so this build is incremental over the
   // dev loop's instead of a second full compile of CubbyKit. The index store
