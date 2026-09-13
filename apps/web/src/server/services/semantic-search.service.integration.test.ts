@@ -1,16 +1,10 @@
-import {
-  ENTITY_EMBEDDING_BATCH_SIZE,
-  entityEmbeddingBackfillCoordinatorPayloadSchema,
-  entityEmbeddingRefreshBatchPayloadSchema,
-} from "@cubby/schemas/background-jobs";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { processBackgroundJob } from "~/server/background-queue";
-import {
-  createBackgroundBatchWithJobs,
-  getBackgroundBatchDetail,
-} from "~/server/repo/background-jobs";
+import type { EmbeddingRefreshPort } from "~/server/background-tasks/embedding";
+import { refreshEntityEmbedding } from "~/server/background-tasks/embedding";
+import { setCfEnv } from "~/server/cf-env";
 import {
   createProductFixture as createProduct,
   makeProductInput,
@@ -18,9 +12,10 @@ import {
   updateProductNameFixtureRaw,
 } from "~/server/repo/repo.fixtures";
 import {
+  countUnembeddedSearchDocuments,
   getSearchDocumentEmbeddingText,
-  getStaleSearchDocumentEmbeddingTextPage,
   refreshSearchDocument,
+  selectUnembeddedSearchDocumentRefs,
 } from "~/server/repo/search-document";
 import { getActiveSuggestionDismissalKeys } from "~/server/repo/suggestion-dismissal";
 import { getSemanticEmbeddingConfig } from "~/server/semantic/config";
@@ -33,12 +28,28 @@ import {
 } from "~/server/workflows/recommendations.server";
 import {
   requestEmbeddingRefreshWorkflow,
-  enqueueEmbeddingBackfillWorkflow,
   findSimilarEntitiesWorkflow,
 } from "~/server/workflows/search.server";
 
-describe("semantic search background jobs", () => {
+import { countAwaitingWork, settleAwaitingWork } from "./awaiting-work.service";
+
+/** The provider is the one external seam: a deterministic fake vector per call. */
+const fakeEmbeddingPort = (calls: string[][]): EmbeddingRefreshPort => ({
+  configured: () => true,
+  config: getSemanticEmbeddingConfig,
+  embed: async (texts) => {
+    calls.push(texts);
+    const { dimensions } = getSemanticEmbeddingConfig();
+    return texts.map((_, index) =>
+      Array.from({ length: dimensions }, (__, i) => (i === index ? 1 : 0)),
+    );
+  },
+});
+
+describe("semantic search background tasks", () => {
   const ctx = withTestDb();
+
+  afterEach(() => setCfEnv(undefined));
 
   it("keeps unavailable similarity results public and skips candidate work", async () => {
     const source = await createProduct(
@@ -69,23 +80,38 @@ describe("semantic search background jobs", () => {
     expect(JSON.stringify(result)).not.toContain(source.entityId);
   });
 
-  it("resolves a public entity and dispatches exactly its requested refresh", async () => {
+  it("resolves a public entity and publishes exactly its requested refresh", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Refresh test kettle" }),
       ctx.actor,
     );
+    const published: unknown[] = [];
+    setCfEnv(
+      fromPartial<Env>({
+        BACKGROUND_QUEUE: {
+          sendBatch: async (messages: Iterable<{ body: unknown }>) => {
+            published.push(...[...messages].map((m) => m.body));
+          },
+        },
+      }),
+    );
     const result = await requestEmbeddingRefreshWorkflow(ctx.db, {
       entityType: "product",
       entityId: product.id,
     });
-    const detail = await getBackgroundBatchDetail(ctx.db, result.batchId);
-    expect(result.totalJobs).toBe(1);
-    expect(detail?.jobs).toHaveLength(1);
-    expect(detail?.jobs[0]?.payload).toEqual({
-      entityType: "product",
-      entityId: product.entityId,
-    });
+    expect(result).toEqual({ accepted: true });
+    expect(published).toEqual([
+      expect.objectContaining({
+        version: 2,
+        queueType: "background",
+        task: expect.objectContaining({
+          kind: "entity-embedding.refresh",
+          entityType: "product",
+          entityId: product.entityId,
+        }),
+      }),
+    ]);
   });
 
   it("dismisses a current duplicate group and suppresses its recommendation", async () => {
@@ -178,149 +204,127 @@ describe("semantic search background jobs", () => {
     }
   });
 
-  it("processes embedding backfill inline when no queue is bound", async () => {
+  it("embeds a fresh projection once, then skips it as fresh", async () => {
     const product = await createProduct(
       ctx.db,
-      makeProductInput({
-        name: "Backfill blue tarp",
-      }),
+      makeProductInput({ name: "Backfill blue tarp" }),
       ctx.actor,
     );
-    await refreshSearchDocument(ctx.db, "product", product.entityId);
+    const calls: string[][] = [];
+    const port = fakeEmbeddingPort(calls);
+    const ref = { entityType: "product" as const, entityId: product.entityId };
 
-    const result = await enqueueEmbeddingBackfillWorkflow(ctx.db, {
-      entityTypes: ["product"],
-    });
-
-    const detail = await getBackgroundBatchDetail(ctx.db, result.batch.id);
-    expect(result.reused).toBe(false);
-    expect(detail?.kind).toBe("entity-embedding.backfill.coordinator");
-    expect(detail?.processor).toBe("inline");
-    expect(detail?.status).toBe("succeeded");
-    expect(detail?.jobs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: "entity-embedding.refresh-batch",
-          status: "skipped",
-          payload: {
-            refs: [
-              {
-                entityType: "product",
-                entityId: product.entityId,
-                expectedEmbeddingHash: expect.any(String),
-              },
-            ],
-          },
-        }),
-      ]),
+    await expect(refreshEntityEmbedding(ctx.db, ref, port)).resolves.toBe(
+      "written",
     );
+    // Duplicate or out-of-order delivery: the stored hash gates the provider.
+    await expect(refreshEntityEmbedding(ctx.db, ref, port)).resolves.toBe(
+      "fresh",
+    );
+    expect(calls).toHaveLength(1);
+    expect(
+      await countUnembeddedSearchDocuments(
+        ctx.db,
+        getSemanticEmbeddingConfig(),
+      ),
+    ).toBe(0);
   });
 
-  it("splits a full page into batch children while counting rows", async () => {
-    const pageSize = 250;
-    await seedSearchDocumentsFixtureRaw(ctx.db, "product", pageSize);
-
-    const result = await enqueueEmbeddingBackfillWorkflow(ctx.db, {
-      entityTypes: ["product"],
-    });
-    const detail = await getBackgroundBatchDetail(ctx.db, result.batch.id);
-    const batchJobs =
-      detail?.jobs.filter(
-        (job) => job.kind === "entity-embedding.refresh-batch",
-      ) ?? [];
-
-    expect(batchJobs).toHaveLength(
-      Math.ceil(pageSize / ENTITY_EMBEDDING_BATCH_SIZE),
-    );
-    const refCounts = batchJobs.map(
-      (job) =>
-        entityEmbeddingRefreshBatchPayloadSchema.parse(job.payload).refs.length,
-    );
-    expect([...refCounts].sort((left, right) => right - left)).toEqual([
-      64, 64, 64, 58,
-    ]);
-
-    const metadata = entityEmbeddingBackfillCoordinatorPayloadSchema.parse(
-      detail?.metadata,
-    );
-    // Rows, not jobs: the debug page reports backfill progress in entities.
-    expect(metadata.workflow.jobsQueued).toBe(pageSize);
-  });
-
-  it("requeues current text when the source changes after its page is read", async () => {
+  it("never writes a vector computed for text that has since changed", async () => {
     const product = await createProduct(
       ctx.db,
       makeProductInput({ name: "Embedding before concurrent change" }),
       ctx.actor,
     );
-    await refreshSearchDocument(ctx.db, "product", product.entityId);
-    const page = await getStaleSearchDocumentEmbeddingTextPage(
-      ctx.db,
-      ["product"],
-      getSemanticEmbeddingConfig(),
-    );
-    const inspected = page.rows.find(
-      (row) => row.entityId === product.entityId,
-    );
-    expect(inspected).toBeDefined();
+    const ref = { entityType: "product" as const, entityId: product.entityId };
+    const racingPort: EmbeddingRefreshPort = {
+      configured: () => true,
+      config: getSemanticEmbeddingConfig,
+      // The provider call is where the race lives: the source moves on while
+      // the vector for the old text is in flight.
+      embed: async (texts) => {
+        await updateProductNameFixtureRaw(
+          ctx.db,
+          product.entityId,
+          "Embedding after concurrent change",
+        );
+        await refreshSearchDocument(ctx.db, "product", product.entityId);
+        const { dimensions } = getSemanticEmbeddingConfig();
+        return texts.map(() => Array.from({ length: dimensions }, () => 0.5));
+      },
+    };
 
-    const { batchId, jobIds } = await createBackgroundBatchWithJobs(ctx.db, {
-      kind: "entity-embedding.backfill.coordinator",
-      source: "backfill",
-      jobs: [
-        {
-          kind: "entity-embedding.refresh",
-          dedupeKey: `test:embedding:old:${product.entityId}`,
-          payload: {
-            entityType: "product",
-            entityId: product.entityId,
-            expectedEmbeddingHash: inspected!.expectedEmbeddingHash,
-          },
-        },
-      ],
-    });
-    await updateProductNameFixtureRaw(
+    await expect(refreshEntityEmbedding(ctx.db, ref, racingPort)).resolves.toBe(
+      "obsolete",
+    );
+    const currentText = await getSearchDocumentEmbeddingText(
       ctx.db,
+      "product",
       product.entityId,
-      "Embedding after concurrent change",
-    );
-
-    await expect(
-      processBackgroundJob(
-        ctx.db,
-        jobIds[0]!,
-        "entity-embedding.backfill.coordinator",
-      ),
-    ).resolves.toBe("skipped");
-
-    const [detail, currentText] = await Promise.all([
-      getBackgroundBatchDetail(ctx.db, batchId),
-      getSearchDocumentEmbeddingText(ctx.db, "product", product.entityId),
-    ]);
-    const refreshJobs = detail?.jobs.filter(
-      (job) => job.kind === "entity-embedding.refresh",
-    );
-    expect(refreshJobs).toHaveLength(2);
-    expect(refreshJobs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          status: "skipped",
-          payload: expect.objectContaining({
-            expectedEmbeddingHash: inspected!.expectedEmbeddingHash,
-          }),
-        }),
-        expect.objectContaining({
-          status: "skipped",
-          payload: expect.objectContaining({
-            expectedEmbeddingHash: expect.not.stringMatching(
-              inspected!.expectedEmbeddingHash,
-            ),
-          }),
-        }),
-      ]),
     );
     expect(currentText?.embeddingText).toContain(
       "Embedding after concurrent change",
     );
+    // Still awaiting: the next refresh embeds the current text.
+    expect(
+      await countUnembeddedSearchDocuments(
+        ctx.db,
+        getSemanticEmbeddingConfig(),
+      ),
+    ).toBe(1);
+    const calls: string[][] = [];
+    await expect(
+      refreshEntityEmbedding(ctx.db, ref, fakeEmbeddingPort(calls)),
+    ).resolves.toBe("written");
+    expect(calls[0]?.[0]).toContain("Embedding after concurrent change");
+  });
+
+  it("pages the unembedded selection with a keyset cursor", async () => {
+    const pageSize = 250;
+    await seedSearchDocumentsFixtureRaw(ctx.db, "product", pageSize + 5);
+    const config = getSemanticEmbeddingConfig();
+    expect(await countUnembeddedSearchDocuments(ctx.db, config)).toBe(
+      pageSize + 5,
+    );
+    const first = await selectUnembeddedSearchDocumentRefs(ctx.db, config);
+    expect(first.refs).toHaveLength(pageSize);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await selectUnembeddedSearchDocumentRefs(ctx.db, config, {
+      cursor: first.nextCursor ?? undefined,
+    });
+    expect(second.refs).toHaveLength(5);
+    expect(second.nextCursor).toBeNull();
+    const seen = new Set(
+      [...first.refs, ...second.refs].map((ref) => ref.entityId),
+    );
+    expect(seen.size).toBe(pageSize + 5);
+  });
+
+  it("settle now republishes exactly what the awaiting counts describe", async () => {
+    await seedSearchDocumentsFixtureRaw(ctx.db, "product", 3);
+    const published: Array<{ task: { kind: string } }> = [];
+    setCfEnv(
+      fromPartial<Env>({
+        BACKGROUND_QUEUE: {
+          sendBatch: async (
+            messages: Iterable<{ body: { task: { kind: string } } }>,
+          ) => {
+            published.push(...[...messages].map((m) => m.body));
+          },
+        },
+      }),
+    );
+    const before = await countAwaitingWork(ctx.db);
+    expect(before.unembeddedEntities).toBe(3);
+
+    const settled = await settleAwaitingWork(ctx.db);
+    expect(settled).toMatchObject({
+      publishedEmbeddingTasks: 3,
+      publishedRecipeTasks: 0,
+      transport: "queue",
+    });
+    expect(
+      published.filter((m) => m.task.kind === "entity-embedding.refresh"),
+    ).toHaveLength(3);
   });
 });

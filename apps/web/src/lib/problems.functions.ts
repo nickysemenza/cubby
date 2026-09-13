@@ -21,7 +21,6 @@ export const problems = defineOperationDomain(problemsContract, {
   dryRunPruneAliases: { tags: [["problems", "dryRunPruneAliases"]] },
   recipeUsageByProduct: { tags: [["problems", "recipeUsageByProduct"]] },
   deleteUnused: { invalidates: ripple.ingredientCleanup },
-  cleanupOrphanedEmbeddings: { invalidates: ripple.problemsSearch },
 });
 
 export const problemsStreams = defineOperationDomain(problemsStreamsContract);

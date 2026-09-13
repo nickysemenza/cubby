@@ -4,12 +4,16 @@
  * persists them on `Recipe.totals`, so the list reads them directly instead of
  * fetching every ingredient and running WASM per page load.
  *
- * Freshness is event-driven: writes null `totalsComputedAt` on the affected rows
- * (see repo/recipe/totals + the recipe/product write paths); this service's
- * `drainStale` recomputes them, driven by the client while the app is open.
+ * Freshness is event-driven: writes null `totalsComputedAt` on the affected
+ * rows (see repo/recipe/totals + the recipe/product write paths). The stale
+ * flag is the durable record of pending work; a queue task, a read of the
+ * recipe page, or "Settle now" recomputes it. Queue messages are wakeups only.
  */
 
-import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
+import {
+  type BackgroundTaskReceipt,
+  RECIPE_RECOMPUTE_CHUNK_SIZE,
+} from "@cubby/schemas/background-tasks";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   type IngredientId,
@@ -43,25 +47,22 @@ import {
   collectIngredientIds,
   getRecipeIngredientName,
 } from "~/lib/recipe-graph";
-import { dispatchBackgroundJobs } from "~/server/background-dispatch";
+import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
-import { RECOMPUTE_CHUNK_SIZE } from "~/server/queue-recompute";
 import {
   getRecipesByIDs,
   getSubRecipeClosure,
 } from "~/server/repo/recipe/crud";
 import {
-  findParentRecipeIdsBatch,
+  commitRecipeTotals,
   findRecipeIdsUsingIngredients,
+  findStaleParentRecipeIds,
   getRecipeTotalsState,
   markRecipesStale,
-  markRecipesStaleReturningTransitioned,
-  markRecipeTotalsFresh,
   selectAllActiveRecipeIds,
   selectAllStaleRecipeIds,
   selectStaleRecipeIds,
-  updateRecipeTotalsBatch,
 } from "~/server/repo/recipe/totals";
 import {
   resolveAllPresent,
@@ -115,9 +116,6 @@ interface RecipeRecomputeDispatchMetadata {
   source?: string;
   entity?: EntityRef;
 }
-
-const batchLog = (batchId?: string): string =>
-  batchId ? ` batch=${batchId}` : "";
 
 // An fdc_id lookup miss is transient, not evidence of absent nutrition data.
 const usdaMissesFor = (
@@ -342,44 +340,47 @@ export class RecipeCostingService {
   }
 
   /**
-   * Queue-consumer entry. Recompute only this bounded chunk in the current
-   * invocation; changed parents are marked stale and re-enqueued as follow-up
-   * chunks. That keeps the per-message CPU/wall budget real even when a sub-recipe
-   * cascade is deep or when a parent also has a large ingredient closure. Recipe
-   * dependency cycles are invalid data, so cross-message cycle state is not part
-   * of the queue contract; stale filtering handles duplicate/old messages.
+   * Queue-consumer entry (also run inline by the recipe page's repair-on-read
+   * and by "Settle now"). Recompute only this bounded chunk in the current
+   * invocation; parents whose totals changed are invalidated in the same
+   * transaction as the child's write and published afterwards.
+   *
+   * Publication is decided by the parents' CURRENT staleness, not by whether
+   * this wakeup staled them: an already-fresh child still publishes its stale
+   * parents, so a parent whose earlier publication was lost is recovered by
+   * any later wakeup of any child. A duplicate wakeup for a fresh child never
+   * re-stales a fresh parent — it only re-publishes parents that are stale
+   * anyway, which their own freshness gate turns into a no-op.
    */
-  async recomputeQueued(
-    recipeIds: RecipeId[],
-    batchId?: string,
-  ): Promise<number> {
+  async recomputeQueued(recipeIds: RecipeId[]): Promise<number> {
     return this.tracedRecompute(
       "recompute",
-      { "recipe.cascade_mode": "queue", "recipe.batch_id": batchId },
+      { "recipe.cascade_mode": "queue" },
       async () => {
         const staleRecipeIds = await selectStaleRecipeIds(this.db, recipeIds);
-        if (staleRecipeIds.length === 0) {
-          // A wakeup for recipes another invocation already recomputed — the
-          // dedup makes this rare now, so it's worth a line when it happens.
-          console.log(
-            `[recompute-queue] skipped${batchLog(batchId)} ${recipeIds.length} queued recipe(s): no stale work`,
-          );
-          return 0;
-        }
-        // Defensive per-invocation budget guard, not the hot path: every message
-        // is produced by enqueueTargetedChunks (≤ RECOMPUTE_CHUNK_SIZE ids), so
-        // this is unreachable today. It stays as the backstop that enforces the
-        // per-invocation bound by code rather than by producer discipline — if a
-        // future/oversized/replayed message ever carries more, re-split instead of
-        // overrunning the CPU/mem budget (the original bug class).
-        if (staleRecipeIds.length > RECOMPUTE_CHUNK_SIZE) {
-          await this.enqueueTargetedChunks(staleRecipeIds, batchId);
+        // Defensive per-invocation budget guard: every message is produced by
+        // publishChunks (≤ RECIPE_RECOMPUTE_CHUNK_SIZE ids), so this is
+        // unreachable today. It enforces the bound by code rather than by
+        // producer discipline — an oversized message is re-split, not run.
+        if (staleRecipeIds.length > RECIPE_RECOMPUTE_CHUNK_SIZE) {
+          await this.publishChunks(staleRecipeIds, "recipe-costing.resplit");
           return 0;
         }
         const visited = new Set<RecipeId>();
-        const before = visited.size;
-        await this.recomputeTree(staleRecipeIds, visited, "queue", batchId);
-        return visited.size - before;
+        if (staleRecipeIds.length > 0) {
+          await this.recomputeTree(staleRecipeIds, visited, "queue");
+        }
+        const staleParents = await findStaleParentRecipeIds(this.db, recipeIds);
+        if (staleParents.length > 0) {
+          await this.publishChunks(
+            staleParents,
+            "recipe-costing.parent-cascade",
+          );
+          console.log(
+            `[recompute-queue] published ${staleParents.length} stale parent recipe(s) for follow-up recompute`,
+          );
+        }
+        return visited.size;
       },
     );
   }
@@ -400,7 +401,6 @@ export class RecipeCostingService {
     recipeIds: RecipeId[],
     visited: Set<RecipeId> = new Set(),
     cascadeMode: CascadeMode = "inline",
-    batchId?: string,
   ): Promise<void> {
     const todo = recipeIds.filter((id) => !visited.has(id));
     if (todo.length === 0) return;
@@ -433,83 +433,51 @@ export class RecipeCostingService {
       }
     }
     const tWrite = performance.now();
-    await updateRecipeTotalsBatch(this.db, updates);
-    await markRecipeTotalsFresh(this.db, freshOnlyIds);
+    // Totals, fresh stamps, and the invalidation of changed parents commit
+    // together. Parent cascades are driven by actual total changes, not merely
+    // by a stale child being restamped fresh; otherwise repeated wakeups would
+    // keep re-staling parents and create their own backlog.
+    const { changedParentIds } = await commitRecipeTotals(this.db, {
+      updates,
+      freshOnlyIds,
+      changedIds,
+      processedIds: todo,
+    });
     const writeMs = Math.round(performance.now() - tWrite);
     // One line per processed chunk. `load+compute` is real wall-clock (it spans
     // DB reads + the USDA fetch, which are I/O so the workerd clock advances);
-    // WASM CPU is invisible here by design (see computeTotalsInner). The batch
-    // total + per-message duration come from cf-server's `message ack` line.
+    // WASM CPU is invisible here by design (see computeTotalsInner).
     console.log(
       `[recompute] recipes=${todo.length} changed=${changedIds.length} fresh=${freshOnlyIds.length} load+compute=${loadMs}ms write=${writeMs}ms`,
     );
-    // One batched lookup for every changed recipe's parents (was an N+1 — a query
-    // per changed recipe). Parent cascades are driven by actual total changes, not
-    // merely by a stale child being restamped fresh; otherwise repeated queue
-    // messages keep re-staling parents and create their own backlog.
-    const parentsByRecipe = await findParentRecipeIdsBatch(this.db, changedIds);
-    const changedParents = new Set<RecipeId>();
-    for (const parents of parentsByRecipe.values())
-      for (const p of parents) changedParents.add(p);
-    const parentIds = [...changedParents].filter((id) => !visited.has(id));
+    // Queue mode stops here: the parents are durably stale, and the caller
+    // publishes every currently-stale parent after this chunk commits.
+    if (cascadeMode === "queue") return;
+    const parentIds = changedParentIds.filter((id) => !visited.has(id));
     if (parentIds.length > 0) {
-      if (cascadeMode === "queue") {
-        await this.enqueueParentCascade(parentIds, batchId);
-      } else {
-        await this.recomputeTree(parentIds, visited, cascadeMode);
-      }
+      await this.recomputeTree(parentIds, visited, cascadeMode);
     }
   }
 
-  private async enqueueParentCascade(
-    parentIds: RecipeId[],
-    batchId?: string,
-  ): Promise<void> {
-    // Only enqueue parents that actually transitioned fresh→stale. A parent
-    // already stale (in the initial dispatch set, or staled by a sibling chunk)
-    // is already queued — re-staling + re-sending it just produces no-op
-    // `stale=0` wakeups and churns the table. This collapses the fan-out to one
-    // enqueue per parent per stale episode.
-    const transitioned = await markRecipesStaleReturningTransitioned(
-      this.db,
-      parentIds,
-    );
-    if (transitioned.length === 0) return;
-    const batch = await this.enqueueTargetedChunks(transitioned, batchId);
-    console.log(
-      `[recompute-timing] queued${batchLog(batch.id)} ${transitioned.length} changed parent recipe(s) for follow-up recompute`,
-    );
-  }
-
-  private async enqueueTargetedChunks(
+  /** Publish bounded recompute tasks for a set of already-stale recipes. */
+  private async publishChunks(
     recipeIds: RecipeId[],
-    batchId?: string,
-    metadata: RecipeRecomputeDispatchMetadata = {},
-  ): Promise<BackgroundBatchRef> {
-    const jobs = [];
-    for (let i = 0; i < recipeIds.length; i += RECOMPUTE_CHUNK_SIZE) {
-      const chunkIds = recipeIds.slice(i, i + RECOMPUTE_CHUNK_SIZE);
-      jobs.push({
+    source: string,
+  ): Promise<BackgroundTaskReceipt> {
+    const requestedAt = new Date().toISOString();
+    const tasks = [];
+    for (let i = 0; i < recipeIds.length; i += RECIPE_RECOMPUTE_CHUNK_SIZE) {
+      tasks.push({
         kind: "recipe-totals.recompute" as const,
-        dedupeKey: `recipe-totals.recompute:${chunkIds.join(",")}`,
-        payload: { recipeIds: chunkIds },
+        requestedAt,
+        recipeIds: recipeIds.slice(i, i + RECIPE_RECOMPUTE_CHUNK_SIZE),
       });
     }
-    const dispatched = await dispatchBackgroundJobs(this.db, {
-      kind: "recipe-totals.recompute",
-      source: "mutation",
-      batchId,
-      metadata: {
-        source: metadata.source ?? "recipe-costing.dispatch",
-        recipeCount: recipeIds.length,
-        ...metadata,
-      },
-      jobs,
-    });
+    const receipt = await publishBackgroundTasks(this.db, tasks, { source });
     console.log(
-      `[recompute-queue] enqueued targeted chunks batch=${dispatched.batchId} recipes=${recipeIds.length} chunks=${jobs.length}`,
+      `[recompute-queue] published recipes=${recipeIds.length} chunks=${tasks.length} transport=${receipt.transport} source=${source}`,
     );
-    return dispatched.batch;
+    return receipt;
   }
 
   async recomputeForIngredient(
@@ -517,15 +485,15 @@ export class RecipeCostingService {
     metadata: RecipeRecomputeDispatchMetadata = {
       entity: { entityType: "ingredient", entityId: ingredientId },
     },
-  ): Promise<BackgroundBatchRef[]> {
+  ): Promise<number> {
     return this.recomputeForIngredients([ingredientId], metadata);
   }
 
   async recomputeForIngredients(
     ingredientIds: IngredientId[],
     metadata: RecipeRecomputeDispatchMetadata = {},
-  ): Promise<BackgroundBatchRef[]> {
-    if (ingredientIds.length === 0) return [];
+  ): Promise<number> {
+    if (ingredientIds.length === 0) return 0;
     const uniqueIngredientIds = uniq(ingredientIds);
     return await withTrace(
       TraceNames.service("recipeCosting", "dispatchForIngredient"),
@@ -544,27 +512,24 @@ export class RecipeCostingService {
 
   /**
    * The single entry for recompute triggered by a request-path mutation. Every
-   * dispatch first marks the affected recipes stale, then persists bounded
-   * background jobs for operations visibility. In production, the queue binding
-   * drains each chunk in its own invocation with a fresh CPU/memory budget. On
-   * the dev Node server (no binding), the same DB jobs process inline, so local
-   * behavior is synchronous but still inspectable. Returns the count dispatched.
+   * dispatch first marks the affected recipes stale — the durable record — then
+   * publishes bounded tasks. In production the queue drains each chunk in its
+   * own invocation with a fresh CPU/memory budget; on the dev Node server (no
+   * binding) the same handler runs inline. Returns the count of recipes
+   * invalidated.
    */
   async dispatchRecompute(
     recipeIds: RecipeId[],
     metadata: RecipeRecomputeDispatchMetadata = {},
-  ): Promise<BackgroundBatchRef[]> {
+  ): Promise<number> {
     const ids = uniq(recipeIds);
-    if (ids.length === 0) return [];
+    if (ids.length === 0) return 0;
     // Correctness floor for both inline and deferred paths: callers may have
     // already committed the triggering write, so stamp stale before any work
     // that can fail independently.
     await markRecipesStale(this.db, ids);
-    const batch = await this.enqueueTargetedChunks(ids, undefined, metadata);
-    console.log(
-      `[recompute-dispatch] batch=${batch.id} affected=${ids.length} chunk_size=${RECOMPUTE_CHUNK_SIZE} mode=targeted`,
-    );
-    return [batch];
+    await this.publishChunks(ids, metadata.source ?? "recipe-costing.dispatch");
+    return ids.length;
   }
 
   async dryRunRecomputeTotals(): Promise<{
@@ -609,15 +574,13 @@ export class RecipeCostingService {
   }
 
   /**
-   * DURABLE recompute-all: mark every active recipe stale and enqueue bounded
-   * `recipe-totals.recompute` jobs onto the background-jobs queue, returning the
-   * batch id — instead of holding a single request open to do the full CPU-heavy
-   * pass inline on the request thread. The work then survives a navigate-
-   * away / PWA background / Worker CPU limit: it runs on the queue (or inline in
-   * dev, where there's no binding), and its progress is inspectable on
-   * `/background-jobs`. This is the same queue + dispatch path every mutation-
-   * triggered recompute already uses ({@link dispatchRecompute}); a full recompute
-   * is just the widest possible affected set.
+   * Recompute-all: mark every active recipe stale and publish bounded
+   * `recipe-totals.recompute` tasks — instead of holding a single request open
+   * to do the full CPU-heavy pass inline. The work then survives a navigate-
+   * away / PWA background / Worker CPU limit: it runs on the queue (or inline
+   * in dev, where there's no binding). This is the same path every
+   * mutation-triggered recompute uses ({@link dispatchRecompute}); a full
+   * recompute is just the widest possible affected set.
    */
   async selectAllQueued(): Promise<RecipeId[]> {
     return selectAllActiveRecipeIds(this.db);
@@ -625,24 +588,16 @@ export class RecipeCostingService {
 
   async enqueueAllQueued(ids: RecipeId[]) {
     const total = ids.length;
-    if (total === 0) return { enqueued: 0, total: 0, batchId: null };
-    const [batch] = await this.dispatchRecompute(ids, {
-      source: "maintenance.recompute-all",
-    });
-    return { enqueued: total, total, batchId: batch?.id ?? null };
+    if (total === 0) return { enqueued: 0, total: 0 };
+    await this.dispatchRecompute(ids, { source: "maintenance.recompute-all" });
+    return { enqueued: total, total };
   }
 
   /**
-   * DURABLE recompute-STALE: same queue-backed shape as the all-recipes drain,
-   * but seeded from {@link selectAllStaleRecipeIds} instead of every active recipe,
-   * and calling {@link enqueueTargetedChunks} directly instead of
-   * {@link dispatchRecompute}. `dispatchRecompute` starts by marking its ids stale
-   * ({@link markRecipesStale}) — a no-op here since these ids are already stale by
-   * construction (that's the selection predicate), but a wasted extra `UPDATE` and,
-   * more importantly, the wrong doc: `dispatchRecompute` is the "something changed,
-   * invalidate + enqueue" entry point, and calling it would misrepresent this as a
-   * fresh invalidation instead of a drain of an already-known backlog. So this
-   * enqueues the targeted chunks straight from the stale-id selection.
+   * Recompute-STALE: same shape as the all-recipes drain, but seeded from
+   * {@link selectAllStaleRecipeIds} and publishing straight from that selection
+   * rather than through {@link dispatchRecompute}, whose stale-marking would be a
+   * no-op here and would misrepresent a backlog drain as a fresh invalidation.
    */
   async selectStaleQueued(): Promise<RecipeId[]> {
     return selectAllStaleRecipeIds(this.db);
@@ -650,10 +605,8 @@ export class RecipeCostingService {
 
   async enqueueStaleQueued(ids: RecipeId[]) {
     const total = ids.length;
-    if (total === 0) return { enqueued: 0, total: 0, batchId: null };
-    const batch = await this.enqueueTargetedChunks(ids, undefined, {
-      source: "maintenance.recompute-stale",
-    });
-    return { enqueued: total, total, batchId: batch.id };
+    if (total === 0) return { enqueued: 0, total: 0 };
+    await this.publishChunks(ids, "maintenance.recompute-stale");
+    return { enqueued: total, total };
   }
 }

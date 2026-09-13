@@ -38,28 +38,24 @@ export const purchaseEntityAdapter = defineEntityAdapter({
       updatePurchase(ctx.db, id, data, ctx.actorContext),
     delete: async (ctx, ids) => {
       const detached = await deletePurchases(ctx.db, ids, ctx.actorContext);
-      const backgroundBatches = await runMutationSideEffectsForEntities(
-        ctx.db,
-        [
-          ...detached.expenseIds.map((entityId) => ({
-            action: "updated" as const,
-            entity: { entity: "expense" as const, id: entityId },
-            source: "purchase.delete",
-          })),
-          ...detached.financialTransactionIds.map((entityId) => ({
-            action: "updated" as const,
-            entity: { entity: "financialTransaction" as const, id: entityId },
-            source: "purchase.delete",
-          })),
-        ],
-      );
+      await runMutationSideEffectsForEntities(ctx.db, [
+        ...detached.expenseIds.map((entityId) => ({
+          action: "updated" as const,
+          entity: { entity: "expense" as const, id: entityId },
+          source: "purchase.delete",
+        })),
+        ...detached.financialTransactionIds.map((entityId) => ({
+          action: "updated" as const,
+          entity: { entity: "financialTransaction" as const, id: entityId },
+          source: "purchase.delete",
+        })),
+      ]);
       return {
         deletedReferences: [
           ...entityMutationReferences("purchase", ids),
           ...entityMutationReferences("image", detached.deletedImageShortcodes),
         ],
         detachedImageKeys: detached.detachedImageKeys,
-        backgroundBatches,
       };
     },
   },

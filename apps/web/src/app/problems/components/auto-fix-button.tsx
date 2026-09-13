@@ -1,6 +1,5 @@
 import type { AllProblems } from "@cubby/schemas/problems";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { Wand2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -70,14 +69,12 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
     setRunning({ done: 0, total: tasks.length });
     const clauses: string[] = [];
     const failures: string[] = [];
-    const batchIds: string[] = [];
     const invalidations: InvalidationTagSet[] = [ripple.problems];
 
     for (const [index, task] of tasks.entries()) {
       try {
         const outcome = await task.run();
         if (outcome.summary) clauses.push(outcome.summary);
-        if (outcome.batchId) batchIds.push(outcome.batchId);
         if (task.invalidateTags) invalidations.push(task.invalidateTags);
       } catch (error) {
         failures.push(`${task.label}: ${getErrorMessage(error)}`);
@@ -102,23 +99,7 @@ export function AutoFixButton({ problems }: { problems: AllProblems }) {
     }
     if (!clauses.length) return;
 
-    const summary = `Fixed: ${clauses.join(" · ")}.`;
-    toast.success(
-      batchIds.length ? (
-        <span>
-          {summary}{" "}
-          <Link
-            to="/background-jobs"
-            search={{ batchIds }}
-            className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
-          >
-            View progress
-          </Link>
-        </span>
-      ) : (
-        summary
-      ),
-    );
+    toast.success(`Fixed: ${clauses.join(" · ")}.`);
   };
 
   const trigger = (

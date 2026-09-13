@@ -1,3 +1,4 @@
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -189,7 +190,6 @@ export const applyProductUpcDataWorkflow = bindWorkflow(
           db: context.db,
           product: createProductWriteActions(context.db, context.usdaClient),
           recipeCosting: context.services.recipeCosting,
-          locationValuation: context.services.locationValuation,
           upcLookupClient: context.upcLookupClient,
         },
         { ...input, id },
@@ -580,7 +580,7 @@ export const discardProductWorkflow = bindWorkflow(
         context.actorContext,
       ),
     )
-    .effect("backgroundBatches", async ({ context }, { result }) =>
+    .effect("indexed", async ({ context }, { result }) =>
       runMutationSideEffectsForEntities(context.db, [
         {
           action: "created",
@@ -603,7 +603,7 @@ export const discardProductWorkflow = bindWorkflow(
           : []),
       ]),
     )
-    .effect("recipeBatches", async ({ context }, { result }) =>
+    .effect("recipesRecomputed", async ({ context }, { result }) =>
       recomputeRecipesForPriceAffectedProducts(
         context.db,
         context.services.recipeCosting,
@@ -611,7 +611,7 @@ export const discardProductWorkflow = bindWorkflow(
         "product.discard",
       ),
     )
-    .output(({ result, backgroundBatches, recipeBatches }) => ({
+    .output(({ result }) => ({
       expenseId: parseShortcodeFor("expense", result.expenseShortcode),
       storedQuantity: result.storedQuantity,
       inventory: result.inventory
@@ -624,9 +624,7 @@ export const discardProductWorkflow = bindWorkflow(
             remainingValue: result.inventory.remainingValue,
           }
         : null,
-      sideEffects: {
-        backgroundBatches: [...backgroundBatches, ...recipeBatches],
-      },
+      sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     })),
   (
     context: ProductWorkflowContext,
@@ -672,15 +670,15 @@ const createManyProductsDefinition = defineBulkWorkflow({
     ProductWorkflowContext,
     BulkWorkflowSummary<CreateProductItem, IngredientId | null>
   >("product.createMany.finalize")
-    .commit("backgroundBatches", async ({ context }, { input }) =>
+    .commit("recipesRecomputed", async ({ context }, { input }) =>
       context.services.recipeCosting.recomputeForIngredients(
         input.succeeded.flatMap(({ result }) => (result ? [result] : [])),
         { source: "product.createMany" },
       ),
     )
-    .output(({ input, backgroundBatches }): CreateManyProductResult => ({
+    .output(({ input }): CreateManyProductResult => ({
       created: input.succeeded.length,
-      sideEffects: { backgroundBatches },
+      sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       failed: input.failed.map(({ index, item, error }) => ({
         index,
         name: item.name,

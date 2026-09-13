@@ -12,26 +12,18 @@ import type {
 import {
   type SearchableEntity,
   type SearchableEntityRef,
-  searchableEntities,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, sql } from "drizzle-orm";
-import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  cookbook,
   entityEmbedding,
   expense,
-  financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  ingredient,
   inventoryEntry,
-  location,
   meal,
   mealRecipe,
-  product,
-  project,
   purchase,
   recipe,
   recipeSection,
@@ -42,15 +34,11 @@ import {
   wish,
   wishCandidate,
 } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
-
-export interface OrphanedEntityEmbedding {
-  id: string;
-  entityType: SearchableEntity;
-  entityId: string;
-  model: string;
-  createdAt: Date;
-}
+import {
+  notDeleted,
+  unwrapDb,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 
 async function softDeleteEntityEmbeddingsTx(
   tx: DrizzleTransaction,
@@ -78,6 +66,30 @@ async function softDeleteEntityEmbeddingsTx(
  * as the one removal-module entry point rather than teaching every delete and
  * merge path about the individual index tables.
  */
+/**
+ * Retire the search artifacts of records that no longer exist, atomically for
+ * the whole page. The index-repair stream hands over the refs it found; the
+ * transaction is owned here, not in the service.
+ */
+export async function retireOrphanedSearchArtifacts(
+  db: Database,
+  refs: ReadonlyArray<{ entityType: SearchableEntity; entityId: string }>,
+): Promise<void> {
+  if (refs.length === 0) return;
+  const byType = new Map<SearchableEntity, string[]>();
+  for (const ref of refs) {
+    byType.set(ref.entityType, [
+      ...(byType.get(ref.entityType) ?? []),
+      ref.entityId,
+    ]);
+  }
+  await withTransaction(db, async (tx) => {
+    for (const [entityType, ids] of byType) {
+      await softDeleteEntitySearchArtifactsTx(tx, entityType, ids);
+    }
+  });
+}
+
 export async function softDeleteEntitySearchArtifactsTx(
   tx: DrizzleTransaction,
   entityType: SearchableEntity,
@@ -97,24 +109,11 @@ export async function softDeleteEntitySearchArtifactsTx(
     );
 }
 
-export async function softDeleteEntityEmbeddingRows(
-  db: Database,
-  ids: string[],
-): Promise<number> {
-  if (ids.length === 0) return 0;
-  const rows = await getDb(db)
-    .update(entityEmbedding)
-    .set({ deletedAt: new Date() })
-    .where(and(inArray(entityEmbedding.id, ids), notDeleted(entityEmbedding)))
-    .returning({ id: entityEmbedding.id });
-  return rows.length;
-}
-
 export async function getEntityEmbeddingDeletedAt(
-  db: Database,
+  db: Database | DrizzleTransaction,
   id: string,
 ): Promise<Date | null | undefined> {
-  const row = await getDb(db).query.entityEmbedding.findFirst({
+  const row = await unwrapDb(db).query.entityEmbedding.findFirst({
     where: eq(entityEmbedding.id, id),
     columns: { deletedAt: true },
   });
@@ -122,10 +121,10 @@ export async function getEntityEmbeddingDeletedAt(
 }
 
 export async function getEntityEmbeddingDeletedAtForRef(
-  db: Database,
+  db: Database | DrizzleTransaction,
   ref: SearchableEntityRef,
 ): Promise<Date | null | undefined> {
-  const row = await getDb(db).query.entityEmbedding.findFirst({
+  const row = await unwrapDb(db).query.entityEmbedding.findFirst({
     where: and(
       eq(entityEmbedding.entityType, ref.entityType),
       eq(entityEmbedding.entityId, ref.entityId),
@@ -136,11 +135,11 @@ export async function getEntityEmbeddingDeletedAtForRef(
 }
 
 export async function findInventoryEmbeddingRefsForProducts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   productIds: ProductId[],
 ): Promise<SearchableEntityRef[]> {
   if (productIds.length === 0) return [];
-  const rows = await getDb(db).query.inventoryEntry.findMany({
+  const rows = await unwrapDb(db).query.inventoryEntry.findMany({
     where: and(
       inArray(inventoryEntry.productId, productIds),
       notDeleted(inventoryEntry),
@@ -153,11 +152,11 @@ export async function findInventoryEmbeddingRefsForProducts(
 /** Tasks embed their subject product's name, so a product rename must refresh
  * every live task that points at it. */
 export async function findTaskEmbeddingRefsForProducts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   productIds: ProductId[],
 ): Promise<SearchableEntityRef[]> {
   if (productIds.length === 0) return [];
-  const rows = await getDb(db).query.task.findMany({
+  const rows = await unwrapDb(db).query.task.findMany({
     where: and(inArray(task.subjectProductId, productIds), notDeleted(task)),
     columns: { id: true },
   });
@@ -166,11 +165,11 @@ export async function findTaskEmbeddingRefsForProducts(
 
 /** Wishes embed candidate product identity, so Product identity edits fan out. */
 export async function findWishEmbeddingRefsForProducts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   productIds: ProductId[],
 ): Promise<SearchableEntityRef[]> {
   if (productIds.length === 0) return [];
-  const rows = await getDb(db)
+  const rows = await unwrapDb(db)
     .selectDistinct({ wishId: wishCandidate.wishId })
     .from(wishCandidate)
     .innerJoin(wish, eq(wish.id, wishCandidate.wishId))
@@ -185,11 +184,11 @@ export async function findWishEmbeddingRefsForProducts(
 }
 
 export async function findInventoryEmbeddingRefsForLocations(
-  db: Database,
+  db: Database | DrizzleTransaction,
   locationIds: LocationId[],
 ): Promise<SearchableEntityRef[]> {
   if (locationIds.length === 0) return [];
-  const rows = await getDb(db).query.inventoryEntry.findMany({
+  const rows = await unwrapDb(db).query.inventoryEntry.findMany({
     where: and(
       inArray(inventoryEntry.locationId, locationIds),
       notDeleted(inventoryEntry),
@@ -200,11 +199,11 @@ export async function findInventoryEmbeddingRefsForLocations(
 }
 
 export async function findRecipeEmbeddingRefsForIngredients(
-  db: Database,
+  db: Database | DrizzleTransaction,
   ingredientIds: IngredientId[],
 ): Promise<SearchableEntityRef[]> {
   if (ingredientIds.length === 0) return [];
-  const rows = await getDb(db)
+  const rows = await unwrapDb(db)
     .selectDistinct({ recipeId: recipeSection.recipeId })
     .from(recipeSectionIngredient)
     .innerJoin(
@@ -228,11 +227,11 @@ export async function findRecipeEmbeddingRefsForIngredients(
  * must refresh every live meal embedding that plans it.
  */
 export async function findMealEmbeddingRefsForRecipes(
-  db: Database,
+  db: Database | DrizzleTransaction,
   recipeIds: RecipeId[],
 ): Promise<SearchableEntityRef[]> {
   if (recipeIds.length === 0) return [];
-  const rows = await getDb(db)
+  const rows = await unwrapDb(db)
     .selectDistinct({ mealId: mealRecipe.mealId })
     .from(mealRecipe)
     .innerJoin(meal, eq(meal.id, mealRecipe.mealId))
@@ -251,16 +250,16 @@ export async function findMealEmbeddingRefsForRecipes(
  * refresh every live task/expense embedding under it.
  */
 export async function findTrackerEmbeddingRefsForProjects(
-  db: Database,
+  db: Database | DrizzleTransaction,
   projectIds: ProjectId[],
 ): Promise<SearchableEntityRef[]> {
   if (projectIds.length === 0) return [];
   const [tasks, expenses] = await Promise.all([
-    getDb(db).query.task.findMany({
+    unwrapDb(db).query.task.findMany({
       where: and(inArray(task.projectId, projectIds), notDeleted(task)),
       columns: { id: true },
     }),
-    getDb(db).query.expense.findMany({
+    unwrapDb(db).query.expense.findMany({
       where: and(inArray(expense.projectId, projectIds), notDeleted(expense)),
       columns: { id: true },
     }),
@@ -279,11 +278,11 @@ export async function findTrackerEmbeddingRefsForProjects(
 
 /** Purchases and their downstream ledger/settlement records embed vendor identity. */
 export async function findEmbeddingRefsForVendors(
-  db: Database,
+  db: Database | DrizzleTransaction,
   vendorIds: VendorId[],
 ): Promise<SearchableEntityRef[]> {
   if (vendorIds.length === 0) return [];
-  const purchases = await getDb(db).query.purchase.findMany({
+  const purchases = await unwrapDb(db).query.purchase.findMany({
     where: and(inArray(purchase.vendorId, vendorIds), notDeleted(purchase)),
     columns: { id: true },
   });
@@ -296,13 +295,13 @@ export async function findEmbeddingRefsForVendors(
 
 /** Expenses and settlement transactions embed their linked Purchase identity. */
 export async function findEmbeddingRefsForPurchases(
-  db: Database,
+  db: Database | DrizzleTransaction,
   purchaseIds: PurchaseId[],
   includePurchases = false,
 ): Promise<SearchableEntityRef[]> {
   if (purchaseIds.length === 0) return [];
   const [expenses, transactions] = await Promise.all([
-    getDb(db).query.expense.findMany({
+    unwrapDb(db).query.expense.findMany({
       where: and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)),
       columns: { id: true },
     }),
@@ -311,7 +310,7 @@ export async function findEmbeddingRefsForPurchases(
     // it and leave a stale vendor/order in its embedding text. This is a
     // removal-path invariant site — missing a transaction here leaks an
     // orphaned embedding.
-    getDb(db)
+    unwrapDb(db)
       .selectDistinct({ id: financialTransactionAllocation.transactionId })
       .from(financialTransactionAllocation)
       .innerJoin(
@@ -351,11 +350,11 @@ export async function findEmbeddingRefsForPurchases(
 
 /** Transactions embed their account's display identity. */
 export async function findTransactionEmbeddingRefsForAccounts(
-  db: Database,
+  db: Database | DrizzleTransaction,
   accountIds: FinancialAccountId[],
 ): Promise<SearchableEntityRef[]> {
   if (accountIds.length === 0) return [];
-  const rows = await getDb(db).query.financialTransaction.findMany({
+  const rows = await unwrapDb(db).query.financialTransaction.findMany({
     where: and(
       inArray(financialTransaction.accountId, accountIds),
       notDeleted(financialTransaction),
@@ -370,11 +369,11 @@ export async function findTransactionEmbeddingRefsForAccounts(
 
 /** Expense writes can create Purchase/Vendor rows implicitly during resolution. */
 export async function findCommercialEmbeddingRefsForExpenses(
-  db: Database,
+  db: Database | DrizzleTransaction,
   expenseIds: ExpenseId[],
 ): Promise<SearchableEntityRef[]> {
   if (expenseIds.length === 0) return [];
-  const rows = await getDb(db)
+  const rows = await unwrapDb(db)
     .selectDistinct({ purchaseId: purchase.id, vendorId: vendor.id })
     .from(expense)
     .innerJoin(
@@ -390,152 +389,4 @@ export async function findCommercialEmbeddingRefsForExpenses(
     { entityType: "purchase", entityId: row.purchaseId },
     { entityType: "vendor", entityId: row.vendorId },
   ]);
-}
-
-/**
- * The live-row test for each searchable entity, as data rather than as a
- * per-type query. Every entry is the same predicate — the row exists and is
- * not soft-deleted — so the sweep below can express all fifteen as one UNION.
- */
-interface LiveIdSource {
-  table: PgTable;
-  idColumn: AnyPgColumn;
-  deletedAtColumn: AnyPgColumn;
-}
-
-const liveIdSources = {
-  product: {
-    table: product,
-    idColumn: product.id,
-    deletedAtColumn: product.deletedAt,
-  },
-  recipe: {
-    table: recipe,
-    idColumn: recipe.id,
-    deletedAtColumn: recipe.deletedAt,
-  },
-  ingredient: {
-    table: ingredient,
-    idColumn: ingredient.id,
-    deletedAtColumn: ingredient.deletedAt,
-  },
-  cookbook: {
-    table: cookbook,
-    idColumn: cookbook.id,
-    deletedAtColumn: cookbook.deletedAt,
-  },
-  location: {
-    table: location,
-    idColumn: location.id,
-    deletedAtColumn: location.deletedAt,
-  },
-  inventory: {
-    table: inventoryEntry,
-    idColumn: inventoryEntry.id,
-    deletedAtColumn: inventoryEntry.deletedAt,
-  },
-  meal: { table: meal, idColumn: meal.id, deletedAtColumn: meal.deletedAt },
-  project: {
-    table: project,
-    idColumn: project.id,
-    deletedAtColumn: project.deletedAt,
-  },
-  task: { table: task, idColumn: task.id, deletedAtColumn: task.deletedAt },
-  vendor: {
-    table: vendor,
-    idColumn: vendor.id,
-    deletedAtColumn: vendor.deletedAt,
-  },
-  purchase: {
-    table: purchase,
-    idColumn: purchase.id,
-    deletedAtColumn: purchase.deletedAt,
-  },
-  financialAccount: {
-    table: financialAccount,
-    idColumn: financialAccount.id,
-    deletedAtColumn: financialAccount.deletedAt,
-  },
-  financialTransaction: {
-    table: financialTransaction,
-    idColumn: financialTransaction.id,
-    deletedAtColumn: financialTransaction.deletedAt,
-  },
-  expense: {
-    table: expense,
-    idColumn: expense.id,
-    deletedAtColumn: expense.deletedAt,
-  },
-  wish: { table: wish, idColumn: wish.id, deletedAtColumn: wish.deletedAt },
-} satisfies Record<SearchableEntity, LiveIdSource>;
-
-/**
- * One anti-join, not a full scan plus one `IN (...)` per entity type. The old
- * shape read every live embedding row, bucketed the ids in JS, then issued a
- * query per type **sequentially** — ~16 round-trips carrying ~25k bind
- * parameters, on the single pinned connection `findFastProblems` shares across
- * all its detectors, on every Problems fetch.
- */
-const liveEntityIdsQuery = () =>
-  sql.join(
-    searchableEntities.map((entityType) => {
-      const source = liveIdSources[entityType];
-      return sql`SELECT ${entityType}::text AS "entityType", ${source.idColumn}::text AS "entityId" FROM ${source.table} WHERE ${source.deletedAtColumn} IS NULL`;
-    }),
-    sql` UNION ALL `,
-  );
-
-export async function countOrphanedEntityEmbeddings(
-  db: Database,
-): Promise<number> {
-  const [row] = await getDb(db)
-    .execute<{ count: number }>(sql`
-    WITH live AS (${liveEntityIdsQuery()})
-    SELECT count(*)::int AS count
-    FROM "EntityEmbedding" ee
-    LEFT JOIN live
-      ON live."entityType" = ee."entityType"
-     AND live."entityId" = ee."entityId"::text
-    WHERE ee."deletedAt" IS NULL
-      AND live."entityId" IS NULL
-  `)
-    .then((result) => result.rows);
-  return Number(row?.count ?? 0);
-}
-
-export async function findOrphanedEntityEmbeddings(
-  db: Database,
-): Promise<OrphanedEntityEmbedding[]> {
-  const live = liveEntityIdsQuery();
-
-  // `createdAt` is typed as the string it actually is. A raw `execute` returns
-  // timestamps unparsed, so the previous `Date` here was an assertion the
-  // driver never satisfied — and `orphanedEntityEmbeddingSchema` validates it
-  // as `z.date()`. The two only ever agreed while this query returned nothing,
-  // which is its normal state, so the mismatch stayed invisible until the
-  // first real orphan: then the detector built to surface a problem instead
-  // took the whole Problems page down with an output-validation error. Parsed
-  // into a real Date below rather than loosening the schema, so the wire
-  // contract stays a date everywhere it is consumed.
-  const result = await getDb(db).execute<{
-    id: string;
-    entityType: SearchableEntity;
-    entityId: string;
-    model: string;
-    createdAt: string;
-  }>(sql`
-    WITH live AS (${live})
-    SELECT ee."id"::text AS id, ee."entityType", ee."entityId"::text AS "entityId",
-           ee."model", ee."createdAt"
-    FROM "EntityEmbedding" ee
-    LEFT JOIN live
-      ON live."entityType" = ee."entityType"
-     AND live."entityId" = ee."entityId"::text
-    WHERE ee."deletedAt" IS NULL
-      AND live."entityId" IS NULL
-  `);
-  return result.rows.map((row) => ({
-    ...row,
-    createdAt: new Date(row.createdAt),
-  }));
 }

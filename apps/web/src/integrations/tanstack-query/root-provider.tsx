@@ -8,10 +8,7 @@ import { toast } from "sonner";
 import superjson from "superjson";
 
 import { authClient } from "~/lib/auth-client";
-import {
-  makeBatchStatusFetcher,
-  watchBatchesAndInvalidateTags,
-} from "~/lib/background-batch-polling";
+import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import {
@@ -76,14 +73,13 @@ const productionMutationSuccessRuntime: RootMutationSuccessRuntime = {
   registeredInvalidations: (operation, variables) =>
     operationInvalidationTags(operation, variables) ??
     EMPTY_INVALIDATION_TAG_SET,
-  afterSuccess: ({ queryClient, result, invalidations }) => {
+  afterSuccess: ({ queryClient, invalidations }) => {
     void invalidateOperationTags(queryClient, invalidations);
-    void watchBatchesAndInvalidateTags({
-      queryClient,
-      result,
-      invalidateTags: invalidations,
-      fetchBatchStatus: makeBatchStatusFetcher(queryClient),
-    });
+    // A mutation's own derived work (an AI description, a recomputed
+    // valuation, a refreshed embedding) lands on the queue shortly after this
+    // returns — there is no batch left to watch, so re-check on a fixed
+    // schedule instead.
+    scheduleDeferredInvalidation(queryClient, invalidations);
   },
 };
 

@@ -90,7 +90,7 @@ describe("workspace navigation contract", () => {
 
   it("keeps utility and developer destinations available to Cmd-K", () => {
     const routes = new Set(completeNavLeaves.map((item) => item.to));
-    expect(routes).toContain("/background-jobs");
+    expect(routes).toContain("/search/debug");
     expect(routes).toContain("/mcp");
   });
 
@@ -193,7 +193,6 @@ describe("expanded rail labels", () => {
   it("keeps full destination wording in the canonical manifest", () => {
     const byRoute = new Map(desktopLeaves.map((leaf) => [leaf.to, leaf.label]));
 
-    expect(byRoute.get("/background-jobs")).toBe("Background jobs");
     expect(byRoute.get("/statement-rows")).toBe("Reconcile statements");
     expect(byRoute.get("/household-contribution")).toBe("Contribution ledger");
     expect(byRoute.get("/meals/suggestions")).toBe("What can I make?");

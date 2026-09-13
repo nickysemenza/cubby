@@ -64,18 +64,13 @@ export const productEntityAdapter = defineEntityAdapter({
           db: ctx.db,
           product: createProductWriteActions(ctx.db, ctx.usdaClient),
           recipeCosting: ctx.services.recipeCosting,
-          locationValuation: ctx.services.locationValuation,
           upcLookupClient: ctx.upcLookupClient,
         },
         data,
         ctx.actorContext,
       );
       const entityId = await productShortcodes.one(ctx.db, result.id);
-      return {
-        output: result,
-        entityId,
-        backgroundBatches: result.sideEffects.backgroundBatches,
-      };
+      return { output: result, entityId };
     },
     update: async (ctx, shortcode, data) => {
       const entityId = await productShortcodes.one(ctx.db, shortcode);
@@ -84,23 +79,18 @@ export const productEntityAdapter = defineEntityAdapter({
           db: ctx.db,
           product: createProductWriteActions(ctx.db, ctx.usdaClient),
           recipeCosting: ctx.services.recipeCosting,
-          locationValuation: ctx.services.locationValuation,
         },
         entityId,
         data,
         ctx.actorContext,
       );
-      return {
-        output: result,
-        entityId,
-        backgroundBatches: result.sideEffects.backgroundBatches,
-      };
+      return { output: result, entityId };
     },
     delete: async (ctx, shortcodes) => {
       const ids = await productShortcodes.all(ctx.db, shortcodes);
       const { detachedImageKeys, deletedImageShortcodes, ingredientIds } =
         await deleteProducts(ctx.db, ids, ctx.actorContext);
-      const [backgroundBatches, recipeBatches] = await Promise.all([
+      await Promise.all([
         runMutationSideEffectsForEntities(
           ctx.db,
           ids.map((entityId) => ({
@@ -119,7 +109,6 @@ export const productEntityAdapter = defineEntityAdapter({
           ...entityMutationReferences("image", deletedImageShortcodes),
         ],
         detachedImageKeys,
-        backgroundBatches: [...backgroundBatches, ...recipeBatches],
       };
     },
     /**
@@ -146,7 +135,7 @@ export const productEntityAdapter = defineEntityAdapter({
         ctx.db,
         items.map((item) => item.id),
       );
-      const backgroundBatches = await runMutationSideEffectsForEntities(
+      await runMutationSideEffectsForEntities(
         ctx.db,
         ids.map((entityId) => ({
           action: "updated" as const,
@@ -159,7 +148,6 @@ export const productEntityAdapter = defineEntityAdapter({
           "product",
           items.map((item) => item.id),
         ),
-        backgroundBatches,
       };
     },
   },
@@ -177,8 +165,8 @@ export const productEntityAdapter = defineEntityAdapter({
         ...input.mergeIds,
       ]);
       const summary = await mergeProducts(ctx.db, input, ctx.actorContext);
-      const backgroundBatches = [
-        ...(await runMutationSideEffectsForEntities(ctx.db, [
+      await Promise.all([
+        runMutationSideEffectsForEntities(ctx.db, [
           {
             action: "updated" as const,
             entity: { entity: "product" as const, id: summary.keepEntityId },
@@ -189,15 +177,12 @@ export const productEntityAdapter = defineEntityAdapter({
             entity: { entity: "product" as const, id: entityId },
             source: "product.merge",
           })),
-        ])),
-        ...(await ctx.services.recipeCosting.recomputeForIngredients(
-          ingredientIds,
-          {
-            source: "product.merge",
-            entity: { entityType: "product", entityId: summary.keepEntityId },
-          },
-        )),
-      ];
+        ]),
+        ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
+          source: "product.merge",
+          entity: { entityType: "product", entityId: summary.keepEntityId },
+        }),
+      ]);
       const product = await getProductByShortcode(ctx.db, input.keepId);
       if (!product) throw new Error("Merged Product keeper disappeared");
       return {
@@ -207,7 +192,6 @@ export const productEntityAdapter = defineEntityAdapter({
         },
         entityId: summary.keepEntityId,
         detachedImageKeys: [],
-        backgroundBatches,
       };
     },
   },

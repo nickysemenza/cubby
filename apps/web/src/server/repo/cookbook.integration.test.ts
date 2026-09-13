@@ -31,7 +31,6 @@ import {
   upsertCookbook,
 } from "./cookbook";
 import { getDb } from "./database-helpers";
-import { findOrphanedEntityEmbeddings } from "./entity-embedding-cleanup";
 import { createPendingImageRecord } from "./image";
 import { upsertCookbookRecipeFromCookbook } from "./import-recipe-convert";
 import { deleteProducts } from "./product";
@@ -441,8 +440,6 @@ describe("cookbook repository", () => {
       },
     );
     expect(recipeEmbedding?.deletedAt).not.toBeNull();
-
-    expect(await findOrphanedEntityEmbeddings(ctx.db)).toHaveLength(0);
   });
 
   describe("physical copy link", () => {

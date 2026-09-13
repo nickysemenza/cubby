@@ -23,7 +23,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 
 1. **Inventory is a ballpark, not a ledger.** For kitchen ingredients especially, a count is a stale-tolerant estimate — enough to answer *"do I have enough flour?"*, never precise enough to drive automatic math. Truth is restored by a deliberate [recount](docs/inventory-audit.md), never inferred from activity. **Nothing decrements inventory as a side effect** — there is no cook-a-recipe → deduct-the-ingredients flow, and there won't be. Consumption is always an explicit human act.
 2. **`fdc_id` belongs to the product, not the ingredient.** A USDA link describes a specific purchasable thing, not the abstract "flour". Ingredient nutrition resolves through the product (`ingredient → product → fdc_id`) — always one hop away, on purpose. Don't add a per-ingredient USDA column to shorten the hop.
-3. **Rare and interactive work stays interactive.** Cookbook/EPUB import runs a few times a year with a human watching; it needs no queue, retries, or DLQ. The background queue is for work that is frequent, unattended, or slow enough to break a request (embeddings, valuation, recompute) — not for making rare work look industrial.
+3. **Rare and interactive work stays interactive.** Cookbook/EPUB import runs a few times a year with a human watching; it needs no queue, retries, or DLQ. The background queue is for work that is frequent, unattended, or slow enough to break a request (embeddings, recipe-total cascades, location AI) — not for making rare work look industrial. Derived data that is cheap to compute is computed at the source (in the write transaction or on read), never deferred.
 4. **One household, trusted users.** Cubby serves a tiny, mutually trusted household user set, not isolated tenants. Authenticated household users may see household-wide operational data, including user and client attribution in MCP analytics. Every trade-off resolves toward the household's taste: no multi-user coordination, no restore/undo, no reservations or locking. Speed and recoverability beat correctness ceremony.
 5. **All money lives on `Expense`.** Spend is `SUM(expense.cost)`, always — the `Vendor ──< Purchase ──< Expense` header carries *identity* (who, which order, which date) and at most a `statedTotal` that is **never summed into spend**. `statedTotal` is a soft reconciliation cue whose mismatch is frequently correct, so nothing may reject a write over it or back-compute a cost from it. Don't propose a second place money is stored or a rollup that adds header totals to line totals.
 
@@ -453,6 +453,24 @@ Key constraints:
   leaving the binding in place.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.
 - **`__CF_WORKERS__` define** eliminates module-level Pool creation from the CF build.
+- **Background tasks are self-contained queue messages.** `cubby-background`
+  carries the whole task (recipe totals, an embedding refresh, a location AI
+  refresh); there is no execution table and no dead-letter queue. Every handler
+  re-checks the derived state's own freshness marker (`totalsComputedAt IS
+  NULL`, the embedding text hash, the AI fingerprint cache), so duplicate,
+  reordered, or redelivered messages are no-ops. Publication after a commit is
+  best-effort (`waitUntil`); the stale marker on the source row is the durable
+  record of pending work. A lost wakeup is repaired on read (the recipe page
+  recomputes a stale recipe before rendering; the product relatedness rail
+  polls readiness after "Index now"), by the Problems page's **Awaiting work**
+  card ("Settle now" republishes exactly what the counts describe), or by the
+  streaming **Repair index** maintenance action. The daily cron refreshes the
+  calendar feed and *asserts* the awaiting counts are zero (Sentry when not);
+  it never repairs, so a lost wakeup stays visible instead of being absorbed.
+  Search projections are written inside the entity write transaction; location
+  valuation is a SQL rollup computed on read; the problem-count badge is a KV
+  snapshot refreshed behind a read once a mutation marks it dirty; abandoned
+  uploads are culled on the next presign.
 - **OTel disabled in production** — only runs in dev via `instrument.server.mjs`.
 - Secrets via `wrangler secret put BETTER_AUTH_SECRET` (etc.) — see `wrangler.jsonc` for the full list.
 

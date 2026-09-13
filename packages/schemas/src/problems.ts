@@ -27,7 +27,7 @@ import {
   type ProjectAttentionType,
   projectAttentionItemSchema,
 } from "./project";
-import { searchableEntityRefFields, searchableEntitySchema } from "./search";
+import { searchableEntityRefFields } from "./search";
 
 const publicEntityIdSchema = anyShortcodeSchema(
   nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
@@ -443,51 +443,19 @@ export const locationWithoutAiDescriptionSchema = z.object({
   imageCount: z.number(),
 });
 
-export const orphanedEntityEmbeddingSchema = z.object({
-  // Permanent diagnostic exceptions: the embedding row itself is orphaned,
-  // so its target UUID may have no live shortcode to expose.
-  id: z.uuid(),
-  entityType: searchableEntitySchema,
-  entityId: z.uuid(),
-  model: z.string(),
-  createdAt: z.date(),
-});
-
-/**
- * A stored file no edge still reaches — R2 bytes nothing can render.
- *
- * Permanent diagnostic exceptions: `targetType`/`targetId` are provenance
- * recorded at attach time, so the entity they name may itself be gone. They are
- * shown to say where the file came from, never to link anywhere.
- */
-export const unreferencedImageSchema = z.object({
-  id: z.uuid(),
-  key: z.string(),
-  filename: z.string(),
-  contentType: z.string(),
-  size: z.number(),
-  createdAt: z.date(),
-  targetType: z.string().nullable(),
-  targetId: z.string().nullable(),
-});
-
 /**
  * A live entity with no embedding row under the current provider/model/dimensions
- * — invisible to semantic search until backfilled. The mirror image of
- * {@link orphanedEntityEmbeddingSchema}, and carries no id/model of its own
- * because there is no row yet.
+ * — invisible to semantic search until backfilled. Carries no id/model of its
+ * own because there is no row yet.
  *
  * These rows are a SAMPLE (the detector caps them); `MaintenanceCounts.
  * entitiesMissingEmbeddings` carries the true figure.
  */
 export const entityMissingEmbeddingSchema = z.object({
   ...searchableEntityRefFields,
-  // Deliberately NOT hoisted onto `searchableEntityRefFields` itself (that type
-  // is shared with `orphanedEntityEmbeddingSchema`, whose row points at an
-  // entity that's been soft-deleted — there is no live row to resolve a
-  // shortcode from, and inventing one would link to a 404). This half of the
-  // pair points at a LIVE entity, so it can always be resolved and is safe to
-  // link. Plain string, not a branded schema: `entityType` is one of ten
+  // Deliberately NOT hoisted onto `searchableEntityRefFields` itself: this row
+  // always points at a LIVE entity, so it can always be resolved and is safe
+  // to link. Plain string, not a branded schema: `entityType` is one of ten
   // different entities, so no single branded type could be right for all of
   // them — mirrors why `entityId` above is also a plain string.
   entityId: publicEntityIdSchema,
@@ -734,8 +702,6 @@ const problemsFastFields = {
   purchaselessExitExpenses: z.array(purchaselessExitExpenseSchema),
   toolsUsedOutsideOwnership: z.array(toolUsedOutsideOwnershipSchema),
   productsWithNoImages: z.array(productWithNoImagesSchema),
-  orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingSchema),
-  unreferencedImages: z.array(unreferencedImageSchema),
   entitiesMissingEmbeddings: z.array(entityMissingEmbeddingSchema),
   staleParentRecipes: z.array(staleParentRecipeSchema),
   understatedCostMeals: z.array(understatedCostMealSchema),
@@ -906,14 +872,6 @@ export const allProblemsSchema = z.object({
   totalProblems: z.number(),
 });
 
-const orphanedEntityEmbeddingMcpOut = orphanedEntityEmbeddingSchema.omit({
-  id: true,
-  entityId: true,
-});
-const unreferencedImageMcpOut = unreferencedImageSchema.omit({
-  id: true,
-  targetId: true,
-});
 const referentialLivenessViolationMcpOut =
   referentialLivenessViolationSchema.omit({
     targetId: true,
@@ -922,15 +880,9 @@ const referentialLivenessViolationMcpOut =
 
 /** MCP problem catalog with storage-only diagnostic identifiers removed. */
 export const allProblemsMcpSchema = allProblemsSchema.extend({
-  orphanedEntityEmbeddings: z.array(orphanedEntityEmbeddingMcpOut),
-  unreferencedImages: z.array(unreferencedImageMcpOut),
   referentialLivenessViolations: z.array(referentialLivenessViolationMcpOut),
 });
 
-export const orphanedEntityEmbeddingsMcpOut = z.array(
-  orphanedEntityEmbeddingMcpOut,
-);
-export const unreferencedImagesMcpOut = z.array(unreferencedImageMcpOut);
 export const referentialLivenessViolationsMcpOut = z.array(
   referentialLivenessViolationMcpOut,
 );
@@ -1038,8 +990,6 @@ export const PROBLEM_CLASS = {
   unusedIngredientsWithProduct: "defect",
   unusedIngredientsWithoutProduct: "defect",
   locationsWithoutAiDescription: "defect",
-  orphanedEntityEmbeddings: "defect",
-  unreferencedImages: "defect",
   entitiesMissingEmbeddings: "defect",
   staleParentRecipes: "defect",
   // A cooked meal with nothing planned is unfinished, and it converges to zero
@@ -1379,7 +1329,6 @@ export const maintenanceCountsSchema = z.object({
   locationsWithoutAiDescription: z.number().int(),
   staleRecipeTotals: z.number().int(),
   cullablePendingImages: z.number().int(),
-  unreferencedImages: z.number().int(),
   // Live entities with no embedding under the current model. The TRUE figure —
   // the matching Problems section only carries a capped sample, so this is what
   // the auto-fix button counts. 0 when embeddings aren't configured.
@@ -1420,17 +1369,6 @@ export const problemsPruneAliasesEventSchema = z.discriminatedUnion("type", [
     result: z.object({ pruned: z.number() }),
   }),
 ]);
-
-export const cleanupOrphanedEntityEmbeddingsInput = z
-  .object({
-    ids: z.array(z.uuid()).optional(),
-  })
-  .optional();
-
-export const cleanupOrphanedEntityEmbeddingsOut = z.object({
-  found: z.number().int().nonnegative(),
-  deleted: z.number().int().nonnegative(),
-});
 
 export const recipeUsageByProductInput = z.object({
   productShortcodes: z.array(productShortcode),

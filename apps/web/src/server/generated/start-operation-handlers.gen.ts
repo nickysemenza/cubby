@@ -23,9 +23,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "ai.approveDetectedInventoryItem": async () =>
     (await import("~/server/ai-browser.server")).aiHandlers.operations
       .approveDetectedInventoryItem,
-  "ai.auditCategories": async () =>
-    (await import("~/server/ai-browser.server")).aiHandlers.operations
-      .auditCategories,
   "ai.describeLocation": async () =>
     (await import("~/server/ai-browser.server")).aiHandlers.operations
       .describeLocation,
@@ -62,33 +59,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "auditLog.list": async () =>
     (await import("~/server/audit-log-browser.server")).auditLogHandlers
       .operations.list,
-  "background-batch.cancel": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundBatchHandlers.operations.cancel,
-  "background-batch.jobs": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundBatchHandlers.operations.jobs,
-  "background-batch.list": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundBatchHandlers.operations.list,
-  "background-batch.retry": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundBatchHandlers.operations.retry,
-  "background-batch.summary": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundBatchHandlers.operations.summary,
-  "background-job.clearStranded": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundJobHandlers.operations.clearStranded,
-  "background-job.drain": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundJobHandlers.operations.drain,
-  "background-job.retry": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundJobHandlers.operations.retry,
-  "background-job.strandedCount": async () =>
-    (await import("~/server/background-batch-browser.server"))
-      .backgroundJobHandlers.operations.strandedCount,
   "calendar.clearUncertainWrite": async () =>
     (await import("~/server/calendar-browser.server")).calendarHandlers
       .operations.clearUncertainWrite,
@@ -233,9 +203,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "householdContribution.project": async () =>
     (await import("~/server/household-contribution-browser.server"))
       .householdContributionHandlers.operations.project,
-  "image.cleanupUnreferencedImages": async () =>
-    (await import("~/server/image-browser.server")).imageUploadHandlers
-      .operations.cleanupUnreferencedImages,
   "image.cullPendingImages": async () =>
     (await import("~/server/image-browser.server")).imageUploadHandlers
       .operations.cullPendingImages,
@@ -338,9 +305,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "location.parentOptions": async () =>
     (await import("~/server/location-browser.server")).locationHandlers
       .operations.parentOptions,
-  "location.recomputeValuations": async () =>
-    (await import("~/server/location-browser.server")).locationHandlers
-      .operations.recomputeValuations,
   "location.search": async () =>
     (await import("~/server/location-browser.server")).locationHandlers
       .operations.search,
@@ -350,6 +314,12 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "location.valuationSummary": async () =>
     (await import("~/server/location-browser.server")).locationHandlers
       .operations.valuationSummary,
+  "maintenance.awaitingWork": async () =>
+    (await import("~/server/maintenance-browser.server")).maintenanceHandlers
+      .operations.awaitingWork,
+  "maintenance.settleAwaitingWork": async () =>
+    (await import("~/server/maintenance-browser.server")).maintenanceHandlers
+      .operations.settleAwaitingWork,
   "mcp.listTools": async () =>
     (await import("~/server/mcp-browser.server")).mcpHandlers.operations
       .listTools,
@@ -395,9 +365,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "oauth.revokeConnectedApp": async () =>
     (await import("~/server/oauth-browser.server")).oauthHandlers.operations
       .revokeConnectedApp,
-  "problems.cleanupOrphanedEmbeddings": async () =>
-    (await import("~/server/problems-browser.server")).problemsHandlers
-      .operations.cleanupOrphanedEmbeddings,
   "problems.deleteUnused": async () =>
     (await import("~/server/problems-browser.server")).problemsHandlers
       .operations.deleteUnused,
@@ -671,12 +638,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "search.debug": async () =>
     (await import("~/server/search-browser.server")).searchHandlers.operations
       .debug,
-  "search.documentHealth": async () =>
-    (await import("~/server/search-browser.server")).searchHandlers.operations
-      .documentHealth,
-  "search.enqueueEmbeddingBackfill": async () =>
-    (await import("~/server/search-browser.server")).searchHandlers.operations
-      .enqueueEmbeddingBackfill,
   "search.find": async () =>
     (await import("~/server/search-browser.server")).searchHandlers.operations
       .find,
@@ -689,9 +650,6 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "search.relatedGrouped": async () =>
     (await import("~/server/search-browser.server")).searchHandlers.operations
       .relatedGrouped,
-  "search.repairDocuments": async () =>
-    (await import("~/server/search-browser.server")).searchHandlers.operations
-      .repairDocuments,
   "search.requestEmbeddingRefresh": async () =>
     (await import("~/server/search-browser.server")).searchHandlers.operations
       .requestEmbeddingRefresh,
@@ -803,6 +761,9 @@ export const WORKFLOW_STREAM_HANDLER_LOADERS = {
   "recipe.reprocessCookbook": async () =>
     (await import("~/server/recipe-browser.server")).recipeStreamHandlers
       .streams.reprocessCookbook,
+  "search.repairIndex": async () =>
+    (await import("~/server/search-browser.server")).searchStreamHandlers
+      .streams.repairIndex,
 } as const satisfies Record<
   StartOperationIdOfKind<"subscription">,
   WorkflowStreamHandlerLoader

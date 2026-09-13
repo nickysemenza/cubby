@@ -1,4 +1,3 @@
-import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
@@ -17,7 +16,6 @@ import {
 import type { MealMutationHooks } from "~/server/repo/meal/crud";
 import { executeDeleteWithEffects } from "~/server/repo/removal";
 import type { TaskMutationHooks } from "~/server/repo/task/crud";
-import type { LocationValuationService } from "~/server/services/location-valuation.service";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import type { USDAService } from "~/server/services/usda.service";
 export interface EntityKernelContext {
@@ -32,7 +30,6 @@ export interface EntityKernelContext {
   upcLookupClient: UPCLookupClient;
   services: {
     recipeCosting: RecipeCostingService;
-    locationValuation: LocationValuationService;
   };
   /** Internal protocol metadata for a transactional CalDAV stale-write check. */
   caldavHooks?: { meal?: MealMutationHooks; task?: TaskMutationHooks };
@@ -69,7 +66,6 @@ export const entityMutationReferences = <E extends EntitySchemaBindingEntity>(
 interface EntityKernelDeleteResult {
   deletedReferences: EntityMutationReference[];
   detachedImageKeys?: string[];
-  backgroundBatches?: BackgroundBatchRef[];
   affectedEdges?: Array<{
     edge: string;
     effect: OperationDisposition["effect"];
@@ -85,7 +81,6 @@ interface EntityKernelDeleteResult {
 interface EntityKernelBulkUpdateResult<E extends EntitySchemaBindingEntity> {
   updatedReferences: EntityMutationReference<E>[];
   detachedImageKeys?: string[];
-  backgroundBatches?: BackgroundBatchRef[];
 }
 
 type SchemaOutput<S> = S extends ZodSchema ? ZodOutput<S> : never;
@@ -178,7 +173,6 @@ interface EntityRepositoryWriteResult<
   output: ZodOutput<S["output"]>;
   entityId: EntityInternalId<E>;
   detachedImageKeys?: string[];
-  backgroundBatches?: BackgroundBatchRef[];
 }
 
 type PresentSchemaOutput<S> = ZodOutput<Extract<S, ZodSchema>>;
@@ -269,7 +263,6 @@ export interface EntityMergePort<
     output: ZodOutput<SOutput>;
     entityId: EntityInternalId<E> | null;
     detachedImageKeys: string[];
-    backgroundBatches?: BackgroundBatchRef[];
   }>;
 }
 

@@ -22,15 +22,6 @@
     }
   ],
   "sideEffects": {
-    "backgroundBatches": [
-      {
-        "id": "job-sample-1",
-        "kind": "location-valuation.recompute",
-        "source": "mutation",
-        "processor": "queue",
-        "status": "queued",
-        "totalJobs": 1
-      }
-    ]
+    "backgroundBatches": []
   }
 }

@@ -73,7 +73,7 @@ export const inventoryEntityAdapter = defineEntityAdapter({
     delete: async (ctx, shortcodes) => {
       const ids = await inventoryShortcodes.all(ctx.db, shortcodes);
       await deleteInventoryEntries(ctx.db, ids, ctx.actorContext);
-      const backgroundBatches = await runMutationSideEffectsForEntities(
+      await runMutationSideEffectsForEntities(
         ctx.db,
         ids.map((entityId) => ({
           action: "deleted" as const,
@@ -83,7 +83,6 @@ export const inventoryEntityAdapter = defineEntityAdapter({
       );
       return {
         deletedReferences: entityMutationReferences("inventory", shortcodes),
-        backgroundBatches,
       };
     },
   },

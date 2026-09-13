@@ -304,7 +304,6 @@ export default defineEntity({
       { key: "gardenKind", specialized: "enum:gardenKind" },
       "gardenConditions",
       "aiDescription",
-      { key: "valuation", specialized: "json:valuation" },
     ],
     create: [
       "name",

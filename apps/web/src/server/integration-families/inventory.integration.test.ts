@@ -12,5 +12,6 @@ import "../repo/product/discard.integration.test";
 import "../repo/product/ownership.integration.test";
 import "../repo/product/quantity-ledger.integration.test";
 import "../repo/product/stock-tracked.integration.test";
-import "../services/location-valuation.integration.test";
+import "../repo/location/valuation.integration.test";
 import "../repo/smart-collection.integration.test";
+import "../repo/location.integration.test";

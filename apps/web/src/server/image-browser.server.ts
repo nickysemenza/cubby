@@ -19,7 +19,6 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getImagesByProjectIds } from "~/server/repo/image";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
-  cleanupUnreferencedImagesWorkflow,
   cullPendingImagesWorkflow,
   importImageFromUrlWorkflow,
   initiateDocumentUploadWorkflow,
@@ -194,7 +193,5 @@ export const imageUploadHandlers = implementOperationDomain(
       importImageFromUrlWorkflow(context.db, input),
     cullPendingImages: (context, input) =>
       cullPendingImagesWorkflow(context.db, input),
-    cleanupUnreferencedImages: (context) =>
-      cleanupUnreferencedImagesWorkflow(context.db),
   },
 );

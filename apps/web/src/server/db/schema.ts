@@ -1,13 +1,5 @@
 import type { AiAnalysisEntityType } from "@cubby/schemas/ai";
 import type { AuditEntityType } from "@cubby/schemas/audit";
-import {
-  type BackgroundBatchProcessor,
-  type BackgroundBatchSource,
-  type BackgroundBatchStatus,
-  type BackgroundJobKind,
-  type BackgroundJobStatus,
-  backgroundJobKinds,
-} from "@cubby/schemas/background-jobs";
 import type { Amount } from "@cubby/schemas/codec";
 import type { Entity } from "@cubby/schemas/entity-core";
 import type {
@@ -53,7 +45,6 @@ import {
   index,
   integer,
   jsonb,
-  pgEnum,
   pgTable,
   pgView,
   real,
@@ -158,44 +149,6 @@ export {
   user,
   verification,
 };
-
-export const backgroundJobKindEnum = pgEnum(
-  "BackgroundJobKind",
-  backgroundJobKinds,
-);
-
-export const backgroundBatchStatusEnum = pgEnum("BackgroundBatchStatus", [
-  "queued",
-  "running",
-  "succeeded",
-  "partial",
-  "failed",
-  "cancelled",
-]);
-
-export const backgroundJobStatusEnum = pgEnum("BackgroundJobStatus", [
-  "pending",
-  "queued",
-  "running",
-  "succeeded",
-  "skipped",
-  "failed",
-  "cancelled",
-]);
-
-export const backgroundBatchSourceEnum = pgEnum("BackgroundBatchSource", [
-  "ui",
-  "mutation",
-  "backfill",
-  "maintenance",
-  "queue",
-  "dev-inline",
-]);
-
-export const backgroundBatchProcessorEnum = pgEnum("BackgroundBatchProcessor", [
-  "queue",
-  "inline",
-]);
 
 const baseTimestamps = () => ({
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -2369,7 +2322,6 @@ export const aiUsage = pgTable(
     cacheStatus: text("cacheStatus").$type<"hit" | "miss" | "none">(),
     entityType: text("entityType"),
     entityId: uuid("entityId"),
-    batchId: uuid("batchId"),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     ...softDeletedAt(),
   },
@@ -2383,7 +2335,6 @@ export const aiUsage = pgTable(
       table.createdAt.desc(),
     ),
     index("AiUsage_entity_idx").on(table.entityType, table.entityId),
-    index("AiUsage_batch_idx").on(table.batchId),
   ],
 );
 
@@ -2433,100 +2384,6 @@ export const mcpToolCall = pgTable(
       table.entity,
       table.occurredAt.desc(),
     ),
-  ],
-);
-
-export const backgroundBatch = pgTable(
-  "BackgroundBatch",
-  {
-    id: pkUuid(),
-    kind: backgroundJobKindEnum("kind").notNull().$type<BackgroundJobKind>(),
-    // Durable workflow identity. Only active batches participate in the
-    // partial unique index below, so a completed maintenance run remains
-    // auditable while a later run may start normally.
-    dedupeKey: text("dedupeKey"),
-    source: backgroundBatchSourceEnum("source")
-      .notNull()
-      .$type<BackgroundBatchSource>(),
-    processor: backgroundBatchProcessorEnum("processor")
-      .notNull()
-      .default("inline")
-      .$type<BackgroundBatchProcessor>(),
-    status: backgroundBatchStatusEnum("status")
-      .notNull()
-      .default("queued")
-      .$type<BackgroundBatchStatus>(),
-    totalJobs: integer("totalJobs").notNull().default(0),
-    queuedJobs: integer("queuedJobs").notNull().default(0),
-    runningJobs: integer("runningJobs").notNull().default(0),
-    succeededJobs: integer("succeededJobs").notNull().default(0),
-    failedJobs: integer("failedJobs").notNull().default(0),
-    skippedJobs: integer("skippedJobs").notNull().default(0),
-    cancelledJobs: integer("cancelledJobs").notNull().default(0),
-    firstEnqueuedAt: timestamp("firstEnqueuedAt", { mode: "date" }),
-    lastEnqueuedAt: timestamp("lastEnqueuedAt", { mode: "date" }),
-    firstJobStartedAt: timestamp("firstJobStartedAt", { mode: "date" }),
-    lastJobFinishedAt: timestamp("lastJobFinishedAt", { mode: "date" }),
-    // bigint, not integer: int32 tops out at 2_147_483_647 ms = 24.86 days, and
-    // these are wall-clock spans over a batch's whole life. A batch left open
-    // longer than that (a lost queue wakeup strands one indefinitely) overflowed
-    // the moment anything stamped finishedAt on its jobs, so the summary UPDATE
-    // threw 22003 and rolled back the work that triggered it.
-    processingDurationMs: bigint("processingDurationMs", { mode: "number" }),
-    wallDurationMs: bigint("wallDurationMs", { mode: "number" }),
-    activeDurationMs: bigint("activeDurationMs", { mode: "number" })
-      .notNull()
-      .default(0),
-    metadata: jsonb("metadata").$type<unknown>(),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    index("BackgroundBatch_status_idx").on(table.status),
-    index("BackgroundBatch_kind_idx").on(table.kind),
-    uniqueIndex("BackgroundBatch_active_dedupe_key")
-      .on(table.kind, table.dedupeKey)
-      .where(
-        sql`${table.deletedAt} IS NULL AND ${table.dedupeKey} IS NOT NULL AND ${table.status} IN ('queued', 'running')`,
-      ),
-    index("BackgroundBatch_createdAt_idx").on(table.createdAt.desc()),
-  ],
-);
-
-export const backgroundJob = pgTable(
-  "BackgroundJob",
-  {
-    id: pkUuid(),
-    batchId: uuid("batchId")
-      .notNull()
-      .references(() => backgroundBatch.id),
-    kind: backgroundJobKindEnum("kind").notNull().$type<BackgroundJobKind>(),
-    dedupeKey: text("dedupeKey").notNull(),
-    payload: jsonb("payload").notNull().$type<unknown>(),
-    status: backgroundJobStatusEnum("status")
-      .notNull()
-      .default("pending")
-      .$type<BackgroundJobStatus>(),
-    attempts: integer("attempts").notNull().default(0),
-    maxAttempts: integer("maxAttempts").notNull().default(3),
-    queuedAt: timestamp("queuedAt", { mode: "date" }),
-    startedAt: timestamp("startedAt", { mode: "date" }),
-    finishedAt: timestamp("finishedAt", { mode: "date" }),
-    // bigint for the same reason as the batch spans above: a job whose worker
-    // died holds `running` until the lease reclaims it, so now-startedAt can
-    // exceed 24.86 days.
-    durationMs: bigint("durationMs", { mode: "number" }),
-    lastError: text("lastError"),
-    ...baseTimestamps(),
-    ...softDeletedAt(),
-  },
-  (table) => [
-    index("BackgroundJob_batch_idx").on(table.batchId),
-    index("BackgroundJob_status_idx").on(table.status),
-    index("BackgroundJob_kind_idx").on(table.kind),
-    uniqueIndex("BackgroundJob_batch_dedupe_key")
-      .on(table.batchId, table.dedupeKey)
-      .where(sql`${table.deletedAt} IS NULL`),
   ],
 );
 

@@ -1,10 +1,12 @@
 /**
  * Embedding-coverage Problems detector.
  *
- * The mirror image of `findOrphanedEntityEmbeddings` (repo/entity-embedding-cleanup):
- * that one finds embedding rows whose entity is gone, this one finds live
- * entities that have no embedding row — i.e. records semantic search simply
- * cannot see. Both are needed; neither implies the other.
+ * Finds live entities that have no embedding row — i.e. records semantic
+ * search simply cannot see. (The mirror question — embedding rows whose
+ * entity is gone — no longer has a detector: both removal-path invariants
+ * soft-delete `SearchDocument`/`EntityEmbedding` in the same transaction as
+ * the entity, so an orphaned row is structurally impossible rather than
+ * something to detect.)
  *
  * Deliberately a pure SQL anti-join, NOT a reuse of the SearchDocument
  * embedding-backfill worklist: that path scans and hashes the complete catalog

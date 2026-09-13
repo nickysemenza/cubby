@@ -1,7 +1,6 @@
 import type { AiUsageEntry, AiUsageSummaryRow } from "@cubby/schemas/ai";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import { EntityInlineLinkById } from "~/app/_components/EntityInlineLinkById";
@@ -116,6 +115,7 @@ export function AiUsageTableStatus({
   emptyLabel,
   retryLabel,
   onRetry,
+  colSpan = 11,
 }: {
   isLoading: boolean;
   error: unknown;
@@ -123,12 +123,13 @@ export function AiUsageTableStatus({
   emptyLabel: string;
   retryLabel: string;
   onRetry: () => void;
+  colSpan?: number;
 }) {
   if (!isLoading && !error && !isEmpty) return null;
 
   return (
     <TableRow>
-      <TableCell colSpan={11}>
+      <TableCell colSpan={colSpan}>
         {isLoading ? (
           <Spinner />
         ) : error ? (
@@ -179,19 +180,6 @@ export function UsageEntityLink({
       entityId={row.entityId}
       compact
     />
-  );
-}
-
-function BatchLink({ batchId }: { batchId: string | null }) {
-  if (!batchId) return <span className="text-muted-foreground">-</span>;
-  return (
-    <Link
-      to="/background-jobs"
-      search={{ batchId }}
-      className="font-mono text-xs underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
-    >
-      {batchId.slice(0, 8)}
-    </Link>
   );
 }
 
@@ -351,7 +339,6 @@ export function AiUsagePage() {
               <TableHead>Operation</TableHead>
               <TableHead>Cache</TableHead>
               <TableHead>Entity</TableHead>
-              <TableHead>Batch</TableHead>
               <TableHead>Input</TableHead>
               <TableHead>Output</TableHead>
               <TableHead>Cost</TableHead>
@@ -375,9 +362,6 @@ export function AiUsagePage() {
                 <TableCell>
                   <UsageEntityLink row={row} />
                 </TableCell>
-                <TableCell>
-                  <BatchLink batchId={row.batchId} />
-                </TableCell>
                 <TableCell>{formatTokens(row.inputTokens)}</TableCell>
                 <TableCell>{formatTokens(row.outputTokens)}</TableCell>
                 <TableCell>
@@ -393,6 +377,7 @@ export function AiUsagePage() {
               emptyLabel="No recent calls"
               retryLabel="Retry recent calls"
               onRetry={() => void recentQuery.refetch()}
+              colSpan={10}
             />
           </TableBody>
         </Table>

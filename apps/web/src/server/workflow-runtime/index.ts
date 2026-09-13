@@ -1,5 +1,4 @@
 export { inspectWorkflow } from "./definition";
-export type { WorkflowDefinition } from "./definition";
 export * from "./execute";
 
 export * from "./operation";

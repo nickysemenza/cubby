@@ -1,4 +1,4 @@
-import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
+import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import type { EntityRef } from "@cubby/schemas/identifiers";
 import type {
   SearchableEntity,
@@ -7,11 +7,11 @@ import type {
 import { uniqBy } from "es-toolkit";
 
 import {
-  dispatchBackgroundJobs,
-  dispatchLocationValuationRecompute,
-  dispatchProblemCountsRefresh,
-} from "~/server/background-dispatch";
-import type { Database } from "~/server/db";
+  type PublishOptions,
+  publishInBackground,
+} from "~/server/background-tasks/publish";
+import { getProblemCountsCache } from "~/server/cf-env";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   findCommercialEmbeddingRefsForExpenses,
   findEmbeddingRefsForPurchases,
@@ -25,10 +25,9 @@ import {
   findTransactionEmbeddingRefsForAccounts,
   findWishEmbeddingRefsForProducts,
 } from "~/server/repo/entity-embedding";
-import {
-  refreshSearchDocument,
-  refreshSearchDocuments,
-} from "~/server/repo/search-document";
+import { refreshSearchDocuments } from "~/server/repo/search-document";
+
+import { markProblemCountsDirty } from "./problem-counts-dirty";
 
 const mutationSideEffectEntities = [
   "product",
@@ -73,9 +72,14 @@ export const isMutationSideEffectRef = (
 ): ref is MutationSideEffectEntityRef => isMutationSideEffectEntity(ref.entity);
 
 export interface MutationSideEffectPorts {
-  readonly dispatchBackgroundJobs: typeof dispatchBackgroundJobs;
-  readonly dispatchLocationValuationRecompute: typeof dispatchLocationValuationRecompute;
-  readonly dispatchProblemCountsRefresh: typeof dispatchProblemCountsRefresh;
+  /** Publish after commit; failures are reported, never surfaced as rollback. */
+  readonly publishTasks: (
+    db: Database,
+    tasks: readonly BackgroundTaskInput[],
+    options: PublishOptions,
+  ) => Promise<void>;
+  /** One KV write; the badge read refreshes the snapshot when it sees it. */
+  readonly markProblemCountsDirty: () => Promise<void>;
   readonly findInventoryEmbeddingRefsForProducts: typeof findInventoryEmbeddingRefsForProducts;
   readonly findInventoryEmbeddingRefsForLocations: typeof findInventoryEmbeddingRefsForLocations;
   readonly findRecipeEmbeddingRefsForIngredients: typeof findRecipeEmbeddingRefsForIngredients;
@@ -87,21 +91,18 @@ export interface MutationSideEffectPorts {
   readonly findEmbeddingRefsForPurchases: typeof findEmbeddingRefsForPurchases;
   readonly findTransactionEmbeddingRefsForAccounts: typeof findTransactionEmbeddingRefsForAccounts;
   readonly findCommercialEmbeddingRefsForExpenses: typeof findCommercialEmbeddingRefsForExpenses;
-  readonly refreshSearchDocument: (
-    db: Database,
-    entityType: SearchableEntity,
-    entityId: string,
-  ) => Promise<void>;
   readonly refreshSearchDocuments: (
-    db: Database,
+    db: Database | DrizzleTransaction,
     refs: SearchableEntityRef[],
   ) => Promise<void>;
 }
 
 const productionMutationSideEffectPorts: MutationSideEffectPorts = {
-  dispatchBackgroundJobs,
-  dispatchLocationValuationRecompute,
-  dispatchProblemCountsRefresh,
+  publishTasks: publishInBackground,
+  markProblemCountsDirty: async () => {
+    const cache = getProblemCountsCache();
+    if (cache) await markProblemCountsDirty(cache);
+  },
   findInventoryEmbeddingRefsForProducts,
   findInventoryEmbeddingRefsForLocations,
   findRecipeEmbeddingRefsForIngredients,
@@ -113,31 +114,36 @@ const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   findEmbeddingRefsForPurchases,
   findTransactionEmbeddingRefsForAccounts,
   findCommercialEmbeddingRefsForExpenses,
-  refreshSearchDocument: async (...args) => {
-    await refreshSearchDocument(...args);
-  },
   refreshSearchDocuments: async (...args) => {
     await refreshSearchDocuments(...args);
   },
 };
+
+export { productionMutationSideEffectPorts };
 type MutationEntityType = MutationSideEffectEvent["entity"]["entity"];
 type MutationAction = MutationSideEffectEvent["action"];
 
+/** Post-commit handlers publish, so they always hold the request Database. */
 interface HandlerContext {
   db: Database;
   event: MutationSideEffectEvent;
   ports: MutationSideEffectPorts;
 }
 
-type MutationSideEffectBatchHandler = (
-  ctx: HandlerContext,
-) => Promise<BackgroundBatchRef[]>;
+/** Ref collectors also run inside the write transaction. */
+interface CollectorContext {
+  db: Database | DrizzleTransaction;
+  event: MutationSideEffectEvent;
+  ports: MutationSideEffectPorts;
+}
+
+type MutationSideEffectHandler = (ctx: HandlerContext) => Promise<void>;
 type MutationSideEffectManifest = Record<
   MutationEntityType,
   {
-    onCreate: MutationSideEffectBatchHandler[];
-    onUpdate: MutationSideEffectBatchHandler[];
-    onDelete: MutationSideEffectBatchHandler[];
+    onCreate: MutationSideEffectHandler[];
+    onUpdate: MutationSideEffectHandler[];
+    onDelete: MutationSideEffectHandler[];
   }
 >;
 
@@ -156,76 +162,65 @@ const ownEmbeddingRef = (
     : null;
 
 /**
- * Keep the changed entity immediately discoverable without coupling a
- * successful source mutation to the availability of the derived index.
- *
- * The embedding job already queued by the manifest is the repair path when
- * this best-effort synchronous refresh fails, so the committed mutation still
- * returns success instead of reporting a false rollback to the caller.
+ * Every search document this event changes: the entity's own projection plus
+ * the projections that embed its text (a product rename rewrites its
+ * inventory, task, and wish documents). The entity kernel refreshes these
+ * inside the write transaction; other writers refresh them synchronously
+ * before responding. Either way a projection failure is a visible error, not
+ * a swallowed log — the projection is a SQL view of the row being written and
+ * has no reason to fail independently.
  */
-async function refreshOwnSearchDocument(
-  db: Database,
+export async function collectProjectionRefs(
+  db: Database | DrizzleTransaction,
   event: MutationSideEffectEvent,
-  ports: MutationSideEffectPorts,
-): Promise<void> {
-  if (event.action === "deleted") return;
-  const ref = ownEmbeddingRef(event);
-  if (!ref) return;
-  try {
-    await ports.refreshSearchDocument(db, ref.entityType, ref.entityId);
-  } catch (error) {
-    console.error("search.document.sync-refresh.failed", {
-      source: event.source,
-      action: event.action,
-      entityType: ref.entityType,
-      entityId: ref.entityId,
-      error,
-    });
+  ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
+): Promise<SearchableEntityRef[]> {
+  if (event.action === "deleted") return [];
+  const refs: SearchableEntityRef[] = [];
+  for (const handler of handlersFor(event)) {
+    const collector = embeddingRefCollectorByHandler.get(handler);
+    if (collector) refs.push(...(await collector({ db, event, ports })));
   }
+  return uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
 }
 
-async function enqueueEntityEmbeddingRefreshMany(
+/** Refresh every projection {@link collectProjectionRefs} names, on `db`. */
+export async function refreshProjectionsForEvent(
+  db: Database | DrizzleTransaction,
+  event: MutationSideEffectEvent,
+  ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
+): Promise<void> {
+  const refs = await collectProjectionRefs(db, event, ports);
+  if (refs.length > 0) await ports.refreshSearchDocuments(db, refs);
+}
+
+async function publishEmbeddingRefreshes(
   db: Database,
   refs: SearchableEntityRef[],
   event: MutationSideEffectEvent,
   ports: MutationSideEffectPorts,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const uniqueRefs = uniqBy(refs, (ref) => `${ref.entityType}:${ref.entityId}`);
-  if (uniqueRefs.length === 0) return [];
-
-  // Still the single-entity kind, not `entity-embedding.refresh-batch`: a
-  // mutation wave is a handful of refs, and keeping this kind is also what lets
-  // messages already in flight drain across a deploy.
-  const dispatched = await ports.dispatchBackgroundJobs(db, {
-    kind: "entity-embedding.refresh",
-    source: "mutation",
-    metadata: {
-      source: event.source,
-      action: event.action,
-      entity: {
-        entityType: event.entity.entity,
-        entityId: event.entity.id,
-      },
-      refCount: uniqueRefs.length,
-    },
-    jobs: uniqueRefs.map((ref) => ({
+  if (uniqueRefs.length === 0) return;
+  const requestedAt = new Date().toISOString();
+  await ports.publishTasks(
+    db,
+    uniqueRefs.map((ref) => ({
       kind: "entity-embedding.refresh" as const,
-      dedupeKey: `entity-embedding.refresh:${ref.entityType}:${ref.entityId}`,
-      payload: {
-        entityType: ref.entityType,
-        entityId: ref.entityId,
-      },
+      requestedAt,
+      entityType: ref.entityType,
+      entityId: ref.entityId,
     })),
-  });
-  return [dispatched.batch];
+    { source: `${event.source}:${event.action}` },
+  );
 }
 
 // Ref-only variant of each embedding-refresh handler below, factored out so
 // runMutationSideEffectsForEntities can collect refs across an entire bulk
-// wave and issue ONE enqueueEntityEmbeddingRefreshMany call (one transaction)
+// wave and issue ONE publishEmbeddingRefreshes call (one transaction)
 // instead of one dispatch per entity — see embeddingRefCollectorByHandler.
 type EmbeddingRefCollector = (
-  ctx: HandlerContext,
+  ctx: CollectorContext,
 ) => Promise<SearchableEntityRef[]>;
 
 const collectOwnEmbeddingRef: EmbeddingRefCollector = async (ctx) => {
@@ -324,16 +319,9 @@ const collectCommercialEmbeddingRefsForExpense: EmbeddingRefCollector = async (
   ]);
 };
 
-async function refreshOwnEmbedding(
-  ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+async function refreshOwnEmbedding(ctx: HandlerContext): Promise<void> {
   const refs = await collectOwnEmbeddingRef(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(
-    ctx.db,
-    refs,
-    ctx.event,
-    ctx.ports,
-  );
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 // NOTE: there is no onDelete embedding handler. Embedding soft-delete is
@@ -345,123 +333,86 @@ async function refreshOwnEmbedding(
 
 async function refreshInventoryEmbeddingsForProduct(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectInventoryEmbeddingRefsForProduct(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(
-    ctx.db,
-    refs,
-    ctx.event,
-    ctx.ports,
-  );
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshTaskEmbeddingsForProduct(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectTaskEmbeddingRefsForProduct(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(
-    ctx.db,
-    refs,
-    ctx.event,
-    ctx.ports,
-  );
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshWishEmbeddingsForProduct(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectWishEmbeddingRefsForProduct(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(
-    ctx.db,
-    refs,
-    ctx.event,
-    ctx.ports,
-  );
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshInventoryEmbeddingsForLocation(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectInventoryEmbeddingRefsForLocation(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(
-    ctx.db,
-    refs,
-    ctx.event,
-    ctx.ports,
-  );
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshRecipeEmbeddingsForIngredient(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectRecipeEmbeddingRefsForIngredient(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(
-    ctx.db,
-    refs,
-    ctx.event,
-    ctx.ports,
-  );
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 // Meals embed their planned recipes' names, so a recipe update fans out.
 async function refreshMealEmbeddingsForRecipe(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectMealEmbeddingRefsForRecipe(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(
-    ctx.db,
-    refs,
-    ctx.event,
-    ctx.ports,
-  );
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 // Tasks/expenses embed their project's name, so a project update fans out.
 async function refreshTrackerEmbeddingsForProject(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectTrackerEmbeddingRefsForProject(ctx);
-  return await enqueueEntityEmbeddingRefreshMany(
-    ctx.db,
-    refs,
-    ctx.event,
-    ctx.ports,
-  );
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
-async function refreshEmbeddingsForVendor(
-  ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+async function refreshEmbeddingsForVendor(ctx: HandlerContext): Promise<void> {
   const refs = await collectEmbeddingRefsForVendor(ctx);
-  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event, ctx.ports);
+  return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshEmbeddingsForPurchase(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectEmbeddingRefsForPurchase(ctx);
-  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event, ctx.ports);
+  return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshTransactionEmbeddingsForAccount(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectTransactionEmbeddingRefsForAccount(ctx);
-  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event, ctx.ports);
+  return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 async function refreshCommercialEmbeddingsForExpense(
   ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
+): Promise<void> {
   const refs = await collectCommercialEmbeddingRefsForExpense(ctx);
-  return enqueueEntityEmbeddingRefreshMany(ctx.db, refs, ctx.event, ctx.ports);
+  return publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
 // Maps each embedding-refresh handler to its ref-only collector, so the bulk
 // path (runMutationSideEffectsForEntities) can bypass the handler's own
 // per-event dispatch and instead accumulate refs for one wave-wide dispatch.
 const embeddingRefCollectorByHandler = new Map<
-  MutationSideEffectBatchHandler,
+  MutationSideEffectHandler,
   EmbeddingRefCollector
 >([
   [refreshOwnEmbedding, collectOwnEmbeddingRef],
@@ -493,53 +444,31 @@ const embeddingRefCollectorByHandler = new Map<
   ],
 ]);
 
-async function enqueueLocationAiRefresh(
-  ctx: HandlerContext,
-): Promise<BackgroundBatchRef[]> {
-  if (ctx.event.entity.entity !== "location") return [];
-  if (ctx.event.source.startsWith("location-ai.")) return [];
+async function enqueueLocationAiRefresh(ctx: HandlerContext): Promise<void> {
+  if (ctx.event.entity.entity !== "location") return;
+  if (ctx.event.source.startsWith("location-ai.")) return;
   // The analysis fingerprint includes the location name, so a rename would force
   // a cache miss and fire two Anthropic vision calls (description + inventory
   // detection) for no benefit. Only refresh when images actually changed.
-  if (!ctx.event.locationImagesChanged) return [];
-  const locationIdValue = ctx.event.entity.id;
-  const batches: BackgroundBatchRef[] = [];
-  for (const kind of [
-    "location-ai.description.refresh",
-    "location-ai.inventory.refresh",
-  ] as const) {
-    const dispatched = await ctx.ports.dispatchBackgroundJobs(ctx.db, {
-      kind,
-      source: "mutation",
-      metadata: {
-        source: ctx.event.source,
-        action: ctx.event.action,
-        entity: {
-          entityType: ctx.event.entity.entity,
-          entityId: ctx.event.entity.id,
-        },
-      },
-      jobs: [
-        {
-          kind,
-          dedupeKey: `${kind}:${locationIdValue}`,
-          payload: { locationId: locationIdValue },
-        },
-      ],
-    });
-    batches.push(dispatched.batch);
-  }
-  return batches;
+  if (!ctx.event.locationImagesChanged) return;
+  const locationId = ctx.event.entity.id;
+  const requestedAt = new Date().toISOString();
+  await ctx.ports.publishTasks(
+    ctx.db,
+    [
+      { kind: "location-ai.description.refresh", requestedAt, locationId },
+      { kind: "location-ai.inventory.refresh", requestedAt, locationId },
+    ],
+    { source: `${ctx.event.source}:${ctx.event.action}` },
+  );
 }
 
 // These side effects are intentionally coarse. Cubby data changes are low-volume,
-// and background jobs are idempotent: embeddings skip unchanged text by hash and
+// and background tasks are idempotent: embeddings skip unchanged text by hash and
 // AI analyses skip unchanged fingerprints. Prefer obvious coverage over fragile
 // changed-field detection.
 //
-// Location valuation is NOT a per-entity handler here: it is a whole-tree
-// recompute, so it is enqueued once per mutation wave (see needsValuationRecompute
-// + the run* functions) rather than per affected entity.
+// Location valuation has no side effect: it is computed on read from inventory.
 export const mutationSideEffectManifest = {
   product: {
     onCreate: [refreshOwnEmbedding, refreshInventoryEmbeddingsForProduct],
@@ -637,33 +566,9 @@ export const mutationSideEffectManifest = {
   },
 } satisfies MutationSideEffectManifest;
 
-// Whole-tree location valuation must run whenever inventory changes, a product's
-// price/details change, or a location is created/changed/removed.
-//
-// `created` counts because a location can now BE a product: a new linked
-// location adds its SKU's price to its parent's container bucket the moment it
-// exists. Before `location.productId`, a fresh location was always empty and
-// could not move any number, which is why creation used to be exempt.
-function needsValuationRecompute(event: MutationSideEffectEvent): boolean {
-  switch (event.entity.entity) {
-    case "inventory":
-      return true;
-    case "product":
-      return event.action === "updated";
-    case "location":
-      return (
-        event.action === "created" ||
-        event.action === "updated" ||
-        event.action === "deleted"
-      );
-    default:
-      return false;
-  }
-}
-
 const handlersFor = (
   event: MutationSideEffectEvent,
-): MutationSideEffectBatchHandler[] => {
+): MutationSideEffectHandler[] => {
   const manifest = mutationSideEffectManifest[event.entity.entity];
   const key = (
     {
@@ -679,92 +584,72 @@ async function runManifestHandlers(
   db: Database,
   event: MutationSideEffectEvent,
   ports: MutationSideEffectPorts,
-): Promise<BackgroundBatchRef[]> {
-  const handlers = handlersFor(event);
-  const batches: BackgroundBatchRef[] = [];
-  for (const handler of handlers) {
-    batches.push(...(await handler({ db, event, ports })));
+): Promise<void> {
+  for (const handler of handlersFor(event)) {
+    await handler({ db, event, ports });
   }
-  return batches;
 }
 
 /**
- * Problem counts are a derived, stale-safe snapshot. A failed refresh enqueue
- * must not turn an already-committed entity mutation into an apparent failure;
- * the daily safety refresh remains the repair path.
+ * Problem counts are a derived, stale-safe snapshot: the mutation only marks
+ * it dirty, and the next badge read refreshes it under a lock. A failed mark
+ * must not turn an already-committed entity mutation into an apparent failure.
  */
-async function enqueueProblemCountsRefreshBestEffort(
-  db: Database,
+async function markProblemCountsDirtyBestEffort(
   source: string,
   ports: MutationSideEffectPorts,
-): Promise<BackgroundBatchRef | null> {
+): Promise<void> {
   try {
-    const dispatched = await ports.dispatchProblemCountsRefresh(
-      db,
-      "mutation",
-      source,
-    );
-    return dispatched?.batch ?? null;
+    await ports.markProblemCountsDirty();
   } catch (error) {
-    console.error("problems.counts.refresh.enqueue.failed", {
-      source,
-      error,
-    });
-    return null;
+    console.error("problems.counts.dirty-mark.failed", { source, error });
   }
+}
+
+export interface RunMutationSideEffectsOptions {
+  /**
+   * `"skip"` when the caller already refreshed the projections inside its own
+   * write transaction (the entity kernel does); the default refreshes them
+   * synchronously first, so a non-kernel writer's document is current before
+   * its response returns.
+   */
+  projection?: "refresh" | "skip";
 }
 
 export async function runMutationSideEffects(
   db: Database,
   event: MutationSideEffectEvent,
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
-): Promise<BackgroundBatchRef[]> {
-  await refreshOwnSearchDocument(db, event, ports);
-  const batches = await runManifestHandlers(db, event, ports);
-  if (needsValuationRecompute(event)) {
-    const dispatched = await ports.dispatchLocationValuationRecompute(
-      db,
-      event.source,
-    );
-    batches.push(dispatched.batch);
+  options: RunMutationSideEffectsOptions = {},
+): Promise<void> {
+  if (options.projection !== "skip") {
+    await refreshProjectionsForEvent(db, event, ports);
   }
-  const problemCounts = await enqueueProblemCountsRefreshBestEffort(
-    db,
-    event.source,
-    ports,
-  );
-  if (problemCounts) batches.push(problemCounts);
-  return batches;
+  await runManifestHandlers(db, event, ports);
+  await markProblemCountsDirtyBestEffort(event.source, ports);
 }
 
 export async function runMutationSideEffectsForEntities(
   db: Database,
   events: MutationSideEffectEvent[],
   ports: MutationSideEffectPorts = productionMutationSideEffectPorts,
-): Promise<BackgroundBatchRef[]> {
-  const ownSearchRefs = uniqBy(
-    events.flatMap((event) => {
-      if (event.action === "deleted") return [];
-      const ref = ownEmbeddingRef(event);
-      return ref ? [ref] : [];
-    }),
-    (ref) => `${ref.entityType}:${ref.entityId}`,
-  );
-  if (ownSearchRefs.length > 0) {
-    try {
-      await ports.refreshSearchDocuments(db, ownSearchRefs);
-    } catch (error) {
-      console.error("search.document.bulk-sync-refresh.failed", {
-        refCount: ownSearchRefs.length,
-        source: events[0]?.source ?? "mutation.bulk",
-        error,
-      });
-    }
+  options: RunMutationSideEffectsOptions = {},
+): Promise<void> {
+  if (events.length === 0) return;
+  if (options.projection !== "skip") {
+    const refs = uniqBy(
+      (
+        await Promise.all(
+          events.map((event) => collectProjectionRefs(db, event, ports)),
+        )
+      ).flat(),
+      (ref) => `${ref.entityType}:${ref.entityId}`,
+    );
+    if (refs.length > 0) await ports.refreshSearchDocuments(db, refs);
   }
-  const batches: BackgroundBatchRef[] = [];
-  // Embedding-refresh handlers all funnel into the same job kind, so their
-  // refs are collected across the whole wave and dispatched once below
-  // instead of once per entity (was N transactions for N entities).
+  // Embedding-refresh handlers all funnel into the same task kind, so their
+  // refs are collected across the whole wave and published once instead of
+  // once per entity.
   const waveEmbeddingRefs: SearchableEntityRef[] = [];
   for (const event of events) {
     for (const handler of handlersFor(event)) {
@@ -773,36 +658,15 @@ export async function runMutationSideEffectsForEntities(
         waveEmbeddingRefs.push(...(await collector({ db, event, ports })));
         continue;
       }
-      batches.push(...(await handler({ db, event, ports })));
+      await handler({ db, event, ports });
     }
   }
   const firstEvent = events[0];
   if (waveEmbeddingRefs.length > 0 && firstEvent) {
-    batches.push(
-      ...(await enqueueEntityEmbeddingRefreshMany(
-        db,
-        waveEmbeddingRefs,
-        firstEvent,
-        ports,
-      )),
-    );
+    await publishEmbeddingRefreshes(db, waveEmbeddingRefs, firstEvent, ports);
   }
-  // Valuation is whole-tree, so a bulk wave needs exactly one recompute, not one
-  // per entity (the previous per-entity fan-out ran N whole-tree recomputes).
-  if (events.some(needsValuationRecompute)) {
-    const dispatched = await ports.dispatchLocationValuationRecompute(
-      db,
-      events[0]?.source ?? "mutation.bulk",
-    );
-    batches.push(dispatched.batch);
-  }
-  if (events.length > 0) {
-    const problemCounts = await enqueueProblemCountsRefreshBestEffort(
-      db,
-      events[0]?.source ?? "mutation.bulk",
-      ports,
-    );
-    if (problemCounts) batches.push(problemCounts);
-  }
-  return batches;
+  await markProblemCountsDirtyBestEffort(
+    firstEvent?.source ?? "mutation.bulk",
+    ports,
+  );
 }

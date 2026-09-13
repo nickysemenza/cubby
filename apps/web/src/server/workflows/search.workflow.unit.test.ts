@@ -3,9 +3,8 @@ import { describe, expect, it } from "vitest";
 import { inspectWorkflow } from "~/server/workflow-runtime/definition";
 
 import {
-  enqueueEmbeddingBackfillWorkflow,
   findSimilarEntitiesWorkflow,
-  repairSearchDocumentsWorkflow,
+  requestEmbeddingRefreshWorkflow,
 } from "./search.server";
 
 describe("search maintenance workflow graphs", () => {
@@ -26,16 +25,14 @@ describe("search maintenance workflow graphs", () => {
       inspectWorkflow(branch.whenTrue).steps.map((step) => step.name),
     ).toEqual(["candidates", "hits"]);
   });
-  it("keeps durable maintenance operations as committed steps", () => {
+  it("publishes an explicit refresh as one committed step after resolving the id", () => {
     expect(
-      inspectWorkflow(repairSearchDocumentsWorkflow.definition).steps.map(
-        (step) => step.type,
+      inspectWorkflow(requestEmbeddingRefreshWorkflow.definition).steps.map(
+        (step) => [step.name, step.type],
       ),
-    ).toEqual(["committedCall"]);
-    expect(
-      inspectWorkflow(enqueueEmbeddingBackfillWorkflow.definition).steps.map(
-        (step) => step.type,
-      ),
-    ).toEqual(["committedCall"]);
+    ).toEqual([
+      ["resolve", "call"],
+      ["publish", "committedCall"],
+    ]);
   });
 });

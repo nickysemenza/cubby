@@ -1,3 +1,4 @@
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { ENTITY_LABEL, parseEntityRef } from "@cubby/schemas/identifiers";
 import { searchableEntitySchema } from "@cubby/schemas/search";
@@ -70,30 +71,29 @@ const executeMerge = bindWorkflow(
     .effect("storage", async (_, { merged }) =>
       deleteStoredObjects(merged.detachedImageKeys),
     )
-    .effect("backgroundBatches", async ({ context }, { owner, merged }) => {
+    .effect("sideEffects", async ({ context }, { owner, merged }) => {
       const entityRef = merged.entityId
         ? parseEntityRef<ShortcodeEntity>(owner.binding.entity, merged.entityId)
         : null;
-      return [
-        ...(merged.backgroundBatches ?? []),
-        ...(entityRef &&
+      if (
+        entityRef &&
         owner.binding.sideEffects &&
         isMutationSideEffectRef(entityRef)
-          ? await runMutationSideEffects(context.db, {
-              action: "updated",
-              entity: entityRef,
-              source: `${owner.binding.entity}.merge`,
-            })
-          : []),
-      ];
+      ) {
+        await runMutationSideEffects(context.db, {
+          action: "updated",
+          entity: entityRef,
+          source: `${owner.binding.entity}.merge`,
+        });
+      }
     })
-    .output(({ input, merged, backgroundBatches }) =>
+    .output(({ input, merged }) =>
       entityMutationResultSchema.parse({
         action: input.action,
         entity: input.entity,
         item: merged.item,
         mergeSummary: merged.mergeSummary,
-        sideEffects: { backgroundBatches },
+        sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       }),
     ),
   (context: EntityKernelContext, input: MergeCommand) => ({ context, input }),

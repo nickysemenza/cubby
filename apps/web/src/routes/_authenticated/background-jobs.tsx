@@ -1,29 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { BackgroundJobsPage } from "~/app/_components/background-jobs/background-jobs-page";
-import { Page } from "~/components/page/Page";
-import { pageTitle } from "~/lib/page-title";
-
-const searchSchema = z.object({
-  batchId: z.string().optional(),
-  // Plural scope set by the save toast: the page narrows its batch list to just
-  // these ids so one toast link opens exactly that mutation's batches. `batchId`
-  // (singular) still drives the detail panel.
-  batchIds: z.array(z.string()).optional(),
-});
-
+// The background-job ledger and its history page are gone. The route itself
+// stays (linked from old toasts, bookmarks, and `http-route-template.ts`'s
+// redirect guard) and just sends visitors to the page that replaced it.
+// Unknown search params (`batchId`/`batchIds`) are ignored rather than
+// validated, matching `projects.tools.tsx`'s legacy-redirect shape.
 export const Route = createFileRoute("/_authenticated/background-jobs")({
-  validateSearch: searchSchema,
-  component: BackgroundJobsRoute,
-  head: () => ({ meta: [{ title: pageTitle("Background jobs") }] }),
+  beforeLoad: () => {
+    throw redirect({ to: "/problems", replace: true });
+  },
 });
-
-function BackgroundJobsRoute() {
-  const { batchId, batchIds } = Route.useSearch();
-  return (
-    <Page variant="list" title="Background jobs" listChrome="workbench">
-      <BackgroundJobsPage selectedBatchId={batchId} scopedBatchIds={batchIds} />
-    </Page>
-  );
-}

@@ -13,13 +13,11 @@ import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
 import { deleteCookbook, upsertCookbook } from "./cookbook";
 import { getDb, insertAndReturn, withTransaction } from "./database-helpers";
 import {
-  countUnreferencedImages,
   createAndAssociateUploadedImage,
   createPendingImageRecord,
   createUploadedImageRecord,
   deleteImages,
   detachImagesFromEntity,
-  findUnreferencedImages,
   imageList,
 } from "./image";
 import { createProject } from "./project";
@@ -287,7 +285,7 @@ describe("image repository — purchase (charge) documents", () => {
    * even though `detachImagesFromEntity` now deletes the row it detaches.
    */
 
-  describe("findUnreferencedImages", () => {
+  describe("imageList reference-presence filter", () => {
     it("reports an unattached UPLOADED row and skips everything still spoken for", async () => {
       const projectId = (
         await createProject(
@@ -340,8 +338,6 @@ describe("image repository — purchase (charge) documents", () => {
         .set({ createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) })
         .where(eq(image.id, orphan.id));
 
-      const found = (await findUnreferencedImages(ctx.db)).map((r) => r.id);
-      expect(await countUnreferencedImages(ctx.db)).toBe(found.length);
       const listed = await imageList(
         ctx.db,
         {
@@ -353,12 +349,7 @@ describe("image repository — purchase (charge) documents", () => {
         { pageIndex: 0, pageSize: 100 },
       );
 
-      expect(found).toContain(orphan.id);
-      expect(found).not.toContain(attached.id);
-      expect(found).not.toContain(pending.id);
-      expect(found).not.toContain(coverOnly.id);
-      // `imageList` is a read API, so its rows carry shortcodes; the raw uuid
-      // stays inside `findUnreferencedImages`, which feeds `deleteImages`.
+      // `imageList` is a read API, so its rows carry shortcodes.
       expect(listed.data.map((row) => row.id)).toContain(orphan.shortcode);
       expect(listed.data.map((row) => row.id)).not.toContain(attached.id);
       expect(listed.data.map((row) => row.id)).not.toContain(pending.id);

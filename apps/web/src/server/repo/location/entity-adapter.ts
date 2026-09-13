@@ -34,13 +34,13 @@ export const locationEntityAdapter = defineEntityAdapter({
     create: async (ctx, data) => {
       const output = await createLocation(ctx.db, data, ctx.actorContext);
       const entityId = await locationShortcodes.one(ctx.db, output.id);
-      const backgroundBatches = await runMutationSideEffects(ctx.db, {
+      await runMutationSideEffects(ctx.db, {
         action: "created",
         entity: { entity: "location", id: entityId },
         source: "location.create",
         locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
       });
-      return { output, entityId, backgroundBatches };
+      return { output, entityId };
     },
     update: async (ctx, shortcode, data) => {
       const entityId = await locationShortcodes.one(ctx.db, shortcode);
@@ -53,7 +53,7 @@ export const locationEntityAdapter = defineEntityAdapter({
         data,
         ctx.actorContext,
       );
-      const backgroundBatches = await runMutationSideEffects(ctx.db, {
+      await runMutationSideEffects(ctx.db, {
         action: "updated",
         entity: { entity: "location", id: entityId },
         source: "location.update",
@@ -64,7 +64,6 @@ export const locationEntityAdapter = defineEntityAdapter({
           output: updated,
           entityId,
           detachedImageKeys,
-          backgroundBatches,
         };
       if (updated.images.length === 0)
         await updateLocationAiDescription(ctx.db, entityId, null);
@@ -72,14 +71,13 @@ export const locationEntityAdapter = defineEntityAdapter({
         output: await getLocationById(ctx.db, entityId),
         entityId,
         detachedImageKeys,
-        backgroundBatches,
       };
     },
     delete: async (ctx, shortcodes) => {
       const ids = await locationShortcodes.all(ctx.db, shortcodes);
       const { detachedImageKeys, deletedImageShortcodes } =
         await deleteLocations(ctx.db, ids, ctx.actorContext);
-      const backgroundBatches = await runMutationSideEffectsForEntities(
+      await runMutationSideEffectsForEntities(
         ctx.db,
         ids.map((entityId) => ({
           action: "deleted" as const,
@@ -93,7 +91,6 @@ export const locationEntityAdapter = defineEntityAdapter({
           ...entityMutationReferences("image", deletedImageShortcodes),
         ],
         detachedImageKeys,
-        backgroundBatches,
       };
     },
     /**
@@ -112,7 +109,7 @@ export const locationEntityAdapter = defineEntityAdapter({
           "A bulk location patch must supply parentId (null moves to Home).",
         );
       }
-      const { backgroundBatches } = await reparentLocationsInBulk(
+      await reparentLocationsInBulk(
         ctx.db,
         ctx.actorContext,
         shortcodes,
@@ -120,7 +117,6 @@ export const locationEntityAdapter = defineEntityAdapter({
       );
       return {
         updatedReferences: entityMutationReferences("location", shortcodes),
-        backgroundBatches,
       };
     },
   },

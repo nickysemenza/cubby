@@ -1,11 +1,10 @@
-import type { enqueueEmbeddingBackfillInputSchema } from "@cubby/schemas/background-jobs";
 import type {
   requestEmbeddingRefreshInputSchema,
   searchQueryInputSchema,
 } from "@cubby/schemas/search";
 import type { z } from "zod";
 
-import { dispatchBackgroundJobs } from "~/server/background-dispatch";
+import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
@@ -15,10 +14,7 @@ import {
 import {
   findRelatedSearchHits,
   findSearchHits,
-  inspectSearchDocumentHealth,
-  repairSearchDocuments,
 } from "~/server/services/search.service";
-import { enqueueEntityEmbeddingBackfill } from "~/server/services/semantic-search.service";
 import {
   defineWorkflowOperation,
   bindWorkflow,
@@ -33,18 +29,6 @@ export const findGroupedSearchHitsWorkflow = defineWorkflowOperation(
   "search.grouped",
   findGroupedSearchHits,
 );
-export const inspectSearchDocumentHealthWorkflow = defineWorkflowOperation(
-  "search.documentHealth",
-  inspectSearchDocumentHealth,
-);
-
-export const repairSearchDocumentsWorkflow = bindWorkflow(
-  workflow<Database, undefined>("search.repairDocuments")
-    .commit("repair", async ({ context }) => repairSearchDocuments(context))
-    .output(({ repair }) => repair),
-  (db: Database) => ({ context: db, input: undefined }),
-);
-
 export const findRelatedSearchHitsWorkflow = defineWorkflowOperation(
   "search.related",
   findRelatedSearchHits,
@@ -75,23 +59,6 @@ export const inspectSearchDebugWorkflow = bindWorkflow(
   (db: Database, input: SearchDebugInput) => ({ context: db, input }),
 );
 
-type EnqueueEmbeddingBackfillInput = z.output<
-  typeof enqueueEmbeddingBackfillInputSchema
->;
-export const enqueueEmbeddingBackfillWorkflow = bindWorkflow(
-  workflow<Database, EnqueueEmbeddingBackfillInput>(
-    "search.enqueueEmbeddingBackfill",
-  )
-    .commit("enqueue", async ({ context }, { input }) =>
-      enqueueEntityEmbeddingBackfill(context, input),
-    )
-    .output(({ enqueue }) => enqueue),
-  (db: Database, input: EnqueueEmbeddingBackfillInput) => ({
-    context: db,
-    input,
-  }),
-);
-
 type RefreshInput = z.output<typeof requestEmbeddingRefreshInputSchema>;
 export const requestEmbeddingRefreshWorkflow = bindWorkflow(
   workflow<Database, RefreshInput>("search.embeddingRefresh")
@@ -99,30 +66,22 @@ export const requestEmbeddingRefreshWorkflow = bindWorkflow(
       entityType: input.entityType,
       entityId: await resolveOrThrow(context, input.entityType, input.entityId),
     }))
-    .commit("dispatch", async ({ context }, { resolve }) => {
-      const dispatched = await dispatchBackgroundJobs(context, {
-        kind: "entity-embedding.refresh",
-        source: "ui",
-        metadata: {
-          source: "relatedness.indexNow",
-          entityType: resolve.entityType,
-        },
-        jobs: [
+    // Awaited, unlike a mutation's after-commit publication: this IS the
+    // user's action, so its acknowledgment must mean the queue accepted it.
+    .commit("publish", async ({ context }, { resolve }) =>
+      publishBackgroundTasks(
+        context,
+        [
           {
             kind: "entity-embedding.refresh",
-            dedupeKey: `entity-embedding.refresh:${resolve.entityType}:${resolve.entityId}`,
-            payload: {
-              entityType: resolve.entityType,
-              entityId: resolve.entityId,
-            },
+            requestedAt: new Date().toISOString(),
+            entityType: resolve.entityType,
+            entityId: resolve.entityId,
           },
         ],
-      });
-      return dispatched;
-    })
-    .output(({ dispatch }) => ({
-      batchId: dispatch.batchId,
-      totalJobs: dispatch.jobIds.length,
-    })),
+        { source: "relatedness.indexNow" },
+      ),
+    )
+    .output(() => ({ accepted: true as const })),
   (db: Database, input: RefreshInput) => ({ context: db, input }),
 );

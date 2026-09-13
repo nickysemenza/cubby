@@ -56,9 +56,5 @@ export { reparentLocationsInBulk } from "./reparent";
 // cycle. Same reason crud.ts deep-imports `product/pricing` instead of the
 // product barrel.
 export { buildLocationTree, getLocationInventoryBreakdown } from "./tree";
-// Valuation rollup persistence
-export {
-  getLocationValuationInputs,
-  getLocationValuationSummary,
-  writeLocationValuations,
-} from "./valuation";
+// Valuation — computed on read, no persisted rollup
+export { getLocationValuationSummary } from "./valuation";

@@ -1,3 +1,4 @@
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
@@ -11,10 +12,14 @@ import {
 } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
+import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
+import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
+  type MutationSideEffectEvent,
+  refreshProjectionsForEvent,
   runMutationSideEffects,
 } from "~/server/services/mutation-side-effects";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
@@ -86,6 +91,49 @@ const parseGroupBy = <
   return z.enum(binding.sort.groupable ?? binding.sort.fields).parse(groupBy);
 };
 
+const sideEffectEventFor = <
+  E extends EntityKernelEntity,
+  S extends EntityBindingSchemas,
+>(
+  binding: EntityKernelCoreBinding<E, S>,
+  action: "created" | "updated",
+  entityId: EntityInternalId<E>,
+  source: string,
+): MutationSideEffectEvent | null => {
+  // Binding lookup erases the entity/id correlation; restore it at this
+  // boundary before routing to the subset that has side effects.
+  const entityRef = parseEntityRef<ShortcodeEntity>(binding.entity, entityId);
+  if (!binding.sideEffects || !isMutationSideEffectRef(entityRef)) return null;
+  return { action, entity: entityRef, source };
+};
+
+/**
+ * Run a repository write and the refresh of every search projection it
+ * changes inside ONE transaction. The projection is a SQL view of the row
+ * being written; a projection that cannot be written is a reason for the
+ * write to fail, not something to repair later.
+ */
+const writeWithProjections = async <
+  E extends EntityKernelEntity,
+  S extends EntityBindingSchemas,
+  TResult extends { entityId: EntityInternalId<E> },
+>(
+  context: EntityKernelContext,
+  binding: EntityKernelCoreBinding<E, S>,
+  action: "created" | "updated",
+  source: string,
+  write: (db: Database) => Promise<TResult>,
+): Promise<TResult> => {
+  if (!binding.sideEffects) return write(context.db);
+  return withTransactionDatabase(context.db, async (transactionDb) => {
+    const result = await write(transactionDb);
+    const event = sideEffectEventFor(binding, action, result.entityId, source);
+    if (event) await refreshProjectionsForEvent(transactionDb, event);
+    return result;
+  });
+};
+
+/** Post-commit effects: embedding tasks, AI refreshes, the problem-count mark. */
 const runSideEffects = async <
   E extends EntityKernelEntity,
   S extends EntityBindingSchemas,
@@ -95,15 +143,12 @@ const runSideEffects = async <
   action: "created" | "updated",
   entityId: EntityInternalId<E>,
   source: string,
-) => {
-  // Binding lookup erases the entity/id correlation; restore it at this
-  // boundary before routing to the subset that has side effects.
-  const entityRef = parseEntityRef<ShortcodeEntity>(binding.entity, entityId);
-  if (!binding.sideEffects || !isMutationSideEffectRef(entityRef)) return [];
-  return await runMutationSideEffects(ctx.db, {
-    action,
-    entity: entityRef,
-    source,
+): Promise<void> => {
+  const event = sideEffectEventFor(binding, action, entityId, source);
+  if (!event) return;
+  // The projections were refreshed inside the write transaction above.
+  await runMutationSideEffects(ctx.db, event, undefined, {
+    projection: "skip",
   });
 };
 
@@ -206,22 +251,27 @@ export const defineEntityOperations = <
         };
       })
       .commit("created", async ({ context }, { validated }) =>
-        validated.run(context, validated.data),
+        writeWithProjections(
+          context,
+          binding,
+          "created",
+          `${binding.entity}.create`,
+          (db) => validated.run({ ...context, db }, validated.data),
+        ),
       )
       .effect("storage", async (_, { created }) =>
         deleteStoredObjects(created.detachedImageKeys ?? []),
       )
-      .effect("backgroundBatches", async ({ context }, { created }) => [
-        ...(created.backgroundBatches ?? []),
-        ...(await runSideEffects(
+      .effect("sideEffects", async ({ context }, { created }) =>
+        runSideEffects(
           context,
           binding,
           "created",
           created.entityId,
           `${binding.entity}.create`,
-        )),
-      ])
-      .output(({ created, backgroundBatches }) =>
+        ),
+      )
+      .output(({ created }) =>
         entityMutationResultSchema.parse({
           action: "create",
           entity: binding.entity,
@@ -229,7 +279,7 @@ export const defineEntityOperations = <
             binding.schemas.output,
             created.output,
           ),
-          sideEffects: { backgroundBatches },
+          sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
         }),
       ),
     <TInput>(context: EntityKernelContext, input: TInput) => ({
@@ -259,22 +309,28 @@ export const defineEntityOperations = <
         };
       })
       .commit("updated", async ({ context }, { validated }) =>
-        validated.run(context, validated.id, validated.data),
+        writeWithProjections(
+          context,
+          binding,
+          "updated",
+          `${binding.entity}.update`,
+          (db) =>
+            validated.run({ ...context, db }, validated.id, validated.data),
+        ),
       )
       .effect("storage", async (_, { updated }) =>
         deleteStoredObjects(updated.detachedImageKeys ?? []),
       )
-      .effect("backgroundBatches", async ({ context }, { updated }) => [
-        ...(updated.backgroundBatches ?? []),
-        ...(await runSideEffects(
+      .effect("sideEffects", async ({ context }, { updated }) =>
+        runSideEffects(
           context,
           binding,
           "updated",
           updated.entityId,
           `${binding.entity}.update`,
-        )),
-      ])
-      .output(({ updated, backgroundBatches }) =>
+        ),
+      )
+      .output(({ updated }) =>
         entityMutationResultSchema.parse({
           action: "update",
           entity: binding.entity,
@@ -282,7 +338,7 @@ export const defineEntityOperations = <
             binding.schemas.output,
             updated.output,
           ),
-          sideEffects: { backgroundBatches },
+          sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
         }),
       ),
     <TInput>(context: EntityKernelContext, id: string, data: TInput) => ({
@@ -314,7 +370,7 @@ export const defineEntityOperations = <
           entity: binding.entity,
           deletedReferences: receipt.deletedReferences,
           affectedEdges: receipt.affectedEdges,
-          sideEffects: { backgroundBatches: receipt.backgroundBatches ?? [] },
+          sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
         }),
       ),
     (context: EntityKernelContext, input: string[]) => ({ context, input }),
@@ -353,7 +409,7 @@ export const defineEntityOperations = <
           action: "bulkUpdate",
           entity: binding.entity,
           updatedReferences: updated.updatedReferences,
-          sideEffects: { backgroundBatches: updated.backgroundBatches ?? [] },
+          sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
         }),
       ),
     <TInput>(context: EntityKernelContext, ids: string[], data: TInput) => ({

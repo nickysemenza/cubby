@@ -7,10 +7,12 @@
 
 // Core database access
 export {
+  databaseForTransaction,
   getDb,
   isTransaction,
   unwrapDb,
   withTransaction,
+  withTransactionDatabase,
   withTransactionOn,
 } from "./core";
 // CRUD operations

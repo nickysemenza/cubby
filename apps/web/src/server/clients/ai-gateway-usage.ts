@@ -10,7 +10,6 @@ export type AiGatewayUsageContext = SupportedAiModelRef & {
   operation: string;
   cacheStatus?: "hit" | "miss" | "none";
   entity?: { entityType: string; entityId: string } | null;
-  batchId?: string | null;
 };
 
 export function aiGatewayUsageMiddleware(

@@ -1,3 +1,4 @@
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type {
   CandidateEquivalence,
   EquivalenceReport,
@@ -87,12 +88,12 @@ export const duplicateWorkflow = bindWorkflow(
     .effect("entityId", async ({ context }, { duplicated }) =>
       recipeShortcodes.one(context.db, duplicated.id),
     )
-    .effect("costing", async ({ context }, { entityId }) =>
-      context.services.recipeCosting.dispatchRecompute([entityId], {
+    .effect("costing", async ({ context }, { entityId }) => {
+      await context.services.recipeCosting.dispatchRecompute([entityId], {
         source: "recipe.duplicate",
         entity: { entityType: "recipe", entityId },
-      }),
-    )
+      });
+    })
     .effect("background", async ({ context }, { entityId }) =>
       runMutationSideEffects(context.db, {
         action: "created",
@@ -100,9 +101,9 @@ export const duplicateWorkflow = bindWorkflow(
         source: "recipe.duplicate",
       }),
     )
-    .output(({ duplicated, costing, background }) => ({
+    .output(({ duplicated }) => ({
       ...duplicated,
-      sideEffects: { backgroundBatches: [...costing, ...background] },
+      sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     })),
   (
     context: AuthenticatedStartOperationContext,
@@ -173,7 +174,6 @@ type RecipeCostingCoordinatorInput = {
 type RecipeCostingCoordinatorResult = {
   readonly enqueued: number;
   readonly total: number;
-  readonly batchId: string | null;
 };
 
 const recipeCostingCoordinator = (

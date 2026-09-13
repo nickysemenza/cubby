@@ -1,3 +1,4 @@
+import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import {
   expenseCreateInput,
   projectCreateInput,
@@ -5,7 +6,6 @@ import {
 } from "@cubby/schemas/project";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import {
@@ -24,21 +24,39 @@ import {
 } from "~/server/repo/repo.fixtures";
 import { createTask } from "~/server/repo/task";
 
-import {
-  getBackgroundBatchDetail,
-  listBackgroundBatches,
-} from "../repo/background-jobs";
 import { getSemanticEmbeddingConfig } from "../semantic/config";
 import {
+  productionMutationSideEffectPorts,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
+  type MutationSideEffectPorts,
 } from "./mutation-side-effects";
 
-const batchMetadataSchema = z.object({ source: z.string().optional() });
-const batchSource = <Metadata>(metadata: Metadata): string | undefined => {
-  const parsed = batchMetadataSchema.safeParse(metadata);
-  return parsed.success ? parsed.data.source : undefined;
-};
+/**
+ * Real find-embedding-refs and refreshSearchDocuments ports (so embedding
+ * fan-out still reads the actual DB), but publishTasks/markProblemCountsDirty
+ * are captured in-memory instead of hitting the queue or KV.
+ */
+function capturingPorts(): MutationSideEffectPorts & {
+  published: BackgroundTaskInput[][];
+} {
+  const published: BackgroundTaskInput[][] = [];
+  return {
+    ...productionMutationSideEffectPorts,
+    published,
+    publishTasks: async (_db, tasks) => {
+      published.push([...tasks]);
+    },
+    markProblemCountsDirty: async () => undefined,
+  };
+}
+
+const embeddingRefreshRefs = (tasks: readonly BackgroundTaskInput[]) =>
+  tasks.flatMap((task) =>
+    task.kind === "entity-embedding.refresh"
+      ? [{ entityType: task.entityType, entityId: task.entityId }]
+      : [],
+  );
 
 describe("mutation side effects integration", () => {
   const ctx = withTestDb();
@@ -74,36 +92,23 @@ describe("mutation side effects integration", () => {
       ctx.actor,
     );
 
-    await runMutationSideEffects(ctx.db, {
-      action: "updated",
-      entity: { entity: "product", id: product.entityId },
-      source: "test.product.update",
-    });
+    const ports = capturingPorts();
+    await runMutationSideEffects(
+      ctx.db,
+      {
+        action: "updated",
+        entity: { entity: "product", id: product.entityId },
+        source: "test.product.update",
+      },
+      ports,
+    );
 
-    const batches = await listBackgroundBatches(ctx.db, 20);
-    const embeddingBatches = batches.filter(
-      (batch) =>
-        batch.kind === "entity-embedding.refresh" &&
-        batchSource(batch.metadata) === "test.product.update",
-    );
-    expect(embeddingBatches.length).toBeGreaterThan(0);
-    const details = await Promise.all(
-      embeddingBatches.map((batch) =>
-        getBackgroundBatchDetail(ctx.db, batch.id),
-      ),
-    );
-    const jobs = details.flatMap((detail) => detail?.jobs ?? []);
-    expect(jobs).toEqual(
+    const refs = embeddingRefreshRefs(ports.published.flat());
+    expect(refs).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          payload: { entityType: "product", entityId: product.entityId },
-        }),
-        expect.objectContaining({
-          payload: { entityType: "inventory", entityId: inventory.entityId },
-        }),
-        expect.objectContaining({
-          payload: { entityType: "task", entityId: taskId },
-        }),
+        { entityType: "product", entityId: product.entityId },
+        { entityType: "inventory", entityId: inventory.entityId },
+        { entityType: "task", entityId: taskId },
       ]),
     );
   });
@@ -142,87 +147,28 @@ describe("mutation side effects integration", () => {
       { name: "Manifest Tracker Project Renamed" },
       ctx.actor,
     );
-    await runMutationSideEffects(ctx.db, {
-      action: "updated",
-      entity: { entity: "project", id: projectId },
-      source: "test.project.rename",
-    });
+    const ports = capturingPorts();
+    await runMutationSideEffects(
+      ctx.db,
+      {
+        action: "updated",
+        entity: { entity: "project", id: projectId },
+        source: "test.project.rename",
+      },
+      ports,
+    );
 
-    const batches = await listBackgroundBatches(ctx.db, 20);
-    const embeddingBatches = batches.filter(
-      (batch) =>
-        batch.kind === "entity-embedding.refresh" &&
-        batchSource(batch.metadata) === "test.project.rename",
-    );
-    expect(embeddingBatches.length).toBeGreaterThan(0);
-    const details = await Promise.all(
-      embeddingBatches.map((batch) =>
-        getBackgroundBatchDetail(ctx.db, batch.id),
-      ),
-    );
-    const jobs = details.flatMap((detail) => detail?.jobs ?? []);
-    expect(jobs).toEqual(
+    const refs = embeddingRefreshRefs(ports.published.flat());
+    expect(refs).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          payload: { entityType: "project", entityId: projectId },
-        }),
-        expect.objectContaining({
-          payload: { entityType: "task", entityId: taskId },
-        }),
-        expect.objectContaining({
-          payload: { entityType: "expense", entityId: expenseId },
-        }),
+        { entityType: "project", entityId: projectId },
+        { entityType: "task", entityId: taskId },
+        { entityType: "expense", entityId: expenseId },
       ]),
     );
   });
 
-  it("bulk inventory wave enqueues exactly one valuation recompute", async () => {
-    const location = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Manifest valuation bin" }),
-      ctx.actor,
-    );
-    // Distinct products — (productId, locationId) is unique on InventoryEntry.
-    const entries = [];
-    for (const n of [1, 2, 3]) {
-      const product = await createProduct(
-        ctx.db,
-        makeProductInput({ name: `Manifest valuation product ${n}` }),
-        ctx.actor,
-      );
-      entries.push(
-        await createInventoryEntry(
-          ctx.db,
-          {
-            productId: product.id,
-            locationId: location.id,
-            amount: { value: n, unit: "each" },
-          },
-          ctx.actor,
-        ),
-      );
-    }
-
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      entries.map((entry) => ({
-        action: "updated" as const,
-        entity: { entity: "inventory" as const, id: entry.entityId },
-        source: "test.inventory.bulk",
-      })),
-    );
-
-    const batches = await listBackgroundBatches(ctx.db, 50);
-    const valuationBatches = batches.filter(
-      (batch) =>
-        batch.kind === "location-valuation.recompute" &&
-        batchSource(batch.metadata) === "test.inventory.bulk",
-    );
-    // Whole-tree valuation must collapse to a single job, not one per entity.
-    expect(valuationBatches).toHaveLength(1);
-  });
-
-  it("bulk wave enqueues exactly one entity-embedding batch for N entities", async () => {
+  it("bulk wave publishes exactly one entity-embedding task list for N entities", async () => {
     const location = await createLocation(
       ctx.db,
       makeLocationInput({ name: "Manifest embedding bin" }),
@@ -248,6 +194,7 @@ describe("mutation side effects integration", () => {
       );
     }
 
+    const ports = capturingPorts();
     await runMutationSideEffectsForEntities(
       ctx.db,
       entries.map((entry) => ({
@@ -255,32 +202,22 @@ describe("mutation side effects integration", () => {
         entity: { entity: "inventory" as const, id: entry.entityId },
         source: "test.embedding.bulk",
       })),
+      ports,
     );
 
-    const batches = await listBackgroundBatches(ctx.db, 50);
-    const embeddingBatches = batches.filter(
-      (batch) =>
-        batch.kind === "entity-embedding.refresh" &&
-        batchSource(batch.metadata) === "test.embedding.bulk",
-    );
     // Three entities whose only handler is refreshOwnEmbedding must collapse
-    // into a single batch (one transaction), not one batch per entity.
-    expect(embeddingBatches).toHaveLength(1);
-    const detail = await getBackgroundBatchDetail(
-      ctx.db,
-      embeddingBatches[0]!.id,
-    );
-    expect(detail?.jobs).toHaveLength(3);
-    expect(detail?.jobs.map((job) => job.payload)).toEqual(
+    // into a single publishTasks call (one wave-wide dispatch), not one per entity.
+    expect(ports.published).toHaveLength(1);
+    const refs = embeddingRefreshRefs(ports.published[0] ?? []);
+    expect(refs).toEqual(
       expect.arrayContaining(
-        entries.map((entry) =>
-          expect.objectContaining({
-            entityType: "inventory",
-            entityId: entry.entityId,
-          }),
-        ),
+        entries.map((entry) => ({
+          entityType: "inventory",
+          entityId: entry.entityId,
+        })),
       ),
     );
+    expect(refs).toHaveLength(3);
   });
 
   it("repo delete soft-deletes the entity's search embedding", async () => {

@@ -6,9 +6,7 @@ import {
 import {
   allProblemsMcpSchema,
   assembleAllProblems,
-  orphanedEntityEmbeddingsMcpOut,
   referentialLivenessViolationsMcpOut,
-  unreferencedImagesMcpOut,
 } from "@cubby/schemas/problems";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -24,16 +22,6 @@ function projectProblemTypeSlice(
 ): z.output<typeof problemsTypeSliceOut> {
   const slice = problemsTypeSliceOut.parse(value);
   switch (slice.type) {
-    case "orphanedEntityEmbeddings":
-      return problemsTypeSliceOut.parse({
-        ...slice,
-        items: orphanedEntityEmbeddingsMcpOut.parse(slice.items),
-      });
-    case "unreferencedImages":
-      return problemsTypeSliceOut.parse({
-        ...slice,
-        items: unreferencedImagesMcpOut.parse(slice.items),
-      });
     case "referentialLivenessViolations":
       return problemsTypeSliceOut.parse({
         ...slice,

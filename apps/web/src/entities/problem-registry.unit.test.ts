@@ -38,10 +38,10 @@ describe("Problem Query registry", () => {
     expect(() => validateCompleteProblemRegistry(definitions)).not.toThrow();
     expect(
       definitions.filter(({ source }) => source.kind === "entity"),
-    ).toHaveLength(33);
+    ).toHaveLength(32);
     expect(
       definitions.filter(({ source }) => source.kind === "derived"),
-    ).toHaveLength(20);
+    ).toHaveLength(19);
     expect(keys).toContain("productsMissingPrice");
     expect(keys).toContain("overdueTasks");
     expect(keys).toContain("duplicateVendors");
@@ -114,7 +114,7 @@ describe("Problem Query registry", () => {
       expect(definition.source.grain).toBeTruthy();
       expect(definition.source.operations.length).toBeGreaterThan(0);
     }
-    expect(diagnostics.size).toBe(20);
+    expect(diagnostics.size).toBe(19);
     expect(new Set(Object.keys(diagnosticAdapters))).toEqual(diagnostics);
   });
 

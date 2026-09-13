@@ -1,5 +1,5 @@
+import { referentialLivenessViolationSchema } from "@cubby/schemas/entity-integrity";
 import { problemsCountSchema } from "@cubby/schemas/mcp";
-import { orphanedEntityEmbeddingSchema } from "@cubby/schemas/problems";
 import { expenseAnalyticsOut } from "@cubby/schemas/project";
 import { similarEntitiesOut } from "@cubby/schemas/search";
 import type { McpToolCallTelemetry } from "@cubby/schemas/telemetry";
@@ -25,15 +25,15 @@ describe("MCP workflow tools", () => {
   });
 
   it("projects internal diagnostic ids out of problem slices", async () => {
-    const diagnostic = mock(orphanedEntityEmbeddingSchema);
+    const diagnostic = mock(referentialLivenessViolationSchema);
     const result = await callMcpTool(
       createMcpServer(),
       "list_problems",
-      { type: "orphanedEntityEmbeddings" },
+      { type: "referentialLivenessViolations" },
       {
         problems: {
           getByType: async () => ({
-            type: "orphanedEntityEmbeddings" as const,
+            type: "referentialLivenessViolations" as const,
             items: [diagnostic],
             total: 1,
           }),
@@ -43,9 +43,9 @@ describe("MCP workflow tools", () => {
     const serialized = JSON.stringify(result.structuredContent);
 
     expect(result.isError).not.toBe(true);
-    expect(serialized).not.toContain(diagnostic.id);
-    expect(serialized).not.toContain(diagnostic.entityId);
-    expect(serialized).toContain(diagnostic.model);
+    expect(serialized).not.toContain(diagnostic.targetId);
+    expect(serialized).not.toContain(diagnostic.sourceId);
+    expect(serialized).toContain(diagnostic.description);
   });
 
   it("records success, validation failure, and an unregistered tool without payload telemetry", async () => {

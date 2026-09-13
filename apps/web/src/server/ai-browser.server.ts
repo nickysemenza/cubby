@@ -3,7 +3,6 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/subscription-domain.server";
 import {
   approveDetectedInventoryItemWorkflow,
-  auditCategoriesWorkflow,
   backfillLocationDescriptionsWorkflow,
   describeLocationWorkflow,
   detectInventoryItemsWorkflow,
@@ -42,7 +41,6 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   suggestUsdaFoodBatch: suggestUsdaFoodBatchWorkflow,
   suggestIngredientMergeBatch: (context, input) =>
     suggestIngredientMergeBatchWorkflow(context.db, input),
-  auditCategories: (context) => auditCategoriesWorkflow(context.db),
   usageRecent: {
     run: (context, input) => listAiUsageRecentWorkflow(context.db, input),
   },

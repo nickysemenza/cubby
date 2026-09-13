@@ -80,7 +80,6 @@ export async function persistTelemetryMessages(
             cacheStatus: event.cacheStatus,
             entityType: event.entityType,
             entityId: event.entityId,
-            batchId: event.batchId,
             createdAt: new Date(event.occurredAt),
           })),
         )

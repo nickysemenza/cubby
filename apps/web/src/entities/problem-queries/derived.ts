@@ -113,29 +113,6 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
-    key: "orphanedEntityEmbeddings",
-    problemClass: PROBLEM_CLASS.orphanedEntityEmbeddings,
-    executionLane: "fast",
-    continuation: {
-      kind: "none",
-      reason: "Embedding rows are polymorphic and do not have one list route.",
-    },
-    freshness: { kind: "live" },
-    title: "Orphaned entity embeddings",
-    description:
-      "Search index entries for records that no longer exist — they can still surface in results.",
-    emptyMessage: "Every embedding has a live entity.",
-    source: {
-      kind: "derived",
-      diagnostic: "orphaned-entity-embeddings",
-      grain: "polymorphic",
-      operations: [
-        { label: "Resolve each embedding's typed entity reference" },
-        { label: "Keep missing targets" },
-      ],
-    },
-  }),
-  defineProblem({
     key: "entitiesMissingEmbeddings",
     problemClass: PROBLEM_CLASS.entitiesMissingEmbeddings,
     executionLane: "fast",

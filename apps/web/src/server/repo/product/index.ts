@@ -25,7 +25,6 @@ export {
   getCategoryDistribution,
   getProductExternalIdSourceOptions,
   getProductManufacturerOptions,
-  getProductSummaryForAudit,
   getProductsSharingTags,
   getProductTagOptions,
 } from "./analytics";

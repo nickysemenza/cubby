@@ -3,13 +3,12 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { getTableColumns } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
-import { Database, type DrizzleTransaction } from "~/server/db";
-import type { DatabaseClient } from "~/server/db/database";
+import type { Database } from "~/server/db";
 import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { getDb } from "~/server/repo/database-helpers";
+import { databaseForTransaction, getDb } from "~/server/repo/database-helpers";
 import { countByTarget } from "~/server/repo/impact";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
@@ -57,15 +56,6 @@ export async function executeDeleteWithEffects<
   result: TResult;
   affectedEdges: AffectedDeleteEdge[];
 }> {
-  const transactionDatabase = (tx: DrizzleTransaction) => {
-    // SAFETY: the repository-only Database facade exposes the same schema-bound
-    // Drizzle methods as DatabaseClient; nested transactions become savepoints.
-    const client = tx as DatabaseClient;
-    return new Database(() => ({
-      client,
-      withConnection: (fn) => fn(client),
-    }));
-  };
   const entries = Object.entries(policy);
   const snapshot = async (transactionDb: Database, ids: readonly string[]) =>
     new Map(
@@ -102,7 +92,7 @@ export async function executeDeleteWithEffects<
 
   return getDb(db).transaction(
     async (tx) => {
-      const transactionDb = transactionDatabase(tx);
+      const transactionDb = databaseForTransaction(tx);
       const ids = await resolveAllOrThrow(transactionDb, entity, shortcodes);
       const before = await snapshot(transactionDb, ids);
       const result = await execute(transactionDb);

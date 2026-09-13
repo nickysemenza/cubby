@@ -174,7 +174,6 @@ const recomputeEventSchema = z.discriminatedUnion("type", [
     result: z.object({
       enqueued: z.number().int().nonnegative(),
       total: z.number().int().nonnegative(),
-      batchId: z.string().nullable(),
     }),
   }),
 ]);

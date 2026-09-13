@@ -437,7 +437,10 @@ export const dbProductToAPI = (
         aiDescription: entry.location.aiDescription,
         images: mapImages(entry.location.images),
         displayImage: entry.location.displayImage ?? null,
-        valuation: entry.location.valuation,
+        // Valuation is a whole-tree rollup; this movement-timeline embed is a
+        // lightweight identity reference, not a place callers read this
+        // location's own aggregate value from.
+        valuation: null,
         ancestors: entry.location.ancestors ?? [],
         createdAt: entry.location.createdAt,
         updatedAt: entry.location.updatedAt,

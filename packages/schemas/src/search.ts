@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { inventoryPlacementValues } from "@cubby/shared";
-import { backgroundBatchRefSchema } from "./background-jobs";
 import { amount } from "./codec";
 import { searchableEntities, type ShortcodeEntity } from "./entity-manifest";
 import {
@@ -82,9 +81,12 @@ export type RequestEmbeddingRefreshInput = z.infer<
   typeof requestEmbeddingRefreshInputSchema
 >;
 
+/**
+ * An explicit refresh is accepted, not completed: the embedding runs on the
+ * queue and the entity's readiness (`relatedness.product`) reports the result.
+ */
 export const requestEmbeddingRefreshOutSchema = z.object({
-  batchId: z.string(),
-  totalJobs: z.number().int().nonnegative(),
+  accepted: z.literal(true),
 });
 export type RequestEmbeddingRefreshOut = z.infer<
   typeof requestEmbeddingRefreshOutSchema
@@ -203,38 +205,6 @@ export const relatedSearchGroupsOutSchema = z.object({
 });
 export type RelatedSearchGroupsOut = z.infer<
   typeof relatedSearchGroupsOutSchema
->;
-
-/** Public, aggregate-only health for the private SearchDocument projection. */
-export const searchDocumentHealthSchema = z.object({
-  missing: z.number().int().nonnegative(),
-  orphaned: z.number().int().nonnegative(),
-  stale: z.number().int().nonnegative(),
-  total: z.number().int().nonnegative(),
-});
-export type SearchDocumentHealth = z.infer<typeof searchDocumentHealthSchema>;
-
-export const searchDocumentMaintenanceSchema = z.object({
-  state: z.enum(["never-run", "running", "completed", "failed"]),
-  batchId: z.string().nullable(),
-  findings: searchDocumentHealthSchema,
-  repaired: z.object({
-    queued: z.number().int().nonnegative(),
-    retired: z.number().int().nonnegative(),
-  }),
-  reused: z.boolean(),
-  completedAt: z.date().nullable(),
-});
-export type SearchDocumentMaintenance = z.infer<
-  typeof searchDocumentMaintenanceSchema
->;
-
-export const repairSearchDocumentsOutSchema = z.object({
-  batch: backgroundBatchRefSchema,
-  reused: z.boolean(),
-});
-export type RepairSearchDocumentsOut = z.infer<
-  typeof repairSearchDocumentsOutSchema
 >;
 
 /** Semantic results are separate so they cannot reorder lexical hits. */

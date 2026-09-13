@@ -20,12 +20,12 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { productCodeSearchTerms } from "@cubby/schemas/isbn";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { product, productExternalId } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
-const liveGtinRows = (db: Database, ids: ProductId[]) =>
-  getDb(db)
+const liveGtinRows = (db: Database | DrizzleTransaction, ids: ProductId[]) =>
+  unwrapDb(db)
     .select({
       productId: productExternalId.productId,
       externalId: productExternalId.externalId,
@@ -55,7 +55,7 @@ const liveGtinRows = (db: Database, ids: ProductId[]) =>
  * and returns NULL with no error.
  */
 export const loadPrimaryGtins = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: ProductId[],
 ): Promise<Map<ProductId, string | null>> => {
   const unique = [...new Set(ids)];
@@ -75,7 +75,7 @@ export const loadPrimaryGtins = async (
  * unfindable by the very thing it exists to identify.
  */
 export const loadAllGtins = async (
-  db: Database,
+  db: Database | DrizzleTransaction,
   ids: ProductId[],
 ): Promise<Map<ProductId, string[]>> => {
   const unique = [...new Set(ids)];

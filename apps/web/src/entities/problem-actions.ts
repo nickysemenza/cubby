@@ -141,15 +141,6 @@ const problemActionCapabilities = {
       target: "global-backfill",
     }),
   ],
-  orphanedEntityEmbeddings: [
-    action({
-      id: "clean-up",
-      label: "Clean up",
-      scope: "item",
-      target: "item",
-      destructive: true,
-    }),
-  ],
   entitiesMissingEmbeddings: [
     action({
       id: "backfill-all",

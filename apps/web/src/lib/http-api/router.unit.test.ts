@@ -59,8 +59,8 @@ describe("HTTP contract", () => {
     }
     expect(mismatches).toEqual([]);
     // Flat-input queries are GET; the structured ones travel as POST bodies.
-    expect(transports).toEqual({ get: 119, post: 31, mutation: 92 });
-    expect(Object.keys(document.paths)).toHaveLength(279);
+    expect(transports).toEqual({ get: 115, post: 31, mutation: 82 });
+    expect(Object.keys(document.paths)).toHaveLength(265);
     const analytics = rpc.find(
       (route) => metadataOf(route).operation === "expense.analytics",
     );

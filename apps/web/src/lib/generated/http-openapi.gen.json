@@ -79,45 +79,6 @@
         }
       }
     },
-    "/api/v1/ai/auditCategories": {
-      "post": {
-        "tags": ["ai"],
-        "parameters": [],
-        "operationId": "ai.auditCategories",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AiAuditCategoriesInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CategoryAudit"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/ai/describeLocation": {
       "post": {
         "tags": ["ai"],
@@ -691,382 +652,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AuditLogListOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-batch/cancel": {
-      "post": {
-        "tags": ["background-batch"],
-        "parameters": [],
-        "operationId": "background-batch.cancel",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BackgroundBatchIdInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundJobActionOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-batch/jobs": {
-      "get": {
-        "tags": ["background-batch"],
-        "parameters": [
-          {
-            "name": "batchId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "pageIndex",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            },
-            "style": "form",
-            "explode": true
-          },
-          {
-            "name": "failedOnly",
-            "in": "query",
-            "schema": {
-              "type": "boolean"
-            },
-            "style": "form",
-            "explode": true
-          }
-        ],
-        "operationId": "background-batch.jobs",
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundBatchBrowserJobsOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-batch/list": {
-      "get": {
-        "tags": ["background-batch"],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100
-            },
-            "style": "form",
-            "explode": true
-          }
-        ],
-        "operationId": "background-batch.list",
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundBatchBrowserListOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-batch/retry": {
-      "post": {
-        "tags": ["background-batch"],
-        "parameters": [],
-        "operationId": "background-batch.retry",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BackgroundBatchIdInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundJobActionOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-batch/summary": {
-      "get": {
-        "tags": ["background-batch"],
-        "parameters": [
-          {
-            "name": "batchId",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "style": "form",
-            "explode": true
-          }
-        ],
-        "operationId": "background-batch.summary",
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundBatchBrowserSummary"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-job/clearStranded": {
-      "post": {
-        "tags": ["background-job"],
-        "parameters": [],
-        "operationId": "background-job.clearStranded",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BackgroundClearStrandedInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundClearStrandedOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-job/drain": {
-      "post": {
-        "tags": ["background-job"],
-        "parameters": [],
-        "operationId": "background-job.drain",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BackgroundDrainInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundDrainOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-job/retry": {
-      "post": {
-        "tags": ["background-job"],
-        "parameters": [],
-        "operationId": "background-job.retry",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BackgroundJobIdInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundJobActionOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/background-job/strandedCount": {
-      "get": {
-        "tags": ["background-job"],
-        "parameters": [],
-        "operationId": "background-job.strandedCount",
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackgroundStrandedCountOut"
                 }
               }
             }
@@ -2987,45 +2572,6 @@
         }
       }
     },
-    "/api/v1/image/cleanupUnreferencedImages": {
-      "post": {
-        "tags": ["image"],
-        "parameters": [],
-        "operationId": "image.cleanupUnreferencedImages",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ImageCleanupUnreferencedImagesInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CullPendingImagesResponse"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/image/cullPendingImages": {
       "post": {
         "tags": ["image"],
@@ -4368,45 +3914,6 @@
         }
       }
     },
-    "/api/v1/location/recomputeValuations": {
-      "post": {
-        "tags": ["location"],
-        "parameters": [],
-        "operationId": "location.recomputeValuations",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LocationRecomputeValuationsInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LocationRecomputeValuationsOutput"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/location/search": {
       "post": {
         "tags": ["location"],
@@ -4498,6 +4005,74 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LocationValuationSummaryOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maintenance/awaitingWork": {
+      "get": {
+        "tags": ["maintenance"],
+        "parameters": [],
+        "operationId": "maintenance.awaitingWork",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AwaitingWork"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/maintenance/settleAwaitingWork": {
+      "post": {
+        "tags": ["maintenance"],
+        "parameters": [],
+        "operationId": "maintenance.settleAwaitingWork",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MaintenanceSettleAwaitingWorkInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettleAwaitingWorkOut"
                 }
               }
             }
@@ -5269,45 +4844,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RevokeConnectedAppOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/problems/cleanupOrphanedEmbeddings": {
-      "post": {
-        "tags": ["problems"],
-        "parameters": [],
-        "operationId": "problems.cleanupOrphanedEmbeddings",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProblemsCleanupOrphanedEmbeddingsInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CleanupOrphanedEntityEmbeddingsOut"
                 }
               }
             }
@@ -9357,74 +8893,6 @@
         }
       }
     },
-    "/api/v1/search/documentHealth": {
-      "get": {
-        "tags": ["search"],
-        "parameters": [],
-        "operationId": "search.documentHealth",
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SearchDocumentMaintenance"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/search/enqueueEmbeddingBackfill": {
-      "post": {
-        "tags": ["search"],
-        "parameters": [],
-        "operationId": "search.enqueueEmbeddingBackfill",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EnqueueEmbeddingBackfillInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EnqueueEmbeddingBackfillOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/search/find": {
       "get": {
         "tags": ["search"],
@@ -9740,45 +9208,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RelatedSearchGroupsOut"
-                }
-              }
-            }
-          },
-          "default": {
-            "description": "Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/search/repairDocuments": {
-      "post": {
-        "tags": ["search"],
-        "parameters": [],
-        "operationId": "search.repairDocuments",
-        "requestBody": {
-          "description": "Body",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SearchRepairDocumentsInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "200",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RepairSearchDocumentsOut"
                 }
               }
             }
@@ -20304,167 +19733,6 @@
           "noAmount"
         ]
       },
-      "BackgroundBatchIdInput": {
-        "type": "object",
-        "properties": {
-          "batchId": {
-            "type": "string"
-          }
-        },
-        "required": ["batchId"]
-      },
-      "BackgroundBatchJobsInput": {
-        "type": "object",
-        "properties": {
-          "batchId": {
-            "type": "string"
-          },
-          "pageIndex": {
-            "default": 0,
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "pageSize": {
-            "default": 100,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          },
-          "failedOnly": {
-            "default": false,
-            "type": "boolean"
-          }
-        },
-        "required": ["batchId"]
-      },
-      "BackgroundBatchListInput": {
-        "type": "object",
-        "properties": {
-          "limit": {
-            "default": 25,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          }
-        }
-      },
-      "BackgroundBatchProcessor": {
-        "type": "string",
-        "enum": ["queue", "inline"]
-      },
-      "BackgroundBatchSource": {
-        "type": "string",
-        "enum": [
-          "ui",
-          "mutation",
-          "backfill",
-          "maintenance",
-          "queue",
-          "dev-inline"
-        ]
-      },
-      "BackgroundBatchStatus": {
-        "type": "string",
-        "enum": [
-          "queued",
-          "running",
-          "succeeded",
-          "partial",
-          "failed",
-          "cancelled"
-        ]
-      },
-      "BackgroundClearStrandedInput": {
-        "type": "object",
-        "properties": {
-          "limit": {
-            "default": 2000,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 10000
-          }
-        }
-      },
-      "BackgroundDrainInput": {
-        "type": "object",
-        "properties": {
-          "limit": {
-            "default": 25,
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          }
-        }
-      },
-      "BackgroundJobIdInput": {
-        "type": "object",
-        "properties": {
-          "jobId": {
-            "type": "string"
-          }
-        },
-        "required": ["jobId"]
-      },
-      "BackgroundJobKind": {
-        "type": "string",
-        "enum": [
-          "recipe-totals.recompute",
-          "entity-embedding.refresh",
-          "entity-embedding.refresh-batch",
-          "entity-embedding.backfill.coordinator",
-          "search-document.repair.coordinator",
-          "location-ai.description.refresh",
-          "location-ai.inventory.refresh",
-          "location-valuation.recompute",
-          "problems.counts.refresh",
-          "usda-match.retry"
-        ]
-      },
-      "BackgroundJobStatus": {
-        "type": "string",
-        "enum": [
-          "pending",
-          "queued",
-          "running",
-          "succeeded",
-          "skipped",
-          "failed",
-          "cancelled"
-        ]
-      },
-      "BackgroundStrandedCountInput": {
-        "type": "object",
-        "properties": {}
-      },
-      "EnqueueEmbeddingBackfillInput": {
-        "type": "object",
-        "properties": {
-          "entityTypes": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": [
-                "product",
-                "recipe",
-                "ingredient",
-                "cookbook",
-                "location",
-                "inventory",
-                "meal",
-                "project",
-                "task",
-                "vendor",
-                "purchase",
-                "financialAccount",
-                "financialTransaction",
-                "wish",
-                "expense"
-              ]
-            }
-          }
-        }
-      },
       "PlainDate": {
         "type": "string",
         "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -24199,19 +23467,6 @@
       "RelativeDateFilter": {
         "type": "string",
         "enum": ["beforeToday", "onOrBeforeToday"]
-      },
-      "CleanupOrphanedEntityEmbeddingsInput": {
-        "type": "object",
-        "properties": {
-          "ids": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid",
-              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-            }
-          }
-        }
       },
       "DeleteUnusedIngredientsInput": {
         "type": "object",
@@ -28550,11 +27805,6 @@
         },
         "required": ["kind", "fdc_id"]
       },
-      "AiAuditCategoriesInput": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
       "CalendarRevokeCredentialInput": {
         "type": "object",
         "properties": {},
@@ -28580,11 +27830,6 @@
         "required": ["input"],
         "additionalProperties": false
       },
-      "ImageCleanupUnreferencedImagesInput": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
       "IngredientEnrichmentWorkbenchInput": {
         "type": "object",
         "properties": {
@@ -28595,11 +27840,6 @@
         "additionalProperties": false
       },
       "LocationEnsureGlobalUnknownInput": {
-        "type": "object",
-        "properties": {},
-        "additionalProperties": false
-      },
-      "LocationRecomputeValuationsInput": {
         "type": "object",
         "properties": {},
         "additionalProperties": false
@@ -28638,18 +27878,14 @@
         },
         "required": ["filters", "sort", "pagination"]
       },
-      "OauthPruneOrphanedClientsInput": {
+      "MaintenanceSettleAwaitingWorkInput": {
         "type": "object",
         "properties": {},
         "additionalProperties": false
       },
-      "ProblemsCleanupOrphanedEmbeddingsInput": {
+      "OauthPruneOrphanedClientsInput": {
         "type": "object",
-        "properties": {
-          "input": {
-            "$ref": "#/components/schemas/CleanupOrphanedEntityEmbeddingsInput"
-          }
-        },
+        "properties": {},
         "additionalProperties": false
       },
       "ProjectGetDependencyGraphInput": {
@@ -28696,11 +27932,6 @@
           }
         },
         "required": ["input"],
-        "additionalProperties": false
-      },
-      "SearchRepairDocumentsInput": {
-        "type": "object",
-        "properties": {},
         "additionalProperties": false
       },
       "TaskListActionableInput": {
@@ -29167,9 +28398,6 @@
           "entityId": {
             "type": ["string", "null"]
           },
-          "batchId": {
-            "type": ["string", "null"]
-          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -29187,7 +28415,6 @@
           "durationMs",
           "entityType",
           "entityId",
-          "batchId",
           "createdAt"
         ],
         "additionalProperties": false
@@ -29290,46 +28517,6 @@
         ],
         "additionalProperties": false
       },
-      "CategoryAudit": {
-        "type": "object",
-        "properties": {
-          "suggestions": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "categoryName": {
-                  "type": "string"
-                },
-                "description": {
-                  "type": "string"
-                },
-                "productNames": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
-                "reasoning": {
-                  "type": "string"
-                }
-              },
-              "required": [
-                "categoryName",
-                "description",
-                "productNames",
-                "reasoning"
-              ],
-              "additionalProperties": false
-            }
-          },
-          "summary": {
-            "type": "string"
-          }
-        },
-        "required": ["suggestions", "summary"],
-        "additionalProperties": false
-      },
       "CategorySuggestion": {
         "type": "object",
         "properties": {
@@ -29413,10 +28600,10 @@
           "type": "object",
           "properties": {
             "source": {
-              "$ref": "#/components/schemas/output_schema8"
+              "$ref": "#/components/schemas/output_schema6"
             },
             "target": {
-              "$ref": "#/components/schemas/output_schema8"
+              "$ref": "#/components/schemas/output_schema6"
             },
             "confidence": {
               "$ref": "#/components/schemas/Confidence"
@@ -29784,354 +28971,21 @@
         ],
         "additionalProperties": false
       },
-      "BackgroundBatchBrowserJobsOut": {
-        "type": "object",
-        "properties": {
-          "jobs": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BackgroundJobBrowserSummary"
-            }
-          },
-          "totalCount": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "pageIndex": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "pageSize": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 100
-          }
-        },
-        "required": ["jobs", "totalCount", "pageIndex", "pageSize"],
-        "additionalProperties": false
-      },
-      "BackgroundBatchBrowserListOut": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/BackgroundBatchBrowserSummary"
-        }
-      },
-      "BackgroundBatchBrowserSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/BackgroundJobKind"
-          },
-          "source": {
-            "$ref": "#/components/schemas/BackgroundBatchSource"
-          },
-          "processor": {
-            "$ref": "#/components/schemas/BackgroundBatchProcessor"
-          },
-          "status": {
-            "$ref": "#/components/schemas/BackgroundBatchStatus"
-          },
-          "totalJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "queuedJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "runningJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "succeededJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "failedJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "skippedJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "cancelledJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "firstEnqueuedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "lastEnqueuedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "firstJobStartedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "lastJobFinishedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "processingDurationMs": {
-            "type": ["integer", "null"],
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "wallDurationMs": {
-            "type": ["integer", "null"],
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "activeDurationMs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "metadata": {
-            "$ref": "#/components/schemas/JsonValue"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "source",
-          "processor",
-          "status",
-          "totalJobs",
-          "queuedJobs",
-          "runningJobs",
-          "succeededJobs",
-          "failedJobs",
-          "skippedJobs",
-          "cancelledJobs",
-          "firstEnqueuedAt",
-          "lastEnqueuedAt",
-          "firstJobStartedAt",
-          "lastJobFinishedAt",
-          "processingDurationMs",
-          "wallDurationMs",
-          "activeDurationMs",
-          "createdAt",
-          "updatedAt"
-        ],
-        "additionalProperties": false
-      },
       "BackgroundBatchRef": {
         "type": "object",
         "properties": {
           "id": {
             "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/BackgroundJobKind"
-          },
-          "source": {
-            "$ref": "#/components/schemas/BackgroundBatchSource"
-          },
-          "processor": {
-            "$ref": "#/components/schemas/BackgroundBatchProcessor"
-          },
-          "status": {
-            "$ref": "#/components/schemas/BackgroundBatchStatus"
-          },
-          "totalJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
           }
         },
-        "required": [
-          "id",
-          "kind",
-          "source",
-          "processor",
-          "status",
-          "totalJobs"
-        ],
-        "additionalProperties": false
-      },
-      "BackgroundClearStrandedOut": {
-        "type": "object",
-        "properties": {
-          "cancelled": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "batchesSettled": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["cancelled", "batchesSettled"],
-        "additionalProperties": false
-      },
-      "BackgroundDrainOut": {
-        "type": "object",
-        "properties": {
-          "processed": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["processed"],
-        "additionalProperties": false
-      },
-      "BackgroundJobActionOut": {
-        "type": "object",
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "const": true
-          }
-        },
-        "required": ["ok"],
-        "additionalProperties": false
-      },
-      "BackgroundJobBrowserSummary": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "batchId": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/BackgroundJobKind"
-          },
-          "dedupeKey": {
-            "type": "string"
-          },
-          "status": {
-            "$ref": "#/components/schemas/BackgroundJobStatus"
-          },
-          "attempts": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "maxAttempts": {
-            "type": "integer",
-            "exclusiveMinimum": 0,
-            "maximum": 9007199254740991
-          },
-          "queuedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "startedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "finishedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "durationMs": {
-            "type": ["integer", "null"],
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "lastError": {
-            "type": ["string", "null"]
-          },
-          "payload": {
-            "$ref": "#/components/schemas/JsonValue"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          }
-        },
-        "required": [
-          "id",
-          "batchId",
-          "kind",
-          "dedupeKey",
-          "status",
-          "attempts",
-          "maxAttempts",
-          "queuedAt",
-          "startedAt",
-          "finishedAt",
-          "durationMs",
-          "lastError",
-          "payload",
-          "createdAt",
-          "updatedAt"
-        ],
-        "additionalProperties": false
-      },
-      "BackgroundStrandedCountOut": {
-        "type": "object",
-        "properties": {
-          "abandoned": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["abandoned"],
-        "additionalProperties": false
-      },
-      "EnqueueEmbeddingBackfillOut": {
-        "type": "object",
-        "properties": {
-          "batch": {
-            "$ref": "#/components/schemas/BackgroundBatchRef"
-          },
-          "reused": {
-            "type": "boolean"
-          }
-        },
-        "required": ["batch", "reused"],
+        "required": ["id"],
         "additionalProperties": false
       },
       "MutationSideEffects": {
         "type": "object",
         "properties": {
           "backgroundBatches": {
+            "maxItems": 0,
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/BackgroundBatchRef"
@@ -30341,13 +29195,13 @@
             "type": "object",
             "properties": {
               "meals": {
-                "$ref": "#/components/schemas/output_schema46"
+                "$ref": "#/components/schemas/output_schema42"
               },
               "tasks": {
-                "$ref": "#/components/schemas/output_schema46"
+                "$ref": "#/components/schemas/output_schema42"
               },
               "all": {
-                "$ref": "#/components/schemas/output_schema46"
+                "$ref": "#/components/schemas/output_schema42"
               }
             },
             "required": [],
@@ -32395,10 +31249,10 @@
                 "minLength": 1
               },
               "itemSchema": {
-                "$ref": "#/components/schemas/output_schema70"
+                "$ref": "#/components/schemas/output_schema66"
               },
               "adapter": {
-                "$ref": "#/components/schemas/output_schema70"
+                "$ref": "#/components/schemas/output_schema66"
               },
               "audiences": {
                 "minItems": 1,
@@ -33329,7 +32183,7 @@
             "minLength": 1
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "createdAt": {
             "type": "string",
@@ -33382,7 +32236,7 @@
             "minLength": 1
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "createdAt": {
             "type": "string",
@@ -34839,7 +33693,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema97"
+            "$ref": "#/components/schemas/output_schema93"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -34960,7 +33814,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema97"
+            "$ref": "#/components/schemas/output_schema93"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -35050,7 +33904,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema97"
+            "$ref": "#/components/schemas/output_schema93"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -35148,7 +34002,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema97"
+            "$ref": "#/components/schemas/output_schema93"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -35200,7 +34054,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema97"
+            "$ref": "#/components/schemas/output_schema93"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -35550,7 +34404,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema111"
+            "$ref": "#/components/schemas/output_schema107"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -35563,7 +34417,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema115"
+            "$ref": "#/components/schemas/output_schema111"
           },
           "createdAt": {
             "type": "string",
@@ -35593,7 +34447,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema111"
+            "$ref": "#/components/schemas/output_schema107"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -35606,7 +34460,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema115"
+            "$ref": "#/components/schemas/output_schema111"
           },
           "createdAt": {
             "type": "string",
@@ -35725,7 +34579,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema111"
+            "$ref": "#/components/schemas/output_schema107"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -35738,7 +34592,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema115"
+            "$ref": "#/components/schemas/output_schema111"
           },
           "createdAt": {
             "type": "string",
@@ -36014,7 +34868,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema121"
+            "$ref": "#/components/schemas/output_schema117"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -36038,7 +34892,7 @@
             "type": ["string", "null"]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -36241,7 +35095,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema121"
+            "$ref": "#/components/schemas/output_schema117"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -36265,7 +35119,7 @@
             "type": ["string", "null"]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -36440,7 +35294,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema121"
+            "$ref": "#/components/schemas/output_schema117"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -36464,7 +35318,7 @@
             "type": ["string", "null"]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -36563,10 +35417,10 @@
             "maximum": 9007199254740991
           },
           "direct": {
-            "$ref": "#/components/schemas/output_schema131"
+            "$ref": "#/components/schemas/output_schema127"
           },
           "total": {
-            "$ref": "#/components/schemas/output_schema131"
+            "$ref": "#/components/schemas/output_schema127"
           },
           "installed": {
             "type": "object",
@@ -36678,7 +35532,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema121"
+            "$ref": "#/components/schemas/output_schema117"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -36702,7 +35556,7 @@
             "type": ["string", "null"]
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "valuation": {
             "$ref": "#/components/schemas/LocationValuation"
@@ -36740,6 +35594,69 @@
         "items": {
           "$ref": "#/components/schemas/LocationWithParentNameOut"
         }
+      },
+      "AwaitingWork": {
+        "type": "object",
+        "properties": {
+          "staleRecipeTotals": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "unembeddedEntities": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pendingUploads": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "computedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+          }
+        },
+        "required": [
+          "staleRecipeTotals",
+          "unembeddedEntities",
+          "pendingUploads",
+          "computedAt"
+        ],
+        "additionalProperties": false
+      },
+      "SettleAwaitingWorkOut": {
+        "type": "object",
+        "properties": {
+          "publishedRecipeTasks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "publishedEmbeddingTasks": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "culledUploads": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "transport": {
+            "type": "string",
+            "enum": ["queue", "inline"]
+          }
+        },
+        "required": [
+          "publishedRecipeTasks",
+          "publishedEmbeddingTasks",
+          "culledUploads",
+          "transport"
+        ],
+        "additionalProperties": false
       },
       "ProblemsCount": {
         "type": "object",
@@ -36781,12 +35698,6 @@
                 "type": "number"
               },
               "productsWithNoImages": {
-                "type": "number"
-              },
-              "orphanedEntityEmbeddings": {
-                "type": "number"
-              },
-              "unreferencedImages": {
                 "type": "number"
               },
               "entitiesMissingEmbeddings": {
@@ -36924,8 +35835,6 @@
               "purchaselessExitExpenses",
               "toolsUsedOutsideOwnership",
               "productsWithNoImages",
-              "orphanedEntityEmbeddings",
-              "unreferencedImages",
               "entitiesMissingEmbeddings",
               "staleParentRecipes",
               "understatedCostMeals",
@@ -37120,7 +36029,7 @@
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           }
         },
         "required": [
@@ -37233,10 +36142,10 @@
             "type": "object",
             "properties": {
               "confirmed": {
-                "$ref": "#/components/schemas/output_schema153"
+                "$ref": "#/components/schemas/output_schema149"
               },
               "projected": {
-                "$ref": "#/components/schemas/output_schema153"
+                "$ref": "#/components/schemas/output_schema149"
               }
             },
             "required": ["confirmed", "projected"],
@@ -37940,23 +36849,6 @@
         "required": ["pageIndex", "pageSize", "totalCount"],
         "additionalProperties": false
       },
-      "CleanupOrphanedEntityEmbeddingsOut": {
-        "type": "object",
-        "properties": {
-          "found": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "deleted": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["found", "deleted"],
-        "additionalProperties": false
-      },
       "CoverageTotals": {
         "type": "object",
         "properties": {
@@ -38431,10 +37323,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema97"
+                "$ref": "#/components/schemas/output_schema93"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema97"
+                "$ref": "#/components/schemas/output_schema93"
               }
             },
             "required": ["covered", "applicable"],
@@ -38638,11 +37530,6 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "unreferencedImages": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
           "entitiesMissingEmbeddings": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -38654,7 +37541,6 @@
           "locationsWithoutAiDescription",
           "staleRecipeTotals",
           "cullablePendingImages",
-          "unreferencedImages",
           "entitiesMissingEmbeddings"
         ],
         "additionalProperties": false
@@ -38745,34 +37631,6 @@
           }
         },
         "required": ["id", "amount", "createdAt", "product", "location"],
-        "additionalProperties": false
-      },
-      "OrphanedEntityEmbedding": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "entityType": {
-            "$ref": "#/components/schemas/SearchableEntity"
-          },
-          "entityId": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "model": {
-            "type": "string"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          }
-        },
-        "required": ["id", "entityType", "entityId", "model", "createdAt"],
         "additionalProperties": false
       },
       "OrphanedProduct": {
@@ -38974,18 +37832,6 @@
               "$ref": "#/components/schemas/ProductWithNoImages"
             }
           },
-          "orphanedEntityEmbeddings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/OrphanedEntityEmbedding"
-            }
-          },
-          "unreferencedImages": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UnreferencedImage"
-            }
-          },
           "entitiesMissingEmbeddings": {
             "type": "array",
             "items": {
@@ -39141,8 +37987,6 @@
           "purchaselessExitExpenses",
           "toolsUsedOutsideOwnership",
           "productsWithNoImages",
-          "orphanedEntityEmbeddings",
-          "unreferencedImages",
           "entitiesMissingEmbeddings",
           "staleParentRecipes",
           "understatedCostMeals",
@@ -39449,10 +38293,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema97"
+                "$ref": "#/components/schemas/output_schema93"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema97"
+                "$ref": "#/components/schemas/output_schema93"
               }
             },
             "required": ["covered", "applicable"],
@@ -39962,50 +38806,6 @@
         "required": ["id", "name", "cost", "purchaseId", "vendorName"],
         "additionalProperties": false
       },
-      "UnreferencedImage": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
-          },
-          "key": {
-            "type": "string"
-          },
-          "filename": {
-            "type": "string"
-          },
-          "contentType": {
-            "type": "string"
-          },
-          "size": {
-            "type": "number"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          },
-          "targetType": {
-            "type": ["string", "null"]
-          },
-          "targetId": {
-            "type": ["string", "null"]
-          }
-        },
-        "required": [
-          "id",
-          "key",
-          "filename",
-          "contentType",
-          "size",
-          "createdAt",
-          "targetType",
-          "targetId"
-        ],
-        "additionalProperties": false
-      },
       "UnusedIngredient": {
         "type": "object",
         "properties": {
@@ -40393,10 +39193,10 @@
             "$ref": "#/components/schemas/IngredientShortcode"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema32"
+            "$ref": "#/components/schemas/output_schema30"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -40431,7 +39231,7 @@
             }
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema171"
+            "$ref": "#/components/schemas/output_schema167"
           },
           "inventoryEntry": {
             "type": "array",
@@ -40656,7 +39456,7 @@
                 "usedOnProjects": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema174"
+                    "$ref": "#/components/schemas/output_schema170"
                   }
                 },
                 "ownershipIntervals": {
@@ -40763,7 +39563,7 @@
                         "$ref": "#/components/schemas/PlainDate"
                       },
                       "chargedTo": {
-                        "$ref": "#/components/schemas/output_schema174"
+                        "$ref": "#/components/schemas/output_schema170"
                       },
                       "provenanceOnly": {
                         "type": "boolean"
@@ -41106,10 +39906,10 @@
             "$ref": "#/components/schemas/IngredientShortcode"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema32"
+            "$ref": "#/components/schemas/output_schema30"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -41216,10 +40016,10 @@
             "$ref": "#/components/schemas/IngredientShortcode"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema32"
+            "$ref": "#/components/schemas/output_schema30"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -41252,7 +40052,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema171"
+            "$ref": "#/components/schemas/output_schema167"
           },
           "unitMappings": {
             "type": "array",
@@ -41263,13 +40063,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema175"
+              "$ref": "#/components/schemas/output_schema171"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema177"
+              "$ref": "#/components/schemas/output_schema173"
             }
           },
           "food": {
@@ -41364,10 +40164,10 @@
             "$ref": "#/components/schemas/IngredientShortcode"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema32"
+            "$ref": "#/components/schemas/output_schema30"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -41400,7 +40200,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema171"
+            "$ref": "#/components/schemas/output_schema167"
           },
           "unitMappings": {
             "type": "array",
@@ -41411,13 +40211,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema175"
+              "$ref": "#/components/schemas/output_schema171"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema177"
+              "$ref": "#/components/schemas/output_schema173"
             }
           },
           "componentCount": {
@@ -41521,10 +40321,10 @@
             "$ref": "#/components/schemas/IngredientShortcode"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema32"
+            "$ref": "#/components/schemas/output_schema30"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -41629,10 +40429,10 @@
             "$ref": "#/components/schemas/IngredientShortcode"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "externalIds": {
-            "$ref": "#/components/schemas/output_schema32"
+            "$ref": "#/components/schemas/output_schema30"
           },
           "price": {
             "$ref": "#/components/schemas/Money",
@@ -41902,10 +40702,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema189"
+            "$ref": "#/components/schemas/output_schema185"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema189"
+            "$ref": "#/components/schemas/output_schema185"
           },
           "subtaskCount": {
             "type": "integer",
@@ -42308,10 +41108,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema195"
+                "$ref": "#/components/schemas/output_schema191"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema195"
+                "$ref": "#/components/schemas/output_schema191"
               }
             },
             "required": ["scope", "grid"],
@@ -42321,19 +41121,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema195"
+                "$ref": "#/components/schemas/output_schema191"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema195"
+                    "$ref": "#/components/schemas/output_schema191"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema195"
+                    "$ref": "#/components/schemas/output_schema191"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema195"
+                    "$ref": "#/components/schemas/output_schema191"
                   }
                 },
                 "required": [
@@ -44084,10 +42884,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema189"
+            "$ref": "#/components/schemas/output_schema185"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema189"
+            "$ref": "#/components/schemas/output_schema185"
           },
           "subtaskCount": {
             "type": "integer",
@@ -45435,7 +44235,7 @@
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
-            "$ref": "#/components/schemas/output_schema31"
+            "$ref": "#/components/schemas/output_schema29"
           },
           "sideEffects": {
             "$ref": "#/components/schemas/MutationSideEffects"
@@ -45479,13 +44279,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema136"
+                "$ref": "#/components/schemas/output_schema132"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema136"
+                "$ref": "#/components/schemas/output_schema132"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema136"
+                "$ref": "#/components/schemas/output_schema132"
               }
             },
             "required": ["cost", "weight", "nutrients"],
@@ -45495,10 +44295,10 @@
             "type": ["number", "null"]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema137"
+            "$ref": "#/components/schemas/output_schema133"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema137"
+            "$ref": "#/components/schemas/output_schema133"
           },
           "nutrient": {
             "oneOf": [
@@ -46523,32 +45323,15 @@
         "required": ["status", "results"],
         "additionalProperties": false
       },
-      "RepairSearchDocumentsOut": {
-        "type": "object",
-        "properties": {
-          "batch": {
-            "$ref": "#/components/schemas/BackgroundBatchRef"
-          },
-          "reused": {
-            "type": "boolean"
-          }
-        },
-        "required": ["batch", "reused"],
-        "additionalProperties": false
-      },
       "RequestEmbeddingRefreshOut": {
         "type": "object",
         "properties": {
-          "batchId": {
-            "type": "string"
-          },
-          "totalJobs": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
+          "accepted": {
+            "type": "boolean",
+            "const": true
           }
         },
-        "required": ["batchId", "totalJobs"],
+        "required": ["accepted"],
         "additionalProperties": false
       },
       "SearchComponentPlacement": {
@@ -46626,82 +45409,6 @@
           "subtitle",
           "typeHint",
           "imageUrl"
-        ],
-        "additionalProperties": false
-      },
-      "SearchDocumentHealth": {
-        "type": "object",
-        "properties": {
-          "missing": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "orphaned": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "stale": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          },
-          "total": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 9007199254740991
-          }
-        },
-        "required": ["missing", "orphaned", "stale", "total"],
-        "additionalProperties": false
-      },
-      "SearchDocumentMaintenance": {
-        "type": "object",
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": ["never-run", "running", "completed", "failed"]
-          },
-          "batchId": {
-            "type": ["string", "null"]
-          },
-          "findings": {
-            "$ref": "#/components/schemas/SearchDocumentHealth"
-          },
-          "repaired": {
-            "type": "object",
-            "properties": {
-              "queued": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              },
-              "retired": {
-                "type": "integer",
-                "minimum": 0,
-                "maximum": 9007199254740991
-              }
-            },
-            "required": ["queued", "retired"],
-            "additionalProperties": false
-          },
-          "reused": {
-            "type": "boolean"
-          },
-          "completedAt": {
-            "type": ["string", "null"],
-            "format": "date-time",
-            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
-          }
-        },
-        "required": [
-          "state",
-          "batchId",
-          "findings",
-          "repaired",
-          "reused",
-          "completedAt"
         ],
         "additionalProperties": false
       },
@@ -47082,13 +45789,13 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema208"
+                  "$ref": "#/components/schemas/output_schema204"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema208"
+                  "$ref": "#/components/schemas/output_schema204"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema210"
+                  "$ref": "#/components/schemas/output_schema206"
                 }
               },
               "required": ["name", "inputSchema"],
@@ -47144,10 +45851,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema211"
+                  "$ref": "#/components/schemas/output_schema207"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema212"
+                  "$ref": "#/components/schemas/output_schema208"
                 }
               },
               "required": [
@@ -47239,7 +45946,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema213"
+              "$ref": "#/components/schemas/output_schema209"
             }
           },
           "tools": {
@@ -47257,13 +45964,13 @@
                   "type": ["string", "null"]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema208"
+                  "$ref": "#/components/schemas/output_schema204"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema208"
+                  "$ref": "#/components/schemas/output_schema204"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema210"
+                  "$ref": "#/components/schemas/output_schema206"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -47307,19 +46014,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema213"
+                    "$ref": "#/components/schemas/output_schema209"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema211"
+                    "$ref": "#/components/schemas/output_schema207"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema212"
+                    "$ref": "#/components/schemas/output_schema208"
                   }
                 }
               },
@@ -47346,25 +46053,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema214"
+              "$ref": "#/components/schemas/output_schema210"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema214"
+              "$ref": "#/components/schemas/output_schema210"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema214"
+              "$ref": "#/components/schemas/output_schema210"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema214"
+              "$ref": "#/components/schemas/output_schema210"
             }
           }
         },
@@ -47457,7 +46164,7 @@
             "description": "provenance note (null if unknown), e.g. \"manual\""
           },
           "sourceMetadata": {
-            "$ref": "#/components/schemas/output_schema19"
+            "$ref": "#/components/schemas/output_schema17"
           },
           "createdAt": {
             "type": "string",
@@ -47527,7 +46234,7 @@
             "description": "provenance note (null if unknown), e.g. \"manual\""
           },
           "sourceMetadata": {
-            "$ref": "#/components/schemas/output_schema19"
+            "$ref": "#/components/schemas/output_schema17"
           }
         },
         "required": ["a", "b", "source", "sourceMetadata"],
@@ -48125,7 +46832,7 @@
             "minimum": 0
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema45"
+            "$ref": "#/components/schemas/output_schema41"
           }
         },
         "required": ["status", "lower", "upper", "coverage"],
@@ -48147,7 +46854,7 @@
             "minimum": 0
           },
           "coverage": {
-            "$ref": "#/components/schemas/output_schema45"
+            "$ref": "#/components/schemas/output_schema41"
           }
         },
         "required": ["status", "lower", "upper", "coverage"],
@@ -49267,7 +47974,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema147"
+            "$ref": "#/components/schemas/output_schema143"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -49339,7 +48046,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema147"
+            "$ref": "#/components/schemas/output_schema143"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -49452,7 +48159,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema147"
+            "$ref": "#/components/schemas/output_schema143"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -49524,7 +48231,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema147"
+            "$ref": "#/components/schemas/output_schema143"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -50773,16 +49480,6 @@
           "$ref": "#/components/schemas/LocationParentOptionsOut"
         }
       },
-      "LocationRecomputeValuationsOutput": {
-        "type": "object",
-        "properties": {
-          "updated": {
-            "type": "number"
-          }
-        },
-        "required": ["updated"],
-        "additionalProperties": false
-      },
       "LocationSearchOutput": {
         "type": "object",
         "properties": {
@@ -51243,7 +49940,7 @@
         "required": ["items", "meta"],
         "additionalProperties": false
       },
-      "output_schema8": {
+      "output_schema6": {
         "type": "object",
         "properties": {
           "id": {
@@ -51256,7 +49953,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema19": {
+      "output_schema17": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/UnitMappingWithMetadataProduct"
@@ -51277,19 +49974,19 @@
           }
         }
       },
-      "output_schema31": {
+      "output_schema29": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageOut"
         }
       },
-      "output_schema32": {
+      "output_schema30": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ExternalIdOut"
         }
       },
-      "output_schema45": {
+      "output_schema41": {
         "type": "object",
         "properties": {
           "covered": {
@@ -51306,7 +50003,7 @@
         "required": ["covered", "total"],
         "additionalProperties": false
       },
-      "output_schema46": {
+      "output_schema42": {
         "type": "object",
         "properties": {
           "etag": {
@@ -51342,7 +50039,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema70": {
+      "output_schema66": {
         "type": "object",
         "properties": {
           "module": {
@@ -51357,13 +50054,13 @@
         "required": ["module", "export"],
         "additionalProperties": false
       },
-      "output_schema97": {
+      "output_schema93": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/BaseKind"
         }
       },
-      "output_schema111": {
+      "output_schema107": {
         "type": "object",
         "properties": {
           "value": {
@@ -51382,15 +50079,15 @@
         "additionalProperties": false,
         "description": "Quantity on hand"
       },
-      "output_schema115": {
+      "output_schema111": {
         "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
         "$ref": "#/components/schemas/InventoryPlacement"
       },
-      "output_schema121": {
+      "output_schema117": {
         "description": "Namespaced Collection tags assigned directly to this location",
         "$ref": "#/components/schemas/input_schema45"
       },
-      "output_schema131": {
+      "output_schema127": {
         "type": "object",
         "properties": {
           "priced": {
@@ -51412,7 +50109,7 @@
         "required": ["priced", "missingPricing", "miscNoPrice"],
         "additionalProperties": false
       },
-      "output_schema136": {
+      "output_schema132": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -51441,7 +50138,7 @@
           }
         }
       },
-      "output_schema137": {
+      "output_schema133": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -51451,13 +50148,13 @@
           }
         ]
       },
-      "output_schema147": {
+      "output_schema143": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Amount"
         }
       },
-      "output_schema153": {
+      "output_schema149": {
         "type": "object",
         "properties": {
           "portionCount": {
@@ -51472,7 +50169,7 @@
         "required": ["portionCount", "totals"],
         "additionalProperties": false
       },
-      "output_schema171": {
+      "output_schema167": {
         "type": "object",
         "properties": {
           "id": {
@@ -51514,7 +50211,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema174": {
+      "output_schema170": {
         "type": "object",
         "properties": {
           "id": {
@@ -51527,7 +50224,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema175": {
+      "output_schema171": {
         "type": "object",
         "properties": {
           "id": {
@@ -51573,7 +50270,7 @@
                 "$ref": "#/components/schemas/input_schema45"
               },
               "tags": {
-                "$ref": "#/components/schemas/output_schema121"
+                "$ref": "#/components/schemas/output_schema117"
               },
               "type": {
                 "$ref": "#/components/schemas/LocationType"
@@ -51597,7 +50294,7 @@
                 "type": ["string", "null"]
               },
               "images": {
-                "$ref": "#/components/schemas/output_schema31"
+                "$ref": "#/components/schemas/output_schema29"
               },
               "valuation": {
                 "$ref": "#/components/schemas/LocationValuation"
@@ -51618,7 +50315,7 @@
               "ancestors": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/output_schema176"
+                  "$ref": "#/components/schemas/output_schema172"
                 }
               }
             },
@@ -51648,7 +50345,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema176": {
+      "output_schema172": {
         "type": "object",
         "properties": {
           "id": {
@@ -51667,7 +50364,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema177": {
+      "output_schema173": {
         "type": "object",
         "properties": {
           "id": {
@@ -51685,20 +50382,20 @@
           "ancestors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema176"
+              "$ref": "#/components/schemas/output_schema172"
             }
           }
         },
         "required": ["id", "name", "ancestors"],
         "additionalProperties": false
       },
-      "output_schema189": {
+      "output_schema185": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema195": {
+      "output_schema191": {
         "type": "object",
         "properties": {
           "current": {
@@ -51711,7 +50408,7 @@
         "required": ["current"],
         "additionalProperties": false
       },
-      "output_schema208": {
+      "output_schema204": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -51720,7 +50417,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema210": {
+      "output_schema206": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -51738,7 +50435,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema211": {
+      "output_schema207": {
         "type": "object",
         "properties": {
           "id": {
@@ -51754,7 +50451,7 @@
         "required": ["id", "name", "email"],
         "additionalProperties": false
       },
-      "output_schema212": {
+      "output_schema208": {
         "type": "object",
         "properties": {
           "id": {
@@ -51767,7 +50464,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema213": {
+      "output_schema209": {
         "type": "object",
         "properties": {
           "day": {
@@ -51792,7 +50489,7 @@
         "required": ["day", "success", "error", "total"],
         "additionalProperties": false
       },
-      "output_schema214": {
+      "output_schema210": {
         "type": "object",
         "properties": {
           "key": {

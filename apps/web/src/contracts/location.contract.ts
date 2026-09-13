@@ -47,10 +47,6 @@ export const locationContract = defineContract("location", {
     input: locationShortcodesInput,
     output: locationsWithParentNameOut,
   }),
-  recomputeValuations: mutation({
-    input: z.undefined(),
-    output: z.object({ updated: z.number() }),
-  }),
   search: query({
     input: rosterInput,
     output: searchOutput,

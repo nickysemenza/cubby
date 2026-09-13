@@ -1,7 +1,8 @@
-import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
+import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import { testEntityId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { PublishOptions } from "~/server/background-tasks/publish";
 import { Database } from "~/server/db";
 
 import {
@@ -18,45 +19,24 @@ const db = new Database(() => {
   );
 });
 
-function batch(totalJobs: number): BackgroundBatchRef {
-  return {
-    id: "00000000-0000-4000-8000-000000000010",
-    kind: "entity-embedding.refresh",
-    source: "mutation",
-    processor: "inline",
-    status: "succeeded",
-    totalJobs,
-  };
-}
-
 class InMemoryMutationSideEffectPorts {
-  readonly backgroundJobs: Array<{
-    jobs: Array<{ dedupeKey: string }>;
-    metadata: unknown;
+  readonly published: Array<{
+    tasks: readonly BackgroundTaskInput[];
+    options: PublishOptions;
   }> = [];
   readonly refreshed: Array<{ entityType: string; entityId: string }> = [];
   readonly inventoryRefs: Array<{ entityType: "inventory"; entityId: string }> =
     [];
+  readonly markProblemCountsDirty = vi.fn(async () => {
+    if (this.problemCountsError) throw this.problemCountsError;
+  });
   problemCountsError: Error | null = null;
 
   readonly ports = {
-    dispatchBackgroundJobs: async (_db, input) => {
-      this.backgroundJobs.push({ jobs: input.jobs, metadata: input.metadata });
-      return {
-        batch: batch(input.jobs.length),
-        batchId: "batch-1",
-        jobIds: [],
-      };
+    publishTasks: async (_db, tasks, options) => {
+      this.published.push({ tasks, options });
     },
-    dispatchLocationValuationRecompute: async () => ({
-      batch: batch(1),
-      batchId: "valuation-1",
-      jobIds: [],
-    }),
-    dispatchProblemCountsRefresh: async () => {
-      if (this.problemCountsError) throw this.problemCountsError;
-      return null;
-    },
+    markProblemCountsDirty: () => this.markProblemCountsDirty(),
     findInventoryEmbeddingRefsForProducts: async () => this.inventoryRefs,
     findInventoryEmbeddingRefsForLocations: async () => [],
     findRecipeEmbeddingRefsForIngredients: async () => [],
@@ -68,13 +48,210 @@ class InMemoryMutationSideEffectPorts {
     findEmbeddingRefsForPurchases: async () => [],
     findTransactionEmbeddingRefsForAccounts: async () => [],
     findCommercialEmbeddingRefsForExpenses: async () => [],
-    refreshSearchDocument: async () => undefined,
     refreshSearchDocuments: async (_db, refs) => {
       this.refreshed.push(...refs);
-      return undefined;
     },
   } satisfies MutationSideEffectPorts;
+
+  /** Every embedding-refresh task published across all `publishTasks` calls. */
+  get embeddingRefreshTasks(): BackgroundTaskInput[] {
+    return this.published.flatMap(({ tasks }) => tasks);
+  }
 }
+
+describe("runMutationSideEffects", () => {
+  let memory: InMemoryMutationSideEffectPorts;
+
+  beforeEach(() => {
+    memory = new InMemoryMutationSideEffectPorts();
+  });
+
+  it("publishes an entity-embedding.refresh task for the entity's own ref on create", async () => {
+    const productId = testEntityId(
+      "product",
+      "00000000-0000-4000-8000-000000000001",
+    );
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "created",
+        entity: { entity: "product", id: productId },
+        source: "product.create",
+      },
+      memory.ports,
+    );
+
+    expect(memory.embeddingRefreshTasks).toEqual([
+      expect.objectContaining({
+        kind: "entity-embedding.refresh",
+        entityType: "product",
+        entityId: productId,
+      }),
+    ]);
+  });
+
+  it("fans out an entity-embedding.refresh task to inventory refs on product update", async () => {
+    const productId = testEntityId(
+      "product",
+      "00000000-0000-4000-8000-000000000002",
+    );
+    const inventoryId = testEntityId(
+      "inventory",
+      "00000000-0000-4000-8000-000000000003",
+    );
+    memory.inventoryRefs.push({
+      entityType: "inventory",
+      entityId: inventoryId,
+    });
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "product", id: productId },
+        source: "product.update",
+      },
+      memory.ports,
+    );
+
+    const refreshedRefs = memory.embeddingRefreshTasks.map((task) =>
+      task.kind === "entity-embedding.refresh"
+        ? { entityType: task.entityType, entityId: task.entityId }
+        : null,
+    );
+    expect(refreshedRefs).toEqual(
+      expect.arrayContaining([
+        { entityType: "product", entityId: productId },
+        { entityType: "inventory", entityId: inventoryId },
+      ]),
+    );
+  });
+
+  it("publishes both location-ai tasks when location images changed", async () => {
+    const locationId = testEntityId(
+      "location",
+      "00000000-0000-4000-8000-000000000004",
+    );
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "location", id: locationId },
+        source: "location.update",
+        locationImagesChanged: true,
+      },
+      memory.ports,
+    );
+
+    const kinds = memory.published.flatMap(({ tasks }) =>
+      tasks.map((task) => task.kind),
+    );
+    expect(kinds).toEqual(
+      expect.arrayContaining([
+        "location-ai.description.refresh",
+        "location-ai.inventory.refresh",
+      ]),
+    );
+  });
+
+  it("does not publish location-ai tasks when images did not change", async () => {
+    const locationId = testEntityId(
+      "location",
+      "00000000-0000-4000-8000-000000000005",
+    );
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "location", id: locationId },
+        source: "location.update",
+        locationImagesChanged: false,
+      },
+      memory.ports,
+    );
+
+    const kinds = memory.published.flatMap(({ tasks }) =>
+      tasks.map((task) => task.kind),
+    );
+    expect(kinds).not.toContain("location-ai.description.refresh");
+    expect(kinds).not.toContain("location-ai.inventory.refresh");
+  });
+
+  it("refreshes the search projection by default", async () => {
+    const productId = testEntityId(
+      "product",
+      "00000000-0000-4000-8000-000000000006",
+    );
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "product", id: productId },
+        source: "product.update",
+      },
+      memory.ports,
+    );
+
+    expect(memory.refreshed).toEqual(
+      expect.arrayContaining([{ entityType: "product", entityId: productId }]),
+    );
+  });
+
+  it("skips the search projection when projection: 'skip' is passed", async () => {
+    const productId = testEntityId(
+      "product",
+      "00000000-0000-4000-8000-000000000007",
+    );
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "product", id: productId },
+        source: "product.update",
+      },
+      memory.ports,
+      { projection: "skip" },
+    );
+
+    expect(memory.refreshed).toEqual([]);
+  });
+
+  it("does not reject a committed mutation when marking problem counts dirty fails", async () => {
+    memory.problemCountsError = new Error("KV write failed");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await expect(
+      runMutationSideEffects(
+        db,
+        {
+          action: "updated",
+          entity: {
+            entity: "project",
+            id: testEntityId("project", "00000000-0000-4000-8000-000000000008"),
+          },
+          source: "project.update",
+        },
+        memory.ports,
+      ),
+    ).resolves.toBeUndefined();
+    expect(memory.markProblemCountsDirty).toHaveBeenCalledTimes(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      "problems.counts.dirty-mark.failed",
+      expect.objectContaining({
+        source: "project.update",
+        error: memory.problemCountsError,
+      }),
+    );
+    consoleError.mockRestore();
+  });
+});
 
 describe("runMutationSideEffectsForEntities batching", () => {
   let memory: InMemoryMutationSideEffectPorts;
@@ -83,11 +260,11 @@ describe("runMutationSideEffectsForEntities batching", () => {
     memory = new InMemoryMutationSideEffectPorts();
   });
 
-  it("dispatches one entity-embedding batch per wave, not one per entity", async () => {
+  it("publishes one task list per wave, not one per entity", async () => {
     const inventoryIds = [
-      testEntityId("inventory", "00000000-0000-4000-8000-000000000001"),
-      testEntityId("inventory", "00000000-0000-4000-8000-000000000002"),
-      testEntityId("inventory", "00000000-0000-4000-8000-000000000003"),
+      testEntityId("inventory", "00000000-0000-4000-8000-000000000010"),
+      testEntityId("inventory", "00000000-0000-4000-8000-000000000011"),
+      testEntityId("inventory", "00000000-0000-4000-8000-000000000012"),
     ];
 
     await runMutationSideEffectsForEntities(
@@ -103,24 +280,25 @@ describe("runMutationSideEffectsForEntities batching", () => {
     expect(memory.refreshed).toEqual(
       inventoryIds.map((entityId) => ({ entityType: "inventory", entityId })),
     );
-    expect(memory.backgroundJobs).toHaveLength(1);
-    expect(
-      memory.backgroundJobs[0]?.jobs.map((job) => job.dedupeKey).sort(),
-    ).toEqual(
-      inventoryIds
-        .map((id) => `entity-embedding.refresh:inventory:${id}`)
-        .sort(),
+    expect(memory.published).toHaveLength(1);
+    const refreshedRefs = memory.published[0]?.tasks.map((task) =>
+      task.kind === "entity-embedding.refresh"
+        ? `${task.entityType}:${task.entityId}`
+        : task.kind,
+    );
+    expect(refreshedRefs?.sort()).toEqual(
+      inventoryIds.map((id) => `inventory:${id}`).sort(),
     );
   });
 
   it("dedupes embedding refs collected across handlers in the same wave", async () => {
     const productId = testEntityId(
       "product",
-      "00000000-0000-4000-8000-000000000004",
+      "00000000-0000-4000-8000-000000000013",
     );
     const inventoryId = testEntityId(
       "inventory",
-      "00000000-0000-4000-8000-000000000005",
+      "00000000-0000-4000-8000-000000000014",
     );
     memory.inventoryRefs.push({
       entityType: "inventory",
@@ -144,73 +322,66 @@ describe("runMutationSideEffectsForEntities batching", () => {
       memory.ports,
     );
 
-    expect(
-      memory.backgroundJobs[0]?.jobs.map((job) => job.dedupeKey).sort(),
-    ).toEqual(
-      [
-        `entity-embedding.refresh:product:${productId}`,
-        `entity-embedding.refresh:inventory:${inventoryId}`,
-      ].sort(),
+    expect(memory.published).toHaveLength(1);
+    const refreshedRefs = memory.published[0]?.tasks.map((task) =>
+      task.kind === "entity-embedding.refresh"
+        ? `${task.entityType}:${task.entityId}`
+        : task.kind,
+    );
+    expect(refreshedRefs?.sort()).toEqual(
+      [`product:${productId}`, `inventory:${inventoryId}`].sort(),
     );
   });
 
-  it("does not reject a committed mutation when Problem-count refresh enqueue fails", async () => {
-    const enqueueError = new Error("BackgroundJobKind is missing");
-    memory.problemCountsError = enqueueError;
+  it("skips refreshSearchDocuments when projection: 'skip' is passed", async () => {
+    const productId = testEntityId(
+      "product",
+      "00000000-0000-4000-8000-000000000015",
+    );
+
+    await runMutationSideEffectsForEntities(
+      db,
+      [
+        {
+          action: "updated",
+          entity: { entity: "product", id: productId },
+          source: "test.bulk",
+        },
+      ],
+      memory.ports,
+      { projection: "skip" },
+    );
+
+    expect(memory.refreshed).toEqual([]);
+  });
+
+  it("does not reject the wave when marking problem counts dirty fails", async () => {
+    memory.problemCountsError = new Error("KV write failed");
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
 
     await expect(
-      runMutationSideEffects(
+      runMutationSideEffectsForEntities(
         db,
-        {
-          action: "updated",
-          entity: {
-            entity: "project",
-            id: testEntityId("project", "00000000-0000-4000-8000-000000000006"),
+        [
+          {
+            action: "updated",
+            entity: {
+              entity: "project",
+              id: testEntityId(
+                "project",
+                "00000000-0000-4000-8000-000000000016",
+              ),
+            },
+            source: "test.bulk",
           },
-          source: "project.update",
-        },
+        ],
         memory.ports,
       ),
-    ).resolves.toHaveLength(1);
-    expect(consoleError).toHaveBeenCalledWith(
-      "problems.counts.refresh.enqueue.failed",
-      expect.objectContaining({
-        source: "project.update",
-        error: enqueueError,
-      }),
-    );
+    ).resolves.toBeUndefined();
+    expect(memory.markProblemCountsDirty).toHaveBeenCalledTimes(1);
     consoleError.mockRestore();
-  });
-
-  it("keeps dispatched metadata at the legacy wire-reference boundary", async () => {
-    const locationId = testEntityId(
-      "location",
-      "00000000-0000-4000-8000-000000000007",
-    );
-
-    await runMutationSideEffects(
-      db,
-      {
-        action: "updated",
-        entity: { entity: "location", id: locationId },
-        source: "location.updateImages",
-        locationImagesChanged: true,
-      },
-      memory.ports,
-    );
-
-    expect(memory.backgroundJobs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          metadata: expect.objectContaining({
-            entity: { entityType: "location", entityId: locationId },
-          }),
-        }),
-      ]),
-    );
   });
 });
 

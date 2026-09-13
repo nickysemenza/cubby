@@ -5,9 +5,9 @@ import { Database } from "~/server/db";
 
 import {
   AGENT_ASK_FEATURE,
-  CATEGORY_AUDIT_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   PRODUCT_CATEGORY_SUGGESTION_FEATURE,
+  RECIPE_FLOW_PRIMARY_FEATURE,
 } from "./features";
 import {
   type AiChatRequest,
@@ -146,9 +146,9 @@ describe("planStructuredRun", () => {
     });
 
     expect(
-      planStructuredRun(CATEGORY_AUDIT_FEATURE, {
+      planStructuredRun(RECIPE_FLOW_PRIMARY_FEATURE, {
         db,
-        operation: "auditCategories",
+        operation: "recipeFlow",
       }).usage,
     ).toMatchObject({ provider: "anthropic", model: "claude-sonnet-5" });
 
@@ -207,14 +207,14 @@ describe("runStructuredFeature", () => {
     const { calls, ports } = fakeChat([UNUSED_RESPONSE]);
 
     await runStructuredFeature(
-      CATEGORY_AUDIT_FEATURE,
+      RECIPE_FLOW_PRIMARY_FEATURE,
       request,
-      { db, operation: "auditCategories" },
+      { db, operation: "recipeFlow" },
       ports,
     );
 
     expect(calls[0]!.modelOptions).toEqual({
-      max_tokens: 2000,
+      max_tokens: 16000,
       thinking: { type: "adaptive" },
       output_config: { effort: "low" },
     });

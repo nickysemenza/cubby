@@ -1,11 +1,7 @@
-import {
-  type SearchableEntity,
-  type SearchHit,
-  searchableEntities,
-} from "@cubby/schemas/search";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import type { SearchHit } from "@cubby/schemas/search";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Search, Send } from "lucide-react";
+import { Search } from "lucide-react";
 import { useState } from "react";
 
 import { Row, Stack } from "~/components/layout";
@@ -78,9 +74,6 @@ function ResultTable({ title, items }: { title: string; items: SearchHit[] }) {
 export function SearchDebugPage() {
   const [query, setQuery] = useState("plastic tarp");
   const [submitted, setSubmitted] = useState(query);
-  const [entityTypes, setEntityTypes] = useState<SearchableEntity[]>([
-    ...searchableEntities,
-  ]);
   const shouldSearch = submitted.trim().length > 0;
   const debugQuery = useQuery({
     ...search.debug.queryOptions({
@@ -89,9 +82,6 @@ export function SearchDebugPage() {
     }),
     enabled: shouldSearch,
   });
-  const backfill = useMutation(
-    search.enqueueEmbeddingBackfill.mutationOptions(),
-  );
 
   return (
     <Stack gap="md">
@@ -112,64 +102,6 @@ export function SearchDebugPage() {
           Run
         </Button>
       </form>
-
-      <Stack gap="sm" className="border border-border bg-card p-4">
-        <Row align="center" justify="between" gap="sm" wrap>
-          <h2 className="font-mono text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-            Semantic backfill
-          </h2>
-          <Row gap="sm" wrap>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={backfill.isPending || entityTypes.length === 0}
-              onClick={() =>
-                backfill.mutate({
-                  entityTypes,
-                })
-              }
-            >
-              {backfill.isPending ? <Spinner className="size-3" /> : <Send />}
-              Enqueue remaining
-            </Button>
-          </Row>
-        </Row>
-        <Row gap="sm" wrap>
-          {searchableEntities.map((entityType) => (
-            <label
-              key={entityType}
-              className="inline-flex items-center gap-1 text-sm"
-            >
-              <input
-                type="checkbox"
-                checked={entityTypes.includes(entityType)}
-                onChange={(event) => {
-                  setEntityTypes((prev) =>
-                    event.target.checked
-                      ? [...prev, entityType]
-                      : prev.filter((type) => type !== entityType),
-                  );
-                }}
-              />
-              {entityType}
-            </label>
-          ))}
-        </Row>
-      </Stack>
-
-      {backfill.data ? (
-        <p className="text-xs text-muted-foreground">
-          {backfill.data.reused ? "Reusing" : "Started"} embedding backfill in{" "}
-          <Link
-            to="/background-jobs"
-            search={{ batchId: backfill.data.batch.id }}
-            className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
-          >
-            batch {backfill.data.batch.id.slice(0, 8)}
-          </Link>
-          .
-        </p>
-      ) : null}
 
       {debugQuery.isLoading ? <Spinner /> : null}
       {debugQuery.error ? (

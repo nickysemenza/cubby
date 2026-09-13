@@ -1,5 +1,4 @@
 import type {
-  CategoryAudit,
   CategorySuggestion,
   DetectedInventoryAiResult,
   LocationDescription,
@@ -15,7 +14,6 @@ import type { RecipeFlowAiPlan } from "@cubby/schemas/recipe-flow";
 import type { ImagePart } from "@tanstack/ai";
 
 import {
-  CATEGORY_AUDIT_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   LOCATION_INVENTORY_DETECTION_FEATURE,
   LOCATION_TYPE_SUGGESTION_FEATURE,
@@ -31,7 +29,7 @@ import {
 
 // Category descriptions for the LLM to understand what each category means
 // Using `satisfies` to ensure all categories have descriptions (build fails if one is missing)
-export const CATEGORY_DESCRIPTIONS = {
+const CATEGORY_DESCRIPTIONS = {
   food: "Consumable food items: flour, olive oil, canned tomatoes, spices, meat, produce, beverages",
   tools:
     "Power and hand tools: drills, saws, grinders, screwdrivers, wrenches, measuring tools",
@@ -141,12 +139,6 @@ function imageParts(imageUrls: string[]): ImagePart[] {
     type: "image",
     source: { type: "url", value: url },
   }));
-}
-
-interface CategoryAuditProduct {
-  name: string;
-  manufacturer: string;
-  category: string | null;
 }
 
 /**
@@ -320,43 +312,6 @@ function buildProductIdentificationRequest(imageUrls: string[]): AiChatRequest {
   };
 }
 
-function buildCategoryAuditRequest(
-  products: CategoryAuditProduct[],
-  existingCategories: Record<string, string>,
-): AiChatRequest {
-  const categoryList = Object.entries(existingCategories)
-    .map(([cat, desc]) => `- "${cat}": ${desc}`)
-    .join("\n");
-  const productList = products
-    .map(
-      (product) =>
-        `- ${product.name} (${product.manufacturer}) [${product.category ?? "uncategorized"}]`,
-    )
-    .join("\n");
-
-  return {
-    systemPrompts: [
-      `You are a product catalog analyst. Given a list of products and the current category definitions, identify gaps — clusters of products that would benefit from a new category.
-
-Current categories:
-${categoryList}
-
-Rules:
-1. Only suggest new categories if there is a meaningful cluster of products (at least 3) that don't fit well into existing categories
-2. Don't suggest categories that heavily overlap with existing ones
-3. Use lowercase kebab-case for category names (e.g., "automotive", "craft-supplies")
-4. If the current categories cover the catalog well, return an empty suggestions array
-5. For each suggestion, list existing product names that would move to the new category`,
-    ],
-    messages: [
-      {
-        role: "user",
-        content: `Review these ${products.length} products and suggest any missing categories:\n\n${productList}`,
-      },
-    ],
-  };
-}
-
 /**
  * Every method here is the same two lines: build the request, hand it and the
  * feature record to the one runner. Tier, model, token cap, effort, cache
@@ -422,15 +377,6 @@ class AiClient {
   ): Promise<ProductIdentification> {
     const request = buildProductIdentificationRequest(imageUrls);
     return runStructuredFeature(PRODUCT_IDENTIFICATION_FEATURE, request, ctx);
-  }
-
-  async auditCategories(
-    products: CategoryAuditProduct[],
-    existingCategories: Record<string, string>,
-    ctx: AiRunContext,
-  ): Promise<CategoryAudit> {
-    const request = buildCategoryAuditRequest(products, existingCategories);
-    return runStructuredFeature(CATEGORY_AUDIT_FEATURE, request, ctx);
   }
 }
 

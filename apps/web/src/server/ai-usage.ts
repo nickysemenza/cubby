@@ -25,7 +25,6 @@ export type RecordAiUsageInput = {
   durationMs: number;
   cacheStatus?: "hit" | "miss" | "none" | null;
   entity?: { entityType: string; entityId: string } | null;
-  batchId?: string | null;
 };
 
 /** Best-effort AI usage telemetry; never changes the owning AI operation. */
@@ -54,7 +53,6 @@ export async function recordAiUsage(
       cacheStatus: input.cacheStatus ?? null,
       entityType: input.entity?.entityType ?? null,
       entityId: input.entity?.entityId ?? null,
-      batchId: input.batchId ?? null,
       estimatedCost: input.estimatedCost ?? null,
     });
   } catch (error) {

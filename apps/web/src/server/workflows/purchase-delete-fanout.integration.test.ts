@@ -5,17 +5,13 @@ import { purchaseCreateInput, purchaseOut } from "@cubby/schemas/purchase";
 import { vendorCreateInput, vendorOut } from "@cubby/schemas/vendor";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { executeEntity } from "~/server/entity-kernel";
-import {
-  getBackgroundBatchDetail,
-  listBackgroundBatches,
-} from "~/server/repo/background-jobs";
 import { createExpense } from "~/server/repo/expense";
 import { createFinancialAccount } from "~/server/repo/financial-account";
 import { createFinancialTransaction } from "~/server/repo/financial-transaction";
+import { getSearchDocumentEmbeddingText } from "~/server/repo/search-document";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -95,30 +91,21 @@ describe("purchase deletion embedding fanout", () => {
       ids: [purchase.id],
     });
 
-    const batches = await listBackgroundBatches(ctx.db, 50);
-    const purchaseDeleteMetadata = z.object({
-      source: z.literal("purchase.delete"),
-    });
-    const details = await Promise.all(
-      batches
-        .filter(
-          (batch) =>
-            batch.kind === "entity-embedding.refresh" &&
-            purchaseDeleteMetadata.safeParse(batch.metadata).success,
-        )
-        .map((batch) => getBackgroundBatchDetail(ctx.db, batch.id)),
-    );
-    const payloads = details.flatMap(
-      (detail) => detail?.jobs.map((job) => job.payload) ?? [],
-    );
-    expect(payloads).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ entityType: "expense", entityId: expenseId }),
-        expect.objectContaining({
-          entityType: "financialTransaction",
-          entityId: transactionId,
-        }),
-      ]),
-    );
+    // Purchase delete detaches these rows and fans out
+    // entity-embedding.refresh for both; with no queue bound in tests, that
+    // task runs inline and refreshes the search-document projection as its
+    // first step (see refreshEntityEmbedding), so a live projection is the
+    // observable proof the fanout ran — the background-job ledger this used
+    // to assert against no longer exists.
+    const [expenseDoc, transactionDoc] = await Promise.all([
+      getSearchDocumentEmbeddingText(ctx.db, "expense", expenseId),
+      getSearchDocumentEmbeddingText(
+        ctx.db,
+        "financialTransaction",
+        transactionId,
+      ),
+    ]);
+    expect(expenseDoc).not.toBeNull();
+    expect(transactionDoc).not.toBeNull();
   });
 });

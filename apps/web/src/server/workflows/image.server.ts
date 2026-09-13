@@ -16,7 +16,6 @@ import { markImageUploaded } from "~/server/repo/image";
 import { resolveOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   attachFileToEntity,
-  cleanupUnreferencedImageStorage,
   createFileUpload,
   cullPendingImageStorage,
   importImageFromUrl,
@@ -150,17 +149,4 @@ export const cullPendingImagesWorkflow = imageOperation(
     cullPendingImageStorage(db, input.olderThanHours),
   "IMAGE_CULL_FAILED",
   "Failed to cull pending images",
-);
-const cleanupImages = imageOperation<
-  undefined,
-  Awaited<ReturnType<typeof cleanupUnreferencedImageStorage>>
->(
-  "image.cleanupUnreferenced",
-  cleanupUnreferencedImageStorage,
-  "IMAGE_CULL_FAILED",
-  "Failed to clean up unreferenced files",
-);
-export const cleanupUnreferencedImagesWorkflow = bindWorkflow(
-  cleanupImages.definition,
-  (db: Database) => ({ context: db, input: undefined }),
 );

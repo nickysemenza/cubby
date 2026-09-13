@@ -53,14 +53,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { isMoneyUnit } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import { type Database, withConnection } from "~/server/db";
-import {
-  findOrphanedEntityEmbeddings,
-  softDeleteEntityEmbeddingRows,
-} from "~/server/repo/entity-embedding";
-import {
-  countCullablePendingImages,
-  countUnreferencedImages,
-} from "~/server/repo/image";
+import { countCullablePendingImages } from "~/server/repo/image";
 import {
   deleteIngredients,
   findOrCreateIngredient,
@@ -405,7 +398,6 @@ export const findMaintenanceCounts = async (
     staleRecipeTotals: () => countStaleRecipeTotals(db),
     cullablePendingImages: () =>
       countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
-    unreferencedImages: () => countUnreferencedImages(db),
     entitiesMissingEmbeddings: () => countMissingEmbeddings(db),
   });
 
@@ -414,7 +406,6 @@ export const findMaintenanceCounts = async (
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
-    unreferencedImages: r.unreferencedImages,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
   };
 };
@@ -647,14 +638,8 @@ const exactProblemPresentationRowSchema = z.object({
   quantityLedger: z
     .object({ expectedQuantity: z.number().optional() })
     .nullish(),
-  key: z.string().nullish(),
-  filename: z.string().nullish(),
-  contentType: z.string().nullish(),
-  size: z.number().nullish(),
   createdAt:
     allProblemsSchema.shape.unknownParkedItems.element.shape.createdAt.nullish(),
-  entityType: z.string().nullish(),
-  entityId: z.string().nullish(),
   recipes: z
     .array(
       z.object({
@@ -784,17 +769,6 @@ const fastExactPresenters = {
       manufacturer: String(row.manufacturer ?? ""),
       ownUnits: Number(row.onHandUnits ?? 0),
       expectedUnits: Number(row.quantityLedger?.expectedQuantity ?? 0),
-    }),
-  unreferencedImages: (row) =>
-    allProblemsSchema.shape.unreferencedImages.element.parse({
-      id: row.id,
-      key: String(row.key),
-      filename: String(row.filename),
-      contentType: String(row.contentType),
-      size: Number(row.size),
-      createdAt: row.createdAt,
-      targetType: row.entityType ?? null,
-      targetId: row.entityId ?? null,
     }),
   understatedCostMeals: (row) => {
     const affectedRecipes = (row.recipes ?? []).flatMap((entry) => {
@@ -967,7 +941,6 @@ const FAST_ENTITY_PROBLEM_KEYS = [
   "unlinkedExitExpenses",
   "purchaselessExitExpenses",
   "productsWithNoImages",
-  "unreferencedImages",
   "understatedCostMeals",
   "unknownParkedItems",
   "inventoryWithoutPricePath",
@@ -1018,12 +991,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             db,
             "tools-used-outside-ownership",
             allProblemsSchema.shape.toolsUsedOutsideOwnership,
-          ),
-        orphanedEntityEmbeddings: () =>
-          diagnosticItems(
-            db,
-            "orphaned-entity-embeddings",
-            allProblemsSchema.shape.orphanedEntityEmbeddings,
           ),
         entitiesMissingEmbeddings: () =>
           diagnosticItems(
@@ -1107,7 +1074,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     orphanedProducts: r.orphanedProducts.items,
     partiallyImportedCookbooks: r.partiallyImportedCookbooks.items,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership.items,
-    orphanedEntityEmbeddings: r.orphanedEntityEmbeddings.items,
     entitiesMissingEmbeddings: r.entitiesMissingEmbeddings.items,
     staleParentRecipes: r.staleParentRecipes.items,
     weightSoldProducts: r.weightSoldProducts.items,
@@ -1183,11 +1149,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
       page("productsWithNoImages"),
       allProblemsSchema.shape.productsWithNoImages,
     ),
-    unreferencedImages: presentFastExactProblem(
-      "unreferencedImages",
-      page("unreferencedImages"),
-      allProblemsSchema.shape.unreferencedImages,
-    ),
     understatedCostMeals: presentFastExactProblem(
       "understatedCostMeals",
       page("understatedCostMeals"),
@@ -1227,21 +1188,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     ),
     sectionTotals: { ...derivedTotals, ...exactSectionTotals(exact) },
   };
-};
-
-export const cleanupOrphanedEntityEmbeddings = async (
-  db: Database,
-  ids?: string[],
-): Promise<{ found: number; deleted: number }> => {
-  const orphaned = await findOrphanedEntityEmbeddings(db);
-  const targets = ids?.length
-    ? orphaned.filter((row) => ids.includes(row.id))
-    : orphaned;
-  const deleted = await softDeleteEntityEmbeddingRows(
-    db,
-    targets.map((row) => row.id),
-  );
-  return { found: orphaned.length, deleted };
 };
 
 export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>

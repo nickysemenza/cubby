@@ -1,3 +1,4 @@
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   taskBulkReorderInput,
@@ -87,7 +88,7 @@ export const taskBulkReorderWorkflow = bindWorkflow(
         items.map((item) => item.id),
       ),
     )
-    .effect("backgroundBatches", async ({ context }, { entityIds }) =>
+    .effect("sideEffectsRun", async ({ context }, { entityIds }) =>
       runMutationSideEffectsForEntities(
         context.db,
         entityIds.map((id) => ({
@@ -97,9 +98,9 @@ export const taskBulkReorderWorkflow = bindWorkflow(
         })),
       ),
     )
-    .output(({ items, backgroundBatches }) => ({
+    .output(({ items }) => ({
       items,
-      sideEffects: { backgroundBatches },
+      sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     })),
   (db: Database, input: ReorderInput, actorContext: ActorContext) => ({
     context: { db, actorContext },

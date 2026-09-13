@@ -1177,85 +1177,6 @@ export const imageJoinColumnFor = (table: PgTable): PgColumn | undefined => {
   return undefined;
 };
 
-export const UNREFERENCED_IMAGE_GRACE_HOURS = 1;
-
-const unreferencedImageWhere = (db: Database, cutoffDate: Date) =>
-  and(
-    eq(image.status, "UPLOADED"),
-    notDeleted(image),
-    lt(image.createdAt, cutoffDate),
-    not(activeImageReferenceCondition(db, image)),
-  );
-
-/**
- * UPLOADED images no edge still reaches — bytes R2 charges for that nothing can
- * render. The mirror of `findCullablePendingImages`, which only ever swept
- * PENDING rows; that gap is exactly why these accumulated unnoticed. It shares
- * the active-reference SQL used by the Images list, so the detector and that
- * list cannot disagree about whether an image still renders.
- *
- * The grace window is load-bearing, not cosmetic: `importImageFromUrl` and the
- * cookbook cover import create an UPLOADED row and associate it in a SEPARATE
- * step, so a seconds-old unattached row is in flight, not orphaned.
- *
- * Both removal paths now take the file with them — `detachImagesFromEntity` on a
- * detach, `removeEntity` on an entity delete — so this converges to zero and a
- * row here names a removal path that skipped the reap, not a backlog. "Delete
- * unreferenced files" in Settings → Maintenance clears whatever one leaves.
- */
-export const findUnreferencedImages = async (
-  db: Database,
-  olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
-): Promise<
-  Array<{
-    id: ImageId;
-    key: string;
-    filename: string;
-    contentType: string;
-    size: number;
-    createdAt: Date;
-    targetType: string | null;
-    targetId: string | null;
-  }>
-> => {
-  const dbClient = getDb(db);
-  const cutoffDate = new Date();
-  cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
-
-  const candidates = await dbClient
-    .select({
-      id: image.id,
-      key: image.key,
-      filename: image.filename,
-      contentType: image.contentType,
-      size: image.size,
-      createdAt: image.createdAt,
-      targetType: image.targetType,
-      targetId: image.targetId,
-    })
-    .from(image)
-    .where(unreferencedImageWhere(db, cutoffDate));
-  // `image.id` is an unbranded column, so this is the genuine string -> brand
-  // boundary: these are real uuids on their way to `deleteImages`.
-  return candidates.map((img) => ({
-    ...img,
-    id: parseEntityId("image", img.id),
-  }));
-};
-
-export const countUnreferencedImages = async (
-  db: Database,
-  olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
-): Promise<number> => {
-  const cutoffDate = new Date();
-  cutoffDate.setHours(cutoffDate.getHours() - olderThanHours);
-  const [row] = await getDb(db)
-    .select({ count: sql<number>`count(*)::int` })
-    .from(image)
-    .where(unreferencedImageWhere(db, cutoffDate));
-  return row?.count ?? 0;
-};
-
 /**
  * Associate an image with a product.
  *
@@ -1872,13 +1793,13 @@ export const createOrReuseAttachedImage = async (
         if (winner) return { row: winner, reused: true };
         // Conflicted with a row the liveness check then rejected: the partial
         // unique index spans unattached rows, so a stale one still owns this
-        // key. `detachImagesFromEntity` no longer produces those; a row here
-        // means some removal path left one behind and `findUnreferencedImages`
-        // will be reporting it.
+        // key. Both `detachImagesFromEntity` and `removeEntity` reap an
+        // unreferenced image transactionally, so a row here means some
+        // removal path left one behind.
         throw createAppError(
           "IMAGE_ATTACH_FAILED",
           `A detached file still holds idempotencyKey "${params.idempotencyKey}" for this ${entity.entity}. ` +
-            "Retry with a different key, and check Problems → unreferenced files.",
+            "Retry with a different key.",
         );
       }
       throw new Error("Image attachment insert unexpectedly returned no row");

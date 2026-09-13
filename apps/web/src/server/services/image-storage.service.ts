@@ -14,6 +14,7 @@ import type {
 } from "@cubby/schemas/image";
 import {
   ALLOWED_IMAGE_TYPES,
+  CULL_PENDING_IMAGES_DEFAULT_HOURS,
   MAX_IMAGE_UPLOAD_BYTES,
   PDF_CONTENT_TYPE,
 } from "@cubby/schemas/image";
@@ -38,10 +39,8 @@ import {
   cullPendingImages,
   deleteImages,
   findAttachmentByIdempotencyKey,
-  findUnreferencedImages,
   getImageById,
   getImageByKey,
-  UNREFERENCED_IMAGE_GRACE_HOURS,
 } from "~/server/repo/image";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 import {
@@ -118,10 +117,6 @@ export interface ImageStoragePorts<TDatabase> {
       database: TDatabase,
       ...args: WithoutDatabase<typeof findAttachmentByIdempotencyKey>
     ) => Promise<AttachedImageRecord | null>;
-    findUnreferencedImages: (
-      database: TDatabase,
-      ...args: WithoutDatabase<typeof findUnreferencedImages>
-    ) => Promise<Array<{ id: ImageId }>>;
     getImageById: (
       database: TDatabase,
       ...args: WithoutDatabase<typeof getImageById>
@@ -167,7 +162,6 @@ export const productionImageStoragePorts = {
     cullPendingImages,
     deleteImages,
     findAttachmentByIdempotencyKey,
-    findUnreferencedImages,
     getImageById,
     getImageByKey,
   },
@@ -202,6 +196,19 @@ const initiatePendingUpload = async <TDatabase>(
   input: { filename: string; contentType: string; size: number },
   key: string,
 ) => {
+  // Clean-on-write: the only way a PENDING row outlives its upload is a flow
+  // abandoned after this presign step, so the next presign is the natural
+  // moment to reap the day-old ones — no sweeper, no schedule. Best-effort:
+  // a failed cull must not block the upload it precedes.
+  try {
+    await cullPendingImageStorageWithPorts(
+      ports,
+      db,
+      CULL_PENDING_IMAGES_DEFAULT_HOURS,
+    );
+  } catch (error) {
+    console.error("image.cull-on-presign.failed", error);
+  }
   const url = ports.objectStorage.getPublicUrl(key);
   const createdImage = await ports.repository.createPendingImageRecord(db, {
     filename: input.filename,
@@ -849,37 +856,6 @@ const cullPendingImageStorageWithPorts = async <TDatabase>(
   return result;
 };
 
-/**
- * Delete UPLOADED files nothing references, plus their R2 objects — the sibling
- * of the pending cull for rows that already made it past the upload.
- *
- * Neither removal path produces these any more — a detach reaps via
- * `detachImagesFromEntity`, an entity delete via `removeEntity` — so this is the
- * backfill for rows that accumulated before, and the recovery route if a future
- * removal path forgets. `findUnreferencedImages` is the detector that finds
- * them.
- */
-const cleanupUnreferencedImageStorageWithPorts = async <TDatabase>(
-  ports: ImageStoragePorts<TDatabase>,
-  db: TDatabase,
-  olderThanHours: number = UNREFERENCED_IMAGE_GRACE_HOURS,
-) => {
-  const found = await ports.repository.findUnreferencedImages(
-    db,
-    olderThanHours,
-  );
-  if (found.length === 0) return { count: 0, deletedIds: [], deletedKeys: [] };
-  // Via `deleteImages`, not a bare row delete: these rows can still be FK'd by
-  // the tombstoned join rows an entity delete left behind, and only the
-  // IMAGE_HARD_DELETE cascade clears every incoming edge first.
-  const result = await ports.repository.deleteImages(
-    db,
-    found.map((row) => row.id),
-  );
-  await deleteStoredObjectsWithPorts(ports, result.deletedKeys);
-  return { count: result.deletedIds.length, ...result };
-};
-
 /** Bind image storage to real infrastructure or a local in-memory test port. */
 export function createImageStorageService<TDatabase>(
   ports: ImageStoragePorts<TDatabase>,
@@ -887,11 +863,6 @@ export function createImageStorageService<TDatabase>(
   return {
     attachFileToEntity: (database: TDatabase, input: McpAttachFileInput) =>
       attachFileToEntityWithPorts(ports, database, input),
-    cleanupUnreferencedImageStorage: (
-      database: TDatabase,
-      olderThanHours?: number,
-    ) =>
-      cleanupUnreferencedImageStorageWithPorts(ports, database, olderThanHours),
     cullPendingImageStorage: (database: TDatabase, olderThanHours: number) =>
       cullPendingImageStorageWithPorts(ports, database, olderThanHours),
     createFileUpload: (database: TDatabase, input: CreateFileUploadInput) =>
@@ -918,8 +889,6 @@ const productionImageStorage = createImageStorageService(
 );
 
 export const attachFileToEntity = productionImageStorage.attachFileToEntity;
-export const cleanupUnreferencedImageStorage =
-  productionImageStorage.cleanupUnreferencedImageStorage;
 export const cullPendingImageStorage =
   productionImageStorage.cullPendingImageStorage;
 export const createFileUpload = productionImageStorage.createFileUpload;

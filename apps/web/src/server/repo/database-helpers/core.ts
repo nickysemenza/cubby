@@ -3,7 +3,12 @@
  * Unwrap opaque Database type and handle transactions.
  */
 
-import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import {
+  Database,
+  type DrizzleClient,
+  type DrizzleTransaction,
+} from "~/server/db";
+import type { DatabaseClient } from "~/server/db/database";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 /**
@@ -77,3 +82,26 @@ export const withTransactionOn = async <T>(
 ): Promise<T> => {
   return isTransaction(db) ? fn(db) : withTransaction(db, fn);
 };
+
+/**
+ * A `Database` handle whose repository client IS the open transaction, so
+ * repository functions that take a `Database` (and open their own
+ * transactions) run inside the caller's boundary: nested transactions become
+ * savepoints. This is how one write and its derived projections commit
+ * together without every repository learning a second parameter type.
+ */
+export const databaseForTransaction = (tx: DrizzleTransaction): Database => {
+  // SAFETY: the repository-only Database facade exposes the same schema-bound
+  // Drizzle methods as DatabaseClient; nested transactions become savepoints.
+  const client = tx as DatabaseClient;
+  return new Database(() => ({
+    client,
+    withConnection: (fn) => fn(client),
+  }));
+};
+
+/** {@link withTransaction} whose callback receives a transaction-backed `Database`. */
+export const withTransactionDatabase = async <T>(
+  db: Database,
+  fn: (transactionDb: Database) => Promise<T>,
+): Promise<T> => withTransaction(db, (tx) => fn(databaseForTransaction(tx)));

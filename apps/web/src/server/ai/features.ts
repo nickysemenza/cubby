@@ -17,8 +17,6 @@
 import {
   type AiSelectionResult,
   aiSelectionResultSchema,
-  type CategoryAudit,
-  categoryAuditSchema,
   type CategorySuggestion,
   categorySuggestionSchema,
   type DetectedInventoryAiResult,
@@ -235,16 +233,6 @@ export const RECIPE_FLOW_PRIMARY_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<RecipeFlowAiPlan> &
   AiAnalysisFeature<RecipeFlowArtifact>;
 
-export const CATEGORY_AUDIT_FEATURE = defineFeature({
-  feature: "category-audit",
-  tier: "reasoning",
-  maxTokens: 2000,
-  effort: "low",
-  cache: true,
-  promptVersion: "2026-09-11.1",
-  schema: categoryAuditSchema,
-}) satisfies AiStructuredFeature<CategoryAudit>;
-
 /**
  * The agent is declared here for its tier/cap/effort, but it does NOT run
  * through {@link runStructuredFeature}: it streams, calls tools across
@@ -271,7 +259,6 @@ export const AI_FEATURES = [
   LOCATION_INVENTORY_DETECTION_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
-  CATEGORY_AUDIT_FEATURE,
   AGENT_ASK_FEATURE,
 ] as const satisfies readonly AiFeature[];
 

@@ -19,10 +19,6 @@ import { proposeSizeFromTitle } from "~/lib/title-unit-size";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { Database } from "~/server/db";
 import {
-  countOrphanedEntityEmbeddings,
-  findOrphanedEntityEmbeddings,
-} from "~/server/repo/entity-embedding";
-import {
   countDependencyCycles,
   countEntitiesMissingEmbeddings,
   countReferentialLivenessViolations,
@@ -244,11 +240,6 @@ export const diagnosticAdapters = {
       healthySample(findToolsUsedOutsideOwnership(db), limit),
     count: async (db) =>
       healthyCount((await findToolsUsedOutsideOwnership(db)).length),
-  },
-  "orphaned-entity-embeddings": {
-    sample: (db, _options, limit) =>
-      healthySample(findOrphanedEntityEmbeddings(db), limit),
-    count: async (db) => healthyCount(await countOrphanedEntityEmbeddings(db)),
   },
   "entities-missing-embeddings": {
     sample: async (db, _options, limit) => {

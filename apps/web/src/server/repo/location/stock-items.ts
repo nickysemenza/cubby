@@ -15,7 +15,7 @@ import { stockOnly } from "~/server/repo/inventory/placement";
  *
  * Stock only (`stockOnly()`), per the rule in `inventory/placement.ts`:
  * installed fixtures are not items you can walk over and count, and the
- * persisted `location.valuation` rollup excludes them too.
+ * computed `location.valuation` rollup excludes them too.
  *
  * Regression: `getLocationById` once counted via its own GROUP BY and left
  * `inventoryItems` unmapped, so the HTTP/CLI resource detail reported

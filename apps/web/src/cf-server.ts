@@ -35,7 +35,6 @@ import {
 import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
 import { withRequestDb, withRequestDbClient } from "./server/db";
-import type { DeadLetterQueueBatch } from "./server/dead-letter-queue";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
 import { classifyHttpWorkload } from "./server/workload";
@@ -310,13 +309,10 @@ const handler = {
     }
   },
 
-  // Background queue consumer. Each message is a small persisted-job wakeup:
-  // the payload lives in Postgres, so retries are inspectable and queue messages
-  // stay bounded. Per-message ack/retry so one bad job doesn't replay the rest.
-  async queue(
-    batch: BackgroundQueueBatch | TelemetryQueueBatch | DeadLetterQueueBatch,
-    env: Env,
-  ) {
+  // Background queue consumer. Each message is a complete task; there is no
+  // execution row behind it. Per-message ack/retry so one failing task never
+  // replays its siblings, and the queue's own retry budget is the only retry.
+  async queue(batch: BackgroundQueueBatch | TelemetryQueueBatch, env: Env) {
     setCfEnv(env);
     await withTrace(
       "cf.queue",
@@ -333,51 +329,22 @@ const handler = {
             return;
           }
 
-          if (batch.queue === "cubby-background") {
-            // Imported here, not at module scope: the consumer pulls
-            // @tanstack/ai + its provider adapters + @anthropic-ai/sdk
-            // (~553 KiB, plus a second copy of zod) and only queue deliveries
-            // need it. A static import puts all of that on the module-init
-            // path of every fetch invocation too.
-            const [{ db }, { processBackgroundQueueMessage }] =
-              await Promise.all([
-                import("./server/db"),
-                import("./server/background-queue"),
-              ]);
-            for (const message of batch.messages) {
-              try {
-                const outcome = await processBackgroundQueueMessage(
-                  db,
-                  message,
-                );
-                if (outcome === "succeeded") {
-                  const state = await calendarFeedStateFor(env.APP_ORIGIN);
-                  await state.markDirty("background-job");
-                }
-              } catch (error) {
-                // Per-message identifiers are logged inside the consumer, the
-                // only place the body has been parsed. Here we just make sure
-                // one bad job neither escapes Sentry nor replays the rest.
-                Sentry.captureException(error);
-                message.retry();
-              }
-            }
-            return;
-          }
-
-          // Last stop: the dead-letter queues have no DLQ of their own, so the
-          // handler acks everything and records the loss rather than retrying.
-          const [
-            { db },
-            { processDeadLetterBatch, productionDeadLetterQueuePorts },
-          ] = await Promise.all([
+          // Imported here, not at module scope: the consumer pulls
+          // @tanstack/ai + its provider adapters + @anthropic-ai/sdk
+          // (~553 KiB, plus a second copy of zod) and only queue deliveries
+          // need it. A static import puts all of that on the module-init
+          // path of every fetch invocation too.
+          const [{ db }, { handleBackgroundQueueBatch }] = await Promise.all([
             import("./server/db"),
-            import("./server/dead-letter-queue"),
+            import("./server/background-tasks/consume"),
           ]);
-          await processDeadLetterBatch(batch, {
-            ...productionDeadLetterQueuePorts(db),
+          await handleBackgroundQueueBatch(db, batch, {
             captureException: (error) => {
               Sentry.captureException(error);
+            },
+            afterSuccess: async () => {
+              const state = await calendarFeedStateFor(env.APP_ORIGIN);
+              await state.markDirty("background-job");
             },
           });
         });
@@ -409,52 +376,49 @@ const handler = {
           );
         } catch (error) {
           // Calendar keeps serving its previous atomic snapshot. Keep the
-          // independent maintenance jobs below running while surfacing repair
-          // failure through both the errored child span and Sentry.
+          // independent assertion below running while surfacing the failure
+          // through both the errored child span and Sentry.
           Sentry.captureException(error);
         }
+        // The clock is a legitimate input for the calendar above. For derived
+        // data it is not: nothing here repairs. This tick only reads the
+        // markers that "Settle now" acts on and reports when they are non-zero,
+        // which is the evidence that a wakeup was lost — the cue to look, not a
+        // sweep that would hide it.
         await withRequestDbClient(env.HYPERDRIVE.connectionString, async () => {
-          const [
-            { db },
-            { dispatchProblemCountsRefresh, sweepStrandedBackgroundJobs },
-          ] = await Promise.all([
+          const [{ db }, { countAwaitingWork }] = await Promise.all([
             import("./server/db"),
-            import("./server/background-dispatch"),
+            import("./server/services/awaiting-work.service"),
           ]);
-
-          // Each job carries its own `cubby.scheduled.job`: the attribute moved
-          // off the parent once this handler ran more than one thing, or every
-          // tick would report itself as whichever job was hardcoded there.
-          await withTrace(
-            "cf.scheduled.job",
-            async () =>
-              await dispatchProblemCountsRefresh(
-                db,
-                "maintenance",
-                "cron.problem-counts",
-                new Date(controller.scheduledTime).toISOString(),
-              ),
-            { "cubby.scheduled.job": "problem-counts" },
-          );
-
-          // Reconciles wakeups the queue never delivered. Isolated so a failure
-          // here cannot suppress the problem-counts refresh above, which is the
-          // job users actually see.
           await withTrace(
             "cf.scheduled.job",
             async (span) => {
               try {
-                const swept = await sweepStrandedBackgroundJobs(db);
+                const awaiting = await countAwaitingWork(db);
                 span.setAttributes({
-                  "cubby.stranded.redispatched": swept.redispatched,
-                  "cubby.stranded.batches": swept.batches,
+                  "cubby.awaiting.stale_recipe_totals":
+                    awaiting.staleRecipeTotals,
+                  "cubby.awaiting.unembedded_entities":
+                    awaiting.unembeddedEntities,
+                  "cubby.awaiting.pending_uploads": awaiting.pendingUploads,
                 });
+                console.log("[scheduled] awaiting work", awaiting);
+                if (
+                  awaiting.staleRecipeTotals > 0 ||
+                  awaiting.unembeddedEntities > 0 ||
+                  awaiting.pendingUploads > 0
+                ) {
+                  Sentry.captureMessage(
+                    `Derived work is waiting: ${awaiting.staleRecipeTotals} stale recipe totals, ${awaiting.unembeddedEntities} unembedded entities, ${awaiting.pendingUploads} pending uploads`,
+                    "warning",
+                  );
+                }
               } catch (error) {
-                span.setError("Stranded background job sweep failed");
+                span.setError("Awaiting-work assertion failed");
                 Sentry.captureException(error);
               }
             },
-            { "cubby.scheduled.job": "stranded-sweep" },
+            { "cubby.scheduled.job": "awaiting-work-assertion" },
           );
         });
       },

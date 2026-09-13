@@ -1,12 +1,9 @@
-import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
+import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
-import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
-import { location } from "~/app/locations/location.functions";
 import {
   openRecipeRecomputeAllStream,
   recipe,
@@ -21,18 +18,16 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
+import { Eyebrow } from "~/components/ui/eyebrow";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { imageUpload } from "~/lib/image.functions";
 import {
   openProblemsPruneAliasesStream,
   openProblemsReparseStream,
   problems,
 } from "~/lib/problems.functions";
-import { search } from "~/lib/search.functions";
+import { openSearchIndexRepairStream } from "~/lib/search.functions";
 
-import { searchDocumentMaintenanceRefetchInterval } from "../search-document-maintenance-query";
 import { BACKFILL } from "./backfill-registry";
-import { ProblemActionButton } from "./problem-action-button";
 import { BackfillButton } from "./problem-backfill-action";
 
 /** One labeled maintenance action: description left, dry-run count + run-button right. */
@@ -70,7 +65,7 @@ function MaintenanceRow({
               ? "—"
               : approximate
                 ? `up to ${count}`
-                : `${count} affected`}
+                : `${count} to do`}
           </span>
         )}
         {action}
@@ -88,7 +83,7 @@ function MaintenanceDryRunRow({
   summary,
   onDryRun,
   dryRunPending,
-  dryRunLabel = "Dry run",
+  dryRunLabel = "Preview",
   backfill,
 }: {
   summary: ReactNode;
@@ -118,20 +113,18 @@ function MaintenanceDryRunRow({
 }
 
 // Recompute's accurate "would change" needs a full compute+diff (~as costly as
-// recomputing), so it's an on-demand dry run rather than an always-on count. The
-// force-recompute button stays — it's the only path that catches logic-change
-// drift the stale flag misses. It's DURABLE: instead of holding one request open
-// to do the full CPU-heavy pass inline (which dies on navigate-away / PWA
-// background / Worker CPU limit), it enqueues bounded jobs onto the background-jobs
-// queue and links the toast there (mirrors "Analyze descriptions").
+// recomputing), so it's an on-demand preview rather than an always-on count.
+// The force-recompute button stays — it's the only path that catches
+// logic-change drift the stale flag misses. It publishes bounded queue tasks
+// rather than holding one request open for the full CPU-heavy pass.
 function RecomputeAction() {
   const dryRun = useQuery({
     ...recipe.dryRunRecomputeTotals.queryOptions(),
     enabled: false,
   });
-  // Cheap always-on count of recipes whose totals are stale (pending recompute) —
-  // shares the card's cached query, so no extra round-trip. The queue normally
-  // clears these in seconds; a lingering count flags a stuck/lost wave.
+  // Cheap always-on count of recipes whose totals are stale — shares the
+  // card's cached query, so no extra round-trip. The Awaiting-work card is
+  // where a lingering count gets settled.
   const { data: counts } = useQuery({
     ...problems.getMaintenanceCounts.queryOptions(),
   });
@@ -147,35 +140,17 @@ function RecomputeAction() {
       onDryRun={() => void dryRun.refetch()}
       dryRunPending={dryRun.isFetching}
       backfill={
-        <BackfillButton<{
-          enqueued: number;
-          total: number;
-          batchId: string | null;
-        }>
+        <BackfillButton<{ enqueued: number; total: number }>
           run={(signal) => openRecipeRecomputeAllStream(signal)}
           invalidateTags={ripple.recipe}
-          idleLabel="Recompute all"
-          pendingLabel="Enqueuing…"
+          idleLabel="Run"
+          pendingLabel="Publishing…"
           toastResult={(r) => ({
             tone: r.enqueued > 0 ? "success" : "info",
             message:
-              r.enqueued > 0 ? (
-                <span>
-                  Enqueued {pluralize("recipe", r.enqueued, true)} for
-                  recompute.{" "}
-                  {r.batchId ? (
-                    <Link
-                      to="/background-jobs"
-                      search={{ batchId: r.batchId }}
-                      className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
-                    >
-                      View progress
-                    </Link>
-                  ) : null}
-                </span>
-              ) : (
-                "Nothing to recompute."
-              ),
+              r.enqueued > 0
+                ? `Published ${pluralize("recipe", r.enqueued, true)} for recompute; they run in the background.`
+                : "Nothing to recompute.",
           })}
         />
       }
@@ -205,7 +180,7 @@ function ReparseAction() {
           run={openProblemsReparseStream}
           invalidateTags={ripple.recipe}
           foreground
-          idleLabel="Re-parse all"
+          idleLabel="Run"
           pendingLabel="Re-parsing…"
           toastResult={(r) => ({
             tone: r.updated > 0 ? "success" : "info",
@@ -242,7 +217,7 @@ function PruneAliasesAction() {
           run={openProblemsPruneAliasesStream}
           invalidateTags={ripple.ingredient}
           foreground
-          idleLabel="Prune all"
+          idleLabel="Run"
           pendingLabel="Pruning…"
           toastResult={(r) => ({
             tone: r.pruned > 0 ? "success" : "info",
@@ -257,228 +232,108 @@ function PruneAliasesAction() {
   );
 }
 
-// This reads the latest persisted repair batch only; it never starts a
-// full-catalog diagnostic from the Problems page.
-function SearchDocumentsAction() {
-  const health = useQuery({
-    ...search.documentHealth.queryOptions(),
-    staleTime: 30_000,
-    refetchInterval: (query) =>
-      searchDocumentMaintenanceRefetchInterval(query.state.data),
-  });
-  const repair = useActionMutation({
-    mutationFn: search.repairDocuments.mutationOptions,
-    success: (result) => (
-      <span>
-        {result.reused ? "Repair already running. " : "Repair started. "}
-        <Link
-          to="/background-jobs"
-          search={{ batchId: result.batch.id }}
-          className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
-        >
-          View progress
-        </Link>
-      </span>
-    ),
-  });
-  const summary: ReactNode = health.data ? (
-    health.data.state === "never-run" ? (
-      "Not audited yet"
-    ) : health.data.state === "running" ? (
-      <span>
-        Auditing · {health.data.findings.total} findings so far
-        {health.data.batchId ? (
-          <>
-            {" · "}
-            <Link
-              to="/background-jobs"
-              search={{ batchId: health.data.batchId }}
-              className="underline decoration-border decoration-dotted underline-offset-2 hover:decoration-primary"
-            >
-              View progress
-            </Link>
-          </>
-        ) : null}
-      </span>
-    ) : health.data.findings.total === 0 ? (
-      "Index healthy"
-    ) : (
-      `${health.data.findings.missing} missing · ${health.data.findings.orphaned} orphaned · ${health.data.findings.stale} stale`
-    )
-  ) : null;
-
+// One cancellable stream: retire orphaned documents, rebuild missing and
+// stale projections, publish embedding refreshes. The toast reports THIS run's
+// findings and outcomes; the Awaiting-work card is the live truth afterwards.
+function RepairIndexAction() {
   return (
-    <MaintenanceDryRunRow
-      summary={summary}
-      onDryRun={() => void health.refetch()}
-      dryRunPending={health.isFetching}
-      dryRunLabel="Refresh"
-      backfill={
-        <ProblemActionButton
-          onClick={() => repair.mutate(undefined)}
-          isPending={repair.isPending}
-          idleLabel="Repair index"
-          pendingLabel="Enqueuing…"
-        />
-      }
+    <BackfillButton<SearchIndexRepairCounters>
+      run={(signal) => openSearchIndexRepairStream(signal)}
+      invalidateTags={ripple.search}
+      idleLabel="Run"
+      pendingLabel="Repairing…"
+      toastResult={(r) => {
+        const findings = r.orphaned + r.missing + r.stale;
+        return {
+          tone: findings > 0 ? "success" : "info",
+          message:
+            findings > 0
+              ? `Scanned ${r.scanned}: retired ${r.retired} orphaned, rebuilt ${r.rebuilt} (${r.missing} missing, ${r.stale} stale), published ${pluralize("embedding refresh", r.published, true)}.`
+              : `Scanned ${r.scanned}: nothing to repair.`,
+        };
+      }}
     />
   );
 }
 
-// Delete abandoned uploads: PENDING image rows with no entity association that
-// are older than the cull threshold, plus their R2 objects. Plain (non-streamed)
-// mutation, so it uses useActionMutation rather than the BackfillButton stream.
-function CullPendingImagesAction() {
-  const cull = useActionMutation({
-    mutationFn: imageUpload.cullPendingImages.mutationOptions,
-    success: (data) =>
-      data.count > 0
-        ? `Deleted ${pluralize("pending image", data.count, true)}.`
-        : "No pending images to cull.",
-  });
-
-  return (
-    <ProblemActionButton
-      onClick={() =>
-        cull.mutate({ olderThanHours: CULL_PENDING_IMAGES_DEFAULT_HOURS })
-      }
-      isPending={cull.isPending}
-      idleLabel="Cull now"
-      pendingLabel="Culling…"
-    />
-  );
-}
-
-// Delete UPLOADED files no edge reaches, plus their R2 objects. The fix path for
-// the "Unreferenced files" Problems section — mostly residue from entity deletes,
-// whose cascade soft-deletes the join row and leaves the file behind.
-function CleanupUnreferencedImagesAction() {
-  const cleanup = useActionMutation({
-    mutationFn: imageUpload.cleanupUnreferencedImages.mutationOptions,
-    success: (data) =>
-      data.count > 0
-        ? `Deleted ${pluralize("unreferenced file", data.count, true)}.`
-        : "No unreferenced files.",
-  });
-
-  return (
-    <ProblemActionButton
-      onClick={() => cleanup.mutate(undefined)}
-      isPending={cleanup.isPending}
-      idleLabel="Delete now"
-      pendingLabel="Deleting…"
-    />
-  );
-}
-
-// Rebuild every location's persisted valuation rollup. Idempotent; the safety
-// net for writes that bypass the router (raw SQL / postgres MCP).
-function RecomputeValuationsAction() {
-  const recompute = useActionMutation({
-    mutationFn: location.recomputeValuations.mutationOptions,
-    success: (data) =>
-      `Recomputed ${pluralize("location", data.updated, true)}.`,
-  });
-
-  return (
-    <ProblemActionButton
-      onClick={() => recompute.mutate(undefined)}
-      isPending={recompute.isPending}
-      idleLabel="Recompute all"
-      pendingLabel="Recomputing…"
-    />
-  );
-}
-
-// Batch operations that also surface on the Problems page when something needs
-// attention — here they run on demand regardless of state, via the same
-// BackfillButton plumbing (toast + invalidate). Declared as data (each row's
-// typed BackfillButton lives in `action`, mirroring the Problems registry's
-// `headerAction`); the card just maps over them.
-const MAINTENANCE_TOOLS: {
+// One-off tools, grouped by what they rebuild. Declared as data (each row's
+// typed action lives in `action`); the card maps groups then rows. Rows share
+// one grammar — plain description, an always-on count only where it is cheap,
+// one primary action, a Preview only where a dry run exists.
+type MaintenanceTool = {
   label: string;
   description: string;
   // Always-on affected count; omitted for tools whose accurate count is
-  // expensive (recompute uses an on-demand dry run instead).
+  // expensive (recompute uses an on-demand preview instead).
   count?: (c: MaintenanceCounts) => number;
   // Count is a candidate set the action only attempts (external lookup/API may
   // not change every one) → shown as "up to N" rather than "N affected".
   approximate?: boolean;
   action: ReactNode;
-}[] = [
+};
+
+const MAINTENANCE_GROUPS: { group: string; tools: MaintenanceTool[] }[] = [
   {
-    label: "Recompute recipe totals",
-    description:
-      "Rebuild every recipe's cost / calorie / macro rollup, even when not marked stale.",
-    action: <RecomputeAction />,
+    group: "Search",
+    tools: [
+      {
+        label: "Repair index",
+        description:
+          "Compare the search index with every live record: retire documents whose record is gone, rebuild missing or stale ones, and refresh their embeddings in the background.",
+        action: <RepairIndexAction />,
+      },
+    ],
   },
   {
-    label: "Re-parse recipe lines",
-    description:
-      "Re-run the ingredient parser over each recipe line as it was originally written. Reverts manual structured edits — intended. Dry run before applying.",
-    action: <ReparseAction />,
+    group: "Recipes",
+    tools: [
+      {
+        label: "Recompute all totals",
+        description:
+          "Rebuild every recipe's cost, calorie, and macro rollup — even ones not marked stale — for when the costing logic itself changed.",
+        action: <RecomputeAction />,
+      },
+      {
+        label: "Re-parse lines",
+        description:
+          "Re-run the ingredient parser over each recipe line as it was originally written. Overwrites manual edits to those lines, so preview first.",
+        action: <ReparseAction />,
+      },
+      {
+        label: "Prune unused aliases",
+        description:
+          "Remove ingredient aliases that no recipe line matches or that duplicate the ingredient's name. The ingredients themselves stay.",
+        action: <PruneAliasesAction />,
+      },
+    ],
   },
   {
-    label: "Prune unused aliases",
-    description:
-      "Strip aliases that no recipe line matches (or that duplicate the ingredient's name) from every ingredient. The ingredients themselves stay.",
-    action: <PruneAliasesAction />,
-  },
-  {
-    label: "Check search index",
-    description:
-      "Compare the indexed catalog with every live searchable record. Retire orphaned rows and durably rebuild missing or stale documents.",
-    action: <SearchDocumentsAction />,
-  },
-  {
-    label: "Fetch UPC images",
-    description:
-      "Pull product images from the UPC database for products missing one.",
-    count: (c) => c.productsWithNoImages,
-    // A UPC lookup can return no image, so not every candidate gets one.
-    approximate: true,
-    action: <BackfillButton {...BACKFILL.fetchUpcImages} />,
-  },
-  {
-    label: "Analyze location descriptions",
-    description:
-      "Generate AI descriptions for locations that don't have one yet.",
-    count: (c) => c.locationsWithoutAiDescription,
-    // An AI generation can fail, so not every candidate ends up described.
-    approximate: true,
-    action: <BackfillButton {...BACKFILL.analyzeDescriptions} />,
-  },
-  {
-    label: "Cull pending images",
-    description: `Delete abandoned uploads — PENDING images with no entity, older than ${CULL_PENDING_IMAGES_DEFAULT_HOURS}h — from the database and R2.`,
-    count: (c) => c.cullablePendingImages,
-    action: <CullPendingImagesAction />,
-  },
-  {
-    label: "Delete unreferenced files",
-    description:
-      "Delete UPLOADED files nothing points at — R2 pays for them and no page can render them — from the database and R2.",
-    count: (c) => c.unreferencedImages,
-    action: <CleanupUnreferencedImagesAction />,
-  },
-  {
-    label: "Recompute location valuations",
-    description:
-      "Rebuild every location's stored inventory-value rollup (direct + descendants). Idempotent; catches writes that bypassed the app.",
-    action: <RecomputeValuationsAction />,
+    group: "Products",
+    tools: [
+      {
+        label: "Fetch UPC images",
+        description:
+          "Pull product images from the UPC database for products missing one.",
+        count: (c) => c.productsWithNoImages,
+        // A UPC lookup can return no image, so not every candidate gets one.
+        approximate: true,
+        action: <BackfillButton {...BACKFILL.fetchUpcImages} />,
+      },
+    ],
   },
 ];
 
 /**
- * The shared "Maintenance" card: force-run batch fixes (recompute totals,
- * re-parse lines, prune aliases, fetch UPC images, analyze descriptions) on
- * demand, independent of whether the Problems page currently flags them. Rendered
- * on BOTH the Problems page (so a "fix this" affordance lives next to the issues)
- * and Settings → Developer / Maintenance (so the tools are reachable even when
- * the page is clean).
+ * The shared "Maintenance" card: one-off tools that rebuild derived data on
+ * demand. Routine upkeep no longer lives here — search projections are written
+ * with the entity, valuations are computed on read, and anything waiting on a
+ * queue wakeup shows in the Awaiting-work card. Rendered on BOTH the Problems
+ * page (so a "fix this" affordance lives next to the issues) and Settings →
+ * Developer / Maintenance (so the tools are reachable even when the page is
+ * clean).
  */
 export function MaintenanceCard() {
-  // Dry-run "N affected" figures — one cheap DB/WASM query (no USDA/UPC network).
+  // Always-on "N to do" figures — one cheap DB query (no USDA/UPC network).
   const { data: counts } = useQuery({
     ...problems.getMaintenanceCounts.queryOptions(),
   });
@@ -488,22 +343,31 @@ export function MaintenanceCard() {
       <CardHeader>
         <CardTitle>Maintenance</CardTitle>
         <CardDescription>
-          Force-run batch operations on demand — independent of whether the
-          Problems page currently flags them.
+          Rebuilds derived data on demand. Routine upkeep happens at write time;
+          these are one-off tools.
         </CardDescription>
       </CardHeader>
-      <CardContent className="divide-y divide-border/60">
-        {MAINTENANCE_TOOLS.map((t) => (
-          <MaintenanceRow
-            key={t.label}
-            label={t.label}
-            description={t.description}
-            showCount={!!t.count}
-            count={t.count && counts ? t.count(counts) : undefined}
-            approximate={t.approximate}
-            action={t.action}
-          />
-        ))}
+      <CardContent>
+        <Stack gap="lg">
+          {MAINTENANCE_GROUPS.map(({ group, tools }) => (
+            <Stack key={group} gap="tight">
+              <Eyebrow>{group}</Eyebrow>
+              <div className="divide-y divide-border/60">
+                {tools.map((t) => (
+                  <MaintenanceRow
+                    key={t.label}
+                    label={t.label}
+                    description={t.description}
+                    showCount={!!t.count}
+                    count={t.count && counts ? t.count(counts) : undefined}
+                    approximate={t.approximate}
+                    action={t.action}
+                  />
+                ))}
+              </div>
+            </Stack>
+          ))}
+        </Stack>
       </CardContent>
     </Card>
   );

@@ -9,7 +9,6 @@ import {
   initiateUploadWithoutEntityResponseSchema,
   initiateUploadWithoutEntitySchema,
 } from "@cubby/schemas/image";
-import { z } from "zod";
 
 import { defineContract, mutation } from "~/contracts/define";
 
@@ -32,10 +31,6 @@ export const imageUploadContract = defineContract("image", {
   }),
   cullPendingImages: mutation({
     input: cullPendingImagesSchema,
-    output: cullPendingImagesResponseSchema,
-  }),
-  cleanupUnreferencedImages: mutation({
-    input: z.undefined(),
     output: cullPendingImagesResponseSchema,
   }),
 });

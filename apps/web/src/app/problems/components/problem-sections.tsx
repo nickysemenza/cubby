@@ -41,6 +41,7 @@ import {
   Unlink,
   Wrench,
 } from "lucide-react";
+import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -68,8 +69,7 @@ import {
 import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
-import { problems } from "~/lib/problems.functions";
-import { search } from "~/lib/search.functions";
+import { maintenance } from "~/lib/maintenance.functions";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 
@@ -200,6 +200,8 @@ function section<T, K extends CoverageProblemKey = never>(config: {
    */
   headerAction?: ReactNode | ((items: T[], count: number) => ReactNode);
   coverage?: ProblemSectionDeclaredCoverage<K>;
+  /** See `ProblemSection`'s `hideWhenEmpty` — for a regression guard, not a backlog. */
+  hideWhenEmpty?: boolean;
 }): ProblemSectionEntry<K> {
   const iconProp: IconProp = config.entity
     ? { entity: config.entity }
@@ -248,6 +250,7 @@ function section<T, K extends CoverageProblemKey = never>(config: {
           emptyMessage={emptyMessage}
           items={items}
           count={count}
+          hideWhenEmpty={config.hideWhenEmpty}
           renderItem={config.renderItem}
           groupBy={config.groupBy}
           assembly={problemAssembly(
@@ -363,45 +366,21 @@ function UpcApplyAction({ product }: { product: ProductWithBetterUpcData }) {
   );
 }
 
-function OrphanedEmbeddingCleanupFix({
-  id,
-  close,
-}: {
-  id: string;
-  close: () => void;
-}) {
-  const cleanup = useActionMutation({
-    mutationFn: problems.cleanupOrphanedEmbeddings.mutationOptions,
-    success: "Cleaned up orphaned embedding",
-    onSuccess: close,
-  });
-  return (
-    <Button
-      size="sm"
-      onClick={() => cleanup.mutate({ ids: [id] })}
-      disabled={cleanup.isPending}
-    >
-      <Wrench className="mr-1 size-3" />
-      {cleanup.isPending ? "Cleaning…" : "Clean up"}
-    </Button>
-  );
-}
-
 function MissingEmbeddingsBackfillAction() {
   const backfill = useActionMutation({
-    mutationFn: search.enqueueEmbeddingBackfill.mutationOptions,
+    mutationFn: maintenance.settleAwaitingWork.mutationOptions,
     success: (data) =>
-      data.reused
-        ? "Embedding backfill is already running."
-        : "Started embedding backfill.",
+      data.publishedEmbeddingTasks > 0
+        ? `Published ${pluralize("embedding refresh", data.publishedEmbeddingTasks, true)}.`
+        : "No embeddings needed publishing.",
   });
   return (
     <Button
       size="sm"
-      onClick={() => backfill.mutate({})}
+      onClick={() => backfill.mutate(undefined)}
       disabled={backfill.isPending}
     >
-      {backfill.isPending ? "Queuing…" : "Backfill all"}
+      {backfill.isPending ? "Publishing…" : "Backfill all"}
     </Button>
   );
 }
@@ -1415,53 +1394,6 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
-    id: "orphaned-embeddings",
-    label: "Embeddings",
-    select: (p) => p.orphanedEntityEmbeddings,
-    problemKeys: ["orphanedEntityEmbeddings"],
-    icon: Wrench,
-    renderItem: (embedding) => ({
-      // The embedding row's own id is stable and unique on its own — no route
-      // to derive a fallback key from (see the comment on `route` below).
-      key: embedding.id,
-      title: `${embedding.entityType} · ${embedding.entityId.slice(0, 8)}`,
-      subtitle: embedding.model,
-      details: [createdAgoDetail(embedding.createdAt)],
-      // No `route`: this row exists precisely BECAUSE its entity was deleted
-      // (an orphaned embedding), so there is no live page to link to — the
-      // pre-cutover code linked to a uuid URL that already 404'd. Leave it
-      // unlinked rather than "restoring" a link to nothing.
-      inlineFix: {
-        label: "Clean up",
-        render: (close) => (
-          <OrphanedEmbeddingCleanupFix id={embedding.id} close={close} />
-        ),
-      },
-    }),
-  }),
-  section({
-    id: "unreferenced-images",
-    label: "Files",
-    select: (p) => p.unreferencedImages,
-    problemKeys: ["unreferencedImages"],
-    icon: Wrench,
-    renderItem: (file) => ({
-      key: file.id,
-      title: file.filename,
-      // Provenance, not a link: `targetType`/`targetId` are stamped at attach
-      // time and the entity they name may itself be gone, which is often the
-      // very reason the file ended up here. Same call as the orphaned-embedding
-      // section below — no `route`.
-      subtitle: file.targetType
-        ? `${file.targetType} · ${file.targetId?.slice(0, 8) ?? "unknown"}`
-        : file.contentType,
-      details: [
-        `${Math.round(file.size / 1024)} KB`,
-        createdAgoDetail(file.createdAt),
-      ],
-    }),
-  }),
-  section({
     id: "missing-embeddings",
     label: "Unindexed",
     select: (p) => p.entitiesMissingEmbeddings,
@@ -1574,6 +1506,9 @@ const DECLARED_SECTIONS = [
     select: (p) => p.referentialLivenessViolations,
     problemKeys: ["referentialLivenessViolations"],
     icon: Unlink,
+    // Regression guard: healthy is the overwhelming common case, so don't
+    // spend a permanent card on "nothing found".
+    hideWhenEmpty: true,
     groupBy: (items) =>
       groupBy(
         [...items].sort((a, b) =>
@@ -1604,6 +1539,9 @@ const DECLARED_SECTIONS = [
     select: (p) => p.dependencyCycles,
     problemKeys: ["dependencyCycles"],
     icon: Network,
+    // Regression guard: healthy is the overwhelming common case, so don't
+    // spend a permanent card on "nothing found".
+    hideWhenEmpty: true,
     groupBy: (items) =>
       groupBy(items, (cycle) =>
         cycle.entity === "project" ? "Projects" : "Tasks",

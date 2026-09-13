@@ -13,7 +13,7 @@ import type {
   DetectedItem,
   LocationDescription,
 } from "@cubby/schemas/ai";
-import type { BackgroundBatchRef } from "@cubby/schemas/background-jobs";
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type LocationId,
@@ -33,7 +33,7 @@ import {
   LOCATION_INVENTORY_DETECTION_FEATURE,
 } from "~/server/ai/features";
 import { providerFor } from "~/server/ai/models";
-import { dispatchBackgroundJobs } from "~/server/background-dispatch";
+import { publishBackgroundTasks } from "~/server/background-tasks/publish";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
@@ -199,7 +199,6 @@ async function recordLocationAiUsage(
     cacheStatus: "hit" | "miss";
     durationMs: number;
     locationId: LocationId;
-    batchId?: string;
   },
 ): Promise<void> {
   await recordAiUsage(db, {
@@ -212,7 +211,6 @@ async function recordLocationAiUsage(
     durationMs: input.durationMs,
     cacheStatus: input.cacheStatus,
     entity: { entityType: "location", entityId: input.locationId },
-    batchId: input.batchId,
   });
 }
 
@@ -235,7 +233,6 @@ export interface LocationDescriptionResult extends LocationDescription {
 export async function describeLocation(
   db: Database,
   locationId: LocationId,
-  opts: { batchId?: string } = {},
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<LocationDescriptionResult> {
   const location = await getLocationById(db, locationId);
@@ -285,7 +282,6 @@ export async function describeLocation(
       cacheStatus: "hit",
       durationMs: 0,
       locationId,
-      batchId: opts.batchId,
     });
     return {
       ...cached.result,
@@ -302,7 +298,6 @@ export async function describeLocation(
       operation: "locationDescription",
       cacheStatus: "miss",
       entity: { entityType: "location", entityId: locationId },
-      batchId: opts.batchId,
     },
   );
   await upsertAiAnalysis(db, analysisKey, result);
@@ -476,7 +471,6 @@ export interface DetectedInventoryResult extends DetectedInventory {
 export async function detectInventoryItems(
   db: Database,
   locationId: LocationId,
-  opts: { batchId?: string } = {},
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
 ): Promise<DetectedInventoryResult> {
   const location = await getLocationById(db, locationId);
@@ -510,7 +504,6 @@ export async function detectInventoryItems(
       cacheStatus: "hit",
       durationMs: 0,
       locationId,
-      batchId: opts.batchId,
     });
   } else {
     raw = await ai.detectInventoryItems(
@@ -521,7 +514,6 @@ export async function detectInventoryItems(
         operation: "locationInventoryDetection",
         cacheStatus: "miss",
         entity: { entityType: "location", entityId: locationId },
-        batchId: opts.batchId,
       },
     );
     await upsertAiAnalysis(db, analysisKey, raw);
@@ -558,7 +550,6 @@ export async function approveDetectedInventoryItem(
   let productShortcode = input.productId ?? null;
   let productNameForToast = productName;
   let createdProduct = false;
-  const backgroundBatches: BackgroundBatchRef[] = [];
 
   if (productId) {
     const product = await getProductByID(db, productId);
@@ -587,13 +578,11 @@ export async function approveDetectedInventoryItem(
       productShortcode = created.id;
       productNameForToast = created.name;
       createdProduct = true;
-      backgroundBatches.push(
-        ...(await runMutationSideEffects(db, {
-          action: "created",
-          entity: { entity: "product", id: productId },
-          source: "location-ai.inventory.approve",
-        })),
-      );
+      await runMutationSideEffects(db, {
+        action: "created",
+        entity: { entity: "product", id: productId },
+        source: "location-ai.inventory.approve",
+      });
     }
   }
 
@@ -623,25 +612,23 @@ export async function approveDetectedInventoryItem(
     "inventory",
     createdInventory.id,
   );
-  backgroundBatches.push(
-    ...(await runMutationSideEffects(db, {
-      action: "created",
-      entity: { entity: "inventory", id: inventoryEntityId },
-      source: "location-ai.inventory.approve",
-    })),
-  );
+  await runMutationSideEffects(db, {
+    action: "created",
+    entity: { entity: "inventory", id: inventoryEntityId },
+    source: "location-ai.inventory.approve",
+  });
 
   return {
     inventoryId: createdInventory.id,
     productId: productShortcode!,
     productName: productNameForToast,
     createdProduct,
-    sideEffects: { backgroundBatches },
+    sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
   };
 }
 
-/** Select the immutable batch that the durable description refresh will
- * enqueue. This keeps progress and the job set tied to one snapshot. */
+/** Select the locations the description backfill will publish, as one
+ * snapshot so progress and the published set agree. */
 export const selectLocationDescriptionBackfill = async (
   db: Database,
 ): Promise<LocationId[]> => {
@@ -649,25 +636,20 @@ export const selectLocationDescriptionBackfill = async (
   return locations.map((location) => location.id);
 };
 
-/** Enqueue the already-selected locations as a single durable batch. */
+/** Publish one description-refresh task per selected location. */
 export const enqueueLocationDescriptionBackfill = async (
   db: Database,
   locationIds: readonly LocationId[],
-): Promise<{ enqueued: number; total: number; batchId: string }> => {
-  const total = locationIds.length;
-  const dispatched = await dispatchBackgroundJobs(db, {
-    kind: "location-ai.description.refresh",
-    source: "backfill",
-    metadata: { source: "location-ai.description.backfill", total },
-    jobs: locationIds.map((locationId) => ({
+): Promise<{ enqueued: number; total: number }> => {
+  const requestedAt = new Date().toISOString();
+  const receipt = await publishBackgroundTasks(
+    db,
+    locationIds.map((locationId) => ({
       kind: "location-ai.description.refresh" as const,
-      dedupeKey: `location-ai.description.refresh:${locationId}`,
-      payload: { locationId },
+      requestedAt,
+      locationId,
     })),
-  });
-  return {
-    enqueued: dispatched.jobIds.length,
-    total,
-    batchId: dispatched.batchId,
-  };
+    { source: "location-ai.description.backfill" },
+  );
+  return { enqueued: receipt.count, total: locationIds.length };
 };

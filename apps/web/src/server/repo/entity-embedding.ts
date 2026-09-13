@@ -13,14 +13,12 @@
  */
 
 export {
-  countOrphanedEntityEmbeddings,
   findCommercialEmbeddingRefsForExpenses,
   findEmbeddingRefsForPurchases,
   findEmbeddingRefsForVendors,
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
-  findOrphanedEntityEmbeddings,
   findRecipeEmbeddingRefsForIngredients,
   findTaskEmbeddingRefsForProducts,
   findTrackerEmbeddingRefsForProjects,
@@ -28,7 +26,6 @@ export {
   findWishEmbeddingRefsForProducts,
   getEntityEmbeddingDeletedAt,
   getEntityEmbeddingDeletedAtForRef,
-  softDeleteEntityEmbeddingRows,
 } from "./entity-embedding-cleanup";
 export * from "./entity-embedding-refresh";
 export * from "./entity-embedding-search";

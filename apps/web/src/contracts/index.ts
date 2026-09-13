@@ -6,10 +6,6 @@
 export { agentContract, agentStreamsContract } from "./agent.contract";
 export { aiContract, aiStreamsContract } from "./ai.contract";
 export { auditLogContract } from "./audit-log.contract";
-export {
-  backgroundBatchContract,
-  backgroundJobContract,
-} from "./background-batch.contract";
 export { calendarContract } from "./calendar.contract";
 export { collectionContract } from "./collection.contract";
 export { oauthContract } from "./connected-apps.contract";
@@ -38,6 +34,7 @@ export { ingredientContract } from "./ingredient.contract";
 export { gardenContract } from "./garden.contract";
 export { inventoryContract } from "./inventory.contract";
 export { locationContract } from "./location.contract";
+export { maintenanceContract } from "./maintenance.contract";
 export { mcpContract } from "./mcp.contract";
 export { mealContract } from "./meal.contract";
 export { problemsContract, problemsStreamsContract } from "./problems.contract";
@@ -54,7 +51,7 @@ export {
   recommendationsContract,
 } from "./recommendations.contract";
 export { relatedDataContract } from "./related-data.contract";
-export { searchContract } from "./search.contract";
+export { searchContract, searchStreamsContract } from "./search.contract";
 export { statementRowContract } from "./statement-row.contract";
 export { taskContract } from "./task.contract";
 export { upcContract } from "./upc.contract";

@@ -3,30 +3,23 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import {
-  makeBatchStatusFetcher,
-  watchBatchesAndInvalidateTags,
-} from "~/lib/background-batch-polling";
+import { scheduleDeferredInvalidation } from "~/lib/deferred-invalidation";
 import type { UnparsedError } from "~/lib/error-utils";
 
 /**
- * Returns a callback that invalidates inventory queries and — given the mutation
- * result — re-invalidates once its background work (whole-tree location
- * valuation) drains. Pass the mutation `data` so the poller can watch the batch;
- * called with no args it just invalidates immediately. Safe to pass directly as a
- * React Query `onSuccess` (it receives `data` as its first argument).
+ * Returns a callback that invalidates inventory queries and re-invalidates
+ * them again shortly after, so its background work (whole-tree location
+ * valuation) shows up once it lands. Callers may still pass the mutation
+ * `data` (kept for source compatibility — it's unused now that there's no
+ * batch left to watch); called with no args it just invalidates. Safe to pass
+ * directly as a React Query `onSuccess`.
  */
 export function useInventoryInvalidation() {
   const queryClient = useQueryClient();
 
-  return <Result>(result?: Result) => {
+  return <Result>(_result?: Result) => {
     void invalidateOperationTags(queryClient, ripple.inventory);
-    void watchBatchesAndInvalidateTags({
-      queryClient,
-      result,
-      invalidateTags: ripple.inventory,
-      fetchBatchStatus: makeBatchStatusFetcher(queryClient),
-    });
+    scheduleDeferredInvalidation(queryClient, ripple.inventory);
   };
 }
 

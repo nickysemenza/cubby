@@ -3,7 +3,6 @@ import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
 import { sumBy } from "es-toolkit";
 import pluralize from "pluralize";
 
-import { location } from "~/app/locations/location.functions";
 import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe.functions";
 import {
   ripple,
@@ -12,15 +11,12 @@ import {
 import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
 import { collectBulkStream } from "~/lib/bulk-progress";
 import { imageUpload } from "~/lib/image.functions";
-import { problems } from "~/lib/problems.functions";
-import { search } from "~/lib/search.functions";
+import { maintenance } from "~/lib/maintenance.functions";
 
 /** What one task did, for the run's summary toast. */
 type AutoFixOutcome = {
   /** Clause for the summary toast; null when the task turned out to be a no-op. */
   summary: string | null;
-  /** Set when the task enqueued durable work, so the toast can link to it. */
-  batchId?: string | null;
 };
 
 export type AutoFixTask = {
@@ -75,7 +71,7 @@ export type AutoFixTask = {
  *
  * Membership rule, so this list doesn't quietly grow teeth: a task belongs here
  * only if it is idempotent, non-destructive, and either instant or durable on
- * the background-jobs queue. Deliberately absent, each for a stated reason:
+ * the queue. Deliberately absent, each for a stated reason:
  *
  *  - `product.backfillUPCImages` — does all its work inside one held-open
  *    request. Navigating away, backgrounding the PWA, or hitting the Worker CPU
@@ -95,24 +91,6 @@ export type AutoFixTask = {
  * Worker CPU limit and forced the Problems page into cost-grouped queries.
  */
 const AUTO_FIX_TASKS: AutoFixTask[] = [
-  {
-    key: "orphanedEmbeddings",
-    label: "Clean orphaned embeddings",
-    sectionId: "orphaned-embeddings",
-    count: (problems) => problems.orphanedEntityEmbeddings.length,
-    // Its own section, uncapped — every item is on the page.
-    listedCount: (problems) => problems.orphanedEntityEmbeddings.length,
-    invalidateTags: ripple.search,
-    // Omitting `ids` cleans every orphan — the server already supports it.
-    run: async () => {
-      const r = await problems.cleanupOrphanedEmbeddings.call({});
-      return {
-        summary: r.deleted
-          ? `cleaned ${pluralize("orphaned embedding", r.deleted, true)}`
-          : null,
-      };
-    },
-  },
   {
     key: "cullPendingImages",
     label: "Cull abandoned uploads",
@@ -148,7 +126,6 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
         summary: r.enqueued
           ? `queued ${pluralize("location", r.enqueued, true)} for analysis`
           : null,
-        batchId: r.batchId,
       };
     },
   },
@@ -163,16 +140,16 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
     // total — a model swap can make the true figure dwarf it.
     listedCount: (problems) => problems.entitiesMissingEmbeddings.length,
     invalidateTags: ripple.search,
-    // Called unbounded on purpose: `limit` selects an arbitrary per-type window
-    // rather than a needs-work one, so a bounded call can enqueue nothing useful
-    // and never converge.
+    // Republishes every derived-data kind whose freshness marker is stale, not
+    // just embeddings — there is no per-kind "just the embeddings" enqueue any
+    // more (see `maintenance.settleAwaitingWork`), only this settle-everything
+    // action, so the task's own count only reports the embedding slice of it.
     run: async () => {
-      const r = await search.enqueueEmbeddingBackfill.call({});
+      const r = await maintenance.settleAwaitingWork.call();
       return {
-        summary: r.reused
-          ? "embedding backfill is already running"
-          : "started embedding backfill",
-        batchId: r.batch.id,
+        summary: r.publishedEmbeddingTasks
+          ? `published ${pluralize("embedding refresh", r.publishedEmbeddingTasks, true)}`
+          : null,
       };
     },
   },
@@ -190,26 +167,6 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
       return {
         summary: r.enqueued
           ? `queued ${pluralize("recipe", r.enqueued, true)} for recompute`
-          : null,
-        batchId: r.batchId,
-      };
-    },
-  },
-  {
-    key: "locationValuations",
-    label: "Recompute location valuations",
-    // No detector backs this — it's the idempotent safety net for writes that
-    // bypassed the router (raw SQL / postgres MCP), so there is nothing to
-    // count. Rides along whenever the button runs; never justifies a run alone.
-    count: () => null,
-    listedCount: () => 0,
-    alwaysRun: true,
-    invalidateTags: ripple.locationValuation,
-    run: async () => {
-      const r = await location.recomputeValuations.call();
-      return {
-        summary: r.updated
-          ? `revalued ${pluralize("location", r.updated, true)}`
           : null,
       };
     },

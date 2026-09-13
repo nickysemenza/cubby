@@ -20,7 +20,6 @@ export async function listRecentAiUsage(db: Database, limit: number) {
       cacheStatus: aiUsage.cacheStatus,
       entityType: aiUsage.entityType,
       entityId: aiUsage.entityId,
-      batchId: aiUsage.batchId,
       createdAt: aiUsage.createdAt,
     })
     .from(aiUsage)

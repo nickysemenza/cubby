@@ -1,3 +1,4 @@
+import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/background-jobs";
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type EntityId,
@@ -82,7 +83,7 @@ const inventoryMutation = <
           written.items.map((item) => item.id),
         ),
       )
-      .effect("backgroundBatches", async ({ context }, { entityIds }) =>
+      .effect("sideEffectsRun", async ({ context }, { entityIds }) =>
         runMutationSideEffectsForEntities(
           context.db,
           entityIds.map((id) => ({
@@ -92,9 +93,9 @@ const inventoryMutation = <
           })),
         ),
       )
-      .output(({ written, backgroundBatches }) => ({
+      .output(({ written }) => ({
         ...written,
-        sideEffects: { backgroundBatches },
+        sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
       })),
     (db: Database, actorContext: ActorContext, input: Input) => ({
       context: { db, actorContext },
@@ -291,8 +292,8 @@ export const bulkDiscardInventoryWorkflow = bindWorkflow(
         context.actorContext,
       );
     })
-    .effect("backgroundBatches", async ({ context }, { result }) => {
-      return await runMutationSideEffectsForEntities(
+    .effect("sideEffectsRun", async ({ context }, { result }) => {
+      await runMutationSideEffectsForEntities(
         context.db,
         result.items.flatMap((line) => [
           {
@@ -319,16 +320,14 @@ export const bulkDiscardInventoryWorkflow = bindWorkflow(
             : []),
         ]),
       );
-    })
-    .effect("recipeBatches", async ({ context }, { result }) => {
-      return await recomputeRecipesForPriceAffectedProducts(
+      await recomputeRecipesForPriceAffectedProducts(
         context.db,
         context.services.recipeCosting,
         result.priceAffectedProductIds,
         "inventory.bulkDiscard",
       );
     })
-    .output(({ result, backgroundBatches, recipeBatches }) => ({
+    .output(({ result }) => ({
       items: result.items.map((line) => ({
         inventoryEntryId: parseShortcodeFor(
           "inventory",
@@ -340,9 +339,7 @@ export const bulkDiscardInventoryWorkflow = bindWorkflow(
         removed: line.inventory?.removed ?? false,
         remainingValue: line.inventory?.remainingValue ?? null,
       })),
-      sideEffects: {
-        backgroundBatches: [...backgroundBatches, ...recipeBatches],
-      },
+      sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     })),
   (
     context: DiscardContext,
@@ -520,30 +517,29 @@ export const reconcileInventorySessionWorkflow = bindWorkflow(
       },
     )
     .effect(
-      "backgroundBatches",
+      "sideEffectsRun",
       async (
         { context: { db } },
         { result: { removedIds, recomputeNeeded }, survivingEntityIds },
       ) => {
-        return recomputeNeeded
-          ? await runMutationSideEffectsForEntities(db, [
-              ...survivingEntityIds.map((entityId) => ({
-                action: "updated" as const,
-                entity: { entity: "inventory" as const, id: entityId },
-                source: "inventory.reconcileSession",
-              })),
-              ...removedIds.map((entityId) => ({
-                action: "deleted" as const,
-                entity: { entity: "inventory" as const, id: entityId },
-                source: "inventory.reconcileSession",
-              })),
-            ])
-          : [];
+        if (!recomputeNeeded) return;
+        await runMutationSideEffectsForEntities(db, [
+          ...survivingEntityIds.map((entityId) => ({
+            action: "updated" as const,
+            entity: { entity: "inventory" as const, id: entityId },
+            source: "inventory.reconcileSession",
+          })),
+          ...removedIds.map((entityId) => ({
+            action: "deleted" as const,
+            entity: { entity: "inventory" as const, id: entityId },
+            source: "inventory.reconcileSession",
+          })),
+        ]);
       },
     )
-    .output(({ result: { items }, backgroundBatches }) => ({
+    .output(({ result: { items } }) => ({
       items,
-      sideEffects: { backgroundBatches },
+      sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
     })),
   (
     db: Database,

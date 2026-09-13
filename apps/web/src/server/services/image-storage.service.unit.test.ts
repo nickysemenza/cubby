@@ -5,7 +5,7 @@ import {
 } from "@cubby/schemas/image";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { ExternalFetchError } from "@cubby/shared/external-fetch";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   createImageStorageService,
@@ -39,6 +39,11 @@ class MemoryImageStorage {
   readonly uploaded: Array<{ key: string; contentType: string; size: number }> =
     [];
   readonly deletedKeys: string[] = [];
+  /** Hours passed to each `cullPendingImages` call, in order. */
+  readonly culls: number[] = [];
+  /** Keys the next cull reports as abandoned. */
+  cullable: string[] = [];
+  cullError: Error | null = null;
   readonly resolvedCodes = new Map<string, string>([
     [stagedUploadCode, stagedImageId],
     [existingImageCode, testEntityId("image", "existing-image")],
@@ -115,11 +120,15 @@ class MemoryImageStorage {
         this.createdUploads.push(params);
         return { shortcode: "IMG-7QRS" };
       },
-      cullPendingImages: async () => ({
-        count: 0,
-        deletedIds: [],
-        deletedKeys: [],
-      }),
+      cullPendingImages: async (_database, olderThanHours) => {
+        if (this.cullError) throw this.cullError;
+        this.culls.push(olderThanHours);
+        return {
+          count: this.cullable.length,
+          deletedIds: this.cullable.map((key) => `id:${key}`),
+          deletedKeys: this.cullable,
+        };
+      },
       deleteImages: async (_database, imageIds) => {
         this.deletedImageIds.push(...imageIds);
         return {
@@ -128,7 +137,6 @@ class MemoryImageStorage {
         };
       },
       findAttachmentByIdempotencyKey: async () => this.existingAttachment,
-      findUnreferencedImages: async () => [],
       getImageById: async () => {
         if (this.stagedRow instanceof Error) throw this.stagedRow;
         return this.stagedRow;
@@ -255,6 +263,46 @@ describe("image storage ports", () => {
       }),
     ).rejects.toThrow(/Unsupported content type/);
     expect(storage.createdPending).toHaveLength(1);
+  });
+
+  it("culls day-old abandoned uploads on the next presign and deletes their objects", async () => {
+    const { service, storage } = setup();
+    storage.cullable = ["cubby/images/abandoned.png"];
+
+    await service.createFileUpload(database, {
+      entityId: "PRD-TEST",
+      filename: "receipt.jpeg",
+      contentType: "image/jpeg",
+      size: 2_432_267,
+    });
+
+    // Clean-on-write replaces the sweeper: one bounded cull per presign,
+    // before the new PENDING row is minted.
+    expect(storage.culls).toEqual([24]);
+    expect(storage.deletedKeys).toContain("cubby/images/abandoned.png");
+    expect(storage.createdPending).toHaveLength(1);
+  });
+
+  it("still presigns when the cull fails", async () => {
+    const { service, storage } = setup();
+    storage.cullError = new Error("cull unavailable");
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+
+    await service.createFileUpload(database, {
+      entityId: "PRD-TEST",
+      filename: "receipt.jpeg",
+      contentType: "image/jpeg",
+      size: 2_432_267,
+    });
+
+    expect(storage.createdPending).toHaveLength(1);
+    expect(consoleError).toHaveBeenCalledWith(
+      "image.cull-on-presign.failed",
+      expect.any(Error),
+    );
+    consoleError.mockRestore();
   });
 });
 
