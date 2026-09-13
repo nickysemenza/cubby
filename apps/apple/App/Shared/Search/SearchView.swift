@@ -35,7 +35,9 @@ struct SearchView: View {
     }
 }
 
-private struct SearchContent: View {
+/// Plain-state search UI, split out so snapshot tests can render it directly (seeded via
+/// `SearchModel`'s `#if DEBUG` preview initializer) without `SearchView`'s network-backed `.task`.
+struct SearchContent: View {
     @Bindable var search: SearchModel
     @Environment(AppModel.self) private var model
     @Environment(\.dismissSearch) private var dismissSearch

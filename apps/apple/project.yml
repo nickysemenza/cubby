@@ -41,6 +41,9 @@ packages:
   Nuke:
     url: https://github.com/kean/Nuke
     from: "12.8.0"
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: "1.19.4"
 
 targetTemplates:
   CubbyApp:
@@ -160,17 +163,52 @@ targets:
           - UIApplicationShortcutItemType: cubby://search
             UIApplicationShortcutItemTitle: Search
             UIApplicationShortcutItemIconSymbolName: magnifyingglass
+    settings:
+      configs:
+        # Lets `Cubby-iOS-Tests` `@testable import Cubby` to reach internal preview/content
+        # sub-views (e.g. `SearchContent`, `PreviewFixtures`) for snapshot tests. iOS-only: the
+        # macOS target has no test bundle, so its Debug config is untouched.
+        Debug:
+          ENABLE_TESTABILITY: YES
   Cubby-macOS:
     templates: [CubbyApp]
     templateAttributes:
       plat: macOS
     platform: macOS
+  # Snapshot tests for iOS-only screens (App/Tests/Snapshots). Hosted by Cubby-iOS so
+  # `@testable import Cubby` and `.environment`/`AppModel` work exactly as the app's own
+  # `#Preview`s do; no macOS counterpart exists yet.
+  Cubby-iOS-Tests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: App/Tests
+    dependencies:
+      - target: Cubby-iOS
+      - package: SnapshotTesting
+        product: SnapshotTesting
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby.tests
+        # Matches the host app: SearchModel/SearchContent/etc. assume MainActor by default.
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        # XcodeGen's auto host-app wiring guesses the app binary is named after the target
+        # ("Cubby-iOS"), but `CubbyApp`'s PRODUCT_NAME is "Cubby" for both platforms — override
+        # both to the real bundle/executable name.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Cubby.app/Cubby"
+        BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:
   Cubby-iOS:
     build:
       targets:
         Cubby-iOS: all
+        Cubby-iOS-Tests: [test]
+    test:
+      config: Debug
+      targets:
+        - Cubby-iOS-Tests
     run:
       config: Debug
   Cubby-macOS:

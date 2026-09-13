@@ -64,6 +64,18 @@ final class SearchModel {
         self.client = client
     }
 
+    #if DEBUG
+        /// Snapshot/preview-only seed: sets `phase`/`recents` directly instead of going through
+        /// `start()`'s network round trip, so a snapshot test can render "results" or "recents
+        /// present" deterministically with no live client. Never used by a real caller — those
+        /// always go through `init(client:)` followed by `start()`.
+        init(client: CubbyClient, previewPhase: Phase, previewRecents: [RecentRow] = []) {
+            self.client = client
+            self.phase = previewPhase
+            self.recents = previewRecents
+        }
+    #endif
+
     /// Starts the debounced watch loop and loads recents. Idempotent — safe to call from
     /// `.task(id:)`, which re-runs whenever the host changes.
     func start() async {
