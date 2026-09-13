@@ -1,6 +1,5 @@
 import CubbyKit
 import SwiftUI
-import TipKit
 
 /// One entity's list screen. Owns a `GenericEntityListModel` created per host (mirrors
 /// `CaptureView`/`CaptureModel`), and accumulates pages into view state since the model itself
@@ -11,7 +10,6 @@ struct EntityListView: View {
     @Environment(AppModel.self) private var appModel
     @State private var model: GenericEntityListModel?
     @State private var loadedRows: [EntityRow] = []
-    private let pullToRefreshTip = PullToRefreshTip()
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -77,11 +75,6 @@ struct EntityListView: View {
                             bottom: 0, trailing: PorcelainTokens.Space.lg
                         )
                     )
-                    .listRowBackground(PorcelainTokens.canvas)
-                    .listRowSeparator(.hidden)
-                // Inline so it cannot outlive this screen the way a popover over a pushed
-                // detail would.
-                TipView(pullToRefreshTip)
                     .listRowBackground(PorcelainTokens.canvas)
                     .listRowSeparator(.hidden)
             }

@@ -51,6 +51,7 @@ struct SectionView: View {
             case .gardenBedJournal(let id): GardenBedJournalView(locationID: id)
             case .audit(let locationID): AuditRootView(locationID: locationID)
             case .needsPhoto(let locationID): NeedsPhotoView(locationID: locationID)
+            case .dev: DevView()
             }
         }
     }

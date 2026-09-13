@@ -11,6 +11,7 @@ import Foundation
 /// - `cubby://audit?location=LOC-…` starts a walk, optionally scoped to a location.
 /// - `cubby://today` opens Today.
 /// - `cubby://search` opens the Search tab (home-screen quick action).
+/// - `cubby://dev` opens the Dev screen.
 ///
 /// A Universal Link also resolves: `https://<any host>/<SHORTCODE>` or
 /// `https://<any host>/<anything>/<SHORTCODE>` (only the last path component is inspected) opens
@@ -23,6 +24,7 @@ public enum CubbyLink: Sendable, Hashable {
     case audit(location: LocationCode?)
     case today
     case search
+    case dev
 
     public static let scheme = "cubby"
 
@@ -56,6 +58,8 @@ public enum CubbyLink: Sendable, Hashable {
             self = .today
         case ("search", 0):
             self = .search
+        case ("dev", 0):
+            self = .dev
         default:
             return nil
         }
@@ -78,6 +82,8 @@ public enum CubbyLink: Sendable, Hashable {
             components.host = "today"
         case .search:
             components.host = "search"
+        case .dev:
+            components.host = "dev"
         }
         // Every component above is scheme-safe ASCII, so this cannot fail.
         return components.url!

@@ -1,6 +1,5 @@
 import CubbyKit
 import SwiftUI
-import TipKit
 
 /// The landing screen: what needs attention today (tasks, meals, open problems), and the ways in.
 /// Each section loads independently — a failure in one never blanks the others — and the whole
@@ -25,6 +24,15 @@ struct TodayView: View {
         }
         .porcelainScreen()
         .navigationTitle("Today")
+        .toolbar {
+            ToolbarItem {
+                Button {
+                    model.navigator.openDev()
+                } label: {
+                    Label("Dev", systemImage: "wrench.and.screwdriver")
+                }
+            }
+        }
         .task(id: model.host) {
             let today = TodayModel(client: model.client)
             self.today = today
@@ -43,9 +51,6 @@ struct TodayContent: View {
 
     @Environment(\.sectionSelection) private var sectionSelection
     @Environment(AppModel.self) private var model
-    #if os(iOS)
-        private let quickActionsTip = QuickActionsTip()
-    #endif
 
     var body: some View {
         ScrollView {
@@ -54,11 +59,6 @@ struct TodayContent: View {
                 tasksSection
                 mealsSection
                 problemsSection
-                // Inline, not a popover: TabView keeps this view alive, and a popover tip
-                // presented from here stays on screen over the other tabs.
-                #if os(iOS)
-                    TipView(quickActionsTip)
-                #endif
                 shortcutsSection
             }
             .padding(PorcelainTokens.Space.lg)
@@ -204,7 +204,7 @@ struct TodayContent: View {
                     detail: "Rank a photo"
                 )
                 shortcut(
-                    to: .dev,
+                    action: { model.navigator.openDev() },
                     title: "Dev",
                     symbol: "wrench.and.screwdriver",
                     detail: "Parser and API"
@@ -229,6 +229,21 @@ struct TodayContent: View {
         }
         .buttonStyle(.plain)
         .disabled(sectionSelection == nil)
+    }
+
+    /// A tile that performs an arbitrary action rather than moving the shell's selection — Dev is
+    /// a pushed screen (see `AppSection.tabs`), not a top-level section, so its tile can't go
+    /// through `shortcut(to:)`.
+    private func shortcut(
+        action: @escaping () -> Void,
+        title: String,
+        symbol: String,
+        detail: String
+    ) -> some View {
+        Button(action: action) {
+            ActionTile(title: title, symbol: symbol, detail: detail)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: Shared section chrome

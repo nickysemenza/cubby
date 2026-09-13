@@ -7,7 +7,7 @@ struct RootTabsView: View {
     var body: some View {
         @Bindable var navigator = model.navigator
         TabView(selection: $navigator.section) {
-            ForEach(AppSection.allCases) { section in
+            ForEach(AppSection.tabs) { section in
                 // The search role pulls the tab out of the bar into its own pill (iOS 26) and
                 // hands its field to the section's `.searchable`.
                 Tab(

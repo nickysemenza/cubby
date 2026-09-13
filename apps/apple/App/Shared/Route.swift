@@ -10,6 +10,8 @@ enum Route: Hashable {
     case audit(locationID: LocationCode?)
     /// The products-without-a-photo queue, optionally narrowed to a location.
     case needsPhoto(locationID: LocationCode?)
+    /// Dev is a pushed screen on iOS (see `AppSection.tabs`), reached via `Navigator.openDev()`.
+    case dev
 }
 
 /// Top-level sections. Tabs on iOS, sidebar rows on macOS.
@@ -38,6 +40,16 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .identify: "camera.metering.center.weighted"
         case .dev: "wrench.and.screwdriver"
         }
+    }
+
+    /// Dev is a pushed screen on iOS so the tab bar stays at four tabs + the search pill; macOS
+    /// keeps it as a sidebar row.
+    static var tabs: [AppSection] {
+        #if os(iOS)
+            allCases.filter { $0 != .dev }
+        #else
+            allCases
+        #endif
     }
 }
 

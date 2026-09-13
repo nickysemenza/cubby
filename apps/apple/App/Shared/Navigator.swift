@@ -52,7 +52,21 @@ final class Navigator {
         case .search:
             section = .search
             paths[.search] = []
+        case .dev:
+            openDev()
         }
+    }
+
+    /// Pushes Dev onto whatever section is currently showing on iOS, since it no longer has its
+    /// own tab (`AppSection.tabs` excludes it there); on macOS, where it stays a sidebar row,
+    /// selects it directly instead.
+    func openDev() {
+        #if os(iOS)
+            paths[section, default: []].append(.dev)
+        #else
+            section = .dev
+            paths[.dev] = []
+        #endif
     }
 
     /// Opens an entity on top of the section the user is already in, so a result found from the
