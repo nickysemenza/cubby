@@ -7,6 +7,8 @@ struct CubbyApp: App {
     @State private var model: AppModel
 
     init() {
+        // Before anything else so a crash during model setup is still reported.
+        Diagnostics.start(baseURL: AppModel.persistedBaseURL)
         let model = AppModel()
         _model = State(initialValue: model)
         AppModel.active = model

@@ -44,6 +44,7 @@ final class TodayModel {
         do {
             return .loaded(try await client.todayBriefing())
         } catch {
+            Diagnostics.report(error, context: "today.tasks")
             return .failed(message(for: error))
         }
     }
@@ -52,6 +53,7 @@ final class TodayModel {
         do {
             return .loaded(try await client.meals(on: .now))
         } catch {
+            Diagnostics.report(error, context: "today.meals")
             return .failed(message(for: error))
         }
     }
@@ -60,6 +62,7 @@ final class TodayModel {
         do {
             return .loaded(try await client.problemCounts())
         } catch {
+            Diagnostics.report(error, context: "today.problems")
             return .failed(message(for: error))
         }
     }

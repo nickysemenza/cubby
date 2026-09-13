@@ -39,8 +39,10 @@ final class NeedsPhotoModel {
             phase = .ready
         } catch let error as CubbyAPIError {
             phase = .failed(error.detail?.message ?? "HTTP \(error.status)")
+            Diagnostics.report(error, context: "photo.queue.load")
         } catch {
             phase = .failed(String(describing: error))
+            Diagnostics.report(error, context: "photo.queue.load")
         }
     }
 

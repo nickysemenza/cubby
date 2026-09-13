@@ -139,6 +139,7 @@ final class BrowseCountsModel {
             counts = try await client.dashboardCounts()
         } catch {
             counts = nil
+            Diagnostics.report(error, context: "browse.counts")
         }
     }
 

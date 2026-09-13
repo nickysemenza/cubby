@@ -90,6 +90,7 @@ struct StraysView: View {
             }
         } catch {
             summary = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            Diagnostics.report(error, context: "capture.resolveStrays")
         }
     }
 }

@@ -128,6 +128,7 @@ struct BinStraysSheet: View {
             summary = error.detail?.message ?? "HTTP \(error.status)"
         } catch {
             summary = String(describing: error)
+            Diagnostics.report(error, context: "audit.resolveStrays")
         }
     }
 }

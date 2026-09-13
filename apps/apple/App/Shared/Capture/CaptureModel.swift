@@ -49,6 +49,7 @@ final class CaptureModel {
             locationError = nil
         } catch {
             locationError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
+            Diagnostics.report(error, context: "capture.locations")
         }
     }
 

@@ -38,6 +38,7 @@ final class AppModel {
         didSet {
             guard baseURL != oldValue else { return }
             UserDefaults.standard.set(baseURL.absoluteString, forKey: Self.baseURLKey)
+            Diagnostics.setBaseURL(baseURL)
             rebindClients()
             Task {
                 await spotlight.wipe()
@@ -48,12 +49,15 @@ final class AppModel {
 
     private let store: any SessionTokenStore
 
+    /// The last-applied base URL, or the default. Readable before an `AppModel` exists so
+    /// `Diagnostics.start` can run first in `CubbyApp.init`.
+    static var persistedBaseURL: URL {
+        UserDefaults.standard.string(forKey: baseURLKey).flatMap(URL.init(string:)) ?? defaultBaseURL
+    }
+
     init(store: any SessionTokenStore = KeychainSessionTokenStore(), baseURL: URL? = nil) {
         self.store = store
-        let url =
-            baseURL
-            ?? UserDefaults.standard.string(forKey: Self.baseURLKey).flatMap(URL.init(string:))
-            ?? Self.defaultBaseURL
+        let url = baseURL ?? Self.persistedBaseURL
         self.baseURL = url
         let credentials = CredentialProvider(host: CubbyBaseURL.host(of: url), store: store)
         self.credentials = credentials
@@ -77,8 +81,10 @@ final class AppModel {
             phase = .signedIn
         } catch let error as AuthError {
             lastError = error.message
+            Diagnostics.report(error, context: "auth.signIn")
         } catch {
             lastError = String(describing: error)
+            Diagnostics.report(error, context: "auth.signIn")
         }
     }
 
@@ -89,6 +95,7 @@ final class AppModel {
             // The credential is cleared locally regardless; a failed server call is not a
             // reason to stay signed in on the device.
             lastError = String(describing: error)
+            Diagnostics.report(error, context: "auth.signOut")
         }
         credential = nil
         phase = .signedOut
@@ -98,6 +105,7 @@ final class AppModel {
     /// Called by any screen that receives a `CubbyAPIError`: a 401 means the middleware already
     /// dropped the credential, so the UI should follow it out.
     func handle(_ error: any Error) {
+        Diagnostics.report(error, context: "app.handle")
         if let apiError = error as? CubbyAPIError {
             lastError = apiError.detail?.message ?? "HTTP \(apiError.status)"
             if apiError.isUnauthorized {

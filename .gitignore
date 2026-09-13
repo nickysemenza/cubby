@@ -92,3 +92,6 @@ apps/apple/**/xcuserdata/
 *.xcuserstate
 apps/apple/.build/
 apps/apple/CubbyKit/Frameworks/
+
+# Sentry auth token for the Apple dSYM upload phase lives in ~/.sentryclirc; never in the tree.
+.sentryclirc

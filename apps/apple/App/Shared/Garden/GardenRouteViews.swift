@@ -36,6 +36,7 @@ struct GardenPlantingRouteView: View {
         await model.load()
         do { planting = try await appModel.client.gardenPlanting(id: id) } catch {
             self.error = error.localizedDescription
+            Diagnostics.report(error, context: "garden.planting.load")
         }
     }
 }
@@ -88,6 +89,7 @@ struct GardenEntryRouteView: View {
         error = nil
         do { entry = try await appModel.client.gardenEntry(id: id) } catch {
             self.error = error.localizedDescription
+            Diagnostics.report(error, context: "garden.entry.load")
         }
     }
 }
@@ -213,6 +215,7 @@ struct GardenBedJournalView: View {
         } catch {
             failedReset = reset
             message = error.localizedDescription
+            Diagnostics.report(error, context: "garden.location.entries")
         }
     }
 }

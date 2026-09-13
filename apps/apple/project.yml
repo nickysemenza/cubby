@@ -35,6 +35,9 @@ settings:
 packages:
   CubbyKit:
     path: CubbyKit
+  Sentry:
+    url: https://github.com/getsentry/sentry-cocoa
+    from: "9.28.0"
 
 targetTemplates:
   CubbyApp:
@@ -83,6 +86,11 @@ targetTemplates:
     dependencies:
       - package: CubbyKit
         product: CubbyKit
+      # App targets only: CubbyKit is a non-MainActor package that also builds the `cubby` CLI,
+      # so it stays SDK-free. CubbyKit errors are reported at the app layer, where they are
+      # already caught (`Diagnostics.report`).
+      - package: Sentry
+        product: Sentry
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby
@@ -100,6 +108,29 @@ targetTemplates:
           # Surfaces slow type-checking and slow function bodies in the issue navigator so
           # CubbyKit's ~60k generated lines don't quietly regress compile times.
           OTHER_SWIFT_FLAGS: "$(inherited) -Xfrontend -warn-long-function-bodies=200 -Xfrontend -warn-long-expression-type-checking=200"
+        Release:
+          # Xcode's Release default, pinned so Sentry symbolication cannot silently break.
+          DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+    postBuildScripts:
+      # Archives only (`runOnlyWhenInstalling`): a Debug build has no dSYM to upload. Org + auth
+      # come from the org token in ~/.sentryclirc — Xcode run scripts do not inherit the shell
+      # env — so only the project is exported here.
+      - name: Upload dSYMs to Sentry
+        runOnlyWhenInstalling: true
+        # The upload has no output file, so declare it unconditional rather than let Xcode
+        # warn about missing outputs on every archive.
+        basedOnDependencyAnalysis: false
+        inputFiles:
+          - "${DWARF_DSYM_FOLDER_PATH}/${DWARF_DSYM_FILE_NAME}/Contents/Resources/DWARF/${EXECUTABLE_NAME}"
+        script: |
+          if [[ "$(uname -m)" == arm64 ]]; then export PATH="/opt/homebrew/bin:$PATH"; fi
+          if which sentry-cli >/dev/null; then
+            export SENTRY_PROJECT=cubby-apple
+            ERROR=$(sentry-cli debug-files upload --include-sources "$DWARF_DSYM_FOLDER_PATH" 2>&1 >/dev/null)
+            if [ ! $? -eq 0 ]; then echo "warning: sentry-cli - $ERROR"; fi
+          else
+            echo "warning: sentry-cli not installed: brew install getsentry/tools/sentry-cli"
+          fi
 
 targets:
   Cubby-iOS:

@@ -14,6 +14,10 @@ porting. See `/Users/nicky/.claude/plans/moonlit-juggling-finch.md` for the full
    `CubbyKit/Sources/CubbyAPI/{Types,Client}.swift`. That output is its own SPM target so a
    hand-written CubbyKit edit no longer recompiles ~58k generated lines.
 3. `xcodegen generate --spec apps/apple/project.yml` — produces `Cubby.xcodeproj` (gitignored).
+4. Optional: `brew install getsentry/tools/sentry-cli` and put an org auth token in
+   `~/.sentryclirc`. Only the `Upload dSYMs to Sentry` archive phase needs it (project
+   `cubby-apple`; the org is derived from the token), so a TestFlight build symbolicates. A
+   missing `sentry-cli` or token is a build warning, never a failure.
 
 If you see the literal error text `artifact of binary target 'CubbyFFIBinary' not found`, the
 xcframework hasn't been built yet — run step 1 (`build-rust.sh`) first.
@@ -73,6 +77,8 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 - `xcodegen generate --spec apps/apple/project.yml` then
   `xcodebuild -project apps/apple/Cubby.xcodeproj -scheme Cubby-iOS -destination 'generic/platform=iOS Simulator' build`
   for the app targets (needs the xcframework from step 1 first)
+- The `Upload dSYMs to Sentry` phase is `runOnlyWhenInstalling`: it runs on archive only, so a
+  plain build or simulator run never touches `sentry-cli`. Verify it from an archive's build log.
 
 ## Debugging on device
 
