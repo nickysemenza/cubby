@@ -70,6 +70,23 @@ struct MappingTests {
         #expect(counts.count(for: .financialTransaction) == 30)
     }
 
+    /// Regression for a mapper that hand-listed 17 keys and silently dropped `planting` and
+    /// `gardenEntry` when those entities' routes shipped. Every `countable` `EntityKey` — driven
+    /// by the generated catalog, not a hand-kept list here — must decode to a real count from the
+    /// fixture; a future omission in either the fixture or `DashboardCounts.init` fails this.
+    @Test func dashboardCountsCoversEveryCountableEntity() throws {
+        let out = try Fixtures.decode(DashboardCountsOut.self, from: "dashboard-counts.json")
+        let counts = DashboardCounts(out)
+        for entity in EntityKey.allCases where EntityCatalog[entity].countable {
+            #expect(
+                counts.count(for: entity) != nil,
+                "Countable entity \(entity.rawValue) has no dashboard count"
+            )
+        }
+        #expect(counts.count(for: .planting) == 0)
+        #expect(counts.count(for: .gardenEntry) == 0)
+    }
+
     @Test func todayBriefingMapsNextTasks() throws {
         let out = try Fixtures.decode(TodayBriefingOut.self, from: "today-briefing.json")
         let tasks = out.next.map(TodayTask.init)

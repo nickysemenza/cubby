@@ -202,6 +202,7 @@ const renderEntityDescriptorLiteral = (
   // sets one today; fall back to `singular` rather than widen the Swift
   // field to Optional for a case that has never occurred.
   const plural = entity.inspector.plural ?? entity.inspector.singular;
+  const countable = entity.descriptor.countable === true;
   return (
     `  EntityDescriptor(\n` +
     `    key: .${swiftCaseName(entity.key)},\n` +
@@ -210,6 +211,7 @@ const renderEntityDescriptorLiteral = (
     `    basePath: ${swiftString(entity.route.basePath)},\n` +
     `    shortcodePrefix: ${swiftOptionalString(entity.shortcode)},\n` +
     `    titleField: ${swiftString(entity.inspector.titleField)},\n` +
+    `    countable: ${countable ? "true" : "false"},\n` +
     `    fields: ${fields.length === 0 ? "[]" : `[\n      ${fields}\n    ]`},\n` +
     `    filters: ${filters.length === 0 ? "[]" : `[\n      ${filters}\n    ]`},\n` +
     `    actions: [${orderedActions.map((action) => `.${swiftCaseName(action)}`).join(", ")}]\n` +
@@ -303,6 +305,7 @@ export const renderSwiftEntityCatalog = (
     "  public let basePath: String\n" +
     "  public let shortcodePrefix: String?\n" +
     "  public let titleField: String\n" +
+    "  public let countable: Bool\n" +
     "  public let fields: [FieldDescriptor]\n" +
     "  public let filters: [FilterDescriptor]\n" +
     "  public let actions: Set<EntityAction>\n" +

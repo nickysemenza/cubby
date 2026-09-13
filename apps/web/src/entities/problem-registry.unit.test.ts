@@ -17,6 +17,10 @@ import {
   compileProblemFilters,
   problemFilterSpecs,
 } from "./problem-filter-semantics";
+import { basicProblemQueries } from "./problem-queries/basic";
+import { derivedProblemQueries } from "./problem-queries/derived";
+import { productCoverageProblemQueries } from "./problem-queries/product-coverage";
+import { trackerProblemQueries } from "./problem-queries/tracker";
 import type { DiagnosticKey } from "./problem-query";
 import {
   expectedProblemKeys,
@@ -36,12 +40,22 @@ describe("Problem Query registry", () => {
     expect(new Set(keys).size).toBe(keys.length);
     expect(new Set(keys)).toEqual(new Set(expectedProblemKeys));
     expect(() => validateCompleteProblemRegistry(definitions)).not.toThrow();
-    expect(
-      definitions.filter(({ source }) => source.kind === "entity"),
-    ).toHaveLength(32);
+    // "derived" sources aren't confined to derived.ts: product-coverage.ts and
+    // tracker.ts each mix in one alongside their "entity" declarations. Count
+    // every declared source array directly instead of hardcoding a total, so
+    // a new Problem in any of them is reflected here automatically.
+    const declaredDerivedCount = [
+      ...basicProblemQueries,
+      ...productCoverageProblemQueries,
+      ...trackerProblemQueries,
+      ...derivedProblemQueries,
+    ].filter(({ source }) => source.kind === "derived").length;
     expect(
       definitions.filter(({ source }) => source.kind === "derived"),
-    ).toHaveLength(19);
+    ).toHaveLength(declaredDerivedCount);
+    expect(
+      definitions.filter(({ source }) => source.kind === "entity"),
+    ).toHaveLength(definitions.length - declaredDerivedCount);
     expect(keys).toContain("productsMissingPrice");
     expect(keys).toContain("overdueTasks");
     expect(keys).toContain("duplicateVendors");
@@ -114,7 +128,6 @@ describe("Problem Query registry", () => {
       expect(definition.source.grain).toBeTruthy();
       expect(definition.source.operations.length).toBeGreaterThan(0);
     }
-    expect(diagnostics.size).toBe(19);
     expect(new Set(Object.keys(diagnosticAdapters))).toEqual(diagnostics);
   });
 

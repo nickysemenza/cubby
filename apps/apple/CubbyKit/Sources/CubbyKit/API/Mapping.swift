@@ -594,28 +594,54 @@ extension TodayProblemCounts {
 
 extension DashboardCounts {
     init(_ out: DashboardCountsOut) {
-        // The response spells the USDA food count `usdaFoods` (plural); every other key matches
-        // `EntityKey.rawValue`, so the dictionary is keyed that way and the odd one out is fixed
-        // up by `count(for:)`.
-        self.init(byEntityKey: [
-            EntityKey.product.rawValue: out.product,
-            EntityKey.recipe.rawValue: out.recipe,
-            EntityKey.ingredient.rawValue: out.ingredient,
-            EntityKey.cookbook.rawValue: out.cookbook,
-            EntityKey.location.rawValue: out.location,
-            EntityKey.inventory.rawValue: out.inventory,
-            EntityKey.meal.rawValue: out.meal,
-            EntityKey.project.rawValue: out.project,
-            EntityKey.task.rawValue: out.task,
-            EntityKey.vendor.rawValue: out.vendor,
-            EntityKey.purchase.rawValue: out.purchase,
-            EntityKey.expense.rawValue: out.expense,
-            EntityKey.financialAccount.rawValue: out.financialAccount,
-            EntityKey.financialTransaction.rawValue: out.financialTransaction,
-            EntityKey.image.rawValue: out.image,
-            EntityKey.wish.rawValue: out.wish,
-            EntityKey.usdaFood.rawValue: out.usdaFoods,
-        ])
+        // Iterate the generated catalog's `countable` flag instead of hand-listing keys: the
+        // 2026-09 regression silently dropped `planting`/`gardenEntry` because this initializer
+        // hand-listed 17 keys and nobody updated it when those entities' routes shipped. The
+        // `count(for:in:)` switch below is exhaustive over every `EntityKey`, so a newly
+        // countable entity fails to compile here until it is mapped.
+        var byEntityKey: [String: Int] = [:]
+        for entity in EntityKey.allCases where EntityCatalog[entity].countable {
+            byEntityKey[entity.rawValue] = DashboardCounts.count(for: entity, in: out)
+        }
+        // The response spells the USDA food count `usdaFoods` (plural), and USDA foods are not
+        // `countable` in the entity manifest (they come from the separate USDA database, not the
+        // generic per-entity count query) — so this key is fixed up by hand instead of by the
+        // loop above.
+        byEntityKey[EntityKey.usdaFood.rawValue] = out.usdaFoods
+        self.init(byEntityKey: byEntityKey)
+    }
+
+    /// One arm per `EntityKey`, deliberately with no `default:`: adding a new case to the
+    /// generated `EntityKey` enum without adding it here fails the build instead of silently
+    /// omitting the entity from the dashboard, which is exactly how `planting`/`gardenEntry` were
+    /// dropped previously. `ledgerParty`/`ledgerTransfer`/`usdaFood` are never reached — the
+    /// caller only visits `countable` keys, and `usdaFood` is mapped separately above — so they
+    /// trap rather than return a fabricated count.
+    private static func count(for entity: EntityKey, in out: DashboardCountsOut) -> Int {
+        switch entity {
+        case .product: return out.product
+        case .recipe: return out.recipe
+        case .ingredient: return out.ingredient
+        case .cookbook: return out.cookbook
+        case .location: return out.location
+        case .inventory: return out.inventory
+        case .meal: return out.meal
+        case .project: return out.project
+        case .task: return out.task
+        case .vendor: return out.vendor
+        case .purchase: return out.purchase
+        case .expense: return out.expense
+        case .financialAccount: return out.financialAccount
+        case .financialTransaction: return out.financialTransaction
+        case .image: return out.image
+        case .wish: return out.wish
+        case .planting: return out.planting
+        case .gardenEntry: return out.gardenEntry
+        case .ledgerParty, .ledgerTransfer, .usdaFood:
+            preconditionFailure(
+                "EntityKey.\(entity.rawValue) is not countable-iterated; usdaFood is mapped separately."
+            )
+        }
     }
 }
 
