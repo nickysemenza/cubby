@@ -17,6 +17,7 @@ function makeFood(opts: {
 }): FoodSummaryWithLinkedProducts {
   return foodSummaryWithLinkedProducts.parse({
     fdc_id: opts.fdc_id,
+    description: "TEST",
     foodInfo: { data_type: "branded_food", description: "TEST" },
     legacyFoodInfo: null,
     brandedFoodInfo: opts.upc

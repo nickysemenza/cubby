@@ -156,6 +156,7 @@ export class USDAService {
   ): Promise<FoodSummaryWithLinkedProducts> {
     return {
       ...foodSummary,
+      description: foodSummary.foodInfo.description,
       ...(await this.getFoodEnrichment(foodSummary)),
     };
   }
@@ -181,6 +182,7 @@ export class USDAService {
     }
     return foods.map((food, index) => ({
       ...food,
+      description: food.foodInfo.description,
       inferredUnitMappings: unitMappingsFromFood(food),
       linkedProducts: linkedByFood[index] ?? [],
     }));

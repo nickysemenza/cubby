@@ -87,6 +87,7 @@ function usdaFood(
 ): FoodSummaryWithLinkedProducts {
   return {
     fdc_id,
+    description,
     foodInfo: { data_type: "sr_legacy_food", description },
     legacyFoodInfo: { ndb_number: 1100 },
     brandedFoodInfo: null,

@@ -13,6 +13,7 @@ import {
 
 const food = foodSummaryWithLinkedProducts.parse({
   fdc_id: 12345,
+  description: "Example food",
   foodInfo: { data_type: "branded_food", description: "Example food" },
   legacyFoodInfo: null,
   brandedFoodInfo: null,
