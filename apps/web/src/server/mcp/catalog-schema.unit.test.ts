@@ -294,6 +294,13 @@ describe("MCP catalog schemas", () => {
       "entity.command.data.sections[].ingredients[].id",
       "entity.command.data.sections[].instructions[].id",
       "entity.command.data.unitMappings[].id",
+      // entity_batch items are the same create/update commands as `entity`,
+      // so they carry the same child-row ids (the ones an update edits in place).
+      "entity_batch.items[].data.externalIds[].id",
+      "entity_batch.items[].data.sections[].id",
+      "entity_batch.items[].data.sections[].ingredients[].id",
+      "entity_batch.items[].data.sections[].instructions[].id",
+      "entity_batch.items[].data.unitMappings[].id",
       "update_meal_recipe.id",
       "remove_meal_recipe.id",
       "save_meal_recipe_preparation.mealRecipeId",

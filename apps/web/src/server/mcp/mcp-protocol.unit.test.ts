@@ -1,6 +1,14 @@
 import { mcpToolName } from "@cubby/schemas/entity-manifest";
+import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { mealOut, mealRecipeOut } from "@cubby/schemas/meal";
 import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import {
+  productTopLevelOut,
+  productWithFoodOut,
+  productWithMappingsAndFoodOut,
+} from "@cubby/schemas/product";
+import { recipeTopLevel } from "@cubby/schemas/recipe-shared";
+import { foodSummary } from "@cubby/usda-schemas";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -172,6 +180,122 @@ describe("MCP protocol smoke", () => {
             },
           },
         },
+      ],
+    });
+  });
+
+  const nullKernel = {
+    entityKernel: {
+      db: null,
+      readDb: null,
+      actorContext: null,
+      usdaClient: null,
+      upcLookupClient: null,
+      services: null,
+    },
+  };
+
+  it("drops the full USDA nutrient table from product and ingredient reads", async () => {
+    const food = mock(foodSummary);
+    expect(food.nutritionInfo.nutrientSummary).toBeDefined();
+    // `externalIds: []` — the generator can't satisfy the source-slug refine.
+    const product = mock(productWithFoodOut, {
+      overrides: { food, externalIds: [] },
+    });
+    const embedded = mock(productWithMappingsAndFoodOut, {
+      overrides: { food, externalIds: [] },
+    });
+    const recipe = mock(recipeTopLevel, {
+      overrides: { notes: "a headnote that repeats once per usage row" },
+    });
+    const ingredient = mock(ingredientWithFoodOut, {
+      overrides: {
+        recipe,
+        appearsInRecipes: [recipe],
+        recipeUsages: [
+          {
+            ...mock(ingredientWithFoodOut, {
+              overrides: { product: [], appearsInRecipes: [] },
+            }).recipeUsages[0]!,
+            recipe,
+          },
+        ],
+        product: [embedded],
+      },
+    });
+    const runEntity: ExecuteEntity = async (_context, command) =>
+      command.entity === "product"
+        ? { action: "get", entity: "product", item: product }
+        : { action: "get", entity: "ingredient", item: ingredient };
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerEntityTools(server, runEntity);
+
+    const productRead = await callMcpTool(
+      server,
+      "get_entities",
+      { command: { action: "get", entity: "product", id: product.id } },
+      {},
+      nullKernel,
+    );
+    const ingredientRead = await callMcpTool(
+      server,
+      "get_entities",
+      { command: { action: "get", entity: "ingredient", id: ingredient.id } },
+      {},
+      nullKernel,
+    );
+
+    expect(productRead.isError).not.toBe(true);
+    expect(ingredientRead.isError).not.toBe(true);
+    const productJson = JSON.stringify(productRead.structuredContent);
+    const ingredientJson = JSON.stringify(ingredientRead.structuredContent);
+    expect(productJson).not.toContain("nutrientSummary");
+    expect(productJson).toContain("nutrientsPer100");
+    expect(ingredientJson).not.toContain("nutrientSummary");
+    expect(ingredientJson).not.toContain("a headnote that repeats");
+    expect(ingredientJson).toContain(recipe.id);
+  });
+
+  it("runs entity_batch items independently and reports each outcome", async () => {
+    const created = mock(productTopLevelOut, {
+      overrides: { externalIds: [] },
+    });
+    const runEntity = vi.fn<ExecuteEntity>(async (_context, command) => {
+      if (command.action !== "create" || command.entity !== "product")
+        throw new Error("unexpected command");
+      if (command.data.name === "boom") throw new Error("simulated failure");
+      return {
+        action: "create",
+        entity: "product",
+        item: { ...created, name: command.data.name },
+        sideEffects: { backgroundBatches: [] },
+      };
+    });
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerEntityTools(server, runEntity);
+
+    const result = await callMcpTool(
+      server,
+      "entity_batch",
+      {
+        items: [
+          { action: "create", entity: "product", data: { name: "first" } },
+          { action: "create", entity: "product", data: { name: "boom" } },
+          { action: "create", entity: "product", data: { name: "third" } },
+        ],
+      },
+      {},
+      nullKernel,
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(runEntity).toHaveBeenCalledTimes(3);
+    expect(result.structuredContent).toMatchObject({
+      summary: { requested: 3, succeeded: 2, failed: 1 },
+      results: [
+        { index: 0, status: "succeeded", reference: created.id },
+        { index: 1, status: "failed" },
+        { index: 2, status: "succeeded", reference: created.id },
       ],
     });
   });

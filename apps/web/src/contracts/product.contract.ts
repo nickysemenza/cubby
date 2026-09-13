@@ -19,6 +19,7 @@ import {
 
 export const productContract = defineContract("product", {
   search: query({ ...productWorkflowSchemas.search }),
+  resolveNames: query({ ...productWorkflowSchemas.resolveNames }),
   summaries: query({ ...productWorkflowSchemas.summaries }),
   quantitySummaries: query({ ...productWorkflowSchemas.quantitySummaries }),
   inventoryEntriesByIds: query({

@@ -239,6 +239,7 @@ export const START_OPERATIONS = {
   "product.purchases": { kind: "query" },
   "product.quantitySummaries": { kind: "query" },
   "product.quickCreate": { kind: "mutation" },
+  "product.resolveNames": { kind: "query" },
   "product.search": { kind: "query" },
   "product.setProjectUses": { kind: "mutation" },
   "product.summaries": { kind: "query" },

@@ -24,6 +24,7 @@ import {
   type productSummariesInput,
   productTopLevelOut,
 } from "@cubby/schemas/product";
+import type { productResolveNamesInput } from "@cubby/schemas/product";
 import type {
   AttachProductComponentsInput,
   attachProductComponentsInput,
@@ -56,6 +57,7 @@ import {
   getProductsByShortcodes,
   getProductTagOptions,
   productSearch,
+  resolveProductNames,
   quickCreateProduct,
 } from "~/server/repo/product";
 import {
@@ -323,6 +325,14 @@ export const findOrCreateProductByCodeWorkflow = defineWorkflowOperation(
       input,
       context.actorContext,
     ),
+);
+
+export const resolveProductNamesWorkflow = defineWorkflowOperation(
+  "product.resolveNames",
+  (
+    context: ProductWorkflowContext,
+    input: z.output<typeof productResolveNamesInput>,
+  ) => resolveProductNames(context.readDb, input.names),
 );
 
 export const getProductTagOptionsWorkflow = defineWorkflowOperation(

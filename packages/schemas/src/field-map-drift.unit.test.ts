@@ -99,10 +99,6 @@ const INTENTIONAL_RESPELLINGS = {
   // --- product.ts: reviewed and intentional -------------------------------
   "product::productQuickCreatePayload::name":
     "quick-create keeps its own requiredName() label ('Product name'), not the generated create field's describe()/meta()",
-  "product::productQuickCreatePayload::manufacturer":
-    "quick-create defaults manufacturer to UNSPECIFIED_MANUFACTURER; the generated create field has no default",
-  "product::productQuickCreatePayload::upc":
-    "quick-create makes upc fully optional; the generated create field requires the key (though its value may be null)",
   "product::productQuickCreatePayload::expectedQuantity":
     "quick-create constrains expectedQuantity to a positive integer; the generated create field is a plain nullable number",
   "product::productMcpOut::price":
@@ -183,6 +179,10 @@ const INTENTIONAL_RESPELLINGS = {
     "picker-row projection — hand-copied manufacturer field, narrower row shape than the read schema",
   "product::productPickerItemOut::category":
     "picker-row projection — hand-copied category field, narrower row shape than the read schema",
+  "product::productResolveNameOut::name":
+    "the REQUESTED name echoed back (the caller's receipt line, trimmed), not the product's name field — coincidental key-name collision",
+  "product::productResolveCandidateOut::price":
+    "resolve candidates are picker rows: same positiveMoneyNullable narrowing as productPickerItemOut::price",
   "product::productPickerItemOut::price":
     "picker row deliberately constrains price to positiveMoneyNullable (see the file comment above it: 'kept as-is rather than silently loosened') — value-space narrowing over the generated plain moneyNullable read field",
   "product::productWithIngredientAndInventoryAndMappingsOut::unitMappings":
@@ -422,6 +422,8 @@ const INTENTIONAL_RESPELLINGS = {
   // updatedAt) and embedded RECIPE/ingredient fields (name/totals) coincide
   // in key name with meal's own generated fields, since meal-recipe shapes
   // live in meal.ts/meal-fields.ts alongside meal's own generated map ---
+  "meal::getMealPreparationsMcpOut::totals":
+    "MCP variant of getMealPreparationsOut::totals with a partial nutrient record — same coincidental key-name collision with meal's scalar `totals` read field",
   "meal::getMealPreparationsOut::totals":
     "nested {confirmed, projected} nutrition-totals breakdown object — a different shape than meal's own scalar `totals` read field, coincidental key-name collision",
   "meal::mealAddRecipeInput::sortOrder":
@@ -682,6 +684,10 @@ const INTENTIONAL_RESPELLINGS = {
     "coincidental key-name collision: the SECTION's own name, not recipe's own name",
   "recipe::recipeSectionOut::updatedAt":
     "coincidental key-name collision: the SECTION row's own audit timestamp, not recipe's own updatedAt",
+  "recipe::recipeRefMcpEntityOut::name": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeRefMcpEntityOut::servings": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeRefMcpEntityOut::tags": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeRefMcpEntityOut::yield": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::createdAt": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::name": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::notes": RECIPE_TOP_LEVEL_FIELDS,

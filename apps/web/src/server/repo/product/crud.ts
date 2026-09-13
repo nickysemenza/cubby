@@ -1308,10 +1308,23 @@ const assertExternalIdsAvailable = async (
   );
 };
 
+/**
+ * The reads `createProduct` performs inside its own transaction after the
+ * insert. A real port rather than a module seam so a test can make one fail
+ * and prove the insert rolls back with it.
+ */
+export type ProductCreateReads = {
+  loadProductDataQualities: typeof loadProductDataQualities;
+};
+const defaultProductCreateReads: ProductCreateReads = {
+  loadProductDataQualities,
+};
+
 export const createProduct = async (
   db: Database,
   data: ProductRepoCreateInput,
   actor: ActorContext,
+  reads: ProductCreateReads = defaultProductCreateReads,
 ): Promise<ProductTopLevelOut> => {
   const {
     ingredientId,
@@ -1327,9 +1340,15 @@ export const createProduct = async (
 
   // Use a transaction to ensure atomicity. On a unique violation (e.g. another
   // product already claims this barcode), translate the raw DB error into a
-  // clear CONFLICT message — the lookups run on `db` because the tx is aborted.
+  // clear CONFLICT message — the duplicate lookups in the catch run on `db`
+  // because the tx is aborted by then.
+  //
+  // The data-quality read stays INSIDE the tx (as `updateProduct` does): run
+  // after commit, a failure there threw from a create whose row already
+  // existed, so the caller saw "failed" and re-created it. In-tx, that read
+  // failing rolls the insert back and "failed" means failed.
   try {
-    const created = await withTransaction(db, async (tx) => {
+    return await withTransaction(db, async (tx) => {
       // A bare `upc` becomes a `gtin` identifier row rather than a column, and
       // is folded into the payload so it cannot be lost to (or lose to) an
       // explicit `externalIds` on the same call.
@@ -1426,18 +1445,18 @@ export const createProduct = async (
           })
         : null;
 
-      return {
+      const created = {
         ...newProduct,
         growsIngredient,
         images,
         externalIds: createdExternalIds,
       };
-    });
-    const qualities = await loadProductDataQualities(db, [created.id]);
-    return dbProductToTopLevelAPI({
-      ...created,
-      pricing: resolveProductPricing(created.price),
-      dataQuality: qualities.get(created.id)!,
+      const qualities = await reads.loadProductDataQualities(tx, [created.id]);
+      return dbProductToTopLevelAPI({
+        ...created,
+        pricing: resolveProductPricing(created.price),
+        dataQuality: qualities.get(created.id)!,
+      });
     });
   } catch (error) {
     await throwIfDuplicateProduct(db, data, error);

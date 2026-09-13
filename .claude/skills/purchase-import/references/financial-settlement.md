@@ -30,10 +30,11 @@ receipt, and what a statement produces when it combines same-day refunds.
 Record it as **one** transaction carrying an `allocations` array:
 
 ```
-update_financial_transactions({ items: [{ id: "FTX-…", allocations: [
-  { purchaseId: "PUR-9QXK", amount: -8.96 },
-  { purchaseId: "PUR-9ZMQ", amount: -7.80 },
-] }] })
+entity({ command: { action: "update", entity: "financialTransaction",
+  id: "FTX-…", data: { allocations: [
+    { purchaseId: "PUR-9QXK", amount: -8.96 },
+    { purchaseId: "PUR-9ZMQ", amount: -7.80 },
+  ] } } })
 ```
 
 Allocations must sum to the transaction's amount to the cent and share its sign;
@@ -57,7 +58,7 @@ rows. It is read-only and returns `already_recorded`, `ready_to_create`,
 `possible_existing`, `unresolved_account`, or `indistinguishable_duplicate`.
 
 After approval, submit only `ready_to_create` proposed values to
-`create_financial_transactions`. Review every result. Source reference
+`entity create financialTransaction` (or `entity_batch`). Review every result. Source reference
 uniqueness makes later full-history imports no-op for unchanged rows; it does
 not authorize writing through a conflict.
 
@@ -96,15 +97,15 @@ An existing transaction can carry the right amount, Account and Purchase and
 still leave `settlement_reference` open because it was imported without a source
 ref. Re-derive the ref through `preview_financial_statement_import` — a match
 returns `possible_existing` with the transaction id — then backfill it with
-`update_financial_transactions`. Never create a second transaction to fix this.
+`entity update financialTransaction`. Never create a second transaction to fix this.
 
 The field is **`sourceRefs`**, an array, and on update it replaces the whole
 array (read–merge–write when appending). The singular `sourceRef` is accepted
 and silently discarded — the write reports success, `sourceRefs` comes back
 `[]`, and the gap stays open. Confirm by re-reading the row, or by checking that
-the Purchase drops out of `list_purchases({dataStatus:"needs_data"})`.
+the Purchase drops out of `entity list purchase` with `filters:{dataStatus:"needs_data"}`.
 
-**`create_financial_transactions` does take `sourceRefs`,** so the backfill pass
+**`entity create financialTransaction` does take `sourceRefs`,** so the backfill pass
 above is only for transactions that were created without one — not a mandatory
 second step after every create. Verified 2026-08-03: a 304-row backfill passed
 `sourceRefs` on create and all 304 persisted, 304 distinct, none empty. Treat a
@@ -131,7 +132,7 @@ match.
 
 `list_statement_rows({matchState:"unmatched"})` is the worklist — a provider row
 with no live transaction carrying its source ref. To close one, append that ref
-to the right transaction with `update_financial_transactions` (read–merge–write
+to the right transaction with `entity update financialTransaction` (read–merge–write
 on `sourceRefs`); the row flips to `matched` on the next read, with no write to
 the row itself. `update_statement_rows` takes a `{filter}` selector for the long
 tail that will never match; `disposition: "ignored"` requires BOTH a reason and

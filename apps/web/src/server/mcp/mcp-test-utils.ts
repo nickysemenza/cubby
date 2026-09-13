@@ -72,6 +72,7 @@ const unavailableCaller = {
     getTracker: unavailableCallerMethod,
   },
   product: {
+    resolveNames: unavailableCallerMethod,
     externalIdCollisions: unavailableCallerMethod,
     patchExternalIds: unavailableCallerMethod,
     verifyImages: unavailableCallerMethod,

@@ -66,6 +66,7 @@ export {
 // is deliberately NOT re-exported here — the lifecycle registry imports it from
 // `./merge` directly, the same way it reaches every other entity's policy.
 export { mergeProducts, previewMergeProducts } from "./merge";
+export { resolveProductNames } from "./resolve-names";
 export { getProductMovementTimeline } from "./movement-timeline";
 // Stored conversion rows, kept out of `crud.ts` so the inventory-valuation
 // path can read them without closing an import cycle back through it.

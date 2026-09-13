@@ -473,6 +473,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "product.quickCreate": async () =>
     (await import("~/server/product-browser.server")).productHandlers.operations
       .quickCreate,
+  "product.resolveNames": async () =>
+    (await import("~/server/product-browser.server")).productHandlers.operations
+      .resolveNames,
   "product.search": async () =>
     (await import("~/server/product-browser.server")).productHandlers.operations
       .search,

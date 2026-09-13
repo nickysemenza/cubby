@@ -127,6 +127,11 @@ for (const [key, binding] of Object.entries(ENTITY_BINDINGS)) {
   });
 }
 
+const passesUndefinedThrough = (schema: z.ZodType): boolean => {
+  const parsed = schema.safeParse(undefined);
+  return parsed.success && parsed.data === undefined;
+};
+
 describe("create-input shapes track their Drizzle tables", () => {
   it("binds every entity with a crud contract", () => {
     // Guards the loop above against silently iterating nothing.
@@ -159,10 +164,12 @@ describe("create-input shapes track their Drizzle tables", () => {
           (field) =>
             !SERVER_MINTED_COLUMNS.has(field) &&
             !(field in exempt) &&
-            // Absent, or present but accepting `undefined` — both mean a
-            // caller can omit a value the column has no way to fill.
+            // Absent, or present but letting `undefined` THROUGH — both mean
+            // a caller can omit a value the column has no way to fill. A
+            // schema `.default()` fills it itself (`manufacturer`), so that
+            // parses undefined into a value and is supplied.
             (createFields[field] === undefined ||
-              createFields[field].safeParse(undefined).success),
+              passesUndefinedThrough(createFields[field])),
         );
       expect(missing).toEqual([]);
     },

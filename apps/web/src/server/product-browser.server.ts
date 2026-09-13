@@ -30,12 +30,14 @@ import {
   markProductsUsdaUnavailableWorkflow,
   mergeProductsWorkflow,
   quickCreateProductWorkflow,
+  resolveProductNamesWorkflow,
   searchProductsWorkflow,
   setProductProjectUsesWorkflow,
 } from "~/server/workflows/product.server";
 
 export const productHandlers = implementOperationDomain(productContract, {
   search: searchProductsWorkflow,
+  resolveNames: resolveProductNamesWorkflow,
   summaries: getProductSummariesWorkflow,
   quantitySummaries: getProductQuantitySummariesWorkflow,
   inventoryEntriesByIds: getProductInventoryEntriesWorkflow,

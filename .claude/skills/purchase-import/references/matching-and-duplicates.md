@@ -21,11 +21,13 @@ label, vendor, and order ID where available. It ranks candidates only.
 
 ## Generic mutation batches
 
-`create_products`, `update_products`, `create_expenses`, `update_expenses`,
-`update_tasks`, `create_financial_transactions`, and
-`update_financial_transactions` process at most 50 items in request order.
-Each item succeeds or fails independently. Validate all proposed rows before
-calling a batch, then reconcile its ordered results with the approval table.
+`entity` runs one create/update at a time. `entity_batch` takes up to 50
+create/update commands — any mix of entities — and runs them in request order;
+each item succeeds or fails independently and carries the same validation,
+side effects and result shape as the single call. `entity bulkUpdate` is the
+other multi-row write: one field patch over `ids[]` (≤500) for the few fields
+each entity allows. Validate all proposed rows before calling a batch, then
+reconcile its ordered results with the approval table.
 
 Do not retry a whole batch blindly. Retry only failed indices after correcting
 the cause, and re-read a row when the failure may reflect a concurrent write.
@@ -50,9 +52,8 @@ treat a near-exact hit as a duplicate to resolve, not a new Product: a
 single-best-match search silently hides the real duplicate behind a
 similarly-named different size. Prefer consolidating onto the record that
 already carries images, model, price, or expenses, then add the missing id kind
-to it — use `merge_entity` with `entity: "product"` for the consolidation
-itself rather than hand
-copying fields and deleting the loser; it moves external ids, inventory,
+to it — use `entity {action:"merge", entity:"product", …}` for the
+consolidation itself rather than hand copying fields and deleting the loser; it moves external ids, inventory,
 expenses, images, unit mappings, tasks, project-uses, and wish-candidates onto
 the survivor, and sums same-location inventory rather than dropping it. A
 retailer may also reuse one SKU for unrelated things — Home Depot files
@@ -61,6 +62,7 @@ identity from a SKU attached to an adjustment line.
 
 For a bogus duplicate Purchase, preview the operation, delete its bogus
 Expenses, and re-read it. Delete the Purchase only once it is empty, through
-`delete_empty_purchases`; that guarded operation must refuse live Expenses and
-Financial Transactions. Purchase deletion is identity cleanup, not spend or
-settlement cleanup.
+`entity delete purchase`. That operation does NOT refuse a non-empty Purchase:
+live Expenses and Financial Transactions are detached (`purchaseId` cleared)
+and survive as orphans, so an empty re-read is the guard. Purchase deletion is
+identity cleanup, not spend or settlement cleanup.

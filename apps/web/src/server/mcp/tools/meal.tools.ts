@@ -1,7 +1,8 @@
 import {
   mealAddRecipeInput,
-  getMealPreparationsInput,
-  getMealPreparationsOut,
+  getMealPreparationsMcpInput,
+  getMealPreparationsMcpOut,
+  type MealPreparationNutritionDetail,
   mealMcpOut,
   mealRecipeIdInput,
   mealScale,
@@ -11,6 +12,10 @@ import {
   saveMealRecipePreparationInput,
   saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
+import type {
+  NutritionTotals,
+  NutritionTotalsPartial,
+} from "@cubby/schemas/nutrition";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -24,16 +29,51 @@ import {
   WRITE_CLOSED,
 } from "./_shared";
 
+/** Keep cost; keep all, only `kcal`, or none of the nutrient estimates. */
+const trimNutrition =
+  (detail: MealPreparationNutritionDetail) =>
+  (totals: NutritionTotals): NutritionTotalsPartial => {
+    if (detail === "full") return totals;
+    if (detail === "kcal")
+      return { cost: totals.cost, nutrition: { kcal: totals.nutrition.kcal } };
+    return { cost: totals.cost, nutrition: {} };
+  };
+
 export function registerMealTools(server: McpServer) {
   registerMcpTool(server, {
     name: "get_meal_preparations",
     description:
-      "Read recipe preparations made by or served at a meal, including projected and confirmed nutrition.",
-    inputSchema: getMealPreparationsInput,
-    outputSchema: getMealPreparationsOut,
+      "Read recipe preparations made by or served at a meal, including projected and confirmed nutrition. `nutrition` trims every totals block: `full` (default) carries all 22 nutrients, `kcal` keeps only calories, `none` keeps cost alone — pick `kcal`/`none` when you are reading portions or yields rather than nutrition.",
+    inputSchema: getMealPreparationsMcpInput,
+    outputSchema: getMealPreparationsMcpOut,
     annotations: READ_ONLY_CLOSED,
-    handler: async (params, extra) =>
-      getCaller(extra).meal.getPreparations(params),
+    handler: async (params, extra) => {
+      const view = await getCaller(extra).meal.getPreparations({
+        mealId: params.mealId,
+      });
+      const project = trimNutrition(params.nutrition);
+      return {
+        mealId: view.mealId,
+        preparations: view.preparations.map((preparation) => ({
+          ...preparation,
+          totals: project(preparation.totals),
+          portions: preparation.portions.map((portion) => ({
+            ...portion,
+            totals: project(portion.totals),
+          })),
+        })),
+        totals: {
+          confirmed: {
+            ...view.totals.confirmed,
+            totals: project(view.totals.confirmed.totals),
+          },
+          projected: {
+            ...view.totals.projected,
+            totals: project(view.totals.projected.totals),
+          },
+        },
+      };
+    },
   });
 
   registerMcpTool(server, {

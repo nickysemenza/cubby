@@ -1,6 +1,10 @@
 import { referentialLivenessViolationSchema } from "@cubby/schemas/entity-integrity";
 import { problemsCountSchema } from "@cubby/schemas/mcp";
+import { getMealPreparationsOut } from "@cubby/schemas/meal";
+import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import { productResolveNamesOut } from "@cubby/schemas/product";
 import { expenseAnalyticsOut } from "@cubby/schemas/project";
+import { recipeCostingExplain } from "@cubby/schemas/recipe-shared";
 import { similarEntitiesOut } from "@cubby/schemas/search";
 import type { McpToolCallTelemetry } from "@cubby/schemas/telemetry";
 import { describe, expect, it, vi } from "vitest";
@@ -9,6 +13,26 @@ import { mock } from "~/lib/test/mock-schema";
 
 import { callMcpTool } from "./mcp-test-utils";
 import { createMcpServer } from "./server";
+
+/** The mock generator can't satisfy the coverage refine; build totals by hand. */
+const knownTotals: NutritionTotals = {
+  cost: {
+    status: "complete",
+    lower: 1.5,
+    upper: null,
+    coverage: { covered: 2, total: 2 },
+  },
+  nutrition: buildNutrition((key) =>
+    key === "kcal"
+      ? {
+          status: "complete",
+          lower: 120,
+          upper: null,
+          coverage: { covered: 2, total: 2 },
+        }
+      : { status: "pending", reason: "totals_missing" },
+  ),
+};
 
 describe("MCP workflow tools", () => {
   it("routes counts-only problem triage to the cheap caller port", async () => {
@@ -177,5 +201,115 @@ describe("MCP workflow tools", () => {
     expect(result.isError).not.toBe(true);
     expect(readSimilar).toHaveBeenCalledOnce();
     expect(strongSimilar).not.toHaveBeenCalled();
+  });
+
+  it("resolve_products is a pure lookup that forwards trimmed names", async () => {
+    const resolveNames = vi.fn(async () => mock(productResolveNamesOut));
+    const result = await callMcpTool(
+      createMcpServer(),
+      "resolve_products",
+      { names: ["Lee Kum Kee Premium Soy Sauce, 500 ml", "zzz"] },
+      { product: { resolveNames } },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(resolveNames).toHaveBeenCalledWith({
+      names: ["Lee Kum Kee Premium Soy Sauce, 500 ml", "zzz"],
+    });
+    expect(result.structuredContent).toMatchObject({
+      results: expect.any(Array),
+    });
+  });
+
+  it("explain_recipe_costing detail=lines drops both totals blocks and drift", async () => {
+    const explain = mock(recipeCostingExplain, {
+      overrides: {
+        persisted: { totals: knownTotals },
+        computed: { totals: knownTotals },
+      },
+    });
+    const explainCosting = vi.fn(async () => explain);
+    const server = createMcpServer();
+
+    const full = await callMcpTool(
+      server,
+      "explain_recipe_costing",
+      { id: "RCP-4K7M" },
+      { recipe: { explainCosting } },
+    );
+    const lines = await callMcpTool(
+      server,
+      "explain_recipe_costing",
+      { id: "RCP-4K7M", detail: "lines" },
+      { recipe: { explainCosting } },
+    );
+
+    expect(full.isError).not.toBe(true);
+    expect(lines.isError).not.toBe(true);
+    expect(full.structuredContent).toHaveProperty("drift");
+    expect(full.structuredContent).toHaveProperty("computed.totals");
+    expect(lines.structuredContent).not.toHaveProperty("drift");
+    expect(lines.structuredContent).not.toHaveProperty("computed.totals");
+    expect(lines.structuredContent).not.toHaveProperty("persisted.totals");
+    expect(lines.structuredContent).toMatchObject({
+      detail: "lines",
+      coverage: {
+        cost: explain.computed.totals.cost,
+        kcal: explain.computed.totals.nutrition.kcal,
+      },
+      computed: { diagnostics: explain.computed.diagnostics },
+    });
+  });
+
+  it("get_meal_preparations nutrition=kcal keeps cost and only the kcal estimate", async () => {
+    const view = mock(getMealPreparationsOut, {
+      overrides: {
+        preparations: [],
+        totals: {
+          confirmed: { totals: knownTotals },
+          projected: { totals: knownTotals },
+        },
+      },
+    });
+    const getPreparations = vi.fn(async () => view);
+    const server = createMcpServer();
+
+    const kcal = await callMcpTool(
+      server,
+      "get_meal_preparations",
+      { mealId: view.mealId, nutrition: "kcal" },
+      { meal: { getPreparations } },
+    );
+    const none = await callMcpTool(
+      server,
+      "get_meal_preparations",
+      { mealId: view.mealId, nutrition: "none" },
+      { meal: { getPreparations } },
+    );
+
+    expect(kcal.isError).not.toBe(true);
+    expect(none.isError).not.toBe(true);
+    expect(getPreparations).toHaveBeenCalledWith({ mealId: view.mealId });
+    expect(kcal.structuredContent).toMatchObject({
+      totals: {
+        confirmed: {
+          totals: {
+            cost: view.totals.confirmed.totals.cost,
+            nutrition: { kcal: view.totals.confirmed.totals.nutrition.kcal },
+          },
+        },
+      },
+    });
+    expect(
+      JSON.stringify(kcal.structuredContent).match(/"protein"/g) ?? [],
+    ).toHaveLength(0);
+    expect(none.structuredContent).toMatchObject({
+      totals: {
+        projected: {
+          totals: { cost: view.totals.projected.totals.cost, nutrition: {} },
+        },
+      },
+    });
+    expect(JSON.stringify(none.structuredContent)).not.toContain('"kcal"');
   });
 });

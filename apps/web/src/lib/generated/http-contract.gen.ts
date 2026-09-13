@@ -800,6 +800,11 @@ export const httpContract = httpContractBuilder.router(
         "quickCreate",
         contracts.productContract.ops["quickCreate"],
       ),
+      resolveNames: rpcQuery(
+        "product",
+        "resolveNames",
+        contracts.productContract.ops["resolveNames"],
+      ),
       search: rpcQueryPost(
         "product",
         "search",
