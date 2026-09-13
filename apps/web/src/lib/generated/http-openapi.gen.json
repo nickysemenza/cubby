@@ -23583,11 +23583,6 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "expense": {
-            "type": "integer",
-            "minimum": -9007199254740991,
-            "maximum": 9007199254740991
-          },
           "financialAccount": {
             "type": "integer",
             "minimum": -9007199254740991,
@@ -23598,12 +23593,17 @@
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "image": {
+          "wish": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
           },
-          "wish": {
+          "expense": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "image": {
             "type": "integer",
             "minimum": -9007199254740991,
             "maximum": 9007199254740991
@@ -23636,11 +23636,11 @@
           "task",
           "vendor",
           "purchase",
-          "expense",
           "financialAccount",
           "financialTransaction",
-          "image",
           "wish",
+          "expense",
+          "image",
           "planting",
           "gardenEntry",
           "usdaFoods"
@@ -43735,7 +43735,7 @@
           "settlement_mismatch"
         ]
       },
-      "PurchaseDocumentKind": {
+      "PurchaseFieldsPurchaseDocumentKind": {
         "type": "string",
         "enum": [
           "order_confirmation",
@@ -43752,6 +43752,10 @@
           "specification",
           "other"
         ]
+      },
+      "PurchaseFieldsPurchaseReconciliation": {
+        "type": "string",
+        "enum": ["unknown", "match", "refund_adjusted", "mismatch"]
       },
       "PurchaseFinancialSettlementMismatch": {
         "type": "object",
@@ -43820,6 +43824,42 @@
           "financialReconciliation"
         ],
         "additionalProperties": false
+      },
+      "PurchaseImages": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "$ref": "#/components/schemas/ImageShortcode"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "filename": {
+              "type": "string"
+            },
+            "contentType": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "documentKind": {
+              "$ref": "#/components/schemas/PurchaseFieldsPurchaseDocumentKind"
+            }
+          },
+          "required": [
+            "id",
+            "url",
+            "filename",
+            "contentType",
+            "key",
+            "documentKind"
+          ],
+          "additionalProperties": false
+        }
       },
       "PurchaselessExitExpense": {
         "type": "object",
@@ -43960,7 +44000,7 @@
             "$ref": "#/components/schemas/Money"
           },
           "reconciliation": {
-            "$ref": "#/components/schemas/PurchaseReconciliation"
+            "$ref": "#/components/schemas/PurchaseFieldsPurchaseReconciliation"
           },
           "financialReconciliation": {
             "$ref": "#/components/schemas/FinancialReconciliationSummary"
@@ -43971,40 +44011,7 @@
             "maximum": 9007199254740991
           },
           "images": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "properties": {
-                "id": {
-                  "$ref": "#/components/schemas/ImageShortcode"
-                },
-                "url": {
-                  "type": "string",
-                  "format": "uri"
-                },
-                "filename": {
-                  "type": "string"
-                },
-                "contentType": {
-                  "type": "string"
-                },
-                "key": {
-                  "type": "string"
-                },
-                "documentKind": {
-                  "$ref": "#/components/schemas/PurchaseDocumentKind"
-                }
-              },
-              "required": [
-                "id",
-                "url",
-                "filename",
-                "contentType",
-                "key",
-                "documentKind"
-              ],
-              "additionalProperties": false
-            }
+            "$ref": "#/components/schemas/PurchaseImages"
           },
           "dataQuality": {
             "$ref": "#/components/schemas/DataQuality"
@@ -44123,10 +44130,6 @@
         "items": {
           "$ref": "#/components/schemas/PurchaseProductOut"
         }
-      },
-      "PurchaseReconciliation": {
-        "type": "string",
-        "enum": ["unknown", "match", "refund_adjusted", "mismatch"]
       },
       "PurchaseShortcode": {
         "type": "string",

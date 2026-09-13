@@ -1,9 +1,12 @@
 import {
   defineEntityAdapter,
-  entityMutationReferences,
+  deletedWithImages,
 } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 import {
   createRecipe,
@@ -81,11 +84,7 @@ export const recipeEntityAdapter = defineEntityAdapter({
       await Promise.all([
         runMutationSideEffectsForEntities(
           ctx.db,
-          ids.map((entityId) => ({
-            action: "deleted" as const,
-            entity: { entity: "recipe" as const, id: entityId },
-            source: "recipe.delete",
-          })),
+          mutationEvents("recipe", "deleted", ids, "recipe.delete"),
         ),
         parentIds.length > 0
           ? ctx.services.recipeCosting.dispatchRecompute(parentIds, {
@@ -94,10 +93,11 @@ export const recipeEntityAdapter = defineEntityAdapter({
           : Promise.resolve(0),
       ]);
       return {
-        deletedReferences: [
-          ...entityMutationReferences("recipe", shortcodes),
-          ...entityMutationReferences("image", deletedImageShortcodes),
-        ],
+        deletedReferences: deletedWithImages(
+          "recipe",
+          shortcodes,
+          deletedImageShortcodes,
+        ),
         detachedImageKeys,
       };
     },

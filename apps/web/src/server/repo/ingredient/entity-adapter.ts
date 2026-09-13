@@ -15,7 +15,10 @@ import {
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { getIngredientByID as getIngredientDetail } from "~/server/services/ingredient.service";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 import {
   createIngredient,
@@ -79,11 +82,12 @@ export const ingredientEntityAdapter = defineEntityAdapter({
       );
       await runMutationSideEffectsForEntities(
         ctx.db,
-        updatedIds.map((entityId) => ({
-          action: "updated" as const,
-          entity: { entity: "ingredient" as const, id: entityId },
-          source: "ingredient.bulkUpdate",
-        })),
+        mutationEvents(
+          "ingredient",
+          "updated",
+          updatedIds,
+          "ingredient.bulkUpdate",
+        ),
       );
       const updatedSet = new Set(updatedIds);
       return {
@@ -98,11 +102,7 @@ export const ingredientEntityAdapter = defineEntityAdapter({
       await deleteIngredients(ctx.db, ids, ctx.actorContext);
       await runMutationSideEffectsForEntities(
         ctx.db,
-        ids.map((entityId) => ({
-          action: "deleted" as const,
-          entity: { entity: "ingredient" as const, id: entityId },
-          source: "ingredient.delete",
-        })),
+        mutationEvents("ingredient", "deleted", ids, "ingredient.delete"),
       );
       return {
         deletedReferences: entityMutationReferences("ingredient", shortcodes),
@@ -129,11 +129,12 @@ export const ingredientEntityAdapter = defineEntityAdapter({
       );
       await runMutationSideEffectsForEntities(
         ctx.db,
-        summary.deletedEntityIds.map((deletedEntityId) => ({
-          action: "deleted" as const,
-          entity: { entity: "ingredient" as const, id: deletedEntityId },
-          source: "ingredient.merge",
-        })),
+        mutationEvents(
+          "ingredient",
+          "deleted",
+          summary.deletedEntityIds,
+          "ingredient.merge",
+        ),
       );
       return {
         output: {

@@ -1,4 +1,7 @@
-import { parseEntityDeclarationMetadata } from "../../packages/schemas/src/entity-definitions/definition.ts";
+import {
+  FILTER_KINDS,
+  parseEntityDeclarationMetadata,
+} from "../../packages/schemas/src/entity-definitions/definition.ts";
 import type {
   EntityDeclarationMetadata,
   EntityFieldModelMetadata,
@@ -40,16 +43,7 @@ const entityPorts = (
   };
 };
 
-export const filterKinds = [
-  "text",
-  "select",
-  "multiselect",
-  "presence",
-  "boolean",
-  "id",
-  "idMulti",
-  "range",
-] as const;
+const filterKinds = FILTER_KINDS;
 
 const compileEditIntents = (
   value: NonNullable<EntityDeclarationMetadata["model"]>["intents"],

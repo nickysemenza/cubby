@@ -43,8 +43,10 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   document by `apps/web/scripts/generate-http-openapi.ts` into `Generated/OperationRoutes.swift`
   (`pnpm --filter @cubby/web generate:http-api`; `pnpm check` fails when stale). Look routes up
   by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. `resources.<entity>.list`
-  and `resources.<entity>.get` are generated automatically for every entity (the generic Browse
-  screens need them all); `resources.*.create/update/delete` are opt-in and, like the RPC operation
+  and `resources.<entity>.get` are generated automatically for whichever entities actually have that
+  operation in the OpenAPI document — not every entity (`image` has only `update`/`delete`;
+  `cookbook` and `usda-food` have neither, per `Generated/EntityOperations.swift`'s `httpActions`);
+  `resources.*.create/update/delete` are opt-in and, like the RPC operation
   ids CubbyKit calls, are hand-kept in `openapi/native-operations.json`, sorted and deduplicated —
   listing an automatic list/get id there is rejected. `openapi/openapi-generator-config.yaml`
   and `Generated/EntityOperations.swift` are themselves emitter-owned, derived from that allowlist
@@ -91,7 +93,7 @@ generate --spec apps/apple/project.yml --use-cache`. If a build fails with the l
   typed client and schema types, from `apps/web`'s committed OpenAPI document
   (`apps/web/src/lib/generated/http-openapi.gen.json`). The entire `CubbyAPI` target is generated,
   which is why it is excluded from the `swift format` targets in `scripts/ci-scope.ts`. Regenerate
-  with `apps/apple/scripts/generate-openapi.sh`; `scripts/check-openapi-drift.sh` fails when stale.
+  with `apps/apple/scripts/generate-openapi.sh`; `apps/apple/scripts/check-openapi-drift.sh` fails when stale.
 - `CubbyKit/Sources/CubbyKit/Generated/{OperationRoutes,EntityOperations}.swift` — the runtime
   route table (`OperationRoute.all`) and the per-entity `list`/`get`/image-attach switches, from
   `apps/web/scripts/generate-http-openapi.ts` reading `openapi/native-operations.json`.

@@ -63,6 +63,20 @@ export const entityMutationReferences = <E extends EntitySchemaBindingEntity>(
   ids: readonly string[],
 ): EntityMutationReference<E>[] => ids.map((id) => ({ entity, id }));
 
+/**
+ * `deletedReferences` for a delete that also detached images: the entity's
+ * own ids plus whatever image shortcodes came off it. Reused across every
+ * adapter whose delete detaches images rather than writing it out twice.
+ */
+export const deletedWithImages = <E extends EntitySchemaBindingEntity>(
+  entity: E,
+  shortcodes: readonly string[],
+  imageShortcodes: readonly string[],
+): EntityMutationReference[] => [
+  ...entityMutationReferences(entity, shortcodes),
+  ...entityMutationReferences("image", imageShortcodes),
+];
+
 interface EntityKernelDeleteResult {
   deletedReferences: EntityMutationReference[];
   detachedImageKeys?: string[];

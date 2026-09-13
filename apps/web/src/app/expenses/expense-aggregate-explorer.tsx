@@ -32,7 +32,7 @@ import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { Switch } from "~/components/ui/switch";
 import { copyText } from "~/lib/clipboard";
-import { cn, formatCount, formatCurrency } from "~/lib/utils";
+import { cn, formatCount, formatCurrency, formatPercent } from "~/lib/utils";
 
 import {
   canSwapExpenseAnalyzeAxes,
@@ -284,11 +284,7 @@ export function formatExpenseAnalyzeValue(
   if (projection !== "percent") return formatMetric(value, metric);
   if (value === null) return "—";
   if (value === Number.POSITIVE_INFINITY) return "New";
-  return new Intl.NumberFormat("en-US", {
-    style: "percent",
-    maximumFractionDigits: 1,
-    signDisplay: "exceptZero",
-  }).format(value);
+  return formatPercent(value, { signDisplay: "exceptZero" });
 }
 
 export function canCompareExpenseAnalysis(

@@ -105,4 +105,26 @@ struct MappingTests {
         #expect(today.mealKind == "cooked")
         #expect(today.recipeNames == ["Sample Recipe"])
     }
+
+    /// `UploadInput.init(entity:)` derives `entityType` from `EntityKey.rawValue.uppercased()`
+    /// instead of hand-listing cases, so every case of the generated `EntityImage` enum must be
+    /// reachable from some `EntityKey`. Regression for a hand-listed switch that silently
+    /// dropped a newly added case (e.g. `gardenEntry`) when the OpenAPI enum grew.
+    @Test func uploadInputEntityTypeCoversEveryEntityImageCase() throws {
+        for imageCase in Components.Schemas.EntityImage.allCases {
+            let entity = try #require(
+                EntityKey.allCases.first { $0.rawValue.uppercased() == imageCase.rawValue },
+                "No EntityKey maps to EntityImage case \(imageCase.rawValue)"
+            )
+            let input = UploadInput(filename: "photo.jpg", size: 10, format: .jpeg, entity: entity)
+            #expect(input.entityType == imageCase)
+        }
+    }
+
+    /// An entity outside `EntityImage`'s enum (e.g. `vendor`) uploads untyped: `entityType` is
+    /// `nil`, matching the old hand-listed switch's `default: break` semantics.
+    @Test func uploadInputEntityTypeIsNilOutsideEntityImage() throws {
+        let input = UploadInput(filename: "photo.jpg", size: 10, format: .jpeg, entity: .vendor)
+        #expect(input.entityType == nil)
+    }
 }

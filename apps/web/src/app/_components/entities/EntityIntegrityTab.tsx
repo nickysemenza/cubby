@@ -7,6 +7,7 @@ import type {
   ReferentialLivenessViolation,
   RelationshipProvenance,
 } from "@cubby/schemas/entity-integrity";
+import { humanize } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Database, HeartPulse, Waypoints } from "lucide-react";
 import type { ReactNode } from "react";
@@ -253,10 +254,7 @@ function PhysicalRelationshipGraph({ catalog }: { catalog: IntegrityCatalog }) {
  */
 const entityLabel = (entity: Entity) => {
   if (isBrowserRoutedEntity(entity)) return entities[entity].label;
-  const words = String(entity)
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/-/g, " ");
-  return words[0]?.toUpperCase() + words.slice(1);
+  return humanize(String(entity));
 };
 
 /** One step of an FK path (column plus direction) — a dense inline token. */

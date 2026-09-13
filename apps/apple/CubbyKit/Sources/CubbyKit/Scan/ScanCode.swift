@@ -73,7 +73,7 @@ extension ScanCode {
 /// Cubby shortcodes: `<PREFIX>-<4 chars>` over a 31-character alphabet with the OCR-confusable
 /// characters removed. Prefixes come from the generated entity catalog, never a hand-kept list.
 public enum Shortcode {
-    public static let alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
+    public static let alphabet = EntityCatalog.shortcodeAlphabet
 
     public struct Parsed: Sendable, Hashable {
         public let key: EntityKey
@@ -86,7 +86,9 @@ public enum Shortcode {
         guard let dash = normalized.firstIndex(of: "-"), dash > normalized.startIndex else { return nil }
         let prefix = String(normalized[...dash])
         let body = String(normalized[normalized.index(after: dash)...])
-        guard body.count == 4, body.allSatisfy({ alphabet.contains($0) }) else { return nil }
+        guard body.count == EntityCatalog.shortcodeBodyLength, body.allSatisfy({ alphabet.contains($0) }) else {
+            return nil
+        }
         guard let descriptor = EntityCatalog.all.first(where: { $0.shortcodePrefix == prefix }) else {
             return nil
         }

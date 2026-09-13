@@ -650,21 +650,20 @@ extension DashboardCounts {
 extension UploadInput {
     /// `image.uploadImage`'s `entityType` names the owning table for storage placement; an entity
     /// outside its enum uploads untyped.
+    ///
+    /// `Components.Schemas.EntityImage`'s raw values are `EntityKey.rawValue`, upper-cased
+    /// (`"gardenEntry"` -> `"GARDENENTRY"`), so deriving the payload from `entity.rawValue`
+    /// instead of hand-listing cases keeps this in sync with the OpenAPI enum automatically —
+    /// a hand-listed switch previously dropped `gardenEntry` when it was added upstream. An
+    /// entity outside the enum (e.g. `vendor`) makes the `rawValue:` init return `nil`, which is
+    /// the same "uploads untyped" behavior the old `default: break` produced.
     init(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey) {
         var input = UploadInput(filename: filename, size: size, contentType: .imageJpeg)
         switch format {
         case .jpeg: break
         case .png: input.contentType = .imagePng
         }
-        switch entity {
-        case .product: input.entityType = .product
-        case .recipe: input.entityType = .recipe
-        case .cookbook: input.entityType = .cookbook
-        case .location: input.entityType = .location
-        case .project: input.entityType = .project
-        case .purchase: input.entityType = .purchase
-        default: break
-        }
+        input.entityType = Components.Schemas.EntityImage(rawValue: entity.rawValue.uppercased())
         self = input
     }
 }

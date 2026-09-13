@@ -2,6 +2,9 @@ import { customAlphabet } from "nanoid";
 import { z } from "zod";
 import { mapRecord, recordKeys } from "./record";
 import { capitalize } from "./text-case";
+import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
+
+export { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
 import {
   LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_PREFIX,
@@ -14,14 +17,7 @@ export {
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
 
-/**
- * Character set: 31 chars — the digits and uppercase letters minus the
- * scan/OCR-confusable ones (0/O, 1/I/L). Four of them give 31^4 = 923,521
- * codes per prefix, against a largest table of ~1,800 rows.
- */
-export const SHORTCODE_CHARS = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
-
-const BODY_PATTERN = `[${SHORTCODE_CHARS}]{4}`;
+const BODY_PATTERN = `[${SHORTCODE_CHARS}]{${SHORTCODE_BODY_LENGTH}}`;
 const BODY_RE = new RegExp(`^${BODY_PATTERN}$`);
 
 /** Every canonical prefix that may legitimately cross an API or MCP boundary. */
@@ -212,7 +208,7 @@ export type WishShortcode = ShortcodeFor<"wish">;
 /** Any entity's shortcode, for surfaces that hold a code before resolving it. */
 export type AnyShortcode = z.infer<(typeof SHORTCODE_SCHEMA)[ShortcodeType]>;
 
-const shortcodeBody = customAlphabet(SHORTCODE_CHARS, 4);
+const shortcodeBody = customAlphabet(SHORTCODE_CHARS, SHORTCODE_BODY_LENGTH);
 
 /**
  * Generate a shortcode for `type`. Uniqueness is NOT checked here — the DB

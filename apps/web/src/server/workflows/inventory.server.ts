@@ -42,7 +42,10 @@ import {
   resolveLiveShortcodes,
 } from "~/server/repo/shortcode-resolver";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import {
   resolveScanStrays as resolveScanStraysService,
@@ -86,11 +89,7 @@ const inventoryMutation = <
       .effect("sideEffectsRun", async ({ context }, { entityIds }) =>
         runMutationSideEffectsForEntities(
           context.db,
-          entityIds.map((id) => ({
-            action: "updated" as const,
-            entity: { entity: "inventory" as const, id },
-            source: name,
-          })),
+          mutationEvents("inventory", "updated", entityIds, name),
         ),
       )
       .output(({ written }) => ({
@@ -296,27 +295,22 @@ export const bulkDiscardInventoryWorkflow = bindWorkflow(
       await runMutationSideEffectsForEntities(
         context.db,
         result.items.flatMap((line) => [
-          {
-            action: "created" as const,
-            entity: { entity: "expense" as const, id: line.expenseId },
-            source: "inventory.bulkDiscard",
-          },
+          ...mutationEvents(
+            "expense",
+            "created",
+            [line.expenseId],
+            "inventory.bulkDiscard",
+          ),
           // An entry that emptied was soft-deleted; one that was drawn down was
           // updated. Reporting the wrong one leaves a removed row in the search
           // index.
           ...(line.inventory
-            ? [
-                {
-                  action: line.inventory.removed
-                    ? ("deleted" as const)
-                    : ("updated" as const),
-                  entity: {
-                    entity: "inventory" as const,
-                    id: line.inventory.entryId,
-                  },
-                  source: "inventory.bulkDiscard",
-                },
-              ]
+            ? mutationEvents(
+                "inventory",
+                line.inventory.removed ? "deleted" : "updated",
+                [line.inventory.entryId],
+                "inventory.bulkDiscard",
+              )
             : []),
         ]),
       );
@@ -524,16 +518,18 @@ export const reconcileInventorySessionWorkflow = bindWorkflow(
       ) => {
         if (!recomputeNeeded) return;
         await runMutationSideEffectsForEntities(db, [
-          ...survivingEntityIds.map((entityId) => ({
-            action: "updated" as const,
-            entity: { entity: "inventory" as const, id: entityId },
-            source: "inventory.reconcileSession",
-          })),
-          ...removedIds.map((entityId) => ({
-            action: "deleted" as const,
-            entity: { entity: "inventory" as const, id: entityId },
-            source: "inventory.reconcileSession",
-          })),
+          ...mutationEvents(
+            "inventory",
+            "updated",
+            survivingEntityIds,
+            "inventory.reconcileSession",
+          ),
+          ...mutationEvents(
+            "inventory",
+            "deleted",
+            removedIds,
+            "inventory.reconcileSession",
+          ),
         ]);
       },
     )

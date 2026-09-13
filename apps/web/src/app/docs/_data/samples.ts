@@ -2,6 +2,7 @@ import { locationShortcode } from "@cubby/schemas/identifiers";
 import type { infLocation, LocationType } from "@cubby/schemas/location";
 import { buildNutrition, type MeasureEstimate } from "@cubby/schemas/nutrition";
 import type { unitMappingWithMetadata } from "@cubby/schemas/unitmapping";
+import { SHORTCODE_CHARS } from "@cubby/shared";
 import { z } from "zod";
 
 import type { entitySummaryDataSchema } from "~/components/entity/entity-summary-card";
@@ -14,7 +15,7 @@ import type { entitySummaryDataSchema } from "~/components/entity/entity-summary
 const now = new Date(0);
 const ts = { createdAt: now, updatedAt: now };
 let locationSeq = 0;
-const shortcodeAlphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+const shortcodeAlphabet = SHORTCODE_CHARS;
 
 // Helper to create a location
 const makeLocation = (

@@ -22,10 +22,17 @@ pub struct Amount {
 
 impl From<recipebridge::WAmount> for Amount {
     fn from(amount: recipebridge::WAmount) -> Self {
+        // Exhaustive destructure (no `..`): a field added to `WAmount` upstream fails
+        // this to compile instead of silently being dropped from the FFI boundary.
+        let recipebridge::WAmount {
+            unit,
+            value,
+            upper_value,
+        } = amount;
         Self {
-            unit: amount.unit,
-            value: amount.value,
-            upper_value: amount.upper_value,
+            unit,
+            value,
+            upper_value,
         }
     }
 }
@@ -62,10 +69,11 @@ impl ParsedIngredient {
 /// consumer sees.
 #[uniffi::export]
 pub fn parse_ingredient(line: String) -> ParsedIngredient {
-    ParsedIngredient::new(
-        recipebridge::parse_ingredient(&line),
-        recipebridge::format_ingredient(&line),
-    )
+    // One parse for both the structured result and the display string — the earlier
+    // version called `recipebridge::parse_ingredient` and `::format_ingredient`
+    // separately, each running the (non-trivial) parse from scratch on the same line.
+    let (ingredient, display) = recipebridge::parse_and_format_ingredient(&line);
+    ParsedIngredient::new(ingredient, display)
 }
 
 /// The unit-alias vocabulary `parse_ingredient` recognizes for weight/volume

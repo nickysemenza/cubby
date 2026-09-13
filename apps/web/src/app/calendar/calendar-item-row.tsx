@@ -1,4 +1,5 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import { capitalize } from "@cubby/shared";
 
 import { EntityCover } from "~/components/entity/entity-cover";
 import { Badge } from "~/components/ui/badge";
@@ -74,7 +75,7 @@ function CalendarItemCompact({ item }: { item: CalendarItem }) {
       )}
       {item.kind === "project" && item.projectKind && (
         <span className="shrink-0 text-muted-foreground">
-          {item.projectKind[0]?.toUpperCase() + item.projectKind.slice(1)}
+          {capitalize(item.projectKind)}
         </span>
       )}
       {span && (

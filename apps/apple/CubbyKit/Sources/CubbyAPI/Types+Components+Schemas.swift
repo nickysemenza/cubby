@@ -644,16 +644,16 @@ extension Components {
             package var vendor: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/purchase`.
             package var purchase: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/expense`.
-            package var expense: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/financialAccount`.
             package var financialAccount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/financialTransaction`.
             package var financialTransaction: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/image`.
-            package var image: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/wish`.
             package var wish: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/expense`.
+            package var expense: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/image`.
+            package var image: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/planting`.
             package var planting: Swift.Int
             /// - Remark: Generated from `#/components/schemas/DashboardCountsOut/gardenEntry`.
@@ -674,11 +674,11 @@ extension Components {
             ///   - task:
             ///   - vendor:
             ///   - purchase:
-            ///   - expense:
             ///   - financialAccount:
             ///   - financialTransaction:
-            ///   - image:
             ///   - wish:
+            ///   - expense:
+            ///   - image:
             ///   - planting:
             ///   - gardenEntry:
             ///   - usdaFoods:
@@ -694,11 +694,11 @@ extension Components {
                 task: Swift.Int,
                 vendor: Swift.Int,
                 purchase: Swift.Int,
-                expense: Swift.Int,
                 financialAccount: Swift.Int,
                 financialTransaction: Swift.Int,
-                image: Swift.Int,
                 wish: Swift.Int,
+                expense: Swift.Int,
+                image: Swift.Int,
                 planting: Swift.Int,
                 gardenEntry: Swift.Int,
                 usdaFoods: Swift.Int
@@ -714,11 +714,11 @@ extension Components {
                 self.task = task
                 self.vendor = vendor
                 self.purchase = purchase
-                self.expense = expense
                 self.financialAccount = financialAccount
                 self.financialTransaction = financialTransaction
-                self.image = image
                 self.wish = wish
+                self.expense = expense
+                self.image = image
                 self.planting = planting
                 self.gardenEntry = gardenEntry
                 self.usdaFoods = usdaFoods
@@ -735,11 +735,11 @@ extension Components {
                 case task
                 case vendor
                 case purchase
-                case expense
                 case financialAccount
                 case financialTransaction
-                case image
                 case wish
+                case expense
+                case image
                 case planting
                 case gardenEntry
                 case usdaFoods
@@ -790,10 +790,6 @@ extension Components {
                     Swift.Int.self,
                     forKey: .purchase
                 )
-                self.expense = try container.decode(
-                    Swift.Int.self,
-                    forKey: .expense
-                )
                 self.financialAccount = try container.decode(
                     Swift.Int.self,
                     forKey: .financialAccount
@@ -802,13 +798,17 @@ extension Components {
                     Swift.Int.self,
                     forKey: .financialTransaction
                 )
-                self.image = try container.decode(
-                    Swift.Int.self,
-                    forKey: .image
-                )
                 self.wish = try container.decode(
                     Swift.Int.self,
                     forKey: .wish
+                )
+                self.expense = try container.decode(
+                    Swift.Int.self,
+                    forKey: .expense
+                )
+                self.image = try container.decode(
+                    Swift.Int.self,
+                    forKey: .image
                 )
                 self.planting = try container.decode(
                     Swift.Int.self,
@@ -834,11 +834,11 @@ extension Components {
                     "task",
                     "vendor",
                     "purchase",
-                    "expense",
                     "financialAccount",
                     "financialTransaction",
-                    "image",
                     "wish",
+                    "expense",
+                    "image",
                     "planting",
                     "gardenEntry",
                     "usdaFoods"
@@ -16906,8 +16906,8 @@ extension Components {
             case settlementReference = "settlement_reference"
             case settlementMismatch = "settlement_mismatch"
         }
-        /// - Remark: Generated from `#/components/schemas/PurchaseDocumentKind`.
-        @frozen package enum PurchaseDocumentKind: String, Codable, Hashable, Sendable, CaseIterable {
+        /// - Remark: Generated from `#/components/schemas/PurchaseFieldsPurchaseDocumentKind`.
+        @frozen package enum PurchaseFieldsPurchaseDocumentKind: String, Codable, Hashable, Sendable, CaseIterable {
             case orderConfirmation = "order_confirmation"
             case salesOrder = "sales_order"
             case invoice = "invoice"
@@ -16922,6 +16922,97 @@ extension Components {
             case specification = "specification"
             case other = "other"
         }
+        /// - Remark: Generated from `#/components/schemas/PurchaseFieldsPurchaseReconciliation`.
+        @frozen package enum PurchaseFieldsPurchaseReconciliation: String, Codable, Hashable, Sendable, CaseIterable {
+            case unknown = "unknown"
+            case match = "match"
+            case refundAdjusted = "refund_adjusted"
+            case mismatch = "mismatch"
+        }
+        /// - Remark: Generated from `#/components/schemas/PurchaseImages`.
+        package struct PurchaseImagesPayload: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PurchaseImages/id`.
+            package var id: Components.Schemas.ImageShortcode
+            /// - Remark: Generated from `#/components/schemas/PurchaseImages/url`.
+            package var url: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PurchaseImages/filename`.
+            package var filename: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PurchaseImages/contentType`.
+            package var contentType: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PurchaseImages/key`.
+            package var key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PurchaseImages/documentKind`.
+            package var documentKind: Components.Schemas.PurchaseFieldsPurchaseDocumentKind
+            /// Creates a new `PurchaseImagesPayload`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - url:
+            ///   - filename:
+            ///   - contentType:
+            ///   - key:
+            ///   - documentKind:
+            package init(
+                id: Components.Schemas.ImageShortcode,
+                url: Swift.String,
+                filename: Swift.String,
+                contentType: Swift.String,
+                key: Swift.String,
+                documentKind: Components.Schemas.PurchaseFieldsPurchaseDocumentKind
+            ) {
+                self.id = id
+                self.url = url
+                self.filename = filename
+                self.contentType = contentType
+                self.key = key
+                self.documentKind = documentKind
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case url
+                case filename
+                case contentType
+                case key
+                case documentKind
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.ImageShortcode.self,
+                    forKey: .id
+                )
+                self.url = try container.decode(
+                    Swift.String.self,
+                    forKey: .url
+                )
+                self.filename = try container.decode(
+                    Swift.String.self,
+                    forKey: .filename
+                )
+                self.contentType = try container.decode(
+                    Swift.String.self,
+                    forKey: .contentType
+                )
+                self.key = try container.decode(
+                    Swift.String.self,
+                    forKey: .key
+                )
+                self.documentKind = try container.decode(
+                    Components.Schemas.PurchaseFieldsPurchaseDocumentKind.self,
+                    forKey: .documentKind
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "url",
+                    "filename",
+                    "contentType",
+                    "key",
+                    "documentKind"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PurchaseImages`.
+        package typealias PurchaseImages = [Components.Schemas.PurchaseImagesPayload]
         /// - Remark: Generated from `#/components/schemas/PurchaseListPage`.
         package struct PurchaseListPage: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PurchaseListPage/items`.
@@ -16991,97 +17082,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/expenseTotal`.
             package var expenseTotal: Components.Schemas.Money
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/reconciliation`.
-            package var reconciliation: Components.Schemas.PurchaseReconciliation
+            package var reconciliation: Components.Schemas.PurchaseFieldsPurchaseReconciliation
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/financialReconciliation`.
             package var financialReconciliation: Components.Schemas.FinancialReconciliationSummary
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/documentCount`.
             package var documentCount: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/PurchaseOut/ImagesPayload`.
-            package struct ImagesPayloadPayload: Codable, Hashable, Sendable {
-                /// - Remark: Generated from `#/components/schemas/PurchaseOut/ImagesPayload/id`.
-                package var id: Components.Schemas.ImageShortcode
-                /// - Remark: Generated from `#/components/schemas/PurchaseOut/ImagesPayload/url`.
-                package var url: Swift.String
-                /// - Remark: Generated from `#/components/schemas/PurchaseOut/ImagesPayload/filename`.
-                package var filename: Swift.String
-                /// - Remark: Generated from `#/components/schemas/PurchaseOut/ImagesPayload/contentType`.
-                package var contentType: Swift.String
-                /// - Remark: Generated from `#/components/schemas/PurchaseOut/ImagesPayload/key`.
-                package var key: Swift.String
-                /// - Remark: Generated from `#/components/schemas/PurchaseOut/ImagesPayload/documentKind`.
-                package var documentKind: Components.Schemas.PurchaseDocumentKind
-                /// Creates a new `ImagesPayloadPayload`.
-                ///
-                /// - Parameters:
-                ///   - id:
-                ///   - url:
-                ///   - filename:
-                ///   - contentType:
-                ///   - key:
-                ///   - documentKind:
-                package init(
-                    id: Components.Schemas.ImageShortcode,
-                    url: Swift.String,
-                    filename: Swift.String,
-                    contentType: Swift.String,
-                    key: Swift.String,
-                    documentKind: Components.Schemas.PurchaseDocumentKind
-                ) {
-                    self.id = id
-                    self.url = url
-                    self.filename = filename
-                    self.contentType = contentType
-                    self.key = key
-                    self.documentKind = documentKind
-                }
-                package enum CodingKeys: String, CodingKey {
-                    case id
-                    case url
-                    case filename
-                    case contentType
-                    case key
-                    case documentKind
-                }
-                package init(from decoder: any Swift.Decoder) throws {
-                    let container = try decoder.container(keyedBy: CodingKeys.self)
-                    self.id = try container.decode(
-                        Components.Schemas.ImageShortcode.self,
-                        forKey: .id
-                    )
-                    self.url = try container.decode(
-                        Swift.String.self,
-                        forKey: .url
-                    )
-                    self.filename = try container.decode(
-                        Swift.String.self,
-                        forKey: .filename
-                    )
-                    self.contentType = try container.decode(
-                        Swift.String.self,
-                        forKey: .contentType
-                    )
-                    self.key = try container.decode(
-                        Swift.String.self,
-                        forKey: .key
-                    )
-                    self.documentKind = try container.decode(
-                        Components.Schemas.PurchaseDocumentKind.self,
-                        forKey: .documentKind
-                    )
-                    try decoder.ensureNoAdditionalProperties(knownKeys: [
-                        "id",
-                        "url",
-                        "filename",
-                        "contentType",
-                        "key",
-                        "documentKind"
-                    ])
-                }
-            }
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/images`.
-            package typealias ImagesPayload = [Components.Schemas.PurchaseOut.ImagesPayloadPayload]
-            /// - Remark: Generated from `#/components/schemas/PurchaseOut/images`.
-            package var images: Components.Schemas.PurchaseOut.ImagesPayload
+            package var images: Components.Schemas.PurchaseImages
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/dataQuality`.
             package var dataQuality: Components.Schemas.DataQuality
             /// - Remark: Generated from `#/components/schemas/PurchaseOut/createdAt`.
@@ -17125,10 +17132,10 @@ extension Components {
                 expenseCount: Swift.Int,
                 unpricedExpenseCount: Swift.Int,
                 expenseTotal: Components.Schemas.Money,
-                reconciliation: Components.Schemas.PurchaseReconciliation,
+                reconciliation: Components.Schemas.PurchaseFieldsPurchaseReconciliation,
                 financialReconciliation: Components.Schemas.FinancialReconciliationSummary,
                 documentCount: Swift.Int,
-                images: Components.Schemas.PurchaseOut.ImagesPayload,
+                images: Components.Schemas.PurchaseImages,
                 dataQuality: Components.Schemas.DataQuality,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date
@@ -17231,7 +17238,7 @@ extension Components {
                     forKey: .expenseTotal
                 )
                 self.reconciliation = try container.decode(
-                    Components.Schemas.PurchaseReconciliation.self,
+                    Components.Schemas.PurchaseFieldsPurchaseReconciliation.self,
                     forKey: .reconciliation
                 )
                 self.financialReconciliation = try container.decode(
@@ -17243,7 +17250,7 @@ extension Components {
                     forKey: .documentCount
                 )
                 self.images = try container.decode(
-                    Components.Schemas.PurchaseOut.ImagesPayload.self,
+                    Components.Schemas.PurchaseImages.self,
                     forKey: .images
                 )
                 self.dataQuality = try container.decode(
@@ -17281,13 +17288,6 @@ extension Components {
                     "updatedAt"
                 ])
             }
-        }
-        /// - Remark: Generated from `#/components/schemas/PurchaseReconciliation`.
-        @frozen package enum PurchaseReconciliation: String, Codable, Hashable, Sendable, CaseIterable {
-            case unknown = "unknown"
-            case match = "match"
-            case refundAdjusted = "refund_adjusted"
-            case mismatch = "mismatch"
         }
         /// purchase shortcode, e.g. PUR-4K7M
         ///

@@ -21,3 +21,16 @@ export const screamingSnake = <S extends string>(value: S): ScreamingSnake<S> =>
 export const capitalize = <S extends string>(value: S): Capitalize<S> =>
   // SAFETY: `Capitalize<S>` is exactly this transformation.
   `${value.charAt(0).toUpperCase()}${value.slice(1)}` as Capitalize<S>;
+
+/**
+ * An identifier into a human label: splits camelCase and digit-then-letter
+ * boundaries, and underscores/dashes, into spaces, then upper-cases only the
+ * first character of the whole result — every other letter keeps its
+ * original case, so `createdAt` → `Created At` and `data_quality` →
+ * `Data quality`. Matches the table's former per-column-id humanizer
+ * (`useMobileListModel.tsx`'s old `humanizeColumnId`).
+ */
+export const humanize = (value: string): string =>
+  capitalize(
+    value.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]+/g, " "),
+  );

@@ -1,11 +1,17 @@
-import { WAYFINDING_DOMAINS } from "../../../packages/schemas/src/entity-definitions/definition.ts";
+import {
+  FILTER_KINDS,
+  WAYFINDING_DOMAINS,
+} from "../../../packages/schemas/src/entity-definitions/definition.ts";
+import {
+  SHORTCODE_BODY_LENGTH,
+  SHORTCODE_CHARS,
+} from "../../../packages/shared/src/shortcode-alphabet.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import {
   entityFieldControlKinds,
   entityFieldKinds,
 } from "../../../packages/schemas/src/entity-definitions/definition.ts";
-import { filterKinds } from "../compile.ts";
 
 /** Per-entity kernel action roster, as built for `entity-kernel-*` artifacts. */
 export type SwiftKernelContractCases = Readonly<
@@ -248,7 +254,7 @@ export const renderSwiftEntityCatalog = (
   );
   const entityFilterKindEnum = renderStringEnum(
     "EntityFilterKind",
-    filterKinds,
+    FILTER_KINDS,
   );
   // One static per entity rather than a single ~900-line array literal:
   // Release/WMO spent ~650 s inside the SIL optimizer's COWArrayOpt pass
@@ -322,6 +328,8 @@ export const renderSwiftEntityCatalog = (
     "  public let actions: Set<EntityAction>\n" +
     "}\n\n" +
     "public enum EntityCatalog {\n" +
+    `  public static let shortcodeAlphabet: String = "${SHORTCODE_CHARS}"\n` +
+    `  public static let shortcodeBodyLength = ${SHORTCODE_BODY_LENGTH}\n\n` +
     `${descriptors}\n\n` +
     `  public static let all: [EntityDescriptor] = [\n${allEntries}\n  ]\n\n` +
     "  private static let byKey: [EntityKey: EntityDescriptor] = Dictionary(\n" +

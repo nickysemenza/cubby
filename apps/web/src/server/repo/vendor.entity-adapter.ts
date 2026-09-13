@@ -3,7 +3,7 @@ import { mergeVendorsInput, mergeVendorsOut } from "@cubby/schemas/vendor";
 
 import {
   defineEntityAdapter,
-  entityMutationReferences,
+  deletedWithImages,
 } from "~/server/entity-kernel/adapter";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
 
@@ -37,10 +37,11 @@ export const vendorEntityAdapter = defineEntityAdapter({
         ctx.actorContext,
       );
       return {
-        deletedReferences: [
-          ...entityMutationReferences("vendor", ids),
-          ...entityMutationReferences("image", deletedImageShortcodes),
-        ],
+        deletedReferences: deletedWithImages(
+          "vendor",
+          ids,
+          deletedImageShortcodes,
+        ),
         detachedImageKeys,
       };
     },

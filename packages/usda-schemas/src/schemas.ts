@@ -1,3 +1,4 @@
+import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
 
 export const BARCODE_RE = /^\d{8}$|^\d{12,14}$/;
@@ -68,11 +69,7 @@ const DATA_TYPE_LABELS = {
 
 export function dataTypeLabel(dataType: DataType): string {
   return (
-    DATA_TYPE_LABELS[dataType] ??
-    dataType
-      .split("_")
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(" ")
+    DATA_TYPE_LABELS[dataType] ?? dataType.split("_").map(capitalize).join(" ")
   );
 }
 

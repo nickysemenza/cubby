@@ -3,7 +3,10 @@ import {
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/services/expense-pricing.service";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 import {
   createExpense,
@@ -68,11 +71,12 @@ export const expenseEntityAdapter = defineEntityAdapter({
       );
       await runMutationSideEffectsForEntities(
         ctx.db,
-        result.updatedIds.map((entityId) => ({
-          action: "updated" as const,
-          entity: { entity: "expense" as const, id: entityId },
-          source: "expense.bulkUpdate",
-        })),
+        mutationEvents(
+          "expense",
+          "updated",
+          result.updatedIds,
+          "expense.bulkUpdate",
+        ),
       );
       return {
         updatedReferences: entityMutationReferences(

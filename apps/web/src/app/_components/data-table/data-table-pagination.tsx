@@ -9,7 +9,7 @@ import {
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { type QueryTiming, QueryTimingIndicator } from "~/lib/query-timing";
-import { formatCurrency } from "~/lib/utils";
+import { formatCount, formatCurrency } from "~/lib/utils";
 
 import { getCellSelectionStats } from "./cell-selection-stats";
 import { RowsPerPageSelect } from "./rows-per-page-select";
@@ -56,13 +56,10 @@ export function DataTablePagination<TData extends RowData>({
                   {() => {
                     const stats = getCellSelectionStats(table);
                     if (!stats) return null;
-                    const number = new Intl.NumberFormat(undefined, {
-                      maximumFractionDigits: 2,
-                    });
                     const format = (value: number) =>
                       stats.kind === "currency"
                         ? formatCurrency(value)
-                        : number.format(value);
+                        : formatCount(value, 2);
                     return (
                       <span data-selection-stats>
                         Cells: {stats.cellCount}

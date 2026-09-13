@@ -209,9 +209,12 @@ test("local checks retain every required gate and keep stateful verification liv
     manifest.scripts["check:all"]!,
     new RegExp(`--targets=${[...fast, ...extra].join(",")}(?: |$)`),
   );
+  // The guard's own unit test (check-unsafe-identifiers.unit.test.ts) isn't
+  // re-run here: it already matches `script-tests`' `scripts/*.test.ts` glob
+  // (test:scripts), so listing it again would give it two owners.
   assert.equal(
     project.targets.identifiers?.command,
-    "node scripts/check-unsafe-identifiers.ts --include-tests && node --test scripts/check-unsafe-identifiers.unit.test.ts",
+    "node scripts/check-unsafe-identifiers.ts --include-tests",
   );
   for (const name of [
     "soft-delete",

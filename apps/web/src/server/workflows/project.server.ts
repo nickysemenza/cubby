@@ -36,7 +36,10 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 import {
   bindWorkflow,
   defineWorkflowOperation,
@@ -107,16 +110,18 @@ export const projectCreateFromTasksWorkflow = bindWorkflow(
     )
     .effect("effects", async ({ context }, { created }) =>
       runMutationSideEffectsForEntities(context.db, [
-        {
-          action: "created",
-          entity: { entity: "project", id: created.projectEntityId },
-          source: "project.createFromTasks",
-        },
-        ...created.taskEntityIds.map((id) => ({
-          action: "updated" as const,
-          entity: { entity: "task" as const, id },
-          source: "project.createFromTasks",
-        })),
+        ...mutationEvents(
+          "project",
+          "created",
+          [created.projectEntityId],
+          "project.createFromTasks",
+        ),
+        ...mutationEvents(
+          "task",
+          "updated",
+          created.taskEntityIds,
+          "project.createFromTasks",
+        ),
       ]),
     )
     .output(({ created }) => created.output),

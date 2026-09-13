@@ -1,16 +1,16 @@
+import type { FILTER_KINDS } from "@cubby/schemas/entity-definitions/definition";
+import { humanize } from "@cubby/shared";
 import { partition } from "es-toolkit";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
-export type FilterKind =
-  | "text" // substring match
-  | "select" // one enum value
-  | "multiselect" // any-of a set of enum values
-  | "presence" // "has" | "none"
-  | "boolean" // "true" | "false"
-  | "id" // one branded entity id
-  | "idMulti" // any-of a set of branded entity ids
-  | "range"; // preset key expanding to a {from,to} pair
+/**
+ * text: substring match. select: one enum value. multiselect: any-of a set of
+ * enum values. presence: "has" | "none". boolean: "true" | "false". id: one
+ * branded entity id. idMulti: any-of a set of branded entity ids. range:
+ * preset key expanding to a {from,to} pair.
+ */
+export type FilterKind = (typeof FILTER_KINDS)[number];
 
 /** Scalar values accepted by the server-side filter contracts. */
 type FilterScalar = string | number | boolean;
@@ -476,12 +476,7 @@ export function paramToSort<TValue>(value: TValue): SortTerm[] | undefined {
 // counted ("2 locations"), never named. Everything self-describing (text,
 // static picklists, presence predicates) renders in full.
 
-/** `createdAt` / `data_quality` → `Created at` / `Data quality`. */
-export const humanize = (value: string): string =>
-  value
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/^./, (letter) => letter.toUpperCase());
+export { humanize } from "@cubby/shared";
 
 /** Naive plural, sufficient for the entity nouns column ids are built from. */
 const pluralize = (noun: string, count: number): string =>

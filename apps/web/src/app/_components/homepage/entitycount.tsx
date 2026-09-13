@@ -11,9 +11,7 @@ import { entities } from "~/entities/entities";
 import { useHydrated } from "~/hooks/useHydrated";
 import { authClient } from "~/lib/auth-client";
 import { dashboard } from "~/lib/dashboard.functions";
-
-const compactFormatter = new Intl.NumberFormat("en", { notation: "compact" });
-const formatCount = (count: number): string => compactFormatter.format(count);
+import { formatCompactCount } from "~/lib/utils";
 
 const getCountLabel = (
   pluralLabel: string,
@@ -85,7 +83,7 @@ export default function EntityCount() {
                 </p>
               ) : (
                 <p className="font-mono text-xl leading-none font-semibold tracking-tight tabular-nums">
-                  {formatCount(count ?? 0)}
+                  {formatCompactCount(count ?? 0)}
                 </p>
               )}
               <Eyebrow className="truncate">

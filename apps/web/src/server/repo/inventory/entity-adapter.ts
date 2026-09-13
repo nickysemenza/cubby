@@ -3,7 +3,10 @@ import {
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 import {
   checkUniqueProductDuplicate,
@@ -75,11 +78,7 @@ export const inventoryEntityAdapter = defineEntityAdapter({
       await deleteInventoryEntries(ctx.db, ids, ctx.actorContext);
       await runMutationSideEffectsForEntities(
         ctx.db,
-        ids.map((entityId) => ({
-          action: "deleted" as const,
-          entity: { entity: "inventory" as const, id: entityId },
-          source: "inventory.delete",
-        })),
+        mutationEvents("inventory", "deleted", ids, "inventory.delete"),
       );
       return {
         deletedReferences: entityMutationReferences("inventory", shortcodes),

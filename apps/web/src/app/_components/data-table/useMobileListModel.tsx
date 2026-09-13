@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { humanize } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { flexRender } from "@tanstack/react-table";
 import { isValidElement, type ReactNode, useMemo } from "react";
@@ -52,13 +53,6 @@ export interface MobileListRowModel<TItem extends RowData> {
   reserveImageSlot: boolean;
 }
 
-function humanizeColumnId(colId: string): string {
-  return colId
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/[_-]+/g, " ")
-    .replace(/^./, (c) => c.toUpperCase());
-}
-
 export function mobileColumnLabel<TItem extends RowData>(
   column: Column<TItem, unknown>,
 ): string {
@@ -66,7 +60,7 @@ export function mobileColumnLabel<TItem extends RowData>(
   const header = column.columnDef.header;
   if (meta?.mobile?.label) return meta.mobile.label;
   if (isNonEmptyHeaderLabel(header)) return header;
-  return humanizeColumnId(column.id);
+  return humanize(column.id);
 }
 
 function isNonEmptyHeaderLabel<TItem extends RowData>(

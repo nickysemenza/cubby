@@ -4,35 +4,20 @@ import { z } from "zod";
 import { unparsedStartOperationDataSchema } from "~/server/start-operation.contract";
 
 import { compileEntityListInput } from "./entity-list.functions";
-import {
-  expenseSearchDefaults,
-  expenseListLoaderDeps,
-  expenseSearchSchema,
-  financeSearchDefaults,
-  financialAccountSearchSchema,
-  financialTransactionSearchSchema,
-  locationSearchDefaults,
-  locationSearchSchema,
-  productSearchDefaults,
-  productSearchSchema,
-  projectSearchDefaults,
-  projectSearchSchema,
-  purchaseSearchDefaults,
-  purchaseSearchSchema,
-  taskSearchDefaults,
-  taskSearchSchema,
-  vendorSearchDefaults,
-  vendorSearchSchema,
-  wishSearchDefaults,
-  wishSearchSchema,
-} from "./list-search";
+import * as listSearch from "./list-search";
+import { expenseListLoaderDeps, expenseSearchSchema } from "./list-search";
+
+const { productSearchSchema } = listSearch;
 
 /**
- * Every `xSearchDefaults` object hand-mirrors its schema's key list for
- * `stripSearchParams`. Nothing structural ties the two together, so a schema
- * key rename would silently leave a stale default behind (which then never
- * strips, polluting every shared URL). Same guard idea as
- * `meal-search.unit.test.ts`'s key parity check.
+ * Every `xSearchDefaults` export mirrors a subset of its schema's keys for
+ * `stripSearchParams`. `listSearchSchema`'s `strip` option (see its doc
+ * comment in `list-search.ts`) makes the common case — every default is
+ * `undefined` — a compile-time guarantee: a stale key is a type error there.
+ * A few defaults still can't go through `strip` (a canonical non-`undefined`
+ * default; `financeSearchDefaults`, hand-shared by both finance schemas) and
+ * need this runtime check instead. Pairs are derived from the module's own
+ * exports, not a hand-kept roster — the same trap `strip` exists to avoid.
  */
 /**
  * Some list schemas are `.transform()`-wrapped (a Zod pipe) — the object
@@ -45,27 +30,48 @@ function schemaKeys(schema: z.ZodType): string[] {
   throw new Error("schema has no reachable object fields");
 }
 
-const searchDefaultsSchema = z.record(z.string(), z.json().optional());
-type SearchDefaults = z.output<typeof searchDefaultsSchema>;
+// SAFETY: `Object.entries` on a module with many differently-shaped exports
+// collapses `entry[1]` to one giant union no type predicate narrows cleanly
+// against; each entry is checked at runtime (instanceof / name suffix)
+// before use below.
+const moduleEntries = Object.entries(listSearch) as [string, unknown][];
 
-const PAIRS: ReadonlyArray<[string, z.ZodType, SearchDefaults]> = [
-  ["product", productSearchSchema, productSearchDefaults],
-  ["location", locationSearchSchema, locationSearchDefaults],
-  ["wish", wishSearchSchema, wishSearchDefaults],
-  ["project", projectSearchSchema, projectSearchDefaults],
-  ["task", taskSearchSchema, taskSearchDefaults],
-  ["expense", expenseSearchSchema, expenseSearchDefaults],
-  ["vendor", vendorSearchSchema, vendorSearchDefaults],
-  ["purchase", purchaseSearchSchema, purchaseSearchDefaults],
-  ["financial-account", financialAccountSearchSchema, financeSearchDefaults],
-  [
-    "financial-transaction",
-    financialTransactionSearchSchema,
-    financeSearchDefaults,
-  ],
-];
+const schemaExports = moduleEntries.filter(
+  (entry): entry is [string, z.ZodType] =>
+    entry[0].endsWith("SearchSchema") && entry[1] instanceof z.ZodType,
+);
+
+const defaultsExports = moduleEntries.filter(
+  (entry): entry is [string, object] =>
+    entry[0].endsWith("SearchDefaults") &&
+    typeof entry[1] === "object" &&
+    entry[1] !== null,
+);
+
+/**
+ * The one naming exception: both finance list schemas share one defaults
+ * export whose prefix ("finance") doesn't match either schema's own prefix.
+ */
+const FINANCE_SCHEMA_PREFIXES = ["financialAccount", "financialTransaction"];
+
+const PAIRS: ReadonlyArray<[string, z.ZodType, object]> = schemaExports.flatMap(
+  ([schemaName, schema]) => {
+    const prefix = schemaName.replace(/SearchSchema$/, "");
+    const defaultsName = FINANCE_SCHEMA_PREFIXES.includes(prefix)
+      ? "financeSearchDefaults"
+      : `${prefix}SearchDefaults`;
+    const defaults = defaultsExports.find(
+      ([name]) => name === defaultsName,
+    )?.[1];
+    return defaults ? [[schemaName, schema, defaults]] : [];
+  },
+);
 
 describe("list-search defaults parity", () => {
+  it("covers every list schema that has a matching defaults export", () => {
+    expect(PAIRS.length).toBeGreaterThanOrEqual(10);
+  });
+
   it.each(PAIRS)(
     "%s: every strip-default key exists on the schema",
     (_name, schema, defaults) => {

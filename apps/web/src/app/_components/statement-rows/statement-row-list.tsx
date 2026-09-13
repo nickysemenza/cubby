@@ -5,6 +5,7 @@ import type {
   StatementRowOut,
 } from "@cubby/schemas/statement-row";
 import { statementRowSortableFields } from "@cubby/schemas/statement-row";
+import { capitalize } from "@cubby/shared";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
@@ -74,7 +75,7 @@ const matchStateSearchSchema = z.enum([...MATCH_STATE_VALUES, "all"] as const);
 const MATCH_STATE_OPTIONS: FilterableComboboxItem[] = MATCH_STATE_VALUES.map(
   (value) => ({
     value,
-    label: value.charAt(0).toUpperCase() + value.slice(1),
+    label: capitalize(value),
     color: badgeVariantColor[MATCH_STATE_TONE[value]],
   }),
 );
@@ -91,7 +92,7 @@ const DISPOSITION_VALUES = [
 const DISPOSITION_OPTIONS: FilterableComboboxItem[] = DISPOSITION_VALUES.map(
   (value) => ({
     value,
-    label: value.charAt(0).toUpperCase() + value.slice(1),
+    label: capitalize(value),
     color: badgeVariantColor[DISPOSITION_TONE[value]],
   }),
 );

@@ -45,5 +45,13 @@ On workerd, wall clocks omit synchronous CPU: use CPU-time/sampling for WASM or
 JS hot paths. WASM hot-path tracing stays `trace, skip_all`; a global INFO
 subscriber accumulates in reused isolates.
 
+## Generated files
+
+TS generated output lives in a `generated/` directory and carries a `.gen.`
+suffix; Swift/Rust output lives in a `Generated/` directory instead.
+`.gitattributes` marks these paths `linguist-generated`. Never hand-edit one —
+edit its generator or input and regenerate; a missing one at its expected path
+means stub it, not fabricate the real shape.
+
 For the helper catalogue and exact edge-case rules, load the relevant heading in
 [the preserved root reference](root-rules-reference.md).

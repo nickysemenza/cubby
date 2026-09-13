@@ -1,6 +1,11 @@
 export * from "./shortcode";
 export { mapRecord, recordKeys } from "./record";
-export { capitalize, screamingSnake, type ScreamingSnake } from "./text-case";
+export {
+  capitalize,
+  humanize,
+  screamingSnake,
+  type ScreamingSnake,
+} from "./text-case";
 
 export { UNRESOLVABLE_ENTITY_FILTER } from "./filter";
 

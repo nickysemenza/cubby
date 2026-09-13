@@ -331,6 +331,19 @@ pub fn format_ingredient(input: &str) -> String {
     parse_ingredient_str(input).to_string()
 }
 
+/// Parses `input` once and returns both the structured result and the parser's own
+/// one-line rendering. `cubby-ffi::parse_ingredient` wants both `WIngredient` and the
+/// `Display` string for every line; calling `parse_ingredient` + `format_ingredient`
+/// there would run the same (non-trivial) parse twice per line. `parse_ingredient` and
+/// `format_ingredient` stay as single-purpose wrappers for callers that only need one
+/// side (`food_mappings` and the wasm export, respectively).
+pub fn parse_and_format_ingredient(input: &str) -> (WIngredient, String) {
+    let ingredient = parse_ingredient_str(input);
+    // `to_string()` borrows; compute the display string before `.into()` consumes it.
+    let display = ingredient.to_string();
+    (ingredient.into(), display)
+}
+
 /// `WIngredient[]` (`transparent` → `type WParsedLines = WIngredient[]`).
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi)]

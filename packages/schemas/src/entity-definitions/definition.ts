@@ -48,6 +48,23 @@ export const WAYFINDING_DOMAINS = [
   "finance",
 ] as const;
 export type WayfindingDomain = (typeof WAYFINDING_DOMAINS)[number];
+
+/**
+ * The closed vocabulary of table-filter shapes. Schema-free (unlike most of
+ * this file) so `compile.ts`, the web `FilterKind` type, and the Swift
+ * catalog generator can all read the same list without importing each other.
+ */
+export const FILTER_KINDS = [
+  "text",
+  "select",
+  "multiselect",
+  "presence",
+  "boolean",
+  "id",
+  "idMulti",
+  "range",
+] as const;
+export type FilterKind = (typeof FILTER_KINDS)[number];
 export type EntityPresentation = z.output<
   ReturnType<typeof metadataSchemas>["presentation"]
 >;

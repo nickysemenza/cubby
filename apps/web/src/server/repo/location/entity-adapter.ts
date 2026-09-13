@@ -1,10 +1,12 @@
 import {
   defineEntityAdapter,
+  deletedWithImages,
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
+  mutationEvents,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
@@ -79,17 +81,14 @@ export const locationEntityAdapter = defineEntityAdapter({
         await deleteLocations(ctx.db, ids, ctx.actorContext);
       await runMutationSideEffectsForEntities(
         ctx.db,
-        ids.map((entityId) => ({
-          action: "deleted" as const,
-          entity: { entity: "location" as const, id: entityId },
-          source: "location.delete",
-        })),
+        mutationEvents("location", "deleted", ids, "location.delete"),
       );
       return {
-        deletedReferences: [
-          ...entityMutationReferences("location", shortcodes),
-          ...entityMutationReferences("image", deletedImageShortcodes),
-        ],
+        deletedReferences: deletedWithImages(
+          "location",
+          shortcodes,
+          deletedImageShortcodes,
+        ),
         detachedImageKeys,
       };
     },

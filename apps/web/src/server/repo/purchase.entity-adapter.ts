@@ -5,10 +5,13 @@ import {
 
 import {
   defineEntityAdapter,
-  entityMutationReferences,
+  deletedWithImages,
 } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
-import { runMutationSideEffectsForEntities } from "~/server/services/mutation-side-effects";
+import {
+  mutationEvents,
+  runMutationSideEffectsForEntities,
+} from "~/server/services/mutation-side-effects";
 
 import {
   createPurchase,
@@ -39,22 +42,25 @@ export const purchaseEntityAdapter = defineEntityAdapter({
     delete: async (ctx, ids) => {
       const detached = await deletePurchases(ctx.db, ids, ctx.actorContext);
       await runMutationSideEffectsForEntities(ctx.db, [
-        ...detached.expenseIds.map((entityId) => ({
-          action: "updated" as const,
-          entity: { entity: "expense" as const, id: entityId },
-          source: "purchase.delete",
-        })),
-        ...detached.financialTransactionIds.map((entityId) => ({
-          action: "updated" as const,
-          entity: { entity: "financialTransaction" as const, id: entityId },
-          source: "purchase.delete",
-        })),
+        ...mutationEvents(
+          "expense",
+          "updated",
+          detached.expenseIds,
+          "purchase.delete",
+        ),
+        ...mutationEvents(
+          "financialTransaction",
+          "updated",
+          detached.financialTransactionIds,
+          "purchase.delete",
+        ),
       ]);
       return {
-        deletedReferences: [
-          ...entityMutationReferences("purchase", ids),
-          ...entityMutationReferences("image", detached.deletedImageShortcodes),
-        ],
+        deletedReferences: deletedWithImages(
+          "purchase",
+          ids,
+          detached.deletedImageShortcodes,
+        ),
         detachedImageKeys: detached.detachedImageKeys,
       };
     },

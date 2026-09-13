@@ -1,10 +1,13 @@
 import type { CostType, ProjectStatus } from "@cubby/schemas/project";
 import { TRADE_LABELS } from "@cubby/schemas/project";
+import { capitalize } from "@cubby/shared";
 import { format } from "date-fns";
 
 import { parsePlainDate } from "~/lib/plain-date";
 
 import { diffDays } from "./charts/gantt/gantt-date";
+
+export { capitalize } from "@cubby/shared";
 
 export const PROJECT_STATUS_LABELS = {
   planning: "Planning",
@@ -12,12 +15,6 @@ export const PROJECT_STATUS_LABELS = {
   in_progress: "In progress",
   done: "Done",
 } satisfies Record<ProjectStatus, string>;
-
-export function capitalize(value: string): string {
-  return value.length === 0
-    ? value
-    : value.charAt(0).toUpperCase() + value.slice(1);
-}
 
 export function normalizeCostTypeKey(
   costType: CostType | null,

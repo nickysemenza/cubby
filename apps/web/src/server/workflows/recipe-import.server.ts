@@ -64,6 +64,7 @@ import {
   importImageFromUrl as importStoredImageFromUrl,
 } from "~/server/services/image-storage.service";
 import {
+  mutationEvents,
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
@@ -421,11 +422,12 @@ const cookbookImportDefinition = defineBulkWorkflow({
       if (recipeIds.length === 0) return;
       await runMutationSideEffectsForEntities(
         context.db,
-        recipeIds.map((id) => ({
-          action: "updated" as const,
-          entity: { entity: "recipe" as const, id },
-          source: "recipe.importCookbookStream",
-        })),
+        mutationEvents(
+          "recipe",
+          "updated",
+          recipeIds,
+          "recipe.importCookbookStream",
+        ),
       );
     })
     .output(({ input }): ImportSummary => ({
@@ -644,11 +646,12 @@ const notionImportDefinition = defineBulkWorkflow({
       return recipeIds.length
         ? runMutationSideEffectsForEntities(
             context.db,
-            recipeIds.map((id) => ({
-              action: "updated" as const,
-              entity: { entity: "recipe" as const, id },
-              source: "recipe.importNotionSyncStream",
-            })),
+            mutationEvents(
+              "recipe",
+              "updated",
+              recipeIds,
+              "recipe.importNotionSyncStream",
+            ),
           )
         : Promise.resolve();
     })
@@ -734,11 +737,12 @@ export const deleteCookbookWorkflow = bindWorkflow(
     .effect("sideEffects", ({ context }, { deleted }) =>
       runMutationSideEffectsForEntities(
         context.db,
-        deleted.deletedRecipeIds.map((id) => ({
-          action: "deleted" as const,
-          entity: { entity: "recipe" as const, id },
-          source: "recipe.deleteCookbook",
-        })),
+        mutationEvents(
+          "recipe",
+          "deleted",
+          deleted.deletedRecipeIds,
+          "recipe.deleteCookbook",
+        ),
       ),
     )
     .effect("costing", ({ context }, { parentIds }) =>
