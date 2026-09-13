@@ -57,6 +57,7 @@ const rustPrefixes = ["recipebridge/", "cubby-ffi/"];
 // Only recipebridge feeds the WASM package the web app consumes; cubby-ffi is
 // a separate UniFFI target that never touches `packages/wasm`.
 const wasmPrefixes = ["recipebridge/"];
+const ffiPrefixes = ["cubby-ffi/"];
 const applePrefixes = ["apps/apple/", "cubby-ffi/"];
 
 const postgresPrefixes = [
@@ -127,7 +128,9 @@ const sharedRootExact = new Set([
   "codecov.yml",
   "docker-compose.yml",
   "knip.json",
+  "nx.json",
   "package.json",
+  "project.json",
   "pnpm-lock.yaml",
   "pnpm-workspace.yaml",
   "security-audit-allowlist.json",
@@ -172,10 +175,11 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
       startsWithAny(path, sharedRootPrefixes),
   );
 
-  const web =
-    unknown ||
-    sharedRoot ||
-    active.some((path) => startsWithAny(path, webPrefixes));
+  // `web` says the web app may be affected (shared root config and unknown
+  // paths count); `webSource` says a web source path itself changed, which is
+  // what `vitest --changed` can select tests for.
+  const webSource = active.some((path) => startsWithAny(path, webPrefixes));
+  const web = unknown || sharedRoot || webSource;
   const aux =
     unknown ||
     sharedRoot ||
@@ -188,18 +192,19 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
     unknown ||
     sharedRoot ||
     active.some((path) => startsWithAny(path, upcPrefixes));
-  const rust =
-    unknown ||
-    active.some(
-      (path) =>
-        path === "rust-toolchain.toml" || startsWithAny(path, rustPrefixes),
-    );
   const wasm =
     unknown ||
     active.some(
       (path) =>
         path === "rust-toolchain.toml" || startsWithAny(path, wasmPrefixes),
     );
+  const ffi =
+    unknown ||
+    active.some(
+      (path) =>
+        path === "rust-toolchain.toml" || startsWithAny(path, ffiPrefixes),
+    );
+  const rust = wasm || ffi;
   const apple =
     unknown || active.some((path) => startsWithAny(path, applePrefixes));
 
@@ -221,7 +226,10 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
     active.some(
       (path) =>
         startsWithAny(path, highRiskPrefixes) ||
-        highRiskFragments.some((fragment) => path.includes(fragment)) ||
+        // Fragments name server money/ledger/removal seams; UI files that
+        // merely mention inventory/expense/delete are not high-risk.
+        (path.startsWith("apps/web/src/server/") &&
+          highRiskFragments.some((fragment) => path.includes(fragment))) ||
         highRiskExact.has(path) ||
         path === "apps/web/package.json" ||
         path === "pnpm-lock.yaml" ||
@@ -232,8 +240,10 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
   return {
     inert: active.length === 0,
     web,
+    webSource,
     rust,
     wasm,
+    ffi,
     apple,
     aux,
     usda,
@@ -250,6 +260,7 @@ export function classifyPaths(paths: readonly (string | null | undefined)[]) {
 
 export type PushCheck =
   | "all-tests"
+  | "fast-tests"
   | "web-tests"
   | "postgres"
   | "e2e"
@@ -258,7 +269,29 @@ export type PushCheck =
   | "rust"
   | "apple";
 
-export function selectPushChecks(
+export type RustManifest = "recipebridge/Cargo.toml" | "cubby-ffi/Cargo.toml";
+
+// `--changed` selects tests that import a changed web source file; a shared
+// root or unknown change has none, so it runs the whole fast tier instead.
+const webLane = (scope: ReturnType<typeof classifyPaths>): PushCheck =>
+  scope.postgres ? "postgres" : scope.webSource ? "web-tests" : "fast-tests";
+
+// Shared by selectVerifyChecks' non-full path and the (highRisk-free) push
+// selection below: callers decide when highRisk should escalate to full.
+function scopedChecks(
+  scope: ReturnType<typeof classifyPaths>,
+): readonly PushCheck[] {
+  return [
+    ...(scope.web ? [webLane(scope)] : []),
+    ...(scope.cloudflare || scope.e2e ? (["cloudflare"] as const) : []),
+    ...(scope.e2e ? (["e2e"] as const) : []),
+    ...(scope.aux ? (["aux"] as const) : []),
+    ...(scope.rust ? (["rust"] as const) : []),
+    ...(scope.apple ? (["apple"] as const) : []),
+  ];
+}
+
+export function selectVerifyChecks(
   paths: readonly string[],
   forceFull = false,
 ): readonly PushCheck[] {
@@ -267,18 +300,58 @@ export function selectPushChecks(
     return ["rust", "aux", "cloudflare", "all-tests", "apple"];
   if (scope.inert) return [];
 
-  return [
-    ...(scope.web
-      ? ([scope.postgres ? "postgres" : "web-tests"] as const)
-      : []),
-    ...(scope.cloudflare || scope.e2e || scope.highRisk
-      ? (["cloudflare"] as const)
-      : []),
-    ...(scope.e2e || scope.highRisk ? (["e2e"] as const) : []),
+  return scopedChecks(scope);
+}
+
+export type PushSelection = {
+  checks: readonly PushCheck[];
+  manifests: readonly RustManifest[];
+  warning?: string;
+  wasm: boolean;
+  dependencies: boolean;
+};
+
+// Pre-push is fast and scoped: JS lanes fail safe from the raw diff (an
+// unrecognised path still runs every JS gate), but native lanes (rust, apple)
+// and Rust manifests only run when a KNOWN path actually touches them — an
+// unrecognised path must never trigger a Rust/Xcode toolchain pre-push, only
+// a warning telling the pusher to run the full verify:local gate. highRisk is
+// never consulted here: pre-push never escalates to "all-tests" on its own.
+export function selectPushChecks(paths: readonly string[]): PushSelection {
+  const scope = classifyPaths(paths);
+  if (scope.inert)
+    return { checks: [], manifests: [], wasm: false, dependencies: false };
+
+  const known = classifyPaths(paths.filter(isKnownCodePath));
+
+  const checks: PushCheck[] = [
+    ...(scope.web ? [webLane(known)] : []),
+    ...(scope.cloudflare || known.e2e ? (["cloudflare"] as const) : []),
+    ...(known.e2e ? (["e2e"] as const) : []),
     ...(scope.aux ? (["aux"] as const) : []),
-    ...(scope.rust ? (["rust"] as const) : []),
-    ...(scope.apple ? (["apple"] as const) : []),
+    ...(known.rust ? (["rust"] as const) : []),
+    ...(known.apple ? (["apple"] as const) : []),
   ];
+
+  const manifests: RustManifest[] = [
+    ...(known.wasm ? (["recipebridge/Cargo.toml"] as const) : []),
+    ...(known.ffi ? (["cubby-ffi/Cargo.toml"] as const) : []),
+  ];
+
+  const unrecognised = paths
+    .filter((path) => !isInert(path) && !isKnownCodePath(path))
+    .join(", ");
+  const warning = scope.unknown
+    ? `Unrecognised path(s): ${unrecognised}. Pre-push ran the JavaScript gates only; run pnpm verify:local before merging.`
+    : undefined;
+
+  return {
+    checks,
+    manifests,
+    warning,
+    wasm: known.wasm,
+    dependencies: scope.dependencies,
+  };
 }
 
 const capture = (command: string, arguments_: readonly string[]): string => {
@@ -292,24 +365,37 @@ const capture = (command: string, arguments_: readonly string[]): string => {
   return result.stdout.trim();
 };
 
-const resolveBase = (): string => {
-  if (process.env.CUBBY_VERIFY_BASE) return process.env.CUBBY_VERIFY_BASE;
+type ResolvedBase = { sha: string; fallback: boolean };
+
+const resolveBase = (): ResolvedBase => {
+  if (process.env.CUBBY_VERIFY_BASE)
+    return { sha: process.env.CUBBY_VERIFY_BASE, fallback: false };
   try {
-    return capture("git", ["merge-base", "HEAD", "origin/main"]);
+    return {
+      sha: capture("git", ["merge-base", "HEAD", "origin/main"]),
+      fallback: false,
+    };
   } catch {
-    return capture("git", ["rev-parse", "HEAD^"]);
+    return { sha: capture("git", ["rev-parse", "HEAD^"]), fallback: true };
   }
 };
 
+// Mutated once, at start-up, by main(): "[verify:local]" for pnpm
+// verify:local(:full), "[verify:push]" for the pre-push gate.
+let label = "[verify:local]";
+
 const run = (command: string, arguments_: readonly string[]) => {
   const display = [command, ...arguments_].join(" ");
-  process.stdout.write(`\n[pre-push] ${display}\n`);
+  process.stdout.write(`\n${label} ${display}\n`);
+  const start = performance.now();
   const result = spawnSync(command, arguments_, {
     stdio: "inherit",
     env: process.env,
   });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
+  const seconds = (performance.now() - start) / 1000;
+  process.stdout.write(`${label} ${display} ✓ ${seconds.toFixed(1)}s\n`);
 };
 
 const requireCommittedCode = () => {
@@ -343,11 +429,11 @@ const runAuxCheck = (full: boolean) => {
   run("pnpm", ["--filter", "@cubby/upc-lookup", "build"]);
 };
 
-const runRustCheck = () => {
+const runRustCheck = (manifests: readonly RustManifest[]) => {
   // Two independent manifests (no shared workspace): recipebridge feeds
   // the WASM package, cubby-ffi is the native UniFFI target. Same gates,
   // run once per manifest.
-  for (const manifest of ["recipebridge/Cargo.toml", "cubby-ffi/Cargo.toml"]) {
+  for (const manifest of manifests) {
     run("cargo", ["fmt", "--manifest-path", manifest, "--check"]);
     run("cargo", [
       "clippy",
@@ -387,7 +473,7 @@ const runAppleCheck = () => {
   const xcodeSelect = spawnSync("xcode-select", ["-p"]);
   if (xcodeSelect.error || xcodeSelect.status !== 0) {
     process.stdout.write(
-      "[pre-push] Skipping apple checks: Xcode not installed (xcode-select -p failed).\n",
+      `${label} Skipping apple checks: Xcode not installed (xcode-select -p failed).\n`,
     );
     return;
   }
@@ -437,10 +523,17 @@ const runAppleCheck = () => {
   ]);
 };
 
-const runPushCheck = (check: PushCheck, base: string, full: boolean) => {
+const runPushCheck = (
+  check: PushCheck,
+  base: string,
+  full: boolean,
+  manifests: readonly RustManifest[],
+) => {
   switch (check) {
     case "all-tests":
       return run("pnpm", ["test:all"]);
+    case "fast-tests":
+      return run("pnpm", ["test"]);
     case "web-tests":
       return run("pnpm", ["test:changed", base]);
     case "postgres":
@@ -452,31 +545,31 @@ const runPushCheck = (check: PushCheck, base: string, full: boolean) => {
     case "aux":
       return runAuxCheck(full);
     case "rust":
-      return runRustCheck();
+      return runRustCheck(manifests);
     case "apple":
       return runAppleCheck();
   }
 };
 
-const verifyPush = () => {
-  requireCommittedCode();
-  const base = resolveBase();
-  const paths = capture("git", ["diff", "--name-only", `${base}...HEAD`])
-    .split("\n")
-    .filter(Boolean);
+const bothRustManifests: readonly RustManifest[] = [
+  "recipebridge/Cargo.toml",
+  "cubby-ffi/Cargo.toml",
+];
+
+const runVerify = (paths: readonly string[], base: string) => {
   const scope = classifyPaths(paths);
   const full = process.argv.includes("--full") || scope.highRisk;
-  const checks = selectPushChecks(paths, full);
+  const checks = selectVerifyChecks(paths, full);
 
   if (checks.length === 0) {
     process.stdout.write(
-      "[pre-push] No code changes require scoped verification.\n",
+      `${label} No code changes require scoped verification.\n`,
     );
     return;
   }
 
   process.stdout.write(
-    `[pre-push] ${paths.length} changed paths from ${base}; running ${checks.join(", ")}.\n`,
+    `${label} ${paths.length} changed paths from ${base}; running ${checks.join(", ")}.\n`,
   );
 
   if (full || scope.wasm || scope.dependencies) {
@@ -486,7 +579,69 @@ const verifyPush = () => {
   run("pnpm", [full ? "check:all" : "check"]);
   if (full || scope.dependencies) run("pnpm", ["dedupe:check"]);
 
-  for (const check of checks) runPushCheck(check, base, full);
+  const manifests: readonly RustManifest[] = full
+    ? bothRustManifests
+    : [
+        ...(scope.wasm ? (["recipebridge/Cargo.toml"] as const) : []),
+        ...(scope.ffi ? (["cubby-ffi/Cargo.toml"] as const) : []),
+      ];
+
+  for (const check of checks) runPushCheck(check, base, full, manifests);
 };
 
-if (import.meta.main) verifyPush();
+const runPush = (paths: readonly string[], base: string) => {
+  const { checks, manifests, warning, wasm, dependencies } =
+    selectPushChecks(paths);
+
+  if (warning) process.stdout.write(`${label} ${warning}\n`);
+
+  if (checks.length === 0) {
+    process.stdout.write(
+      `${label} No code changes require scoped verification.\n`,
+    );
+    return;
+  }
+
+  process.stdout.write(
+    `${label} ${paths.length} changed paths from ${base}; running ${checks.join(", ")}.\n`,
+  );
+
+  if (wasm) run("pnpm", ["wasm"]);
+  if (dependencies) run("pnpm", ["install", "--frozen-lockfile"]);
+  // pre-commit already ran `pnpm check` on the staged tree, but an --amend,
+  // rebase, or `commit -n` can produce a HEAD pre-commit never saw — rerun it
+  // here; the Nx cache makes the repeat cheap when nothing actually changed.
+  // Never check:all here: that full gate belongs to verify:local(:full).
+  run("pnpm", ["check"]);
+  if (dependencies) run("pnpm", ["dedupe:check"]);
+
+  for (const check of checks) runPushCheck(check, base, false, manifests);
+};
+
+const main = () => {
+  const start = performance.now();
+  const mode = process.argv.includes("--push") ? "push" : "verify";
+  if (mode === "push" && process.argv.includes("--full")) {
+    throw new Error(
+      "--full belongs to pnpm verify:local:full, not the push gate.",
+    );
+  }
+  if (mode === "push") label = "[verify:push]";
+
+  requireCommittedCode();
+  const { sha: base, fallback } = resolveBase();
+  process.stdout.write(
+    `${label} base ${base}${fallback ? " (fallback HEAD^: origin/main unavailable)" : ""}\n`,
+  );
+  const paths = capture("git", ["diff", "--name-only", `${base}...HEAD`])
+    .split("\n")
+    .filter(Boolean);
+
+  if (mode === "verify") runVerify(paths, base);
+  else runPush(paths, base);
+
+  const totalSeconds = (performance.now() - start) / 1000;
+  process.stdout.write(`${label} total ${totalSeconds.toFixed(1)}s\n`);
+};
+
+if (import.meta.main) main();

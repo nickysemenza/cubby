@@ -69,14 +69,15 @@ and security validation. Dependency
 deduplication runs separately when a package manifest, workspace file, patch, or
 lockfile changed; CI and pre-PR validation run the applicable superset.
 
-Pre-commit runs the complete `pnpm check`. Pre-push selects changed Vitest,
-PostgreSQL, E2E, Cloudflare, auxiliary, and Rust gates
-from the commits being pushed. Hooks are mandatory: agents never use
-`--no-verify` to bypass a failure.
+Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm check` plus
+changed Vitest/PostgreSQL, E2E, Cloudflare, auxiliary, per-manifest Rust, and
+Apple gates from the commits being pushed, and never escalates to the full
+suite. Hooks are mandatory: agents never use `--no-verify` to bypass a failure.
 
 Local verification gates merging: run `pnpm verify:local` on the clean final
-commit. High-risk paths run the full routine suite; use `pnpm verify:local:full`
-to force it. E2E always follows a fresh web build. Hosted full verification and
+commit. This is the merge gate, and it does escalate: high-risk paths run the
+full routine suite; use `pnpm verify:local:full` to force it. E2E always
+follows a fresh web build. Hosted full verification and
 coverage are explicitly dispatched when needed (see [CI](../ci.md)). Main builds
 and deploys affected Workers automatically without repeating tests. If hosted
 verification is requested, observe its exact final commit result before merge.
