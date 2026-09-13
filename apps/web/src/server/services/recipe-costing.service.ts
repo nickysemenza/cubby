@@ -10,10 +10,7 @@
  * recipe page, or "Settle now" recomputes it. Queue messages are wakeups only.
  */
 
-import {
-  type BackgroundTaskReceipt,
-  RECIPE_RECOMPUTE_CHUNK_SIZE,
-} from "@cubby/schemas/background-tasks";
+import { RECIPE_RECOMPUTE_CHUNK_SIZE } from "@cubby/schemas/background-tasks";
 import type { EntityRef } from "@cubby/schemas/entity";
 import {
   type IngredientId,
@@ -47,7 +44,10 @@ import {
   collectIngredientIds,
   getRecipeIngredientName,
 } from "~/lib/recipe-graph";
-import { publishBackgroundTasks } from "~/server/background-tasks/publish";
+import {
+  type BackgroundTaskPublisher,
+  publishBackgroundTasks,
+} from "~/server/background-tasks/publish";
 import type { Database } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
@@ -149,7 +149,19 @@ export class RecipeCostingService {
   constructor(
     private db: Database,
     private usdaClient: UsdaFoodBatchPort,
+    private publish: BackgroundTaskPublisher = publishBackgroundTasks,
   ) {}
+
+  /**
+   * The same service on another database handle — a caller's open
+   * transaction — with its publications routed through `publish`. Stale marks
+   * then land in the caller's transaction (an outer-pool UPDATE on a row that
+   * transaction holds would deadlock) and the wakeups go out only after it
+   * commits.
+   */
+  bindTo(db: Database, publish: BackgroundTaskPublisher): RecipeCostingService {
+    return new RecipeCostingService(db, this.usdaClient, publish);
+  }
 
   private async loadContext(recipes: RecipeCostingInput[]): Promise<{
     ingMap: Record<string, IngredientWithFoodLeanOut>;
@@ -463,7 +475,7 @@ export class RecipeCostingService {
   private async publishChunks(
     recipeIds: RecipeId[],
     source: string,
-  ): Promise<BackgroundTaskReceipt> {
+  ): Promise<void> {
     const requestedAt = new Date().toISOString();
     const tasks = [];
     for (let i = 0; i < recipeIds.length; i += RECIPE_RECOMPUTE_CHUNK_SIZE) {
@@ -473,11 +485,10 @@ export class RecipeCostingService {
         recipeIds: recipeIds.slice(i, i + RECIPE_RECOMPUTE_CHUNK_SIZE),
       });
     }
-    const receipt = await publishBackgroundTasks(this.db, tasks, { source });
+    const receipt = await this.publish(this.db, tasks, { source });
     console.log(
       `[recompute-queue] published recipes=${recipeIds.length} chunks=${tasks.length} transport=${receipt.transport} source=${source}`,
     );
-    return receipt;
   }
 
   async recomputeForIngredient(

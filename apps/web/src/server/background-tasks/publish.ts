@@ -153,3 +153,43 @@ export function publishInBackground(
   }
   return publication;
 }
+
+/**
+ * A publish function a service can be handed instead of calling
+ * {@link publishBackgroundTasks} directly — the seam a write transaction uses
+ * to hold its publications back until after commit.
+ */
+export type BackgroundTaskPublisher = (
+  db: Database,
+  tasks: readonly BackgroundTaskInput[],
+  options: PublishOptions,
+) => Promise<{ transport: string; count: number }>;
+
+export interface DeferredPublications {
+  readonly publish: BackgroundTaskPublisher;
+  /** Send everything collected so far; call once the transaction committed. */
+  flush(db: Database): Promise<void>;
+}
+
+/**
+ * Publications made inside a write transaction must go out after it commits:
+ * a consumer that ran before the commit would read the old row, skip on its
+ * freshness gate, and leave the stale marker with no wakeup behind it. The
+ * flush is best-effort ({@link publishInBackground}) — the stale marker is
+ * already durable, so a failed publication is latency, not lost intent.
+ */
+export function deferPublications(): DeferredPublications {
+  const pending: Array<{ tasks: BackgroundTaskInput[]; source: string }> = [];
+  return {
+    publish: async (_db, tasks, options) => {
+      if (tasks.length > 0)
+        pending.push({ tasks: [...tasks], source: options.source });
+      return { transport: "deferred", count: tasks.length };
+    },
+    flush: async (db) => {
+      for (const { tasks, source } of pending.splice(0)) {
+        await publishInBackground(db, tasks, { source });
+      }
+    },
+  };
+}

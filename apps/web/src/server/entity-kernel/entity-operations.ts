@@ -12,7 +12,7 @@ import {
 } from "@cubby/schemas/pagination";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
+import { deferPublications } from "~/server/background-tasks/publish";
 import { createAppError } from "~/server/errors/app-error";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
@@ -122,15 +122,40 @@ const writeWithProjections = async <
   binding: EntityKernelCoreBinding<E, S>,
   action: "created" | "updated",
   source: string,
-  write: (db: Database) => Promise<TResult>,
+  write: (context: EntityKernelContext) => Promise<TResult>,
 ): Promise<TResult> => {
-  if (!binding.sideEffects) return write(context.db);
-  return withTransactionDatabase(context.db, async (transactionDb) => {
-    const result = await write(transactionDb);
-    const event = sideEffectEventFor(binding, action, result.entityId, source);
-    if (event) await refreshProjectionsForEvent(transactionDb, event);
-    return result;
-  });
+  if (!binding.sideEffects) return write(context);
+  // Everything the adapter reaches through the context must run on the
+  // transaction: a service still bound to the request pool would UPDATE a row
+  // this transaction holds and wait on it forever. Its task publications are
+  // held back until the commit, so no consumer can see the pre-write row.
+  const deferred = deferPublications();
+  const result = await withTransactionDatabase(
+    context.db,
+    async (transactionDb) => {
+      const result = await write({
+        ...context,
+        db: transactionDb,
+        services: {
+          ...context.services,
+          recipeCosting: context.services.recipeCosting.bindTo(
+            transactionDb,
+            deferred.publish,
+          ),
+        },
+      });
+      const event = sideEffectEventFor(
+        binding,
+        action,
+        result.entityId,
+        source,
+      );
+      if (event) await refreshProjectionsForEvent(transactionDb, event);
+      return result;
+    },
+  );
+  await deferred.flush(context.db);
+  return result;
 };
 
 /** Post-commit effects: embedding tasks, AI refreshes, the problem-count mark. */
@@ -256,7 +281,7 @@ export const defineEntityOperations = <
           binding,
           "created",
           `${binding.entity}.create`,
-          (db) => validated.run({ ...context, db }, validated.data),
+          (writeContext) => validated.run(writeContext, validated.data),
         ),
       )
       .effect("storage", async (_, { created }) =>
@@ -314,8 +339,8 @@ export const defineEntityOperations = <
           binding,
           "updated",
           `${binding.entity}.update`,
-          (db) =>
-            validated.run({ ...context, db }, validated.id, validated.data),
+          (writeContext) =>
+            validated.run(writeContext, validated.id, validated.data),
         ),
       )
       .effect("storage", async (_, { updated }) =>
