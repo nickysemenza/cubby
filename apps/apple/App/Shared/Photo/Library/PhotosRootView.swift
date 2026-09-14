@@ -291,8 +291,7 @@ private struct PhotoLibraryCell: View {
     @State private var image: CGImage?
     private var known: Bool {
         appModel.photoLibrary.checked.contains(asset.localIdentifier)
-            && appModel.photoMatches.hasIndex && appModel.photoMatches.error == nil
-            && appModel.photoMatches.candidates[asset.localIdentifier] != nil
+            && appModel.photoMatches.hasKnownResult(for: asset.localIdentifier)
     }
     private var represented: Bool {
         appModel.photoMatches.storedCandidates(for: asset.localIdentifier).contains {

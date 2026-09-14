@@ -9,6 +9,37 @@ import Testing
 @MainActor
 @Suite("Progressive photo matching", .serialized)
 struct PhotoMatchStoreTests {
+    @Test func failedRefreshPreservesKnownNoMatchVerdict() async throws {
+        let client = try client(index: "{\"algorithmRevision\":1,\"items\":[],\"repair\":[]}")
+        let store = PhotoMatchStore()
+        let item = try selection(hash: "0123456789abcdef")
+        try await store.check([item], client: client)
+        PhotoMatchTestProtocol.response.withLock { $0 = Data("invalid response".utf8) }
+        await store.refresh(client: client)
+        #expect(store.error != nil)
+        #expect(store.hasKnownResult(for: item.id))
+        #expect(store.storedCandidates(for: item.id).isEmpty)
+        #expect(!store.hasKnownResult(for: "unprocessed"))
+        store.reset()
+        #expect(!store.hasKnownResult(for: item.id))
+    }
+
+    @Test func equalContentAndSourceMatchesPreferStoredContentAfterMerging() async throws {
+        let client = try client(
+            index: """
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":{"hash":"0123456789abcdef","aspectRatio":1},"width":2,"height":2}],"repair":[]}
+                """)
+        let store = PhotoMatchStore()
+        let first = try selection(hash: "0123456789abcdef")
+        let second = try selection(hash: "0123456789abcdef")
+        try await store.check([first, second], client: client)
+        for item in [first, second] {
+            #expect(store.storedCandidates(for: item.id).map(\.basis) == [.content, .source])
+        }
+        await store.refresh(client: client)
+        #expect(store.storedCandidates(for: second.id).map(\.basis) == [.content, .source])
+    }
+
     @Test func priorityRefreshUpdatesSelectionAndDrainsRemainingLibraryQueries() async throws {
         let client = try client(
             index: """

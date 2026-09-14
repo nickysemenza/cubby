@@ -44,6 +44,10 @@ final class PhotoMatchStore {
         (candidates[id] ?? []).filter { !$0.id.rawValue.hasPrefix("draft:") }
     }
 
+    func hasKnownResult(for id: String) -> Bool {
+        hasIndex && candidates[id] != nil
+    }
+
     func acquire(_ id: UUID) {
         observers.insert(id)
         schedulePendingRegistrations()
@@ -251,7 +255,8 @@ final class PhotoMatchStore {
         Array(Set(left + right)).sorted {
             if $0.confidence != $1.confidence { return $0.confidence == .strong }
             if $0.distance != $1.distance { return $0.distance < $1.distance }
-            return $0.id.rawValue < $1.id.rawValue
+            if $0.id != $1.id { return $0.id.rawValue < $1.id.rawValue }
+            return $0.basis == .content && $1.basis == .source
         }
     }
 

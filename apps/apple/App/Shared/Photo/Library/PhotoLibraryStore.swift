@@ -25,6 +25,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     @ObservationIgnored private let cache = LibraryHashCache()
     @ObservationIgnored private let thumbnails = NSCache<NSString, ImageBox>()
     @ObservationIgnored private var scanTask: Task<Void, Never>?
+    @ObservationIgnored private var libraryChangeTask: Task<Void, Never>?
     @ObservationIgnored private var visibleWork: [String: Task<CGImage, any Error>] = [:]
     @ObservationIgnored private var assetsByID: [String: PHAsset] = [:]
     @ObservationIgnored private var clients: [UUID: (PhotoMatchStore, CubbyClient)] = [:]
@@ -125,7 +126,9 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         months = grouped.keys.sorted(by: >).map { Month(id: $0, assets: grouped[$0]!) }
         count = result.count
         isLoadingLibrary = false
-        scannedCount = 0
+        let remaining = result.filter { !checked.contains($0.localIdentifier) }
+        let completedCount = result.count - remaining.count
+        scannedCount = completedCount
         scanTask = Task { [weak self] in
             guard let self else { return }
             guard !Task.isCancelled, generation == token else { return }
@@ -134,14 +137,16 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             // Let visible cells enqueue their user-initiated requests before the utility scan.
             try? await Task.sleep(for: .milliseconds(150))
             var pending: [String: HashQuery] = [:]
-            for (offset, asset) in result.enumerated() {
+            for (offset, asset) in remaining.enumerated() {
                 guard !Task.isCancelled, generation == token else { return }
+                // Visible cells may finish work after this scan's snapshot was taken.
+                if checked.contains(asset.localIdentifier) { continue }
                 do { pending[asset.localIdentifier] = try await query(asset) } catch is CancellationError {
                     return
                 } catch { /* Cloud-only assets remain unknown until explicitly selected. */  }
                 // Coalesce progress even when cloud-only assets cannot be fingerprinted.
-                if offset.isMultiple(of: 32) || offset == result.count - 1 {
-                    scannedCount = offset + 1
+                if offset.isMultiple(of: 32) || offset == remaining.count - 1 {
+                    scannedCount = completedCount + offset + 1
                 }
                 if pending.count >= 32 {
                     await matches.registerBatch(pending)
@@ -206,8 +211,17 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
 
     nonisolated func photoLibraryDidChange(_ changeInstance: PHChange) {
         Task { @MainActor [weak self] in
-            guard let self, let (matches, client) = clients.values.first else { return }
-            await refresh(matches: matches, client: client)
+            guard let self else { return }
+            libraryChangeTask?.cancel()
+            // Leave the scan running while iCloud sends bursts of library changes.
+            libraryChangeTask = Task { [weak self] in
+                do { try await Task.sleep(for: .milliseconds(750)) } catch { return }
+                guard let self, !Task.isCancelled, let (matches, client) = clients.values.first else {
+                    return
+                }
+                libraryChangeTask = nil
+                await refresh(matches: matches, client: client)
+            }
         }
     }
 
@@ -234,6 +248,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     }
 
     private func stopWork() {
+        libraryChangeTask?.cancel(); libraryChangeTask = nil
         generation = UUID()
         scanTask?.cancel(); scanTask = nil
         for task in visibleWork.values { task.cancel() }
