@@ -110,6 +110,148 @@ history is the archive. Permanent product constraints live in the
   `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
   for the same lines.
 
+- **MCP read projection and strict list filters.** A 16-order Amazon import on
+  2026-09-14 spent most of ~600k tokens on reads, not writes: `entity list
+  purchase` returned 25 full rows (~30k tokens, `dataQuality` gap text
+  repeated three times per row) to learn the latest booked order date, and
+  `entity get product` (~4k each, with `recipeUsages` and USDA nutrients) was
+  called only for `externalIds`. Add `resultDetail: "summary"` or a `fields`
+  projection to `list`/`get`, and reject unknown filter keys — `filters.ids`
+  on `list product` is not a field and was silently ignored, returning page 1
+  of the whole catalog (~40k tokens). Add a real `ids` filter while there.
+
+- **MCP write projection.** Planning one dinner (MEL-WB6Y, 2026-09-14) spent
+  most of its tokens on write echoes: every `entity update product` returned
+  the full product (images, `dataQuality`, pricing, ~1.5k tokens) to confirm
+  one field, and each `add_recipe_to_meal` returned the meal with 22-nutrient
+  totals three times (recipe, `scaledTotals`, meal; ~6k tokens). Writes should
+  default to `{id, name}` plus a coverage headline, with the
+  `nutrition: full|kcal|none` knob `get_meal_preparations` already has.
+
+- **Coverage diagnostics on recipe and product writes.** Recipe create returned
+  `totals: pending`, so finding the uncosted lines took a separate
+  `explain_recipe_costing` per recipe per fix (five calls that evening). Return
+  the per-line `missing: [price|weight|nutrients]` list inline on recipe
+  create/update, and on product updates report which recipe lines the change
+  closed (the jar-weight mapping on PRD-Q7KK fixed 14 recipes silently).
+
+- **Line-level recipe patch over MCP.** Three one-field edits (onion `1 whole`
+  → `150 g`, basil `1 handful` → `15 g`, pasta 175 → 150 g) each resent all 12
+  lines and 6 instructions because the read projection strips section/line ids
+  and an update without section `id` replaces every section (see the compound
+  ingredient split note). Add `{action: "patchLine", recipeId, lineId, …}`;
+  `explain_recipe_costing` already exposes line ids.
+
+- **Count units resolve on the ingredient, never via product `each`.** `1 whole
+  yellow onion` costed as 1,360 g because the linked product is a 48 oz bag and
+  its `each` satisfied `whole`. Product `each` means *package*; recipe
+  `whole/bunch/crown/clove` means *piece*. Garlic resolved correctly only
+  because a USDA portion supplied clove → 3 g. Rule: piece units come from USDA
+  `portionInfo` or an ingredient-level mapping, and product `each` prices the
+  package only — it must never satisfy a piece unit.
+
+- **`resolve_ingredients` suggests product links.** It created `ground chicken`
+  (ING-ZEU3) while PRD-FGC5 "Ground Chicken Breast" sat unlinked; four of the
+  five products in that meal had `ingredientId: null`, so nothing costed until
+  hand-linked. Return `candidateProducts` by name similarity and accept
+  `linkProductId` in the same call. Pairs with the coverage-visibility entry
+  above.
+
+- **Inferred-zero nutrients for label data.** USDA `branded_food` records and
+  household `labelNutrition` carry only what the label prints (11 nutrients
+  for chicken, panko, parm, chilies), so macro coverage read 11/12 with the
+  only "missing" line being salt's protein. FDA labels must declare calories,
+  total/saturated/trans fat, cholesterol, sodium, carbs, fiber, sugars, added
+  sugars, protein, vitamin D, calcium, iron, potassium; a manufacturer may omit
+  one only as "not a significant source" (below rounding). So for label-sourced
+  records a missing *mandatory* nutrient is an inferred zero and a missing
+  micronutrient (zinc, B12, magnesium, folate…) stays unknown. Model nutrient
+  values as `measured | inferred-zero | unknown`; count inferred zeros as
+  covered but flag them. Manual override: extend ingredient `naKinds` with
+  nutrient keys for true edge cases — but not salt, which is the largest sodium
+  source, and whose unmeasured "to taste" line is currently planned at 1% of
+  pot weight (13.6 g salt ≈ 5 g sodium in a 1.3 kg pot), worth a sanity check.
+
+- **Portion shares alongside grams.** Once the household stops weighing and
+  serves by eye ("Nicky ~36% of the pot"), grams are a proxy that goes stale
+  when `estimatedYieldGrams` changes. Accept `{share}` per portion in
+  `save_meal_recipe_preparation` and derive grams at read time from the
+  current yield.
+
+- **Compute-if-stale on dependent reads.** After a product unit-mapping change,
+  `get_meal_preparations` returned `pending: totals_stale` until
+  `explain_recipe_costing` forced the recompute. Reads that hit a stale total
+  should compute it rather than report pending.
+
+- **USDA search ranking and product-driven suggestion.** `search_usda_foods`
+  is phrase/AND matching: `"chicken breast ground raw"` (sr_legacy) → 0,
+  `"chicken, ground"` → 344. Tokenize and rank, and add
+  `suggest_usda_for_product(productId)` that searches on name + brand + GTIN
+  (Mary's chicken resolved to Pitman Farms only by knowing the parent brand).
+
+- **Label photo → `labelNutrition`.** The Brami panel was transcribed by hand
+  from a photo pasted into chat. Accept an attached image on the product and
+  extract the Nutrition Facts panel into `labelNutrition` with the image as
+  provenance.
+
+- **Vendor coverage query.** Every import starts with "latest purchase date
+  and the set of `orderId`s for vendor X in [from, to]". Expose that as one
+  cheap read (on `entity get vendor` or a `get_vendor_coverage` tool) instead
+  of the full purchase list above.
+
+- **`resolve_products` should share `global_search`'s lexical engine.** It
+  returned no candidates for `Organic Banana`, `Organic Cauliflower`, `Organic
+  Green Kiwi` while `global_search` found `Organic Whole Trade Banana`,
+  `Cauliflower`, `Organic Kiwi` at once. For grocery the ASIN collision check
+  misses the Fresh / Whole Foods / in-store ASIN split constantly, so the name
+  fallback is load-bearing. Ideal shape: one call taking `{name,
+  externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
+  candidates together.
+
+- **`entity merge product` keeps the loser's secondary external ids.** Products
+  legitimately hold several `amazon/asin` slots (`patch_products_external_ids`
+  already supports it), but merge discards a colliding `(source, kind)` — that
+  is how PRD-WDHJ lost B079M85N83 and needed a hand re-link.
+
+- **Measured quantity on Expense lines.** Amazon states `0.99 lb @ $8.99/lb`
+  and `0.77 lb @ $3.49/lb`; the only legal booking is `productQuantity: null`,
+  which discards the fact a pantry cares about most and leaves weight-priced
+  Products (Mary's chicken breast: $11.89 / $14.98 / $15.58 / $34.52 booked
+  as four "units") with a meaningless derived unit price. Let
+  `productQuantity` carry `{value, unit}` (lb, oz, each) and normalize through
+  the Product's `unitMappings`, so derived pricing becomes price-per-measure
+  for weight lines and stays per-unit for packaged ones.
+
+- **Ingredient as the grocery dedupe hub.** Product is SKU-grade and
+  Ingredient is the commodity layer, but imports never fill `ingredientId`,
+  so the catalog now holds `Cauliflower` / `Organic Cauliflower, 1 Each`,
+  `Organic Kiwi` / `Organic Green Kiwi, 16 oz`, `Broccoli Crowns` /
+  `Broccoli Crowns (Conventional)`, and three ground-beef 80/20s with nothing
+  tying them together — each a defensible SKU, none reachable from the
+  others. Suggest or require an Ingredient on grocery Product creation and
+  make `resolve_products` search ingredient aliases, so "banana" resolves
+  regardless of which storefront's ASIN the receipt carries.
+
+- **Line-level discounts with a Product link.** Whole Foods promos and Amazon
+  Buy-Again are per line, but a `discount` row cannot carry `productId`, so
+  they are booked order-level and every promoted grocery's cost basis is list
+  price (Applegate patties $14.79, paid $11.10; 8× Ellenos at $3.49 list
+  inside a $15.86 order savings). Allow `productId` (no quantity) on
+  `discount` rows and fold linked discounts into derived cost basis without
+  changing `SUM(Expense.cost)`.
+
+- **Consumable vs durable as a Product attribute.** The distinction is
+  currently encoded by convention as "expense on `PRJ-HSHD` vs no project",
+  living only in the purchase-import skill notes; `stockTracked` half-encodes
+  it. A first-class `Product.kind` (or consumable flag) would let the import
+  default the project, the shelf worklists filter, and the convention stop
+  needing rediscovery per importer.
+
+- **Marketplace seller on Amazon purchases.** `Sold by:` (YANTURION, MIYATCH
+  SHOP, Neighborhoodcircle) is lost except in Purchase notes; it decides
+  returns and warranty routing. A small `sellerName` on Purchase or Expense
+  is enough — do not mint a Vendor per marketplace seller.
+
 - **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
   `get_shopping_list` is a plain structured/text tool. The remaining USDA
   Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
@@ -359,6 +501,14 @@ history is the archive. Permanent product constraints live in the
   signals into maintenance, project evidence, and correctly scoped tasks.
 - **Cubby to Home Assistant.** Expose computed shopping shortfalls, maintenance due,
   actionable weekend work, and tonight's meal for household display and voice.
+- **Receipt-shaped import.** Move the deterministic half of a vendor import
+  server-side: a `create_purchase_with_lines` (or `import_vendor_orders`)
+  call takes a header plus lines with per-order defaults, dedupes on
+  `orderId`, emits the typed tax/fee/tip/discount rows, refuses the order
+  unless the lines sum to `statedTotal`, and attaches the line's image URL —
+  returning only the lines whose Product identity is ambiguous. Today the
+  model spends ~150 tool calls per 16 orders on that mechanical part and ~20
+  on the judgment part.
 
 ---
 

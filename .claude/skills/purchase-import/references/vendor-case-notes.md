@@ -233,9 +233,44 @@ source.
   carries `/dp/` links and images for in-store scale items; only Amazon Fresh
   (`112-`) orders link produce ASINs on the ordinary details page.
 - A Product often needs **two ASINs** (Whole Foods storefront id and Amazon
-  Fresh id). Only one fits the `amazon/asin` slot; park the other as
-  `amazon/legacy_unspecified` with a note. A collision check returning `unique`
-  against a *different* Product for a grocery item is a duplicate signal.
+  Fresh id). A Product may hold several `amazon/asin` slots: add the second
+  with `patch_products_external_ids` `upsert` and `isPrimary: false` — the
+  existing primary survives (verified 2026-09-14 on PRD-KMK2). Do **not** park
+  it as `legacy_unspecified`; that older advice predates multi-slot support.
+  The one place a second slot is still lost is `entity merge product`, which
+  discards the loser's colliding `(source, kind)` — re-add it by hand after a
+  merge (PRD-WDHJ's note is that case). A collision check returning `unique`
+  against a *different* Product for a grocery item is a duplicate signal, and
+  the reverse is common too: `find_product_external_id_collisions` says
+  `missing` while the Product exists under the other storefront's ASIN. Run
+  `global_search` on the noun (`banana`, `cauliflower`, `ground beef`) before
+  creating any grocery Product — `resolve_products` returned nothing for
+  "Organic Banana" while `global_search` found `Organic Whole Trade Banana`.
+- **Scraping the current-order surfaces from the Chrome tool.** Use
+  [amazon-print-extract.js](amazon-print-extract.js) verbatim on each
+  printable invoice: it dumps `ORDER / PAY / summary / STATUS / LINES` into a
+  `<pre>` for `get_page_text`, because the JS tool truncates its own return at
+  ~1,000 characters and blocks any in-page `fetch()` whose URL carries a query
+  string. So the loop is `navigate` → `javascript_tool` → `get_page_text`,
+  three calls per order, and the order list is paged by navigating
+  `/your-orders/orders?timeFilter=months-3&startIndex=N` (10 per page) and
+  reading `.order-card` text. A 2026 `111-` order prefix is ordinary retail;
+  `112-` is Fresh (details page redirects to `/uff/` and hides lines past five
+  behind "View all items" — the print page lists them all); `113-` is Whole
+  Foods, both in-store trips and shipped SWOON-style marketplace orders.
+- **Booking conventions on these orders** (mirror the existing rows rather than
+  re-deriving them): `costType: materials`, `trade: other`; consumables
+  (groceries, supplements, batteries, tissues, dog treats, body wash) go on
+  `PRJ-HSHD`, durables (tools, cookware, books, pet gear) carry no project; tax
+  follows the lines it fell on. Row names: `Sales tax`, `Paper bag fee`,
+  `Bottle deposit fee`, `Driver tip`, `Whole Foods savings` (one order-level
+  `discount` at the details page's Total Savings, lines at list price),
+  `Buy Again & Save discount`, `Exclusive promotion`. The driver tip is inside
+  `statedTotal` on the invoice's Grand Total. Weight-priced produce, butcher
+  and Mary's chicken lines take `productQuantity: null`; a title ending
+  `1 Each` / `1 Bunch` takes `1`. A `$0.00` "No current charges" order that
+  re-ships an ASIN bought days earlier is booked as a `$0` principal with
+  `productQuantity: null` and a note naming the original order.
 - Amazon may print a payment token (`Visa *NNNN`) that matches no real card; the
   statement row names the real one. Never mint an account for it.
 - `/cpe/yourpayments/transactions` is the charge→order ledger and the only
