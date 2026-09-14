@@ -73,7 +73,7 @@ final class PhotoMatchStore {
         revision += 1
     }
 
-    func refresh(client: CubbyClient) async {
+    func refresh(client: CubbyClient, priorityIDs: Set<String>? = nil) async {
         if let loadingTask { await loadingTask.value; return }
         repairTask?.cancel(); registrationTask?.cancel()
         isRepairing = false
@@ -92,11 +92,16 @@ final class PhotoMatchStore {
                 totalCount = document.items.count
                 remainingCount = document.repair.count
                 hasIndex = true
-                let querySnapshot = queries
+                let querySnapshot = queries.filter { priorityIDs?.contains($0.key) ?? true }
                 let matched = try await Self.match(entries: document.items, queries: querySnapshot)
                 guard generation == token, !Task.isCancelled else { return }
                 publishServerMatches(matched, for: querySnapshot, replacing: true)
                 pendingQueries = pendingQueries.filter { queries[$0.key] != $0.value }
+                if let priorityIDs {
+                    for (id, query) in queries where !priorityIDs.contains(id) {
+                        pendingQueries[id] = query
+                    }
+                }
                 revision += 1
                 if !observers.isEmpty {
                     repairTask = Task {
@@ -158,22 +163,30 @@ final class PhotoMatchStore {
                 return
             }
             guard let self, generation == token, !Task.isCancelled else { return }
-            let additions = pendingQueries
-            pendingQueries = [:]
-            registrationTask = nil
+            let additions = Dictionary(
+                uniqueKeysWithValues: pendingQueries.prefix(32).map { ($0.key, $0.value) })
+            for id in additions.keys { pendingQueries[id] = nil }
             await registerBatch(additions)
-            if generation == token { schedulePendingRegistrations() }
+            if generation == token {
+                registrationTask = nil
+                schedulePendingRegistrations()
+            }
         }
     }
 
-    func check(_ items: [PhotoSelectionItem], client: CubbyClient) async throws {
+    func check(
+        _ items: [PhotoSelectionItem], client: CubbyClient,
+        status: (String) -> Void = { _ in }
+    ) async throws {
         let account = accountGeneration
-        await refresh(client: client)
+        status("Refreshing Cubby photos…")
+        await refresh(client: client, priorityIDs: Set(items.map(\.id)))
         guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
         guard hasIndex, error == nil else { throw PhotoCheckFailure.indexUnavailable(error) }
         var batch: [ImageHashEntry] = []
         var additions: [String: HashQuery] = [:]
-        for item in items {
+        for (offset, item) in items.enumerated() {
+            status("Checking selected photo \(offset + 1) of \(items.count)…")
             let query = try await item.query()
             guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
             additions[item.id] = query
@@ -187,6 +200,7 @@ final class PhotoMatchStore {
                     perceptualHash: query.perceptualHash, sourceFingerprint: query.sourceFingerprint,
                     width: item.preview.width, height: item.preview.height))
         }
+        status("Comparing selected photos with Cubby…")
         await registerBatch(additions)
         guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
     }

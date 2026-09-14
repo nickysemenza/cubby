@@ -86,6 +86,15 @@ private struct PhotoLibraryBrowser: View {
                                                     preview = AssetPreview(asset: asset)
                                                 }
                                             }.id(asset.localIdentifier)
+                                                .contextMenu {
+                                                    Button(
+                                                        "View photo and Cubby matches",
+                                                        systemImage: "info.circle"
+                                                    ) {
+                                                        library.scrollID = asset.localIdentifier
+                                                        preview = AssetPreview(asset: asset)
+                                                    }
+                                                }
                                         }
                                     }
                                 }
@@ -353,6 +362,11 @@ private struct PhotoLibraryPreview: View {
                     if candidates.isEmpty { Text("No known match").foregroundStyle(.secondary) }
                     ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
                         MatchCandidateView(candidate: candidate)
+                        NavigationLink {
+                            ImageEntityDetailView(id: candidate.id)
+                        } label: {
+                            Label("Open image in Cubby", systemImage: "arrow.up.right.square")
+                        }
                     }
                     Text(appModel.photoMatches.coverage).font(.caption).foregroundStyle(.secondary)
                     if appModel.photoMatches.repairFailures > 0 {
@@ -378,6 +392,9 @@ private struct PhotoLibraryPreview: View {
                     }
                 }
         }
+        #if os(macOS)
+            .frame(minWidth: 540, idealWidth: 720, minHeight: 620, idealHeight: 780)
+        #endif
     }
 }
 

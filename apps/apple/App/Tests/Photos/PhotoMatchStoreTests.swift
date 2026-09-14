@@ -9,6 +9,34 @@ import Testing
 @MainActor
 @Suite("Progressive photo matching", .serialized)
 struct PhotoMatchStoreTests {
+    @Test func priorityRefreshUpdatesSelectionAndDrainsRemainingLibraryQueries() async throws {
+        let client = try client(
+            index: """
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"0123456789abcdef","sourceFingerprint":null,"width":2,"height":2}],"repair":[]}
+                """)
+        let store = PhotoMatchStore()
+        defer { store.reset() }
+        let selected = try selection(hash: "0123456789abcdef")
+        try await store.check([selected], client: client)
+        let query = try await selected.query()
+        let background = Dictionary(uniqueKeysWithValues: (0..<65).map { ("library-\($0)", query) })
+        await store.registerBatch(background)
+        #expect(background.keys.allSatisfy { !store.storedCandidates(for: $0).isEmpty })
+        PhotoMatchTestProtocol.response.withLock {
+            $0 = Data(
+                """
+                {"algorithmRevision":1,"items":[{"id":"IMG-2345","perceptualHash":"fedcba9876543210","sourceFingerprint":null,"width":2,"height":2}],"repair":[]}
+                """.utf8)
+        }
+        await store.refresh(client: client, priorityIDs: [selected.id])
+        #expect(store.storedCandidates(for: selected.id).isEmpty)
+        for _ in 0..<100 {
+            if background.keys.allSatisfy({ store.storedCandidates(for: $0).isEmpty }) { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(background.keys.allSatisfy { store.storedCandidates(for: $0).isEmpty })
+    }
+
     @Test func incompleteRepairDoesNotBlockSelectedPhotos() async throws {
         let client = try client(
             index: """

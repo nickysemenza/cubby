@@ -156,6 +156,9 @@ private struct PhotoEntityReviewFlow: View {
                 PhotoMatchReviewSheet(items: items, dismissOnContinue: false) { reviewedItems = $0 }
             }
         }
+        #if os(macOS)
+            .frame(minWidth: 540, minHeight: 620)
+        #endif
     }
 }
 

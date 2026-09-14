@@ -35,12 +35,14 @@ struct GardenPhotoImportSheet: View {
                         defer { saveTask = nil }
                         guard let importModel, await importModel.save() else { return }
                         guard !Task.isCancelled else { return }
-                        if let client = importModel.client, appModel.client === client {
-                            await appModel.photoMatches.refresh(client: client)
-                        }
-                        guard !Task.isCancelled else { return }
                         onDone()
                         dismiss()
+                        if let client = importModel.client {
+                            Task {
+                                guard appModel.client === client else { return }
+                                await appModel.photoMatches.refresh(client: client)
+                            }
+                        }
                     }
                 }
                 .disabled(importModel?.isReady != true || importModel?.isSaving == true)
@@ -383,6 +385,7 @@ private struct GardenPhotoImportContent: View {
                 .disabled(model.confirmedDraftIDs.contains(draft.id))
             }
         }
+        .formStyle(.grouped)
         .navigationTitle("Import garden photos")
     }
 }

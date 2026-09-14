@@ -10,6 +10,7 @@ struct PhotoMatchReviewSheet: View {
     @State private var decisions: [String: ImageCode] = [:]
     @State private var addNew: [String: Set<ImageCode>] = [:]
     @State private var checking = true
+    @State private var checkStatus = "Checking selected photos…"
     @State private var error: String?
     @State private var sessionID = UUID()
     @State private var refreshID = UUID()
@@ -20,10 +21,12 @@ struct PhotoMatchReviewSheet: View {
                 Section {
                     Text(appModel.photoMatches.coverage)
                     if appModel.photoMatches.remainingCount > 0 {
-                        Text("You can add now. Images that have not been checked may still be duplicates.")
-                            .foregroundStyle(.secondary)
+                        Text(
+                            "Some Cubby images remain unchecked. You can continue after the selected photos are checked."
+                        )
+                        .foregroundStyle(.secondary)
                     }
-                    if checking { ProgressView("Checking selected photos…") }
+                    if checking { ProgressView(checkStatus) }
                     if let error { Text(error).foregroundStyle(PorcelainTokens.destructive) }
                     if appModel.photoMatches.repairFailures > 0 {
                         Text(
@@ -41,7 +44,8 @@ struct PhotoMatchReviewSheet: View {
                         }
                         let matches = candidates(item)
                         if matches.isEmpty {
-                            Text("No known match").foregroundStyle(.secondary)
+                            Text(checking ? "Checking for matches…" : "No known match").foregroundStyle(
+                                .secondary)
                         } else {
                             ForEach(matches, id: \.id) { candidate in
                                 VStack(alignment: .leading, spacing: 8) {
@@ -110,7 +114,9 @@ struct PhotoMatchReviewSheet: View {
 
     private func check() async {
         checking = true; error = nil
-        do { try await appModel.photoMatches.check(items, client: appModel.client) } catch {
+        do {
+            try await appModel.photoMatches.check(items, client: appModel.client) { checkStatus = $0 }
+        } catch {
             self.error = error.localizedDescription; Diagnostics.report(error, context: "photos.review")
         }
         checking = false
