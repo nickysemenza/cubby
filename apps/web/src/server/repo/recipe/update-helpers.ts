@@ -168,23 +168,60 @@ const sectionIngredientValues = (
 });
 
 /**
+ * Resolves an update's `forkedFromRecipeId` shortcode to a live uuid,
+ * guarding against a recipe forking from itself. Returns `undefined` when the
+ * update didn't touch the field at all — distinct from the `null` that clears
+ * it — so the caller can tell "untouched" from "cleared".
+ */
+async function resolveForkedFromRecipeIdUpdate(
+  tx: DrizzleTransaction,
+  recipeId: RecipeId,
+  forkedFromRecipeId: RecipeUpdateInput["data"]["forkedFromRecipeId"],
+): Promise<RecipeId | null | undefined> {
+  if (forkedFromRecipeId === null) return null;
+  if (forkedFromRecipeId === undefined) return undefined;
+
+  const resolved = await resolveOrThrow(tx, "recipe", forkedFromRecipeId);
+  if (resolved === recipeId) {
+    throw createAppError(
+      "SELF_DEPENDENCY",
+      "A recipe cannot be forked from itself.",
+    );
+  }
+  return resolved;
+}
+
+/**
  * Update recipe name and source metadata.
+ *
+ * Returns the resolved `forkedFromRecipeId` (raw uuid) when this call
+ * actually touched it, so `updateRecipe`'s audit diff can compare uuids on
+ * both sides without a second query.
  */
 export async function updateRecipeBasicProperties(
   tx: DrizzleTransaction,
   recipeId: RecipeId,
   updates: RecipeUpdateInput["data"],
   existingRecipe: ExistingRecipeWithSections,
-): Promise<void> {
+): Promise<{ forkedFromRecipeId?: RecipeId | null }> {
   const hasBasicUpdates =
     updates.name ||
     updates.meta !== undefined ||
     updates.yield !== undefined ||
     updates.servings !== undefined ||
     updates.tags !== undefined ||
-    updates.notes !== undefined;
+    updates.notes !== undefined ||
+    updates.forkedFromRecipeId !== undefined;
 
-  if (!hasBasicUpdates) return;
+  if (!hasBasicUpdates) return {};
+
+  // Lineage pointer only ("Recipe.forkedFromRecipeId" — see
+  // RECIPE_DELETE_EDGE_POLICY in crud.ts).
+  const forkedFromRecipeId = await resolveForkedFromRecipeIdUpdate(
+    tx,
+    recipeId,
+    updates.forkedFromRecipeId,
+  );
 
   // A url edit re-derives Website provenance; without one the existing
   // SourceType is preserved (a manual edit must not clobber Book/Notion).
@@ -204,6 +241,7 @@ export async function updateRecipeBasicProperties(
     servings?: number | null;
     tags?: string[] | null;
     notes?: string | null;
+    forkedFromRecipeId?: RecipeId | null;
   } & Partial<RecipeMetaColumns> = {};
 
   if (updates.name) {
@@ -229,11 +267,16 @@ export async function updateRecipeBasicProperties(
   if (updates.notes !== undefined) {
     updateData.notes = updates.notes;
   }
+  if (forkedFromRecipeId !== undefined) {
+    updateData.forkedFromRecipeId = forkedFromRecipeId;
+  }
 
   await tx
     .update(recipe)
     .set(updateData)
     .where(and(eq(recipe.id, recipeId), notDeleted(recipe)));
+
+  return { forkedFromRecipeId };
 }
 
 /**

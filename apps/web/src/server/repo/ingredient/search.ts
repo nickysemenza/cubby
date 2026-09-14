@@ -228,11 +228,12 @@ export const mergeImpactForIngredients = async (
       ingredientId: product.ingredientId,
       productCount: sql<number>`count(*)`,
       // Mirrors `foodLookupParamFromProduct`: an explicit fdc_id, else a
-      // barcode. `sql.raw` with the outer reference hand-qualified — this is a
-      // joined-through aggregate over a single-table select, where drizzle
+      // barcode — OR a label nutrition override, which supersedes USDA
+      // outright. `sql.raw` with the outer reference hand-qualified — this is
+      // a joined-through aggregate over a single-table select, where drizzle
       // strips the table prefix off an interpolated column and the subquery
       // would silently self-join.
-      hasUsdaLink: sql<boolean>`bool_or(${product.fdc_id} is not null or ${sql.raw(
+      hasUsdaLink: sql<boolean>`bool_or(${product.fdc_id} is not null or ${product.labelNutrition} is not null or ${sql.raw(
         `EXISTS (SELECT 1 FROM "ProductExternalId" pei WHERE pei."productId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL)`,
       )})`,
     })

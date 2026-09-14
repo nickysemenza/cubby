@@ -1,4 +1,8 @@
 import { generatedEntityEditIntents } from "@cubby/schemas/entity-edit-intents";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
@@ -112,6 +116,41 @@ const isFieldShorthand = <E extends EditableEntity>(
   value: FieldOptions<E> | "trimmedName" | "nullableText" | undefined,
 ): value is "trimmedName" | "nullableText" => typeof value === "string";
 
+// Editor blank handling predates API parsing and is part of the form contract.
+const trimNormalize = (value: EntityEditValue): EntityEditValue => {
+  const parsed = z.string().safeParse(value);
+  return parsed.success ? parsed.data.trim() : value;
+};
+
+const nullableTrimNormalize = (value: EntityEditValue): EntityEditValue => {
+  const parsed = z.string().safeParse(value);
+  return parsed.success ? parsed.data.trim() || null : value;
+};
+
+/**
+ * Derives the same `"trimmedName"` / `"nullableText"` / `{ required: true }`
+ * behaviour a per-field override used to spell out by hand, from the field's
+ * own declaration (`packages/schemas/src/entity-definitions/*.entity.ts`):
+ * a text field required on create trims and rejects blank; a nullable text
+ * field trims and collapses blank to `null`; a required non-text field is
+ * simply required. Returns `undefined` when none of those apply — the field
+ * keeps `makeField`'s own defaults unless an explicit override says
+ * otherwise. `fieldsFrom`'s `overrides` argument still wins over this.
+ */
+const defaultFieldOptions = <E extends EditableEntity>(
+  field: EntityFieldModel["fields"][number],
+): FieldOptions<E> | undefined => {
+  if (field.kind === "text") {
+    if (field.requiredOnCreate)
+      return { required: true, normalize: trimNormalize };
+    if (field.nullable)
+      return { required: false, normalize: nullableTrimNormalize };
+    return undefined;
+  }
+  if (field.requiredOnCreate) return { required: true };
+  return undefined;
+};
+
 const builderFor = <E extends EditableEntity>(
   entity: E,
 ): EntityEditBuilder<E> => {
@@ -141,6 +180,10 @@ const builderFor = <E extends EditableEntity>(
       changed(record, id, value) ? { [id]: value } : undefined,
   });
 
+  const fieldModelByKey = new Map(
+    entityFieldModels[entity].fields.map((field) => [field.key, field]),
+  );
+
   return {
     fieldsFrom: (intents, overrides) => {
       const ids = new Set(
@@ -148,17 +191,17 @@ const builderFor = <E extends EditableEntity>(
       );
       return [...ids].map((id) => {
         const override = overrides?.[id];
-        if (!isFieldShorthand(override)) return makeField(id, override);
-        // Editor blank handling predates API parsing and is part of the form contract.
-        return makeField(id, {
-          required: override === "trimmedName",
-          normalize: (value) => {
-            const parsed = z.string().safeParse(value);
-            if (!parsed.success) return value;
-            const trimmed = parsed.data.trim();
-            return override === "nullableText" ? trimmed || null : trimmed;
-          },
-        });
+        if (isFieldShorthand(override)) {
+          return makeField(
+            id,
+            override === "trimmedName"
+              ? { required: true, normalize: trimNormalize }
+              : { required: false, normalize: nullableTrimNormalize },
+          );
+        }
+        const field = fieldModelByKey.get(id);
+        const defaults = field ? defaultFieldOptions<E>(field) : undefined;
+        return makeField(id, { ...defaults, ...override });
       });
     },
     fieldsFor: (semanticIntent) => fieldsFor(entity, semanticIntent),
@@ -428,25 +471,22 @@ const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
 export const entityEditRegistry: EntityEditRegistry = {
   product: buildDefinition("product", (f) => ({
     fields: f.fieldsFrom(["full"], {
-      name: "trimmedName",
+      // The create schema allows omitting a manufacturer, but the form still
+      // requires one — not derivable from `requiredOnCreate`.
       manufacturer: { required: true },
-      notes: "nullableText",
     }),
   })),
   ingredient: buildDefinition("ingredient", (f) => ({
-    fields: f.fieldsFrom(["full"], { name: "trimmedName" }),
+    fields: f.fieldsFrom(["full"]),
   })),
   inventory: buildDefinition("inventory", (f) => ({
     fields: f.fieldsFrom(["full"]),
   })),
   location: buildDefinition("location", (f) => ({
-    fields: f.fieldsFrom(["full"], { name: "trimmedName" }),
+    fields: f.fieldsFrom(["full"]),
   })),
   planting: buildDefinition("planting", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"], {
-      ingredientId: { required: true },
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["capture", "full"]),
     create: {
       capture: {
         defaults: { ingredientId: "", locationId: null, status: "planned" },
@@ -456,12 +496,7 @@ export const entityEditRegistry: EntityEditRegistry = {
     update: { full: { acceptsSeed: true } },
   })),
   gardenEntry: buildDefinition("gardenEntry", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"], {
-      locationId: { required: true },
-      observedOn: { required: true },
-      note: "nullableText",
-      harvestAmount: "nullableText",
-    }),
+    fields: f.fieldsFrom(["capture", "full"]),
     create: {
       capture: {
         defaults: {
@@ -486,16 +521,10 @@ export const entityEditRegistry: EntityEditRegistry = {
     update: { full: { acceptsSeed: true } },
   })),
   recipe: buildDefinition("recipe", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      name: "trimmedName",
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["full"]),
   })),
   meal: buildDefinition("meal", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      date: { required: true },
-      name: "nullableText",
-    }),
+    fields: f.fieldsFrom(["full"]),
     create: {
       capture: {
         defaults: () => ({
@@ -517,13 +546,7 @@ export const entityEditRegistry: EntityEditRegistry = {
     },
   })),
   project: buildDefinition("project", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      name: "trimmedName",
-      icon: "nullableText",
-      googleDriveFolderUrl: "nullableText",
-      notionPageUrl: "nullableText",
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["full"]),
     create: {
       capture: {
         defaults: {
@@ -540,7 +563,6 @@ export const entityEditRegistry: EntityEditRegistry = {
   })),
   task: buildDefinition("task", (f) => ({
     fields: f.fieldsFrom(["full"], {
-      name: "trimmedName",
       dueEndDate: {
         validate: ({ value, values }) => {
           const end = z.string().safeParse(value);
@@ -556,6 +578,9 @@ export const entityEditRegistry: EntityEditRegistry = {
             : noIssues();
         },
       },
+      // `notes` is accepted by the canonical task inputs but is not a scalar
+      // model field (see `editorFields` in the declaration) — no field model
+      // entry to derive a default from, so this stays explicit.
       notes: "nullableText",
     }),
     create: {
@@ -592,9 +617,11 @@ export const entityEditRegistry: EntityEditRegistry = {
   })),
   expense: buildDefinition("expense", (f) => ({
     fields: f.fieldsFrom(["full"], {
-      name: "trimmedName",
-      url: "nullableText",
-      notes: "nullableText",
+      // The create schema requires a date (`requiredOnCreate` would derive
+      // `{ required: true }`), but the blanket field-level check would fire
+      // for every intent — the `planned` update intent below already has its
+      // own conditional, better-worded `requiredDate("date")` check.
+      date: { required: false },
     }),
     create: {
       capture: {
@@ -650,25 +677,14 @@ export const entityEditRegistry: EntityEditRegistry = {
     },
   })),
   vendor: buildDefinition("vendor", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      name: "trimmedName",
-      website: "nullableText",
-      orderUrlTemplate: "nullableText",
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["full"]),
     create: {
       capture: { defaults: vendorCreateDefaults },
       full: { defaults: vendorCreateDefaults },
     },
   })),
   purchase: buildDefinition("purchase", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      vendorId: { required: true },
-      date: { required: true },
-      orderId: "nullableText",
-      displayLabel: "nullableText",
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["full"]),
     create: {
       capture: {
         defaults: () => ({
@@ -688,10 +704,7 @@ export const entityEditRegistry: EntityEditRegistry = {
     },
   })),
   financialAccount: buildDefinition("financialAccount", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"], {
-      name: "trimmedName",
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["capture", "full"]),
     create: {
       capture: {
         defaults: {
@@ -732,8 +745,13 @@ export const entityEditRegistry: EntityEditRegistry = {
   })),
   financialTransaction: buildDefinition("financialTransaction", (f) => ({
     fields: f.fieldsFrom(["capture", "full"], {
-      accountId: { required: true },
       amount: {
+        // The create schema makes this required (`requiredOnCreate` would
+        // derive `{ required: true }`), but the generic "This field is
+        // required." message would pre-empt the specific one below for a
+        // blank value — stay off the derived default and always run the
+        // more useful validator.
+        required: false,
         validate: ({ value }) => {
           const amount = z.number().finite().safeParse(value);
           return amount.success && amount.data !== 0
@@ -759,10 +777,6 @@ export const entityEditRegistry: EntityEditRegistry = {
               ]
             : noIssues(),
       },
-      merchant: "nullableText",
-      rawDescription: "nullableText",
-      sourceCategory: "nullableText",
-      notes: "nullableText",
     }),
     create: {
       capture: {
@@ -793,10 +807,7 @@ export const entityEditRegistry: EntityEditRegistry = {
     },
   })),
   wish: buildDefinition("wish", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      name: "trimmedName",
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["full"]),
     create: {
       // Capture is the full form here: a wish has nothing worth deferring.
       capture: {
@@ -814,23 +825,14 @@ export const entityEditRegistry: EntityEditRegistry = {
   // No editor is rendered for these yet — create/update stay on MCP — but the
   // builders must exist for the registry to be exhaustive over EditableEntity.
   ledgerParty: buildDefinition("ledgerParty", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      name: "trimmedName",
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["full"]),
     create: {
       full: { defaults: { name: "", kind: "member", notes: null } },
     },
     update: { full: { acceptsSeed: true } },
   })),
   ledgerTransfer: buildDefinition("ledgerTransfer", (f) => ({
-    fields: f.fieldsFrom(["full"], {
-      fromPartyId: { required: true },
-      toPartyId: { required: true },
-      amount: { required: true },
-      date: { required: true },
-      notes: "nullableText",
-    }),
+    fields: f.fieldsFrom(["full"]),
     create: {
       full: {
         defaults: {

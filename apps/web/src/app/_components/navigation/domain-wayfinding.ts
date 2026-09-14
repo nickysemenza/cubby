@@ -1,9 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { allEntities } from "@cubby/schemas/entity-manifest";
 import {
-  entityPresentation,
+  entitySummary,
   type WayfindingDomain,
-} from "@cubby/schemas/entity-presentation";
+} from "@cubby/schemas/entity-summary";
 
 /** The stable wayfinding families used by the Porcelain Transit shell. */
 export type { WayfindingDomain };
@@ -14,7 +14,7 @@ export type { WayfindingDomain };
  * workbench routes (`/scan`, `/calendar`) that belong to no entity.
  */
 const entitiesOn = (domain: WayfindingDomain): readonly Entity[] =>
-  allEntities.filter((entity) => entityPresentation[entity].domain === domain);
+  allEntities.filter((entity) => entitySummary[entity].domain === domain);
 
 export type DomainWayfinding = {
   id: WayfindingDomain;
@@ -123,7 +123,7 @@ export function domainForRoute(pathname: string): WayfindingDomain | null {
 
 /** Product classification intentionally resolves to Pantry. */
 export function domainForEntity(entity: Entity): WayfindingDomain | null {
-  return entityPresentation[entity].domain;
+  return entitySummary[entity].domain;
 }
 
 export function domainWayfinding(domain: WayfindingDomain): DomainWayfinding {

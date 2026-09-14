@@ -32,6 +32,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   manufacturer: "Example Tools",
   model: "D-12",
   notes: "Store near the fasteners.",
+  labelNutrition: null,
   expectedQuantity: null,
   category: "tools",
   images: [],

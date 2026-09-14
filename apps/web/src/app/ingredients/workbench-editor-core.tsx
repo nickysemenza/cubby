@@ -156,10 +156,14 @@ export const blankConvRow = (
   toUnit: seed?.toUnit ?? "g",
 });
 
-/** Whether any of the row's products already resolves to a USDA food. */
+/** Whether any of the row's products already resolves to a USDA food, or carries a label nutrition override (which supersedes USDA outright). */
 export const hasUsdaLink = (row: EnrichmentRow): boolean =>
   row.product.some(
-    (p) => p.food != null || p.fdc_id != null || p.primaryGtin != null,
+    (p) =>
+      p.food != null ||
+      p.fdc_id != null ||
+      p.primaryGtin != null ||
+      p.labelNutrition != null,
   );
 
 /**

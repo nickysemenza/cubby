@@ -203,6 +203,7 @@ export const RecipeCostingDebugCard: React.FC<{
                   <td className="py-1 pr-2">
                     <span className="block text-2xs text-muted-foreground">
                       {sourceLabel(d.plan.nutrients)}
+                      {d.nutritionSource && ` · ${d.nutritionSource}`}
                     </span>
                     <MeasureCell diag={d.nutrient} path={d.paths?.calories} />
                   </td>

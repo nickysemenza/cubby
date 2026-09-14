@@ -54,6 +54,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   manufacturer: "Bora",
   model: null,
   notes: null,
+  labelNutrition: null,
   expectedQuantity: null,
   category: "tools",
   images: [],

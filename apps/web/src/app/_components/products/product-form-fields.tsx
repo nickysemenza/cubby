@@ -8,7 +8,8 @@ import { hasFoodIndicators, productCategory } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { isMiscProduct } from "@cubby/shared";
-import { Search } from "lucide-react";
+import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda-schemas";
+import { ChevronRight, Search } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import type {
   FieldPathByValue,
@@ -17,6 +18,7 @@ import type {
   PathValue,
   UseFormReturn,
 } from "react-hook-form";
+import { useWatch } from "react-hook-form";
 import { z } from "zod";
 
 import { AliasesField } from "~/components/forms/aliases-field";
@@ -24,7 +26,13 @@ import { ArrayFieldManager } from "~/components/forms/array-field-manager";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "~/components/ui/collapsible";
 import { Description } from "~/components/ui/description";
+import { FieldError } from "~/components/ui/field";
 import { Image } from "~/components/ui/image";
 import { sectionRuleClass } from "~/components/ui/section-rule";
 import { Spinner } from "~/components/ui/spinner";
@@ -112,6 +120,28 @@ type ProductPickerPath<TFieldValues extends FieldValues> = FieldPathByValue<
   ComboboxItem | null | undefined
 >;
 
+/**
+ * The `labelNutrition` form draft: looser than `ProductLabelNutrition` so a
+ * half-filled form (serving grams entered, no nutrients yet) is representable
+ * mid-edit. `servingGrams: null` means "no label" — the resolver's
+ * `labelNutritionField` preprocess (see `product-form.tsx`) is what turns
+ * this into the real `ProductLabelNutrition | null` at submit time, filtering
+ * blank nutrient entries and collapsing to `null` when serving grams is
+ * empty. An explicit `0` in a nutrient field is kept (measured data), unlike
+ * a blank/`null` one (not yet entered).
+ */
+export interface LabelNutritionFormValue {
+  servingGrams: number | null;
+  source: string | null;
+  nutrients: Partial<Record<NutrientKey, number | null>>;
+}
+
+export const EMPTY_LABEL_NUTRITION_DRAFT: LabelNutritionFormValue = {
+  servingGrams: null,
+  source: null,
+  nutrients: {},
+};
+
 export interface ProductFormFieldPaths<TFieldValues extends FieldValues> {
   name: ProductTextPath<TFieldValues>;
   manufacturer: ProductTextPath<TFieldValues>;
@@ -138,6 +168,14 @@ export interface ProductFormFieldPaths<TFieldValues extends FieldValues> {
     source: ProductTextPath<TFieldValues>;
     externalId: ProductTextPath<TFieldValues>;
     url: ProductTextPath<TFieldValues>;
+  };
+  /** Omitted by forms with no `labelNutrition` field of their own (e.g. the
+   * compact quick-inventory-add create form) — `LabelNutritionFields` only
+   * mounts when this is present. */
+  labelNutrition?: {
+    servingGrams: ProductNumberPath<TFieldValues>;
+    source: ProductTextPath<TFieldValues>;
+    nutrient: (key: NutrientKey) => ProductNumberPath<TFieldValues>;
   };
 }
 
@@ -183,6 +221,9 @@ export interface ProductFormFieldValues extends FieldValues {
   tags?: string[];
   collections?: string[];
   externalIds?: ExternalIdInput[];
+  /** Omitted by forms with no label-nutrition UI of their own — see
+   * `ProductFormFieldPaths.labelNutrition`. */
+  labelNutrition?: LabelNutritionFormValue;
 }
 
 interface ProductFormFieldsProps<TFieldValues extends ProductFormFieldValues> {
@@ -368,6 +409,124 @@ function ProductUpcField<TFieldValues extends ProductFormFieldValues>({
   );
 }
 
+// FDA Nutrition Facts label order: the macro block (Calories, then Total Fat
+// / Saturated Fat, Cholesterol, Sodium, Carbohydrate / Fiber, Protein),
+// followed by the rest in `TIER1_NUTRIENTS`' own grouping (minerals, then
+// vitamins) — matches `NutritionLabel`'s `ROW_ORDER` so the read and edit
+// surfaces agree on nutrient ordering.
+const LABEL_NUTRIENT_ORDER: readonly NutrientKey[] = [
+  "kcal",
+  "fat",
+  "saturated_fat",
+  "cholesterol",
+  "sodium",
+  "carbs",
+  "fiber",
+  "protein",
+  "calcium",
+  "iron",
+  "potassium",
+  "vitamin_d",
+  "magnesium",
+  "zinc",
+  "selenium",
+  "vitamin_a",
+  "vitamin_e",
+  "vitamin_k",
+  "vitamin_c",
+  "vitamin_b6",
+  "vitamin_b12",
+  "folate",
+];
+
+/**
+ * Package-label nutrition override — a compact, collapsed-by-default
+ * disclosure so the ~3,000 non-food products that will never use it don't pay
+ * for it visually. Serving grams gates the rest: entering it is what turns
+ * "no label" into a label with data (see `LabelNutritionFormValue`), so the
+ * source note and nutrient grid only appear once it has a value.
+ *
+ * Takes the already-narrowed `labelNutrition` paths (not the full
+ * `ProductFormFieldPaths`) so the field is guaranteed present here — the
+ * caller only mounts this when `paths.labelNutrition` exists at all (some
+ * forms, like the compact quick-inventory-add create form, have no
+ * label-nutrition field of their own).
+ */
+function LabelNutritionFields<TFieldValues extends ProductFormFieldValues>({
+  form,
+  paths,
+}: Pick<ProductFormSectionProps<TFieldValues>, "form"> & {
+  paths: NonNullable<ProductFormFieldPaths<TFieldValues>["labelNutrition"]>;
+}) {
+  const [open, setOpen] = useState(
+    () => form.getValues(paths.servingGrams) != null,
+  );
+  const servingGrams = useWatch({
+    control: form.control,
+    name: paths.servingGrams,
+  });
+  const hasServing = servingGrams != null;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
+        render={
+          <Row
+            as="button"
+            type="button"
+            align="center"
+            gap="sm"
+            className="w-full rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent"
+          />
+        }
+      >
+        <ChevronRight
+          className={`size-4 transition-transform ${open ? "rotate-90" : ""}`}
+          aria-hidden
+        />
+        <span>Package label{hasServing ? "" : " (Optional)"}</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <Stack gap="sm" className="pt-2">
+          <NullableNumericField
+            form={form}
+            step="1"
+            name={paths.servingGrams}
+            label="Serving size, as printed (g)"
+            placeholder="e.g. 44"
+          />
+          {hasServing && (
+            <>
+              <UnifiedTextField
+                form={form}
+                name={paths.source}
+                label="Source (Optional)"
+                placeholder="e.g. Hero package label"
+                nullable={true}
+              />
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+                {LABEL_NUTRIENT_ORDER.map((key) => {
+                  const info = TIER1_NUTRIENTS[key];
+                  return (
+                    <NullableNumericField
+                      key={key}
+                      form={form}
+                      step="0.1"
+                      name={paths.nutrient(key)}
+                      label={`${info.displayName} (${info.unit.toLowerCase()})`}
+                      placeholder="0"
+                    />
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </Stack>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 function ProductCommerceFields<TFieldValues extends ProductFormFieldValues>({
   form,
   paths,
@@ -390,6 +549,14 @@ function ProductCommerceFields<TFieldValues extends ProductFormFieldValues>({
   isLookingUp: boolean;
   onUpcLookup: () => void;
 }) {
+  // SAFETY: RHF's `FieldErrors` type for a nested object field resolves to an
+  // unwieldy generic-conditional shape while `TFieldValues` is still generic
+  // here; at any concrete instantiation this is a plain `FieldError` with an
+  // optional `message` — the shape `FieldError` (the component) expects.
+  const labelNutritionError = form.formState.errors.labelNutrition as
+    | { message?: string }
+    | undefined;
+
   return (
     <>
       <FormSection title="Quantity & price" compact={compact}>
@@ -478,6 +645,15 @@ function ProductCommerceFields<TFieldValues extends ProductFormFieldValues>({
           <Description size="xs">
             USDA link: {fdcValue ? "via FDC id (explicit)" : "via UPC (auto)"}
           </Description>
+        )}
+        {paths.labelNutrition && (
+          <>
+            <LabelNutritionFields form={form} paths={paths.labelNutrition} />
+            {/* The resolver's `labelNutritionField` refine (≥1 nutrient once
+                serving grams is set) attaches its issue to the whole field —
+                surface it here rather than let it fail the submit silently. */}
+            <FieldError errors={[labelNutritionError]} />
+          </>
         )}
       </FormSection>
 

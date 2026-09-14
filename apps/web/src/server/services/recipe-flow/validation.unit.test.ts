@@ -19,6 +19,8 @@ const WATER_USAGE = "00000000-0000-4000-8000-000000000003";
 const recipe: RecipeOut = recipeOut.parse({
   id: testShortcode("recipe", "RCP-BREAD"),
   name: "Bread",
+  forkedFromRecipeId: null,
+  forkedFromRecipeName: null,
   sections: [
     {
       id: SECTION_ID,

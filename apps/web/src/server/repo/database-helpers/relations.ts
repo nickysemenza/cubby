@@ -374,6 +374,9 @@ export const relations = {
         // handful of rows, so this join is far cheaper than resolving the code
         // per recipe on the client.
         cookbook: { columns: { shortcode: true } },
+        // Shortcode + name — the lineage pointer's link needs a real label to
+        // show, not just a code (same reasoning as `cookbook` above, plus a name).
+        forkedFrom: { columns: { shortcode: true, name: true } },
         sections: {
           where: notDeleted(recipeSection),
           orderBy: sectionOrder,
@@ -408,6 +411,9 @@ export const relations = {
     list: {
       with: {
         cookbook: { columns: { shortcode: true } },
+        // Shortcode + name — the lineage pointer's link needs a real label to
+        // show, not just a code (same reasoning as `cookbook` above, plus a name).
+        forkedFrom: { columns: { shortcode: true, name: true } },
         sections: {
           where: notDeleted(recipeSection),
           orderBy: sectionOrder,

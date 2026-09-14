@@ -6,6 +6,10 @@ import {
   normalizeIsbn,
 } from "@cubby/schemas/isbn";
 import {
+  type ProductLabelNutrition,
+  productLabelNutrition,
+} from "@cubby/schemas/nutrition";
+import {
   type ProductCreateInput,
   type ProductTopLevelOut,
   productCategory,
@@ -21,7 +25,7 @@ import {
   isCollectionTag,
   normalizeCollectionSlug,
 } from "@cubby/shared/collection-tag";
-import { fdcId, upc } from "@cubby/usda-schemas";
+import { fdcId, isNutrientKey, upc } from "@cubby/usda-schemas";
 import { type FC, useMemo } from "react";
 import { type Control, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -42,6 +46,8 @@ import { formatCurrency } from "~/lib/utils";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { type EntityFormProps, FormWrapper } from "../form-utils";
 import {
+  EMPTY_LABEL_NUTRITION_DRAFT,
+  type LabelNutritionFormValue,
   type ProductFormFieldPaths,
   ProductFormFields,
 } from "./product-form-fields";
@@ -63,8 +69,49 @@ const PRODUCT_FORM_FIELDS = [
   "price",
   "ingredientId",
   "unitMappings",
+  "labelNutrition",
   "externalIds",
 ] as const;
+
+// The `LabelNutritionFormValue` shape RHF actually holds mid-edit — looser
+// than `ProductLabelNutrition` (serving grams may be typed before any
+// nutrient is, and a nutrient input may be blank rather than a number). This
+// is the schema's own I/O boundary: parsing into it (rather than a raw
+// `typeof` check on `unknown`) is what lets the `.transform` below branch on
+// a real domain value instead of a bare representation check. Every leaf
+// tolerates `undefined` too — a never-touched nutrient input stays an
+// unregistered RHF path (its value comes back `undefined`, not `null`) until
+// the user types in it.
+const labelNutritionDraft = z.object({
+  servingGrams: z.number().nullable().optional(),
+  source: z.string().nullable().optional(),
+  nutrients: z.record(z.string(), z.number().nullable().optional()).optional(),
+});
+
+// A half-filled draft is transformed into the real, stricter
+// `ProductLabelNutrition | null`: `servingGrams: null` collapses the whole
+// field to `null` ("no label"); otherwise blank nutrient entries are dropped
+// (an explicit 0 is kept — measured data, not "not entered") before piping
+// into `productLabelNutrition`'s own refine, so "serving grams set, no
+// nutrients" surfaces as a normal field error instead of a thrown submit.
+const labelNutritionField = labelNutritionDraft
+  .nullable()
+  .optional()
+  .transform((draft) => {
+    if (draft == null || draft.servingGrams == null) return null;
+    const nutrients: Record<string, number> = {};
+    for (const [key, amount] of Object.entries(draft.nutrients ?? {})) {
+      if (amount != null && isNutrientKey(key)) {
+        nutrients[key] = amount;
+      }
+    }
+    return {
+      servingGrams: draft.servingGrams,
+      nutrients,
+      source: draft.source ?? null,
+    };
+  })
+  .pipe(productLabelNutrition.nullable());
 
 // Fields the generated create/update schema map doesn't cover the way this
 // form needs:
@@ -76,6 +123,8 @@ const PRODUCT_FORM_FIELDS = [
 //   digits `ProductLivePreview`/`buildUpdateObject` compare against).
 // - `unitMappings` keeps the cross-field guard against a duplicate per-each
 //   price mapping, which the generated schema doesn't express.
+// - `labelNutrition` swaps in `labelNutritionField` (above) so the form can
+//   hold a looser mid-edit draft than the stored shape.
 const PRODUCT_FORM_EXTEND = {
   collections: z.array(z.string()),
   upc: upc.nullable(),
@@ -94,6 +143,7 @@ const PRODUCT_FORM_EXTEND = {
       }
     });
   }),
+  labelNutrition: labelNutritionField,
 };
 
 interface ProductFormValues {
@@ -116,6 +166,7 @@ interface ProductFormValues {
   ingredient: ComboboxItem | null;
   unitMappings: UnitMappingInput[];
   externalIds: ExternalIdInput[];
+  labelNutrition: LabelNutritionFormValue;
 }
 
 const productFormFieldPaths = {
@@ -145,6 +196,11 @@ const productFormFieldPaths = {
     externalId: `externalIds.${index}.externalId`,
     url: `externalIds.${index}.url`,
   }),
+  labelNutrition: {
+    servingGrams: "labelNutrition.servingGrams",
+    source: "labelNutrition.source",
+    nutrient: (key) => `labelNutrition.nutrients.${key}`,
+  },
 } satisfies ProductFormFieldPaths<ProductFormValues>;
 
 // Live tally for the sticky footer. dirtyFields (not isDirty) — registering
@@ -289,6 +345,20 @@ function createProductFormDefaults({
     ingredient: initialIngredient ?? null,
     unitMappings: [],
     externalIds: [],
+    labelNutrition: EMPTY_LABEL_NUTRITION_DRAFT,
+  };
+}
+
+/** Hydrate the form's looser mid-edit draft from a stored label override —
+ * see `labelNutritionField` for the reverse (draft → stored) direction. */
+function labelNutritionFormDefaults(
+  labelNutrition: ProductLabelNutrition | null,
+): LabelNutritionFormValue {
+  if (!labelNutrition) return EMPTY_LABEL_NUTRITION_DRAFT;
+  return {
+    servingGrams: labelNutrition.servingGrams,
+    source: labelNutrition.source,
+    nutrients: { ...labelNutrition.nutrients },
   };
 }
 
@@ -316,6 +386,7 @@ function editProductFormDefaults(
     ingredient: product.ingredient ?? null,
     unitMappings: product.unitMappings,
     externalIds: product.externalIds,
+    labelNutrition: labelNutritionFormDefaults(product.labelNutrition),
   };
 }
 
@@ -392,6 +463,15 @@ function createProductInput(
     ingredientId: getOptionalIngredientId(values.ingredient) ?? null,
     unitMappings: values.unitMappings,
     externalIds: values.externalIds,
+    // `values.labelNutrition` reaches here already transformed by the
+    // resolver's `labelNutritionField` schema (RHF's zodResolver hands
+    // `handleSubmit` the schema's *output*, not the raw form draft), so this
+    // re-parse is a cheap, honest boundary check rather than a cast — the
+    // looser `LabelNutritionFormValue` type on `ProductFormValues` describes
+    // the mid-edit shape, not this already-validated runtime value.
+    labelNutrition: productLabelNutrition
+      .nullable()
+      .parse(values.labelNutrition),
     ...imageData,
   };
 }

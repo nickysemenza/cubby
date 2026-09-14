@@ -671,8 +671,10 @@ export const buildProductWhere = async (
   const selectedDataGaps = filters.dataGap ? [filters.dataGap].flat() : [];
   const needsData = productNeedsDataCondition();
 
-  // Mirrors `foodLookupParamFromProduct` returning null: no explicit fdc_id AND
-  // no barcode to auto-match. This is the closest pure-SQL predicate — it
+  // Mirrors `foodLookupParamFromProduct` returning null (no explicit fdc_id AND
+  // no barcode to auto-match) OR'd with "no label nutrition override" — a
+  // label supersedes the USDA lookup outright, so a labelled product counts as
+  // present even with neither key. This is the closest pure-SQL predicate — it
   // cannot know whether the USDA worker resolves a food for that key, which is
   // why the filter is labelled "USDA key". Passed as `presenceCondition`'s
   // `emptyWhen` so "has" is derived as not(this) and the two branches can't
@@ -682,7 +684,7 @@ export const buildProductWhere = async (
   // doesn't add its own. Unparenthesized, `NOT a IS NULL AND NOT EXISTS ...`
   // binds as `(NOT a IS NULL) AND (NOT EXISTS ...)` — i.e. "has fdc_id AND has
   // no barcode", which silently drops every barcode-only product from "has".
-  const NO_USDA_KEY = sql`(${product.fdc_id} IS NULL AND NOT EXISTS (
+  const NO_USDA_KEY = sql`(${product.fdc_id} IS NULL AND ${product.labelNutrition} IS NULL AND NOT EXISTS (
     SELECT 1 FROM "ProductExternalId" pei
     WHERE pei."productId" = ${product.id}
       AND pei."source" = ${GTIN_SOURCE}
@@ -1561,7 +1563,8 @@ export const updateProduct = async (
       data.price !== undefined ||
       ingredientId !== undefined ||
       data.fdc_id !== undefined ||
-      incomingGtin !== undefined
+      incomingGtin !== undefined ||
+      data.labelNutrition !== undefined
     ) {
       await markProductConversionCoverageInputStale(tx, [id]);
     }

@@ -6,7 +6,7 @@
  */
 
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import { entityNames } from "@cubby/schemas/entity-names";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 
 const ROW_HEIGHT = 34;
 const HEADER_HEIGHT = 38;
@@ -58,7 +58,7 @@ export function EntityRelationshipsDiagram() {
               fillOpacity={0.28}
             />
             <text x={16} y={y + 21} fontSize={12} fill="var(--foreground)">
-              {entityNames[source].singular}
+              {entitySummary[source].singular}
             </text>
             <text x={220} y={y + 21} fontSize={12} fill="var(--foreground)">
               {relation.label} · {relation.cardinality} ·{" "}
@@ -76,7 +76,7 @@ export function EntityRelationshipsDiagram() {
               strokeWidth={1.25}
             />
             <text x={790} y={y + 21} fontSize={12} fill="var(--foreground)">
-              {entityNames[relation.target].singular}
+              {entitySummary[relation.target].singular}
             </text>
           </g>
         );

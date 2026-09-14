@@ -12307,7 +12307,7 @@ package enum Operations {
                     case has = "has"
                     case none = "none"
                 }
-                /// Filter to products that do / don't have a USDA lookup key (an explicit fdc_id, or a UPC to auto-match). NOT whether USDA actually resolves a food for that key.
+                /// Filter to products that do / don't have a USDA lookup key (an explicit fdc_id, a UPC to auto-match, or a label nutrition override). NOT whether USDA actually resolves a food for that key.
                 ///
                 /// - Remark: Generated from `#/paths/api/v1/products/GET/query/usdaPresenceFilter`.
                 package var usdaPresenceFilter: Operations.Resources_product_list.Input.Query.UsdaPresenceFilterPayload?
@@ -12428,7 +12428,7 @@ package enum Operations {
                 ///   - purchaseDateTo: Match a product with any linked Purchase on or before this date
                 ///   - miscBucketFilter: Filter to `misc:` bucket products (has) or exclude them (none).
                 ///   - pricePresenceFilter: Filter to products that do / don't have a price set.
-                ///   - usdaPresenceFilter: Filter to products that do / don't have a USDA lookup key (an explicit fdc_id, or a UPC to auto-match). NOT whether USDA actually resolves a food for that key.
+                ///   - usdaPresenceFilter: Filter to products that do / don't have a USDA lookup key (an explicit fdc_id, a UPC to auto-match, or a label nutrition override). NOT whether USDA actually resolves a food for that key.
                 ///   - imagePresenceFilter: Filter to products that do / don't have at least one image (PDF manuals don't count).
                 ///   - unitMappingPresenceFilter: Filter to products that do / don't have at least one unit mapping (conversion edge).
                 ///   - componentPresenceFilter: Filter to products that are / aren't kits — i.e. that do or don't contain at least one component product.

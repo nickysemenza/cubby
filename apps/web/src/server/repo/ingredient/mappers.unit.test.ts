@@ -63,6 +63,7 @@ const baseProduct = {
   price: 4.5,
   usdaUnavailable: null,
   stockTracked: null,
+  labelNutrition: null,
 };
 
 const baseIngredient = {
@@ -89,6 +90,7 @@ const baseRecipe = {
   SourceType: "Website" as const,
   SourceData: "https://example.com/pancakes",
   cookbookId: null,
+  forkedFromRecipeId: null,
   yield: null,
   servings: null,
   tags: null,

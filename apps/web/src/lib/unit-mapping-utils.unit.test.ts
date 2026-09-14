@@ -38,6 +38,7 @@ const promixProduct = (householdText: string) => ({
   id: testShortcode("product", "PRD-2345"),
   unitMappings: [],
   food: brandedFood(householdText),
+  labelNutrition: null,
   price: 39.99,
 });
 

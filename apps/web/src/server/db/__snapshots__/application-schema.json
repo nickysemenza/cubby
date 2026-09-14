@@ -6342,6 +6342,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "labelNutrition": {
+          "name": "labelNutrition",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "dataExceptions": {
           "name": "dataExceptions",
           "type": "jsonb",
@@ -8440,6 +8446,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "forkedFromRecipeId": {
+          "name": "forkedFromRecipeId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "yield": {
           "name": "yield",
           "type": "jsonb",
@@ -8595,6 +8607,21 @@
           "method": "btree",
           "with": {}
         },
+        "Recipe_forkedFromRecipeId_idx": {
+          "name": "Recipe_forkedFromRecipeId_idx",
+          "columns": [
+            {
+              "expression": "forkedFromRecipeId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "Recipe_created_at_desc_idx": {
           "name": "Recipe_created_at_desc_idx",
           "columns": [
@@ -8650,6 +8677,19 @@
           "tableTo": "Cookbook",
           "columnsFrom": [
             "cookbookId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "Recipe_forkedFromRecipeId_Recipe_id_fk": {
+          "name": "Recipe_forkedFromRecipeId_Recipe_id_fk",
+          "tableFrom": "Recipe",
+          "tableTo": "Recipe",
+          "columnsFrom": [
+            "forkedFromRecipeId"
           ],
           "columnsTo": [
             "id"

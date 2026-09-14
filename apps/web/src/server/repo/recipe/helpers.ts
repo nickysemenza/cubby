@@ -159,10 +159,14 @@ const sectionIngredientToAPI = (
 };
 
 export const dbRecipeToTopLevel = (
-  // The cookbook join is optional: only the relation-loaded reads carry it, and
-  // a recipe read without it just renders its source badge unlinked rather than
-  // forcing every caller to join a table it doesn't otherwise need.
-  recipeData: RecipeSelect & { cookbook?: { shortcode: string } | null },
+  // The cookbook/forkedFrom joins are optional: only the relation-loaded reads
+  // carry them, and a recipe read without them just renders unlinked (no
+  // source badge, no fork pointer) rather than forcing every caller to join a
+  // table it doesn't otherwise need.
+  recipeData: RecipeSelect & {
+    cookbook?: { shortcode: string } | null;
+    forkedFrom?: { shortcode: string; name: string } | null;
+  },
 ): RecipeTopLevel => {
   return {
     id: parseShortcodeFor("recipe", recipeData.shortcode),
@@ -187,6 +191,10 @@ export const dbRecipeToTopLevel = (
     servings: recipeData.servings,
     tags: recipeData.tags,
     notes: recipeData.notes,
+    forkedFromRecipeId: recipeData.forkedFrom
+      ? parseShortcodeFor("recipe", recipeData.forkedFrom.shortcode)
+      : null,
+    forkedFromRecipeName: recipeData.forkedFrom?.name ?? null,
   };
 };
 

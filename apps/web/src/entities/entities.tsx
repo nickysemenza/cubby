@@ -3,9 +3,8 @@ import type {
   BrowserRoutedEntity,
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
-import { entityNames } from "@cubby/schemas/entity-names";
-import { entityPresentation } from "@cubby/schemas/entity-presentation";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
   Apple,
@@ -162,7 +161,7 @@ const newRouteExtensions = {
  * Stamps every definition with the display names its own key already implies.
  *
  * Both come straight from the entity's manifest literal (`names` in
- * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced as `entityNames`),
+ * `packages/schemas/src/entity-definitions/*.entity.ts`, surfaced as `entitySummary`),
  * so neither is spelled here and neither can disagree with the key it sits
  * under — `wish: { label: ... }` naming a vendor is no longer expressible.
  *
@@ -191,7 +190,7 @@ type EntityDefinitionSeed = Pick<
  * only these glyphs.
  */
 type DeclaredLucideIcon =
-  (typeof entityPresentation)[BrowserRoutedEntity]["icons"]["lucide"];
+  (typeof entitySummary)[BrowserRoutedEntity]["icons"]["lucide"];
 const LUCIDE_ICONS = {
   Apple,
   ArrowLeftRight,
@@ -214,7 +213,7 @@ const LUCIDE_ICONS = {
   Users,
 } satisfies Record<DeclaredLucideIcon, LucideIcon>;
 const isBrowserEntityKey = (value: string): value is BrowserRoutedEntity =>
-  Object.hasOwn(entityNames, value);
+  Object.hasOwn(entitySummary, value);
 
 const withEntityNames = <
   const Definitions extends Record<BrowserRoutedEntity, EntityDefinitionSeed>,
@@ -222,8 +221,8 @@ const withEntityNames = <
   definitions: Definitions,
 ): {
   [Entity in keyof Definitions & BrowserRoutedEntity]: {
-    label: (typeof entityNames)[Entity]["singular"];
-    pluralLabel: (typeof entityNames)[Entity]["plural"];
+    label: (typeof entitySummary)[Entity]["singular"];
+    pluralLabel: (typeof entitySummary)[Entity]["plural"];
     lucideIcon: LucideIcon;
   } & Definitions[Entity];
 } =>
@@ -236,9 +235,9 @@ const withEntityNames = <
       return [
         entity,
         {
-          label: entityNames[entity].singular,
-          pluralLabel: entityNames[entity].plural,
-          lucideIcon: LUCIDE_ICONS[entityPresentation[entity].icons.lucide],
+          label: entitySummary[entity].singular,
+          pluralLabel: entitySummary[entity].plural,
+          lucideIcon: LUCIDE_ICONS[entitySummary[entity].icons.lucide],
           ...definition,
         },
       ];

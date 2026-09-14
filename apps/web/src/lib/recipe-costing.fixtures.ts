@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
+import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
 import type { RecipeOut, SectionIngredientOut } from "@cubby/schemas/recipe";
 import { testShortcode } from "@cubby/schemas/testing";
 
@@ -43,6 +44,7 @@ export const makeProduct = (
     // Attach USDA food data from per-100g nutrient codes (shorthand for `food`).
     nutrientsPer100?: Record<string, number>;
     mappings?: { a: Amount; b: Amount }[];
+    labelNutrition?: ProductLabelNutrition | null;
   } = {},
 ): Product => ({
   id: testShortcode("product", "PRD-TEST"),
@@ -69,6 +71,7 @@ export const makeProduct = (
   },
   usdaUnavailable: null,
   stockTracked: null,
+  labelNutrition: opts.labelNutrition ?? null,
   images: [],
   coverImageUrl: null,
   externalIds: [],
@@ -197,6 +200,8 @@ export const makeSubRecipe = (
   meta: null,
   yield: yieldValue,
   images: [],
+  forkedFromRecipeId: null,
+  forkedFromRecipeName: null,
   sections: [
     { id: `${idStr}-sec`, name: null, instructions: [], ingredients, ...dates },
   ],
@@ -212,6 +217,8 @@ export const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
   meta: null,
   yield: null,
   images: [],
+  forkedFromRecipeId: null,
+  forkedFromRecipeName: null,
   sections: rows.map((row, i) => {
     const { sectionName, ...ingredient } = row;
     return {

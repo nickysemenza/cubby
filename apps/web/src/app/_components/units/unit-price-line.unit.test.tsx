@@ -21,6 +21,7 @@ const mappingsFor = (
     id: testShortcode("product", "PRD-2345"),
     unitMappings,
     food: null,
+    labelNutrition: null,
     price,
   });
 

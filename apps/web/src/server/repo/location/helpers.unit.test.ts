@@ -125,6 +125,7 @@ const product = {
   price: 4.5,
   usdaUnavailable: null,
   stockTracked: null,
+  labelNutrition: null,
   createdAt: CREATED_AT,
   updatedAt: UPDATED_AT,
   deletedAt: null,

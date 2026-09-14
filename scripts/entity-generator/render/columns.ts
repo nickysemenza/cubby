@@ -38,6 +38,7 @@ const storageJsonTypes = {
   "inventory.amount": "Amount",
   "location.valuation": "LocationValuation | null",
   "product.dataExceptions": "DataException[]",
+  "product.labelNutrition": "ProductLabelNutrition | null",
   "purchase.dataExceptions": "DataException[]",
   "recipe.meta": "RecipeStoredMeta | null",
   "recipe.totals": "RecipeTotals | null",
@@ -194,6 +195,7 @@ export const renderEntityColumnsArtifact = (
     'import { productCategoryValues } from "@cubby/schemas/product";\n' +
     'import { costTypeValues, projectKindValues, projectStatusValues, taskStatusValues, tradeValues } from "@cubby/schemas/project";\n' +
     'import { expenseLineBasisValues, expenseLineKindValues } from "@cubby/schemas/expense-line-kind";\n' +
+    'import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";\n' +
     'import type { RecipeStoredMeta, RecipeTotals, RecipeYield } from "@cubby/schemas/recipe-shared";\n' +
     'import { recipeSourceValues } from "@cubby/schemas/recipe-shared";\n' +
     'import { inventoryPlacementValues } from "@cubby/shared";\n' +

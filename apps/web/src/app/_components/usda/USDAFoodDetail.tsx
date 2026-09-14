@@ -110,6 +110,10 @@ export const USDAFoodDetail: React.FC<{
             // correctly on its own detail page.
             unitMappings: [],
             food,
+            // This USDA-food-centric view has no reach into a linked
+            // product's own label override; the food's own nutrients are
+            // what's being inspected here regardless.
+            labelNutrition: null,
             price: pricedProduct.price,
             pricing: pricedProduct.pricing,
           })

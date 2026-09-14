@@ -78,3 +78,25 @@ export const buildNutrition = (
       TIER1_NUTRIENT_KEYS.map((key) => [key, getEstimate(key)]),
     ),
   );
+
+/**
+ * A per-product Nutrition Facts override, transcribed from a package label —
+ * for products USDA has no entry for (e.g. a store-brand tortilla). Stored
+ * per the label's stated serving (what a package prints); scaled to per-100 g
+ * at the TS→WASM boundary (`label-nutrition.ts`). Precedence: label > fdc_id
+ * (USDA) > none.
+ */
+export const productLabelNutrition = z
+  .object({
+    /** Grams in the label's stated serving (Hero tortilla: 44). */
+    servingGrams: z.number().positive(),
+    /** Per-serving amounts exactly as printed, in each key's TIER1 unit. */
+    nutrients: z.partialRecord(nutrientKey, z.number().nonnegative()),
+    /** Provenance note, e.g. "Hero package label". */
+    source: z.string().nullable(),
+  })
+  .refine(
+    (v) => Object.keys(v.nutrients).length > 0,
+    "A label needs at least one nutrient",
+  );
+export type ProductLabelNutrition = z.infer<typeof productLabelNutrition>;

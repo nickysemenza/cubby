@@ -2,8 +2,8 @@ import {
   browserRoutedEntities,
   shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
-import { entityNames } from "@cubby/schemas/entity-names";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { describe, expect, expectTypeOf, it } from "vitest";
 
@@ -110,7 +110,7 @@ describe("entity label parity", () => {
       Object.fromEntries(
         browserRoutedEntities.map((entity) => [
           entity,
-          entityNames[entity].plural,
+          entitySummary[entity].plural,
         ]),
       ),
     );
@@ -132,8 +132,8 @@ describe("entity names come from the key", () => {
     // than 17 lucky coincidences.
     const wrong = browserRoutedEntities.filter(
       (entity) =>
-        entities[entity].label !== entityNames[entity].singular ||
-        entities[entity].pluralLabel !== entityNames[entity].plural,
+        entities[entity].label !== entitySummary[entity].singular ||
+        entities[entity].pluralLabel !== entitySummary[entity].plural,
     );
     expect(wrong).toEqual([]);
     expect(browserRoutedEntities.length).toBeGreaterThan(10);

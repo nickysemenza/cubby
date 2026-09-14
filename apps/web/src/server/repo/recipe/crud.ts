@@ -115,6 +115,12 @@ export const RECIPE_DELETE_EDGE_POLICY = {
     description:
       "Image associations are soft-deleted with the recipe, and each file is\n      deleted too unless something else still references it.",
   },
+  "Recipe.forkedFromRecipeId": {
+    code: "clear-fork-pointer",
+    effect: "detach",
+    description:
+      "A deleted recipe's forks have their forkedFromRecipeId pointer nulled out — a fork is a full independent recipe, so it survives its parent's deletion, just without the lineage pointer.",
+  },
 } as const satisfies IncomingEdgePolicy<"recipe", OperationDisposition>;
 
 import { withDisplayImages } from "~/server/repo/entity-display-image";
@@ -576,6 +582,10 @@ const createRecipeReturningId = async (
   const { pendingImageIds } = recipeInput;
 
   return await withTransaction(db, async (tx) => {
+    const forkedFromRecipeId = recipeInput.forkedFromRecipeId
+      ? await resolveOrThrow(tx, "recipe", recipeInput.forkedFromRecipeId)
+      : null;
+
     const createdRecipe = await insertWithShortcode(tx, "recipe", {
       name: recipeInput.name,
       ...sourceColumns,
@@ -583,6 +593,7 @@ const createRecipeReturningId = async (
       servings: recipeInput.servings ?? null,
       tags: recipeInput.tags ?? null,
       notes: recipeInput.notes ?? null,
+      forkedFromRecipeId,
       ...recipeMetaToColumns(recipeInput.meta),
     });
     const createdRecipeId = createdRecipe.id;
@@ -942,10 +953,20 @@ export const updateRecipe = async (
     throw createAppError("RECIPE_NOT_FOUND", `Recipe with ID ${id} not found`);
   }
 
-  const beforeState = { name: existingRecipe.name };
+  // `forkedFromRecipeId` is diffed as a raw uuid, like every other FK in an
+  // audit roster (e.g. Task.parentTaskId) — not resolved to a shortcode.
+  const beforeState = {
+    name: existingRecipe.name,
+    forkedFromRecipeId: existingRecipe.forkedFromRecipeId,
+  };
 
   const updatedRecipe = await withTransaction(db, async (tx) => {
-    await updateRecipeBasicProperties(tx, id, updates, existingRecipe);
+    const propertyUpdates = await updateRecipeBasicProperties(
+      tx,
+      id,
+      updates,
+      existingRecipe,
+    );
     detachedImageKeys = await updateRecipeImages(tx, id, updates);
 
     if (updates.sections) {
@@ -960,7 +981,13 @@ export const updateRecipe = async (
       );
     }
 
-    const afterState = { name: fullRecipe.name };
+    const afterState = {
+      name: fullRecipe.name,
+      forkedFromRecipeId:
+        propertyUpdates.forkedFromRecipeId !== undefined
+          ? propertyUpdates.forkedFromRecipeId
+          : existingRecipe.forkedFromRecipeId,
+    };
     const changes = computeChanges(beforeState, afterState, [
       ...entityFieldModels.recipe.audit,
     ]);
@@ -1070,6 +1097,15 @@ export const deleteRecipes = async (
       .where(
         and(inArray(recipeSection.recipeId, ids), notDeleted(recipeSection)),
       );
+
+    // Fork lineage is a pointer only ("Recipe.forkedFromRecipeId" in
+    // RECIPE_DELETE_EDGE_POLICY, effect "detach"): a fork is a full,
+    // independent recipe, so deleting the recipe it was forked from clears
+    // the pointer rather than cascading to the fork itself.
+    await tx
+      .update(recipe)
+      .set({ forkedFromRecipeId: null })
+      .where(and(inArray(recipe.forkedFromRecipeId, ids), notDeleted(recipe)));
 
     await tx
       .update(mealRecipe)

@@ -11,6 +11,8 @@ export const walkthroughRecipe = recipeOut.parse({
   name: "Example lemon cakes",
   images: [],
   meta: null,
+  forkedFromRecipeId: null,
+  forkedFromRecipeName: null,
   sections: [
     {
       id: sectionId,

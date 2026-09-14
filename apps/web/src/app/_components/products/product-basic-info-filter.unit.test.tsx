@@ -32,6 +32,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   growsIngredientId: null,
   primaryGtin: null,
   expectedQuantity: null,
+  labelNutrition: null,
   ingredient: {
     id: testShortcode("ingredient", "ING-2ABC"),
     name: "Driver bits",

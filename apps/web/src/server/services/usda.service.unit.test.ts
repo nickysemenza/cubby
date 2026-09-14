@@ -79,6 +79,7 @@ const dummyProducts = (count: number): ProductTopLevelOut[] =>
       manufacturer: "Test",
       model: null,
       notes: null,
+      labelNutrition: null,
       expectedQuantity: null,
       category: null,
       images: [],

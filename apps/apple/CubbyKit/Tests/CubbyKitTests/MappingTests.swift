@@ -62,29 +62,50 @@ struct MappingTests {
         #expect(json["moves"]?[1]?["quantity"]?["unit"] == "each")
     }
 
+    /// Builds a `DashboardCountsOut` payload from the generated catalog instead of a hand-typed
+    /// fixture, so the countable-entity list here can never drift from `EntityCatalog`. Each
+    /// countable entity gets a distinct synthetic count (`100 + index`); `usdaFoods` — the one
+    /// key in the payload that is NOT an `EntityKey.rawValue` — gets its own sentinel, since
+    /// `DashboardCounts.init` maps it to `.usdaFood` by hand rather than through the catalog loop.
+    private static func syntheticDashboardCountsPayload() -> (
+        json: Data, expected: [EntityKey: Int], usdaFoodsCount: Int
+    ) {
+        let countable = EntityCatalog.all.filter(\.countable)
+        var json: [String: Int] = [:]
+        var expected: [EntityKey: Int] = [:]
+        for (index, descriptor) in countable.enumerated() {
+            let count = 100 + index
+            json[descriptor.key.rawValue] = count
+            expected[descriptor.key] = count
+        }
+        let usdaFoodsCount = 42
+        json["usdaFoods"] = usdaFoodsCount
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        return (data, expected, usdaFoodsCount)
+    }
+
     @Test func dashboardCountsMapsUsdaFoodsToTheStableKey() throws {
-        let out = try Fixtures.decode(DashboardCountsOut.self, from: "dashboard-counts.json")
+        let (json, _, usdaFoodsCount) = Self.syntheticDashboardCountsPayload()
+        let out = try JSONDecoder.cubby().decode(DashboardCountsOut.self, from: json)
         let counts = DashboardCounts(out)
-        #expect(counts.count(for: .product) == 12)
-        #expect(counts.count(for: .usdaFood) == 7)
-        #expect(counts.count(for: .financialTransaction) == 30)
+        #expect(counts.count(for: .usdaFood) == usdaFoodsCount)
     }
 
     /// Regression for a mapper that hand-listed 17 keys and silently dropped `planting` and
     /// `gardenEntry` when those entities' routes shipped. Every `countable` `EntityKey` — driven
-    /// by the generated catalog, not a hand-kept list here — must decode to a real count from the
-    /// fixture; a future omission in either the fixture or `DashboardCounts.init` fails this.
+    /// by the generated catalog, not a hand-kept list here — must decode to its synthetic count;
+    /// a future omission in `DashboardCounts.init` fails this.
     @Test func dashboardCountsCoversEveryCountableEntity() throws {
-        let out = try Fixtures.decode(DashboardCountsOut.self, from: "dashboard-counts.json")
+        let (json, expected, usdaFoodsCount) = Self.syntheticDashboardCountsPayload()
+        let out = try JSONDecoder.cubby().decode(DashboardCountsOut.self, from: json)
         let counts = DashboardCounts(out)
-        for entity in EntityKey.allCases where EntityCatalog[entity].countable {
+        for (entity, expectedCount) in expected {
             #expect(
-                counts.count(for: entity) != nil,
-                "Countable entity \(entity.rawValue) has no dashboard count"
+                counts.count(for: entity) == expectedCount,
+                "Countable entity \(entity.rawValue) has the wrong dashboard count"
             )
         }
-        #expect(counts.count(for: .planting) == 0)
-        #expect(counts.count(for: .gardenEntry) == 0)
+        #expect(counts.count(for: .usdaFood) == usdaFoodsCount)
     }
 
     @Test func todayBriefingMapsNextTasks() throws {

@@ -34,6 +34,8 @@ const comparedRecipe: ComparedRecipe = {
     servings: null,
     tags: null,
     notes: null,
+    forkedFromRecipeId: null,
+    forkedFromRecipeName: null,
     sections: [],
     totals: null,
   },

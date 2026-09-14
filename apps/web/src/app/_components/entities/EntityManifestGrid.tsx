@@ -7,8 +7,8 @@ import {
   entityManifest,
   entityReferences,
 } from "@cubby/schemas/entity-manifest";
-import type { EntityPresentation } from "@cubby/schemas/entity-presentation";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
+import type { EntityPresentation } from "@cubby/schemas/entity-summary";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Minus, Stamp } from "lucide-react";
 import { type ReactNode, useId } from "react";

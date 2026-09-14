@@ -1,7 +1,12 @@
 /** Central, batched boundary between public shortcodes and private UUIDs. */
 
 import { entityRefKey } from "@cubby/schemas/entity";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  shortcodeEntities,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
@@ -15,32 +20,18 @@ import {
   parseShortcodeFor,
   type ShortcodeFor,
 } from "@cubby/shared";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  cookbook,
-  expense,
-  financialAccount,
-  financialTransaction,
   gardenEntry,
-  image,
-  ingredient,
   inventoryEntry,
-  ledgerParty,
   location,
-  meal,
   planting,
   product,
-  project,
-  purchase,
-  recipe,
-  task,
-  vendor,
-  wish,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -263,41 +254,7 @@ export async function lookupShortcodes(
 }
 
 /**
- * `null` means the label is relational or the entity has no display column.
- *
- * Not a third copy of the entity *type* label (`ENTITY_LABEL` above,
- * `entityLabel()` in `apps/web/src/entities/entities.tsx`): those map an
- * entity to what to call its *kind* ("Financial transaction"); this maps an
- * entity to the DB column holding one *row's* own name (e.g.
- * `financialTransaction.merchant`), consumed only by `lookupEntityLabels`
- * below for audit-log display. Different semantics — don't fold it into the
- * type-label consolidation.
- */
-export const DISPLAY_NAME_COLUMN = {
-  cookbook: cookbook.name,
-  expense: expense.name,
-  financialAccount: financialAccount.name,
-  financialTransaction: financialTransaction.merchant,
-  gardenEntry: gardenEntry.kind,
-  ingredient: ingredient.name,
-  inventory: null,
-  location: location.name,
-  meal: meal.name,
-  planting: planting.status,
-  ledgerParty: ledgerParty.name,
-  ledgerTransfer: null,
-  image: image.filename,
-  product: product.name,
-  project: project.name,
-  purchase: purchase.displayLabel,
-  recipe: recipe.name,
-  task: task.name,
-  vendor: vendor.name,
-  wish: wish.name,
-} as const satisfies Record<ShortcodeEntity, PgColumn | null>;
-
-/**
- * Entities where `DISPLAY_NAME_COLUMN` deliberately differs from the storage
+ * Entities where the display column deliberately differs from the storage
  * column behind the entity's `titleField` (`packages/schemas/src/
  * entity-definitions/*.entity.ts` `presentation.titleField`) — each with the
  * override column (or `null`, meaning no single column at all) and a
@@ -327,6 +284,90 @@ export const LABEL_COLUMN_OVERRIDES = {
 } satisfies Partial<
   Record<ShortcodeEntity, { column: PgColumn | null; reason: string }>
 >;
+
+/**
+ * The drizzle column backing `presentation.titleField`, independent of
+ * `LABEL_COLUMN_OVERRIDES`: `titleField` names a field's external `readKey`,
+ * which the field model maps to an internal field `key`, which the field
+ * model's `storage` array maps to a physical column name, which
+ * `getTableColumns` resolves to the actual `PgColumn`. `null` means the
+ * titleField has no physical storage column at all (a computed/relational
+ * value) — every such entity must appear in `LABEL_COLUMN_OVERRIDES`, checked
+ * by `DISPLAY_NAME_COLUMN`'s construction below.
+ *
+ * Exported only for `shortcode-resolver-labels.unit.test.ts`'s dead-override
+ * check, which needs this override-independent value to tell "the override
+ * restates what titleField would already give" apart from "the override
+ * documents a value titleField cannot express at all".
+ */
+export const resolveTitleFieldColumn = (
+  entity: ShortcodeEntity,
+): PgColumn | null => {
+  const titleField = entitySummary[entity].titleField;
+  const model = entityFieldModels[entity];
+  const field = model.fields.find((f) => f.readKey === titleField);
+  const storageEntry = field
+    ? model.storage.find((s) => s.key === field.key)
+    : undefined;
+  if (!storageEntry) return null;
+  // SAFETY: `getTableColumns` types its result by the table's own literal
+  // column keys, which can't be indexed by a runtime string; every generated
+  // `storage[].column` name is one of those keys by construction (it comes
+  // from the same drizzle schema this table is built from), so the lookup
+  // below either hits or the `?? null` catches a genuine drift.
+  const columns = getTableColumns(SHORTCODE_TABLE[entity]) as Record<
+    string,
+    PgColumn
+  >;
+  return columns[storageEntry.column] ?? null;
+};
+
+/**
+ * `null` means the label is relational or the entity has no display column.
+ *
+ * Not a third copy of the entity *type* label (`ENTITY_LABEL` above,
+ * `entityLabel()` in `apps/web/src/entities/entities.tsx`): those map an
+ * entity to what to call its *kind* ("Financial transaction"); this maps an
+ * entity to the DB column holding one *row's* own name (e.g.
+ * `financialTransaction.merchant`), consumed only by `lookupEntityLabels`
+ * below for audit-log display. Different semantics — don't fold it into the
+ * type-label consolidation.
+ *
+ * `LABEL_COLUMN_OVERRIDES` wins for its 4 entities; every other entity is
+ * derived from `titleField`, and a non-override entity whose titleField has
+ * no physical storage column is a bug — declare it as an override instead of
+ * letting the map silently go null.
+ */
+type DisplayNameColumns = Record<ShortcodeEntity, PgColumn | null>;
+
+export const DISPLAY_NAME_COLUMN = shortcodeEntities.reduce(
+  (columns, entity) => {
+    // SAFETY: `entity` ranges over every `ShortcodeEntity`, only 4 of which
+    // are keys of `LABEL_COLUMN_OVERRIDES`; the `hasOwn` guard is what makes
+    // this cast sound — everywhere it's false, `override` is never read.
+    const override = Object.hasOwn(LABEL_COLUMN_OVERRIDES, entity)
+      ? LABEL_COLUMN_OVERRIDES[entity as keyof typeof LABEL_COLUMN_OVERRIDES]
+      : undefined;
+    if (override) {
+      columns[entity] = override.column;
+      return columns;
+    }
+
+    const column = resolveTitleFieldColumn(entity);
+    if (!column) {
+      const titleField = entitySummary[entity].titleField;
+      throw new Error(
+        `DISPLAY_NAME_COLUMN: ${entity}'s titleField (${titleField}) has no derivable storage column and no LABEL_COLUMN_OVERRIDES entry to fall back on`,
+      );
+    }
+    columns[entity] = column;
+    return columns;
+  },
+  // SAFETY: `shortcodeEntities` enumerates the whole `ShortcodeEntity` union,
+  // and the reducer above assigns every one of them before returning, so the
+  // accumulator ends up fully populated despite starting empty.
+  {} as DisplayNameColumns,
+);
 
 /** Batched UUID-to-label lookup; rows without a label are omitted. */
 export async function lookupEntityLabels(

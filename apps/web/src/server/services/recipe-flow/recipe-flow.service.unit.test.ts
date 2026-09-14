@@ -33,6 +33,8 @@ const recipe: RecipeOut = recipeOut.parse({
   id: testShortcode("recipe", "RCP-TOAST"),
   name: "Toast",
   meta: null,
+  forkedFromRecipeId: null,
+  forkedFromRecipeName: null,
   sections: [
     {
       id: SECTION_ID,
