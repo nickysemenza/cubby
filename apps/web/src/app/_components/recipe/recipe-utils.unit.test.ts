@@ -48,6 +48,8 @@ it("recipe utils", () => {
               createdAt: new Date(),
               updatedAt: new Date(),
               meta: null,
+              forkedFromRecipeId: null,
+              forkedFromRecipeName: null,
             },
             amounts: [],
           },
@@ -65,6 +67,8 @@ it("recipe utils", () => {
     images: [],
     createdAt: new Date(),
     updatedAt: new Date(),
+    forkedFromRecipeId: null,
+    forkedFromRecipeName: null,
   };
   let si: SectionIngredient | undefined = recipe.sections[1]?.ingredients[0];
   expect(si).toBeDefined();
@@ -128,6 +132,8 @@ it("getServingBasis prefers servings and labels yield units", () => {
     sections: [],
     createdAt: new Date(),
     updatedAt: new Date(),
+    forkedFromRecipeId: null,
+    forkedFromRecipeName: null,
   };
 
   expect(getServingBasis({ ...base, servings: 4 })).toEqual({

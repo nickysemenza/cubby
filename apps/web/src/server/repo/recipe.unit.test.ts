@@ -46,6 +46,7 @@ const baseRecipe = {
   SourceType: "Website" as const,
   SourceData: "https://example.com/recipe",
   cookbookId: null,
+  forkedFromRecipeId: null,
   yield: null,
   servings: null,
   tags: null,
@@ -179,6 +180,8 @@ describe("recipe repository helpers", () => {
         servings: null,
         tags: null,
         notes: null,
+        forkedFromRecipeId: null,
+        forkedFromRecipeName: null,
         totals: {
           cost: { status: "pending", reason: "totals_missing" },
           nutrition: buildNutrition(() => ({

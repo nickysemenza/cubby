@@ -197,6 +197,8 @@ export const makeSubRecipe = (
   meta: null,
   yield: yieldValue,
   images: [],
+  forkedFromRecipeId: null,
+  forkedFromRecipeName: null,
   sections: [
     { id: `${idStr}-sec`, name: null, instructions: [], ingredients, ...dates },
   ],
@@ -212,6 +214,8 @@ export const makeRootRecipe = (rows: CostingRow[]): RecipeOut => ({
   meta: null,
   yield: null,
   images: [],
+  forkedFromRecipeId: null,
+  forkedFromRecipeName: null,
   sections: rows.map((row, i) => {
     const { sectionName, ...ingredient } = row;
     return {

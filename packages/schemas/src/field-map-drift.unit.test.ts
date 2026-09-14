@@ -625,6 +625,8 @@ const INTENTIONAL_RESPELLINGS = {
   "recipe::mcpRecipeUpdateInput::yield":
     "MCP recipe create/update tool input (recipeWritableFields) hand-declares its own .describe() MCP prose for this field — a distinct instance from generatedRecipeFieldSchemas.update",
   "recipe::recipeGraphOut::createdAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::forkedFromRecipeId": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeGraphOut::forkedFromRecipeName": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeGraphOut::name": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeGraphOut::notes": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeGraphOut::sections":
@@ -639,6 +641,8 @@ const INTENTIONAL_RESPELLINGS = {
   "recipe::recipeInstructionInput::id":
     "coincidental key-name collision: an instruction ROW's own optional edit-target uuid (id.optional()), not recipe's own shortcode id",
   "recipe::recipeListItemOut::createdAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::forkedFromRecipeId": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeListItemOut::forkedFromRecipeName": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeListItemOut::name": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeListItemOut::notes": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeListItemOut::servings": RECIPE_TOP_LEVEL_FIELDS,
@@ -676,6 +680,8 @@ const INTENTIONAL_RESPELLINGS = {
   "recipe::recipeRefMcpEntityOut::tags": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeRefMcpEntityOut::yield": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::createdAt": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::forkedFromRecipeId": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeTopLevel::forkedFromRecipeName": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::name": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::notes": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::servings": RECIPE_TOP_LEVEL_FIELDS,
@@ -683,6 +689,7 @@ const INTENTIONAL_RESPELLINGS = {
   "recipe::recipeTopLevel::tags": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::updatedAt": RECIPE_TOP_LEVEL_FIELDS,
   "recipe::recipeTopLevel::yield": RECIPE_TOP_LEVEL_FIELDS,
+  "recipe::recipeUpdateData::forkedFromRecipeId": PARTIAL_REWRAP,
   "recipe::recipeUpdateData::imageOrder": PARTIAL_REWRAP,
   "recipe::recipeUpdateData::meta": PARTIAL_REWRAP,
   "recipe::recipeUpdateData::name": PARTIAL_REWRAP,

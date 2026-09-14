@@ -36,6 +36,8 @@ const recipe = (
     yield: null,
     servings: null,
     notes: null,
+    forkedFromRecipeId: null,
+    forkedFromRecipeName: null,
     images: [],
     tags: [],
     sections: [

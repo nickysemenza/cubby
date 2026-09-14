@@ -279,6 +279,33 @@ export default defineEntity({
         reference: { entity: "cookbook" },
       },
       {
+        key: "forkedFromRecipeId",
+        kind: "identifier",
+        nullable: true,
+        label: "Forked from",
+        reference: { entity: "recipe" },
+        control: { kind: "specialized", renderer: "entity-select" },
+        display: { detail: true },
+        validation: {
+          read: recipeShortcode.nullable(),
+          create: recipeShortcode.nullable().optional(),
+          update: recipeShortcode.nullable().optional(),
+        },
+      },
+      // Derived, read-only: the forked-from recipe's name, joined at read time
+      // (same "<ref>Id" + "<ref>Name" pairing as Task.parentTaskId/parentTaskName)
+      // so the UI can render a real link label instead of a bare shortcode.
+      {
+        key: "forkedFromRecipeName",
+        kind: "text",
+        nullable: true,
+        validation: {
+          read: z.string().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "totalsComputedAt",
         kind: "timestamp",
         nullable: true,
@@ -308,6 +335,7 @@ export default defineEntity({
       { key: "SourceType", specialized: "enum:RecipeSource" },
       "SourceData",
       { key: "cookbookId", reference: "cookbook" },
+      { key: "forkedFromRecipeId", reference: "recipe" },
       { key: "yield", specialized: "json:yield" },
       "servings",
       { key: "tags", specialized: "text-array" },
@@ -327,6 +355,7 @@ export default defineEntity({
       "notes",
       "sections",
       "pendingImageIds",
+      "forkedFromRecipeId",
     ],
     update: [
       "name",
@@ -339,9 +368,10 @@ export default defineEntity({
       "pendingImageIds",
       "removeImageIds",
       "imageOrder",
+      "forkedFromRecipeId",
     ],
     bulk: [],
-    audit: ["name"],
+    audit: ["name", "forkedFromRecipeId"],
     sort: {
       fields: [
         "createdAt",
@@ -362,7 +392,14 @@ export default defineEntity({
     intents: {
       fields: {
         capture: ["name"],
-        full: ["name", "cookbookId", "tags", "notes", "sections"],
+        full: [
+          "name",
+          "cookbookId",
+          "tags",
+          "notes",
+          "sections",
+          "forkedFromRecipeId",
+        ],
         identity: ["name", "cookbookId", "tags"],
       },
       create: ["capture", "full"],
@@ -382,6 +419,8 @@ export default defineEntity({
       "sections",
       "totals",
       "images",
+      "forkedFromRecipeId",
+      "forkedFromRecipeName",
     ],
   },
   fields: {
@@ -555,6 +594,19 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Recipe.cookbookId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "forkedFrom",
+      label: "Forked from",
+      target: "recipe",
+      cardinality: "one",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Recipe.forkedFromRecipeId", direction: "outgoing" }],
+      },
+      inverse: {
+        steps: [{ edge: "Recipe.forkedFromRecipeId", direction: "incoming" }],
       },
     },
     {

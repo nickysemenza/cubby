@@ -278,6 +278,14 @@ export const ENTITY_EDGES = {
       description: "A photo attached to this recipe.",
       liveness: { kind: "must-target-live" },
     },
+    "Recipe.forkedFromRecipeId": {
+      column: recipe.forkedFromRecipeId,
+      role: "hierarchy",
+      label: "forks",
+      description:
+        "A recipe that records this one as the recipe it was forked from — a lineage pointer only, enforced by the Recipe self-FK.",
+      liveness: { kind: "must-target-live" },
+    },
   }),
   ingredient: edges({
     "RecipeSectionIngredient.ingredientId": {

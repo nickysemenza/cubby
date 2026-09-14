@@ -1,9 +1,11 @@
 import type { RecipeOut } from "@cubby/schemas/recipe";
+import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 import {
   BookMarked,
   Clock,
   ExternalLink,
+  GitFork,
   Timer,
   Users,
   Wrench,
@@ -15,6 +17,72 @@ import { Image } from "~/components/ui/image";
 
 import { RecipeSourceLink } from "./recipe-source";
 import { recipeTimeEntries } from "./recipe-utils";
+
+/**
+ * The recipe's own source badge(s): where it came from (book/website/notion/
+ * other, via `RecipeSourceLink` + a "show all…" filter link) and, separately,
+ * the lineage pointer to the recipe it was forked from. Split out of
+ * `RecipeHero` to keep that component's branching under the lint complexity
+ * ceiling.
+ */
+function RecipeSourceBadges({ recipe }: { recipe: RecipeOut }) {
+  return (
+    <>
+      {recipe.source?.type === "book" && (
+        <Row align="center" gap="tight">
+          <RecipeSourceLink source={recipe.source} iconSize={12} />
+          <EntityFilterLink
+            to="/recipes"
+            search={
+              recipe.source.cookbookId
+                ? { source: recipe.source.cookbookId }
+                : { sourceType: "Book" }
+            }
+            label={
+              recipe.source.cookbookId
+                ? `Show all recipes from ${recipe.source.book}`
+                : "Show all recipes from books"
+            }
+          />
+        </Row>
+      )}
+      {recipe.source?.type === "website" && (
+        <EntityFilterLink
+          to="/recipes"
+          search={{ sourceType: "Website" }}
+          label="Show all recipes from websites"
+        />
+      )}
+      {recipe.source?.type === "notion" && (
+        <EntityFilterLink
+          to="/recipes"
+          search={{ sourceType: "Notion" }}
+          label="Show all recipes from Notion"
+        />
+      )}
+      {recipe.source?.type === "other" && (
+        <EntityFilterLink
+          to="/recipes"
+          search={{ sourceType: "Other" }}
+          label="Show all recipes from other sources"
+        />
+      )}
+      {recipe.forkedFromRecipeId && (
+        <Row align="center" gap="sm">
+          <GitFork size={12} />
+          <span>Forked from</span>
+          <Link
+            to="/recipes/$shortcode"
+            params={{ shortcode: recipe.forkedFromRecipeId }}
+            className="hover:underline"
+          >
+            {recipe.forkedFromRecipeName ?? recipe.forkedFromRecipeId}
+          </Link>
+        </Row>
+      )}
+    </>
+  );
+}
 
 interface RecipeHeroProps {
   recipe: RecipeOut;
@@ -90,45 +158,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
           <span>Source</span>
         </a>
       )}
-      {recipe.source?.type === "book" && (
-        <Row align="center" gap="tight">
-          <RecipeSourceLink source={recipe.source} iconSize={12} />
-          <EntityFilterLink
-            to="/recipes"
-            search={
-              recipe.source.cookbookId
-                ? { source: recipe.source.cookbookId }
-                : { sourceType: "Book" }
-            }
-            label={
-              recipe.source.cookbookId
-                ? `Show all recipes from ${recipe.source.book}`
-                : "Show all recipes from books"
-            }
-          />
-        </Row>
-      )}
-      {recipe.source?.type === "website" && (
-        <EntityFilterLink
-          to="/recipes"
-          search={{ sourceType: "Website" }}
-          label="Show all recipes from websites"
-        />
-      )}
-      {recipe.source?.type === "notion" && (
-        <EntityFilterLink
-          to="/recipes"
-          search={{ sourceType: "Notion" }}
-          label="Show all recipes from Notion"
-        />
-      )}
-      {recipe.source?.type === "other" && (
-        <EntityFilterLink
-          to="/recipes"
-          search={{ sourceType: "Other" }}
-          label="Show all recipes from other sources"
-        />
-      )}
+      <RecipeSourceBadges recipe={recipe} />
     </Row>
   );
 

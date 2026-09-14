@@ -187,7 +187,10 @@ const shortcodeUnique = (tableName: string, column: AnyPgColumn) =>
 
 export const recipe = pgTable(
   "Recipe",
-  generatedRecipeColumns({ cookbook: (): AnyPgColumn => cookbook.id }),
+  generatedRecipeColumns({
+    cookbook: (): AnyPgColumn => cookbook.id,
+    recipe: (): AnyPgColumn => recipe.id,
+  }),
   (table) => [
     shortcodeUnique("Recipe", table.shortcode),
     // Non-cookbook recipes keep a globally-unique name. EPUB-imported (Book) and
@@ -217,6 +220,7 @@ export const recipe = pgTable(
       ),
     index("Recipe_SourceType_idx").on(table.SourceType),
     index("Recipe_cookbookId_idx").on(table.cookbookId),
+    index("Recipe_forkedFromRecipeId_idx").on(table.forkedFromRecipeId),
     index("Recipe_created_at_desc_idx").on(table.createdAt.desc()),
     index("Recipe_name_active_idx")
       .on(table.name)
@@ -1761,6 +1765,14 @@ export const recipeRelations = relations(recipe, ({ one, many }) => ({
   cookbook: one(cookbook, {
     fields: [recipe.cookbookId],
     references: [cookbook.id],
+  }),
+  forkedFrom: one(recipe, {
+    fields: [recipe.forkedFromRecipeId],
+    references: [recipe.id],
+    relationName: "RecipeForkedFrom",
+  }),
+  forks: many(recipe, {
+    relationName: "RecipeForkedFrom",
   }),
   images: many(recipeImage),
   mealRecipes: many(mealRecipe),

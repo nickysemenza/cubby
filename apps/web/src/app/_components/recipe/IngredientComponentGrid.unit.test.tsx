@@ -48,6 +48,8 @@ const recipe = (id: string, name: string) =>
     yield: null,
     servings: null,
     notes: null,
+    forkedFromRecipeId: null,
+    forkedFromRecipeName: null,
     source: null,
     images: [],
     sections: [],

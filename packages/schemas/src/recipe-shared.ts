@@ -234,6 +234,12 @@ export const recipeTopLevelFields = {
   servings: recipeServings.nullish(),
   tags: recipeTags.nullish(),
   notes: recipeNotes.nullish(),
+  // Lineage pointer only — nullable(), not nullish(), because it's always
+  // present on read (never absent) even when there's no fork.
+  forkedFromRecipeId: recipeShortcode.nullable(),
+  // Derived from the joined parent recipe's name, same "<ref>Id" +
+  // "<ref>Name" pairing as Task.parentTaskId/parentTaskName.
+  forkedFromRecipeName: z.string().nullable(),
 };
 
 export const recipeTopLevel = z.object(recipeTopLevelFields);

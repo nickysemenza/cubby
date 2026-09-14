@@ -2,6 +2,7 @@ import "../repo/ingredient.integration.test";
 import "../repo/meal.integration.test";
 import "../repo/recipe-cookbook-upsert.integration.test";
 import "../repo/recipe-upsert.integration.test";
+import "../repo/recipe/forked-from.integration.test";
 import "../services/availability.integration.test";
 import "../services/expense-pricing.service.integration.test";
 import "../services/recipe-costing.cascade.integration.test";

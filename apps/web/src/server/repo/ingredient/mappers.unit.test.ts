@@ -89,6 +89,7 @@ const baseRecipe = {
   SourceType: "Website" as const,
   SourceData: "https://example.com/pancakes",
   cookbookId: null,
+  forkedFromRecipeId: null,
   yield: null,
   servings: null,
   tags: null,

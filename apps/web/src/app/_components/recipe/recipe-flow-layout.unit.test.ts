@@ -20,6 +20,8 @@ const recipe: RecipeOut = recipeOut.parse({
   id: testShortcode("recipe", "RCP-FLOW"),
   name: "Flow",
   meta: null,
+  forkedFromRecipeId: null,
+  forkedFromRecipeName: null,
   images: [],
   sections: [
     {
