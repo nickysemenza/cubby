@@ -94,6 +94,21 @@ history is the archive. Permanent product constraints live in the
 - **Meal nutrition goals.** Let meal planning compare planned nutrition with
   explicit household goals using the existing recipe nutrition totals.
 
+- **Itemization and settlement verdict on the transactions list.** The
+  linkage exists (`FinancialTransaction ──< Allocation >── Purchase ──<
+  Expense`) but the two halves of "is this charge itemized?" sit on different
+  lists: `/finance` transactions have only the has/none purchase-presence
+  filter, and the reconciliation verdict (`unknown`/`match`/`refund_adjusted`/
+  `mismatch`, `financial-reconciliation.ts`) lives on `/purchases`. Add a
+  derived transaction column with a filter over: bare (no Purchase), linked to
+  a single productless lump line (order booked, not itemized), itemized and
+  reconciled, itemized and mismatched. Measured 2026-09-14 over 3,337 non-void
+  rows: 657 bare, 147 lump-line, 1,567 reconciled, 944 one-of-several charges
+  on a shared purchase (installments, combined Amazon charges — not
+  mismatches), 22 true sole-charge mismatches. Count product-linked lines per
+  allocated purchase; do not compare a shared purchase's lines against one
+  charge's amount.
+
 - **Fix actions for financial duplicate findings.** Give duplicate transaction
   source-ref and account-alias Problems findings a safe targeted action, without
   widening the general entity-merge system to money entities.
@@ -257,6 +272,15 @@ history is the archive. Permanent product constraints live in the
   Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
   the local M3 development machine. Keep it only while refinement and explicit
   selection materially outperform a plain `search_usda_foods` result.
+
+- **Swift 6.4 / OS 27 readiness pass on the Apple app.** Applies before any
+  deployment-target bump: `@State` is a macro, so an inline default paired with
+  an `init` assignment compiles and silently keeps the inline value — audit
+  the ~30 `_x = State(initialValue:)` custom inits (`GardenForms.swift` is the
+  pattern); `weak let` lets the 11 `@unchecked Sendable` classes become
+  `Sendable`; `@available(anyAppleOS 27, *)` replaces the five-platform list.
+  The 27 resizing model (every app resizable, `UIScreen.main` gone) is the
+  larger piece — run `/axiom:audit resize` when the target moves.
 
 ---
 
@@ -475,6 +499,32 @@ history is the archive. Permanent product constraints live in the
   Every entity going through `createEntityCrudRouter` is safe today because that
   config requires an `idSchema`; a hand-rolled call site can still omit one.
 
+- **iOS parity for the garden-flow audit findings** — Promote when the web
+  garden audit PR (2026-09-14, worktree `tanstack-best-practices`) merges. That
+  audit fixed web only by decision; what iOS does differently was recorded as
+  findings, not changed. Pull the iOS batch from that PR's report rather than
+  re-auditing.
+- **Finish `listScaffold` adoption and retire the hand-built list rosters** —
+  Promote when the next list repository is written or a hand-built list drifts
+  from its declared columns. After the entity-spine work, predicates over
+  subqueries, OR-groups and array columns stay hand-written and several
+  repositories compose lists outside `listScaffold`; one vendor combobox
+  builder also remains hand-rolled. Reconcile per repository, not with a new
+  abstraction.
+- **Delete the stale remote `native-poc` branch** — Still on origin
+  (`c7ce160f`), old history plus one commit; the permission classifier blocked
+  the delete during #1020. `git push origin --delete native-poc` whenever
+  convenient.
+- **Record the TestFlight build-number rule where the archive script lives** —
+  Promote on the next rejected upload. ASC rejects a repeated
+  `CURRENT_PROJECT_VERSION`; it must be bumped in `project.yml` (not the
+  gitignored `.xcodeproj`) per upload, and neither `apps/apple/README.md` nor
+  `scripts/apple.ts` says so yet.
+- **Splitwise re-export dedupe** — Promote if the Coachella-era Splitwise rows
+  are ever re-imported. That export carries no row id, so source keys were
+  derived from date + description + cost; a later export with an edited
+  description will not dedupe against the first import.
+
 ---
 
 ## Visions
@@ -501,6 +551,12 @@ history is the archive. Permanent product constraints live in the
   signals into maintenance, project evidence, and correctly scoped tasks.
 - **Cubby to Home Assistant.** Expose computed shopping shortfalls, maintenance due,
   actionable weekend work, and tonight's meal for household display and voice.
+- **Household cash-flow projection.** A scenario input, not a synced entity:
+  expected inflows (a vesting date, price, withholding) and the ledger's
+  recurring outflows projected forward, calibrated against `SUM(Expense.cost)`
+  history. Needs no schema change and no money-bearing table. Net worth and
+  retirement stay out until the trusted-household tenet is amended for a
+  time-series table as an explicit decision.
 - **Receipt-shaped import.** Move the deterministic half of a vendor import
   server-side: a `create_purchase_with_lines` (or `import_vendor_orders`)
   call takes a header plus lines with per-order defaults, dedupes on
@@ -516,6 +572,17 @@ history is the archive. Permanent product constraints live in the
 
 - **Fill ingredient density gaps.** Use the existing missing-weight list to add
   Product `UnitMapping` data organically as ingredients need it.
+- **Settle the bare card charges.** 618 posted `purchase`-kind transactions
+  ($38.6k) plus 31 refunds and 8 income rows have no Purchase allocation as of
+  2026-09-14; the 22 sole-charge mismatches are a separate short list. Work
+  from `/finance` with the purchase-presence filter set to none, matching to
+  existing Purchases before booking new ones (`match_expenses`,
+  `suggest_financial_transfer_pairs`). The 147 lump-line orders are a lower
+  tier: itemize only where a receipt is on hand.
+- **Register the household's other payment instruments.** Every card or bank
+  account either member pays vendors with belongs in Cubby as a
+  `FinancialAccount`, or its statement rows can never settle anything. Add the
+  missing ones with aliases before the next statement import.
 - **Fill missing acquisition quantities.** Work through Expenses → Missing quantities
   and record known counts on existing Product-linked acquisition rows; do not freeze
   a changing row count into this file.
