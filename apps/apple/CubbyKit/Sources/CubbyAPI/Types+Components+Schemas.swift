@@ -12580,21 +12580,27 @@ extension Components {
             }
             /// - Remark: Generated from `#/components/schemas/MeasureEstimateUnavailable/reason`.
             package var reason: Components.Schemas.MeasureEstimateUnavailable.ReasonPayload
+            /// - Remark: Generated from `#/components/schemas/MeasureEstimateUnavailable/coverage`.
+            package var coverage: Components.Schemas.OutputSchema44?
             /// Creates a new `MeasureEstimateUnavailable`.
             ///
             /// - Parameters:
             ///   - status:
             ///   - reason:
+            ///   - coverage:
             package init(
                 status: Components.Schemas.MeasureEstimateUnavailable.StatusPayload,
-                reason: Components.Schemas.MeasureEstimateUnavailable.ReasonPayload
+                reason: Components.Schemas.MeasureEstimateUnavailable.ReasonPayload,
+                coverage: Components.Schemas.OutputSchema44? = nil
             ) {
                 self.status = status
                 self.reason = reason
+                self.coverage = coverage
             }
             package enum CodingKeys: String, CodingKey {
                 case status
                 case reason
+                case coverage
             }
             package init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -12606,9 +12612,14 @@ extension Components {
                     Components.Schemas.MeasureEstimateUnavailable.ReasonPayload.self,
                     forKey: .reason
                 )
+                self.coverage = try container.decodeIfPresent(
+                    Components.Schemas.OutputSchema44.self,
+                    forKey: .coverage
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "status",
-                    "reason"
+                    "reason",
+                    "coverage"
                 ])
             }
         }

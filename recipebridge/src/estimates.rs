@@ -48,6 +48,12 @@ pub enum WMeasureEstimate {
     },
     Unavailable {
         reason: WUnavailableReason,
+        // Present whenever the aggregate saw at least one contributor (always
+        // `covered: 0`); absent for `Empty` and legacy rows persisted before it
+        // existed. Lets callers count "0 of N priced" without a known total.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[tsify(optional)]
+        coverage: Option<WEstimateCoverage>,
     },
     Pending {
         reason: WPendingReason,
@@ -157,6 +163,7 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
     if entries.is_empty() {
         return WMeasureEstimate::Unavailable {
             reason: WUnavailableReason::Empty,
+            coverage: None,
         };
     }
 
@@ -206,9 +213,9 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
                     _ => WPendingReason::TotalsStale,
                 });
             }
-            WMeasureEstimate::Unavailable { reason } => {
+            WMeasureEstimate::Unavailable { reason, coverage } => {
                 incomplete = true;
-                add_count(&mut total, 1);
+                add_count(&mut total, coverage.map_or(1, |c| c.total));
                 unavailable_reason = Some(match (unavailable_reason, reason) {
                     (None, reason) => *reason,
                     (Some(current), reason) if current == *reason => current,
@@ -238,6 +245,7 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
     } else {
         WMeasureEstimate::Unavailable {
             reason: unavailable_reason.unwrap_or(WUnavailableReason::NoData),
+            coverage: (total > 0).then_some(WEstimateCoverage { covered: 0, total }),
         }
     }
 }
@@ -425,7 +433,8 @@ mod tests {
         assert_eq!(
             aggregate_estimates_impl(&[
                 WMeasureEstimate::Unavailable {
-                    reason: WUnavailableReason::NoData
+                    reason: WUnavailableReason::NoData,
+                    coverage: None,
                 },
                 WMeasureEstimate::Pending {
                     reason: WPendingReason::TotalsMissing
@@ -442,7 +451,73 @@ mod tests {
         assert_eq!(
             aggregate_estimates_impl(&[]),
             WMeasureEstimate::Unavailable {
-                reason: WUnavailableReason::Empty
+                reason: WUnavailableReason::Empty,
+                coverage: None,
+            }
+        );
+    }
+
+    fn unavailable(reason: WUnavailableReason) -> WMeasureEstimate {
+        WMeasureEstimate::Unavailable {
+            reason,
+            coverage: None,
+        }
+    }
+
+    #[test]
+    fn all_unavailable_lines_report_zero_coverage() {
+        assert_eq!(
+            aggregate_estimates_impl(&[
+                unavailable(WUnavailableReason::NoData),
+                unavailable(WUnavailableReason::NoData),
+                unavailable(WUnavailableReason::NoData),
+            ]),
+            WMeasureEstimate::Unavailable {
+                reason: WUnavailableReason::NoData,
+                coverage: Some(WEstimateCoverage {
+                    covered: 0,
+                    total: 3,
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn mixed_unavailable_reasons_collapse_to_no_data_with_coverage() {
+        assert_eq!(
+            aggregate_estimates_impl(&[
+                unavailable(WUnavailableReason::YieldMissing),
+                unavailable(WUnavailableReason::NoData),
+            ]),
+            WMeasureEstimate::Unavailable {
+                reason: WUnavailableReason::NoData,
+                coverage: Some(WEstimateCoverage {
+                    covered: 0,
+                    total: 2,
+                }),
+            }
+        );
+    }
+
+    #[test]
+    fn nested_unavailable_contributes_its_contributor_count() {
+        assert_eq!(
+            aggregate_estimates_impl(&[
+                WMeasureEstimate::Unavailable {
+                    reason: WUnavailableReason::NoData,
+                    coverage: Some(WEstimateCoverage {
+                        covered: 0,
+                        total: 3,
+                    }),
+                },
+                unavailable(WUnavailableReason::NoData),
+            ]),
+            WMeasureEstimate::Unavailable {
+                reason: WUnavailableReason::NoData,
+                coverage: Some(WEstimateCoverage {
+                    covered: 0,
+                    total: 4,
+                }),
             }
         );
     }

@@ -467,6 +467,7 @@ impl<'a> Engine<'a> {
             }
             _ => WMeasureEstimate::Unavailable {
                 reason: unavailable_reason,
+                coverage: None,
             },
         }
     }
@@ -495,6 +496,7 @@ impl<'a> Engine<'a> {
                     ),
                     None => WMeasureEstimate::Unavailable {
                         reason: unavailable_reason,
+                        coverage: None,
                     },
                 };
                 WNamedEstimate {

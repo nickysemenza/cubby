@@ -242,13 +242,16 @@ describe("calculateTotals", () => {
     expect(result.weight).toBe(0);
     expect(result.nutrients["203"] ?? 0).toBe(0);
     expect(result.nutrients["208"] ?? 0).toBe(0);
+    // One line, nothing priced: the engine still reports 0 of 1 contributors.
     expect(result.estimates.cost).toEqual({
       status: "unavailable",
       reason: "no_data",
+      coverage: { covered: 0, total: 1 },
     });
     expect(result.estimates.nutrition.protein).toEqual({
       status: "unavailable",
       reason: "no_data",
+      coverage: { covered: 0, total: 1 },
     });
     expect(result.missingByType).toEqual({
       price: ["unknown ingredient"],
@@ -408,6 +411,7 @@ describe("calculateTotals with sub-recipes", () => {
     expect(costing.totals.estimates.cost).toEqual({
       status: "unavailable",
       reason: "no_data",
+      coverage: { covered: 0, total: 1 },
     });
     expect(costing.totals.estimates.nutrition.kcal).toMatchObject({
       status: "complete",

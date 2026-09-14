@@ -15,7 +15,7 @@ import type {
 } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, or, type SQL, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -186,7 +186,16 @@ export const buildMealWhere = (
     .where(
       and(
         notDeleted(mealRecipe),
-        sql`${recipe.totals} -> 'cost' ->> 'status' = 'partial'`,
+        // Unavailable costs count only when the engine recorded contributors
+        // (`coverage.total`, 0 of N priced). Legacy rows lacking the key stay
+        // out until "Recompute all recipe totals" or repair-on-read rewrites them.
+        or(
+          sql`${recipe.totals} -> 'cost' ->> 'status' = 'partial'`,
+          and(
+            sql`${recipe.totals} -> 'cost' ->> 'status' = 'unavailable'`,
+            sql`COALESCE((${recipe.totals} #>> '{cost,coverage,total}')::int, 0) > 0`,
+          ),
+        ),
       ),
     );
 

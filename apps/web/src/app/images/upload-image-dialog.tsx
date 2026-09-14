@@ -34,7 +34,10 @@ import { type UploadedImage, useImageUpload } from "./use-image-upload";
  */
 interface UploadImageDialogProps {
   /** Injectable transport seam for UI tests; production uses imageUpload. */
-  operations?: Pick<typeof imageUpload, "uploadImage" | "markUploaded">;
+  operations?: Pick<
+    typeof imageUpload,
+    "uploadImage" | "markUploaded" | "importFromUrl"
+  >;
 }
 
 type UploadDraft = {
@@ -73,7 +76,7 @@ export function UploadImageDialog({
   // Single-shot mutation (unlike the multi-step file upload) — useActionMutation
   // fits: one call, one toast, one invalidation.
   const importFromUrl = useActionMutation({
-    mutationFn: imageUpload.importFromUrl.mutationOptions,
+    mutationFn: operations.importFromUrl.mutationOptions,
     success: "Image imported.",
     onSuccess: () => setUrl(""),
   });

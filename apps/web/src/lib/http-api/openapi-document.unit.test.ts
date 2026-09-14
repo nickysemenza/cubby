@@ -253,6 +253,28 @@ describe("generated HTTP OpenAPI document", () => {
     ]);
   });
 
+  it("enumerates every groupBy roster with identifier-safe values", () => {
+    // swift-openapi-generator turns the enum into Swift cases, so a future
+    // `:`/`.` groupable field (product sorts on `related:product.projects`)
+    // must stay out of the roster rather than break the native client.
+    const groupBys = operations.flatMap((entry) =>
+      (entry.parameters ?? [])
+        .filter((value) => value.name === "groupBy")
+        .map((value) => [entry.operationId, value.schema] as const),
+    );
+    expect(groupBys.length).toBeGreaterThan(0);
+    const identifier = z.string().regex(/^[A-Za-z][A-Za-z0-9_]*$/u);
+    const unsafe = groupBys.flatMap(([operationId, schema]) => {
+      const { enum: values } = schemaNode.parse(schema);
+      return values === undefined || values.length === 0
+        ? [`${operationId}: no enum`]
+        : values
+            .filter((field) => !identifier.safeParse(field).success)
+            .map((field) => `${operationId}: ${JSON.stringify(field)}`);
+    });
+    expect(unsafe).toEqual([]);
+  });
+
   it("serves structured queries as POST bodies and everything else as GET", () => {
     const methods = { get: 0, post: 0, patch: 0, delete: 0 };
     for (const entry of operations)

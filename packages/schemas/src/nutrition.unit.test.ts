@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildNutrition, measureEstimate, nutritionTotals } from "./nutrition";
+import {
+  buildNutrition,
+  estimateCoverage,
+  measureEstimate,
+  nutritionTotals,
+} from "./nutrition";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda-schemas";
 
 describe("nutrition estimate contract", () => {
@@ -38,6 +43,30 @@ describe("nutrition estimate contract", () => {
         coverage: { covered: 3, total: 2 },
       }).success,
     ).toBe(false);
+  });
+
+  it("round-trips zero coverage on unavailable estimates", () => {
+    const withCoverage = {
+      status: "unavailable",
+      reason: "no_data",
+      coverage: { covered: 0, total: 3 },
+    } as const;
+    expect(measureEstimate.parse(withCoverage)).toEqual(withCoverage);
+    expect(estimateCoverage(withCoverage)).toEqual({ covered: 0, total: 3 });
+    expect(
+      measureEstimate.safeParse({
+        status: "unavailable",
+        reason: "no_data",
+        coverage: { covered: 1, total: 3 },
+      }).success,
+    ).toBe(false);
+    // Rows persisted before `coverage` existed still parse and report no count.
+    const legacy = { status: "unavailable", reason: "no_data" } as const;
+    expect(measureEstimate.parse(legacy)).toEqual(legacy);
+    expect(estimateCoverage(legacy)).toBeUndefined();
+    expect(
+      estimateCoverage({ status: "pending", reason: "totals_stale" }),
+    ).toBeUndefined();
   });
 
   it("requires the canonical shape and the full catalog", () => {

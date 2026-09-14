@@ -540,8 +540,12 @@ numbers and booleans are their plain text form, a list repeats its key
 (`tag=a&tag=b`; the bracketed `tag[]=a` and `tag[0]=a` spellings are folded onto
 that), and an object-valued filter is flattened onto prefixed scalar parameters
 (`projectScopeStatuses`, `projectScopeSearch`, …). Nothing on a URL is
-JSON-encoded and nothing needs quoting. `groupBy` retains its existing field
-name. Unknown parameters are rejected. Pagination metadata stays zero-based.
+JSON-encoded and nothing needs quoting. `sort` is limited to the entity's
+sortable fields and `groupBy` is an enum of its groupable ones (every sortable
+field when the entity declares none); both rosters are listed per list
+operation in `/api/v1/openapi.json`, and an unknown field is a 400
+`INVALID_INPUT` naming it. Unknown parameters are rejected. Pagination metadata
+stays zero-based.
 For example: `/api/v1/recipes?page=1&pageSize=20&sort=name&nameFilter=Soup`.
 
 Every ordinary operation is one route. A query whose input is flat (scalars,
@@ -561,8 +565,9 @@ the current browser session and supports explicit keys, which it forgets on
 reload. `/api/v1/openapi.json` is an OpenAPI 3.1 document that describes every
 auth method, names components after the schema exports they come from
 (`ProductTopLevelOut`, `RecipeListPage`, `InventoryScanAtLocationInput`),
-spells nullability the way generated clients keep it, and carries a
-`discriminator` mapping for every discriminated union.
+spells nullability the way generated clients keep it, carries a
+`discriminator` mapping for every discriminated union, and lists each list
+operation's sort roster in its `sort` description.
 
 The contract is a real ts-rest router (`apps/web/src/lib/generated/http-contract.gen.ts`,
 built from the operation contracts in `apps/web/src/contracts/` and the entity

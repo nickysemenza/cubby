@@ -1,3 +1,4 @@
+import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import {
   ContractNoBody,
   initContract,
@@ -22,7 +23,7 @@ import {
 } from "~/server/generated/entity-bindings.gen";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 
-import { resourceListQuery } from "./resource-query";
+import { type ListSortRoster, resourceListQuery } from "./resource-query";
 import { isFlatQueryInput, type Json, toWire } from "./wire";
 
 /**
@@ -242,6 +243,15 @@ const mutationResultFor = <
   return option;
 };
 
+/**
+ * The declared sort roster a list route narrows its `sort`/`groupBy` by. A
+ * list entity without a `model.sort` roster fails here at compile time (the
+ * index is over the generated map's literal keys), before the kernel would
+ * refuse it at runtime.
+ */
+const rosterFor = (entity: ListEntity): ListSortRoster =>
+  generatedEntitySort[entity];
+
 /** `GET /<plural>`: the entity list with flat query parameters. */
 export const resourceList = <E extends ListEntity & BoundEntity>(
   entity: ResourceEntity<E>,
@@ -249,7 +259,10 @@ export const resourceList = <E extends ListEntity & BoundEntity>(
 ) => ({
   method: "GET" as const,
   path: `/${basePath}`,
-  query: resourceListQuery(ENTITY_SCHEMA_BINDINGS[entity].filters),
+  query: resourceListQuery(
+    ENTITY_SCHEMA_BINDINGS[entity].filters,
+    rosterFor(entity),
+  ),
   responses: { 200: toWire(getEntityListOutputSchema(entity), "output") },
   metadata: {
     operation: "entity.list",

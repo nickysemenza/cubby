@@ -8,7 +8,7 @@ import {
   type RecipeId,
 } from "@cubby/schemas/identifiers";
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
-import { measureEstimate, hasKnownEstimate } from "@cubby/schemas/nutrition";
+import { measureEstimate, estimateCoverage } from "@cubby/schemas/nutrition";
 import {
   type AllProblems,
   allProblemsSchema,
@@ -774,20 +774,14 @@ const fastExactPresenters = {
     const affectedRecipes = (row.recipes ?? []).flatMap((entry) => {
       const recipe = entry.recipe;
       const cost = recipe?.totals?.cost;
-      const costCovered =
-        cost && hasKnownEstimate(cost) ? cost.coverage.covered : undefined;
-      const ingredientCount =
-        cost && hasKnownEstimate(cost) ? cost.coverage.total : undefined;
-      return recipe &&
-        costCovered != null &&
-        ingredientCount != null &&
-        costCovered < ingredientCount
+      const coverage = cost ? estimateCoverage(cost) : undefined;
+      return recipe && coverage && coverage.covered < coverage.total
         ? [
             {
               id: recipe.id,
               name: recipe.name,
-              costCovered,
-              ingredientCount,
+              costCovered: coverage.covered,
+              ingredientCount: coverage.total,
             },
           ]
         : [];

@@ -12,6 +12,7 @@ const coverage = z
     (value) => value.covered <= value.total,
     "Coverage exceeds the contributor count",
   );
+export type MeasureEstimateCoverage = z.infer<typeof coverage>;
 
 const knownEstimate = {
   lower: z.number().nonnegative(),
@@ -24,10 +25,19 @@ export const measureEstimate = z
   .discriminatedUnion("status", [
     z.object({ status: z.literal("complete"), ...knownEstimate }),
     z.object({ status: z.literal("partial"), ...knownEstimate }),
-    z.object({
-      status: z.literal("unavailable"),
-      reason: z.enum(["no_data", "yield_missing", "empty"]),
-    }),
+    z
+      .object({
+        status: z.literal("unavailable"),
+        reason: z.enum(["no_data", "yield_missing", "empty"]),
+        // Present when the aggregate saw contributors but priced none of them
+        // (`covered` is always 0); absent for `empty` and rows persisted
+        // before the field existed.
+        coverage: coverage.optional(),
+      })
+      .refine(
+        (value) => value.coverage === undefined || value.coverage.covered === 0,
+        "Unavailable estimates cannot cover contributors",
+      ),
     z.object({
       status: z.literal("pending"),
       reason: z.enum(["totals_missing", "totals_stale"]),
@@ -68,6 +78,14 @@ export const hasKnownEstimate = (
   estimate: MeasureEstimate,
 ): estimate is Extract<MeasureEstimate, { status: "complete" | "partial" }> =>
   estimate.status === "complete" || estimate.status === "partial";
+
+/** Contributor counts for known or unavailable estimates; `undefined` when unknown. */
+export const estimateCoverage = (
+  estimate: MeasureEstimate,
+): MeasureEstimateCoverage | undefined =>
+  hasKnownEstimate(estimate) || estimate.status === "unavailable"
+    ? estimate.coverage
+    : undefined;
 
 /** Build every catalog entry, including unavailable nutrients, without a sparse record. */
 export const buildNutrition = (
