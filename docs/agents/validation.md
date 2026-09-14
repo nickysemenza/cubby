@@ -56,6 +56,21 @@ is ready.
 project. Use `pnpm test:changed:postgres <ref>` when changed integration
 coverage needs the real backend.
 
+Tier-specific traps: `pnpm test:e2e <spec>` can forward the path such that
+Playwright runs **zero** tests and still exits 0 — confirm the trailing
+`N passed` line. Local E2E serves whatever is in `dist/`; a green run after a
+stale build proves nothing (`verify:local` builds first). A standalone
+`request.newContext()` in E2E is *not* cookie-less — it inherits the project's
+`storageState`, so unauthenticated API assertions need
+`storageState: { cookies: [], origins: [] }`. RTable's placeholder-transition
+curtain is an inert `<tbody>` that silently eats clicks, so an E2E cell edit
+retries open+fill as one unit via `editListCell`, never gating on
+`aria-busy="false"`; open cell editors are not torn down by refetches. A `.unit.test.ts` importing a
+`.tsx` through the `~` alias fails to resolve in the node project; keep pure
+logic in an alias-free `.ts`. `pnpm check:all` does not run other packages'
+Vitest suites — `pnpm -r --filter '!@cubby/web' run test` after touching
+`packages/*`.
+
 **Never re-run a tier to find out what failed.** Every run ends with a compact
 list of the failing tests, and writes the same list to
 `apps/web/.vitest-failures.txt`, so a `| tail` or a later turn can both recover
@@ -73,6 +88,11 @@ Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm check` plus
 changed Vitest/PostgreSQL, E2E, Cloudflare, auxiliary, per-manifest Rust, and
 Apple gates from the commits being pushed, and never escalates to the full
 suite. Hooks are mandatory: agents never use `--no-verify` to bypass a failure.
+Pre-commit checks the **whole working tree**, not the index, so a commit fails
+while any concurrent agent's files are mid-edit — stage early and commit
+between agent waves. Regenerated files (`routeTree.gen.ts` and friends) are
+fine to commit; do not revert generated churn. Pre-commit does not `cargo fmt`
+recipebridge; the pre-push gate does, so check Rust formatting before pushing.
 
 Local verification gates merging: run `pnpm verify:local` on the clean final
 commit. This is the merge gate, and it does escalate: high-risk paths run the
@@ -112,6 +132,14 @@ formatted, but this repository intentionally has no semantic CSS lint layer or
 JSON duplicate-key lint guarantee.
 
 ## PR and CI
+
+A step that exists only in `deploy.yaml` cannot run on a PR, so its own CI
+merges green and it breaks the first post-merge deploy. Verify deploy-path
+steps against the CI service token's scopes, never local credentials.
+Unresolved GitHub review threads on old PRs are stale bookkeeping, not a
+worklist — verify against HEAD before acting. Reusing a branch after its PR was
+squash-merged makes the follow-up PR show add/add conflicts; merge `origin/main`
+taking ours.
 
 Inspect failing check logs and annotations before editing. Fix only failures
 caused by the change; retain unrelated flakes or infrastructure failures as

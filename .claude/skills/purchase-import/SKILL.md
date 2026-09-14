@@ -92,8 +92,11 @@ Expense → Purchase ← Allocation → FinancialTransaction → FinancialAccoun
   [financial-settlement.md](references/financial-settlement.md).
 - Attachments, primary documents, return evidence, and Purchase paperwork:
   [documents-and-returns.md](references/documents-and-returns.md).
-- Product promotion, identity, exact SKUs, cost basis, and receiving:
+- Product promotion, identity, exact SKUs, cost basis, receiving, and the
+  operator's standing import preferences:
   [product-promotion-and-receiving.md](references/product-promotion-and-receiving.md).
+- Kit splits, bundle and BOGO allocation, N-packs, and construction materials
+  leaving the shelf worklist: [kits-and-bundles.md](references/kits-and-bundles.md).
 - Source-specific quirks and historic examples: [vendor-case-notes.md](references/vendor-case-notes.md).
 
 ## Default workflow

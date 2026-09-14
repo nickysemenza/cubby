@@ -2,7 +2,7 @@
  * One underline color per part of the "amount name modifier" display format.
  * The colored underline identifies *which* section a span/diff belongs to —
  * the only section label, replacing inline text like "mod:". Colors live as CSS
- * tokens (styles.css, the warm chart ramp) so every ingredient surface — parse
+ * tokens (styles.css) so every ingredient surface — parse
  * drift, the grammar decomposition carve, the rich-text line — stays in sync.
  *
  * Keys match the `WField` string union (`"amount" | "name" | "modifier"`) the

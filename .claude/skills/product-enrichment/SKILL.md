@@ -9,6 +9,11 @@ Add product facts and one representative cover image through Cubby's existing
 MCP tools. Keep the work interactive: there is no enrichment queue or separate
 evidence table, so return a source-backed batch report when finished.
 
+Per-source scraping mechanics, the placeholder and wrong-variant shapes that
+pass naive checks, and the vendors that cannot supply a cover are in
+[references/sources.md](references/sources.md) — read the section for the
+source in hand.
+
 ## Build the worklist
 
 When the caller or purchase-import handoff supplies specific `PRD-` shortcodes,

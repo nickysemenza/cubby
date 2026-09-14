@@ -245,3 +245,194 @@ gap between bank movement and final earnings, which diverge precisely when a lab
 settles elsewhere. Do not "fix" these by fitting numbers, and do not unallocate
 them — that would destroy a true fact to quiet a detector. They are expected to
 show in the settlement-mismatch Problems section permanently.
+
+## Card exports: signs, coverage, and what they cannot prove
+
+- Monarch: negative = charge, positive = credit; `Original Statement` carries the
+  store number, and its `Id` column is a usable external id. Copilot: **sign
+  inverted** (positive = charge), carries the account mask directly. Mint-era
+  exports: unsigned amount with a `Transaction Type` column, card named by
+  *product* with no last-four, and no external id — rows sourced from them get
+  no `sourceRef`. Merge Copilot and Monarch: they cover different cards and
+  different eras, and each often has only one leg of a charge/credit pair.
+- Copilot posts on posting date, Monarch on transaction date, so one event
+  appears 1–3 days apart in each; dedupe on vendor + amount within ~5 days.
+- **Absence from every export is not evidence a charge did not happen** — real
+  vendor-confirmed receipts have been missing from all files inside the covered
+  window. Grep the raw amount across every file; when nothing turns up, record
+  the vendor-printed tender hint in the Purchase notes and leave it unsettled.
+- Aggregators sometimes double-represent a return as an extra charge+refund
+  pair; when a card export and the vendor's charge history disagree, the vendor
+  page is authoritative for what was owed.
+- Two people holding the same card product from one issuer is far likelier than
+  an exotic reissue chain. Before attaching an alias or merging accounts on a
+  name resemblance, run the **overlap test**: two descriptors that share ~100%
+  of date+amount rows are one account through two export vintages; two that
+  share zero rows over a long concurrent window are two cards. Recurring
+  subscriptions at different prices on different billing days are the sharpest
+  discriminator. Cubby has no restore — a wrong account merge is permanent.
+- **A last-four printed by a vendor is never grounds for a new account.** Apple
+  Pay device numbers, reissued cards and vendor display tokens all print digits
+  the statement does not carry. Map to the statement row.
+- Another household member's card rows are in scope but unenrichable: their
+  vendor histories sit behind logins the operator does not have. Stamp
+  `accountId` for ownership and leave the rows `open`/`unmatched` — that is the
+  correct resting state, not a backlog. Never disposition them `ignored`, and do
+  not write a per-row note explaining the blocker.
+
+## Re-importing a newer provider export
+
+- It is a **delta-only** job. Dedup is on `(source, externalId)` globally, so
+  declare `rowCountDeclared` = the delta count (or `list_statement_imports`
+  reports an unfinished chunked ingest). Compute `statementRowExternalId` with
+  `apps/web/src/server/repo/statement-row-identity.ts` — import it, never
+  reimplement — and ask the DB which ids exist; a column-wise CSV diff does not
+  work across export vintages. `StatementImport.fingerprint` is the sha256 of
+  the file. Exclude `$0.00` placeholder rows (they re-present as new forever).
+  Verify afterwards: any stored row whose hash is absent from the source file is
+  fabricated.
+- **The descriptor firm-up mints a second identity.** A pending row re-observed
+  with a fuller descriptor after posting (`THE HOME DEPOT #NNNN` →
+  `THE HOME DEPOT #NNNN 800-… CA`, `AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*…`)
+  hashes differently on the same account/date/amount. Detect with a self-join on
+  (accountDescriptor, statementDate, providerAmount) across imports; set
+  `supersededByExternalId` on the thinner row, and where a transaction already
+  carries the old ref, **append the new ref to that same transaction**.
+- Disposition by `sourceCategory` is a first pass only. **Provider categories
+  are wrong often enough to bury modelled spend** — a storage-crate vendor filed
+  as Clothing, a vehicle purchase filed as fuel/parking. When two providers
+  disagree on a category, the ignore is suspect. Sweep the ignored tail **by
+  amount** as well as by merchant: no plausible fuel charge is five figures, and
+  a bare `Check` has no payee to triage on. Ask of each row "is this an
+  acquisition?", not "does the category sound modelled?".
+
+## Orphan transactions and twins
+
+- A statement import leaves orphan transactions (no allocation, `notes` null,
+  the real descriptor, a `v1:<hash>` sourceRef). **Their `transactionDate` is
+  NULL** — only `postedDate` is set — so any `transactionDateFrom/To` filter
+  silently excludes exactly the rows still needing a match, and `vendorSearch`
+  resolves through the linked purchase, so an unlinked row has no vendor either.
+  **Hunt unmatched settlement by amount + account with no date or vendor
+  predicate**, or via Transactions → "Not linked to a purchase". Dedupe on
+  `COALESCE(transactionDate, postedDate)`, and allow **±3 days** — vendor charge
+  history and the statement disagree on a leg's date routinely.
+- **To settle from an orphan, LINK it** (set allocations and `transactionDate`
+  on the existing row). Creating a fresh transaction beside a live orphan is
+  what manufactures twins.
+- A twin pair is a *linked* row (purchase, reasoning, readable vendor ref) and an
+  *orphan* (true descriptor, dedupe hash). Neither dominates: **delete the
+  orphan first, then graft its `v1:` hash onto the linked row's `sourceRefs`**
+  — refs are globally unique, so grafting while the orphan is live fails with a
+  source-ref conflict. Deleting the orphan without grafting throws the hash
+  away and the next sync recreates it. Deleted rows' hashes stay readable via
+  `deletedAt IS NOT NULL`.
+- Shapes that defeat amount matching, all seen for real: split tender (card +
+  gift card, so no row equals the total); per-shipment billing (N legs summing
+  to the order); store-fulfilled legs under the store descriptor; several
+  refunds from **different orders** posting as one credit, grouped by card, not
+  by return visit (retire the merged row and graft its hash onto the largest
+  constituent — a merged row spanning orders can never link to one Purchase);
+  a discount posting as a separate credit; a penny gap that is our tax line, not
+  theirs; a synthesized aggregate booked from an order header facing two real
+  statement legs (prefer the statement rows). Sum before concluding a mismatch,
+  and check the vendor's tender strip before concluding a row is missing.
+- When the constituents of a merged credit are already booked as vendor legs,
+  linking the merged row as another leg double-counts the refund.
+
+## Reading a settlement gap
+
+Comparing posted refunds against negative Expenses finds returned-but-unbooked
+money, but most nonzero gaps are benign. Causes, in order of frequency:
+
+1. **Repriced / net-settled.** The credit was applied by reducing the original
+   Expense, so `statedTotal − net expense` equals the refund exactly. Also the
+   shape of a multi-leg settlement (five charges − one credit = the booked
+   expense).
+2. **Tax-basis mismatch (Home Depot).** Item lines booked pre-tax, card refund
+   tax-inclusive; the returned item's tax was never booked as spend either, so
+   there is nothing to credit back. Do not book refunded-tax rows here.
+3. **Expected-not-posted.** Filter on `status = 'posted'`.
+4. **Import twins — the real defect.** Settled refunds exactly 2× booked credits.
+   Fix is delete-then-graft.
+
+- **An unmatched credit has three causes — check in this order:** already
+  netted into the Expenses with only the settlement pair missing (most common);
+  the whole order missing from Cubby; a genuine missing refund on an existing
+  purchase (rarest). Never assume it belongs to the nearest purchase by
+  vendor+date — the charge side of the export disambiguates.
+- `statedTotal` holding a **net** is a tell: whenever it equals the expense
+  total on a purchase that had a return, suspect the refunded tax is missing.
+- Linking an orphan credit can *create* a double-count when the Purchase already
+  carries the same refund from another source. Check first.
+- The itemisation detector (`statedTotal − Σ expenses > 0.5`) needs two
+  exclusions: a negative Expense line (a booked return) **and** a negative
+  allocation (a refund settled on the card side only). Equivalently, a purchase
+  whose allocations ≈ its expenses is fine. What survives both is usually a
+  **cancelled line whose `statedTotal` still holds the pre-cancellation
+  figure** — nothing goes negative anywhere, so the stated total is the only
+  field carrying the old number. Fix it there and note the original.
+- `statedTotal − expenseTotal` is not the open-gap measure; add back posted
+  refunds, or a worklist triples. Cubby's `reconciliation` field gets this
+  right; raw SQL against the two totals does not. A fully-cancelled order
+  (`statedTotal $0.00` with real legs) still false-positives — read
+  `reconciliation`.
+- **eBay: split by sign before judging it.** Sales have no vendor order total
+  (null `statedTotal` is correct) and settle through payouts, not card charges.
+- **Apple: not a matching problem.** If no Apple charge exists in the statement
+  ledger at all, the fix is a statement import.
+
+## Multi-charge attribution
+
+- **Amazon: the charge→order ledger is the only arbiter.** A subset of charges
+  that sums exactly to `statedTotal`, uniquely in its window, is still not
+  evidence — grocery orders bill in many small legs and coincidental sums are
+  common; every audited subset-sum match was wrong. Scrape
+  `/cpe/yourpayments/transactions` (20 rows per POST page; render results into
+  the DOM and read with `get_page_text`, since `javascript_tool` truncates
+  returns), join free transactions to charges on (amount, date ±6 d) to get the
+  **order id**, then order id → Purchase. Query *all* purchases, not just
+  zero-allocation ones — most wins are extra shipment legs on partially-settled
+  orders, and refund-only purchases complete to net zero when the charge lands.
+  Re-run the audit (group `orderId → [amounts]`, diff against Cubby) after any
+  matching pass; it is cheap. The scraper's dedupe key collapses identical
+  same-day charges on one order, so "Amazon < Cubby" on a same-amount pair may
+  be dedupe loss.
+- **Home Depot multi-charge matches are trustworthy**: legs cluster within a
+  week, so a same-week set summing to `statedTotal` is good evidence. HD has no
+  charge→order ledger; use `expenses vs net settlement`, not either against
+  `statedTotal` (returns net both sides down together).
+- A charge that **predates its order** falsifies the match by itself; a 1–3 day
+  lead is posting noise, a week is a wrong purchase date. A gift-card line means
+  the card charge is *not* the stated total. Marketplace vs first-party
+  descriptors (`AMAZON MKTPL` vs `Amazon.com`) break same-day ties; `Sold by:` on
+  the invoice explains multi-seller multi-charge orders. When identical charges
+  stay indistinguishable, pick, and say the pick is arbitrary in the note. Never
+  attach a charge that exactly equals an already fully-posted total — the twin
+  belongs to an order Cubby never booked. Prefer the candidate purchase that
+  still carries a shortfall, then nearest date, one charge per purchase; tips
+  skip the shortfall test.
+- Recurring same-price purchases are the whole source of ambiguity; nearest
+  date resolves them, with the arbitrariness written into the note.
+- Link in batches of 25, not 50 — 50 exceeds the MCP response timeout, and the
+  writes still land on a timeout, so re-query before resending. Read existing
+  `notes` and append; never write allocations via direct SQL (the write path
+  enforces the sum invariant and fires audit/data-quality side effects).
+- Never report a raw unsettled count as a gap: purchases predating statement
+  coverage cannot ever settle, and free charges exceeding unmatched purchases
+  means some belong to orders never booked — not a bipartite matching problem.
+
+## Vendor account pages beat inference
+
+An expected refund that never arrives, a cancelled order, and gift-card tender
+all present identically in statement data — an amount that will not reconcile.
+Only the vendor account distinguishes them. A cancelled order is not a return:
+the goods never arrived, so the fix is an offsetting `— cancelled` Expense
+credit to zero the spend (keeping `productQuantity` clear on the charge lines so
+no phantom unit enters the derived-price sample), with the outstanding money as
+`status: "expected"` refunds per funding account, and a matching posted draw for
+any gift-card leg. A stored-value refund may come back on a different card than
+the one debited; keep one generic stored-value account per vendor with
+`last4: null` rather than pinning it. Where a vendor's phone/online support
+does nothing, a physical return desk can recall the original receipt and issue
+the refund directly.

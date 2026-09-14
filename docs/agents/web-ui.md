@@ -18,5 +18,13 @@ table order/pinning/visibility/sizing. Rendered entity names are linked and
 readable: use `EntityInlineLink`, a titled truncated link, or `createNameColumn`
 in RTable. Pages use the `Page` shell; detail bodies use `DetailSections`.
 
+Component traps that typecheck cannot catch: `DropdownMenuLabel` crashes at
+runtime unless wrapped in `DropdownMenuGroup` (Base UI, not Radix). A column
+`cell` that depends on separately-fetched data must read `row.original` in the
+renderer, never `info.getValue()` — TanStack Table freezes accessor results in
+`row._valuesCache` and rebuilds rows only on data changes. Every entity
+hovercard renders through one `ManifestCard`; an image appears only when the
+entity's `toXCard` spec pushes a `{kind: "thumb"}` block.
+
 For component-level exceptions and examples, load the relevant heading in [the
 preserved web UI reference](web-ui-reference.md).
