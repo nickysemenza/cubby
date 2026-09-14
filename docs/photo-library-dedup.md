@@ -176,10 +176,17 @@ encoded-file upload pipeline, progressive matching/review, existing picker
 integration, capture-day Garden imports, cancellation, and retry checkpoints.
 
 The server lane passes `pnpm check`, focused unit/OpenAPI/schema checks, and the
-real-PostgreSQL image family (87 tests). CubbyKit's full suite passed before the
-final cache/lifetime follow-up; cache replacement/pruning tests passed afterward.
-App-host matching and Garden retry suites passed before the final lifecycle
-follow-up. Final-commit verification is still pending and will be recorded here.
+real-PostgreSQL image family (87 tests). CubbyKit's complete suite passes 201
+tests, including byte preservation, full dimensions, matching, cache pruning,
+and temporary-file ownership. The simulator app-host matching and Garden suites
+pass 10 tests, including partial-save retries and destination stability. The PR
+records the exact final commit and its `pnpm verify:local` result separately.
+
+A release-optimized synthetic Mac benchmark using the real hash-index code
+compared 6,000 queries against 6,000 entries in 0.564 seconds (36 million entry
+comparisons, source and stored fingerprints enabled). Maximum process RSS was
+6.7 MiB. This measures only in-memory matching; it excludes photo decoding,
+iCloud downloads, CDN repair, UI updates, and concurrent application memory.
 
 The 2026-09-13 Mac experiment above is measured evidence. Physical iPhone
 first-run throughput, memory and thermal behavior, Photos limited-access

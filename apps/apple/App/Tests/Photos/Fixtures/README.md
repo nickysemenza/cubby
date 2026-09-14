@@ -13,3 +13,10 @@ Cubby's PhotoKit integration tests and are dedicated to the public domain under 
 The test suite identifies imported assets through the `cubby-parity-` filename prefix. Do not
 use that prefix for personal images.
 
+Run `PhotoLibraryParityTests` in the `Cubby-iOS` test target on a disposable
+simulator. Import the five `cubby-parity-*` files with `xcrun simctl addmedia
+<simulator-id> <fixture-path>`, set `CUBBY_PHOTO_PARITY=1` in the test action's
+environment, and grant that simulator app full Photos access. Do not import
+`expected-edit-rendition-1440x960.jpg`: the test uses it to edit only its reserved
+source asset. The suite is skipped in ordinary app-host runs because a machine's
+Photos authorization and library contents are external test prerequisites.
