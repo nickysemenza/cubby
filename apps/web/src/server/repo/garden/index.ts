@@ -698,6 +698,12 @@ type GardenEntryUpdateDetails = {
   imageOrder?: string[];
 };
 
+/** Shared with `entity-adapters.ts`'s generic-create guard: a `move` entry is
+ * a byproduct of a planting workflow (start/move/split), never a direct
+ * create or retype. */
+export const MOVE_ENTRY_MESSAGE =
+  "Move entries are created only by planting workflows.";
+
 const assertGardenEntryStructure = (
   current: { kind: string; anchorsPeriod: boolean },
   data: GardenEntryUpdateDetails,
@@ -724,10 +730,7 @@ const assertGardenEntryStructure = (
     data.kind !== current.kind &&
     (data.kind === "move" || current.kind === "move")
   ) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Move entries are created only by planting workflows.",
-    );
+    throw createAppError("CONSTRAINT_VIOLATION", MOVE_ENTRY_MESSAGE);
   }
 };
 

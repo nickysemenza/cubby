@@ -42,6 +42,7 @@ import { usdaFood } from "~/entities/usda.functions";
 import { formatCurrencyRange } from "~/lib/format-range";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { formatEstimate } from "~/lib/nutrition-format";
+import { countLabel } from "~/lib/pluralize";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { formatCurrency } from "~/lib/utils";
@@ -155,7 +156,7 @@ export function toRecipeCard(
   const yieldText = data.yield?.value
     ? `makes ${formatYield(data.yield)}`
     : data.servings
-      ? `${data.servings} servings`
+      ? countLabel(data.servings, "serving")
       : undefined;
   const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
 
@@ -300,7 +301,7 @@ function productCardBody(data: EntityDetailByEntity["product"]): BodyBlock[] {
       label: locationNames.length === 1 ? "Location" : "Locations",
       value:
         locationNames.length > 2
-          ? `${locationNames.length} locations`
+          ? countLabel(locationNames.length, "location")
           : locationNames.join(", "),
     });
   if (stats.length > 0) body.push({ kind: "stats", stats });

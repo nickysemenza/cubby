@@ -1,7 +1,6 @@
 import type { SearchIndexRepairCounters } from "@cubby/schemas/maintenance";
 import type { MaintenanceCounts } from "@cubby/schemas/problems";
 import { useQuery } from "@tanstack/react-query";
-import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
 import {
@@ -20,6 +19,7 @@ import {
 import { Description } from "~/components/ui/description";
 import { Eyebrow } from "~/components/ui/eyebrow";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
+import { countLabel } from "~/lib/pluralize";
 import {
   openProblemsPruneAliasesStream,
   openProblemsReparseStream,
@@ -134,7 +134,7 @@ function RecomputeAction() {
         dryRun.data
           ? `${dryRun.data.wouldChange} of ${dryRun.data.total} would change`
           : counts && counts.staleRecipeTotals > 0
-            ? `${pluralize("recipe", counts.staleRecipeTotals, true)} pending recompute`
+            ? `${countLabel(counts.staleRecipeTotals, "recipe")} pending recompute`
             : null
       }
       onDryRun={() => void dryRun.refetch()}
@@ -149,7 +149,7 @@ function RecomputeAction() {
             tone: r.enqueued > 0 ? "success" : "info",
             message:
               r.enqueued > 0
-                ? `Published ${pluralize("recipe", r.enqueued, true)} for recompute; they run in the background.`
+                ? `Published ${countLabel(r.enqueued, "recipe")} for recompute; they run in the background.`
                 : "Nothing to recompute.",
           })}
         />
@@ -186,7 +186,7 @@ function ReparseAction() {
             tone: r.updated > 0 ? "success" : "info",
             message:
               r.updated > 0
-                ? `Re-parsed ${pluralize("line", r.updated, true)} across ${pluralize("recipe", r.recipesAffected, true)}.`
+                ? `Re-parsed ${countLabel(r.updated, "line")} across ${countLabel(r.recipesAffected, "recipe")}.`
                 : "Nothing to re-parse.",
           })}
         />
@@ -207,7 +207,7 @@ function PruneAliasesAction() {
     <MaintenanceDryRunRow
       summary={
         dryRun.data
-          ? `${pluralize("alias", dryRun.data.wouldPrune, true)} across ${pluralize("ingredient", dryRun.data.ingredients, true)}`
+          ? `${countLabel(dryRun.data.wouldPrune, "alias")} across ${countLabel(dryRun.data.ingredients, "ingredient")}`
           : null
       }
       onDryRun={() => void dryRun.refetch()}
@@ -223,7 +223,7 @@ function PruneAliasesAction() {
             tone: r.pruned > 0 ? "success" : "info",
             message:
               r.pruned > 0
-                ? `Pruned ${pluralize("alias", r.pruned, true)}.`
+                ? `Pruned ${countLabel(r.pruned, "alias")}.`
                 : "No unused aliases to prune.",
           })}
         />
@@ -248,7 +248,7 @@ function RepairIndexAction() {
           tone: findings > 0 ? "success" : "info",
           message:
             findings > 0
-              ? `Scanned ${r.scanned}: retired ${r.retired} orphaned, rebuilt ${r.rebuilt} (${r.missing} missing, ${r.stale} stale), published ${pluralize("embedding refresh", r.published, true)}.`
+              ? `Scanned ${r.scanned}: retired ${r.retired} orphaned, rebuilt ${r.rebuilt} (${r.missing} missing, ${r.stale} stale), published ${countLabel(r.published, "embedding refresh")}.`
               : `Scanned ${r.scanned}: nothing to repair.`,
         };
       }}

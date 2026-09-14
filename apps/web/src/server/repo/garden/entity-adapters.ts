@@ -25,6 +25,7 @@ import {
   gardenEntryList,
   getGardenEntry,
   getPlanting,
+  MOVE_ENTRY_MESSAGE,
   plantingList,
   recordGardenEntry,
   updateGardenEntryDetails,
@@ -165,7 +166,7 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
       gardenEntryList(ctx.readDb, pagination, sorts),
     create: async (ctx, data) => {
       if (data.kind === "move") {
-        throw new Error("Move entries are created by planting workflows.");
+        throw createAppError("CONSTRAINT_VIOLATION", MOVE_ENTRY_MESSAGE);
       }
       const { kind, ...entryData } = data;
       const output = await recordGardenEntry(

@@ -41,7 +41,6 @@ import {
   Unlink,
   Wrench,
 } from "lucide-react";
-import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -70,6 +69,7 @@ import { humanize } from "~/entities/filters";
 import type { ProblemQuery } from "~/entities/problem-query";
 import { problemQuery } from "~/entities/problem-registry";
 import { maintenance } from "~/lib/maintenance.functions";
+import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 import type { ProductWithBetterUpcData } from "~/server/repo/problems";
 
@@ -371,7 +371,7 @@ function MissingEmbeddingsBackfillAction() {
     mutationFn: maintenance.settleAwaitingWork.mutationOptions,
     success: (data) =>
       data.publishedEmbeddingTasks > 0
-        ? `Published ${pluralize("embedding refresh", data.publishedEmbeddingTasks, true)}.`
+        ? `Published ${countLabel(data.publishedEmbeddingTasks, "embedding refresh")}.`
         : "No embeddings needed publishing.",
   });
   return (

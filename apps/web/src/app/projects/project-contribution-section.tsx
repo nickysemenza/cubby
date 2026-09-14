@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 
 export function ProjectContributionReport({
@@ -201,7 +202,7 @@ export function ProjectContributionReport({
                     {gap.count === undefined ? (
                       <ContributionGapTargets targetIds={gap.targetIds} />
                     ) : (
-                      `${gap.count} expenses`
+                      countLabel(gap.count, "expense")
                     )}
                   </TableCell>
                 </TableRow>

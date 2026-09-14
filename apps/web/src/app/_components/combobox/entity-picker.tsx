@@ -5,6 +5,7 @@ import { CheckIcon, XIcon } from "lucide-react";
 import * as React from "react";
 
 import { Spinner } from "~/components/ui/spinner";
+import { entityLabel } from "~/entities/entities";
 import { cn } from "~/lib/utils";
 
 import type {
@@ -55,7 +56,13 @@ export function matchesPickerItem(
 export interface EntityPickerProps<TId extends string> {
   inputId?: string;
   entity?: PickerEntity;
-  label: string;
+  /**
+   * Visible caption for assistive tech (falls back to the entity's noun when
+   * omitted). Not used for the placeholder, "Clear …", or "Create …" strings
+   * — those always name the entity, never a caller's sentence-length field
+   * caption. See `pickerNaming`.
+   */
+  label?: string;
   items: ComboboxItem<TId>[];
   value: ComboboxItem<TId> | null;
   setValue: (item: ComboboxItem<TId> | null) => void;
@@ -218,7 +225,7 @@ function EntityPickerPopup<TId extends string>({
   renderItem,
   clearable,
   value,
-  label,
+  noun,
   setValue,
   setQuery,
   changeOpen,
@@ -233,7 +240,11 @@ function EntityPickerPopup<TId extends string>({
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
   clearable?: boolean;
   value: ComboboxItem<TId> | null;
-  label: string;
+  /**
+   * Entity noun (never the caller's sentence-length caption) for "Clear …" /
+   * "Create …" text.
+   */
+  noun: string;
   setValue: (value: ComboboxItem<TId> | null) => void;
   setQuery: (query: string) => void;
   changeOpen: (open: boolean) => void;
@@ -288,7 +299,7 @@ function EntityPickerPopup<TId extends string>({
           {clearable && value ? (
             <button
               type="button"
-              aria-label={`Clear ${label}`}
+              aria-label={`Clear ${noun}`}
               className="flex min-h-9 w-full shrink-0 items-center gap-2 border-b border-[var(--border)] px-2 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground max-sm:min-h-11"
               onClick={(event) => {
                 event.preventDefault();
@@ -299,7 +310,7 @@ function EntityPickerPopup<TId extends string>({
               }}
             >
               <XIcon className="size-3.5" />
-              Clear {label}
+              Clear {noun}
             </button>
           ) : null}
           <ComboboxPrimitive.List className="max-h-112 min-h-0 flex-1 overflow-y-auto overscroll-contain p-1 outline-none">
@@ -333,8 +344,8 @@ function EntityPickerPopup<TId extends string>({
               onClick={handleCreate}
             >
               {isCreating
-                ? `Creating ${label}…`
-                : `Create ${label}: ${create.name}`}
+                ? `Creating ${noun}…`
+                : `Create ${noun}: ${create.name}`}
             </button>
           ) : null}
         </ComboboxPrimitive.Popup>
@@ -343,11 +354,34 @@ function EntityPickerPopup<TId extends string>({
   );
 }
 
+/**
+ * The visible caption (e.g. "Location where this happened") is only ever an
+ * accessible name. Every string that names the *thing being picked* —
+ * placeholder, "Clear …", "Create …", "No … found." — uses the entity's own
+ * noun, or a caption like that renders as "Select Location where this
+ * happened…". Callers with no entity key (USDA search, static pickers) keep
+ * using `label` as that noun, matching their pre-existing contract.
+ */
+function pickerNaming(
+  entity: PickerEntity | undefined,
+  label: string | undefined,
+) {
+  const entityName = entity ? entityLabel(entity) : null;
+  const entityNoun = entityName?.toLowerCase() ?? null;
+  return {
+    ariaLabel: label ?? entityName ?? "",
+    noun: entityNoun ?? label ?? "item",
+    placeholderDefault: entityNoun ? `Choose a ${entityNoun}…` : "Choose…",
+  };
+}
+
 function EntityPickerInput<TId extends string>({
   inputId,
   anchorRef,
   inputRef,
-  label,
+  ariaLabel,
+  noun,
+  placeholderDefault,
   placeholder,
   compact,
   clearable,
@@ -357,7 +391,18 @@ function EntityPickerInput<TId extends string>({
   inputId?: string;
   anchorRef: React.RefObject<HTMLDivElement | null>;
   inputRef: React.RefObject<HTMLInputElement | null>;
-  label: string;
+  /** Visible caption (or entity fallback) — accessible name for the input. */
+  ariaLabel: string;
+  /**
+   * Entity noun (never the caller's sentence-length caption) for "Clear …"
+   * text.
+   */
+  noun: string;
+  /**
+   * "Choose a <entity>…", or "Choose…" with no entity key — overridden by
+   * `placeholder`.
+   */
+  placeholderDefault: string;
   placeholder?: string;
   compact?: boolean;
   clearable?: boolean;
@@ -379,8 +424,8 @@ function EntityPickerInput<TId extends string>({
         <ComboboxPrimitive.Input
           id={inputId}
           ref={inputRef}
-          aria-label={label}
-          placeholder={placeholder ?? `Select ${label}…`}
+          aria-label={ariaLabel}
+          placeholder={placeholder ?? placeholderDefault}
           className={cn(
             "min-w-0 flex-1 bg-transparent px-2 outline-none placeholder:text-muted-foreground",
             compact
@@ -390,7 +435,7 @@ function EntityPickerInput<TId extends string>({
         />
         {clearable && value ? (
           <ComboboxPrimitive.Clear
-            aria-label={`Clear ${label}`}
+            aria-label={`Clear ${noun}`}
             className="flex h-full shrink-0 items-center justify-center px-2 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11"
             onMouseDown={(event) => event.preventDefault()}
             onClick={(event) => {
@@ -438,6 +483,8 @@ export function EntityPicker<TId extends string>({
   const [debouncedQuery] = useDebouncedValue(query, { wait: 150 });
   const anchorRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const { ariaLabel, noun, placeholderDefault } = pickerNaming(entity, label);
 
   const selectedLabel = value
     ? value.secondary
@@ -522,7 +569,7 @@ export function EntityPicker<TId extends string>({
 
   const emptyMessage = wrongPrefix
     ? `${normalizedQuery.toUpperCase()} is not a ${ENTITY_CODE[entity]} code.`
-    : `No ${label} found.`;
+    : `No ${noun} found.`;
 
   return (
     <ComboboxPrimitive.Root<ComboboxItem<TId>>
@@ -554,7 +601,9 @@ export function EntityPicker<TId extends string>({
         inputId={inputId}
         anchorRef={anchorRef}
         inputRef={inputRef}
-        label={label}
+        ariaLabel={ariaLabel}
+        noun={noun}
+        placeholderDefault={placeholderDefault}
         placeholder={placeholder}
         compact={compact}
         clearable={clearable}
@@ -568,7 +617,7 @@ export function EntityPicker<TId extends string>({
         renderItem={renderItem}
         clearable={clearable}
         value={value}
-        label={label}
+        noun={noun}
         setValue={setValue}
         setQuery={setQuery}
         changeOpen={changeOpen}

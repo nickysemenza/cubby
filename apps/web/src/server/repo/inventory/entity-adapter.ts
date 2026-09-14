@@ -2,6 +2,7 @@ import {
   defineEntityAdapter,
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
+import { createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import {
   mutationEvents,
@@ -40,7 +41,8 @@ export const inventoryEntityAdapter = defineEntityAdapter({
         locationId,
       );
       if (duplicate)
-        throw new Error(
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
           `Unique product ${duplicate.productName} is already inventoried at ${duplicate.locationName}`,
         );
       const output = await createInventoryEntry(

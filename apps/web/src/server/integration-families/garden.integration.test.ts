@@ -798,6 +798,30 @@ describe("garden workflows", () => {
     });
   });
 
+  /**
+   * `kind: "move"` is a valid `GardenEntry.kind` (planting workflows write
+   * one to record a location change), but the generic entity-kernel `create`
+   * path must not — a caller-created "move" entry wouldn't anchor a location
+   * period. See `MOVE_ENTRY_MESSAGE` / the structural-edit guard for the
+   * matching restriction on retyping an existing entry.
+   */
+  it('rejects a generic create with kind "move" — those are created only by planting workflows', async () => {
+    const bed = await location("Garden move-guard bed", "bed");
+    await expect(
+      gardenEntryEntityAdapter.repository.create(kernelContext(ctx.db), {
+        locationId: bed.id,
+        plantingId: null,
+        kind: "move",
+        observedOn: "2026-09-10",
+        note: null,
+        harvestAmount: null,
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "CONSTRAINT_VIOLATION" },
+    });
+  });
+
   it("plantingList honors a two-column sort, not just sorts[0]", async () => {
     const crop = await createIngredient(
       ctx.db,

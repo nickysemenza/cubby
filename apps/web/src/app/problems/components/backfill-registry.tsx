@@ -1,8 +1,7 @@
-import pluralize from "pluralize";
-
 import { backfillProductUpcImagesStream } from "~/app/products/product.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
+import { countLabel } from "~/lib/pluralize";
 
 import type { BackfillButtonProps } from "./problem-backfill-action";
 
@@ -40,7 +39,7 @@ export const BACKFILL = {
     pendingLabel: "Fetching…",
     toastResult: (r) => ({
       tone: r.imported > 0 ? "success" : "info",
-      message: `Imported ${pluralize("image", r.imported, true)} · ${r.found} found, ${r.skipped} skipped.`,
+      message: `Imported ${countLabel(r.imported, "image")} · ${r.found} found, ${r.skipped} skipped.`,
     }),
   }),
   analyzeDescriptions: def<{
@@ -57,7 +56,7 @@ export const BACKFILL = {
       tone: r.enqueued > 0 ? "success" : "info",
       message:
         r.enqueued > 0
-          ? `Enqueued ${r.enqueued} of ${pluralize("location", r.total, true)} for analysis.`
+          ? `Enqueued ${r.enqueued} of ${countLabel(r.total, "location")} for analysis.`
           : "No locations need analysis.",
     }),
   }),
