@@ -34,6 +34,34 @@ import { findOrCreateVendor } from "./vendor";
 describe("image repository", () => {
   const ctx = withTestDb();
 
+  it("prioritizes recent uploads in the hash repair queue", async () => {
+    const older = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "older.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const newer = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "newer.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    await getDb(ctx.db)
+      .update(image)
+      .set({ createdAt: new Date("2000-01-01T00:00:00Z") })
+      .where(eq(image.id, older.id));
+    await getDb(ctx.db)
+      .update(image)
+      .set({ createdAt: new Date("2020-01-01T00:00:00Z") })
+      .where(eq(image.id, newer.id));
+    const index = await getImageHashIndex(ctx.db);
+    const ids = new Set([older.shortcode, newer.shortcode]);
+    expect(
+      index.repair.filter(({ id }) => ids.has(id)).map(({ id }) => id),
+    ).toEqual([newer.shortcode, older.shortcode]);
+  });
+
   it("resolves public image identity before marking an upload complete", async () => {
     const pending = await createPendingImageRecord(ctx.db, {
       key: `images/${crypto.randomUUID()}.jpg`,

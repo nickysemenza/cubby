@@ -39,6 +39,9 @@ struct PhotoDestinationSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
         }
+        #if os(macOS)
+            .frame(minWidth: 520, idealWidth: 620, minHeight: 520, idealHeight: 680)
+        #endif
         .sheet(item: $destination) { destination in
             switch destination {
             case .garden:
@@ -72,6 +75,9 @@ private struct PhotoGardenReviewFlow: View {
                 }
             }
         }
+        #if os(macOS)
+            .frame(minWidth: 540, minHeight: 620)
+        #endif
     }
 }
 

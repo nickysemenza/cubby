@@ -28,6 +28,7 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   exists,
   inArray,
@@ -190,7 +191,7 @@ export const getImageHashIndex = async (
         displayableImageWhere,
       ),
     )
-    .orderBy(asc(image.createdAt), asc(image.id));
+    .orderBy(desc(image.createdAt), desc(image.id));
   return {
     algorithmRevision: 1,
     items: rows.map((row) => ({
