@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
+  groupableFieldsOf,
   resourceListInputFrom,
   resourceListQuery,
   resourceQueryNesting,
@@ -151,5 +152,70 @@ describe("resource list query", () => {
         }),
       ),
     ).toThrow("too deep");
+  });
+
+  describe("with an entity sort roster", () => {
+    const roster = {
+      fields: ["name", "createdAt", "category"],
+      default: "createdAt",
+      groupable: ["category"],
+    } as const;
+    const rostered = resourceListQuery(
+      z.object({ nameFilter: z.string().optional() }),
+      roster,
+    );
+    const issuesOf = (query: string) =>
+      rostered.safeParse(asRouterQuery(query)).error?.issues ?? [];
+
+    it("accepts sortable fields in either direction and a groupable field", () => {
+      expect(
+        rostered.parse(asRouterQuery("sort=name,-createdAt&groupBy=category")),
+      ).toEqual({ sort: "name,-createdAt", groupBy: "category" });
+    });
+
+    it("rejects an unsupported sort field by name on the sort path", () => {
+      expect(issuesOf("sort=bogus")).toEqual([
+        expect.objectContaining({
+          path: ["sort"],
+          message:
+            'Unsupported sort field "bogus"; expected one of name, createdAt, category',
+        }),
+      ]);
+      expect(issuesOf("sort=name,bogus")).toEqual([
+        expect.objectContaining({
+          path: ["sort"],
+          message: expect.stringContaining('Unsupported sort field "bogus"'),
+        }),
+      ]);
+      // A malformed stack reports its shape once, not a field per fragment.
+      expect(issuesOf("sort=")).toHaveLength(1);
+    });
+
+    it("rejects a sortable field that is not groupable", () => {
+      expect(issuesOf("groupBy=name")).toEqual([
+        expect.objectContaining({ path: ["groupBy"] }),
+      ]);
+    });
+
+    it("treats an empty groupable set as every sortable field, like the kernel", () => {
+      const open = { ...roster, groupable: [] };
+      expect(groupableFieldsOf(open)).toEqual(roster.fields);
+      expect(groupableFieldsOf(roster)).toEqual(["category"]);
+      const schema = resourceListQuery(z.object({}), open);
+      expect(schema.parse(asRouterQuery("groupBy=name"))).toEqual({
+        groupBy: "name",
+      });
+    });
+
+    it("lists the roster in the parameter descriptions", () => {
+      if (!(rostered instanceof z.ZodObject))
+        throw new Error("resource query is an object schema");
+      expect(rostered.shape.sort?.description).toContain(
+        "Fields: name, createdAt, category. Default: -createdAt",
+      );
+      expect(rostered.shape.groupBy?.description).toBe(
+        "Group rows by one field. One of: category",
+      );
+    });
   });
 });

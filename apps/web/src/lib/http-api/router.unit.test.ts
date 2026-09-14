@@ -167,6 +167,61 @@ describe("HTTP contract", () => {
     ]);
   });
 
+  it("narrows sort and groupBy to the entity's declared roster", () => {
+    // The live route schema is what the document is generated from, so the
+    // same roster shows in both: the contract now, the document after
+    // `generate:http-api`.
+    const listQueryOf = (path: string) => {
+      const route = routes.find(
+        (candidate) => candidate.path === path && candidate.method === "GET",
+      );
+      if (!route || !("query" in route) || !(route.query instanceof z.ZodType))
+        throw new Error(`${path} has no list query schema`);
+      return z
+        .record(
+          z.string(),
+          z.looseObject({
+            type: z.string().optional(),
+            enum: z.array(z.string()).optional(),
+            description: z.string().optional(),
+          }),
+        )
+        .parse(z.toJSONSchema(route.query, { io: "input" }).properties);
+    };
+    const products = listQueryOf("/api/v1/products");
+    expect(products.groupBy).toMatchObject({
+      type: "string",
+      enum: ["category"],
+      description: "Group rows by one field. One of: category",
+    });
+    expect(products.sort).toMatchObject({ type: "string" });
+    expect(products.sort?.description).toContain("Fields: ");
+    expect(products.sort?.description).toContain("related:product.projects");
+    expect(products.sort?.description).toContain("Default: -createdAt");
+    // Empty `groupable` means every sortable field groups, as in the kernel.
+    expect(listQueryOf("/api/v1/vendors").groupBy).toMatchObject({
+      enum: [
+        "name",
+        "purchaseCount",
+        "spend",
+        "latestPurchaseDate",
+        "createdAt",
+        "updatedAt",
+      ],
+    });
+    const documented = (name: string) =>
+      document.paths["/api/v1/products"].get.parameters.find(
+        (parameter) => parameter.name === name,
+      );
+    expect(documented("groupBy")).toMatchObject({
+      schema: { type: "string", enum: ["category"] },
+    });
+    expect(documented("sort")).toMatchObject({
+      schema: { type: "string" },
+      description: expect.stringContaining("Fields: "),
+    });
+  });
+
   it("emits ISO timestamps and a shared error body", () => {
     expect(JSON.stringify(document)).toContain('"format":"date-time"');
     expect(document.components.schemas.ApiError).toBeDefined();

@@ -13,48 +13,107 @@ import {
 import { type Json, toWire } from "./wire";
 
 /**
- * Resource-list controls. They ride alongside the entity's flat filter
- * parameters, so a filter may not reuse one of these names.
+ * The declared list-sort roster an entity's wire controls are narrowed by:
+ * the shape of a `generatedEntitySort` entry (`@cubby/schemas/entity-sort`).
  */
-const controls = z.object({
-  page: z
-    .number()
-    .int()
-    .min(1)
-    .optional()
-    .describe("Page number, starting at 1 (default 1)"),
-  pageSize: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_PAGE_SIZE)
-    .optional()
-    .describe(
-      `Items per page (default ${sortPaginationFields.pagination.parse(undefined).pageSize}, maximum ${MAX_PAGE_SIZE})`,
-    ),
-  sort: z
-    .string()
-    .regex(
-      new RegExp(
-        `^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,${MAX_SORTS - 1}}$`,
-        "u",
+export interface ListSortRoster {
+  readonly fields: readonly [string, ...string[]];
+  readonly default: string;
+  readonly groupable: readonly string[];
+}
+
+/**
+ * The `groupBy` allowlist of a roster. The one place on the wire the kernel
+ * rule lives: an empty `groupable` means every sortable field groups
+ * (`entity-kernel/adapter.ts` `derivedEntitySort`, `entity-operations.ts`
+ * `parseGroupBy`).
+ */
+export const groupableFieldsOf = (
+  roster: ListSortRoster,
+): readonly [string, ...string[]] => {
+  const [first, ...rest] = roster.groupable;
+  return first === undefined ? roster.fields : [first, ...rest];
+};
+
+const sortStackPattern = new RegExp(
+  `^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,${MAX_SORTS - 1}}$`,
+  "u",
+);
+const sortDescription = `Comma-separated fields; prefix with - for descending. Maximum ${MAX_SORTS} fields. Example: name,-createdAt`;
+const sortFieldOf = (entry: string) =>
+  entry.startsWith("-") ? entry.slice(1) : entry;
+
+/**
+ * Resource-list controls. They ride alongside the entity's flat filter
+ * parameters, so a filter may not reuse one of these names. With a roster,
+ * `sort` is checked against the sortable fields (a refinement, which the
+ * query projection keeps and the OpenAPI emitter lists in the description)
+ * and `groupBy` becomes an enum of the groupable ones; the roster-less
+ * controls validate shape only.
+ */
+const controlsFor = (roster?: ListSortRoster) => {
+  // The shape check aborts so a malformed stack reports one issue, not one
+  // per fragment.
+  const sort = z.string().regex(sortStackPattern, { abort: true });
+  return z.object({
+    page: z
+      .number()
+      .int()
+      .min(1)
+      .optional()
+      .describe("Page number, starting at 1 (default 1)"),
+    pageSize: z
+      .number()
+      .int()
+      .min(1)
+      .max(MAX_PAGE_SIZE)
+      .optional()
+      .describe(
+        `Items per page (default ${sortPaginationFields.pagination.parse(undefined).pageSize}, maximum ${MAX_PAGE_SIZE})`,
       ),
-    )
-    .optional()
-    .describe(
-      `Comma-separated fields; prefix with - for descending. Maximum ${MAX_SORTS} fields. Example: name,-createdAt`,
-    ),
-  groupBy: sortPaginationFields.groupBy,
-});
+    sort:
+      roster === undefined
+        ? sort.optional().describe(sortDescription)
+        : sort
+            .superRefine((value, ctx) => {
+              for (const field of value.split(",").map(sortFieldOf))
+                if (!roster.fields.includes(field))
+                  ctx.addIssue({
+                    code: "custom",
+                    message: `Unsupported sort field "${field}"; expected one of ${roster.fields.join(", ")}`,
+                  });
+            })
+            .optional()
+            .describe(
+              `${sortDescription}. Fields: ${roster.fields.join(", ")}. Default: -${roster.default}`,
+            ),
+    groupBy:
+      roster === undefined
+        ? sortPaginationFields.groupBy
+        : z
+            .enum(groupableFieldsOf(roster))
+            .optional()
+            .describe(
+              `Group rows by one field. One of: ${groupableFieldsOf(roster).join(", ")}`,
+            ),
+  });
+};
+/**
+ * The roster-less controls: what `resourceListInputFrom` re-parses after the
+ * route validated the entity-specific query, and the names a filter may not
+ * collide with.
+ */
+const controls = controlsFor();
+/** `groupBy` is not narrowed per entity here; the route schema carries the enum. */
 type Controls = z.input<typeof controls>;
 
 /** The controls as the query string carries them: numbers coerced from text. */
-const queryControls = (() => {
-  const wire = toWire(controls, "query");
+const queryControlsFor = (roster?: ListSortRoster) => {
+  const wire = toWire(controlsFor(roster), "query");
   if (!(wire instanceof z.ZodObject))
     throw new Error("Resource controls must project onto a query object");
   return wire;
-})();
+};
 
 type Scalarish =
   | string
@@ -121,11 +180,16 @@ const flatName = (field: string, key: string) =>
  */
 export function resourceListQuery<Filters extends z.ZodObject>(
   filters: Filters,
+  roster?: ListSortRoster,
 ): z.ZodType<ResourceListQuery<Filters>, ResourceListQuery<Filters>> {
+  const entityControls = queryControlsFor(roster);
   const nesting = new Map<string, readonly [string, string]>();
   const fields: Record<string, z.ZodType> = {};
   const claim = (name: string, schema: z.ZodType) => {
-    if (Object.hasOwn(queryControls.shape, name) || Object.hasOwn(fields, name))
+    if (
+      Object.hasOwn(entityControls.shape, name) ||
+      Object.hasOwn(fields, name)
+    )
       throw new Error(`HTTP resource query parameter collision: ${name}`);
     fields[name] = schema;
   };
@@ -147,7 +211,7 @@ export function resourceListQuery<Filters extends z.ZodObject>(
   }
   const query: z.ZodType = z.strictObject({
     ...fields,
-    ...queryControls.shape,
+    ...entityControls.shape,
   });
   nestingByQuery.set(query, nesting);
   // SAFETY: the strict object is exactly the flattened filter wire shape plus

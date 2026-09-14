@@ -2584,7 +2584,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, cost, lineKind, productQuantity, date, costType, trade, project, product, vendor, orderId, createdAt, updatedAt. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -2595,8 +2595,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: costType",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["costType"]
             },
             "style": "form",
             "explode": true
@@ -3056,7 +3058,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, provisional, transactionCount, createdAt, updatedAt. Default: -name",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -3067,8 +3069,16 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: name, provisional, transactionCount, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "name",
+                "provisional",
+                "transactionCount",
+                "createdAt",
+                "updatedAt"
+              ]
             },
             "style": "form",
             "explode": true
@@ -3658,7 +3668,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt. Default: -transactionDate",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -3669,8 +3679,19 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: transactionDate, postedDate, amount, merchant, kind, status, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "transactionDate",
+                "postedDate",
+                "amount",
+                "merchant",
+                "kind",
+                "status",
+                "createdAt",
+                "updatedAt"
+              ]
             },
             "style": "form",
             "explode": true
@@ -4002,7 +4023,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: observedOn, createdAt. Default: -observedOn",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -4013,8 +4034,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: observedOn, createdAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["observedOn", "createdAt"]
             },
             "style": "form",
             "explode": true
@@ -5803,7 +5826,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, appearsInRecipes, product. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -5814,8 +5837,16 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: createdAt, updatedAt, name, appearsInRecipes, product",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "updatedAt",
+                "name",
+                "appearsInRecipes",
+                "product"
+              ]
             },
             "style": "form",
             "explode": true
@@ -6292,7 +6323,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -6303,8 +6334,19 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: createdAt, updatedAt, name, product, location, amount, valuation, verifiedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "updatedAt",
+                "name",
+                "product",
+                "location",
+                "amount",
+                "valuation",
+                "verifiedAt"
+              ]
             },
             "style": "form",
             "explode": true
@@ -7012,7 +7054,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, kind, createdAt, updatedAt. Default: -name",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -7023,8 +7065,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: name, kind, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["name", "kind", "createdAt", "updatedAt"]
             },
             "style": "form",
             "explode": true
@@ -7352,7 +7396,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, amount, createdAt, updatedAt. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -7363,8 +7407,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: date, amount, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["date", "amount", "createdAt", "updatedAt"]
             },
             "style": "form",
             "explode": true
@@ -8235,7 +8281,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, type, parent, lastBulkInventory, valuation, inventoryEntries. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -8246,8 +8292,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: type",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["type"]
             },
             "style": "form",
             "explode": true
@@ -9382,7 +9430,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: date, name, mealType, createdAt, updatedAt. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -9393,8 +9441,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: date, name, mealType, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["date", "name", "mealType", "createdAt", "updatedAt"]
             },
             "style": "form",
             "explode": true
@@ -9764,7 +9814,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -9775,8 +9825,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["createdAt", "updatedAt"]
             },
             "style": "form",
             "explode": true
@@ -12311,7 +12363,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, manufacturer, model, primaryGtin, category, fdc_id, price, notes, location, ingredient, expenseTotal, expenses, expectedQuantity, quantityVariance, purchaseDate, related:product.projects, related:product.vendors, related:product.purchases, identity_strength. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -12322,8 +12374,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: category",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["category"]
             },
             "style": "form",
             "explode": true
@@ -13791,7 +13845,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, kind, startDate, costEstimate, createdAt, updatedAt. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -13802,8 +13856,18 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: name, status, kind, startDate, costEstimate, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "name",
+                "status",
+                "kind",
+                "startDate",
+                "costEstimate",
+                "createdAt",
+                "updatedAt"
+              ]
             },
             "style": "form",
             "explode": true
@@ -14661,7 +14725,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt. Default: -date",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -14672,8 +14736,22 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: orderId, displayLabel, date, statedTotal, vendor, expenseCount, expenseTotal, reconciliationGap, documentCount, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "orderId",
+                "displayLabel",
+                "date",
+                "statedTotal",
+                "vendor",
+                "expenseCount",
+                "expenseTotal",
+                "reconciliationGap",
+                "documentCount",
+                "createdAt",
+                "updatedAt"
+              ]
             },
             "style": "form",
             "explode": true
@@ -16022,7 +16100,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: createdAt, updatedAt, name, cookbook, costTotal, caloriesTotal, source, yield, tags, totalMinutes. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -16033,8 +16111,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: name",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["name"]
             },
             "style": "form",
             "explode": true
@@ -18309,7 +18389,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, status, dueDate, trade, project, subjectProduct, createdAt, updatedAt. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -18320,8 +18400,10 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: status",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": ["status"]
             },
             "style": "form",
             "explode": true
@@ -19124,7 +19206,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt. Default: -spend",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -19135,8 +19217,17 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: name, purchaseCount, spend, latestPurchaseDate, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "name",
+                "purchaseCount",
+                "spend",
+                "latestPurchaseDate",
+                "createdAt",
+                "updatedAt"
+              ]
             },
             "style": "form",
             "explode": true
@@ -19481,7 +19572,7 @@
           {
             "name": "sort",
             "in": "query",
-            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt",
+            "description": "Comma-separated fields; prefix with - for descending. Maximum 3 fields. Example: name,-createdAt. Fields: name, acquiredAt, priceRange, createdAt, updatedAt. Default: -createdAt",
             "schema": {
               "type": "string",
               "pattern": "^-?[^,\\s-][^,\\s]*(,-?[^,\\s-][^,\\s]*){0,2}$"
@@ -19492,8 +19583,16 @@
           {
             "name": "groupBy",
             "in": "query",
+            "description": "Group rows by one field. One of: name, acquiredAt, priceRange, createdAt, updatedAt",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "name",
+                "acquiredAt",
+                "priceRange",
+                "createdAt",
+                "updatedAt"
+              ]
             },
             "style": "form",
             "explode": true
@@ -36194,6 +36293,9 @@
           "reason": {
             "type": "string",
             "enum": ["no_data", "yield_missing", "empty"]
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/output_schema44"
           }
         },
         "required": ["status", "reason"],

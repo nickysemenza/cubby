@@ -20,6 +20,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { IngredientWithFoodLeanOut } from "@cubby/schemas/ingredient";
 import {
+  estimateCoverage,
   hasKnownEstimate,
   type MeasureEstimate,
   nutrientKey,
@@ -94,7 +95,18 @@ const estimateDiffers = (
       a.coverage.total !== b.coverage.total
     );
   }
-  return "reason" in a && "reason" in b && a.reason !== b.reason;
+  if ("reason" in a && "reason" in b && a.reason !== b.reason) return true;
+  // Unavailable rows gain `coverage` on recompute; without comparing it a
+  // legacy `{unavailable, no_data}` row would never converge to the new shape.
+  const aCoverage = estimateCoverage(a);
+  const bCoverage = estimateCoverage(b);
+  return (
+    (aCoverage == null) !== (bCoverage == null) ||
+    (aCoverage != null &&
+      bCoverage != null &&
+      (aCoverage.covered !== bCoverage.covered ||
+        aCoverage.total !== bCoverage.total))
+  );
 };
 
 const totalsDiffer = (

@@ -90,6 +90,36 @@ describe("mock() overrides", () => {
     expect(orphanedProductSchema.safeParse(value).success).toBe(true);
   });
 
+  it("an override that names another union variant does not inherit the generated variant's fields", () => {
+    // `gen` always takes option 0; before the schema-aware merge the `complete`
+    // base's random `coverage` survived under an `unavailable` override and
+    // only Zod's unknown-key stripping hid it. Once `unavailable` declared its
+    // own optional `coverage`, the inherited one failed the `covered <= total`
+    // refinement.
+    const estimate = z.discriminatedUnion("status", [
+      z.object({
+        status: z.literal("complete"),
+        coverage: z.object({ covered: z.number(), total: z.number() }),
+      }),
+      z.object({
+        status: z.literal("unavailable"),
+        reason: z.string(),
+        coverage: z.object({ covered: z.literal(0) }).optional(),
+      }),
+    ]);
+    const schema = z.object({ totals: z.object({ cost: estimate }) });
+    const value = mock(schema, {
+      seed: 1,
+      overrides: {
+        totals: { cost: { status: "unavailable", reason: "no_data" } },
+      },
+    });
+    expect(value.totals.cost).toEqual({
+      status: "unavailable",
+      reason: "no_data",
+    });
+  });
+
   it("array overrides replace wholesale", () => {
     const value = mock(duplicateUniqueProductSchema, {
       seed: 1,

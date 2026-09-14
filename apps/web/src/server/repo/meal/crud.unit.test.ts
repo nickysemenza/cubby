@@ -24,3 +24,16 @@ describe("buildMealWhere", () => {
     expect(where({ mealKind: "cooked" })).toContain('"mealKind"');
   });
 });
+
+describe("buildMealWhere recipeCostCoverage=understated", () => {
+  it("matches partial costs and unavailable costs that recorded contributors", () => {
+    const rendered = where({ recipeCostCoverage: "understated" });
+    expect(rendered).toContain("'partial'");
+    expect(rendered).toContain("'unavailable'");
+    expect(rendered).toContain("{cost,coverage,total}");
+    // The subselect joins two tables, so the JSON column must stay qualified.
+    expect(rendered).toMatch(
+      /"Recipe"\."totals" #>> '\{cost,coverage,total\}'/,
+    );
+  });
+});

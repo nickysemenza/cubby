@@ -474,7 +474,9 @@ export const staleParentRecipeSchema = z.object({
 
 // A planned meal whose cost rollup is knowingly incomplete: at least one of
 // its live recipes was costed and came back with fewer priced ingredients than
-// it has (`costCovered < ingredientCount`).
+// it has (`costCovered < ingredientCount`), including none — an `unavailable`
+// cost whose `coverage` records 0 of N. Legacy `unavailable` rows without
+// `coverage` are not reported until recomputed.
 //
 // Deliberately NOT `totals IS NULL`. That set is "the costing queue hasn't run
 // yet", it drains itself the moment the client opens, and `staleRecipeTotals`

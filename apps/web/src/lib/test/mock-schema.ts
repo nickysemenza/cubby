@@ -55,9 +55,12 @@ export function mock<T extends z.ZodType>(
   opts: MockOptions<z.infer<T>> = {},
 ): z.infer<T> {
   if (opts.seed !== undefined) faker.seed(opts.seed);
-  const base = gen(schema, 0, opts.fillOptionals ?? false);
+  const fillOptionals = opts.fillOptionals ?? false;
+  const base = gen(schema, 0, fillOptionals);
   const merged =
-    opts.overrides !== undefined ? deepMerge(base, opts.overrides) : base;
+    opts.overrides !== undefined
+      ? mergeWithSchema(schema, base, opts.overrides, 0, fillOptionals)
+      : base;
   return schema.parse(merged);
 }
 
@@ -95,6 +98,7 @@ type RuntimeDefinition = {
   items?: readonly z.ZodType[];
   innerType?: z.ZodType;
   options?: readonly z.ZodType[];
+  discriminator?: string;
   left?: z.ZodType;
   right?: z.ZodType;
   in?: z.ZodType;
@@ -567,6 +571,110 @@ const isPlain = <TValue>(value: TValue): value is TValue & object =>
   value !== null &&
   (Object.getPrototypeOf(value) === Object.prototype ||
     Object.getPrototypeOf(value) === null);
+
+// Wrappers that carry one inner schema; the merge looks through them so an
+// override under `.optional()` / `.nullable()` / `.default()` still finds the
+// object or union it is aimed at.
+const innerSchemaOf = (def: RuntimeDefinition): z.ZodType | undefined => {
+  switch (def.type) {
+    case "optional":
+    case "nullable":
+    case "default":
+    case "readonly":
+      return def.innerType;
+    case "pipe":
+      return def.in;
+    case "lazy":
+      return def.getter?.();
+    default:
+      return undefined;
+  }
+};
+
+const literalValuesOf = (schema: z.ZodType | undefined) =>
+  schema ? (defOf(schema).values ?? []) : [];
+
+/** A plain object's field by key, without asserting its type. */
+const fieldOf = <TOwner>(owner: TOwner, key: string): MockValue | undefined => {
+  if (!isPlain(owner)) return undefined;
+  const entry = Object.entries(owner).find(([name]) => name === key);
+  return entry && isMockValue(entry[1]) ? entry[1] : undefined;
+};
+
+/** The union option whose discriminator literal admits `value`, if any. */
+const optionForDiscriminator = <TValue>(
+  def: RuntimeDefinition,
+  value: TValue,
+): z.ZodType | undefined =>
+  def.options?.find((option) => {
+    const key = def.discriminator;
+    const discriminatorField = key ? defOf(option).shape?.[key] : undefined;
+    return literalValuesOf(discriminatorField).some((v) => v === value);
+  });
+
+/** Per-key child schema for an object (one per key) or a record (one for all). */
+const childSchemaLookup = (
+  def: RuntimeDefinition,
+): ((key: string) => z.ZodType | undefined) | undefined => {
+  if (def.type === "object" && def.shape) return (key) => def.shape?.[key];
+  if (def.type === "record" && def.valueType) return () => def.valueType;
+  return undefined;
+};
+
+/**
+ * Merge overrides onto a generated base, following the schema so a
+ * discriminated-union override that names a different variant regenerates the
+ * base from THAT variant instead of inheriting the first option's siblings.
+ * `gen` always picks option 0, and an inherited sibling (a `complete`
+ * estimate's random `coverage` under an `unavailable` override) is only
+ * harmless while the target variant does not declare that key.
+ */
+function mergeWithSchema<TBase, TOverride>(
+  schema: z.ZodType,
+  base: TBase,
+  over: TOverride,
+  depth: number,
+  fillOptionals: boolean,
+): MockValue | undefined {
+  const def = defOf(schema);
+  const inner = innerSchemaOf(def);
+  if (inner && depth < MAX_DEPTH)
+    return mergeWithSchema(inner, base, over, depth + 1, fillOptionals);
+  if (!isPlain(over)) return deepMerge(base, over);
+  if (def.type === "union" && def.discriminator)
+    return mergeUnionVariant(def, base, over, depth, fillOptionals);
+  const childSchema = childSchemaLookup(def);
+  if (!childSchema || !isPlain(base)) return deepMerge(base, over);
+  const values = new Map<string, MockValue>();
+  for (const [key, value] of Object.entries(base))
+    if (isMockValue(value)) values.set(key, value);
+  for (const [key, value] of Object.entries(over)) {
+    if (!isMockValue(value)) continue;
+    const child = childSchema(key);
+    const merged = child
+      ? mergeWithSchema(child, values.get(key), value, depth, fillOptionals)
+      : deepMerge(values.get(key), value);
+    if (merged !== undefined) values.set(key, merged);
+  }
+  return Object.fromEntries(values);
+}
+
+function mergeUnionVariant<TBase, TOverride>(
+  def: RuntimeDefinition,
+  base: TBase,
+  over: TOverride,
+  depth: number,
+  fillOptionals: boolean,
+): MockValue | undefined {
+  const key = def.discriminator ?? "";
+  const wanted = fieldOf(over, key);
+  const option =
+    wanted === undefined ? undefined : optionForDiscriminator(def, wanted);
+  if (!option) return deepMerge(base, over);
+  const variantBase =
+    fieldOf(base, key) === wanted ? base : gen(option, depth, fillOptionals);
+  return mergeWithSchema(option, variantBase, over, depth, fillOptionals);
+}
 
 /** Deep-merge overrides onto a generated base. Plain objects recurse; arrays,
  * dates, class instances and primitives replace wholesale. */

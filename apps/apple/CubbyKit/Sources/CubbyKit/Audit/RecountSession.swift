@@ -90,6 +90,16 @@ public final class RecountSession {
     private var unknownLocation: LocationCode?
     private var lastLocalMatch: (raw: String, at: Date)?
 
+    // One refetch loop at a time. A request while a fetch is in flight sets `refetchWanted` and
+    // the loop runs once more; staged decisions are snapshotted only after each fetch lands, so
+    // a `.verify` set meanwhile is never overwritten by an older fetch's view of the rows.
+    /// The running loop; `nil` between refetches (tests await it).
+    private(set) var refetchTask: Task<Void, Never>?
+    private var refetchWanted = false
+    private var dropResolutionsOnRefetch = false
+    /// Products the server just added to or confirmed in this bin, verified on the next apply.
+    private var pendingVerify: Set<ProductCode> = []
+
     public init(service: any RecountService) {
         self.service = service
         drain = ScanDrain(debounceInterval: ScanSession.debounceInterval) { read in
@@ -322,17 +332,51 @@ public final class RecountSession {
     }
 
     private func refetchRows(keepingResolutions: Bool) async {
+        await requestRefetch(keepingResolutions: keepingResolutions).value
+    }
+
+    /// Asks for a fresh read of the current bin, coalescing into the running loop if there is
+    /// one. Returns the task that will finish every refetch requested so far.
+    @discardableResult
+    private func requestRefetch(keepingResolutions: Bool) -> Task<Void, Never> {
+        if !keepingResolutions { dropResolutionsOnRefetch = true }
+        if let refetchTask {
+            refetchWanted = true
+            return refetchTask
+        }
+        let task = Task { await runRefetchLoop() }
+        refetchTask = task
+        return task
+    }
+
+    private func runRefetchLoop() async {
+        defer { refetchTask = nil }
+        repeat {
+            refetchWanted = false
+            let keep = !dropResolutionsOnRefetch
+            dropResolutionsOnRefetch = false
+            await fetchAndApplyRows(keepingResolutions: keep)
+        } while refetchWanted
+    }
+
+    private func fetchAndApplyRows(keepingResolutions: Bool) async {
         guard let bin = currentBin else { return }
-        let staged =
-            keepingResolutions ? Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0.resolution) }) : [:]
+        if !keepingResolutions { pendingVerify = [] }
         do {
             let fresh = try await service.stockRows(at: bin.id)
             guard currentBin?.id == bin.id else { return }
+            // Snapshot after the await: anything staged while the fetch was in flight is kept.
+            var staged: [InventoryEntryCode: RecountResolution] = [:]
+            if keepingResolutions {
+                for state in rows { staged[state.id] = state.resolution }
+            }
             rows = fresh.map { row in
                 RowState(
-                    row: row, resolution: staged[row.id] ?? nil,
+                    row: row,
+                    resolution: staged[row.id] ?? (pendingVerify.contains(row.product.id) ? .verify : nil),
                     isDuplicate: duplicates.contains(row.product.id))
             }
+            pendingVerify.subtract(fresh.map(\.product.id))
             report()
         } catch {
             lastError = Self.message(for: error)
@@ -363,6 +407,7 @@ public final class RecountSession {
         consecutiveStale = 0
         lastLocalMatch = nil
         lastError = nil
+        pendingVerify = []
     }
 
     func row(matching code: ScanCode) -> RowState? {
@@ -418,17 +463,9 @@ public final class RecountSession {
                 // The server wrote to this bin (a new row, or a verified stamp), so the expected
                 // set and its snapshot moved. Refetch so the commit matches what is there now.
                 if case .added = result.outcome { summary.added += 1 }
-                Task { await refetchAndVerify(product: result.product.id) }
+                pendingVerify.insert(result.product.id)
+                requestRefetch(keepingResolutions: true)
             }
-        }
-    }
-
-    private func refetchAndVerify(product: ProductCode) async {
-        await refetchRows(keepingResolutions: true)
-        if let index = rows.firstIndex(where: { $0.row.product.id == product }), rows[index].resolution == nil
-        {
-            rows[index].resolution = .verify
-            report()
         }
     }
 

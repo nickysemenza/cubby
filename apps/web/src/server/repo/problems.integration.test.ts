@@ -273,6 +273,99 @@ describe("problems — understated meal cost", () => {
       ],
     });
   });
+
+  it("reports 0-of-N unavailable costs but not legacy or empty ones", async () => {
+    const unavailableNutrition = buildNutrition(() => ({
+      status: "unavailable",
+      reason: "no_data",
+    }));
+    const [zeroPriced, legacy, empty] = await Promise.all([
+      createRecipeFixture(
+        ctx.db,
+        makeRecipeInput({ name: "Zero priced test recipe" }),
+        ctx.actor,
+      ),
+      createRecipeFixture(
+        ctx.db,
+        makeRecipeInput({ name: "Legacy unavailable test recipe" }),
+        ctx.actor,
+      ),
+      createRecipeFixture(
+        ctx.db,
+        makeRecipeInput({ name: "Empty test recipe" }),
+        ctx.actor,
+      ),
+    ]);
+    await Promise.all([
+      getDb(ctx.db)
+        .update(recipe)
+        .set({
+          totals: {
+            cost: {
+              status: "unavailable",
+              reason: "no_data",
+              coverage: { covered: 0, total: 2 },
+            },
+            nutrition: unavailableNutrition,
+          },
+          totalsComputedAt: new Date(),
+        })
+        .where(eq(recipe.id, zeroPriced.entityId)),
+      // Persisted before `coverage` existed: excluded until recomputed.
+      getDb(ctx.db)
+        .update(recipe)
+        .set({
+          totals: {
+            cost: { status: "unavailable", reason: "no_data" },
+            nutrition: unavailableNutrition,
+          },
+          totalsComputedAt: new Date(),
+        })
+        .where(eq(recipe.id, legacy.entityId)),
+      getDb(ctx.db)
+        .update(recipe)
+        .set({
+          totals: {
+            cost: { status: "unavailable", reason: "empty" },
+            nutrition: unavailableNutrition,
+          },
+          totalsComputedAt: new Date(),
+        })
+        .where(eq(recipe.id, empty.entityId)),
+    ]);
+    const meal = (
+      await createMealWithEntityId(
+        ctx.db,
+        mealCreateInput.parse({
+          date: "2026-09-02",
+          name: "Unpriced dinner",
+          recipes: [
+            { recipeId: zeroPriced.id },
+            { recipeId: legacy.id },
+            { recipeId: empty.id },
+          ],
+        }),
+        ctx.actor,
+      )
+    ).output;
+
+    const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
+      (candidate) => candidate.id === meal.id,
+    );
+
+    expect(row).toMatchObject({
+      id: meal.id,
+      recipeCount: 1,
+      affectedRecipes: [
+        {
+          id: zeroPriced.id,
+          name: "Zero priced test recipe",
+          costCovered: 0,
+          ingredientCount: 2,
+        },
+      ],
+    });
+  });
 });
 
 describe("problems — charges not reconciling", () => {

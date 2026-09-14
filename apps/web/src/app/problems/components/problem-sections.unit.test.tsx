@@ -111,13 +111,19 @@ describe("PROBLEM_SECTIONS", () => {
       id: testShortcode("meal", "understated"),
       name: "Weeknight dinner",
       date: "2026-09-01",
-      recipeCount: 1,
+      recipeCount: 2,
       affectedRecipes: [
         {
           id: testShortcode("recipe", "broccoli"),
           name: "Broccoli",
           costCovered: 2,
           ingredientCount: 3,
+        },
+        {
+          id: testShortcode("recipe", "carrots"),
+          name: "Carrots",
+          costCovered: 0,
+          ingredientCount: 2,
         },
       ],
     });
@@ -136,6 +142,13 @@ describe("PROBLEM_SECTIONS", () => {
     expect(link).toHaveAttribute(
       "href",
       `/recipes/${meal.affectedRecipes[0]!.id}?costingGap=true`,
+    );
+    // A recipe with nothing priced (unavailable cost, 0 of N) renders the same line.
+    expect(
+      screen.getByRole("link", { name: "Carrots — 0 of 2 ingredients priced" }),
+    ).toHaveAttribute(
+      "href",
+      `/recipes/${meal.affectedRecipes[1]!.id}?costingGap=true`,
     );
     harness.dispose();
   });

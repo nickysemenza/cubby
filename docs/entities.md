@@ -266,7 +266,10 @@ emits the roster as `generatedEntitySort` in
 `defineEntityAdapter` derives its `EntitySortContract` from that map when a
 binding omits `sort` explicitly, so an entity adapter no longer hand-lists its
 own `sort: { fields: xSortableFields, default: "..." }`. The compiler enforces
-`default ∈ fields`, `groupable ⊆ fields`, and `computed ⊆ fields`.
+`default ∈ fields`, `groupable ⊆ fields`, and `computed ⊆ fields`. The same
+roster narrows the `/api/v1` list route (`sort` refined to `fields`, `groupBy`
+an enum of `groupable`, or of `fields` when `groupable` is empty), so a
+`groupable` entry must stay an identifier the Swift generator can name.
 
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields

@@ -167,15 +167,22 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     expect(
       (await page.request.get("/api/v1/recipes?filters=null")).status(),
     ).toBe(400);
-    // An unsupported sort/groupBy field is a validation error, not a kernel
-    // 500: entity-operations.ts's parseSorts/parseGroupBy throw a structured
-    // AppError instead of letting a bare ZodError escape uncaught.
-    expect(
-      (await page.request.get("/api/v1/recipes?sort=bogus")).status(),
-    ).toBe(400);
-    expect(
-      (await page.request.get("/api/v1/products?groupBy=name")).status(),
-    ).toBe(400);
+    // An unsupported sort/groupBy field fails at the wire stage: the list
+    // route's query schema carries the entity's roster, so ts-rest rejects
+    // it as INVALID_INPUT before the kernel (whose own parseSorts/parseGroupBy
+    // guard stays for MCP/RPC callers) sees the request.
+    const badSort = await page.request.get("/api/v1/recipes?sort=bogus");
+    expect(badSort.status()).toBe(400);
+    expect(await badSort.json()).toMatchObject({
+      reason: "INVALID_INPUT",
+      validationIssues: [expect.objectContaining({ path: ["sort"] })],
+    });
+    const badGroupBy = await page.request.get("/api/v1/products?groupBy=name");
+    expect(badGroupBy.status()).toBe(400);
+    expect(await badGroupBy.json()).toMatchObject({
+      reason: "INVALID_INPUT",
+      validationIssues: [expect.objectContaining({ path: ["groupBy"] })],
+    });
     const many = await page.request.get("/api/v1/recipe/getManyByIDs", {
       params: { ids: id },
     });

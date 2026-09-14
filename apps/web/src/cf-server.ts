@@ -19,7 +19,7 @@ import {
 import { httpRouteTemplate } from "./lib/http-route-template";
 import { observeResponseBody } from "./lib/response-body-observer";
 import { SENTRY_DSN } from "./lib/sentry-dsn";
-import { sentryEnvironment } from "./lib/sentry-environment";
+import { resolveWorkerSentryEnvironment } from "./lib/sentry-environment";
 import { scrubSentryEvent } from "./lib/sentry-scrub";
 import {
   readStartOperationTraceContext,
@@ -442,11 +442,10 @@ export default Sentry.withSentry(
     sendDefaultPii: false,
     release: `cubby@${__GIT_COMMIT__}`,
     // Covers queue/cron events without request URLs. Deployed previews retain
-    // production reporting because they access the production database.
-    environment: sentryEnvironment(
-      env.APP_ORIGIN,
-      env.E2E_AUTH_TEST_MODE === "true" ? "test" : "production",
-    ),
+    // production reporting (SENTRY_ENVIRONMENT var stays "production" there;
+    // only `preview:cf`'s local `wrangler dev` overrides it to "development")
+    // because they access the production database.
+    environment: resolveWorkerSentryEnvironment(env),
     // Keep the scrubber as defense in depth for manually attached request data,
     // even though the SDK no longer sends default PII.
     beforeSend: scrubSentryEvent,

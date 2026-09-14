@@ -66,6 +66,24 @@ describe("nutrition estimate arithmetic", () => {
     ).toEqual({ status: "pending", reason: "totals_stale" });
   });
 
+  it("reports zero coverage when every contributor is unavailable", () => {
+    expect(
+      aggregateEstimates([
+        { status: "unavailable", reason: "no_data" },
+        { status: "unavailable", reason: "no_data" },
+      ]),
+    ).toEqual({
+      status: "unavailable",
+      reason: "no_data",
+      coverage: { covered: 0, total: 2 },
+    });
+    // No contributors at all: `empty`, and no coverage key to count.
+    expect(aggregateEstimates([])).toEqual({
+      status: "unavailable",
+      reason: "empty",
+    });
+  });
+
   it("returns complete catalog-shaped empty totals", () => {
     const aggregate = aggregateTotals([]);
     expect(aggregate.cost).toEqual({ status: "unavailable", reason: "empty" });

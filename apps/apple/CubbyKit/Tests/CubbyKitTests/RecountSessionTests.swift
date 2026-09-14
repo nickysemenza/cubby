@@ -18,6 +18,10 @@ final class StubRecountService: RecountService, Sendable {
         var duplicates: Set<ProductCode> = []
         var staleReconciles = 0
         var scanResult: ScanResult = StubScanService.result(.queued, id: "PRD-9999", name: "Unexpected")
+        /// Per-code answers; a code not listed falls back to `scanResult`.
+        var scanResults: [String: ScanResult] = [:]
+        /// How long `stockRows` takes, so a test can overlap a refetch with later scans.
+        var rowsDelay: Duration = .zero
         var calls: [Call] = []
         var lastReconcile: ReconcileBody?
     }
@@ -43,6 +47,8 @@ final class StubRecountService: RecountService, Sendable {
 
     func stockRows(at location: LocationCode) async throws -> [RecountRow] {
         record(.rows(location))
+        let delay = state.withLock { $0.rowsDelay }
+        if delay > .zero { try await Task.sleep(for: delay) }
         return state.withLock { $0.rows[location] ?? [] }
     }
 
@@ -75,7 +81,7 @@ final class StubRecountService: RecountService, Sendable {
 
     func scan(_ code: ScanCode, at location: LocationCode) async throws -> ScanResult {
         record(.scan(code.value, location))
-        return state.withLock { $0.scanResult }
+        return state.withLock { $0.scanResults[code.value] ?? $0.scanResult }
     }
 
     func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> StrayResolution {
@@ -96,12 +102,12 @@ extension CubbyAPIError.ErrorDetail {
 @MainActor
 private func settle(_ session: RecountSession, timeout: Duration = .seconds(2)) async throws {
     let deadline = ContinuousClock.now + timeout
-    while session.pendingCount > 0 || session.busy {
+    // A settled scan requests its refetch synchronously, so once nothing is pending only the
+    // refetch loop can still be running.
+    while session.pendingCount > 0 || session.busy || session.refetchTask != nil {
         try #require(ContinuousClock.now < deadline, "session never settled")
         try await Task.sleep(for: .milliseconds(5))
     }
-    // Let a refetch scheduled by a settled scan land.
-    try await Task.sleep(for: .milliseconds(20))
 }
 
 @Suite("RecountSession")
@@ -244,6 +250,35 @@ struct RecountSessionTests {
         #expect(session.rows[2].resolution == .verify)
         #expect(session.summary.added == 1)
         #expect(service.calls.filter { $0 == .rows(bin1) }.count == 2)
+    }
+
+    /// Two added scans while the first refetch is still in flight: the second must not race the
+    /// first and drop its `.verify`. The follow-up refetch is coalesced, so the bin is read once
+    /// on load, once for the in-flight refetch, and once more after it.
+    @Test func backToBackAddedScansCoalesceTheRefetchAndVerifyBothRows() async throws {
+        let (session, service) = try await makeSession()
+        service.state.withLock { state in
+            state.rowsDelay = .milliseconds(50)
+            state.scanResults = [
+                "4006381333931": StubScanService.result(.added, id: "PRD-9999", name: "Unexpected"),
+                "5901234123457": StubScanService.result(.added, id: "PRD-8888", name: "Another"),
+            ]
+            state.rows[bin1]?.append(contentsOf: [
+                Self.row(
+                    "INV-9999", product: "PRD-9999", name: "Unexpected", updated: "2026-03-05T10:00:00.000Z"),
+                Self.row(
+                    "INV-8888", product: "PRD-8888", name: "Another", updated: "2026-03-05T11:00:00.000Z"),
+            ])
+        }
+        session.submit("4006381333931")
+        session.submit("5901234123457")
+        try await settle(session)
+        #expect(session.rows.map(\.id.rawValue) == ["INV-2345", "INV-3456", "INV-9999", "INV-8888"])
+        #expect(session.rows[2].resolution == .verify)
+        #expect(session.rows[3].resolution == .verify)
+        #expect(session.unresolvedCount == 2)
+        #expect(session.summary.added == 2)
+        #expect(service.calls.filter { $0 == .rows(bin1) }.count == 3)
     }
 
     @Test func locationLabelsPlanBinsAndNeverScan() async throws {
