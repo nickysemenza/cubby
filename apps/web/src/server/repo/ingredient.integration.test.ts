@@ -10,6 +10,7 @@ import {
   auditLog,
   ingredient,
   inventoryEntry,
+  planting,
   product,
 } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
@@ -26,6 +27,7 @@ import {
 
 import { getDb, withTransaction } from "./database-helpers";
 import { patchEntityRows } from "./entity-patch";
+import { createPlanting } from "./garden";
 import {
   createIngredient,
   enrichmentWorkbenchIngredients,
@@ -183,6 +185,64 @@ describe("ingredient", () => {
     const merged = await getIngredientByID(ctx.db, keeperId);
     expect(merged?.product.map((linked) => linked.id)).toEqual([live.id]);
     expect(merged?.aliases).toContain("Absorbed with dead product");
+  });
+
+  /**
+   * `Planting.ingredientId` and `Product.growsIngredientId` are real FKs onto
+   * the alias, and the merge ends in a HARD delete — left unpointed, the merge
+   * aborted with a raw FK violation instead of the declared `repoint`.
+   */
+  it("mergeIngredients repoints plantings and garden source products onto the survivor", async () => {
+    const keeper = await createIngredient(
+      ctx.db,
+      { name: "Merge keeper crop" },
+      ctx.actor,
+    );
+    const keeperId = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, keeper.id, "ingredient"))!,
+    );
+    const alias = await createIngredient(
+      ctx.db,
+      { name: "Merge alias crop" },
+      ctx.actor,
+    );
+    const planted = await createPlanting(
+      ctx.db,
+      { ingredientId: alias.id, status: "planned" },
+      ctx.actor,
+    );
+    const plantedId = parseEntityId(
+      "planting",
+      (await resolveLiveShortcode(ctx.db, planted.id, "planting"))!,
+    );
+    const seeds = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Alias seed packet",
+        growsIngredientId: alias.id,
+      }),
+      ctx.actor,
+    );
+
+    await mergeIngredients(
+      ctx.db,
+      { keepId: keeper.id, mergeIds: [alias.id] },
+      ctx.actor,
+    );
+
+    expect(
+      await getDb(ctx.db).query.planting.findFirst({
+        where: eq(planting.id, plantedId),
+        columns: { ingredientId: true },
+      }),
+    ).toEqual({ ingredientId: keeperId });
+    expect(
+      await getDb(ctx.db).query.product.findFirst({
+        where: eq(product.id, seeds.entityId),
+        columns: { growsIngredientId: true },
+      }),
+    ).toEqual({ growsIngredientId: keeperId });
   });
 
   it("streams declared enrichment windows with public ids and skips unresolved subjects", async () => {
@@ -579,6 +639,59 @@ describe("deleteIngredients", () => {
     await expect(
       deleteIngredients(ctx.db, [usedIngredientId], ctx.actor),
     ).resolves.toEqual({ deleted: 1 });
+  });
+
+  /**
+   * INGREDIENT_DELETE_EDGE_POLICY declares both garden edges `block`, but
+   * nothing generic enforces `block`: without the repository guard the crop
+   * of a planting could be soft-deleted out from under garden history.
+   */
+  it("rejects an ingredient that is a planting's crop (INGREDIENT_HAS_PLANTINGS)", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Planted crop", aliases: [] },
+      ctx.actor,
+    );
+    const cropId = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, crop.id, "ingredient"))!,
+    );
+    await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned" },
+      ctx.actor,
+    );
+
+    await expect(
+      deleteIngredients(ctx.db, [cropId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "INGREDIENT_HAS_PLANTINGS" },
+    });
+  });
+
+  it("rejects an ingredient grown by a garden source product (INGREDIENT_HAS_GARDEN_PRODUCTS)", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Seed-packet crop", aliases: [] },
+      ctx.actor,
+    );
+    const cropId = parseEntityId(
+      "ingredient",
+      (await resolveLiveShortcode(ctx.db, crop.id, "ingredient"))!,
+    );
+    await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Seed packet", growsIngredientId: crop.id }),
+      ctx.actor,
+    );
+
+    await expect(
+      deleteIngredients(ctx.db, [cropId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "INGREDIENT_HAS_GARDEN_PRODUCTS" },
+    });
   });
 });
 

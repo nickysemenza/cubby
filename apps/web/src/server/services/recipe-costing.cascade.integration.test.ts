@@ -2,7 +2,7 @@ import type { RecipeId, RecipeShortcode } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import {
@@ -244,6 +244,41 @@ describe("recipe totals cascade", () => {
     expect(await stale(tree.child)).toBe(false);
     expect(await stale(tree.parent)).toBe(true);
     expect(published).toEqual([[tree.parent]]);
+  });
+
+  it("returns the recipe when repair-on-read fails after the child's commit", async () => {
+    const tree = await seedTree();
+    await changePrice(tree.product, 9);
+    await markRecipesStale(ctx.db, [tree.child]);
+    installQueue({ fail: true });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      // The repair is best-effort: a failure after the child's commit must
+      // not fail the GET, or every later read would re-run the same failure.
+      const read = await executeEntity(
+        entityKernelContextSchema.parse(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
+        {
+          action: "get",
+          entity: "recipe",
+          id: tree.childCode,
+          missing: "error",
+        },
+      );
+      if (read.action !== "get" || read.entity !== "recipe" || !read.item)
+        throw new Error("expected a recipe");
+
+      expect(read.item.totals?.cost).not.toMatchObject({ status: "pending" });
+      expect(await stale(tree.child)).toBe(false);
+      expect(await stale(tree.parent)).toBe(true);
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it(

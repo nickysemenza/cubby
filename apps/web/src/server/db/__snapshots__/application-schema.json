@@ -6054,11 +6054,56 @@
           "method": "btree",
           "with": {}
         },
+        "Planting_sourceProductId_idx": {
+          "name": "Planting_sourceProductId_idx",
+          "columns": [
+            {
+              "expression": "sourceProductId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "Planting_locationId_idx": {
           "name": "Planting_locationId_idx",
           "columns": [
             {
               "expression": "locationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Planting_intendedLocationId_idx": {
+          "name": "Planting_intendedLocationId_idx",
+          "columns": [
+            {
+              "expression": "intendedLocationId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Planting_parentPlantingId_idx": {
+          "name": "Planting_parentPlantingId_idx",
+          "columns": [
+            {
+              "expression": "parentPlantingId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

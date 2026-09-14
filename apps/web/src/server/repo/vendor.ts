@@ -1,5 +1,6 @@
-import type { ActorContext } from "@cubby/schemas/context";
 /** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
+
+import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type {
   ImpactItem,
@@ -48,7 +49,6 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
-import { declaredFilterPredicates } from "~/server/repo/declared-filter-predicates";
 import { patchEntityRows } from "~/server/repo/entity-patch";
 import { reapUnreferencedImages } from "~/server/repo/image";
 import {
@@ -250,8 +250,6 @@ export const buildVendorWhereClause = (filters: VendorFilters) =>
         ? sql`NOT ${vendorHasDisplayableLogo}`
         : undefined,
     ...relatedWhereConditions("vendor", filters, vendor.id),
-    // `search` is a declared stored text filter over name, notes and website.
-    ...declaredFilterPredicates("vendor", vendor, filters),
   ]);
 
 const resolveVendorSort = (sort: SortParams) => {

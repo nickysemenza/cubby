@@ -19,7 +19,11 @@ const entityImageValues = nonEmptyTuple<EntityImageValue>(
 export const entityImage = z.enum(entityImageValues);
 export type EntityImage = z.infer<typeof entityImage>;
 
-/** Every entity `entityImage` is derived from — gallery, cover, and borrowed alike. */
+/**
+ * Every entity with image storage of its own — gallery and cover. Borrowed
+ * entities (`displayImages` without `hasImages`: ingredient, inventory,
+ * expense, wish) are not `entityImage` values.
+ */
 export type ImageEntity = (typeof imageEntities)[number];
 
 /**

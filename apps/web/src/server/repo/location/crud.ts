@@ -44,10 +44,13 @@ import { uniq } from "es-toolkit";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
+  gardenEntry,
   image,
   inventoryEntry,
   location,
   locationImage,
+  planting,
+  plantingLocationPeriod,
   product,
   productImage,
 } from "~/server/db/schema";
@@ -89,6 +92,7 @@ import {
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
+import { countByTarget } from "~/server/repo/impact";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { parseLocationType } from "~/server/repo/location/parse-type";
@@ -616,18 +620,53 @@ export const deleteLocations = async (
       throw createAppError("LOCATION_IS_ROOT", "Home cannot be deleted");
     }
 
+    const fetchLocationNames = (failedIds: LocationId[]) =>
+      tx.query.location.findMany({
+        where: inArray(location.id, failedIds),
+        columns: { name: true },
+      });
+
     // Safety check: don't delete if any location has inventory
     const withInventory = await findLocationsWithLiveInventory(tx, ids);
     await assertNoDependents({
       offendingParentIds: withInventory.map((e) => e.locationId),
-      fetchNames: (failedIds) =>
-        tx.query.location.findMany({
-          where: inArray(location.id, failedIds),
-          columns: { name: true },
-        }),
+      fetchNames: fetchLocationNames,
       reason: "LOCATION_HAS_INVENTORY",
       message: (count, names) =>
         `Cannot delete ${count} location(s): ${names} have inventory entries. Move or remove them first.`,
+    });
+
+    // LOCATION_DELETE_EDGE_POLICY declares these four garden edges `block`;
+    // nothing generic enforces `block`, so the repository must (the same call
+    // the preview makes, so the two cannot disagree). `countByTarget` skips
+    // soft-deleted Planting/GardenEntry rows on its own; PlantingLocationPeriod
+    // is hard-delete-only, so every row counts. Any live planting blocks,
+    // finished or not — that is the declared policy.
+    const [byLocation, byIntended, byEntry, byPeriod] = await Promise.all([
+      countByTarget(tx, planting, planting.locationId, ids),
+      countByTarget(tx, planting, planting.intendedLocationId, ids),
+      countByTarget(tx, gardenEntry, gardenEntry.locationId, ids),
+      countByTarget(
+        tx,
+        plantingLocationPeriod,
+        plantingLocationPeriod.locationId,
+        ids,
+        { includeDeleted: true },
+      ),
+    ]);
+    await assertNoDependents({
+      offendingParentIds: ids.filter((id) => byLocation[id] || byIntended[id]),
+      fetchNames: fetchLocationNames,
+      reason: "LOCATION_HAS_PLANTINGS",
+      message: (count, names) =>
+        `Cannot delete ${count} location(s): ${names} still have plantings (current or planned). Move or delete the plantings first.`,
+    });
+    await assertNoDependents({
+      offendingParentIds: ids.filter((id) => byEntry[id] || byPeriod[id]),
+      fetchNames: fetchLocationNames,
+      reason: "LOCATION_HAS_GARDEN_HISTORY",
+      message: (count, names) =>
+        `Cannot delete ${count} location(s): ${names} carry garden history (entries or confirmed location periods).`,
     });
 
     // Promote each surviving child to the nearest ancestor that is not also

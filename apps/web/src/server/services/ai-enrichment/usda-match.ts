@@ -121,7 +121,9 @@ async function suggestUsdaFoodBatchWithPorts<TDatabase>(
   for (let i = 0; i < capped.length; i += 5) {
     const batch = capped.slice(i, i + 5);
     const results = await Promise.allSettled(
-      batch.map((item) => ports.suggest(usdaService, db, item.name)),
+      batch.map((item) =>
+        ports.suggest(usdaService, db, item.name, { ingredientId: item.id }),
+      ),
     );
     for (const [j, result] of results.entries()) {
       const item = batch[j]!;

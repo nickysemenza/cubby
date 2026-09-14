@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { UnparsedError } from "~/lib/error-utils";
 import {
   getExecutionCtx,
+  getProblemCountsCache,
   type ProblemCountsCacheAdapter,
 } from "~/server/cf-env";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
@@ -19,6 +20,24 @@ import {
 } from "./problem-counts-dirty";
 
 export { markProblemCountsDirty };
+
+/**
+ * For writers outside the entity mutation pipeline (Problems-page fixes,
+ * statement rows, purchase/project attach) that cannot call
+ * `runMutationSideEffects`. Never throws: a failed mark must not turn an
+ * already-committed write into an apparent failure.
+ */
+export async function markProblemCountsDirtyBestEffort(
+  source: string,
+): Promise<void> {
+  const cache = getProblemCountsCache();
+  if (!cache) return;
+  try {
+    await markProblemCountsDirty(cache);
+  } catch (error) {
+    console.error("problems.counts.dirty-mark.failed", { source, error });
+  }
+}
 
 export interface ProblemCountsPort {
   countProblems: typeof findProblemCounts;
@@ -76,19 +95,33 @@ async function writeProblemCountsSnapshot(
   return snapshot;
 }
 
+/** Above one detector pass; below the point staleness would be noticeable
+ * on the badge. Safety net for writers that never call
+ * `markProblemCountsDirtyBestEffort` (or a future one that forgets to). */
+const MAX_SNAPSHOT_AGE_MS = 10 * 60_000;
+
 /**
  * Whether the snapshot predates the latest dirty mark. KV is eventually
  * consistent across edges, so a mark may be seen a little late; that delays
  * the refresh, never loses it.
+ *
+ * Also refreshes once a snapshot is simply too old, regardless of a dirty
+ * mark: this replaces the removed `cron.problem-counts` sweep and covers
+ * writers outside the mutation pipeline that mark best-effort (direct repo
+ * deletes and the problems/statement-row/purchase/project workflows).
  */
 async function snapshotIsDirty(
   cache: ProblemCountsCacheAdapter,
   snapshot: ProblemCountsSnapshot,
 ): Promise<string | null> {
   const dirtyAt = await cache.get(PROBLEM_COUNTS_DIRTY_KEY);
-  if (!dirtyAt || Number.isNaN(Date.parse(dirtyAt))) return null;
-  return Date.parse(dirtyAt) > Date.parse(snapshot.coveredThrough)
-    ? dirtyAt
+  if (dirtyAt && !Number.isNaN(Date.parse(dirtyAt))) {
+    if (Date.parse(dirtyAt) > Date.parse(snapshot.coveredThrough)) {
+      return dirtyAt;
+    }
+  }
+  return Date.now() - Date.parse(snapshot.coveredThrough) > MAX_SNAPSHOT_AGE_MS
+    ? new Date().toISOString()
     : null;
 }
 

@@ -15,6 +15,7 @@ import {
   type CalDavCollection,
   type CalDavResource,
 } from "./caldav-types";
+import { etagMatches } from "./contracts";
 
 const DAV = "DAV:";
 const CALDAV = "urn:ietf:params:xml:ns:caldav";
@@ -384,7 +385,14 @@ function path(url: URL): Target | null {
   )
     return null;
   if (!match[2]) return { root: "collection", collection };
-  const filename = decodeURIComponent(match[2]);
+  let filename: string;
+  try {
+    filename = decodeURIComponent(match[2]);
+  } catch (error) {
+    if (error instanceof URIError)
+      throw new CalDavError(400, "Invalid resource filename");
+    throw error;
+  }
   if (
     filename.includes("/") ||
     filename.includes("\\") ||
@@ -393,18 +401,6 @@ function path(url: URL): Target | null {
   )
     throw new CalDavError(400, "Invalid resource filename");
   return { collection, filename, root: "resource" };
-}
-function matched(ifNoneMatch: string | null, etag: string): boolean {
-  return (
-    ifNoneMatch
-      ?.split(",")
-      .some(
-        (value) =>
-          value.trim() === "*" ||
-          value.trim() === etag ||
-          value.trim() === `W/${etag}`,
-      ) ?? false
-  );
 }
 async function requestBody(request: Request): Promise<string> {
   if (Number(request.headers.get("content-length") ?? 0) > 1_000_000)
@@ -573,10 +569,19 @@ async function report(
   return multistatus(
     hrefs.map((node) => {
       const href = node.textContent?.trim() ?? "";
-      const url = new URL(href, request.url);
-      const candidate = path(url);
+      // A malformed href (unparseable URL, invalid percent-encoding) is a
+      // per-resource client error, not a whole-request failure — RFC 4791
+      // §7.9 reports it as a 404 status element for that href alone.
+      let candidate: Target | null;
+      try {
+        const url = new URL(href, request.url);
+        if (url.origin !== new URL(request.url).origin)
+          return statusResponse(href);
+        candidate = path(url);
+      } catch {
+        return statusResponse(href);
+      }
       if (
-        url.origin !== new URL(request.url).origin ||
         candidate?.root !== "resource" ||
         candidate.collection !== target.collection
       )
@@ -599,7 +604,7 @@ function read(
     ETag: resource.etag,
     "Cache-Control": "private, no-cache",
   };
-  if (matched(request.headers.get("if-none-match"), resource.etag))
+  if (etagMatches(request.headers.get("if-none-match"), resource.etag))
     return new Response(null, { status: 304, headers });
   return new Response(request.method === "HEAD" ? null : resource.body, {
     headers,
@@ -712,6 +717,14 @@ export function createCalDavHandler(
           error.condition ?? "conflict",
           error.message,
         );
+      // Anything else (an uncertain-write marker from a failed DO `write()`,
+      // a thrown non-CalDavError) would otherwise vanish behind the generic
+      // 503 with no trace in logs/Sentry.
+      console.error(
+        "[caldav] unhandled",
+        { method: request.method, path: new URL(request.url).pathname },
+        error,
+      );
       return new Response("Calendar temporarily unavailable", {
         status: 503,
         headers: { "Retry-After": "30" },

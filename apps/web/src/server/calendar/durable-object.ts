@@ -17,6 +17,7 @@ import {
   createCalendarFeedToken,
   etagMatches,
   inspectCalendarDocument,
+  UID_DOMAIN,
   type CalendarFeedReadResult,
   type CalendarFeedDurableObjectRpc,
 } from "./contracts";
@@ -234,7 +235,7 @@ export class CalendarFeedDurableObject
                   entity: projection.entity,
                   shortcode: projection.id,
                   filename: `${projection.id}.ics`,
-                  uid: `${projection.id}@cubby.nickysemenza.com`,
+                  uid: `${projection.id}@${UID_DOMAIN}`,
                 },
                 origin,
               ),
@@ -342,12 +343,10 @@ export class CalendarFeedDurableObject
       if (input.ifNoneMatch === "*")
         throw new CalDavError(412, "Calendar event already exists");
       if (!input.ifMatch) throw new CalDavError(428, "If-Match is required");
-      if (
-        !input.ifMatch
-          .split(",")
-          .map((value) => value.trim())
-          .includes(expected.etag)
-      )
+      const tags = input.ifMatch.split(",").map((value) => value.trim());
+      // RFC 7232 §3.1: "*" matches any current representation, not just a
+      // literal etag — same rule etagMatches already applies to If-None-Match.
+      if (!tags.includes("*") && !tags.includes(expected.etag))
         throw new CalDavError(412, "Calendar event has changed");
       if (input.event.uid !== expected.uid)
         throw new CalDavError(403, "UID cannot change", "no-uid-conflict");

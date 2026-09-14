@@ -159,8 +159,7 @@ export function UsageEntityLink({
 
   // AiUsage.entityId is recorded from queue/side-effect payloads that carry
   // private uuids, while EntityInlineLinkById expects a public shortcode.
-  // Never send a uuid into that boundary — mirrors the same guard in
-  // background-jobs-table.tsx's EntityTarget.
+  // Never send a uuid into that boundary.
   if (parseShortcode(row.entityId)?.type !== row.entityType) {
     return (
       <span className="text-muted-foreground">

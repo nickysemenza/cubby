@@ -1,5 +1,6 @@
-import type { ActorContext } from "@cubby/schemas/context";
 /** Purchase repository: one vendor event per row; Expense is the authoritative spend ledger. */
+
+import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type {
   ImpactItem,

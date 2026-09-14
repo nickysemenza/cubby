@@ -2,6 +2,11 @@ import type { AgentStreamEvent } from "@cubby/schemas/agent";
 import { describe, expect, it } from "vitest";
 import type { JSONType } from "zod";
 
+import {
+  READ_ONLY_CLOSED,
+  WRITE_CLOSED,
+} from "~/server/mcp/tools/tool-registration";
+
 import { isReadOnlyTool } from "./mcp-bridge";
 import { collectAgentAnswer, extractSources } from "./runtime";
 
@@ -142,25 +147,35 @@ describe("extractSources", () => {
 });
 
 describe("isReadOnlyTool", () => {
-  it("allows read prefixes", () => {
+  it("allows tools whose registered annotations declare readOnlyHint", () => {
     for (const name of [
       "list_inventory",
       "get_product",
       "search_products",
       "find_cookable_recipes",
     ]) {
-      expect(isReadOnlyTool(name)).toBe(true);
+      expect(isReadOnlyTool({ name, annotations: READ_ONLY_CLOSED })).toBe(
+        true,
+      );
     }
   });
 
-  it("blocks mutating tools", () => {
+  it("blocks tools whose registered annotations declare a write, regardless of name", () => {
     for (const name of [
       "create_inventory_entry",
       "update_product",
       "delete_inventory_entry",
       "entity",
+      // A name-prefix allowlist would have wrongly admitted this: it mints a
+      // Product despite the "find_" prefix, so only the registry's own
+      // annotation can be trusted.
+      "find_or_create_product_by_upc",
     ]) {
-      expect(isReadOnlyTool(name)).toBe(false);
+      expect(isReadOnlyTool({ name, annotations: WRITE_CLOSED })).toBe(false);
     }
+  });
+
+  it("blocks tools with no annotations at all", () => {
+    expect(isReadOnlyTool({ name: "list_x" })).toBe(false);
   });
 });

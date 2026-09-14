@@ -29,16 +29,29 @@ export const recipeEntityAdapter = defineEntityAdapter({
      * the request, before it is returned: one recipe's WASM pass is
      * milliseconds and USDA is cached, so the page never shows "pending" for
      * a wakeup the queue lost. Its stale parents are published, not cascaded
-     * inline, so the read stays bounded to one recipe.
+     * inline, so the read stays bounded to one recipe. The probe and the
+     * post-repair read go through the service's strong handle: on a browser
+     * read `ctx.db` is the bounded-stale (Hyperdrive-cached) adapter and
+     * would hand back the pre-repair row for up to 60s. The repair is
+     * best-effort: the persisted row still reads as pending and the queue /
+     * "Settle now" remain the durable healers, and failing the GET would only
+     * re-run the same failing repair on every later read.
      */
     get: async (ctx, id) => {
       const [entityId] = await recipeShortcodes.present(ctx.db, [id]);
       if (!entityId) return null;
-      const stale = await selectStaleRecipeIds(ctx.db, [entityId]);
-      if (stale.length > 0) {
+      const strongDb = ctx.services.recipeCosting.database;
+      const stale = await selectStaleRecipeIds(strongDb, [entityId]);
+      if (stale.length === 0) return getRecipeByShortcode(ctx.db, id);
+      try {
         await ctx.services.recipeCosting.recomputeQueued(stale);
+      } catch (error) {
+        console.warn("[recipe.get] repair-on-read failed", {
+          recipe: id,
+          error,
+        });
       }
-      return getRecipeByShortcode(ctx.db, id);
+      return getRecipeByShortcode(strongDb, id);
     },
     list: (ctx, filters, sorts, pagination) =>
       recipeList(ctx.db, filters, sorts, pagination),

@@ -11,7 +11,6 @@ interface SessionInvalidateOptions {
   // lands. When false (the expected-photo path), invalidate synchronously
   // without scheduling one.
   watch?: boolean;
-  result?: unknown;
 }
 
 /**

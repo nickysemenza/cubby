@@ -1,4 +1,4 @@
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -11,7 +11,7 @@ import {
   plantingLocationPeriod,
   product,
 } from "~/server/db/schema";
-import type { EntityKernelContext } from "~/server/entity-kernel";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
 import {
   createPlanting,
@@ -28,7 +28,10 @@ import {
   startPlanting,
   updateGardenEntryDetails,
 } from "~/server/repo/garden";
-import { plantingEntityAdapter } from "~/server/repo/garden/entity-adapters";
+import {
+  gardenEntryEntityAdapter,
+  plantingEntityAdapter,
+} from "~/server/repo/garden/entity-adapters";
 import { createPendingImageRecord } from "~/server/repo/image";
 import { createIngredient } from "~/server/repo/ingredient";
 import { createLocation } from "~/server/repo/location";
@@ -38,23 +41,17 @@ import {
   makeProductInput,
 } from "~/server/repo/repo.fixtures";
 import { resolveLiveShortcode } from "~/server/repo/shortcode-resolver";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 describe("garden workflows", () => {
   const ctx = withTestDb();
 
-  const plantingDeleteContext = (db: Database): EntityKernelContext => ({
-    db,
-    readDb: db,
-    actorContext: TEST_ACTOR,
-    // SAFETY: planting deletion never reads enrichment clients.
-    usdaClient: undefined as never,
-    // SAFETY: planting deletion never reads enrichment clients.
-    upcLookupClient: undefined as never,
-    services: {
-      // SAFETY: planting deletion never invokes recipe side effects.
-      recipeCosting: undefined as never,
-    },
-  });
+  // Adapter deletes run inside the kernel wrapper, which binds every service
+  // to the write transaction — so the context must carry real services.
+  const kernelContext = (db: Database) =>
+    entityKernelContextSchema.parse(
+      createTestRequestContext(db, { auth: { userId: ctx.actor.userId } }),
+    );
 
   const location = (name: string, gardenKind: "bed" | "tray") =>
     createLocation(
@@ -629,10 +626,9 @@ describe("garden workflows", () => {
       "planting",
     );
     expect(deletableId).not.toBeNull();
-    await plantingEntityAdapter.repository.delete(
-      plantingDeleteContext(ctx.db),
-      [deletable.id],
-    );
+    await plantingEntityAdapter.repository.delete(kernelContext(ctx.db), [
+      deletable.id,
+    ]);
     expect(
       await getDb(ctx.db).query.plantingLocationPeriod.findMany({
         where: eq(
@@ -661,7 +657,7 @@ describe("garden workflows", () => {
       pendingImageIds: [],
     });
     await expect(
-      plantingEntityAdapter.repository.delete(plantingDeleteContext(ctx.db), [
+      plantingEntityAdapter.repository.delete(kernelContext(ctx.db), [
         blocked.id,
       ]),
     ).rejects.toBeDefined();
@@ -673,6 +669,103 @@ describe("garden workflows", () => {
         ),
       }),
     ).toHaveLength(1);
+  });
+
+  /**
+   * `startPlanting` writes an `observation` entry and anchors the first
+   * location period to it. The delete policy declares that edge `block`, and
+   * the structural-edit guard used to key off `kind === "move"` only, so both
+   * the delete and a date edit went through and orphaned the period's source.
+   */
+  it("protects the start entry that anchors a location period from delete and structural edits", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Garden anchor crop" },
+      TEST_ACTOR,
+    );
+    const bed = await location("Garden anchor bed", "bed");
+    const planted = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned" },
+      TEST_ACTOR,
+    );
+    await startPlanting(ctx.db, {
+      plantingId: planted.id,
+      locationId: bed.id,
+      startedOn: "2026-09-10",
+      startMethod: "sow",
+    });
+    const plantedId = await resolveLiveShortcode(
+      ctx.db,
+      planted.id,
+      "planting",
+    );
+    expect(plantedId).not.toBeNull();
+    const period = await getDb(ctx.db).query.plantingLocationPeriod.findFirst({
+      where: eq(
+        plantingLocationPeriod.plantingId,
+        parseEntityId("planting", plantedId!),
+      ),
+      columns: { sourceGardenEntryId: true },
+    });
+    expect(period?.sourceGardenEntryId).toBeTruthy();
+    const anchorEntryId = parseEntityId(
+      "gardenEntry",
+      period!.sourceGardenEntryId!,
+    );
+    const anchorEntry = await getDb(ctx.db).query.gardenEntry.findFirst({
+      where: eq(gardenEntry.id, anchorEntryId),
+      columns: { shortcode: true, kind: true },
+    });
+    expect(anchorEntry?.kind).toBe("observation");
+
+    await expect(
+      gardenEntryEntityAdapter.repository.delete(kernelContext(ctx.db), [
+        parseShortcodeFor("gardenEntry", anchorEntry!.shortcode),
+      ]),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "CONSTRAINT_VIOLATION" },
+    });
+    await expect(
+      updateGardenEntryDetails(ctx.db, anchorEntryId, {
+        observedOn: "2026-09-11",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "CONSTRAINT_VIOLATION" },
+    });
+    // A non-structural edit on the same entry is still allowed.
+    await expect(
+      updateGardenEntryDetails(ctx.db, anchorEntryId, { note: "Sown thick" }),
+    ).resolves.toMatchObject({ note: "Sown thick" });
+  });
+
+  it("refuses to finish an already-finished planting", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Garden double-finish crop" },
+      TEST_ACTOR,
+    );
+    const bed = await location("Garden double-finish bed", "bed");
+    const planted = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      TEST_ACTOR,
+    );
+    await finishPlanting(ctx.db, {
+      plantingId: planted.id,
+      finishedOn: "2026-10-01",
+    });
+    await expect(
+      finishPlanting(ctx.db, {
+        plantingId: planted.id,
+        finishedOn: "2026-10-02",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "CONSTRAINT_VIOLATION" },
+    });
   });
 
   it("plantingList honors a two-column sort, not just sorts[0]", async () => {

@@ -59,14 +59,6 @@ async function softDeleteEntityEmbeddingsTx(
 }
 
 /**
- * Transactional removal cascade for every derived search artifact.
- *
- * `SearchDocument` and `EntityEmbedding` describe the same live entity at two
- * retrieval layers, so a removal must retire both rows atomically. Keep this
- * as the one removal-module entry point rather than teaching every delete and
- * merge path about the individual index tables.
- */
-/**
  * Retire the search artifacts of records that no longer exist, atomically for
  * the whole page. The index-repair stream hands over the refs it found; the
  * transaction is owned here, not in the service.
@@ -90,6 +82,14 @@ export async function retireOrphanedSearchArtifacts(
   });
 }
 
+/**
+ * Transactional removal cascade for every derived search artifact.
+ *
+ * `SearchDocument` and `EntityEmbedding` describe the same live entity at two
+ * retrieval layers, so a removal must retire both rows atomically. Keep this
+ * as the one removal-module entry point rather than teaching every delete and
+ * merge path about the individual index tables.
+ */
 export async function softDeleteEntitySearchArtifactsTx(
   tx: DrizzleTransaction,
   entityType: SearchableEntity,

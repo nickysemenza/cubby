@@ -194,15 +194,29 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
     delete: async (ctx, shortcodes) => {
       const ids = await entries.all(ctx.db, shortcodes);
       const { detachedImageKeys, deletedImageShortcodes } =
-        await withTransaction(ctx.db, (tx) =>
-          removeEntity(tx, {
+        await withTransaction(ctx.db, async (tx) => {
+          // GARDEN_ENTRY_DELETE_EDGE_POLICY declares the period source edge
+          // `block`; nothing generic enforces `block`, so the adapter must.
+          const anchored = await tx.query.plantingLocationPeriod.findMany({
+            where: inArray(plantingLocationPeriod.sourceGardenEntryId, [
+              ...ids,
+            ]),
+            columns: { sourceGardenEntryId: true },
+          });
+          if (anchored.length > 0) {
+            throw createAppError(
+              "CONSTRAINT_VIOLATION",
+              "A garden entry that anchors confirmed location history cannot be deleted — correct the location history instead.",
+            );
+          }
+          return await removeEntity(tx, {
             entity: "gardenEntry",
             ids,
             removal: "soft",
             actor: ctx.actorContext,
             children: [imageCascadeChild(imageJoinBindings.gardenEntry)],
-          }),
-        );
+          });
+        });
       return {
         deletedReferences: deletedWithImages(
           "gardenEntry",

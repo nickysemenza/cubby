@@ -13,6 +13,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { listMcpToolCatalog } from "~/server/mcp/server";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { askAgentStreamWorkflow } from "~/server/workflows/agent.server";
@@ -30,6 +31,19 @@ describe("MCP entity kernel boundary", () => {
     const context = requireActor(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
+    // The registry's own annotations are the invariant, in both directions:
+    // no tool that writes (`find_or_create_product_by_upc` mints a Product
+    // despite its `find_` prefix) and no read-only tool left out because its
+    // name lacks a list_/get_ prefix (`explain_recipe_costing`).
+    const catalog = await listMcpToolCatalog();
+    const readOnlyNames = catalog.tools
+      .filter((tool) => tool.annotations?.readOnlyHint === true)
+      .map((tool) => tool.name)
+      .sort();
+    expect(readOnlyNames).toContain("get_entities");
+    expect(readOnlyNames).toContain("explain_recipe_costing");
+    expect(readOnlyNames).not.toContain("entity");
+    expect(readOnlyNames).not.toContain("find_or_create_product_by_upc");
     const events: AgentStreamEvent[] = [];
     for await (const event of askAgentStreamWorkflow(
       context,
@@ -38,12 +52,8 @@ describe("MCP entity kernel boundary", () => {
       {
         acquire: createAgentToolset,
         stream: async function* (_db, _query, resource) {
-          const names = resource.tools.map((tool) => tool.name);
-          expect(names).toContain("get_entities");
-          expect(names).not.toContain("entity");
-          expect(
-            names.every((name) => /^(list_|get_|search_|find_)/.test(name)),
-          ).toBe(true);
+          const names = resource.tools.map((tool) => tool.name).sort();
+          expect(names).toEqual(readOnlyNames);
           yield {
             type: EventType.TEXT_MESSAGE_CONTENT,
             messageId: "message-1",
@@ -113,6 +123,38 @@ describe("MCP entity kernel boundary", () => {
       missing: "null",
     });
     expect(missing.item).toBeNull();
+  });
+
+  it("refuses an unknown sort or groupBy field as a client error, not a kernel crash", async () => {
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: testUserId("test-user-id") },
+      }),
+    );
+    // Before this guard the roster check ran `field.parse` inside the run
+    // stage, so `/api/v1/recipes?sort=bogus` answered 500 with a Sentry event.
+    await expect(
+      executeEntity(context, {
+        action: "list",
+        entity: "recipe",
+        filters: {},
+        sort: { orderBy: "bogus", direction: "asc" },
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "LIST_SORT_FIELD_UNSUPPORTED" },
+    });
+    await expect(
+      executeEntity(context, {
+        action: "list",
+        entity: "product",
+        filters: {},
+        groupBy: "name",
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "LIST_GROUP_BY_FIELD_UNSUPPORTED" },
+    });
   });
 
   it("runs a real protocol-to-kernel shortcode round trip", async () => {

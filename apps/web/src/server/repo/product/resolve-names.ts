@@ -1,18 +1,29 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  type ProductId,
+  productId,
+} from "@cubby/schemas/identifiers";
 import type {
   ProductPickerItemOut,
   ProductResolveCandidateOut,
   ProductResolveNamesOut,
 } from "@cubby/schemas/product";
 import { and, inArray, or, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { product } from "~/server/db/schema";
-import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { getDb, notDeleted, unwrapDb } from "~/server/repo/database-helpers";
 
-import { getProductPickerItemsByIds, productSearch } from "./crud";
+import { getProductPickerItemsByIds } from "./crud";
 
 const FUZZY_CANDIDATE_LIMIT = 3;
+
+const fuzzyMatchRowSchema = z.object({
+  key: z.string(),
+  id: productId,
+  shortcode: z.string(),
+});
 
 const toCandidate = (
   item: ProductPickerItemOut,
@@ -29,9 +40,10 @@ const toCandidate = (
  * Resolve receipt-line names to existing Products without creating any.
  *
  * One exact pass over `lower(name)` and aliases for every requested name, then
- * a contains search (the picker's `productSearch`, top {@link FUZZY_CANDIDATE_LIMIT})
- * only for the names that missed. Never writes — see `productResolveNamesInput`
- * for why the create stays a separate call.
+ * one batched contains search (same predicate as the picker's `productSearch`
+ * `nameFilter`, top {@link FUZZY_CANDIDATE_LIMIT} per name) for every name that
+ * missed — not a per-name round-trip. Never writes — see
+ * `productResolveNamesInput` for why the create stays a separate call.
  */
 export const resolveProductNames = async (
   db: Database,
@@ -86,9 +98,63 @@ export const resolveProductNames = async (
   // Picker rows come back in storage order; key them by public id.
   const itemByShortcode = new Map(exactItems.map((item) => [item.id, item]));
 
+  // Same predicate `productSearch` builds for `nameFilter` (`product/crud.ts`
+  // `formatSearchTerm` on name/notes, `alias ILIKE` on aliases) — no `%`/`_`
+  // escaping there either, kept for parity. One batched LATERAL pass replaces
+  // what used to be a `productSearch` round-trip (list + count + 3 hydration
+  // queries) per missed name.
+  const misses = requested.filter(
+    (name) => !exactShortcodesByKey.get(name.toLowerCase())?.size,
+  );
+  // Per-key public-id candidate lists, in the same shape as
+  // `exactShortcodesByKey` above — keyed by public id (not the internal db
+  // id) so hydration below can reuse the exact-match path's `itemByShortcode`
+  // pattern instead of a fragile positional zip against a second query.
+  const fuzzyShortcodesByKey = new Map<string, ProductPickerItemOut["id"][]>();
+  const fuzzyDbIds: ProductId[] = [];
+  if (misses.length > 0) {
+    const missKeys = misses.map((name) => name.toLowerCase());
+    const missList = sql.join(
+      missKeys.map((key) => sql`${key}`),
+      sql`, `,
+    );
+    const fuzzyResult = await unwrapDb(db).execute(sql`
+      SELECT m.key AS key, cand.id AS id, cand.shortcode AS shortcode
+      FROM unnest(ARRAY[${missList}]::text[]) AS m(key)
+      CROSS JOIN LATERAL (
+        SELECT p.id, p.shortcode
+        FROM "Product" p
+        WHERE p."deletedAt" IS NULL AND (
+          p.name ILIKE '%' || m.key || '%'
+          OR p.notes ILIKE '%' || m.key || '%'
+          OR EXISTS (
+            SELECT 1 FROM unnest(p.aliases) AS alias
+            WHERE alias ILIKE '%' || m.key || '%'
+          )
+        )
+        ORDER BY p.name ASC, p.shortcode ASC, p.id ASC
+        LIMIT ${FUZZY_CANDIDATE_LIMIT}
+      ) cand
+    `);
+    // Rows for a given key arrive in the per-key ORDER BY/LIMIT above, so
+    // appending in encountered order reconstructs that per-key ranking.
+    for (const row of z.array(fuzzyMatchRowSchema).parse(fuzzyResult.rows)) {
+      const shortcode = parseShortcodeFor("product", row.shortcode);
+      const shortcodes = fuzzyShortcodesByKey.get(row.key) ?? [];
+      shortcodes.push(shortcode);
+      fuzzyShortcodesByKey.set(row.key, shortcodes);
+      fuzzyDbIds.push(row.id);
+    }
+  }
+  const fuzzyItems = await getProductPickerItemsByIds(db, fuzzyDbIds);
+  const itemByFuzzyShortcode = new Map(
+    fuzzyItems.map((item) => [item.id, item]),
+  );
+
   const results: ProductResolveNamesOut = [];
   for (const name of requested) {
-    const shortcodes = exactShortcodesByKey.get(name.toLowerCase());
+    const key = name.toLowerCase();
+    const shortcodes = exactShortcodesByKey.get(key);
     if (shortcodes && shortcodes.size > 0) {
       results.push({
         name,
@@ -100,16 +166,13 @@ export const resolveProductNames = async (
       });
       continue;
     }
-    const fuzzy = await productSearch(
-      db,
-      { nameFilter: name },
-      [{ orderBy: "name", direction: "asc" }],
-      { pageIndex: 0, pageSize: FUZZY_CANDIDATE_LIMIT },
-    );
     results.push({
       name,
       exact: false,
-      candidates: fuzzy.data.map(toCandidate),
+      candidates: (fuzzyShortcodesByKey.get(key) ?? [])
+        .map((shortcode) => itemByFuzzyShortcode.get(shortcode))
+        .filter((item): item is ProductPickerItemOut => item !== undefined)
+        .map(toCandidate),
     });
   }
   return results;

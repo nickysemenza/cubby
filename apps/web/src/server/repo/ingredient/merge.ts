@@ -310,6 +310,19 @@ export const mergeIngredients = async (
       to: target,
       liveOnly: false,
     });
+    // The two garden edges are real FKs too, so left unpointed they abort the
+    // hard delete with a raw FK violation — `liveOnly: false` for the same
+    // reason as above.
+    await repointEdge(tx, "ingredient", "Planting.ingredientId", {
+      from: uniqueAliases,
+      to: target,
+      liveOnly: false,
+    });
+    await repointEdge(tx, "ingredient", "Product.growsIngredientId", {
+      from: uniqueAliases,
+      to: target,
+      liveOnly: false,
+    });
 
     // Delete the absorbed ingredients AND cascade their search embeddings, as
     // one call — see `finalizeMerge`'s doc for why those can't be separated.

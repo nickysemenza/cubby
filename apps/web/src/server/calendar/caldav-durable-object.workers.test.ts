@@ -202,6 +202,30 @@ describe("CalendarFeedDurableObject in workerd", () => {
     expect(afterRestart.headers.get("etag")).toBe(resource.etag);
   });
 
+  it("reports a malformed multiget href as a per-resource 404, not a 503", async () => {
+    const stub = await seededStub();
+    const credential = await seedCredential(stub);
+    const authorization = basic(credential.username, credential.password);
+
+    // RFC 4791 §7.9: an unresolvable href is a per-resource client error, not
+    // a whole-request failure — "http://[" is unparseable as a URL.
+    const multiGet = await stub.fetch(
+      request(
+        "/api/caldav/calendars/me/tasks/",
+        {
+          method: "REPORT",
+          headers: { "content-type": "application/xml" },
+          body: `<C:calendar-multiget xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:"><D:href>http://[</D:href></C:calendar-multiget>`,
+        },
+        authorization,
+      ),
+    );
+    expect(multiGet.status).toBe(207);
+    const body = await multiGet.text();
+    expect(body).toContain("http://[");
+    expect(body).toContain("404 Not Found");
+  });
+
   it("is discoverable and queryable by an independent tsdav client", async () => {
     const stub = await seededStub();
     const credential = await seedCredential(stub);
@@ -368,6 +392,25 @@ describe("CalendarFeedDurableObject in workerd", () => {
     expect((await stub.inspect(ORIGIN)).caldav?.uncertainWrites).toEqual([]);
     await expectStatus(stub.fetch(request(target, {}, authorization)), 200);
     await expectStatus(put({ "if-match": resource.etag }), 503);
+  });
+
+  it("accepts If-Match: * on an existing resource (RFC 7232 §3.1)", async () => {
+    const stub = await seededStub();
+    const credential = await seedCredential(stub);
+    const authorization = basic(credential.username, credential.password);
+    const target = `/api/caldav/calendars/me/tasks/${resource.filename}`;
+    const put = async (headers: HeadersInit, body = resource.body) =>
+      await stub.fetch(
+        request(target, { method: "PUT", headers, body }, authorization),
+      );
+
+    // "*" matches any current representation and must not 412 the way a
+    // stale/wrong etag does — the precondition check then lets the write
+    // through to the same uncertain-write path a valid etag hits in this
+    // Postgres-less test environment (see "blocks uncertain writes" above).
+    const response = await put({ "if-match": "*" });
+    await response.arrayBuffer();
+    expect(response.status).toBe(503);
   });
 
   it("keeps publication atomic and identities durable across the cutover reset", async () => {

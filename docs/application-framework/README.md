@@ -60,10 +60,9 @@ adapters, transaction nodes, or after-commit queues.
 The runtime distinguishes reads, commits, and required effects. Workflow-level
 failure translation preserves cancellation and effect-failure evidence. Required effects
 follow their commit, including when cancellation arrives after the write. Ordinary
-recovery refuses new or ambiguously acknowledged writes. Durable background jobs
-have an explicit exception: their row-owned retry contract settles payload,
-completion, and continuation failures, including the original cause of a required
-dispatch failure. Cancellation still propagates; recovery failures are not retried
+recovery refuses new or ambiguously acknowledged writes. Queue messages are wakeups,
+not durable jobs; handlers gate on the row's own staleness marker (see README
+"Background tasks"). Cancellation still propagates; recovery failures are not retried
 recursively by the executor.
 
 Mapped and bulk workflows preserve input order and bounded concurrency. Started

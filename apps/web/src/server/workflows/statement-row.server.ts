@@ -20,6 +20,7 @@ import {
   recordStatementRows,
   updateStatementRows,
 } from "~/server/repo/statement-row";
+import { markProblemCountsDirtyBestEffort } from "~/server/services/problem-counts-cache";
 import {
   bindWorkflow,
   defineWorkflowOperation,
@@ -68,6 +69,9 @@ export const recordStatementRowsWorkflow = bindWorkflow(
           .commit("write", async ({ context }, { input: { input } }) =>
             recordStatementRows(context.db, input, context.actor),
           )
+          .effect("badge", async () => {
+            await markProblemCountsDirtyBestEffort("statementRow.record");
+          })
           .output(({ write }) => write),
       whenFalse: (branch) =>
         branch
@@ -91,6 +95,9 @@ export const updateStatementRowsWorkflow = bindWorkflow(
     .commit("updated", async ({ context }, { input }) =>
       updateStatementRows(context.db, input, context.actor),
     )
+    .effect("badge", async () => {
+      await markProblemCountsDirtyBestEffort("statementRow.update");
+    })
     .output(({ updated }) => updated),
   (
     db: Database,
@@ -107,6 +114,9 @@ export const deleteStatementRowsWorkflow = bindWorkflow(
     .commit("deleted", async ({ context }, { input }) =>
       deleteStatementRows(context.db, input.selector, context.actor),
     )
+    .effect("badge", async () => {
+      await markProblemCountsDirtyBestEffort("statementRow.delete");
+    })
     .output(({ deleted }) => deleted),
   (
     db: Database,

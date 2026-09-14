@@ -18,6 +18,8 @@ import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { getDb } from "./database-helpers";
+import { createPlanting, recordGardenEntry } from "./garden";
+import { createIngredient } from "./ingredient";
 import { createInventoryEntry, deleteInventoryEntries } from "./inventory";
 import {
   buildLocationTree,
@@ -274,6 +276,107 @@ describe("deleteLocations hierarchy", () => {
     await expect(
       deleteLocations(ctx.db, [stockedId], ctx.actor),
     ).resolves.toMatchObject({ detachedImageKeys: [] });
+  });
+
+  /**
+   * LOCATION_DELETE_EDGE_POLICY declares the four garden edges `block`, but
+   * nothing generic enforces `block`: without the repository guard these
+   * deletes went through and left plantings pointing at a tombstoned bed.
+   */
+  it("rejects a bed with a growing planting (LOCATION_HAS_PLANTINGS)", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Location delete crop" },
+      ctx.actor,
+    );
+    const bed = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Planted bed", type: null, gardenKind: "bed" }),
+      ctx.actor,
+    );
+    const bedId = parseEntityId(
+      "location",
+      (await resolveLiveShortcode(ctx.db, bed.id, "location"))!,
+    );
+    await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, locationId: bed.id, status: "growing" },
+      ctx.actor,
+    );
+
+    await expect(
+      deleteLocations(ctx.db, [bedId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "LOCATION_HAS_PLANTINGS" },
+    });
+  });
+
+  it("rejects a bed named by a planned planting's intendedLocationId (LOCATION_HAS_PLANTINGS)", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Location intended crop" },
+      ctx.actor,
+    );
+    const bed = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Intended bed",
+        type: null,
+        gardenKind: "bed",
+      }),
+      ctx.actor,
+    );
+    const bedId = parseEntityId(
+      "location",
+      (await resolveLiveShortcode(ctx.db, bed.id, "location"))!,
+    );
+    await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, intendedLocationId: bed.id, status: "planned" },
+      ctx.actor,
+    );
+
+    await expect(
+      deleteLocations(ctx.db, [bedId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "LOCATION_HAS_PLANTINGS" },
+    });
+  });
+
+  it("rejects a bed that only carries a garden observation (LOCATION_HAS_GARDEN_HISTORY)", async () => {
+    const bed = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Observed bed",
+        type: null,
+        gardenKind: "bed",
+      }),
+      ctx.actor,
+    );
+    const bedId = parseEntityId(
+      "location",
+      (await resolveLiveShortcode(ctx.db, bed.id, "location"))!,
+    );
+    await recordGardenEntry(
+      ctx.db,
+      {
+        locationId: bed.id,
+        kind: "observation",
+        observedOn: "2026-09-01",
+        note: "Soil turned",
+        pendingImageIds: [],
+      },
+      ctx.actor,
+    );
+
+    await expect(
+      deleteLocations(ctx.db, [bedId], ctx.actor),
+    ).rejects.toMatchObject({
+      code: "PRECONDITION_FAILED",
+      cause: { reason: "LOCATION_HAS_GARDEN_HISTORY" },
+    });
   });
 });
 

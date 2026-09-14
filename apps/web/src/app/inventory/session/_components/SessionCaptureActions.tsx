@@ -150,7 +150,7 @@ export function SessionCaptureActions({
   const approveDetectedItem = useMutation(
     ai.approveDetectedInventoryItem.mutationOptions({
       onSuccess: (data) => {
-        invalidate({ result: data, watch: true });
+        invalidate({ watch: true });
         toast.success(
           savedWithBackgroundWork(
             data.sideEffects,
@@ -165,7 +165,7 @@ export function SessionCaptureActions({
       "inventory",
       "create",
     )({
-      onSuccess: (data) => invalidate({ result: data, watch: true }),
+      onSuccess: () => invalidate({ watch: true }),
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
   );
@@ -432,7 +432,7 @@ export function SessionCaptureActions({
               locationId={location.id}
               locationName={location.name}
               hasItems={(location.location.directItemCount ?? 0) > 0}
-              onSettled={(data) => invalidate({ result: data, watch: true })}
+              onSettled={() => invalidate({ watch: true })}
             />
           )}
         </SheetContent>

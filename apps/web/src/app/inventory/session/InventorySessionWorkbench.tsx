@@ -275,15 +275,15 @@ export function InventorySessionWorkbench({
     // A location write's own ripple does not reach the session's inventory
     // panes; the audit session reads both sides of the bin, so it settles with
     // the shared session invalidator (which also polls any enqueued batches).
-    onSuccess: (result) => invalidate({ result, watch: true }),
+    onSuccess: () => invalidate({ watch: true }),
   });
   // "Done" commits the staged diff for the current bin. On success the committed
   // resolutions leave the staged map (read from `variables`, so it's never the
   // stale closure) and we advance to the next bin.
   const reconcile = useMutation(
     inventory.reconcileSession.mutationOptions({
-      onSuccess: (data, variables) => {
-        invalidate({ result: data, watch: true });
+      onSuccess: (_data, variables) => {
+        invalidate({ watch: true });
         setItemResolutions((prev) => {
           const next = new Map(prev);
           for (const r of variables.resolutions)

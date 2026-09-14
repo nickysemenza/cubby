@@ -13,6 +13,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   ingredient,
+  planting,
   product,
   recipe,
   recipeSection,
@@ -25,6 +26,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
+import { countByTarget } from "~/server/repo/impact";
 import { removeEntity } from "~/server/repo/removal";
 
 export const INGREDIENT_DELETE_EDGE_POLICY = {
@@ -148,6 +150,28 @@ export const deleteIngredients = async (
       reason: "INGREDIENT_HAS_PRODUCTS",
       message: (count, names) =>
         `Cannot delete ${count} ingredient(s): ${names} have linked products.`,
+    });
+
+    // INGREDIENT_DELETE_EDGE_POLICY declares both garden edges `block`;
+    // nothing generic enforces `block`, so the repository must. Any live
+    // planting blocks, finished or not — garden history retains its crop.
+    const [plantingsByCrop, growersByCrop] = await Promise.all([
+      countByTarget(tx, planting, planting.ingredientId, ids),
+      countByTarget(tx, product, product.growsIngredientId, ids),
+    ]);
+    await assertNoDependents({
+      offendingParentIds: ids.filter((id) => plantingsByCrop[id]),
+      fetchNames: fetchIngredientNames,
+      reason: "INGREDIENT_HAS_PLANTINGS",
+      message: (count, names) =>
+        `Cannot delete ${count} ingredient(s): ${names} are the crop of a planting.`,
+    });
+    await assertNoDependents({
+      offendingParentIds: ids.filter((id) => growersByCrop[id]),
+      fetchNames: fetchIngredientNames,
+      reason: "INGREDIENT_HAS_GARDEN_PRODUCTS",
+      message: (count, names) =>
+        `Cannot delete ${count} ingredient(s): ${names} are grown by a garden source product.`,
     });
 
     // No `children`: an ingredient delete has no cascaded child rows.
