@@ -158,10 +158,16 @@ const builderFor = <E extends EditableEntity>(
     entity,
     id,
     access: options?.access ?? (() => editable),
+    // Every gallery entity's `pendingImageIds` is array-valued and `readKey:
+    // null` (never populated from a record), so its one true default is an
+    // empty array — not the generic text field's `null` — for every entity
+    // that declares it, with no per-entity literal required.
     initial: ({ record, context }) =>
-      valueFor(record, id) ??
-      (id === "parentProjectId" ? context.parentProjectId : undefined) ??
-      null,
+      id === "pendingImageIds"
+        ? []
+        : (valueFor(record, id) ??
+          (id === "parentProjectId" ? context.parentProjectId : undefined) ??
+          null),
     normalize: options?.normalize ?? ((value) => value),
     validate: (input) => {
       const { value } = input;
@@ -503,7 +509,6 @@ export const entityEditRegistry: EntityEditRegistry = {
           locationId: "",
           observedOn: householdLocalDate(),
           note: null,
-          pendingImageIds: [],
         },
       },
       full: {
@@ -514,7 +519,6 @@ export const entityEditRegistry: EntityEditRegistry = {
           observedOn: householdLocalDate(),
           note: null,
           harvestAmount: null,
-          pendingImageIds: [],
         },
       },
     },

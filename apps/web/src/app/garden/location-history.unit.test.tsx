@@ -24,6 +24,7 @@ const planting = plantingOut.parse({
   sowedOn: null,
   transplantedOn: null,
   finishedOn: null,
+  images: [],
   createdAt: new Date(),
   updatedAt: new Date(),
 });

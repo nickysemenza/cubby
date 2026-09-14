@@ -22,9 +22,11 @@ export {
   batchUpdateWithCaseWhen,
   FindOrCreateConflictError,
   findOrCreate,
+  imageCascadeChild,
   imageJoinBindings,
   insertAndReturn,
   nextImageSortOrder,
+  syncEntityImages,
   updateAndReturn,
   updateLiveAndReturn,
 } from "./crud";
@@ -56,7 +58,7 @@ export {
   uuidArrayParam,
 } from "./query";
 // Relation loaders
-export { imageOrder, relations } from "./relations";
+export { imageOrder, plantingImagesRelation, relations } from "./relations";
 export type {
   MappableImageRecord,
   RowWithOptionalAliases,

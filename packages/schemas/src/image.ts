@@ -11,7 +11,13 @@ import {
 } from "./pagination";
 import { auditDateFilterFields } from "./base-entity";
 import { purchaseDocumentKind } from "./purchase";
-import type { ShortcodeEntity } from "./entity-manifest";
+import {
+  coverEntities,
+  galleryEntities,
+  type CoverEntity,
+  type GalleryEntity,
+  type ShortcodeEntity,
+} from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
 import { entityImage } from "./entity";
 import { id, imageShortcode, projectShortcode } from "./identifiers";
@@ -199,18 +205,17 @@ export const importImageFromUrlSchema = z.object({
   entityType: entityImage.optional(),
 });
 
-// The image-bearing entities exposed as attach targets. A subset of
-// `entityImage` (uppercase storage keys) — cookbook is excluded because it uses
-// a single write-once `coverImageId` (replace, not append), unlike these five
-// gallery join tables. Lowercase to match the `entitySchema` slug convention the
-// rest of the MCP surface uses; mapped to the join dispatch server-side.
-export const attachableImageEntity = z.enum([
-  "product",
-  "recipe",
-  "location",
-  "project",
-  "purchase",
-]);
+// The image-bearing entities exposed as attach targets — every entity the
+// manifest declares `capabilities.images: "gallery"`, derived rather than
+// hand-listed so a new gallery entity is automatically attachable the moment
+// its manifest declaration lands. Cookbook is excluded because it uses a
+// single write-once `coverImageId` (replace, not append), unlike these
+// ordered `<Entity>Image` join tables. Lowercase to match the `entitySchema`
+// slug convention the rest of the MCP surface uses; mapped to the join
+// dispatch server-side.
+export const attachableImageEntity = z.enum(
+  nonEmptyTuple<GalleryEntity>(galleryEntities),
+);
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
 
 const attachableImageEntities = nonEmptyTuple<ShortcodeEntity>(
@@ -377,15 +382,17 @@ export { imageOut } from "./entity-definitions/field-primitives";
 
 export type ImageOut = z.infer<typeof imageOut>;
 
-export const imageAssociationEntity = z.enum([
-  "product",
-  "location",
-  "recipe",
-  "cookbook",
-  "project",
-  "purchase",
-  "vendor",
-]);
+// Every gallery entity plus every cover entity, derived from the manifest for
+// the same reason `attachableImageEntity` is. `vendor` is hand-added: its logo
+// is a legacy single `logoImageId` column that predates `capabilities.images`
+// and isn't modeled there.
+export const imageAssociationEntity = z.enum(
+  nonEmptyTuple<GalleryEntity | CoverEntity | "vendor">([
+    ...galleryEntities,
+    ...coverEntities,
+    "vendor",
+  ]),
+);
 export const imageAssociationRole = z.enum(["attachment", "cover", "logo"]);
 export const imageAssociationSchema = z.object({
   entityType: imageAssociationEntity,

@@ -79,8 +79,6 @@ import {
   touchDataQualityTargets,
 } from "~/server/repo/data-quality";
 import {
-  applyImageOrder,
-  associatePendingImages,
   auditDateWhereConditions,
   buildPartialUpdateValues,
   correlated,
@@ -88,13 +86,14 @@ import {
   eqAny,
   executeListQueryWithCount,
   getDb,
+  imageCascadeChild,
   imageJoinBindings,
   type ListReadIntent,
   lockAndValidateForDelete,
-  nextImageSortOrder,
   notDeleted,
   presenceCondition,
   relations,
+  syncEntityImages,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
@@ -117,7 +116,6 @@ import {
   readAllocations,
   transactionIdsAllocatedTo,
 } from "~/server/repo/financial-transaction-allocations";
-import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageSql } from "~/server/repo/image-displayability";
 import { countByTarget, impact, present } from "~/server/repo/impact";
 import { listScaffold } from "~/server/repo/list-scaffold";
@@ -138,7 +136,6 @@ import { relatedWhereConditions } from "~/server/repo/related-view";
 import { cascadeRemoval, removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
-  resolveAllPresent,
   resolveLiveShortcode,
   resolveOrThrow,
   resolveShortcodes,
@@ -391,42 +388,13 @@ const syncPurchaseImages = async (
   removeImageIds: string[] | undefined,
   imageOrder: string[] | undefined,
 ): Promise<string[]> => {
-  let detachedImageKeys: string[] = [];
-
-  if (imageOrder && imageOrder.length > 0) {
-    const orderedIds = await resolveAllPresent(tx, "image", imageOrder);
-    await applyImageOrder(tx, imageJoinBindings.purchase, id, orderedIds);
-  }
-
-  if (removeImageIds && removeImageIds.length > 0) {
-    const idsToRemove = await resolveAllPresent(tx, "image", removeImageIds);
-    ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
-      tx,
-      { entity: "purchase", id },
-      idsToRemove,
-    ));
-  }
-
-  if (pendingImageIds && pendingImageIds.length > 0) {
-    const resolvedImageIds = await resolveAllPresent(
-      tx,
-      "image",
-      pendingImageIds,
-    );
-    const startSortOrder = await nextImageSortOrder(
-      tx,
-      imageJoinBindings.purchase,
-      id,
-    );
-    await associatePendingImages(
-      tx,
-      imageJoinBindings.purchase,
-      id,
-      resolvedImageIds,
-      startSortOrder,
-    );
-  }
-
+  const { detachedImageKeys } = await syncEntityImages(
+    tx,
+    "purchase",
+    imageJoinBindings.purchase,
+    id,
+    { pendingImageIds, removeImageIds, imageOrder },
+  );
   return detachedImageKeys;
 };
 
@@ -1918,11 +1886,10 @@ const deletePurchasesWithPolicy = async (
             parentColumns: [purchaseProduct.purchaseId],
             auditKey: "cascadedPurchaseProducts",
           },
-          {
-            table: purchaseImage,
-            parentColumns: [purchaseImage.purchaseId],
-            auditKey: "cascadedPurchaseImages",
-          },
+          imageCascadeChild(
+            imageJoinBindings.purchase,
+            "cascadedPurchaseImages",
+          ),
         ],
       });
 

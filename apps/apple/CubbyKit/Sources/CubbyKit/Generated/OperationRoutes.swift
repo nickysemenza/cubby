@@ -8,7 +8,7 @@ extension OperationRoute {
     )
 
     /// Entity keys whose `resources.<key>.update` body accepts `pendingImageIds`.
-    public static let imageAttachableEntities: Set<String> = ["gardenEntry", "location", "product", "purchase", "recipe"]
+    public static let imageAttachableEntities: Set<String> = ["gardenEntry", "location", "meal", "planting", "product", "purchase", "recipe", "task"]
 
     private static let routeTable: [OperationRoute] = [
         OperationRoute(operationID: "agent.ask", method: .post, path: "/api/v1/agent/ask", pathParameters: [], queryParameters: [], hasBody: true),

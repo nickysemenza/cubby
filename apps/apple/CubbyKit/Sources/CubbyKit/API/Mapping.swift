@@ -28,6 +28,7 @@ typealias TodayBriefingOut = Components.Schemas.TaskTodayBriefingOut
 typealias ProblemCountsOut = Components.Schemas.ProblemsCount
 typealias DashboardCountsOut = Components.Schemas.DashboardCountsOut
 typealias MealRowOut = Components.Schemas.MealOut
+typealias MealListRowOut = Components.Schemas.MealListItemOut
 typealias UploadInput = Components.Schemas.InitiateUploadWithoutEntity
 typealias UploadOut = Components.Schemas.InitiateUploadWithoutEntityResponse
 typealias UPCLookupOut = Components.Schemas.UpcLookupOutput
@@ -580,6 +581,19 @@ extension TodayTask {
 
 extension TodayMeal {
     init(_ out: MealRowOut) {
+        self.init(
+            id: out.id,
+            name: out.name ?? out.mealType?.rawValue.capitalized ?? out.date,
+            mealType: out.mealType?.rawValue,
+            mealKind: out.mealKind.rawValue,
+            recipeNames: out.recipes.map(\.recipe.name)
+        )
+    }
+
+    /// `resources.meal.list` returns `MealListItemOut` (adds `displayImages`), a distinct
+    /// generated type from `MealOut` even though it's a superset — same duplication as
+    /// `LocationListRowOut` alongside `LocationNodeOut` above.
+    init(_ out: MealListRowOut) {
         self.init(
             id: out.id,
             name: out.name ?? out.mealType?.rawValue.capitalized ?? out.date,

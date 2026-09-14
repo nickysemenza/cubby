@@ -246,6 +246,14 @@ extension EntityDescriptor {
             _ = try await client.resources_location_update(
                 path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
             ).ok
+        case .meal:
+            _ = try await client.resources_meal_update(
+                path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
+            ).ok
+        case .planting:
+            _ = try await client.resources_planting_update(
+                path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
+            ).ok
         case .product:
             _ = try await client.resources_product_update(
                 path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
@@ -256,6 +264,10 @@ extension EntityDescriptor {
             ).ok
         case .recipe:
             _ = try await client.resources_recipe_update(
+                path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
+            ).ok
+        case .task:
+            _ = try await client.resources_task_update(
                 path: .init(id: id), body: .json(.init(pendingImageIds: imageIds))
             ).ok
         default: throw EntityOperationError.unsupported(key, .update)
@@ -273,6 +285,14 @@ extension EntityDescriptor {
             _ = try await client.resources_location_update(
                 path: .init(id: id), body: .json(.init(imageOrder: imageIds))
             ).ok
+        case .meal:
+            _ = try await client.resources_meal_update(
+                path: .init(id: id), body: .json(.init(imageOrder: imageIds))
+            ).ok
+        case .planting:
+            _ = try await client.resources_planting_update(
+                path: .init(id: id), body: .json(.init(imageOrder: imageIds))
+            ).ok
         case .product:
             _ = try await client.resources_product_update(
                 path: .init(id: id), body: .json(.init(imageOrder: imageIds))
@@ -283,6 +303,10 @@ extension EntityDescriptor {
             ).ok
         case .recipe:
             _ = try await client.resources_recipe_update(
+                path: .init(id: id), body: .json(.init(imageOrder: imageIds))
+            ).ok
+        case .task:
+            _ = try await client.resources_task_update(
                 path: .init(id: id), body: .json(.init(imageOrder: imageIds))
             ).ok
         default: throw EntityOperationError.unsupported(key, .update)

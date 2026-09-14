@@ -17,6 +17,7 @@ const meal = mealOut.parse({
   mealType: "dinner",
   mealKind: "cooked",
   recipes: [],
+  images: [],
   totals: {
     cost: {
       status: "complete",

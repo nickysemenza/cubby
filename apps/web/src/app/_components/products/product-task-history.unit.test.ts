@@ -41,6 +41,7 @@ const task = (
   blockingIds: [],
   subtaskCount: 0,
   doneSubtaskCount: 0,
+  images: [],
   createdAt: new Date(options.createdAt ?? "2026-01-01"),
   updatedAt: new Date(options.createdAt ?? "2026-01-01"),
 });

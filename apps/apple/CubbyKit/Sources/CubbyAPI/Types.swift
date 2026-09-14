@@ -181,6 +181,9 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/meals/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/meals/{id}/get(resources.meal.get)`.
     func resources_meal_get(_ input: Operations.Resources_meal_get.Input) async throws -> Operations.Resources_meal_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/meals/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/meals/{id}/patch(resources.meal.update)`.
+    func resources_meal_update(_ input: Operations.Resources_meal_update.Input) async throws -> Operations.Resources_meal_update.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/plantings`.
@@ -256,6 +259,9 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/tasks/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/get(resources.task.get)`.
     func resources_task_get(_ input: Operations.Resources_task_get.Input) async throws -> Operations.Resources_task_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/tasks/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/patch(resources.task.update)`.
+    func resources_task_update(_ input: Operations.Resources_task_update.Input) async throws -> Operations.Resources_task_update.Output
     /// - Remark: HTTP `GET /api/v1/upc/lookup`.
     /// - Remark: Generated from `#/paths//api/v1/upc/lookup/get(upc.lookup)`.
     func upc_lookup(_ input: Operations.Upc_lookup.Input) async throws -> Operations.Upc_lookup.Output
@@ -825,6 +831,19 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// - Remark: HTTP `PATCH /api/v1/meals/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/meals/{id}/patch(resources.meal.update)`.
+    package func resources_meal_update(
+        path: Operations.Resources_meal_update.Input.Path,
+        headers: Operations.Resources_meal_update.Input.Headers = .init(),
+        body: Operations.Resources_meal_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_meal_update.Output {
+        try await resources_meal_update(Operations.Resources_meal_update.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/plantings`.
@@ -1062,6 +1081,19 @@ extension APIProtocol {
         try await resources_task_get(Operations.Resources_task_get.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/tasks/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/tasks/{id}/patch(resources.task.update)`.
+    package func resources_task_update(
+        path: Operations.Resources_task_update.Input.Path,
+        headers: Operations.Resources_task_update.Input.Headers = .init(),
+        body: Operations.Resources_task_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_task_update.Output {
+        try await resources_task_update(Operations.Resources_task_update.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// - Remark: HTTP `GET /api/v1/upc/lookup`.

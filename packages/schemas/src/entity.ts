@@ -19,6 +19,18 @@ const entityImageValues = nonEmptyTuple<EntityImageValue>(
 export const entityImage = z.enum(entityImageValues);
 export type EntityImage = z.infer<typeof entityImage>;
 
+/** Every entity `entityImage` is derived from — gallery, cover, and borrowed alike. */
+export type ImageEntity = (typeof imageEntities)[number];
+
+/**
+ * The polymorphic image `entityType` value for `entity`. Every `ImageEntity`
+ * slug uppercases losslessly (`location` → `LOCATION`, `gardenEntry` →
+ * `GARDENENTRY`) into a member of `entityImage`, so this is a total,
+ * cast-free replacement for a caller's own `entity.toUpperCase() as EntityImage`.
+ */
+export const entityImageOf = (entity: ImageEntity): EntityImage =>
+  entityImage.parse(entity.toUpperCase());
+
 export const entityRefKey = (entity: Entity, id: string): string =>
   `${entity}:${id}`;
 

@@ -555,6 +555,15 @@ const INTENTIONAL_RESPELLINGS = {
   "project::taskOut::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::taskOut::status": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::taskOut::updatedAt": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  // taskListItemOut = taskOut + displayImages, same shared-module collision.
+  "project::taskListItemOut::blockedByIds":
+    TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskListItemOut::blockingIds": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskListItemOut::createdAt": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskListItemOut::id": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskListItemOut::name": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskListItemOut::status": TASK_EXPENSE_SHARED_MODULE_COLLISION,
+  "project::taskListItemOut::updatedAt": TASK_EXPENSE_SHARED_MODULE_COLLISION,
   "project::taskTodayBriefingItemOut::id":
     "compact Today-briefing projection of TASK's own id (see file comment: 'the compact ready-work projection') — coincidentally shares a name with project's generated field since task concepts live in project.ts",
   "project::taskTodayBriefingItemOut::name":

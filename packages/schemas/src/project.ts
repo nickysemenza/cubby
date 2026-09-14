@@ -372,6 +372,12 @@ export const taskOut = z.object({
 });
 export type TaskOut = z.infer<typeof taskOut>;
 
+/** List-row projection: `taskOut` plus the server-resolved gallery cover(s). */
+export const taskListItemOut = taskOut.extend({
+  displayImages: displayImagesField,
+});
+export type TaskListItemOut = z.infer<typeof taskListItemOut>;
+
 export const taskListAndSideEffectsOut = z.object({
   items: z.array(taskOut),
   sideEffects: mutationSideEffectsSchema,

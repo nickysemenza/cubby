@@ -13,7 +13,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { CalendarPlus, Info, Link2, ListChecks } from "lucide-react";
+import { CalendarPlus, ImageIcon, Info, Link2, ListChecks } from "lucide-react";
 import type { FC } from "react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -49,6 +49,7 @@ import { EditableCell } from "../_components/data-table/editable-cell";
 import { EditableEntityCell } from "../_components/data-table/editable-entity-cell";
 import { useEntityDetail } from "../_components/hooks/useEntityDetail";
 import { useUpdateMutation } from "../_components/hooks/useUpdateMutation";
+import { EntityPhotosSection } from "../_components/photos/entity-photos-section";
 import {
   TASK_STATUS_LABELS,
   taskStatusBadgeVariant,
@@ -145,7 +146,9 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
         current
           ? {
               ...current,
-              items: [...current.items, created],
+              // A fresh subtask has no photos; the list row's server-resolved
+              // `displayImages` is empty until the next refetch.
+              items: [...current.items, { ...created, displayImages: [] }],
               meta: {
                 ...current.meta,
                 totalCount: current.meta.totalCount + 1,
@@ -563,6 +566,15 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
             content: <SubtaskChecklist task={task} />,
           } satisfies DetailSection,
         ]),
+    {
+      id: "photos",
+      title: "Photos",
+      icon: ImageIcon,
+      placement: "supporting",
+      content: (
+        <EntityPhotosSection entity="task" id={task.id} images={task.images} />
+      ),
+    },
     ...commonSections,
   ];
 
@@ -628,6 +640,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       entity="task"
       title={task.name}
       rawData={task}
+      heroImages={task.images}
       heroStamp={{
         label: TASK_STATUS_LABELS[task.status],
         tone:
@@ -647,7 +660,11 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         ),
       }}
     >
-      <DetailSections sections={sections} rawData={task} />
+      <DetailSections
+        sections={sections}
+        rawData={task}
+        heroImages={task.images}
+      />
       <EntityEditDialog
         open={followUpOpen}
         onOpenChange={setFollowUpOpen}

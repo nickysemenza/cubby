@@ -10,7 +10,7 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { ClipboardList, Trash2 } from "lucide-react";
+import { ClipboardList, ImageIcon, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -20,6 +20,7 @@ import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { DetailSections } from "~/app/_components/data-table/detail-page";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
+import { EntityPhotosSection } from "~/app/_components/photos/entity-photos-section";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
@@ -218,6 +219,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
       entity="meal"
       title={mealName}
       rawData={meal}
+      heroImages={meal.images}
       heroStats={heroStats}
       heroStamp={{
         label: format(parseISO(meal.date), "EEE, MMM d"),
@@ -226,6 +228,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
     >
       <DetailSections
         rawData={meal}
+        heroImages={meal.images}
         sections={[
           {
             id: "meal-plan",
@@ -423,6 +426,19 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                   </WithEntitySearch>
                 </div>
               </Stack>
+            ),
+          },
+          {
+            id: "photos",
+            title: "Photos",
+            icon: ImageIcon,
+            placement: "primary",
+            content: (
+              <EntityPhotosSection
+                entity="meal"
+                id={meal.id}
+                images={meal.images}
+              />
             ),
           },
           ...(effectivePreparationView

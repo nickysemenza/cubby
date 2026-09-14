@@ -5,7 +5,7 @@ import type {
   PresenceFilter,
   SortParams,
 } from "@cubby/schemas/pagination";
-import type { TaskFilters, TaskOut } from "@cubby/schemas/project";
+import type { TaskFilters } from "@cubby/schemas/project";
 import {
   type AnyColumn,
   and,
@@ -38,6 +38,7 @@ import {
   presenceCondition,
   relations,
 } from "~/server/repo/database-helpers";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { matchingEmbeddedProjectIds } from "~/server/repo/project/dashboard-shared";
 import {
@@ -268,7 +269,7 @@ export const taskList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-): Promise<{ data: TaskOut[]; count: number }> => {
+) => {
   const dbClient = getDb(db);
   const whereClause = await buildTaskWhere(db, filters);
 
@@ -299,7 +300,7 @@ export const taskList = async (
     taskSubtaskCounts(db, ids),
   ]);
 
-  const data = rows.map((row) => {
+  const data = await withDisplayImages(db, "task", rows, (row) => {
     const counts = subtaskCounts.get(row.id);
     return dbTaskToAPI(
       row,

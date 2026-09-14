@@ -13,6 +13,10 @@ import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 
 import { aggregateTotals, scaleTotals } from "~/lib/nutrition-estimates";
+import {
+  mapImages,
+  type MappableImageRecord,
+} from "~/server/repo/database-helpers";
 
 const pendingTotals = (
   reason: "totals_missing" | "totals_stale",
@@ -64,6 +68,7 @@ type MealRow = {
       deletedAt: Date | null;
     };
   }>;
+  images: Array<{ image: MappableImageRecord; deletedAt: Date | null }>;
 };
 
 export const dbMealToAPI = (row: MealRow): MealOut => {
@@ -104,6 +109,7 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     mealKind: row.mealKind,
     recipes,
     totals: aggregateTotals(recipes.map((recipe) => recipe.scaledTotals)),
+    images: mapImages(row.images),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

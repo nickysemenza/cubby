@@ -11,6 +11,7 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
+  ImageShortcode,
   ProductId,
   ProductShortcode,
   ProjectId,
@@ -42,14 +43,18 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
+  associatePendingImages,
   batchUpdateWithCaseWhen,
   buildPartialUpdateValues,
   dependencyIdsFor,
   getDb,
+  imageCascadeChild,
+  imageJoinBindings,
   lockAndValidateForDelete,
   notDeleted,
   relations,
   replaceDependencyEdges,
+  syncEntityImages,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -88,6 +93,12 @@ export const TASK_DELETE_EDGE_POLICY = {
     effect: "hard-delete",
     description:
       "Blocks/blocked-by dependency rows naming the task (or a cascaded subtask) are removed outright.",
+  },
+  "TaskImage.taskId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Image associations are soft-deleted with the task, and each file is\n      deleted too unless something else still references it.",
   },
 } as const satisfies IncomingEdgePolicy<"task", OperationDisposition>;
 
@@ -373,6 +384,19 @@ export const createTask = async (
       dueEndDate: data.dueEndDate,
       trade: data.trade,
     });
+    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      const resolvedImageIds = await resolveAllPresent(
+        tx,
+        "image",
+        data.pendingImageIds,
+      );
+      await associatePendingImages(
+        tx,
+        imageJoinBindings.task,
+        created.id,
+        resolvedImageIds,
+      );
+    }
     await logAuditEntry(tx, actor, {
       entityType: "task",
       entityId: created.id,
@@ -389,7 +413,11 @@ export const updateTask = async (
   data: TaskUpdateData,
   actor: ActorContext,
   hooks?: TaskMutationHooks,
-): Promise<{ output: TaskOut; entityId: TaskId }> => {
+): Promise<{
+  output: TaskOut;
+  entityId: TaskId;
+  detachedImageKeys: string[];
+}> => {
   const id = await resolveOrThrow(db, "task", shortcode);
 
   const before = await fetchTaskRow(db, id);
@@ -401,6 +429,7 @@ export const updateTask = async (
       ? ((await taskDependencyIds(db, [id])).blockedBy.get(id) ?? [])
       : undefined;
 
+  let detachedImageKeys: string[] = [];
   await withTransaction(db, async (tx) => {
     await hooks?.beforeUpdate?.(tx, id);
     let parentTaskId: TaskId | null | undefined;
@@ -456,6 +485,13 @@ export const updateTask = async (
       sortOrder: data.sortOrder,
     });
     const updated = await updateLiveAndReturn(tx, task, updateValues, id);
+    ({ detachedImageKeys } = await syncEntityImages(
+      tx,
+      "task",
+      imageJoinBindings.task,
+      id,
+      data,
+    ));
 
     if (resolvedBlockedByIds !== undefined) {
       await replaceDependencyEdges(
@@ -498,7 +534,11 @@ export const updateTask = async (
     }
   });
 
-  return { output: await getTaskByID(db, id), entityId: id };
+  return {
+    output: await getTaskByID(db, id),
+    entityId: id,
+    detachedImageKeys,
+  };
 };
 
 /**
@@ -810,8 +850,17 @@ export const deleteTasks = async (
   db: Database,
   shortcodes: TaskShortcode[],
   actor: ActorContext,
-): Promise<{ deletedShortcodes: TaskShortcode[] }> => {
-  if (shortcodes.length === 0) return { deletedShortcodes: [] };
+): Promise<{
+  deletedShortcodes: TaskShortcode[];
+  detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
+}> => {
+  if (shortcodes.length === 0)
+    return {
+      deletedShortcodes: [],
+      detachedImageKeys: [],
+      deletedImageShortcodes: [],
+    };
 
   return await withTransaction(db, async (tx) => {
     const ids = await resolveLiveTaskIdsOrThrow(tx, shortcodes);
@@ -824,27 +873,33 @@ export const deleteTasks = async (
     );
     const allIds = [...ids, ...cascadedSubtasks.map((subtask) => subtask.id)];
 
-    // Over `allIds`, not `ids`: the cascaded subtasks are removals too. Their
-    // public shortcodes are returned below so callers report what was actually
-    // deleted rather than projecting the request into an incomplete result.
-    await removeEntity(tx, {
-      entity: "task",
-      ids: allIds,
-      removal: "soft",
-      actor,
-      children: [
-        // Both ends: a dependency edge carries no meaning once either endpoint
-        // is gone, so it is hard-deleted rather than soft-deleted.
-        {
-          table: taskDependency,
-          parentColumns: [
-            taskDependency.taskId,
-            taskDependency.blockedByTaskId,
-          ],
-          mode: "hard",
-        },
-      ],
-    });
+    // Over `allIds`, not `ids`: the cascaded subtasks are removals too — this
+    // also makes the image cascade below reap a subtask's own photos, not just
+    // the parent's. Their public shortcodes are returned below so callers
+    // report what was actually deleted rather than projecting the request into
+    // an incomplete result.
+    const { detachedImageKeys, deletedImageShortcodes } = await removeEntity(
+      tx,
+      {
+        entity: "task",
+        ids: allIds,
+        removal: "soft",
+        actor,
+        children: [
+          // Both ends: a dependency edge carries no meaning once either endpoint
+          // is gone, so it is hard-deleted rather than soft-deleted.
+          {
+            table: taskDependency,
+            parentColumns: [
+              taskDependency.taskId,
+              taskDependency.blockedByTaskId,
+            ],
+            mode: "hard",
+          },
+          imageCascadeChild(imageJoinBindings.task),
+        ],
+      },
+    );
     return {
       deletedShortcodes: [
         ...shortcodes,
@@ -852,6 +907,8 @@ export const deleteTasks = async (
           parseShortcodeFor("task", row.shortcode),
         ),
       ],
+      detachedImageKeys,
+      deletedImageShortcodes,
     };
   });
 };

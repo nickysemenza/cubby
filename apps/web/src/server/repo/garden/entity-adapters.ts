@@ -8,10 +8,15 @@ import {
 } from "~/server/db/schema";
 import {
   defineEntityAdapter,
-  entityMutationReferences,
+  deletedWithImages,
 } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
+import {
+  imageCascadeChild,
+  imageJoinBindings,
+  notDeleted,
+  withTransaction,
+} from "~/server/repo/database-helpers";
 import { removeEntity } from "~/server/repo/removal";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 
@@ -45,6 +50,12 @@ const PLANTING_DELETE_EDGE_POLICY = {
     effect: "hard-delete",
     description:
       "Internal location-period rows are removed with a planting that has no retained entries.",
+  },
+  "PlantingImage.plantingId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Image associations are soft-deleted with the planting, and each file is\n      deleted too unless something else still references it.",
   },
 } as const;
 
@@ -104,31 +115,41 @@ export const plantingEntityAdapter = defineEntityAdapter({
     },
     update: async (ctx, shortcode, data) => {
       const id = await plantings.one(ctx.db, shortcode);
-      return {
-        output: await updatePlantingDetails(ctx.db, id, data, ctx.actorContext),
-        entityId: id,
-      };
+      const { planting, detachedImageKeys } = await updatePlantingDetails(
+        ctx.db,
+        id,
+        data,
+        ctx.actorContext,
+      );
+      return { output: planting, entityId: id, detachedImageKeys };
     },
     delete: async (ctx, shortcodes) => {
       const ids = await plantings.all(ctx.db, shortcodes);
-      await withTransaction(ctx.db, async (tx) => {
-        await assertPlantingsHaveNoRetainedHistory(tx, ids);
-        await removeEntity(tx, {
-          entity: "planting",
-          ids,
-          removal: "soft",
-          actor: ctx.actorContext,
-          children: [
-            {
-              table: plantingLocationPeriod,
-              parentColumns: [plantingLocationPeriod.plantingId],
-              mode: "hard",
-            },
-          ],
+      const { detachedImageKeys, deletedImageShortcodes } =
+        await withTransaction(ctx.db, async (tx) => {
+          await assertPlantingsHaveNoRetainedHistory(tx, ids);
+          return await removeEntity(tx, {
+            entity: "planting",
+            ids,
+            removal: "soft",
+            actor: ctx.actorContext,
+            children: [
+              {
+                table: plantingLocationPeriod,
+                parentColumns: [plantingLocationPeriod.plantingId],
+                mode: "hard",
+              },
+              imageCascadeChild(imageJoinBindings.planting),
+            ],
+          });
         });
-      });
       return {
-        deletedReferences: entityMutationReferences("planting", shortcodes),
+        deletedReferences: deletedWithImages(
+          "planting",
+          shortcodes,
+          deletedImageShortcodes,
+        ),
+        detachedImageKeys,
       };
     },
   },
@@ -172,16 +193,23 @@ export const gardenEntryEntityAdapter = defineEntityAdapter({
     },
     delete: async (ctx, shortcodes) => {
       const ids = await entries.all(ctx.db, shortcodes);
-      await withTransaction(ctx.db, (tx) =>
-        removeEntity(tx, {
-          entity: "gardenEntry",
-          ids,
-          removal: "soft",
-          actor: ctx.actorContext,
-        }),
-      );
+      const { detachedImageKeys, deletedImageShortcodes } =
+        await withTransaction(ctx.db, (tx) =>
+          removeEntity(tx, {
+            entity: "gardenEntry",
+            ids,
+            removal: "soft",
+            actor: ctx.actorContext,
+            children: [imageCascadeChild(imageJoinBindings.gardenEntry)],
+          }),
+        );
       return {
-        deletedReferences: entityMutationReferences("gardenEntry", shortcodes),
+        deletedReferences: deletedWithImages(
+          "gardenEntry",
+          shortcodes,
+          deletedImageShortcodes,
+        ),
+        detachedImageKeys,
       };
     },
   },

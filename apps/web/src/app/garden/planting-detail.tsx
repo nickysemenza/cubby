@@ -5,10 +5,11 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, History, Sprout } from "lucide-react";
+import { BookOpen, History, ImageIcon, Sprout } from "lucide-react";
 import { useState } from "react";
 
 import { DetailSections } from "~/app/_components/data-table/detail-page";
+import { EntityPhotosSection } from "~/app/_components/photos/entity-photos-section";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -285,7 +286,21 @@ export function PlantingDetail({
       <DetailSections
         showEntityActions={false}
         rawData={planting}
+        heroImages={planting.images}
         sections={[
+          {
+            id: "photos",
+            title: "Photos",
+            icon: ImageIcon,
+            placement: "supporting",
+            content: (
+              <EntityPhotosSection
+                entity="planting"
+                id={planting.id}
+                images={planting.images}
+              />
+            ),
+          },
           {
             id: "garden-history",
             title: "Journal",

@@ -73,7 +73,11 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
   },
   location: { pendingImageIds: "writes LocationImage rows" },
   gardenEntry: { pendingImageIds: "writes GardenEntryImage rows" },
-  meal: { recipes: "writes MealRecipe rows" },
+  meal: {
+    recipes: "writes MealRecipe rows",
+    pendingImageIds: "writes MealImage rows",
+  },
+  planting: { pendingImageIds: "writes PlantingImage rows" },
   product: {
     upc: "barcode write slot; lands in ProductExternalId, not on Product",
     isbn: "book identifier; lands in ProductExternalId, not on Product",
@@ -86,6 +90,7 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
     sections: "writes RecipeSection + RecipeSectionIngredient rows",
     pendingImageIds: "writes RecipeImage rows",
   },
+  task: { pendingImageIds: "writes TaskImage rows" },
   wish: { candidateProductIds: "writes WishCandidate rows" },
 };
 

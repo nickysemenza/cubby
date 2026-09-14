@@ -1,11 +1,13 @@
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
+  imageShortcode,
   productShortcode,
   projectShortcode,
   taskShortcode,
 } from "../identifier-fields.js";
 import { taskStatusSchema, tradeSchema } from "@cubby/schemas/task-fields";
+import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 export default defineEntity({
   key: "task",
@@ -187,6 +189,44 @@ export default defineEntity({
         },
       },
       {
+        key: "pendingImageIds",
+        kind: "identifier",
+        readKey: null,
+        reference: { entity: "image", multiple: true },
+        validation: {
+          read: null,
+          create: z.array(imageShortcode).optional(),
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "removeImageIds",
+        kind: "identifier",
+        readKey: null,
+        reference: { entity: "image", multiple: true },
+        validation: {
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "imageOrder",
+        kind: "text",
+        readKey: null,
+        validation: {
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "images",
+        kind: "json",
+        display: { list: true, standard: "image", columnId: "image" },
+        validation: { read: z.array(imageOut), create: null, update: null },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: {
@@ -314,6 +354,7 @@ export default defineEntity({
       "dueEndDate",
       "trade",
       "sortOrder",
+      "pendingImageIds",
     ],
     update: [
       "name",
@@ -326,6 +367,9 @@ export default defineEntity({
       "trade",
       "sortOrder",
       "blockedByIds",
+      "pendingImageIds",
+      "removeImageIds",
+      "imageOrder",
     ],
     bulk: ["projectId", "status", "trade", "dueDate", "dueEndDate"],
     audit: [
@@ -362,6 +406,7 @@ export default defineEntity({
           "subjectProductId",
           "trade",
           "dueDate",
+          "pendingImageIds",
         ],
         full: [
           "name",
@@ -372,6 +417,7 @@ export default defineEntity({
           "dueDate",
           "dueEndDate",
           "notes",
+          "pendingImageIds",
         ],
         schedule: ["name", "status", "dueDate", "dueEndDate"],
         status: ["status"],
@@ -402,6 +448,7 @@ export default defineEntity({
       "blockingIds",
       "subtaskCount",
       "doneSubtaskCount",
+      "images",
       "createdAt",
       "updatedAt",
     ],
@@ -410,6 +457,7 @@ export default defineEntity({
     create: { module: "@cubby/schemas/project", export: "taskCreateInput" },
     update: { module: "@cubby/schemas/project", export: "taskUpdateData" },
     output: { module: "@cubby/schemas/project", export: "taskOut" },
+    list: { module: "@cubby/schemas/project", export: "taskListItemOut" },
   },
   filters: {
     audit: true,
@@ -633,11 +681,30 @@ export default defineEntity({
         ],
       },
     },
+    {
+      key: "images",
+      label: "Images",
+      target: "image",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "TaskImage.taskId", direction: "incoming" },
+          { edge: "TaskImage.imageId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "TaskImage.imageId", direction: "incoming" },
+          { edge: "TaskImage.taskId", direction: "outgoing" },
+        ],
+      },
+    },
   ],
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

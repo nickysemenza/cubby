@@ -62,7 +62,6 @@ import {
   logAuditEntry,
 } from "~/server/repo/audit-log";
 import {
-  applyImageOrder,
   assertNoDependents,
   associatePendingImages,
   auditDateWhereConditions,
@@ -74,21 +73,21 @@ import {
   executeListQueryWithCount,
   getDb,
   idSetPresence,
+  imageCascadeChild,
   imageJoinBindings,
   imageOrder,
   type ListReadIntent,
   lockAndValidateForDelete,
   mapImages,
-  nextImageSortOrder,
   notDeleted,
   rangeConditions,
   relations,
+  syncEntityImages,
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { withDisplayImages } from "~/server/repo/entity-display-image";
-import { detachImagesFromEntity } from "~/server/repo/image";
 import { displayableImageWhere } from "~/server/repo/image-displayability";
 import { stockOnly } from "~/server/repo/inventory/placement";
 import { listScaffold } from "~/server/repo/list-scaffold";
@@ -416,46 +415,13 @@ export const updateLocation = async (
     tx: DrizzleTransaction,
     locationId: LocationId,
   ) => {
-    if (data.imageOrder?.length) {
-      const orderedIds = await resolveAllPresent(tx, "image", data.imageOrder);
-      await applyImageOrder(
-        tx,
-        imageJoinBindings.location,
-        locationId,
-        orderedIds,
-      );
-    }
-    if (data.removeImageIds?.length) {
-      const idsToRemove = await resolveAllPresent(
-        tx,
-        "image",
-        data.removeImageIds,
-      );
-      ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
-        tx,
-        { entity: "location", id: locationId },
-        idsToRemove,
-      ));
-    }
-    if (data.pendingImageIds?.length) {
-      const pendingIds = await resolveAllPresent(
-        tx,
-        "image",
-        data.pendingImageIds,
-      );
-      const startSortOrder = await nextImageSortOrder(
-        tx,
-        imageJoinBindings.location,
-        locationId,
-      );
-      await associatePendingImages(
-        tx,
-        imageJoinBindings.location,
-        locationId,
-        pendingIds,
-        startSortOrder,
-      );
-    }
+    ({ detachedImageKeys } = await syncEntityImages(
+      tx,
+      "location",
+      imageJoinBindings.location,
+      locationId,
+      data,
+    ));
   };
 
   const runUpdate = async (tx: DrizzleTransaction) => {
@@ -702,13 +668,7 @@ export const deleteLocations = async (
       ids,
       removal: "soft",
       actor,
-      children: [
-        {
-          table: locationImage,
-          parentColumns: [locationImage.locationId],
-          auditKey: "cascadedImages",
-        },
-      ],
+      children: [imageCascadeChild(imageJoinBindings.location)],
     });
   });
 };

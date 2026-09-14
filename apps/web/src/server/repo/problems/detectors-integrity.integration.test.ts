@@ -15,8 +15,10 @@ import {
   gardenEntryImage,
   ledgerSourceClaim,
   locationImage,
+  mealImage,
   mealRecipe,
   mealRecipePortion,
+  plantingImage,
   plantingLocationPeriod,
   productComponent,
   productConversionCoverage,
@@ -34,6 +36,7 @@ import {
   statementImport,
   statementRow,
   taskDependency,
+  taskImage,
   wishCandidate,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
@@ -49,7 +52,7 @@ import {
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 74 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 80 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -424,6 +427,30 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "MealImage.imageId": async (db, targetId) => {
+    const m = await mkMeal(db);
+    return insertAndReturn(db, mealImage, {
+      mealId: m.id,
+      imageId: targetId,
+    });
+  },
+
+  "TaskImage.imageId": async (db, targetId) => {
+    const t = await mkTask(db);
+    return insertAndReturn(db, taskImage, {
+      taskId: t.id,
+      imageId: targetId,
+    });
+  },
+
+  "PlantingImage.imageId": async (db, targetId) => {
+    const p = await mkPlanting(db);
+    return insertAndReturn(db, plantingImage, {
+      plantingId: parseEntityId("planting", p.id),
+      imageId: targetId,
+    });
+  },
+
   "RecipeSection.recipeId": (db, targetId) =>
     insertAndReturn(db, recipeSection, {
       recipeId: parseEntityId("recipe", targetId),
@@ -787,6 +814,30 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "MealImage.mealId": async (db, targetId) => {
+    const photo = await mkImage(db);
+    return insertAndReturn(db, mealImage, {
+      mealId: parseEntityId("meal", targetId),
+      imageId: photo.id,
+    });
+  },
+
+  "TaskImage.taskId": async (db, targetId) => {
+    const photo = await mkImage(db);
+    return insertAndReturn(db, taskImage, {
+      taskId: parseEntityId("task", targetId),
+      imageId: photo.id,
+    });
+  },
+
+  "PlantingImage.plantingId": async (db, targetId) => {
+    const photo = await mkImage(db);
+    return insertAndReturn(db, plantingImage, {
+      plantingId: parseEntityId("planting", targetId),
+      imageId: photo.id,
+    });
+  },
+
   "TaskDependency.taskId": async (db, targetId) => {
     const other = await mkTask(db);
     return insertAndReturn(db, taskDependency, {
@@ -1019,7 +1070,7 @@ describe("findReferentialLivenessViolations", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(74);
+    expect(derivedMustTargetLiveEdges).toHaveLength(80);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

@@ -1,5 +1,6 @@
 import {
   defineEntityAdapter,
+  deletedWithImages,
   entityMutationReferences,
 } from "~/server/entity-kernel/adapter";
 import {
@@ -28,13 +29,15 @@ export const taskEntityAdapter = defineEntityAdapter({
     update: (ctx, id, data) =>
       updateTask(ctx.db, id, data, ctx.actorContext, ctx.caldavHooks?.task),
     delete: async (ctx, ids) => {
-      const { deletedShortcodes } = await deleteTasks(
-        ctx.db,
-        ids,
-        ctx.actorContext,
-      );
+      const { deletedShortcodes, detachedImageKeys, deletedImageShortcodes } =
+        await deleteTasks(ctx.db, ids, ctx.actorContext);
       return {
-        deletedReferences: entityMutationReferences("task", deletedShortcodes),
+        deletedReferences: deletedWithImages(
+          "task",
+          deletedShortcodes,
+          deletedImageShortcodes,
+        ),
+        detachedImageKeys,
       };
     },
     /** One complete patch, one transaction, then one side-effect fan-out. */

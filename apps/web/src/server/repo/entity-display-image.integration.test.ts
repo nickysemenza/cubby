@@ -469,17 +469,19 @@ describe("entity display image resolver", () => {
       await getDb(ctx.db)
         .insert(productImage)
         .values({ productId: product.entityId, imageId: img.id, sortOrder: 0 });
-      const mealId = crypto.randomUUID();
+      const financialAccountId = crypto.randomUUID();
 
       const result = await resolveEntityDisplayImages(ctx.db, [
         { entityType: "product", entityId: product.entityId },
-        { entityType: "meal", entityId: mealId },
+        { entityType: "financialAccount", entityId: financialAccountId },
       ]);
 
       expect(result.get(entityRefKey("product", product.entityId))).toEqual({
         url: getR2PublicUrl(img.key),
       });
-      expect(result.has(entityRefKey("meal", mealId))).toBe(false);
+      expect(
+        result.has(entityRefKey("financialAccount", financialAccountId)),
+      ).toBe(false);
     });
 
     it("resolves a mixed batch of several entity types independently", async () => {

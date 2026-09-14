@@ -247,7 +247,8 @@ struct PhotoUploaderTests {
     @Test func acceptsImagesFollowsTheGeneratedTable() {
         #expect(EntityCatalog[.product].acceptsImages)
         #expect(EntityCatalog[.purchase].acceptsImages)
-        #expect(!EntityCatalog[.task].acceptsImages)
+        // Vendor owns a single logo FK rather than an image-association gallery.
+        #expect(!EntityCatalog[.vendor].acceptsImages)
     }
 }
 

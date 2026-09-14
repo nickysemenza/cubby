@@ -1,13 +1,16 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
+import type {
+  ImageShortcode,
+  MealId,
+  MealRecipeId,
+} from "@cubby/schemas/identifiers";
 import type {
   MealCreateInput,
   MealFilters,
-  MealKind,
   MealOut,
   MealRecipeInput,
-  MealType,
+  MealUpdateInput,
   UpcomingMealSummaryOut,
 } from "@cubby/schemas/meal";
 import { mealTypeValues } from "@cubby/schemas/meal-classification";
@@ -25,25 +28,31 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
+  associatePendingImages,
   auditDateWhereConditions,
   countWhere,
   executeListQueryWithCount,
   getDb,
+  imageCascadeChild,
+  imageJoinBindings,
   insertAndReturn,
   type ListReadIntent,
   lockAndValidateForDelete,
   notDeleted,
   relations,
+  syncEntityImages,
   updateAndReturn,
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/repo/database-helpers";
 import { createEntityReader } from "~/server/repo/entity-crud-factory";
+import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal";
 import {
   resolveAllOrThrow,
+  resolveAllPresent,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -58,6 +67,16 @@ export type MealMutationHooks = {
   beforeUpdate?: (tx: DrizzleTransaction, id: MealId) => Promise<void>;
 };
 
+/** The scalar-column subset of `MealUpdateInput["data"]` — everything except
+ * the image write fields, which `syncEntityImages` handles separately. */
+type MealColumnPatch = {
+  date?: string;
+  name?: string | null;
+  sortOrder?: number | null;
+  mealType?: MealCreateInput["mealType"];
+  mealKind?: MealCreateInput["mealKind"];
+};
+
 export const MEAL_DELETE_EDGE_POLICY = {
   "MealRecipe.mealId": {
     code: "soft-delete-association",
@@ -70,6 +89,12 @@ export const MEAL_DELETE_EDGE_POLICY = {
     effect: "soft-delete",
     description:
       "Deleting a meal soft-deletes portions served at it; their source preparations are untouched.",
+  },
+  "MealImage.mealId": {
+    code: "soft-delete-association",
+    effect: "soft-delete",
+    description:
+      "Image associations are soft-deleted with the meal, and each file is\n      deleted too unless something else still references it.",
   },
 } as const satisfies IncomingEdgePolicy<"meal", OperationDisposition>;
 
@@ -189,7 +214,7 @@ export const mealList = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   readIntent: ListReadIntent = "page",
-): Promise<{ data: MealOut[]; count: number }> => {
+) => {
   const dbClient = getDb(db);
   // `mealType` must sort by slot, not by slug: a plain text ordering puts
   // dessert before dinner, which reads as a broken table. `mealTypeValues`
@@ -230,8 +255,12 @@ export const mealList = async (
       }),
     count: () => countWhere(db, meal, whereCondition),
   });
+  if (readIntent === "count") {
+    return { data: [], count };
+  }
 
-  return { data: rows.map(dbMealToAPI), count };
+  const items = await withDisplayImages(db, "meal", rows, dbMealToAPI);
+  return { data: items, count };
 };
 
 export const createMealWithEntityId = async (
@@ -269,6 +298,19 @@ export const createMealWithEntityId = async (
         })),
       );
     }
+    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      const resolvedImageIds = await resolveAllPresent(
+        tx,
+        "image",
+        data.pendingImageIds,
+      );
+      await associatePendingImages(
+        tx,
+        imageJoinBindings.meal,
+        created.id,
+        resolvedImageIds,
+      );
+    }
     await logAuditEntry(tx, actor, {
       entityType: "meal",
       entityId: created.id,
@@ -288,33 +330,35 @@ export const createMeal = async (
 export const updateMeal = async (
   db: Database,
   id: MealId,
-  data: {
-    date?: string;
-    name?: string | null;
-    sortOrder?: number | null;
-    mealType?: MealType | null;
-    mealKind?: MealKind;
-  },
+  data: MealUpdateInput["data"],
   actor: ActorContext,
   hooks?: MealMutationHooks,
-): Promise<MealOut> => {
+): Promise<{ meal: MealOut; detachedImageKeys: string[] }> => {
+  let detachedImageKeys: string[] = [];
   // Mutation + audit in one transaction so the change is never left unrecorded.
   await withTransaction(db, async (tx) => {
     await hooks?.beforeUpdate?.(tx, id);
-    const mealPatch: typeof data = {};
+    const mealPatch: MealColumnPatch = {};
     if (data.date !== undefined) mealPatch.date = data.date;
     if (data.name !== undefined) mealPatch.name = data.name;
     if (data.sortOrder !== undefined) mealPatch.sortOrder = data.sortOrder;
     if (data.mealType !== undefined) mealPatch.mealType = data.mealType;
     if (data.mealKind !== undefined) mealPatch.mealKind = data.mealKind;
     await updateLiveAndReturn(tx, meal, mealPatch, id);
+    ({ detachedImageKeys } = await syncEntityImages(
+      tx,
+      "meal",
+      imageJoinBindings.meal,
+      id,
+      data,
+    ));
     await logAuditEntry(tx, actor, {
       entityType: "meal",
       entityId: id,
       action: "update",
     });
   });
-  return requireMeal(db, id);
+  return { meal: await requireMeal(db, id), detachedImageKeys };
 };
 
 /**
@@ -325,8 +369,13 @@ export const deleteMeals = async (
   db: Database,
   ids: MealId[],
   actor: ActorContext,
-): Promise<{ deleted: number }> => {
-  if (ids.length === 0) return { deleted: 0 };
+): Promise<{
+  deleted: number;
+  detachedImageKeys: string[];
+  deletedImageShortcodes: ImageShortcode[];
+}> => {
+  if (ids.length === 0)
+    return { deleted: 0, detachedImageKeys: [], deletedImageShortcodes: [] };
   return await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, meal, ids, "Meal");
     const sourceOccurrences = await tx
@@ -355,25 +404,27 @@ export const deleteMeals = async (
     // a meal's EntityEmbedding row gets cleaned up. And because
     // `removeMealRecipe` unplans rows singly, a meal can already own dead
     // MealRecipe rows — the soft cascade's `notDeleted` is what preserves them.
-    const { deleted } = await removeEntity(tx, {
-      entity: "meal",
-      ids,
-      removal: "soft",
-      actor,
-      children: [
-        {
-          table: mealRecipe,
-          parentColumns: [mealRecipe.mealId],
-          auditKey: "cascadedMealRecipes",
-        },
-        {
-          table: mealRecipePortion,
-          parentColumns: [mealRecipePortion.mealId],
-          auditKey: "cascadedMealRecipePortions",
-        },
-      ],
-    });
-    return { deleted };
+    const { deleted, detachedImageKeys, deletedImageShortcodes } =
+      await removeEntity(tx, {
+        entity: "meal",
+        ids,
+        removal: "soft",
+        actor,
+        children: [
+          {
+            table: mealRecipe,
+            parentColumns: [mealRecipe.mealId],
+            auditKey: "cascadedMealRecipes",
+          },
+          {
+            table: mealRecipePortion,
+            parentColumns: [mealRecipePortion.mealId],
+            auditKey: "cascadedMealRecipePortions",
+          },
+          imageCascadeChild(imageJoinBindings.meal),
+        ],
+      });
+    return { deleted, detachedImageKeys, deletedImageShortcodes };
   });
 };
 

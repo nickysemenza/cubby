@@ -20,6 +20,11 @@ import { getErrorMessage } from "~/lib/error-utils";
 
 import { GardenField, GardenFormActions, GardenNotes } from "./garden-fields";
 import { GardenGuide } from "./garden-guide";
+import {
+  GardenPhotos,
+  uploadGardenPhotos,
+  type GardenPhotoDraft,
+} from "./garden-photos";
 import { GardenPicker } from "./garden-picker";
 import { garden } from "./garden.functions";
 
@@ -191,10 +196,16 @@ export function PlantingForm({
     destinationDetail,
     guideKey,
   } = usePlantingReferences(source, crop, destination, guideSelection);
+  // Photo capture only applies to a NEW planting — an existing one manages its
+  // gallery from the detail page's Photos section (`EntityPhotosSection`).
+  const [photos, setPhotos] = useState<GardenPhotoDraft[]>([]);
   // The form coordinates a source relationship and planting write; failures remain inline.
   const save = useMutation({
     meta: { invalidates: ripple.garden },
     mutationFn: async () => {
+      const pendingImageIds = await uploadGardenPhotos(photos, undefined, () =>
+        setPhotos([...photos]),
+      );
       const data = gardenCreatePlantingInput.parse({
         ingredientId: resolvedCrop?.id,
         sourceProductId: source?.id ?? null,
@@ -207,6 +218,7 @@ export function PlantingForm({
         plannedWindow: nullable(plannedWindow),
         plannedDate: nullable(plannedDate),
         sowedOn: nullable(sowedOn),
+        pendingImageIds,
         transplantedOn: nullable(transplantedOn),
         inLocationSince:
           !planting && status === "growing"
@@ -418,6 +430,13 @@ export function PlantingForm({
               <GardenGuide guideKey={guideKey} />
             </Stack>
           </details>
+        )}
+        {!planting && (
+          <GardenPhotos
+            photos={photos}
+            onChange={setPhotos}
+            disabled={save.isPending}
+          />
         )}
         <GardenFormActions
           pending={save.isPending}
