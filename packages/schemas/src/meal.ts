@@ -8,6 +8,7 @@ import {
   subRecipeBlockReason,
 } from "./availability";
 import { amount } from "./codec";
+import { displayImagesField } from "./display-images";
 import { money } from "./money";
 import {
   ledgerPartyShortcode,
@@ -314,6 +315,12 @@ const mealOutFields = generatedMealFieldSchemas.read;
 
 export const mealOut = z.object(mealOutFields);
 export type MealOut = z.infer<typeof mealOut>;
+
+/** List-row projection: `mealOut` plus the server-resolved gallery cover(s). */
+export const mealListItemOut = mealOut.extend({
+  displayImages: displayImagesField,
+});
+export type MealListItemOut = z.infer<typeof mealListItemOut>;
 
 /** Generic MCP entity result; MealRecipe rows have no public shortcode. */
 export const mealMcpEntityOut = mealOut.extend({

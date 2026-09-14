@@ -1,9 +1,11 @@
 import type { ImageAssociation } from "@cubby/schemas/image";
-import { match } from "ts-pattern";
+import { Link } from "@tanstack/react-router";
+import { match, P } from "ts-pattern";
 
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Stack } from "~/components/layout";
 import { NoneValue } from "~/components/ui/none-value";
+import { entityDetailLink } from "~/entities/entities";
 
 const roleLabel = {
   attachment: "Attachment",
@@ -77,6 +79,35 @@ function ImageAssociationLink({
         compact={compact}
       />
     ))
+    .with({ entityType: "meal" }, ({ entityId, entityName }) => (
+      <EntityInlineLink
+        displayImage={undefined}
+        entity="meal"
+        data={{ id: entityId, name: entityName }}
+        compact={compact}
+      />
+    ))
+    .with({ entityType: "task" }, ({ entityId, entityName }) => (
+      <EntityInlineLink
+        displayImage={undefined}
+        entity="task"
+        data={{ id: entityId, name: entityName }}
+        compact={compact}
+      />
+    ))
+    // Planting and garden entries have no inline-link projection yet; a plain
+    // routed link keeps the association navigable.
+    .with(
+      { entityType: P.union("planting", "gardenEntry") },
+      ({ entityType, entityId, entityName }) => (
+        <Link
+          {...entityDetailLink(entityType, entityId)}
+          className="min-w-0 truncate underline-offset-2 hover:underline"
+        >
+          {entityName}
+        </Link>
+      ),
+    )
     .exhaustive();
 
   return (

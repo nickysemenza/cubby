@@ -3,7 +3,11 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
 import { entityEditRegistry } from "./definitions";
-import { buildEntityEdit, resolveEntityEdit } from "./kernel";
+import {
+  buildEntityEdit,
+  initialEntityEditValues,
+  resolveEntityEdit,
+} from "./kernel";
 import type { EditableEntity } from "./types";
 
 // `ledgerParty`/`ledgerTransfer` joined the registry when they gained browser
@@ -128,6 +132,29 @@ describe("entity edit definitions", () => {
       changed: true,
       command: { data: { merchant: "New merchant" } },
     });
+  });
+
+  it("defaults pendingImageIds to an empty array off the field roster, not a per-entity literal (G5)", () => {
+    for (const entity of ["gardenEntry", "meal", "task", "planting"] as const) {
+      const request = {
+        entity,
+        operation: "create" as const,
+        intent: "capture" as const,
+        surface: "dialog" as const,
+      };
+      const resolved = resolveEntityEdit(entityEditRegistry, request);
+      if (!("definition" in resolved)) {
+        throw new Error(`${entity} capture create must resolve`);
+      }
+      expect(
+        resolved.intentDefinition.fields,
+        `${entity} capture roster`,
+      ).toContain("pendingImageIds");
+      expect(
+        initialEntityEditValues(resolved, request).pendingImageIds,
+        `${entity} pendingImageIds default`,
+      ).toEqual([]);
+    }
   });
 
   it("declares delete availability wherever the schema declares a lifecycle", () => {

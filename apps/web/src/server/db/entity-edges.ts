@@ -88,6 +88,7 @@ import {
   ledgerTransfer,
   location,
   locationImage,
+  mealImage,
   mealRecipe,
   mealRecipePortion,
   product,
@@ -108,10 +109,12 @@ import {
   recipeSection,
   recipeSectionIngredient,
   planting,
+  plantingImage,
   plantingLocationPeriod,
   statementRow,
   task,
   taskDependency,
+  taskImage,
   vendor,
   wishCandidate,
 } from "./schema";
@@ -237,6 +240,27 @@ export const ENTITY_EDGES = {
       description: "A full-scene photo attached to a dated garden entry.",
       liveness: { kind: "must-target-live" },
     },
+    "MealImage.imageId": {
+      column: mealImage.imageId,
+      role: "media",
+      label: "meal photos",
+      description: "A photo of a planned or prepared meal.",
+      liveness: { kind: "must-target-live" },
+    },
+    "TaskImage.imageId": {
+      column: taskImage.imageId,
+      role: "media",
+      label: "task photos",
+      description: "A before/after or reference photo attached to a task.",
+      liveness: { kind: "must-target-live" },
+    },
+    "PlantingImage.imageId": {
+      column: plantingImage.imageId,
+      role: "media",
+      label: "planting photos",
+      description: "A photo of a crop as a whole, attached to a planting.",
+      liveness: { kind: "must-target-live" },
+    },
   }),
   recipe: edges({
     "RecipeSection.recipeId": {
@@ -335,6 +359,14 @@ export const ENTITY_EDGES = {
       label: "served portions",
       description:
         "A gram portion from a recipe preparation assigned for consumption at this meal, including portions from an earlier leftovers source.",
+      liveness: { kind: "must-target-live" },
+    },
+    "MealImage.mealId": {
+      column: mealImage.mealId,
+      role: "media",
+      label: "meal photos",
+      description:
+        "A photo of the plated dinner or preparation has no independent meaning once the meal is removed.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -635,6 +667,14 @@ export const ENTITY_EDGES = {
         "A dependency edge naming this task as the blocker another task is waiting on.",
       liveness: { kind: "must-target-live" },
     },
+    "TaskImage.taskId": {
+      column: taskImage.taskId,
+      role: "media",
+      label: "task photos",
+      description:
+        "A before/after or reference photo has no independent meaning once the task is removed.",
+      liveness: { kind: "must-target-live" },
+    },
   }),
   vendor: edges({
     "Purchase.vendorId": {
@@ -774,6 +814,14 @@ export const ENTITY_EDGES = {
       role: "history",
       label: "location history",
       description: "A confirmed interval belongs to its planting.",
+      liveness: { kind: "must-target-live" },
+    },
+    "PlantingImage.plantingId": {
+      column: plantingImage.plantingId,
+      role: "media",
+      label: "planting photos",
+      description:
+        "A photo of the crop as a whole has no independent meaning once the planting is removed.",
       liveness: { kind: "must-target-live" },
     },
   }),

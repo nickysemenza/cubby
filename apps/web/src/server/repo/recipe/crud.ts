@@ -61,6 +61,7 @@ import {
   executeListQueryWithCount,
   getDb,
   idSetPresence,
+  imageCascadeChild,
   imageJoinBindings,
   type ListReadIntent,
   lockAndValidateForDelete,
@@ -1128,13 +1129,7 @@ export const deleteRecipes = async (
       ids,
       removal: "soft",
       actor,
-      children: [
-        {
-          table: recipeImage,
-          parentColumns: [recipeImage.recipeId],
-          auditKey: "cascadedImages",
-        },
-      ],
+      children: [imageCascadeChild(imageJoinBindings.recipe)],
       extraCounts: {
         cascadedSections: sectionsByRecipe,
         cascadedIngredients: ingredientsByRecipe,

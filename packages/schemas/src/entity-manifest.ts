@@ -163,6 +163,14 @@ export const galleryEntities: readonly GalleryEntity[] = Object.freeze(
       descriptorFor(entity).imageStorage === "gallery",
   ),
 );
+/** Entities whose single photo lives in one `coverImageId` column. */
+export type CoverEntity = EntityWithImageStorage<"cover">;
+export const coverEntities: readonly CoverEntity[] = Object.freeze(
+  allEntities.filter(
+    (entity): entity is CoverEntity =>
+      descriptorFor(entity).imageStorage === "cover",
+  ),
+);
 export const searchableEntities = entitiesWithTrait("searchable");
 export const countableEntities = entitiesWithTrait("countable");
 

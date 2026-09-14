@@ -48,6 +48,7 @@ function task(params: {
     blockingIds: [],
     subtaskCount: 0,
     doneSubtaskCount: 0,
+    images: [],
     createdAt: new Date("2026-01-01"),
     updatedAt: params.updatedAt ?? new Date("2026-01-01"),
   };

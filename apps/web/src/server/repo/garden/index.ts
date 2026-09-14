@@ -9,6 +9,7 @@ import {
   gardenLocationHistoryInput,
   gardenLocationHistoryOut,
   gardenLocationKind,
+  gardenPlantingOut,
   gardenRecordEntryInput,
   gardenEntryOut,
   gardenOverviewOut,
@@ -23,17 +24,7 @@ import {
   type PlantingId,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  exists,
-  inArray,
-  isNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, desc, eq, exists, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
@@ -41,7 +32,6 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   gardenEntry,
-  gardenEntryImage,
   ingredient,
   location,
   planting,
@@ -52,13 +42,14 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   associatePendingImages,
-  applyImageOrder,
   countWhere,
   executeListQueryWithCount,
   imageJoinBindings,
   mapImages,
   type MappableImageRecord,
   notDeleted,
+  plantingImagesRelation,
+  syncEntityImages,
   unwrapDb,
   withTransaction,
 } from "~/server/repo/database-helpers";
@@ -66,6 +57,7 @@ import { withDisplayImages } from "~/server/repo/entity-display-image";
 import { listScaffold } from "~/server/repo/list-scaffold";
 import {
   resolveAllOrThrow,
+  resolveAllPresent,
   resolveLiveShortcode,
 } from "~/server/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
@@ -103,6 +95,7 @@ const plantingRow = async (db: GardenDb, id: PlantingId) => {
       location: { columns: { shortcode: true } },
       intendedLocation: { columns: { shortcode: true } },
       parentPlanting: { columns: { shortcode: true } },
+      images: plantingImagesRelation,
     },
   });
   if (!row)
@@ -132,6 +125,7 @@ const mapPlanting = (row: PlantingWithReferences) =>
     parentPlantingId: row.parentPlanting
       ? parseShortcodeFor("planting", row.parentPlanting.shortcode)
       : null,
+    images: mapImages(row.images),
   });
 
 type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
@@ -185,7 +179,14 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
   return mapEntry(row);
 };
 
-type CreatePlantingData = z.input<typeof gardenCreatePlantingInput>;
+// `gardenCreatePlantingInput` (the dedicated garden-form workflow input)
+// doesn't itself carry `pendingImageIds` — the generic entity-kernel
+// `planting.create` path does (the generated `PlantingCreateInput`), and both
+// funnel through this one function. Optional here so a caller without it
+// (the garden form) is unaffected.
+type CreatePlantingData = z.input<typeof gardenCreatePlantingInput> & {
+  pendingImageIds?: readonly string[];
+};
 
 const plantingCreateReferences = async (
   tx: DrizzleTransaction,
@@ -260,6 +261,19 @@ export const createPlanting = async (
       finishedOn: null,
       parentPlantingId: null,
     });
+    if (data.pendingImageIds && data.pendingImageIds.length > 0) {
+      const resolvedImageIds = await resolveAllPresent(
+        tx,
+        "image",
+        data.pendingImageIds,
+      );
+      await associatePendingImages(
+        tx,
+        imageJoinBindings.planting,
+        parseEntityId("planting", row.id),
+        resolvedImageIds,
+      );
+    }
     await logAuditEntry(tx, _actor, {
       entityType: "planting",
       entityId: parseEntityId("planting", row.id),
@@ -610,10 +624,14 @@ export const updatePlantingDetails = async (
     locationId?: unknown;
     status?: unknown;
     finishedOn?: unknown;
+    pendingImageIds?: readonly string[];
+    removeImageIds?: readonly string[];
+    imageOrder?: readonly string[];
   },
   actor?: ActorContext,
-) =>
-  withTransaction(db, async (tx) => {
+) => {
+  let detachedImageKeys: string[] = [];
+  const result = await withTransaction(db, async (tx) => {
     if (
       data.locationId !== undefined ||
       data.status !== undefined ||
@@ -647,9 +665,18 @@ export const updatePlantingDetails = async (
         : null;
     }
     await tx.update(planting).set(patch).where(eq(planting.id, id));
+    ({ detachedImageKeys } = await syncEntityImages(
+      tx,
+      "planting",
+      imageJoinBindings.planting,
+      id,
+      data,
+    ));
     await auditGardenChange(tx, actor, "planting", id, "update");
     return getPlanting(tx, id);
   });
+  return { planting: result, detachedImageKeys };
+};
 
 type GardenEntryUpdateDetails = {
   locationId?: string;
@@ -689,33 +716,19 @@ const updateGardenEntryImages = async (
   tx: DrizzleTransaction,
   id: GardenEntryId,
   data: GardenEntryUpdateDetails,
-) => {
-  if (data.pendingImageIds?.length) {
-    const imageIds = await resolveAllOrThrow(tx, "image", data.pendingImageIds);
-    await associatePendingImages(
-      tx,
-      imageJoinBindings.gardenEntry,
-      id,
-      imageIds,
-    );
-  }
-  if (data.removeImageIds?.length) {
-    const imageIds = await resolveAllOrThrow(tx, "image", data.removeImageIds);
-    await tx
-      .update(gardenEntryImage)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(gardenEntryImage.gardenEntryId, id),
-          inArray(gardenEntryImage.imageId, imageIds),
-          notDeleted(gardenEntryImage),
-        ),
-      );
-  }
-  if (data.imageOrder?.length) {
-    const imageIds = await resolveAllOrThrow(tx, "image", data.imageOrder);
-    await applyImageOrder(tx, imageJoinBindings.gardenEntry, id, imageIds);
-  }
+): Promise<string[]> => {
+  // `unresolved: "throw"` — a caller-supplied `IMG-` code that doesn't
+  // resolve is bad input here, unlike product/location/recipe/purchase's
+  // silent-drop convention.
+  const { detachedImageKeys } = await syncEntityImages(
+    tx,
+    "gardenEntry",
+    imageJoinBindings.gardenEntry,
+    id,
+    data,
+    { unresolved: "throw" },
+  );
+  return detachedImageKeys;
 };
 
 export const updateGardenEntryDetails = async (
@@ -789,6 +802,7 @@ export const plantingList = async (
           location: { columns: { shortcode: true } },
           intendedLocation: { columns: { shortcode: true } },
           parentPlanting: { columns: { shortcode: true } },
+          images: plantingImagesRelation,
         },
         orderBy: orderByArray,
         limit: take,
@@ -796,7 +810,8 @@ export const plantingList = async (
       }),
     count: () => countWhere(db, planting, where),
   });
-  return { data: rows.map(mapPlanting), count };
+  const items = await withDisplayImages(db, "planting", rows, mapPlanting);
+  return { data: items, count };
 };
 
 const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry);
@@ -879,8 +894,11 @@ export const gardenOverview = async (db: Database) => {
       .where(notDeleted(planting))
       .orderBy(desc(planting.createdAt)),
   ]);
-  const enriched = rows.map((item) => ({
-    ...plantingOut.parse({
+  // `gardenPlantingOut` (not `plantingOut`) on purpose: this raw joined select
+  // has no `PlantingImage` relation loaded, so a schema requiring `images`
+  // would fail to parse every row.
+  const enriched = rows.map((item) =>
+    gardenPlantingOut.parse({
       ...item.row,
       id: parseShortcodeFor("planting", item.row.shortcode),
       ingredientId: parseShortcodeFor("ingredient", item.ingredientShortcode),
@@ -896,13 +914,13 @@ export const gardenOverview = async (db: Database) => {
       parentPlantingId: item.parentPlantingShortcode
         ? parseShortcodeFor("planting", item.parentPlantingShortcode)
         : null,
+      ingredientName: item.ingredientName,
+      gardenGuideKey: item.gardenGuideKey,
+      sourceProductName: item.sourceProductName,
+      locationName: item.locationName,
+      intendedLocationName: item.intendedLocationName,
     }),
-    ingredientName: item.ingredientName,
-    gardenGuideKey: item.gardenGuideKey,
-    sourceProductName: item.sourceProductName,
-    locationName: item.locationName,
-    intendedLocationName: item.intendedLocationName,
-  })) satisfies GardenPlantingOut[];
+  ) satisfies GardenPlantingOut[];
   return gardenOverviewOut.parse({
     locations: locations
       .filter((place) => {

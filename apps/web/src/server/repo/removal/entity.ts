@@ -163,7 +163,7 @@ const cascadingImageRowsSchema = z.array(
  * have to be collected first.
  *
  * Which children are image attachments is not declared here: `imageJoinColumnFor`
- * answers it from `INCOMING_EDGES.image`, so a sixth gallery entity is covered
+ * answers it from `INCOMING_EDGES.image`, so a new gallery entity is covered
  * the moment it is declared there rather than when someone remembers this file.
  */
 const collectCascadingImageIds = async (

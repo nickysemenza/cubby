@@ -4,6 +4,8 @@ import type { GalleryEntity } from "@cubby/schemas/entity-manifest";
  * Insert, update, and batch operations with proper error handling.
  */
 import type { ImageId } from "@cubby/schemas/identifiers";
+import { parseEntityRef } from "@cubby/schemas/identifiers";
+import type { AttachableImageEntity } from "@cubby/schemas/image";
 import type {
   AnyColumn,
   GetColumnData,
@@ -27,11 +29,18 @@ import {
   image,
   locationImage,
   gardenEntryImage,
+  mealImage,
+  plantingImage,
   productImage,
   projectImage,
   purchaseImage,
   recipeImage,
+  taskImage,
 } from "~/server/db/schema";
+import {
+  resolveAllOrThrow,
+  resolveAllPresent,
+} from "~/server/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/tracing";
 
 import { unwrapDb } from "./core";
@@ -351,6 +360,36 @@ export const imageJoinBindings = {
     }),
     sortOrderUpdate: (sortOrder) => ({ sortOrder }),
   }),
+  meal: defineImageJoinBinding({
+    table: mealImage,
+    parentIdColumn: mealImage.mealId,
+    insertRow: (mealId, imageId, sortOrder) => ({
+      mealId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
+  task: defineImageJoinBinding({
+    table: taskImage,
+    parentIdColumn: taskImage.taskId,
+    insertRow: (taskId, imageId, sortOrder) => ({
+      taskId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
+  planting: defineImageJoinBinding({
+    table: plantingImage,
+    parentIdColumn: plantingImage.plantingId,
+    insertRow: (plantingId, imageId, sortOrder) => ({
+      plantingId,
+      imageId,
+      sortOrder,
+    }),
+    sortOrderUpdate: (sortOrder) => ({ sortOrder }),
+  }),
 } as const satisfies Record<GalleryEntity, { table: ImageJoinTable }>;
 
 export async function associatePendingImages<
@@ -433,6 +472,113 @@ export async function nextImageSortOrder<
     .from(joinTable)
     .where(and(eq(binding.parentIdColumn, parentId), notDeleted(joinTable)));
   return (row?.max ?? -1) + 1;
+}
+
+/**
+ * The declared child-cascade edge for a gallery entity's own image join
+ * table — pass this in `removeEntity`'s `children` so a delete soft-deletes
+ * the association and reaps any Image row/R2 object the cascade orphaned.
+ * `removeEntity` discovers the image column itself (via `imageJoinColumnFor`
+ * reading `INCOMING_EDGES.image`); this just supplies the `parentColumns` /
+ * `auditKey` shape every gallery entity's delete uses identically.
+ */
+export const imageCascadeChild = <
+  TTable extends ImageJoinTable,
+  TParentColumn extends AnyColumn,
+>(
+  binding: ImageJoinBinding<TTable, TParentColumn>,
+  // Purchase's cascade counts distinguish `cascadedPurchaseImages` from its
+  // sibling `cascadedPurchaseProducts` child — every other caller uses the
+  // shared default.
+  auditKey = "cascadedImages",
+) =>
+  ({
+    table: binding.table,
+    parentColumns: [binding.parentIdColumn],
+    auditKey,
+  }) satisfies {
+    table: TTable;
+    parentColumns: readonly [TParentColumn];
+    auditKey: string;
+  };
+
+/**
+ * The shared image-sync body behind every gallery entity's update path:
+ * reorder existing images (first = cover) → detach removed ones (reaping any
+ * Image row/R2 object nothing else still references, via
+ * `detachImagesFromEntity`) → attach newly pending ones, appended after the
+ * reordered set. All three fields are public `IMG-` shortcodes, resolved to
+ * uuids here — right before the lower-level helpers above, which still take
+ * raw `Image.id`s.
+ *
+ * `unresolved` controls what an `IMG-` code that does not resolve to a live
+ * Image does: `"drop"` (the default) silently ignores it, matching the
+ * long-standing product/location/recipe/purchase behavior where a stale or
+ * already-detached code is a no-op. `"throw"` surfaces
+ * `REFERENCED_RECORD_MISSING` instead — gardenEntry's existing behavior,
+ * preserved as-is by this extraction rather than silently loosened.
+ */
+export async function syncEntityImages<
+  E extends GalleryEntity,
+  TTable extends ImageJoinTable,
+  TParentColumn extends AnyColumn,
+>(
+  tx: DrizzleTransaction,
+  entity: E,
+  binding: ImageJoinBinding<TTable, TParentColumn>,
+  parentId: GetColumnData<TParentColumn>,
+  data: {
+    pendingImageIds?: readonly string[] | null;
+    removeImageIds?: readonly string[] | null;
+    imageOrder?: readonly string[] | null;
+  },
+  options?: { unresolved?: "drop" | "throw" },
+): Promise<{ detachedImageKeys: string[] }> {
+  const resolve = (codes: readonly string[]) =>
+    options?.unresolved === "throw"
+      ? resolveAllOrThrow(tx, "image", codes)
+      : resolveAllPresent(tx, "image", codes);
+
+  let detachedImageKeys: string[] = [];
+
+  if (data.imageOrder?.length) {
+    const orderedIds = await resolve(data.imageOrder);
+    await applyImageOrder(tx, binding, parentId, orderedIds);
+  }
+  if (data.removeImageIds?.length) {
+    const idsToRemove = await resolve(data.removeImageIds);
+    // Dynamic, not a top-level import: `image.ts` imports this module (the
+    // database-helpers barrel) for `imageJoinBindings` et al., so a static
+    // import here would form a cycle — `image.ts`'s own top-level
+    // `notDeleted(...)` relation config would run before this barrel's
+    // `query.ts` export lands, crashing with "notDeleted is not a function".
+    // Deferring the import to call time (long after both modules have
+    // finished loading independently) avoids the mid-evaluation state
+    // entirely.
+    const { detachImagesFromEntity } = await import("~/server/repo/image");
+    // `parseEntityRef` (a typed resolver, not an assertion) is what correlates
+    // this generic `entity`/`parentId` pair into the properly branded ref
+    // `detachImagesFromEntity` needs — `parentId` is already a validated brand
+    // from the caller, so this is a re-derivation, not fresh validation.
+    ({ deletedKeys: detachedImageKeys } = await detachImagesFromEntity(
+      tx,
+      parseEntityRef<AttachableImageEntity>(entity, parentId),
+      idsToRemove,
+    ));
+  }
+  if (data.pendingImageIds?.length) {
+    const pendingIds = await resolve(data.pendingImageIds);
+    const startSortOrder = await nextImageSortOrder(tx, binding, parentId);
+    await associatePendingImages(
+      tx,
+      binding,
+      parentId,
+      pendingIds,
+      startSortOrder,
+    );
+  }
+
+  return { detachedImageKeys };
 }
 
 /**

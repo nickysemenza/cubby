@@ -25,7 +25,9 @@ import {
   ledgerSourceClaim,
   location,
   locationImage,
+  mealImage,
   mealRecipe,
+  plantingImage,
   product,
   productExternalId,
   productImage,
@@ -35,6 +37,7 @@ import {
   recipeImage,
   recipeSection,
   recipeSectionIngredient,
+  taskImage,
 } from "~/server/db/schema";
 // Deep path, never the `database-helpers` barrel: these are top-level const
 // initializations, so an import cycle here is a TDZ crash at startup.
@@ -57,26 +60,6 @@ import { notDeleted } from "./query";
  * disagreeing is the #428 failure mode.
  */
 const productComponentCount = sql<number>`(SELECT count(*) FROM "ProductComponent" pc WHERE pc."parentProductId" = "product"."id" AND pc."deletedAt" IS NULL)`;
-
-/**
- * A task's parent `project`, optional subject `product`, and own parent task,
- * each as the `{ name, deletedAt }` projection `resolveLiveJoinName`
- * (transform.ts) needs to derive the public relation names — without pulling
- * the rest of either row. Task-only (expense has no self-relation).
- */
-const withProjectAndParentTaskNameOnly = {
-  with: {
-    project: {
-      columns: { name: true, shortcode: true, deletedAt: true },
-    },
-    subjectProduct: {
-      columns: { name: true, shortcode: true, deletedAt: true },
-    },
-    parentTask: {
-      columns: { name: true, shortcode: true, deletedAt: true },
-    },
-  },
-} as const;
 
 /**
  * An expense's parent `project` plus its optionally-linked `product`, same
@@ -191,6 +174,33 @@ const linkOrder = (t: { createdAt: AnyColumn; id: AnyColumn }) => [
   asc(t.createdAt),
   asc(t.id),
 ];
+
+/**
+ * A task's parent `project`, optional subject `product`, and own parent task,
+ * each as the `{ name, deletedAt }` projection `resolveLiveJoinName`
+ * (transform.ts) needs to derive the public relation names — without pulling
+ * the rest of either row. Task-only (expense has no self-relation).
+ */
+const withProjectAndParentTaskNameOnly = {
+  with: {
+    project: {
+      columns: { name: true, shortcode: true, deletedAt: true },
+    },
+    subjectProduct: {
+      columns: { name: true, shortcode: true, deletedAt: true },
+    },
+    parentTask: {
+      columns: { name: true, shortcode: true, deletedAt: true },
+    },
+    images: {
+      where: notDeleted(taskImage),
+      orderBy: imageOrder,
+      with: {
+        image: true,
+      },
+    },
+  },
+} as const;
 
 /**
  * The identity product a Location IS — the bin, tote or rack itself, as
@@ -607,7 +617,30 @@ export const relations = {
             },
           },
         },
+        images: {
+          where: notDeleted(mealImage),
+          orderBy: imageOrder,
+          with: {
+            image: true,
+          },
+        },
       },
     },
+  },
+} as const;
+
+/**
+ * Not a `relations.<entity>` preset: `plantingRow`/`plantingList`
+ * (`repo/garden/index.ts`) each already hand-assemble their own full `with`
+ * set (ingredient/sourceProduct/location/intendedLocation/parentPlanting) —
+ * neither has a single canonical "full" preset to extend. This is just the
+ * shared images-relation fragment both splice in, kept beside its
+ * product/location/recipe/meal/task counterparts above.
+ */
+export const plantingImagesRelation = {
+  where: notDeleted(plantingImage),
+  orderBy: imageOrder,
+  with: {
+    image: true,
   },
 } as const;

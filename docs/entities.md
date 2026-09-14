@@ -142,6 +142,12 @@ server-resolved `displayImages: [{ id, url }]` attached by `withDisplayImages`
 in its list function — the one display-image policy
 (`apps/web/src/server/repo/entity-display-image.ts`) that web thumbnails,
 native rows, search hits and hover cards all read. No client derives a cover.
+Meal, task, and planting all own a `"gallery"` (their own ordered
+`MealImage`/`TaskImage`/`PlantingImage` join tables), but two of the three
+also fall back to a borrowed source when their own gallery is empty: task
+falls back to its subject product's photo, and planting falls back to its
+garden entries' photos (newest entry first) — both resolved by the same
+`entity-display-image.ts` priority chain, never by the client.
 
 `extensions.ports` is the explicit seam map for entity-wide behavior the
 compiler must not infer: the kernel repository binding, entity label and

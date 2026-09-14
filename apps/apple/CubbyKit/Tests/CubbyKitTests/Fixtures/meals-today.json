@@ -32,6 +32,8 @@
         "cost": { "status": "unavailable", "reason": "no_data" },
         "nutrition": {}
       },
+      "images": [],
+      "displayImages": [],
       "createdAt": "2026-03-05T00:00:00.000Z",
       "updatedAt": "2026-03-05T00:00:00.000Z"
     }

@@ -27,8 +27,11 @@ const IMAGE_KEY = {
   recipe: "RECIPE",
   cookbook: "COOKBOOK",
   location: "LOCATION",
+  meal: "MEAL",
   project: "PROJECT",
+  task: "TASK",
   purchase: "PURCHASE",
+  planting: "PLANTING",
   gardenEntry: "GARDENENTRY",
 } satisfies Partial<Record<Entity, string>>;
 
@@ -163,8 +166,11 @@ describe("entity manifest", () => {
       "recipe",
       "cookbook",
       "location",
+      "meal",
       "project",
+      "task",
       "purchase",
+      "planting",
       "gardenEntry",
     ]);
     expect(sorted(imageEntities.map((e) => IMAGE_KEY[e] ?? e))).toEqual(

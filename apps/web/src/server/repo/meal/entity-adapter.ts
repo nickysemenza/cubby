@@ -1,6 +1,6 @@
 import {
   defineEntityAdapter,
-  entityMutationReferences,
+  deletedWithImages,
 } from "~/server/entity-kernel/adapter";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 
@@ -26,24 +26,29 @@ export const mealEntityAdapter = defineEntityAdapter({
       createMealWithEntityId(ctx.db, data, ctx.actorContext),
     update: async (ctx, id, data) => {
       const entityId = await mealShortcodes.one(ctx.db, id);
-      return {
-        output: await updateMeal(
-          ctx.db,
-          entityId,
-          data,
-          ctx.actorContext,
-          ctx.caldavHooks?.meal,
-        ),
+      const { meal, detachedImageKeys } = await updateMeal(
+        ctx.db,
         entityId,
-      };
+        data,
+        ctx.actorContext,
+        ctx.caldavHooks?.meal,
+      );
+      return { output: meal, entityId, detachedImageKeys };
     },
     delete: async (ctx, ids) => {
-      await deleteMeals(
+      const { detachedImageKeys, deletedImageShortcodes } = await deleteMeals(
         ctx.db,
         await mealShortcodes.all(ctx.db, ids),
         ctx.actorContext,
       );
-      return { deletedReferences: entityMutationReferences("meal", ids) };
+      return {
+        deletedReferences: deletedWithImages(
+          "meal",
+          ids,
+          deletedImageShortcodes,
+        ),
+        detachedImageKeys,
+      };
     },
   },
 });

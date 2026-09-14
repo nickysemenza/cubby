@@ -1,12 +1,14 @@
 import { defineEntity } from "./definition.js";
 import { plainDate } from "@cubby/schemas/base-entity";
 import {
+  imageShortcode,
   ingredientShortcode,
   locationShortcode,
   plantingShortcode,
   productShortcode,
 } from "../identifier-fields.js";
 import { plantingStatus } from "@cubby/schemas/garden-fields";
+import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 
 const optionalText = z.string().trim().min(1).nullable();
@@ -173,6 +175,44 @@ export default defineEntity({
         },
       },
       {
+        key: "pendingImageIds",
+        kind: "identifier",
+        readKey: null,
+        reference: { entity: "image", multiple: true },
+        validation: {
+          read: null,
+          create: z.array(imageShortcode).optional(),
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "removeImageIds",
+        kind: "identifier",
+        readKey: null,
+        reference: { entity: "image", multiple: true },
+        validation: {
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "imageOrder",
+        kind: "text",
+        readKey: null,
+        validation: {
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "images",
+        kind: "json",
+        display: { list: true, standard: "image", columnId: "image" },
+        validation: { read: z.array(imageOut), create: null, update: null },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: { read: plantingShortcode, create: null, update: null },
@@ -234,6 +274,7 @@ export default defineEntity({
       "sowedOn",
       "transplantedOn",
       "finishedOn",
+      "pendingImageIds",
     ],
     update: [
       "ingredientId",
@@ -249,13 +290,16 @@ export default defineEntity({
       "sowedOn",
       "transplantedOn",
       "finishedOn",
+      "pendingImageIds",
+      "removeImageIds",
+      "imageOrder",
     ],
     bulk: [],
     audit: ["status", "locationId"],
     sort: { fields: ["createdAt", "updatedAt"], default: "createdAt" },
     intents: {
       fields: {
-        capture: ["ingredientId", "locationId", "status"],
+        capture: ["ingredientId", "locationId", "status", "pendingImageIds"],
         full: [
           "ingredientId",
           "sourceProductId",
@@ -269,6 +313,7 @@ export default defineEntity({
           "plannedDate",
           "sowedOn",
           "transplantedOn",
+          "pendingImageIds",
         ],
       },
       create: ["capture", "full"],
@@ -290,6 +335,7 @@ export default defineEntity({
       "sowedOn",
       "transplantedOn",
       "finishedOn",
+      "images",
       "createdAt",
       "updatedAt",
     ],
@@ -369,11 +415,30 @@ export default defineEntity({
         steps: [{ edge: "Planting.parentPlantingId", direction: "incoming" }],
       },
     },
+    {
+      key: "images",
+      label: "Images",
+      target: "image",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "PlantingImage.plantingId", direction: "incoming" },
+          { edge: "PlantingImage.imageId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "PlantingImage.imageId", direction: "incoming" },
+          { edge: "PlantingImage.plantingId", direction: "outgoing" },
+        ],
+      },
+    },
   ],
   search: { enabled: false },
   capabilities: {
     auditable: true,
-    images: false,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

@@ -1,5 +1,5 @@
 {
-  "$comment": "RPC ids CubbyKit calls, plus opt-in resources.*.create/update/delete ids, sorted. resources.*.list and resources.*.get are generated automatically for every entity and must not appear here. apps/web/scripts/generate-http-openapi.ts rejects an unknown id, an automatic list/get id, a duplicate or an unsorted list, and writes openapi-generator-config.yaml from this file.",
+  "$comment": "RPC ids CubbyKit calls, plus opt-in resources.*.create/update/delete ids, sorted. resources.*.list and resources.*.get are generated automatically for every entity, and resources.*.update for every entity whose update body accepts pendingImageIds; none of those may appear here. apps/web/scripts/generate-http-openapi.ts rejects an unknown id, an automatic list/get id, a duplicate or an unsorted list, and writes openapi-generator-config.yaml from this file.",
   "operations": [
     { "id": "agent.ask", "why": "Ask sheet" },
     { "id": "dashboard.counts", "why": "Browse row counts" },
@@ -29,15 +29,9 @@
     { "id": "problems.getCounts", "why": "Today problems tile" },
     { "id": "product.findOrCreateByCode", "why": "Search tab create from a barcode or ISBN" },
     { "id": "product.findOrCreateByUPC", "why": "Capture unknown barcode" },
-    { "id": "resources.gardenEntry.update", "why": "Garden entry corrections" },
     { "id": "resources.ingredient.update", "why": "Garden guide association" },
     { "id": "resources.inventory.create", "why": "CubbyClient.createInventory ad-hoc count" },
     { "id": "resources.location.create", "why": "Garden location setup" },
-    { "id": "resources.location.update", "why": "EntityOperations image attach/reorder" },
-    { "id": "resources.planting.update", "why": "Garden planting details" },
-    { "id": "resources.product.update", "why": "EntityOperations image attach/reorder" },
-    { "id": "resources.purchase.update", "why": "EntityOperations image attach/reorder" },
-    { "id": "resources.recipe.update", "why": "EntityOperations image attach/reorder" },
     { "id": "search.find", "why": "Search and intents" },
     { "id": "task.todayBriefing", "why": "Today tasks" },
     { "id": "upc.lookup", "why": "Capture barcode lookup" }

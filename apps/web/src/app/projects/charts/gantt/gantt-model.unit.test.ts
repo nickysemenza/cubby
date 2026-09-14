@@ -116,6 +116,7 @@ function task(params: {
     blockingIds: [],
     subtaskCount: 0,
     doneSubtaskCount: 0,
+    images: [],
     createdAt: new Date(),
     updatedAt: new Date(),
   };

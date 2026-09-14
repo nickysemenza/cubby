@@ -1,5 +1,5 @@
 import { defineEntity } from "./definition.js";
-import { mealShortcode } from "../identifier-fields.js";
+import { imageShortcode, mealShortcode } from "../identifier-fields.js";
 import {
   mealKindSchema,
   mealTypeSchema,
@@ -10,6 +10,7 @@ import {
   mealTotals,
 } from "@cubby/schemas/meal-fields";
 import { mealDate } from "@cubby/schemas/meal-shared";
+import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
 export default defineEntity({
   key: "meal",
@@ -119,6 +120,44 @@ export default defineEntity({
         },
       },
       {
+        key: "pendingImageIds",
+        kind: "identifier",
+        readKey: null,
+        reference: { entity: "image", multiple: true },
+        validation: {
+          read: null,
+          create: z.array(imageShortcode).optional(),
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "removeImageIds",
+        kind: "identifier",
+        readKey: null,
+        reference: { entity: "image", multiple: true },
+        validation: {
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "imageOrder",
+        kind: "text",
+        readKey: null,
+        validation: {
+          read: null,
+          create: null,
+          update: z.array(imageShortcode).optional(),
+        },
+      },
+      {
+        key: "images",
+        kind: "json",
+        display: { list: true, standard: "image", columnId: "image" },
+        validation: { read: z.array(imageOut), create: null, update: null },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: {
@@ -177,8 +216,25 @@ export default defineEntity({
       { key: "updatedAt", default: "now", specialized: "updated-at" },
       "deletedAt",
     ],
-    create: ["date", "name", "sortOrder", "mealType", "mealKind", "recipes"],
-    update: ["date", "name", "sortOrder", "mealType", "mealKind"],
+    create: [
+      "date",
+      "name",
+      "sortOrder",
+      "mealType",
+      "mealKind",
+      "recipes",
+      "pendingImageIds",
+    ],
+    update: [
+      "date",
+      "name",
+      "sortOrder",
+      "mealType",
+      "mealKind",
+      "pendingImageIds",
+      "removeImageIds",
+      "imageOrder",
+    ],
     bulk: [],
     audit: [],
     sort: {
@@ -187,8 +243,15 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["date", "name", "mealType", "mealKind"],
-        full: ["date", "name", "mealType", "mealKind", "sortOrder"],
+        capture: ["date", "name", "mealType", "mealKind", "pendingImageIds"],
+        full: [
+          "date",
+          "name",
+          "mealType",
+          "mealKind",
+          "sortOrder",
+          "pendingImageIds",
+        ],
         calendar: ["date", "name", "mealType", "mealKind"],
       },
       create: ["capture", "full"],
@@ -203,6 +266,7 @@ export default defineEntity({
       "mealKind",
       "recipes",
       "totals",
+      "images",
       "createdAt",
       "updatedAt",
     ],
@@ -211,6 +275,7 @@ export default defineEntity({
     create: { module: "@cubby/schemas/meal", export: "mealCreateInput" },
     update: { module: "@cubby/schemas/meal", export: "mealUpdateData" },
     output: { module: "@cubby/schemas/meal", export: "mealOut" },
+    list: { module: "@cubby/schemas/meal", export: "mealListItemOut" },
     mcpOutput: {
       module: "@cubby/schemas/meal",
       export: "mealMcpEntityOut",
@@ -316,11 +381,30 @@ export default defineEntity({
         ],
       },
     },
+    {
+      key: "images",
+      label: "Images",
+      target: "image",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "MealImage.mealId", direction: "incoming" },
+          { edge: "MealImage.imageId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "MealImage.imageId", direction: "incoming" },
+          { edge: "MealImage.mealId", direction: "outgoing" },
+        ],
+      },
+    },
   ],
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: "gallery",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

@@ -39,7 +39,8 @@ struct OperationRoutesTests {
     @Test func imageAttachableEntitiesAreTheOnesWithPendingImageIds() {
         #expect(OperationRoute.imageAttachableEntities.contains("product"))
         #expect(OperationRoute.imageAttachableEntities.contains("purchase"))
-        #expect(!OperationRoute.imageAttachableEntities.contains("task"))
+        // Vendor owns a single logo FK rather than an image-association gallery.
+        #expect(!OperationRoute.imageAttachableEntities.contains("vendor"))
     }
 
     /// `imageAttachableEntities` and `EntityDescriptor.acceptsImages` are meant to be the same

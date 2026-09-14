@@ -10,6 +10,8 @@ import { sql } from "drizzle-orm";
 
 import { task } from "~/server/db/schema";
 import {
+  mapImages,
+  type MappableImageRecord,
   resolveLiveJoinName,
   resolveLiveJoinShortcode,
 } from "~/server/repo/database-helpers";
@@ -60,6 +62,7 @@ type TaskRow = {
     shortcode: string;
     deletedAt: Date | null;
   } | null;
+  images: Array<{ image: MappableImageRecord; deletedAt: Date | null }>;
 };
 
 export const dbTaskToAPI = (
@@ -97,6 +100,7 @@ export const dbTaskToAPI = (
   blockingIds,
   subtaskCount,
   doneSubtaskCount,
+  images: mapImages(row.images),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

@@ -1,11 +1,15 @@
+import { entityImageOf, type ImageEntity } from "@cubby/schemas/entity";
 import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { FormWrapper } from "~/app/_components/form-utils";
+import { PendingImageUpload } from "~/app/_components/PendingImageUpload";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
+import { entityEditRegistry } from "./definitions";
 import { getEntityEditorPresentation } from "./editor-presentations";
 import type { EntityEditDialogProps } from "./entity-edit-dialog";
+import { isResolvedEntityEdit, resolveEntityEdit } from "./kernel";
 import type { EditableEntity, RuntimeEntityEditRequest } from "./types";
 import type { EntityEditIssue } from "./types";
 import { useEntityEditSession } from "./use-entity-edit-session";
@@ -32,6 +36,15 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   const presentation = getEntityEditorPresentation<E>(request);
   const context = request.context ?? {};
   const record = request.record;
+  // A create intent whose active field roster includes `pendingImageIds` gets
+  // the generic photo-capture field for free, below the presentation's own
+  // fields — no per-entity Fields component needs to know about it (meal and
+  // task's capture dialogs are exactly this: see `editor-presentations.tsx`).
+  const resolved = resolveEntityEdit(entityEditRegistry, sessionRequest);
+  const showPendingImageUpload =
+    request.operation === "create" &&
+    isResolvedEntityEdit(resolved) &&
+    resolved.intentDefinition.fields.includes("pendingImageIds");
   // Field-scoped issues render beside their control via the session's RHF
   // errors; everything else — the headline plus one line per lifecycle blocker
   // — belongs in the banner.
@@ -82,6 +95,21 @@ export function EntityEditDialogContent<E extends EditableEntity>({
           context={context}
           record={record}
         />
+        {showPendingImageUpload && (
+          <PendingImageUpload
+            // SAFETY: `showPendingImageUpload` only turns true when the
+            // resolved intent's field roster carries `pendingImageIds`, which
+            // only an image-bearing entity declares.
+            entityType={entityImageOf(request.entity as ImageEntity)}
+            onImagesChange={(images) =>
+              session.form.setValue(
+                "pendingImageIds",
+                images.map((image) => image.id),
+                { shouldDirty: true },
+              )
+            }
+          />
+        )}
       </FormWrapper>
     </ResponsiveDialog>
   );
