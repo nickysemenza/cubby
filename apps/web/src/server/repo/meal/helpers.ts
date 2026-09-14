@@ -9,21 +9,18 @@ import type {
   MealRecipeOut,
   MealType,
 } from "@cubby/schemas/meal";
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import type { NutritionTotals } from "@cubby/schemas/nutrition";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 
-import { aggregateTotals, scaleTotals } from "~/lib/nutrition-estimates";
+import {
+  aggregateTotals,
+  pendingTotals,
+  scaleTotals,
+} from "~/lib/nutrition-estimates";
 import {
   mapImages,
   type MappableImageRecord,
 } from "~/server/repo/database-helpers";
-
-const pendingTotals = (
-  reason: "totals_missing" | "totals_stale",
-): NutritionTotals => {
-  const estimate = { status: "pending" as const, reason };
-  return { cost: estimate, nutrition: buildNutrition(() => estimate) };
-};
 
 const scaledRecipeTotals = (
   totals: RecipeTotals | null,
@@ -73,8 +70,9 @@ type MealRow = {
 
 export const dbMealToAPI = (row: MealRow): MealOut => {
   const recipes: MealRecipeOut[] = row.recipes
-    // Drizzle can't filter soft-deleted rows inside `with`; both the occurrence
-    // and its recipe must still be live before contributing to the meal.
+    // `relations.meal.full.recipes` already filters soft-deleted occurrences
+    // (`where: notDeleted(mealRecipe)`); the to-one `recipe` join can't be
+    // filtered in `with`, so `mr.recipe.deletedAt` is the backstop here.
     .filter((mr) => mr.deletedAt === null && mr.recipe.deletedAt === null)
     .map((mr) => ({
       id: mr.id,

@@ -76,7 +76,8 @@ const withOptionalLimit = <const TConfig extends object>(
  * no live row.
  *
  * Exposed so callers can decide BEFORE paying for an embedding.
- * `upsertEntityEmbedding` runs the same comparison, but only after the provider
+ * `upsertEntityEmbeddingIfCurrent` is the live write path and runs the same
+ * comparison implicitly (via `embeddingHash`), but only after the provider
  * has already been called and billed — that check saves the HNSW write, not the
  * request. Mutation-sourced refreshes carry no expected hash and fan out on
  * every edit, so without a pre-call gate an entity is re-embedded whenever any
@@ -168,7 +169,19 @@ export async function upsertEntityEmbeddingIfCurrent(
   return result.rows.length > 0 ? "written" : "obsolete";
 }
 
-export async function upsertEntityEmbedding(
+/**
+ * Test-only seed for an `EntityEmbedding` row, upserted by content hash.
+ *
+ * This is NOT the production write path — that is
+ * `upsertEntityEmbeddingIfCurrent`, which requires a matching
+ * `SearchDocument.semanticText` row and only writes when the projection it
+ * was computed for is still current. Integration tests that need a row
+ * present without seeding a `SearchDocument` too (e.g. to assert removal
+ * cascades soft-delete it) use this instead. Lives here rather than inline in
+ * the calling test because services code cannot import DB schema/helpers
+ * directly (`no-restricted-imports` on `apps/web/src/server/services/**`).
+ */
+export async function seedEntityEmbedding(
   db: Database | DrizzleTransaction,
   input: SearchableEntityText & {
     config: SemanticEmbeddingConfig;
@@ -209,12 +222,6 @@ export async function upsertEntityEmbedding(
     deletedAt: null,
   };
 
-  // Deliberately NOT `updateAndReturn`/`insertAndReturn`: those `RETURNING *`,
-  // which ships the 1536-float vector back over the wire and re-parses it into
-  // a JS array via `pgVector.fromDriver` (~30 KB per write) — and this function
-  // returns void, so every byte of it is discarded. Writes here are already the
-  // hot path: each one rewrites a 258 MB HNSW entry. The driver-level
-  // `traceQuery` span in db.ts still covers these, so no observability is lost.
   if (existing) {
     await unwrapDb(db)
       .update(entityEmbedding)

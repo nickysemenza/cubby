@@ -16,6 +16,7 @@ import { createProduct } from "~/server/repo/product";
 import {
   createRecipe,
   deleteRecipes,
+  getRecipeByID,
   upsertCookbookRecipe,
 } from "~/server/repo/recipe";
 import { getRecipeTotalsState } from "~/server/repo/recipe/totals";
@@ -41,16 +42,30 @@ describe("recipe deletion cost-staleness workflows", () => {
     );
   const recompute = (ids: RecipeId[]) =>
     workflowContext().services.recipeCosting.recompute(ids);
-  const installFakeQueue = () =>
+  /** A queue that records the kind of every task published to it. */
+  const installFakeQueue = () => {
+    const published: string[] = [];
     setCfEnv(
       fromPartial<Env>({
-        BACKGROUND_QUEUE: { send: async () => {}, sendBatch: async () => {} },
+        BACKGROUND_QUEUE: {
+          send: async () => {},
+          sendBatch: async (
+            messages: Iterable<{ body: { task: { kind: string } } }>,
+          ) => {
+            for (const message of messages)
+              published.push(message.body.task.kind);
+          },
+        },
       }),
     );
+    return published;
+  };
 
   afterEach(() => setCfEnv(undefined));
 
-  const seedParentWithSubRecipe = async () => {
+  const seedParentWithSubRecipe = async (
+    options: { parentIsFork?: boolean } = {},
+  ) => {
     const ingredient = await findOrCreateIngredient(ctx.db, "sub flour");
     await createProduct(
       ctx.db,
@@ -78,26 +93,24 @@ describe("recipe deletion cost-staleness workflows", () => {
       }),
       ctx.actor,
     );
-    const parent = await createRecipe(
-      ctx.db,
-      makeRecipeInput({
-        name: "Parent Recipe A",
-        sections: [
-          {
-            instructions: [{ instruction: "Use B" }],
-            ingredients: [
-              {
-                type: "recipe",
-                recipeId: child.id,
-                ingredientId: null,
-                amounts: [{ value: 1, unit: "each" }],
-              },
-            ],
-          },
-        ],
-      }),
-      ctx.actor,
-    );
+    const parentInput = makeRecipeInput({
+      name: "Parent Recipe A",
+      sections: [
+        {
+          instructions: [{ instruction: "Use B" }],
+          ingredients: [
+            {
+              type: "recipe",
+              recipeId: child.id,
+              ingredientId: null,
+              amounts: [{ value: 1, unit: "each" }],
+            },
+          ],
+        },
+      ],
+    });
+    if (options.parentIsFork) parentInput.forkedFromRecipeId = child.id;
+    const parent = await createRecipe(ctx.db, parentInput, ctx.actor);
     const [childEntityId, parentEntityId] = await Promise.all([
       resolveLiveShortcode(ctx.db, child.id, "recipe"),
       resolveLiveShortcode(ctx.db, parent.id, "recipe"),
@@ -117,7 +130,7 @@ describe("recipe deletion cost-staleness workflows", () => {
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
     ).not.toBeNull();
 
-    installFakeQueue();
+    const published = installFakeQueue();
     await executeEntity(workflowContext(), {
       action: "delete",
       entity: "recipe",
@@ -127,10 +140,43 @@ describe("recipe deletion cost-staleness workflows", () => {
     expect(
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
     ).toBeNull();
+    expect(published).toContain("recipe-totals.recompute");
     expect(await findParentRecipesWithDeletedSubRecipes(ctx.db)).toHaveLength(
       0,
     );
   });
+
+  it(
+    "marks a parent stale that is also a fork of the deleted sub-recipe",
+    { timeout: 10_000 },
+    async () => {
+      // deleteRecipes nulls the fork pointer on P inside the delete
+      // transaction, so P's row is locked when the parent stale mark is
+      // written: a service still bound to the request pool would wait on
+      // that lock forever (an application-level deadlock Postgres cannot
+      // detect), so the mark must go through the transaction and the
+      // wakeup must be published only after it commits.
+      const { child, childCode, parent } = await seedParentWithSubRecipe({
+        parentIsFork: true,
+      });
+      await recompute([parent, child]);
+
+      const published = installFakeQueue();
+      await executeEntity(workflowContext(), {
+        action: "delete",
+        entity: "recipe",
+        ids: [childCode],
+      });
+
+      expect(
+        (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
+      ).toBeNull();
+      expect(
+        (await getRecipeByID(ctx.db, parent))?.forkedFromRecipeId,
+      ).toBeNull();
+      expect(published).toContain("recipe-totals.recompute");
+    },
+  );
 
   it("marks external parents stale when a cookbook deletes their sub-recipe", async () => {
     const bookName = "Doomed Book";

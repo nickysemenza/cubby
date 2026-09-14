@@ -21,9 +21,12 @@ import { emitTelemetry } from "~/server/telemetry";
 // delete_ tools; the allowlist keeps the agent unable to mutate even though
 // those handlers exist. Drop this filter (behind explicit UI confirmation) to
 // enable writes later.
-const READ_ONLY_PREFIXES = ["list_", "get_", "search_", "find_"];
-export function isReadOnlyTool(name: string): boolean {
-  return READ_ONLY_PREFIXES.some((prefix) => name.startsWith(prefix));
+/** The registry's own statement of intent. A name prefix is not one: `find_or_create_product_by_upc` writes. */
+export function isReadOnlyTool(tool: {
+  name: string;
+  annotations?: { readOnlyHint?: boolean };
+}): boolean {
+  return tool.annotations?.readOnlyHint === true;
 }
 
 /**
@@ -137,7 +140,7 @@ export async function createAgentToolset(
     const records: ToolCallRecord[] = [];
 
     const tools: Tool[] = mcpTools
-      .filter((mcpTool) => isReadOnlyTool(mcpTool.name))
+      .filter((mcpTool) => isReadOnlyTool(mcpTool))
       .map((mcpTool) =>
         toolDefinition({
           name: mcpTool.name,

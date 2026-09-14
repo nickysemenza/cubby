@@ -2,6 +2,7 @@ import {
   MEAL_SLOT_DURATION_MINUTES,
   MEAL_TYPE_LABELS,
   MEAL_TYPE_START_MINUTES,
+  mealTypeValues,
   type MealType,
 } from "@cubby/schemas/meal-classification";
 import { TZDate } from "@date-fns/tz";
@@ -196,14 +197,7 @@ function nearestSlot(start: Date): MealType {
   const local = new TZDate(start.getTime(), HOUSEHOLD_TIMEZONE);
   const minutes =
     local.getHours() * 60 + local.getMinutes() + local.getSeconds() / 60;
-  const slots: MealType[] = [
-    "breakfast",
-    "brunch",
-    "lunch",
-    "snack",
-    "dinner",
-    "dessert",
-  ];
+  const slots: readonly MealType[] = mealTypeValues;
   return slots.reduce((best, slot) =>
     Math.abs(MEAL_TYPE_START_MINUTES[slot] - minutes) <
     Math.abs(MEAL_TYPE_START_MINUTES[best] - minutes)

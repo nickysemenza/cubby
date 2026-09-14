@@ -165,6 +165,11 @@ export class RecipeCostingService {
     return new RecipeCostingService(db, this.usdaClient, publish);
   }
 
+  /** The handle this instance reads and writes through — the request's strong pool unless `bindTo` rebound it. */
+  get database(): Database {
+    return this.db;
+  }
+
   private async loadContext(recipes: RecipeCostingInput[]): Promise<{
     ingMap: Record<string, IngredientWithFoodLeanOut>;
     recipeMap: Record<string, RecipeGraphOut>;

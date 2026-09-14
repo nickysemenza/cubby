@@ -23,15 +23,6 @@ export type Json<T> = T extends string | number | boolean | null | undefined
  */
 export type WireIo = "input" | "output" | "query";
 
-export interface WireOptions {
-  /**
-   * Schemas the walker must not descend into, keyed by the domain schema
-   * instance. Used for type-only carriers (`z.custom<T>()`) whose runtime
-   * wire schema lives elsewhere.
-   */
-  overrides?: ReadonlyMap<z.ZodType, z.ZodType>;
-}
-
 export class WireSchemaError extends Error {
   constructor(
     message: string,
@@ -203,7 +194,6 @@ interface Visit {
   def: WalkableDef;
   io: WireIo;
   path: string[];
-  options: WireOptions;
   child: (value: z.ZodType | null | undefined, segment: string) => z.ZodType;
 }
 
@@ -509,14 +499,7 @@ const queryHandlers = new Map<string, NodeHandler>([
   ["pipe", visitPipe],
 ]);
 
-function walk(
-  schema: z.ZodType,
-  io: WireIo,
-  path: string[],
-  options: WireOptions,
-): z.ZodType {
-  const override = options.overrides?.get(schema);
-  if (override) return override;
+function walk(schema: z.ZodType, io: WireIo, path: string[]): z.ZodType {
   const cached = memo.get(schema)?.[io];
   if (cached) return cached;
   const def = defOf(schema);
@@ -540,13 +523,9 @@ function walk(
   const child = (value: z.ZodType | null | undefined, segment: string) => {
     if (!(value instanceof z.ZodType))
       throw new WireSchemaError(`Expected a Zod schema for ${segment}`, path);
-    return walk(value, io, [...path, segment], options);
+    return walk(value, io, [...path, segment]);
   };
-  return remember(
-    schema,
-    io,
-    handler({ schema, def, io, path, options, child }),
-  );
+  return remember(schema, io, handler({ schema, def, io, path, child }));
 }
 
 /**
@@ -557,34 +536,23 @@ function walk(
 export function toWire<S extends z.ZodType>(
   schema: S,
   io: "output",
-  options?: WireOptions,
 ): z.ZodType<Json<z.output<S>>>;
 export function toWire<S extends z.ZodType>(
   schema: S,
   io: "input",
-  options?: WireOptions,
 ): z.ZodType<Json<z.input<S>>, Json<z.input<S>>>;
 export function toWire<S extends z.ZodType>(
   schema: S,
   io: "query",
-  options?: WireOptions,
 ): z.ZodType<Json<z.input<S>>, Json<z.input<S>>>;
-export function toWire(
-  schema: z.ZodType,
-  io: WireIo,
-  options?: WireOptions,
-): z.ZodType;
-export function toWire(
-  schema: z.ZodType,
-  io: WireIo,
-  options: WireOptions = {},
-): z.ZodType {
+export function toWire(schema: z.ZodType, io: WireIo): z.ZodType;
+export function toWire(schema: z.ZodType, io: WireIo): z.ZodType {
   // SAFETY: the walker maps exactly the node types the `Json<T>` type maps —
   // Date -> ISO string and nothing else changes shape — so the overloads are
   // the truthful static view of the returned runtime schema. The query
   // projection additionally accepts the text form of every value, and its
   // coercions still admit the JSON form the static type spells.
-  return walk(schema, io, [], options);
+  return walk(schema, io, []);
 }
 
 /**

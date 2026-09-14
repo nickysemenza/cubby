@@ -587,6 +587,14 @@ export const finishPlanting = async (
   withTransaction(db, async (tx) => {
     const id = await required(tx, input.plantingId, "planting");
     const current = await plantingRow(tx, id);
+    // `planned` is deliberately allowed (the UI offers Finish for every
+    // non-finished planting); a second finish would silently move the date.
+    if (current.status === "finished") {
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "This planting is already finished.",
+      );
+    }
     await tx
       .update(planting)
       .set({ status: "finished", finishedOn: input.finishedOn })
@@ -691,14 +699,19 @@ type GardenEntryUpdateDetails = {
 };
 
 const assertGardenEntryStructure = (
-  current: { kind: string },
+  current: { kind: string; anchorsPeriod: boolean },
   data: GardenEntryUpdateDetails,
 ) => {
   const editsMoveStructure =
     data.locationId !== undefined ||
     data.plantingId !== undefined ||
     data.observedOn !== undefined;
-  if (current.kind === "move" && editsMoveStructure) {
+  // Keyed off the period, not only `kind`: the bootstrapping entry that
+  // `startPlanting` writes is an `observation` and anchors a period too.
+  if (
+    (current.kind === "move" || current.anchorsPeriod) &&
+    editsMoveStructure
+  ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "Use location history to correct a structural move.",
@@ -751,7 +764,14 @@ export const updateGardenEntryDetails = async (
         "The garden entry no longer exists.",
       );
     }
-    assertGardenEntryStructure(current, data);
+    const anchor = await unwrapDb(tx).query.plantingLocationPeriod.findFirst({
+      where: eq(plantingLocationPeriod.sourceGardenEntryId, id),
+      columns: { sourceGardenEntryId: true },
+    });
+    assertGardenEntryStructure(
+      { kind: current.kind, anchorsPeriod: anchor !== undefined },
+      data,
+    );
     const locationId =
       data.locationId === undefined
         ? current.locationId

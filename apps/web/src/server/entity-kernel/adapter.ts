@@ -5,6 +5,7 @@ import type { EntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
+import { deferPublications } from "~/server/background-tasks/publish";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
@@ -335,14 +336,34 @@ export function defineEntityAdapter<
         ctx: EntityKernelContext,
         ids: ZodOutput<SchemasFor<E>["id"]>[],
       ) => {
+        // Same rule as writeWithProjections: every DB touch inside the delete
+        // transaction goes through the transaction-bound context (a pool-bound
+        // service UPDATE on a row this transaction holds — a fork the delete
+        // just locked — waits forever), and queue publications wait for the
+        // commit.
+        const deferred = deferPublications();
         const { result, affectedEdges } = await executeDeleteWithEffects(
           ctx.db,
           config.entity,
           ids,
           config.lifecycle.delete,
           (transactionDb) =>
-            config.repository.delete({ ...ctx, db: transactionDb }, ids),
+            config.repository.delete(
+              {
+                ...ctx,
+                db: transactionDb,
+                services: {
+                  ...ctx.services,
+                  recipeCosting: ctx.services.recipeCosting.bindTo(
+                    transactionDb,
+                    deferred.publish,
+                  ),
+                },
+              },
+              ids,
+            ),
         );
+        await deferred.flush(ctx.db);
         return {
           ...result,
           affectedEdges,

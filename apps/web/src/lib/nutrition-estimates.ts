@@ -93,3 +93,19 @@ export const aggregateTotals = (
     wasm.aggregate_nutrition_totals(entries.map(toWTotals)),
     entries.length === 0 ? "empty" : "no_data",
   );
+
+export type PendingTotalsReason = "totals_missing" | "totals_stale";
+
+export const pendingTotals = (reason: PendingTotalsReason): NutritionTotals => {
+  const estimate = { status: "pending" as const, reason };
+  return { cost: estimate, nutrition: buildNutrition(() => estimate) };
+};
+
+/** Persisted totals are authoritative only while stamped fresh; otherwise the read shows pending with the reason. */
+export const totalsForRead = (
+  totals: NutritionTotals | null,
+  totalsComputedAt: Date | null,
+): NutritionTotals =>
+  totals != null && totalsComputedAt != null
+    ? totals
+    : pendingTotals(totals == null ? "totals_missing" : "totals_stale");

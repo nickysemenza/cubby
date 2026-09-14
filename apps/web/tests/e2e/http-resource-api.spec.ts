@@ -167,6 +167,15 @@ test("signed-in resource CRUD preserves fields, audit identity, and calendar eff
     expect(
       (await page.request.get("/api/v1/recipes?filters=null")).status(),
     ).toBe(400);
+    // An unsupported sort/groupBy field is a validation error, not a kernel
+    // 500: entity-operations.ts's parseSorts/parseGroupBy throw a structured
+    // AppError instead of letting a bare ZodError escape uncaught.
+    expect(
+      (await page.request.get("/api/v1/recipes?sort=bogus")).status(),
+    ).toBe(400);
+    expect(
+      (await page.request.get("/api/v1/products?groupBy=name")).status(),
+    ).toBe(400);
     const many = await page.request.get("/api/v1/recipe/getManyByIDs", {
       params: { ids: id },
     });

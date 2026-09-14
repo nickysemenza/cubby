@@ -59,8 +59,8 @@ describe("problem-counts KV snapshot", () => {
       JSON.stringify({
         version: 1,
         counts: cached,
-        computedAt: "2026-08-20T17:00:00.000Z",
-        coveredThrough: "2026-08-20T16:59:00.000Z",
+        computedAt: "2026-08-20T17:56:00.000Z",
+        coveredThrough: "2026-08-20T17:55:00.000Z",
       }),
     );
     await expect(
@@ -236,11 +236,47 @@ describe("problem-counts KV snapshot", () => {
     });
 
     it("ignores a mark older than the snapshot's horizon", async () => {
-      const { adapter } = memoryCache(snapshot("2026-08-20T17:30:00.000Z"));
+      const { adapter } = memoryCache(snapshot("2026-08-20T17:55:00.000Z"));
       await markProblemCountsDirty(
         adapter,
-        new Date("2026-08-20T17:00:00.000Z"),
+        new Date("2026-08-20T17:50:00.000Z"),
       );
+      await expect(
+        getCachedProblemCounts(db, upc, adapter, port),
+      ).resolves.toEqual(counts(4));
+      expect(countProblems).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("snapshot age fallback", () => {
+    const snapshot = (coveredThrough: string) =>
+      JSON.stringify({
+        version: 1,
+        counts: counts(4),
+        computedAt: coveredThrough,
+        coveredThrough,
+      });
+
+    it("refreshes a snapshot older than the max age even with no dirty mark", async () => {
+      const fresh = counts(11);
+      countProblems.mockResolvedValue(fresh);
+      const { adapter, values } = memoryCache(
+        snapshot("2026-08-20T17:49:00.000Z"),
+      );
+      await expect(
+        getCachedProblemCounts(db, upc, adapter, port),
+      ).resolves.toEqual(counts(4));
+      expect(countProblems).toHaveBeenCalledTimes(1);
+      expect(
+        JSON.parse(values.get("problem-counts:v1") ?? "null"),
+      ).toMatchObject({
+        counts: fresh,
+        coveredThrough: "2026-08-20T18:00:00.000Z",
+      });
+    });
+
+    it("does not refresh a snapshot under the max age", async () => {
+      const { adapter } = memoryCache(snapshot("2026-08-20T17:55:00.000Z"));
       await expect(
         getCachedProblemCounts(db, upc, adapter, port),
       ).resolves.toEqual(counts(4));

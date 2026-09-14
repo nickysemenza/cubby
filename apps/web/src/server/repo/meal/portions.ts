@@ -20,6 +20,7 @@ import { alias } from "drizzle-orm/pg-core";
 
 import {
   aggregateTotals,
+  pendingTotals,
   scaleEstimate,
   scaleNutrition,
   scaleTotals,
@@ -106,13 +107,6 @@ export const yieldBasisFor = (
     lowerGrams: recipeGrams.lower * scale,
     upperGrams: recipeGrams.upper == null ? null : recipeGrams.upper * scale,
   };
-};
-
-const pendingTotals = (
-  reason: "totals_missing" | "totals_stale",
-): NutritionTotals => {
-  const estimate = { status: "pending" as const, reason };
-  return { cost: estimate, nutrition: buildNutrition(() => estimate) };
 };
 
 /** Recalculate a preparation from the current recipe totals on every read. */

@@ -1,3 +1,4 @@
+import type { UnparsedError } from "~/lib/error-utils";
 import { withTrace } from "~/server/tracing";
 
 import type {
@@ -43,6 +44,8 @@ export class WorkflowEffectError extends Error {
     readonly effect: string,
     readonly pendingEffects: readonly string[],
     cause: unknown,
+    /** The failure the run was unwinding when this effect failed. */
+    readonly stoppedBy?: UnparsedError,
   ) {
     super(`Workflow committed, but effect ${effect} failed`, { cause });
     this.name = "WorkflowEffectError";

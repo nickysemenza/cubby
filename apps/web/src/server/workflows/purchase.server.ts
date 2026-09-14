@@ -32,6 +32,7 @@ import {
   runMutationSideEffects,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
+import { markProblemCountsDirtyBestEffort } from "~/server/services/problem-counts-cache";
 import { bindWorkflow, workflow } from "~/server/workflow-runtime";
 
 export const linkExpensesToPurchaseWorkflow = bindWorkflow(
@@ -178,6 +179,9 @@ export const attachPurchaseProductsWorkflow = bindWorkflow(
         context.actorContext,
       ),
     )
+    .effect("badge", async () => {
+      await markProblemCountsDirtyBestEffort("purchase.attachProducts");
+    })
     .output(({ attach }) => attach),
   (
     ctx: EntityKernelContext,
@@ -200,6 +204,9 @@ export const detachPurchaseProductsWorkflow = bindWorkflow(
         context.actorContext,
       ),
     )
+    .effect("badge", async () => {
+      await markProblemCountsDirtyBestEffort("purchase.detachProducts");
+    })
     .output(({ detach }) => detach),
   (
     ctx: EntityKernelContext,

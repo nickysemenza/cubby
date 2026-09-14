@@ -139,6 +139,29 @@ async function runBulkWindow<Context, Input, Item, Result>(
   );
 }
 
+/** Both matter: `stoppedBy` is why the run stopped, the finalizer failure is why
+ * committed work is not settled. Returns the committed-effect error with the
+ * stopping error carried on it so neither the caller nor Sentry loses either. */
+function wrapFinalizationFailure(
+  finalizationError: UnparsedError,
+  finalizeName: string,
+  stoppedBy: UnparsedError,
+): WorkflowEffectError {
+  return finalizationError instanceof WorkflowEffectError
+    ? new WorkflowEffectError(
+        finalizationError.effect,
+        finalizationError.pendingEffects,
+        finalizationError.cause,
+        stoppedBy,
+      )
+    : new WorkflowEffectError(
+        finalizeName,
+        [finalizeName],
+        finalizationError,
+        stoppedBy,
+      );
+}
+
 /** Pull-based streaming over the same executable graphs as ordinary operations.
  * Each item settles its required effects before yielding. Once writes commit,
  * finalization also runs on early close/cancellation, using the completed subset.
@@ -295,7 +318,11 @@ export async function* executeBulkWorkflow<
       try {
         await finish();
       } catch (finalizationError) {
-        failure = finalizationError;
+        failure = wrapFinalizationFailure(
+          finalizationError,
+          definition.finalize.name,
+          error,
+        );
       }
     }
     if (failure instanceof WorkflowCancelledError)

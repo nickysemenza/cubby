@@ -12,6 +12,7 @@ import {
   type CalendarProjection,
   CalDavError,
 } from "~/server/calendar/caldav-types";
+import { UID_DOMAIN } from "~/server/calendar/contracts";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { meal, task } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
@@ -19,7 +20,6 @@ import type { EntityKernelContext } from "~/server/entity-kernel";
 import { notDeleted, withTransaction } from "~/server/repo/database-helpers";
 import { buildCrudServices } from "~/server/request-context";
 
-const UID_DOMAIN = "cubby.nickysemenza.com";
 const PAGE_SIZE = 500;
 
 const shiftDate = (value: string, days: number) => {

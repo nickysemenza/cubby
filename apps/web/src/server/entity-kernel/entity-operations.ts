@@ -76,7 +76,14 @@ const parseSorts = <
   const normalized = normalizeSorts(
     value ?? { orderBy: binding.sort.default, direction: "desc" },
   );
-  for (const sort of normalized) field.parse(sort.orderBy);
+  for (const sort of normalized) {
+    const result = field.safeParse(sort.orderBy);
+    if (!result.success)
+      throw createAppError(
+        "LIST_SORT_FIELD_UNSUPPORTED",
+        `Unsupported sort field "${sort.orderBy}" for ${binding.entity}; expected one of ${binding.sort.fields.join(", ")}`,
+      );
+  }
   return normalized;
 };
 
@@ -88,7 +95,14 @@ const parseGroupBy = <
   groupBy: string | undefined,
 ) => {
   if (groupBy === undefined) return undefined;
-  return z.enum(binding.sort.groupable ?? binding.sort.fields).parse(groupBy);
+  const groupable = binding.sort.groupable ?? binding.sort.fields;
+  const result = z.enum(groupable).safeParse(groupBy);
+  if (!result.success)
+    throw createAppError(
+      "LIST_GROUP_BY_FIELD_UNSUPPORTED",
+      `Unsupported groupBy field "${groupBy}" for ${binding.entity}; expected one of ${groupable.join(", ")}`,
+    );
+  return result.data;
 };
 
 const sideEffectEventFor = <

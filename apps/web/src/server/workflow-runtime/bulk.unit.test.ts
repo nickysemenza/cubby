@@ -309,6 +309,50 @@ describe("bulk workflow execution", () => {
     expect(attempts).toBe(1);
     expect(context.writes).toEqual([1]);
   });
+
+  it("carries the stopping item error when the finalizer also fails while unwinding a stop", async () => {
+    let finalizeAttempts = 0;
+    const context = state();
+    const itemFailure = new Error("Item failure");
+    const finalizerFailure = new Error("Finalizer failure");
+    const stream = executeBulkWorkflow(
+      {
+        ...definition,
+        concurrency: 1,
+        onItemError: "stop",
+        item: workflow<State, number>("stopping-item")
+          .call("validated", async (_, { input }) => {
+            if (input === 2) throw itemFailure;
+            return input;
+          })
+          .commit("saved", async ({ context }, { validated }) => {
+            context.writes.push(validated);
+            return validated;
+          })
+          .output(({ saved }) => saved),
+        finalize: workflow<State, BulkWorkflowSummary<number, number>>(
+          "stopping-finalizer",
+        )
+          .call("attempt", async () => {
+            finalizeAttempts++;
+            throw finalizerFailure;
+          })
+          .output(({ attempt }) => attempt),
+      },
+      { context, input: [1, 2] },
+    );
+    await stream.next();
+    await stream.next();
+    await expect(stream.next()).rejects.toMatchObject({
+      name: "WorkflowEffectError",
+      committed: true,
+      cause: finalizerFailure,
+      stoppedBy: itemFailure,
+    });
+    expect(finalizeAttempts).toBe(1);
+    expect(context.writes).toEqual([1]);
+  });
+
   it("does not isolate committed effect failures or start the next item", async () => {
     const context = state();
     const stream = executeBulkWorkflow(

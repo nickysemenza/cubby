@@ -10,6 +10,8 @@ import ICAL from "ical.js";
 import { householdDateTime } from "~/lib/household-date";
 import { formatEstimate } from "~/lib/nutrition-format";
 
+import { UID_DOMAIN } from "./contracts";
+
 /**
  * RFC 5545 serializer for the published calendar feed.
  *
@@ -34,18 +36,6 @@ const CRLF = "\r\n";
 
 /** RFC 5545 §3.1: lines are folded at 75 *octets*, excluding the CRLF. */
 const MAX_LINE_OCTETS = 75;
-
-/**
- * Fixed UID namespace — deliberately NOT the serving origin.
- *
- * A UID identifies an event for the lifetime of a subscription, so it has to be
- * the same string no matter which host served the feed. Deriving it from the
- * request origin meant subscribing via localhost or a preview deploy and later
- * switching to production changed every UID, and Calendar.app treats a changed
- * UID as a brand-new event — so every meal and task would silently duplicate
- * instead of updating in place.
- */
-const UID_DOMAIN = "cubby.nickysemenza.com";
 
 export type IcsFeed = "meals" | "tasks" | "all";
 

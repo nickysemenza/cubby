@@ -163,8 +163,6 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
     public let plannedDate: Date?
     public let sownAt: Date?
     public let transplantedAt: Date?
-    public let inLocationSince: Date?
-    public let inLocationSinceKind: GardenLocationStartKind
     public let finishedAt: Date?
     public let gardenGuideKey: String?
 
@@ -183,8 +181,6 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
         plannedDate: Date? = nil,
         sownAt: Date? = nil,
         transplantedAt: Date? = nil,
-        inLocationSince: Date? = nil,
-        inLocationSinceKind: GardenLocationStartKind = .actual,
         finishedAt: Date? = nil,
         gardenGuideKey: String? = nil
     ) {
@@ -202,8 +198,6 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
         self.plannedDate = plannedDate
         self.sownAt = sownAt
         self.transplantedAt = transplantedAt
-        self.inLocationSince = inLocationSince
-        self.inLocationSinceKind = inLocationSinceKind
         self.finishedAt = finishedAt
         self.gardenGuideKey = gardenGuideKey
     }

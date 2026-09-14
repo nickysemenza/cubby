@@ -7,6 +7,22 @@ import type { UserId } from "@cubby/schemas/identifiers";
 import type { CalDavCollection } from "./caldav-types";
 import type { IcsFeed } from "./ics";
 
+/**
+ * Fixed UID namespace — deliberately NOT the serving origin.
+ *
+ * A UID identifies an event for the lifetime of a subscription, so it has to be
+ * the same string no matter which host served the feed. Deriving it from the
+ * request origin meant subscribing via localhost or a preview deploy and later
+ * switching to production changed every UID, and Calendar.app treats a changed
+ * UID as a brand-new event — so every meal and task would silently duplicate
+ * instead of updating in place.
+ *
+ * Shared by the ICS serializer, the CalDAV write path's reserved-identity
+ * guard, and the DO's synthetic fallback identity so all three agree on
+ * exactly the namespace client-created resources cannot claim.
+ */
+export const UID_DOMAIN = "cubby.nickysemenza.com";
+
 export interface CalendarCredentialState {
   clearUncertainWrite(
     collection: CalDavCollection,

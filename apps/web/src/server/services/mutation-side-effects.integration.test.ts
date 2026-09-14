@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 import { mock } from "~/lib/test/mock-schema";
 import {
   getEntityEmbeddingDeletedAtForRef,
-  upsertEntityEmbedding,
+  seedEntityEmbedding,
 } from "~/server/repo/entity-embedding";
 import { createExpense } from "~/server/repo/expense";
 import { deleteProducts } from "~/server/repo/product";
@@ -227,7 +227,7 @@ describe("mutation side effects integration", () => {
       ctx.actor,
     );
     const config = getSemanticEmbeddingConfig();
-    await upsertEntityEmbedding(ctx.db, {
+    await seedEntityEmbedding(ctx.db, {
       entityType: "product",
       entityId: product.entityId,
       embeddingText: "product: Manifest deleted embedding",

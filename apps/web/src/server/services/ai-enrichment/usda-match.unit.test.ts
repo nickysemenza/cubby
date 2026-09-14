@@ -1,6 +1,6 @@
 import { testEntityId } from "@cubby/schemas/testing";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { Database } from "~/server/db";
 
@@ -74,6 +74,25 @@ describe("suggestUsdaFoodBatch", () => {
         reasoning: "No suitable match found.",
       },
     ]);
+  });
+
+  it("threads each item's ingredientId into the suggest port, for AI-usage attribution", async () => {
+    const ingredientId = testEntityId(
+      "ingredient",
+      "00000000-0000-4000-8000-000000000003",
+    );
+    const suggest = vi.fn(async () => ({
+      food: null,
+      confidence: "low" as const,
+      reasoning: "No suitable match found.",
+    }));
+    const service = createUsdaMatchService(ports(suggest));
+    await service.suggestUsdaFoodBatch(lookup, database, [
+      { id: ingredientId, name: "unobtainium" },
+    ]);
+    expect(suggest).toHaveBeenCalledWith(lookup, database, "unobtainium", {
+      ingredientId,
+    });
   });
 });
 
