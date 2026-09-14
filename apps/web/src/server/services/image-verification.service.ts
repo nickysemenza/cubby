@@ -44,12 +44,14 @@ const productionImageVerificationPorts: ImageVerificationPorts = {
 
 /** Verify stored bytes only when explicitly requested. This backfills legacy
  * rows without making product/detail reads perform R2 network I/O. */
-const verifyEntityImages = async (
+export const verifyImageRows = async (
   db: Database,
-  entity: AttachableImageRef,
-  ports: ImageVerificationPorts,
+  rows: ImageVerificationRow[],
+  ports: Pick<
+    ImageVerificationPorts,
+    "updateImageIntegrity" | "getObject" | "inspectImageFile"
+  > = productionImageVerificationPorts,
 ): Promise<ImageVerificationResult[]> => {
-  const rows = await ports.getImagesAttachedToEntity(db, entity);
   const results: ImageVerificationResult[] = [];
   for (const row of rows) {
     const response = await ports.getObject(row.key);
@@ -87,10 +89,7 @@ const verifyEntityImages = async (
           storageStatus: "metadata_mismatch",
           verifiedAt: new Date(),
         });
-        results.push({
-          imageId: row.id,
-          storageStatus: "metadata_mismatch",
-        });
+        results.push({ imageId: row.id, storageStatus: "metadata_mismatch" });
         continue;
       }
       await ports.updateImageIntegrity(db, row.id, inspected);
@@ -105,6 +104,15 @@ const verifyEntityImages = async (
     }
   }
   return results;
+};
+
+const verifyEntityImages = async (
+  db: Database,
+  entity: AttachableImageRef,
+  ports: ImageVerificationPorts,
+): Promise<ImageVerificationResult[]> => {
+  const rows = await ports.getImagesAttachedToEntity(db, entity);
+  return verifyImageRows(db, rows, ports);
 };
 
 export const verifyProductImages = async (

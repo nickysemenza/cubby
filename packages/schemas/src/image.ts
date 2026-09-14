@@ -58,6 +58,15 @@ export const ALLOWED_IMAGE_TYPES = [
 export type AllowedImageType = (typeof ALLOWED_IMAGE_TYPES)[number];
 const imageContentType = z.enum(ALLOWED_IMAGE_TYPES);
 
+export const perceptualHashSchema = z.string().regex(/^[0-9a-f]{16}$/);
+export const imageSourceFingerprintSchema = z.object({
+  hash: perceptualHashSchema,
+  aspectRatio: z.number().positive().finite(),
+});
+export type ImageSourceFingerprint = z.infer<
+  typeof imageSourceFingerprintSchema
+>;
+
 // Documents (PDF manuals) reuse the Image table + joins; a "document" is
 // inferred purely from contentType. Kept separate from ALLOWED_IMAGE_TYPES so
 // image-only surfaces (paste, camera, URL import, recipe/location forms) never
@@ -151,6 +160,11 @@ const initiateUploadFields = {
 export const initiateUploadWithoutEntitySchema = z.object({
   ...initiateUploadFields,
   contentType: imageContentType,
+  algorithmRevision: z.literal(1).optional(),
+  perceptualHash: perceptualHashSchema.optional(),
+  sourceFingerprint: imageSourceFingerprintSchema.optional(),
+  width: z.int().positive().optional(),
+  height: z.int().positive().optional(),
 });
 
 export type InitiateUploadWithoutEntityInput = z.infer<
@@ -381,6 +395,41 @@ export const cullPendingImagesSchema = z.object({
 export { imageOut } from "./entity-definitions/field-primitives";
 
 export type ImageOut = z.infer<typeof imageOut>;
+
+export const imageHashIndexItemSchema = z.object({
+  id: imageShortcode,
+  perceptualHash: perceptualHashSchema.nullable(),
+  sourceFingerprint: imageSourceFingerprintSchema.nullable(),
+  width: generatedImageFieldSchemas.read.width,
+  height: generatedImageFieldSchemas.read.height,
+});
+export const imageHashIndexSchema = z.object({
+  algorithmRevision: z.literal(1),
+  items: z.array(imageHashIndexItemSchema),
+  repair: z.array(z.object({ id: imageShortcode, url: z.url() })),
+});
+export type ImageHashIndex = z.infer<typeof imageHashIndexSchema>;
+
+export const setPerceptualHashesInputSchema = z.object({
+  algorithmRevision: z.literal(1),
+  items: z
+    .array(
+      z.object({ id: imageShortcode, perceptualHash: perceptualHashSchema }),
+    )
+    .max(50),
+});
+export const setPerceptualHashesOutputSchema = z.object({
+  items: z.array(
+    z.object({ id: imageShortcode, perceptualHash: perceptualHashSchema }),
+  ),
+  unavailable: z.array(imageShortcode),
+});
+export type SetPerceptualHashesInput = z.infer<
+  typeof setPerceptualHashesInputSchema
+>;
+export type SetPerceptualHashesOutput = z.infer<
+  typeof setPerceptualHashesOutputSchema
+>;
 
 // Every gallery entity plus every cover entity, derived from the manifest for
 // the same reason `attachableImageEntity` is. `vendor` is hand-added: its logo

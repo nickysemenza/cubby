@@ -5,7 +5,7 @@ import UIKit
 /// `isSourceTypeAvailable(.camera)` is true (never on the simulator), so `PhotosPicker` is the
 /// path that always works during development. Shared by Identify and Add photo.
 struct CameraPicker: UIViewControllerRepresentable {
-    let onCapture: (CGImage) -> Void
+    let onCapture: (Data) -> Void
     @Environment(\.dismiss) private var dismiss
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
@@ -22,10 +22,10 @@ struct CameraPicker: UIViewControllerRepresentable {
     }
 
     final class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let onCapture: (CGImage) -> Void
+        let onCapture: (Data) -> Void
         let dismiss: DismissAction
 
-        init(onCapture: @escaping (CGImage) -> Void, dismiss: DismissAction) {
+        init(onCapture: @escaping (Data) -> Void, dismiss: DismissAction) {
             self.onCapture = onCapture
             self.dismiss = dismiss
         }
@@ -34,9 +34,18 @@ struct CameraPicker: UIViewControllerRepresentable {
             _ picker: UIImagePickerController,
             didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]
         ) {
-            if let image = info[.originalImage] as? UIImage, let cgImage = image.cgImage {
-                onCapture(cgImage)
+            guard let image = info[.originalImage] as? UIImage,
+                let data = image.jpegData(compressionQuality: 1)
+            else {
+                let alert = UIAlertController(
+                    title: "Couldn't prepare photo",
+                    message: "The camera image could not be encoded. Retake the photo and try again.",
+                    preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .default))
+                picker.present(alert, animated: true)
+                return
             }
+            onCapture(data)
             dismiss()
         }
 

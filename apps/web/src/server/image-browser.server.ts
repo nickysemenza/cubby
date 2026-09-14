@@ -16,7 +16,11 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { implementOperationDomain } from "~/server/operation-domain.server";
-import { getImagesByProjectIds } from "~/server/repo/image";
+import {
+  getImageHashIndex,
+  getImagesByProjectIds,
+  setImagePerceptualHashes,
+} from "~/server/repo/image";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 import {
   cullPendingImagesWorkflow,
@@ -177,6 +181,12 @@ export const imageHandlers = implementOperationDomain(imageContract, {
   projectSummaries: {
     run: (context, input) =>
       loadProjectImageSummaries(context, input.projectIds),
+  },
+  hashIndex: {
+    run: (context) => getImageHashIndex(context.db),
+  },
+  setPerceptualHashes: {
+    run: (context, input) => setImagePerceptualHashes(context.db, input),
   },
 });
 

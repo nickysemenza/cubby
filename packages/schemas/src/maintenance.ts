@@ -27,6 +27,25 @@ export const settleAwaitingWorkOutSchema = z.object({
 });
 export type SettleAwaitingWorkOut = z.infer<typeof settleAwaitingWorkOutSchema>;
 
+export const repairImageDimensionsInputSchema = z.object({
+  batchSize: z.number().int().positive().max(100).default(25),
+  maxBatches: z.number().int().positive().max(100).default(20),
+});
+export const repairImageDimensionsOutSchema = z.object({
+  batches: z.number().int().nonnegative(),
+  scanned: z.number().int().nonnegative(),
+  repaired: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  remaining: z.number().int().nonnegative(),
+  stopped: z.enum(["complete", "limit", "no_progress"]),
+});
+export type RepairImageDimensionsInput = z.infer<
+  typeof repairImageDimensionsInputSchema
+>;
+export type RepairImageDimensionsOut = z.infer<
+  typeof repairImageDimensionsOutSchema
+>;
+
 /**
  * Counters for one search-index repair run. These describe what that run
  * found and did — findings and outcomes — not a live assertion that the index

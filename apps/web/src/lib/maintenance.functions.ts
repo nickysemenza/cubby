@@ -5,4 +5,5 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 export const maintenance = defineOperationDomain(maintenanceContract, {
   awaitingWork: { tags: [["maintenance", "awaitingWork"]] },
   settleAwaitingWork: { invalidates: ripple.maintenance },
+  repairImageDimensions: { invalidates: ripple.maintenance },
 });

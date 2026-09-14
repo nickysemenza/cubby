@@ -23,6 +23,8 @@ public enum CubbyLink: Sendable, Hashable {
     case capture(location: LocationCode?)
     case audit(location: LocationCode?)
     case today
+    case photos
+    case identify
     case search
     case dev
 
@@ -54,6 +56,10 @@ public enum CubbyLink: Sendable, Hashable {
         case ("audit", 0):
             guard let scope = Self.locationScope(location) else { return nil }
             self = .audit(location: scope)
+        case ("photos", 0):
+            self = .photos
+        case ("identify", 0):
+            self = .identify
         case ("today", 0):
             self = .today
         case ("search", 0):
@@ -78,6 +84,10 @@ public enum CubbyLink: Sendable, Hashable {
         case .audit(let location):
             components.host = "audit"
             components.queryItems = location.map { [URLQueryItem(name: "location", value: $0.rawValue)] }
+        case .photos:
+            components.host = "photos"
+        case .identify:
+            components.host = "identify"
         case .today:
             components.host = "today"
         case .search:

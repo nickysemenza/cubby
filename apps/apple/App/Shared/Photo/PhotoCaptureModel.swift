@@ -3,13 +3,13 @@ import CubbyKit
 import Foundation
 import Observation
 
-/// One photo on its way onto an entity: picked → lifted → ready → uploading → done. The lift
-/// runs as soon as a picture arrives so the sheet can show both versions; the upload only starts
-/// on request and reports the uploader's steps as they happen.
-@Observable
+/// One photo on its way onto an entity. The original encoded file remains the upload source
+/// unless the user explicitly asks for subject lifting; only that edit path decodes full size.
+@MainActor @Observable
 final class PhotoCaptureModel {
     enum Phase: Equatable {
         case picking
+        case preparing
         case lifting
         case ready
         case uploading(PhotoUploader.Step)
@@ -22,23 +22,43 @@ final class PhotoCaptureModel {
     let entityTitle: String
 
     private(set) var phase: Phase = .picking
+    private(set) var preparationProgress: Double?
     private(set) var original: CGImage?
     private(set) var lifted: LiftedImage?
-    /// Send the lifted version when Vision found a subject; the toggle is only shown then.
-    var useLifted = true { didSet { if useLifted != oldValue { uploadCheckpoint = nil } } }
+    var useLifted = false {
+        didSet {
+            if useLifted != oldValue {
+                uploadCheckpoint = nil
+                uploadFailureCanRetry = false
+            }
+        }
+    }
     var background: SubjectLift.Background = .white {
         didSet {
-            if background != oldValue, let original {
+            if background != oldValue, lifted != nil {
+                editedPhoto = nil
+                editedReviewItem = nil
+                editedExistingImageID = nil
                 uploadCheckpoint = nil
-                Task { await lift(original) }
+                prepareLift()
             }
         }
     }
     var makeCover: Bool
 
     private let uploader: PhotoUploader
+    private let client: CubbyClient
     private let featurePrints: FeaturePrintIndex
+    @ObservationIgnored private var preparationTask: Task<Void, Never>?
+    private var selection: PhotoSelectionItem?
+    private var originalPhoto: PreparedPhoto?
+    private var editedPhoto: PreparedPhoto?
+    private var originalReviewItem: PhotoSelectionItem?
+    private var editedReviewItem: PhotoSelectionItem?
+    private var editedExistingImageID: ImageCode?
     private var uploadCheckpoint: PhotoUploader.Checkpoint?
+    private var uploadFailureCanRetry = false
+    private var lifecycleGeneration = UUID()
 
     init(
         client: CubbyClient, entity: EntityKey, entityID: String, entityTitle: String,
@@ -47,71 +67,299 @@ final class PhotoCaptureModel {
         self.entity = entity
         self.entityID = entityID
         self.entityTitle = entityTitle
+        self.client = client
         self.featurePrints = featurePrints
         uploader = PhotoUploader(service: client)
         makeCover = entity == .product
     }
 
     var canMakeCover: Bool { entity == .product }
+    var canUpload: Bool { phase == .ready || uploadFailureCanRetry }
+    var canLift: Bool {
+        selection != nil && (phase == .ready || (!uploadFailureCanRetry && isFailed))
+    }
 
-    /// The bytes that will go up: the lift when it found something and is selected, else the original.
+    /// Preview pixels only. Original uploads use `originalPhoto.file`, never these pixels.
     var chosen: CGImage? {
         if useLifted, let lifted, lifted.foundSubject { return lifted.image }
         return original
     }
 
-    /// Transparent lifts need PNG; everything else is JPEG (HEIC never reaches the wire).
     var format: ImageEncoding.Format {
         useLifted && lifted?.foundSubject == true && background == .transparent ? .png : .jpeg
     }
 
-    func receive(_ image: CGImage) async {
+    func uses(client: CubbyClient) -> Bool {
+        self.client === client
+    }
+
+    func receive(_ selection: PhotoSelectionItem) {
+        cancelPreparation()
+        resetPreparedState()
+        self.selection = selection
+        original = selection.preview
+        phase = .preparing
+        let generation = lifecycleGeneration
+        preparationTask = Task { [weak self] in
+            guard let self else { return }
+            await receive(selection, generation: generation)
+        }
+    }
+
+    private func receive(_ selection: PhotoSelectionItem, generation: UUID) async {
+        defer { finishPreparation(generation: generation) }
+        do {
+            if selection.existingImageID == nil {
+                let file = try await selection.materialize { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard self?.lifecycleGeneration == generation, self?.preparationTask != nil else {
+                            return
+                        }
+                        self?.preparationProgress = progress
+                    }
+                }
+                let task = Task.detached(priority: .userInitiated) {
+                    try PreparedPhoto.prepare(file: file)
+                }
+                let photo = try await withTaskCancellationHandler {
+                    try await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+                guard canPublish(generation) else { return }
+                originalPhoto = photo
+            }
+            guard canPublish(generation) else { return }
+            phase = .ready
+        } catch is CancellationError {
+        } catch {
+            guard canPublish(generation) else { return }
+            fail(error, context: "photo.prepare", uploadRetry: false)
+        }
+    }
+
+    func prepareLift() {
+        guard let selection else { return }
+        cancelPreparation()
+        let generation = lifecycleGeneration
         uploadCheckpoint = nil
-        original = image
-        await lift(image)
+        uploadFailureCanRetry = false
+        phase = .lifting
+        preparationTask = Task { [weak self] in
+            guard let self else { return }
+            await prepareLift(selection: selection, generation: generation)
+        }
+    }
+
+    private func prepareLift(selection: PhotoSelectionItem, generation: UUID) async {
+        defer { finishPreparation(generation: generation) }
+        do {
+            let photo: PreparedPhoto
+            if let originalPhoto {
+                photo = originalPhoto
+            } else {
+                let file = try await selection.materialize { [weak self] progress in
+                    Task { @MainActor [weak self] in
+                        guard self?.lifecycleGeneration == generation, self?.preparationTask != nil else {
+                            return
+                        }
+                        self?.preparationProgress = progress
+                    }
+                }
+                let task = Task.detached(priority: .userInitiated) {
+                    try PreparedPhoto.prepare(file: file)
+                }
+                photo = try await withTaskCancellationHandler {
+                    try await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+            }
+            guard canPublish(generation) else { return }
+            let selectedBackground = background
+            let task = Task.detached(priority: .userInitiated) {
+                let image = try photo.file.decodeFullResolution()
+                return try await SubjectLift.lift(
+                    image, background: selectedBackground, cropToSubject: true)
+            }
+            let result = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            guard canPublish(generation) else { return }
+            originalPhoto = photo
+            lifted = result
+            useLifted = result.foundSubject
+            editedPhoto = nil
+            editedReviewItem = nil
+            editedExistingImageID = nil
+            phase = .ready
+        } catch is CancellationError {
+        } catch {
+            guard canPublish(generation) else { return }
+            lifted = nil
+            useLifted = false
+            fail(error, context: "photo.lift", uploadRetry: false)
+        }
+    }
+
+    /// Rechecks the exact pixels and metadata that would be uploaded. The first picker review
+    /// uses a bounded PhotoKit preview, which can differ slightly from ImageIO's final file path.
+    func finalSelectionForReview() async throws -> PhotoSelectionItem? {
+        let generation = lifecycleGeneration
+        let photo: PreparedPhoto
+        if useLifted, lifted?.foundSubject == true {
+            if let editedReviewItem { return editedReviewItem }
+            photo = try await preparedEditedPhoto(generation: generation)
+        } else {
+            guard let originalPhoto else { return nil }
+            if let originalReviewItem { return originalReviewItem }
+            photo = originalPhoto
+        }
+        guard canPublish(generation) else { throw CancellationError() }
+        var item = PhotoSelectionItem(
+            file: photo.file, preview: try photo.file.thumbnail(), query: photo.hashQuery)
+        guard canPublish(generation) else { throw CancellationError() }
+        item.approvedCandidates = selection?.approvedCandidates ?? []
+        if useLifted {
+            editedReviewItem = item
+        } else {
+            item.existingImageID = selection?.existingImageID
+            originalReviewItem = item
+        }
+        return item
+    }
+
+    func acceptFinalReview(_ item: PhotoSelectionItem) {
+        let previousExistingID = useLifted ? editedExistingImageID : selection?.existingImageID
+        if useLifted {
+            editedReviewItem = item
+            editedExistingImageID = item.existingImageID
+        } else {
+            originalReviewItem = item
+            selection?.existingImageID = item.existingImageID
+            selection?.approvedCandidates = item.approvedCandidates
+        }
+        if previousExistingID != item.existingImageID {
+            uploadCheckpoint = nil
+        }
+    }
+
+    func failPreparation(_ error: Error) {
+        fail(error, context: "photo.review", uploadRetry: false)
     }
 
     func retake() {
-        uploadCheckpoint = nil
+        cancelPreparation()
+        selection = nil
         original = nil
-        lifted = nil
+        resetPreparedState()
         phase = .picking
     }
 
+    func cancelPendingWork() {
+        cancelPreparation()
+    }
+
     func upload() async {
-        // A failed upload leaves the selected image intact so the sheet can offer a real retry.
-        // The confirmation button intentionally stays available in that state.
-        guard let image = chosen, phase == .ready || isFailed else { return }
+        guard canUpload, selection != nil else { return }
+        let generation = lifecycleGeneration
         phase = .uploading(.encoding)
+        uploadFailureCanRetry = false
         do {
+            let existingID = useLifted ? editedExistingImageID : selection?.existingImageID
+            if let existingID {
+                try await uploader.attachExisting(
+                    existingID, entity: entity, entityID: entityID,
+                    makeCover: makeCover && canMakeCover
+                ) { [weak self] step in
+                    Task { @MainActor in self?.report(step, generation: generation) }
+                }
+                guard canPublish(generation) else { return }
+                phase = .done(existingID)
+                return
+            }
+
+            let photo: PreparedPhoto
+            if useLifted, lifted?.foundSubject == true {
+                photo = try await preparedEditedPhoto(generation: generation)
+            } else if let originalPhoto {
+                photo = originalPhoto
+            } else if let selection {
+                let file = try await selection.materialize()
+                let task = Task.detached(priority: .userInitiated) {
+                    try PreparedPhoto.prepare(file: file)
+                }
+                photo = try await withTaskCancellationHandler {
+                    try await task.value
+                } onCancel: {
+                    task.cancel()
+                }
+                guard canPublish(generation) else { return }
+                originalPhoto = photo
+            } else {
+                throw PhotoFile.Failure.unreadable
+            }
             let outcome = try await uploader.upload(
                 .init(
-                    image: image, format: format, entity: entity, entityID: entityID,
-                    makeCover: makeCover && canMakeCover, filenameBase: entityID.lowercased()),
+                    photo: photo, entity: entity, entityID: entityID,
+                    makeCover: makeCover && canMakeCover),
                 resuming: uploadCheckpoint
-            ) { step in
-                Task { @MainActor [weak self] in
-                    if case .uploading = self?.phase { self?.phase = .uploading(step) }
-                }
+            ) { [weak self] step in
+                Task { @MainActor in self?.report(step, generation: generation) }
             }
-            if entity == .product {
-                // Index the new photo right away so Identify can match it before the next rebuild.
+            guard canPublish(generation) else { return }
+            if entity == .product, let preview = chosen {
                 try? await featurePrints.add(
-                    productID: ProductCode(entityID), name: entityTitle, imageURL: outcome.url, image: image)
+                    productID: ProductCode(entityID), name: entityTitle, imageURL: outcome.url,
+                    image: preview)
                 try? await featurePrints.saveCache()
             }
+            guard canPublish(generation) else { return }
             phase = .done(outcome.imageID)
         } catch let failure as PhotoUploader.Failure {
+            guard canPublish(generation), !(failure.underlying is CancellationError) else { return }
             uploadCheckpoint = failure.checkpoint
-            phase = .failed(failure.underlying.localizedDescription)
-            Diagnostics.report(failure.underlying, context: "photo.upload")
-        } catch let error as CubbyAPIError {
-            phase = .failed(error.detail?.message ?? "HTTP \(error.status)")
-            Diagnostics.report(error, context: "photo.upload")
+            fail(failure.underlying, context: "photo.upload", uploadRetry: true)
+        } catch is CancellationError {
         } catch {
-            phase = .failed(String(describing: error))
-            Diagnostics.report(error, context: "photo.upload")
+            guard canPublish(generation) else { return }
+            fail(error, context: "photo.upload", uploadRetry: true)
         }
+    }
+
+    private func preparedEditedPhoto(generation: UUID) async throws -> PreparedPhoto {
+        guard canPublish(generation) else { throw CancellationError() }
+        if let editedPhoto { return editedPhoto }
+        guard let lifted, lifted.foundSubject, let originalPhoto else {
+            throw PhotoFile.Failure.unreadable
+        }
+        let image = lifted.image
+        let format = format
+        let filename = "\(entityID.lowercased()).\(format.fileExtension)"
+        let sourceFingerprint = originalPhoto.sourceFingerprint
+        let capturedAt = originalPhoto.file.capturedAt
+        let task = Task.detached(priority: .userInitiated) {
+            let data = try ImageEncoding.encode(image, as: format)
+            let file = try PhotoFile.materialize(
+                data: data, filename: filename, contentType: format.contentType,
+                capturedAt: capturedAt)
+            return try PreparedPhoto.prepare(
+                file: file, sourceFingerprint: sourceFingerprint)
+        }
+        let prepared = try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        guard canPublish(generation) else { throw CancellationError() }
+        editedPhoto = prepared
+        return prepared
+    }
+
+    private func report(_ step: PhotoUploader.Step, generation: UUID) {
+        if canPublish(generation), case .uploading = phase { phase = .uploading(step) }
     }
 
     private var isFailed: Bool {
@@ -119,13 +367,43 @@ final class PhotoCaptureModel {
         return false
     }
 
-    private func lift(_ image: CGImage) async {
-        phase = .lifting
-        do {
-            lifted = try await SubjectLift.lift(image, background: background, cropToSubject: true)
-        } catch {
-            lifted = LiftedImage(image: image, foundSubject: false)
+    private func fail(_ error: Error, context: String, uploadRetry: Bool) {
+        uploadFailureCanRetry = uploadRetry
+        if let apiError = error as? CubbyAPIError {
+            phase = .failed(apiError.detail?.message ?? "HTTP \(apiError.status)")
+        } else {
+            phase = .failed(error.localizedDescription)
         }
-        phase = .ready
+        Diagnostics.report(error, context: context)
+    }
+
+    private func resetPreparedState() {
+        uploadCheckpoint = nil
+        originalPhoto = nil
+        editedPhoto = nil
+        originalReviewItem = nil
+        editedReviewItem = nil
+        editedExistingImageID = nil
+        lifted = nil
+        useLifted = false
+        uploadFailureCanRetry = false
+        preparationProgress = nil
+    }
+
+    private func cancelPreparation() {
+        lifecycleGeneration = UUID()
+        preparationTask?.cancel()
+        preparationTask = nil
+        preparationProgress = nil
+    }
+
+    private func finishPreparation(generation: UUID) {
+        guard lifecycleGeneration == generation else { return }
+        preparationTask = nil
+        preparationProgress = nil
+    }
+
+    private func canPublish(_ generation: UUID) -> Bool {
+        lifecycleGeneration == generation && !Task.isCancelled
     }
 }

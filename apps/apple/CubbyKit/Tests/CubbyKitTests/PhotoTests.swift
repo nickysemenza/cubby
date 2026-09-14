@@ -107,7 +107,7 @@ struct SubjectLiftTests {
 /// Records the exact call sequence; `failPut` makes the presigned PUT fail.
 final class StubPhotoService: PhotoService, Sendable {
     enum Call: Equatable, Sendable {
-        case create(String, Int, ImageEncoding.Format, EntityKey), put(URL, String, Int), mark(ImageCode),
+        case create(ImageUploadRequest), put(URL, String, Int), mark(ImageCode),
             attach([ImageCode], EntityKey, String), ids(ProductCode), order([ImageCode], ProductCode)
     }
 
@@ -122,10 +122,8 @@ final class StubPhotoService: PhotoService, Sendable {
 
     func record(_ call: Call) { calls.withLock { $0.append(call) } }
 
-    func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey)
-        async throws -> ImageUpload
-    {
-        record(.create(filename, size, format, entity))
+    func createUpload(_ request: ImageUploadRequest) async throws -> ImageUpload {
+        record(.create(request))
         return ImageUpload(
             uploadUrl: URL(string: "https://uploads.example/x")!, imageId: ImageCode("IMG-2345"), key: "k",
             url: URL(string: "https://images.example/x.jpg")!)
@@ -159,10 +157,28 @@ final class StubPhotoService: PhotoService, Sendable {
 struct PhotoUploaderTests {
     let image = TestImages.canvas(width: 3000, height: 1500, subject: true)
 
+    @Test func temporarySourceSurvivesAnAsynchronousPut() async throws {
+        let original = try ImageEncoding.encode(
+            TestImages.canvas(width: 120, height: 80, subject: true), as: .png)
+        let uploadedURL = Mutex<URL?>(nil)
+        let pending = PendingImageUpload(service: StubPhotoService()) { fileURL, _, _ in
+            uploadedURL.withLock { $0 = fileURL }
+            await Task.yield()
+            try await Task.sleep(for: .milliseconds(20))
+            #expect(try Data(contentsOf: fileURL) == original)
+        }
+        _ = try await pending.upload(
+            PreparedPhoto.prepare(
+                file: PhotoFile.materialize(original, filename: "temporary.png")),
+            entity: .gardenEntry)
+        let url = try #require(uploadedURL.withLock { $0 })
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test func uploadsInTheServerOrderAndOrdersTheCoverSecond() async throws {
         let service = StubPhotoService(existing: [ImageCode("IMG-0001"), ImageCode("IMG-2345")])
-        let uploader = PhotoUploader(service: service) { data, url, contentType in
-            service.record(.put(url, contentType, data.count))
+        let uploader = PhotoUploader(service: service) { fileURL, url, contentType in
+            service.record(.put(url, contentType, try Data(contentsOf: fileURL).count))
         }
         let steps = Mutex<[PhotoUploader.Step]>([])
         let outcome = try await uploader.upload(
@@ -173,17 +189,20 @@ struct PhotoUploaderTests {
         )
         let calls = service.calls.withLock { $0 }
         #expect(calls.count == 6)
-        guard case .create(let filename, let size, let format, let entity) = calls[0] else {
+        guard case .create(let request) = calls[0] else {
             Issue.record("expected create"); return
         }
-        #expect(filename == "shelf.jpg")
-        #expect(format == .jpeg)
-        #expect(entity == .product)
-        #expect(size == outcome.byteCount)
+        #expect(request.filename == "shelf.jpg")
+        #expect(request.contentType == "image/jpeg")
+        #expect(request.entity == .product)
+        #expect(request.size == outcome.byteCount)
+        #expect(request.width == 3000)
+        #expect(request.height == 1500)
+        #expect(request.algorithmRevision == 1)
         guard case .put(_, let putType, let putSize) = calls[1] else { Issue.record("expected put"); return }
         // The PUT carries exactly the bytes and content type that were presigned.
-        #expect(putType == format.contentType)
-        #expect(putSize == size)
+        #expect(putType == request.contentType)
+        #expect(putSize == request.size)
         #expect(calls[2] == .mark(ImageCode("IMG-2345")))
         #expect(calls[3] == .attach([ImageCode("IMG-2345")], .product, "PRD-2345"))
         #expect(calls[4] == .ids(ProductCode("PRD-2345")))
@@ -191,7 +210,6 @@ struct PhotoUploaderTests {
         #expect(calls[5] == .order([ImageCode("IMG-2345"), ImageCode("IMG-0001")], ProductCode("PRD-2345")))
         #expect(steps.withLock { $0 } == PhotoUploader.Step.allCases)
         #expect(outcome.imageID == ImageCode("IMG-2345"))
-        // 3000 px wide goes down to 2048.
         #expect(outcome.byteCount > 0)
     }
 
@@ -203,6 +221,48 @@ struct PhotoUploaderTests {
         #expect(calls.count == 3)
         #expect(calls[1] == .mark(ImageCode("IMG-2345")))
         #expect(calls[2] == .attach([ImageCode("IMG-2345")], .purchase, "PUR-2345"))
+    }
+
+    @Test func existingImageAttachesAndOrdersWithoutUploadingOrMarking() async throws {
+        let service = StubPhotoService(existing: [ImageCode("IMG-0001"), ImageCode("IMG-2345")])
+        let uploader = PhotoUploader(service: service) { _, _, _ in
+            Issue.record("existing image should not PUT bytes")
+        }
+        try await uploader.attachExisting(
+            ImageCode("IMG-2345"), entity: .product, entityID: "PRD-2345", makeCover: true)
+
+        #expect(
+            service.calls.withLock { $0 } == [
+                .attach([ImageCode("IMG-2345")], .product, "PRD-2345"),
+                .ids(ProductCode("PRD-2345")),
+                .order([ImageCode("IMG-2345"), ImageCode("IMG-0001")], ProductCode("PRD-2345")),
+            ])
+    }
+
+    @Test func originalFileUploadsExactBytesAndActualContainerMetadata() async throws {
+        let service = StubPhotoService()
+        let original = try ImageEncoding.encode(
+            TestImages.canvas(width: 413, height: 271, subject: true), as: .png)
+        let file = try PhotoFile.materialize(
+            data: original, filename: "original.png", contentType: "image/png")
+        let uploaded = Mutex<Data?>(nil)
+        let uploader = PhotoUploader(service: service) { fileURL, _, _ in
+            uploaded.withLock { $0 = try? Data(contentsOf: fileURL) }
+        }
+
+        _ = try await uploader.upload(
+            .init(file: file, entity: .purchase, entityID: "PUR-2345"))
+
+        #expect(uploaded.withLock { $0 } == original)
+        guard case .create(let request) = service.calls.withLock({ $0 }).first else {
+            Issue.record("expected create")
+            return
+        }
+        #expect(request.filename == "original.png")
+        #expect(request.contentType == "image/png")
+        #expect(request.size == original.count)
+        #expect(request.width == 413)
+        #expect(request.height == 271)
     }
 
     @Test func aFailedPutStopsBeforeMarking() async throws {
@@ -218,8 +278,8 @@ struct PhotoUploaderTests {
 
     @Test func retriesMarkingWithoutUploadingTheSuccessfulPhotoAgain() async throws {
         let service = StubPhotoService(markFailures: 1)
-        let uploader = PhotoUploader(service: service) { data, url, contentType in
-            service.record(.put(url, contentType, data.count))
+        let uploader = PhotoUploader(service: service) { fileURL, url, contentType in
+            service.record(.put(url, contentType, try Data(contentsOf: fileURL).count))
         }
         let request = PhotoUploader.Request(image: image, entity: .product, entityID: "PRD-2345")
         var checkpoint: PhotoUploader.Checkpoint?
@@ -227,7 +287,7 @@ struct PhotoUploaderTests {
             _ = try await uploader.upload(request)
             Issue.record("Expected the first mark to fail")
         } catch let failure as PhotoUploader.Failure {
-            checkpoint = try #require(failure.checkpoint)
+            checkpoint = failure.checkpoint
         }
         let resumed = try #require(checkpoint)
         _ = try await uploader.upload(request, resuming: resumed)
@@ -256,8 +316,8 @@ struct PhotoUploaderTests {
 struct GardenImageUploaderTests {
     @Test func leavesCompletedPhotosPendingForTheEntryWorkflow() async throws {
         let service = StubPhotoService()
-        let uploader = GardenImageUploader(service: service) { data, url, contentType in
-            service.record(.put(url, contentType, data.count))
+        let uploader = GardenImageUploader(service: service) { fileURL, url, contentType in
+            service.record(.put(url, contentType, try Data(contentsOf: fileURL).count))
         }
         let image = TestImages.canvas(width: 1200, height: 800, subject: true)
         let ids = try await uploader.upload([image, image])
@@ -303,16 +363,19 @@ struct PresignedUploadTests {
                 return (200, Data())
             }
         }
-        let bytes = Data(repeating: 7, count: 1234)
-        try await PresignedUpload.put(
-            bytes, to: URL(string: "https://uploads.example/x")!, contentType: "image/jpeg",
+        let bytes = try ImageEncoding.encode(
+            TestImages.canvas(width: 24, height: 12, subject: true), as: .jpeg)
+        let file = try PhotoFile.materialize(
+            bytes, filename: "transport.jpg", contentType: "image/jpeg")
+        try await PresignedUpload.putFile(
+            file.url, to: URL(string: "https://uploads.example/x")!, contentType: file.contentType,
             session: PresignedStub.session())
         let request = try #require(seen.withLock { $0 })
         #expect(request.method == "PUT")
         #expect(request.headers["Content-Type"] == "image/jpeg")
         #expect(request.headers["Authorization"] == nil)
         #expect(request.headers["x-api-key"] == nil)
-        #expect(request.length == 1234)
+        #expect(request.length == bytes.count)
     }
 
     @Test func rejectedPutThrowsWithTheStatus() async throws {

@@ -26,6 +26,7 @@ struct RootView: View {
                     RootSplitView()
                 #endif
             }
+            .id(ObjectIdentifier(model.client))
             .task(id: model.host) {
                 await model.spotlight.refreshIfNeeded(client: model.client, host: model.host)
             }

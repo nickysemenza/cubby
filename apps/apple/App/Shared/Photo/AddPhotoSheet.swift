@@ -6,8 +6,13 @@ import SwiftUI
 struct AddPhotoSheet: View {
     @Bindable var capture: PhotoCaptureModel
     var onDone: (ImageCode) -> Void
+    @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var previewing = false
+    @State private var editedReview: PhotoSelectionItem?
+    @State private var preparingUpload = false
+    @State private var operationTask: Task<Void, Never>?
+    @State private var refreshingMatches = false
 
     var body: some View {
         NavigationStack {
@@ -17,7 +22,25 @@ struct AddPhotoSheet: View {
                     case .picking:
                         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
                             Eyebrow("Photo")
-                            PhotoSourceButtons { image in Task { await capture.receive(image) } }
+                            PhotoSourceButtons(maxSelectionCount: 1) { selections in
+                                if let selection = selections.first {
+                                    capture.receive(selection)
+                                }
+                            }
+                        }
+                    case .preparing:
+                        Panel {
+                            HStack(spacing: PorcelainTokens.Space.md) {
+                                if let progress = capture.preparationProgress {
+                                    ProgressView(value: progress, total: 1)
+                                        .frame(width: 64)
+                                } else {
+                                    ProgressView().controlSize(.small)
+                                }
+                                Text("Preparing the full-quality photo…")
+                                    .font(.porcelainBody)
+                                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                            }
                         }
                     case .lifting:
                         Panel {
@@ -36,6 +59,16 @@ struct AddPhotoSheet: View {
                                 HStack(spacing: PorcelainTokens.Space.md) {
                                     ProgressView().controlSize(.small)
                                     Text(Self.label(for: step))
+                                        .font(.porcelainBody)
+                                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                                }
+                            }
+                        }
+                        if preparingUpload {
+                            Panel {
+                                HStack(spacing: PorcelainTokens.Space.md) {
+                                    ProgressView().controlSize(.small)
+                                    Text("Checking the final photo…")
                                         .font(.porcelainBody)
                                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
                                 }
@@ -71,7 +104,7 @@ struct AddPhotoSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(isUploading)
+                        .disabled(isUploading || preparingUpload)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     switch capture.phase {
@@ -80,9 +113,10 @@ struct AddPhotoSheet: View {
                             onDone(id)
                             dismiss()
                         }
+                        .disabled(refreshingMatches)
                     case .ready, .failed:
-                        Button("Upload") { Task { await capture.upload() } }
-                            .disabled(capture.chosen == nil)
+                        Button("Upload") { startPreparingUpload() }
+                            .disabled(capture.chosen == nil || !capture.canUpload || preparingUpload)
                     default:
                         EmptyView()
                     }
@@ -99,6 +133,18 @@ struct AddPhotoSheet: View {
                         PhotoAttachment(id: "selection", filename: "Selected photo", source: .local(image))
                     ], selectedID: "selection")
             }
+        }
+        .sheet(item: $editedReview) { item in
+            PhotoMatchReviewSheet(items: [item]) { reviewed in
+                guard let reviewed = reviewed.first else { return }
+                capture.acceptFinalReview(reviewed)
+                startUpload()
+            }
+        }
+        .onDisappear {
+            operationTask?.cancel()
+            operationTask = nil
+            capture.cancelPendingWork()
         }
     }
 
@@ -150,6 +196,19 @@ struct AddPhotoSheet: View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
             Eyebrow("Options")
             Panel(padding: 0, spacing: 0) {
+                if capture.lifted == nil {
+                    Button {
+                        capture.prepareLift()
+                    } label: {
+                        Label("Lift the subject", systemImage: "person.crop.rectangle")
+                            .font(.porcelainBody)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(PorcelainTokens.Space.md)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!capture.canLift)
+                    PanelDivider()
+                }
                 if capture.lifted?.foundSubject == true {
                     Picker("Version", selection: $capture.useLifted) {
                         Text("Lifted").tag(true)
@@ -183,7 +242,53 @@ struct AddPhotoSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            .disabled(isUploading)
+            .disabled(isUploading || preparingUpload)
+        }
+    }
+
+    private func prepareAndUpload() async {
+        guard !preparingUpload else { return }
+        preparingUpload = true
+        defer {
+            if !Task.isCancelled { preparingUpload = false }
+        }
+        do {
+            guard let item = try await capture.finalSelectionForReview() else {
+                await uploadAndRefreshMatches()
+                return
+            }
+            try await appModel.photoMatches.check([item], client: appModel.client)
+            let candidateIDs = Set(
+                (appModel.photoMatches.candidates[item.id] ?? []).map(\.id))
+            if candidateIDs.subtracting(item.approvedCandidates).isEmpty {
+                capture.acceptFinalReview(item)
+                await uploadAndRefreshMatches()
+            } else {
+                editedReview = item
+            }
+        } catch is CancellationError {
+        } catch {
+            capture.failPreparation(error)
+        }
+    }
+
+    private func startPreparingUpload() {
+        operationTask?.cancel()
+        operationTask = Task { await prepareAndUpload() }
+    }
+
+    private func startUpload() {
+        operationTask?.cancel()
+        operationTask = Task { await uploadAndRefreshMatches() }
+    }
+
+    private func uploadAndRefreshMatches() async {
+        await capture.upload()
+        guard !Task.isCancelled, capture.uses(client: appModel.client) else { return }
+        if case .done = capture.phase {
+            refreshingMatches = true
+            await appModel.photoMatches.refresh(client: appModel.client)
+            if !Task.isCancelled { refreshingMatches = false }
         }
     }
 

@@ -129,6 +129,18 @@ export default defineEntity({
         },
       },
       {
+        key: "perceptualHash",
+        kind: "text",
+        nullable: true,
+        readKey: null,
+      },
+      {
+        key: "sourceFingerprint",
+        kind: "json",
+        nullable: true,
+        readKey: null,
+      },
+      {
         key: "detectedContentType",
         kind: "text",
         nullable: true,
@@ -230,6 +242,8 @@ export default defineEntity({
       },
       "width",
       "height",
+      "perceptualHash",
+      "sourceFingerprint",
       "detectedContentType",
       "sha256",
       { key: "renderStatus", specialized: "enum:ImageRenderStatus" },

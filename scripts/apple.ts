@@ -12,6 +12,7 @@
 //   pnpm apple sim           build Cubby-iOS, install + launch on a simulator
 //   pnpm apple gen           build-rust.sh → generate-openapi.sh → xcodegen
 //   pnpm apple test          swift test for CubbyKit
+//   pnpm apple check         native formatting, tests, API drift, and simulator build
 //
 // Options: --device <name> (ios; default: the first paired iPhone),
 // --sim <name> (sim; default: the booted simulator, else the first iPhone),
@@ -21,6 +22,7 @@
 // use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/CLAUDE.md
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
+import { runAppleCheck } from "./ci-scope.ts";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -42,7 +44,7 @@ const DERIVED = join(APPLE, "DerivedData");
 const BUNDLE_ID = "com.nickysemenza.cubby";
 const PRODUCT = "Cubby.app";
 
-const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test> [--device <name>] [--sim <name>] [--verbose] [-- <cli args>]`;
+const usage = `usage: pnpm apple <cli|mac|ios|sim|gen|test|check> [--device <name>] [--sim <name>] [--verbose] [-- <cli args>]`;
 
 type Options = {
   command: string;
@@ -355,6 +357,8 @@ const main = () => {
       return gen();
     case "test":
       return test();
+    case "check":
+      return runAppleCheck();
     case "help":
     case "--help":
     case "-h":

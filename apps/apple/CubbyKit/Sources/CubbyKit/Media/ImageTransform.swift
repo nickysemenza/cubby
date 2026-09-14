@@ -49,4 +49,24 @@ public enum ImageTransform {
             "\(scheme)\(host)\(port)/cdn-cgi/image/\(opts)\(components.percentEncodedPath)\(query)"
         return URL(string: rewritten) ?? url
     }
+
+    /// Stable repair source for server images missing a hash: full frame, bounded on both axes,
+    /// and JPEG regardless of the caller's Accept header.
+    public static func hashSource(_ url: URL) -> URL {
+        guard url.host?.lowercased() == bucketHost,
+            !url.path.hasPrefix("/cdn-cgi/")
+        else { return url }
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        let opts = "width=256,height=256,quality=80,format=jpeg,fit=scale-down"
+        let scheme = components.scheme.map { "\($0)://" } ?? ""
+        let host = components.host ?? ""
+        let port = components.port.map { ":\($0)" } ?? ""
+        let query = components.percentEncodedQuery.map { "?\($0)" } ?? ""
+        return URL(
+            string:
+                "\(scheme)\(host)\(port)/cdn-cgi/image/\(opts)\(components.percentEncodedPath)\(query)"
+        ) ?? url
+    }
 }

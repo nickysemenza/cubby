@@ -2675,6 +2675,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "perceptualHash": {
+          "name": "perceptualHash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceFingerprint": {
+          "name": "sourceFingerprint",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "detectedContentType": {
           "name": "detectedContentType",
           "type": "text",
@@ -2841,7 +2853,12 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "Image_perceptualHash_format_check": {
+          "name": "Image_perceptualHash_format_check",
+          "value": "\"Image\".\"perceptualHash\" IS NULL OR \"Image\".\"perceptualHash\" ~ '^[0-9a-f]{16}$'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.Ingredient": {

@@ -5,6 +5,9 @@ import {
   imageBrowserListOut,
   imageBrowserUpdateInput,
   imageWithEntitySchema,
+  imageHashIndexSchema,
+  setPerceptualHashesInputSchema,
+  setPerceptualHashesOutputSchema,
   projectImageSummariesInput,
   projectImageSummariesOut,
 } from "@cubby/schemas/image";
@@ -32,5 +35,13 @@ export const imageContract = defineContract("image", {
   projectSummaries: query({
     input: projectImageSummariesInput,
     output: projectImageSummariesOut,
+  }),
+  hashIndex: query({
+    input: z.undefined(),
+    output: imageHashIndexSchema,
+  }),
+  setPerceptualHashes: mutation({
+    input: setPerceptualHashesInputSchema,
+    output: setPerceptualHashesOutputSchema,
   }),
 });

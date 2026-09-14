@@ -1,8 +1,8 @@
 import type { ProjectId } from "@cubby/schemas/identifiers";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { getImageByIdSchema } from "@cubby/schemas/image";
 import { projectCreateInput } from "@cubby/schemas/project";
-import { eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +11,13 @@ import { makeCookbookExtraction } from "~/server/repo/repo.fixtures";
 import { markImageUploadedWorkflow } from "~/server/workflows/image.server";
 
 import { deleteCookbook, upsertCookbook } from "./cookbook";
-import { getDb, insertAndReturn, withTransaction } from "./database-helpers";
+import {
+  associatePendingImages,
+  getDb,
+  imageJoinBindings,
+  insertAndReturn,
+  withTransaction,
+} from "./database-helpers";
 import {
   createAndAssociateUploadedImage,
   createPendingImageRecord,
@@ -19,12 +25,42 @@ import {
   deleteImages,
   detachImagesFromEntity,
   imageList,
+  getImageHashIndex,
+  setImagePerceptualHashes,
 } from "./image";
 import { createProject } from "./project";
 import { findOrCreateVendor } from "./vendor";
 
 describe("image repository", () => {
   const ctx = withTestDb();
+
+  it("prioritizes recent uploads in the hash repair queue", async () => {
+    const older = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "older.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const newer = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "newer.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    await getDb(ctx.db)
+      .update(image)
+      .set({ createdAt: new Date("2000-01-01T00:00:00Z") })
+      .where(eq(image.id, older.id));
+    await getDb(ctx.db)
+      .update(image)
+      .set({ createdAt: new Date("2020-01-01T00:00:00Z") })
+      .where(eq(image.id, newer.id));
+    const index = await getImageHashIndex(ctx.db);
+    const ids = new Set([older.shortcode, newer.shortcode]);
+    expect(
+      index.repair.filter(({ id }) => ids.has(id)).map(({ id }) => id),
+    ).toEqual([newer.shortcode, older.shortcode]);
+  });
 
   it("resolves public image identity before marking an upload complete", async () => {
     const pending = await createPendingImageRecord(ctx.db, {
@@ -45,6 +81,211 @@ describe("image repository", () => {
       .from(image)
       .where(eq(image.id, pending.id));
     expect(stored?.status).toBe("UPLOADED");
+  });
+
+  it("persists native metadata and fills hashes without overwriting canonical values", async () => {
+    const first = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "native-first.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+      perceptualHash: "0123456789abcdef",
+      sourceFingerprint: { hash: "fedcba9876543210", aspectRatio: 1.5 },
+      width: 1200,
+      height: 800,
+    });
+    const second = await createUploadedImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "native-second.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const unavailable = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "not-uploaded.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    await markImageUploadedWorkflow(
+      ctx.db,
+      getImageByIdSchema.parse({ id: first.shortcode }),
+    );
+
+    const result = await setImagePerceptualHashes(ctx.db, {
+      algorithmRevision: 1,
+      items: [
+        {
+          id: parseShortcodeFor("image", first.shortcode),
+          perceptualHash: "aaaaaaaaaaaaaaaa",
+        },
+        {
+          id: parseShortcodeFor("image", second.shortcode),
+          perceptualHash: "bbbbbbbbbbbbbbbb",
+        },
+        {
+          id: parseShortcodeFor("image", unavailable.shortcode),
+          perceptualHash: "cccccccccccccccc",
+        },
+      ],
+    });
+    expect(result).toEqual({
+      items: [
+        {
+          id: first.shortcode,
+          perceptualHash: "0123456789abcdef",
+        },
+        { id: second.shortcode, perceptualHash: "bbbbbbbbbbbbbbbb" },
+      ],
+      unavailable: [unavailable.shortcode],
+    });
+    const index = await getImageHashIndex(ctx.db);
+    expect(index.items).toContainEqual({
+      id: first.shortcode,
+      perceptualHash: "0123456789abcdef",
+      sourceFingerprint: { hash: "fedcba9876543210", aspectRatio: 1.5 },
+      width: 1200,
+      height: 800,
+    });
+    expect(index.repair.map(({ id }) => id)).not.toContain(first.shortcode);
+    expect(index.items.map(({ id }) => id)).not.toContain(
+      unavailable.shortcode,
+    );
+  });
+
+  it("enforces canonical lowercase perceptual hashes at the database boundary", async () => {
+    await expect(
+      createPendingImageRecord(ctx.db, {
+        key: `images/${crypto.randomUUID()}.jpg`,
+        filename: "invalid-hash.jpg",
+        contentType: "image/jpeg",
+        size: 512,
+        perceptualHash: "ABCDEF0123456789",
+      }),
+    ).rejects.toMatchObject({
+      cause: { constraint: "Image_perceptualHash_format_check" },
+    });
+  });
+
+  it("deduplicates association retries while still finalizing pending uploads", async () => {
+    const projectId = (
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "Idempotent photo project" }),
+        ctx.actor,
+      )
+    ).entityId;
+    const pending = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "retry.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const imageId = parseEntityId("image", pending.id);
+    const dbc = getDb(ctx.db);
+    await associatePendingImages(dbc, imageJoinBindings.project, projectId, [
+      imageId,
+      imageId,
+    ]);
+    await associatePendingImages(
+      dbc,
+      imageJoinBindings.project,
+      projectId,
+      [imageId],
+      1,
+    );
+    const appended = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "appended.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const appendedId = parseEntityId("image", appended.id);
+    await associatePendingImages(dbc, imageJoinBindings.project, projectId, [
+      imageId,
+      appendedId,
+    ]);
+
+    expect(
+      (
+        await dbc
+          .select()
+          .from(projectImage)
+          .where(eq(projectImage.projectId, projectId))
+          .orderBy(asc(projectImage.sortOrder))
+      ).map(({ imageId: id, sortOrder }) => ({ id, sortOrder })),
+    ).toEqual([
+      { id: imageId, sortOrder: 0 },
+      { id: appendedId, sortOrder: 1 },
+    ]);
+    const [stored] = await dbc
+      .select({ status: image.status })
+      .from(image)
+      .where(eq(image.id, imageId));
+    expect(stored?.status).toBe("UPLOADED");
+  });
+
+  it("rejects unavailable pending image associations before writing", async () => {
+    const projectId = (
+      await createProject(
+        ctx.db,
+        projectCreateInput.parse({ name: "Unavailable photo project" }),
+        ctx.actor,
+      )
+    ).entityId;
+    const failed = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "failed.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const missing = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "missing.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const mismatched = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "mismatched.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const deleted = await createPendingImageRecord(ctx.db, {
+      key: `images/${crypto.randomUUID()}.jpg`,
+      filename: "deleted.jpg",
+      contentType: "image/jpeg",
+      size: 512,
+    });
+    const ids = [failed.id, missing.id, mismatched.id, deleted.id].map((id) =>
+      parseEntityId("image", id),
+    );
+    const dbc = getDb(ctx.db);
+    await dbc
+      .update(image)
+      .set({ status: "FAILED" })
+      .where(eq(image.id, ids[0]!));
+    await dbc
+      .update(image)
+      .set({ storageStatus: "missing" })
+      .where(eq(image.id, ids[1]!));
+    await dbc
+      .update(image)
+      .set({ storageStatus: "metadata_mismatch" })
+      .where(eq(image.id, ids[2]!));
+    await dbc
+      .update(image)
+      .set({ deletedAt: new Date() })
+      .where(eq(image.id, ids[3]!));
+
+    await expect(
+      associatePendingImages(dbc, imageJoinBindings.project, projectId, ids),
+    ).rejects.toMatchObject({ reason: "REFERENCED_RECORD_MISSING" });
+    expect(
+      await dbc
+        .select()
+        .from(projectImage)
+        .where(inArray(projectImage.imageId, ids)),
+    ).toHaveLength(0);
   });
 
   /**

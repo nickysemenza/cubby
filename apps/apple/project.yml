@@ -66,6 +66,7 @@ targetTemplates:
           - CFBundleURLName: com.nickysemenza.cubby
             CFBundleURLSchemes: [cubby]
         NSCameraUsageDescription: Cubby scans barcodes to add items to a location.
+        NSPhotoLibraryUsageDescription: Cubby uses selected photos for garden journals and product images.
         NSAppTransportSecurity:
           NSExceptionDomains:
             localhost:
@@ -183,6 +184,9 @@ targets:
     platform: iOS
     sources:
       - path: App/Tests
+        excludes: ["Photos/Fixtures"]
+      - path: App/Tests/Photos/Fixtures
+        buildPhase: resources
     dependencies:
       - target: Cubby-iOS
       - package: SnapshotTesting
@@ -191,6 +195,8 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby.tests
+        # The PhotoKit parity suite compares imported originals with these fixture bytes.
+        COMPRESS_PNG_FILES: NO
         # Matches the host app: SearchModel/SearchContent/etc. assume MainActor by default.
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         # XcodeGen's auto host-app wiring guesses the app binary is named after the target
@@ -207,6 +213,8 @@ schemes:
         Cubby-iOS-Tests: [test]
     test:
       config: Debug
+      environmentVariables:
+        CUBBY_TEST_HOST: "1"
       targets:
         - Cubby-iOS-Tests
     run:

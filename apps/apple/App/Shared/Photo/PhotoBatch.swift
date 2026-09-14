@@ -113,7 +113,7 @@ struct PhotoPreview: View {
                     }
                     if let imageID = photo.imageID {
                         NavigationLink {
-                            EntityDetailView(key: .image, id: imageID)
+                            ImageEntityDetailView(id: ImageCode(imageID))
                         } label: {
                             Label("View Image details", systemImage: "info.circle")
                         }

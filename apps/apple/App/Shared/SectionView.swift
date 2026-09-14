@@ -22,9 +22,9 @@ struct SectionView: View {
             switch section {
             case .today: TodayView()
             case .capture: CaptureView()
+            case .photos: PhotosRootView()
             case .browse: BrowseRootView()
             case .search: SearchView()
-            case .identify: IdentifyView()
             case .dev: DevView()
             }
         }
@@ -41,27 +41,42 @@ struct SectionView: View {
             }
         #endif
         .navigationDestination(for: Route.self) { route in
-            switch route {
-            case .entityList(let key): EntityListView(key: key)
-            case .entityDetail(let key, let id):
-                entityDestination(key: key, id: id)
-                    #if os(iOS)
+            #if os(iOS)
+                if case .entityDetail(_, let id) = route {
+                    RouteDestinationView(route: route)
                         .navigationTransition(.zoom(sourceID: id, in: zoomNamespace))
-                    #endif
-            case .gardenBedJournal(let id): GardenBedJournalView(locationID: id)
-            case .audit(let locationID): AuditRootView(locationID: locationID)
-            case .needsPhoto(let locationID): NeedsPhotoView(locationID: locationID)
-            case .dev: DevView()
-            }
+                } else {
+                    RouteDestinationView(route: route)
+                }
+            #else
+                RouteDestinationView(route: route)
+            #endif
         }
     }
+}
 
-    @ViewBuilder
-    private func entityDestination(key: EntityKey, id: String) -> some View {
-        switch key {
-        case .planting: GardenPlantingRouteView(id: id)
-        case .gardenEntry: GardenEntryRouteView(id: id)
-        default: EntityDetailView(key: key, id: id)
+/// Sheet-owned stacks need destinations for links followed from image associations too.
+struct RouteDestinationView: View {
+    let route: Route
+    var body: some View {
+        switch route {
+        case .entityDetail(.planting, let id): GardenPlantingRouteView(id: id)
+        case .entityDetail(.gardenEntry, let id): GardenEntryRouteView(id: id)
+        case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))
+        case .entityDetail(let key, let id): EntityDetailView(key: key, id: id)
+        case .entityList(let key): EntityListView(key: key)
+        case .gardenBedJournal(let id): GardenBedJournalView(locationID: id)
+        case .audit(let id): AuditRootView(locationID: id)
+        case .needsPhoto(let id): NeedsPhotoView(locationID: id)
+        case .identify: IdentifyView()
+        case .dev: DevView()
         }
     }
+}
+
+#Preview {
+    NavigationStack {
+        SectionView(section: .capture)
+    }
+    .environment(PreviewFixtures.signedInModel())
 }

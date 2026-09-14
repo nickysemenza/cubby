@@ -46,6 +46,10 @@ final class Navigator {
         case .audit(let location):
             section = .capture
             paths[.capture] = [.audit(locationID: location)]
+        case .photos:
+            section = .photos
+        case .identify:
+            openIdentify()
         case .today:
             section = .today
             paths[.today] = []
@@ -67,6 +71,13 @@ final class Navigator {
             section = .dev
             paths[.dev] = []
         #endif
+    }
+
+    /// Opens Identify as part of Capture's navigation stack. Keeping the parent route in Capture
+    /// makes the workflow consistent across tabs, sidebar selection, and deep-link entry points.
+    func openIdentify() {
+        section = .capture
+        paths[.capture] = [.identify]
     }
 
     /// Opens an entity on top of the section the user is already in, so a result found from the

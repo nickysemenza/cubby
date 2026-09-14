@@ -37,6 +37,7 @@ import {
   recipeImage,
   taskImage,
 } from "~/server/db/schema";
+import { createAppError } from "~/server/errors/app-error";
 import {
   resolveAllOrThrow,
   resolveAllPresent,
@@ -402,22 +403,78 @@ export async function associatePendingImages<
   pendingImageIds: ImageId[],
   startSortOrder = 0,
 ): Promise<void> {
-  if (!pendingImageIds || pendingImageIds.length === 0) {
+  const requestedIds = [...new Set(pendingImageIds)];
+  if (requestedIds.length === 0) {
     return;
   }
 
-  await dbOrTx
-    .insert(binding.table)
-    .values(
-      pendingImageIds.map((imageId, index) =>
-        binding.insertRow(parentId, imageId, startSortOrder + index),
+  const availableRows = await dbOrTx
+    .select({
+      id: image.id,
+      status: image.status,
+      storageStatus: image.storageStatus,
+    })
+    .from(image)
+    .where(and(inArray(image.id, requestedIds), notDeleted(image)));
+  const availableIds = new Set(availableRows.map(({ id }) => id));
+  const unavailableIds = requestedIds.filter((id) => {
+    const row = availableRows.find((candidate) => candidate.id === id);
+    return (
+      row === undefined ||
+      (row.status !== "PENDING" && row.status !== "UPLOADED") ||
+      row.storageStatus === "missing" ||
+      row.storageStatus === "metadata_mismatch"
+    );
+  });
+  if (unavailableIds.length > 0) {
+    throw createAppError(
+      "REFERENCED_RECORD_MISSING",
+      `Cannot attach unavailable images: ${unavailableIds.join(", ")}`,
+    );
+  }
+
+  const joinTable: ImageJoinTable = binding.table;
+  const activeRows = await dbOrTx
+    .select({ imageId: sql<ImageId>`${joinTable.imageId}` })
+    .from(joinTable)
+    .where(
+      and(
+        eq(binding.parentIdColumn, parentId),
+        inArray(joinTable.imageId, requestedIds),
+        notDeleted(joinTable),
       ),
     );
+  const activeIds = new Set(activeRows.map(({ imageId }) => imageId));
+  const newIds = requestedIds.filter(
+    (imageId) => availableIds.has(imageId) && !activeIds.has(imageId),
+  );
 
-  await dbOrTx
-    .update(image)
-    .set({ status: "UPLOADED" })
-    .where(inArray(image.id, pendingImageIds));
+  if (newIds.length > 0) {
+    const appendSortOrder = Math.max(
+      startSortOrder,
+      await nextImageSortOrder(dbOrTx, binding, parentId),
+    );
+    await dbOrTx
+      .insert(binding.table)
+      .values(
+        newIds.map((imageId, index) =>
+          binding.insertRow(parentId, imageId, appendSortOrder + index),
+        ),
+      )
+      .onConflictDoNothing();
+  }
+
+  if (availableRows.length > 0) {
+    await dbOrTx
+      .update(image)
+      .set({ status: "UPLOADED" })
+      .where(
+        inArray(
+          image.id,
+          availableRows.map(({ id }) => id),
+        ),
+      );
+  }
 }
 
 /**

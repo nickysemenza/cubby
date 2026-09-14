@@ -15,6 +15,9 @@ import type {
   AttachableImageEntity,
   ImageAssociation,
   ImageListFilters,
+  ImageHashIndex,
+  SetPerceptualHashesInput,
+  SetPerceptualHashesOutput,
   ImageUpdateInput,
   ImageWithEntity,
 } from "@cubby/schemas/image";
@@ -25,10 +28,12 @@ import {
   and,
   asc,
   count,
+  desc,
   eq,
   exists,
   inArray,
   isNotNull,
+  isNull,
   lt,
   not,
   or,
@@ -106,11 +111,19 @@ export const createPendingImageRecord = async (
     filename,
     contentType,
     size,
+    perceptualHash,
+    sourceFingerprint,
+    width,
+    height,
   }: {
     key: string;
     filename: string;
     contentType: string;
     size: number;
+    perceptualHash?: string;
+    sourceFingerprint?: { hash: string; aspectRatio: number };
+    width?: number;
+    height?: number;
   },
 ) => {
   // `insertWithShortcode`, not a bare insert: Image now carries a public `IMG-`
@@ -121,6 +134,10 @@ export const createPendingImageRecord = async (
     size,
     contentType,
     status: "PENDING",
+    perceptualHash,
+    sourceFingerprint,
+    width,
+    height,
   });
 };
 
@@ -151,6 +168,123 @@ export const createUploadedImageRecord = async (
   return await insertWithShortcode(db, "image", {
     ...params,
     status: "UPLOADED",
+  });
+};
+
+export const getImageHashIndex = async (
+  db: Database,
+): Promise<ImageHashIndex> => {
+  const rows = await getDb(db)
+    .select({
+      shortcode: image.shortcode,
+      key: image.key,
+      perceptualHash: image.perceptualHash,
+      sourceFingerprint: image.sourceFingerprint,
+      width: image.width,
+      height: image.height,
+    })
+    .from(image)
+    .where(
+      and(
+        eq(image.status, "UPLOADED"),
+        notDeleted(image),
+        displayableImageWhere,
+      ),
+    )
+    .orderBy(desc(image.createdAt), desc(image.id));
+  return {
+    algorithmRevision: 1,
+    items: rows.map((row) => ({
+      id: parseShortcodeFor("image", row.shortcode),
+      perceptualHash: row.perceptualHash,
+      sourceFingerprint: row.sourceFingerprint,
+      width: row.width,
+      height: row.height,
+    })),
+    repair: rows
+      .filter((row) => row.perceptualHash === null)
+      .map((row) => ({
+        id: parseShortcodeFor("image", row.shortcode),
+        url: getR2PublicUrl(row.key),
+      })),
+  };
+};
+
+export const setImagePerceptualHashes = async (
+  db: Database,
+  input: SetPerceptualHashesInput,
+): Promise<SetPerceptualHashesOutput> => {
+  const requested = new Map(
+    input.items.map((item) => [item.id, item.perceptualHash] as const),
+  );
+  if (requested.size === 0) return { items: [], unavailable: [] };
+
+  return withTransaction(db, async (tx) => {
+    const codes = [...requested.keys()];
+    const eligible = await tx
+      .select({
+        id: image.id,
+        shortcode: image.shortcode,
+        perceptualHash: image.perceptualHash,
+      })
+      .from(image)
+      .where(
+        and(
+          inArray(image.shortcode, codes),
+          eq(image.status, "UPLOADED"),
+          notDeleted(image),
+          displayableImageWhere,
+        ),
+      )
+      .for("update");
+
+    const fillable = eligible.filter((row) => row.perceptualHash === null);
+    if (fillable.length > 0) {
+      const cases = fillable.map(
+        (row) =>
+          sql`when ${image.id} = ${row.id} then ${requested.get(parseShortcodeFor("image", row.shortcode))!}`,
+      );
+      await tx
+        .update(image)
+        .set({
+          perceptualHash: sql<string>`case ${sql.join(cases, sql.raw(" "))} else ${image.perceptualHash} end`,
+        })
+        .where(
+          inArray(
+            image.id,
+            fillable.map((row) => row.id),
+          ),
+        );
+    }
+
+    if (eligible.length === 0) {
+      return { items: [], unavailable: codes };
+    }
+    const canonical = await tx
+      .select({
+        shortcode: image.shortcode,
+        perceptualHash: image.perceptualHash,
+      })
+      .from(image)
+      .where(
+        inArray(
+          image.id,
+          eligible.map((row) => row.id),
+        ),
+      );
+    const byCode = new Map(
+      canonical.map((row) => [
+        parseShortcodeFor("image", row.shortcode),
+        row.perceptualHash,
+      ]),
+    );
+    return {
+      items: codes.flatMap((id) => {
+        const perceptualHash = byCode.get(id);
+        return perceptualHash ? [{ id, perceptualHash }] : [];
+      }),
+      unavailable: codes.filter((id) => !byCode.has(id)),
+    };
   });
 };
 
@@ -1857,6 +1991,50 @@ export const updateImageIntegrity = async (
     .update(image)
     .set(values)
     .where(and(eq(image.id, imageId), notDeleted(image)));
+};
+
+export const selectImagesMissingDimensions = async (
+  db: Database,
+  limit: number,
+) =>
+  getDb(db)
+    .select({
+      id: image.id,
+      key: image.key,
+      contentType: image.contentType,
+      size: image.size,
+      width: image.width,
+      height: image.height,
+      detectedContentType: image.detectedContentType,
+      sha256: image.sha256,
+    })
+    .from(image)
+    .where(
+      and(
+        eq(image.status, "UPLOADED"),
+        notDeleted(image),
+        displayableImageWhere,
+        or(isNull(image.width), isNull(image.height)),
+      ),
+    )
+    .orderBy(asc(image.createdAt), asc(image.id))
+    .limit(limit);
+
+export const countImagesMissingDimensions = async (
+  db: Database,
+): Promise<number> => {
+  const [row] = await getDb(db)
+    .select({ count: count() })
+    .from(image)
+    .where(
+      and(
+        eq(image.status, "UPLOADED"),
+        notDeleted(image),
+        displayableImageWhere,
+        or(isNull(image.width), isNull(image.height)),
+      ),
+    );
+  return row?.count ?? 0;
 };
 
 const lockAttachableEntity = async (

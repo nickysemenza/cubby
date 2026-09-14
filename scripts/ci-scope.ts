@@ -469,7 +469,7 @@ const swiftFormatTargets = () => {
   ];
 };
 
-const runAppleCheck = () => {
+export const runAppleCheck = () => {
   const xcodeSelect = spawnSync("xcode-select", ["-p"]);
   if (xcodeSelect.error || xcodeSelect.status !== 0) {
     process.stdout.write(

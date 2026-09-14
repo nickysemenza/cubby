@@ -4,6 +4,7 @@ import {
   countAwaitingWork,
   settleAwaitingWork,
 } from "~/server/services/awaiting-work.service";
+import { repairImageDimensions } from "~/server/services/image-dimension-repair.service";
 
 /** Counts read the authoritative handle: this is the truth the badge and the cron agree on. */
 export const maintenanceHandlers = implementOperationDomain(
@@ -11,5 +12,7 @@ export const maintenanceHandlers = implementOperationDomain(
   {
     awaitingWork: (context) => countAwaitingWork(context.db),
     settleAwaitingWork: (context) => settleAwaitingWork(context.db),
+    repairImageDimensions: (context, input) =>
+      repairImageDimensions(context.db, input),
   },
 );

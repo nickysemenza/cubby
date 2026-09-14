@@ -19,6 +19,8 @@ struct CubbyLinkTests {
         #expect(link("cubby://capture") == .capture(location: nil))
         #expect(link("cubby://capture?location=LOC-2345") == .capture(location: LocationCode("LOC-2345")))
         #expect(link("cubby://audit?location=LOC-2345") == .audit(location: LocationCode("LOC-2345")))
+        #expect(link("cubby://photos") == .photos)
+        #expect(link("cubby://identify") == .identify)
         #expect(link("cubby://today") == .today)
         #expect(link("cubby://search") == .search)
         #expect(link("cubby://dev") == .dev)
@@ -54,6 +56,8 @@ struct CubbyLinkTests {
             .capture(location: nil),
             .capture(location: LocationCode("LOC-2345")),
             .audit(location: LocationCode("LOC-2345")),
+            .photos,
+            .identify,
             .today,
             .search,
             .dev,

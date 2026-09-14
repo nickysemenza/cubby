@@ -89,6 +89,11 @@ private struct CaptureContent: View {
         )
         .toolbar {
             ToolbarItem {
+                NavigationLink(value: Route.identify) {
+                    Label("Identify a photo", systemImage: "camera.metering.center.weighted")
+                }
+            }
+            ToolbarItem {
                 NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
                     Label("Walk the shelf", systemImage: "checklist")
                 }

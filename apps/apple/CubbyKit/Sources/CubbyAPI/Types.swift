@@ -91,9 +91,18 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/v1/garden/startPlanting`.
     /// - Remark: Generated from `#/paths//api/v1/garden/startPlanting/post(garden.startPlanting)`.
     func garden_startPlanting(_ input: Operations.Garden_startPlanting.Input) async throws -> Operations.Garden_startPlanting.Output
+    /// - Remark: HTTP `GET /api/v1/image/detail`.
+    /// - Remark: Generated from `#/paths//api/v1/image/detail/get(image.detail)`.
+    func image_detail(_ input: Operations.Image_detail.Input) async throws -> Operations.Image_detail.Output
+    /// - Remark: HTTP `GET /api/v1/image/hashIndex`.
+    /// - Remark: Generated from `#/paths//api/v1/image/hashIndex/get(image.hashIndex)`.
+    func image_hashIndex(_ input: Operations.Image_hashIndex.Input) async throws -> Operations.Image_hashIndex.Output
     /// - Remark: HTTP `POST /api/v1/image/markUploaded`.
     /// - Remark: Generated from `#/paths//api/v1/image/markUploaded/post(image.markUploaded)`.
     func image_markUploaded(_ input: Operations.Image_markUploaded.Input) async throws -> Operations.Image_markUploaded.Output
+    /// - Remark: HTTP `POST /api/v1/image/setPerceptualHashes`.
+    /// - Remark: Generated from `#/paths//api/v1/image/setPerceptualHashes/post(image.setPerceptualHashes)`.
+    func image_setPerceptualHashes(_ input: Operations.Image_setPerceptualHashes.Input) async throws -> Operations.Image_setPerceptualHashes.Output
     /// - Remark: HTTP `POST /api/v1/image/uploadImage`.
     /// - Remark: Generated from `#/paths//api/v1/image/uploadImage/post(image.uploadImage)`.
     func image_uploadImage(_ input: Operations.Image_uploadImage.Input) async throws -> Operations.Image_uploadImage.Output
@@ -535,6 +544,22 @@ extension APIProtocol {
             body: body
         ))
     }
+    /// - Remark: HTTP `GET /api/v1/image/detail`.
+    /// - Remark: Generated from `#/paths//api/v1/image/detail/get(image.detail)`.
+    package func image_detail(
+        query: Operations.Image_detail.Input.Query,
+        headers: Operations.Image_detail.Input.Headers = .init()
+    ) async throws -> Operations.Image_detail.Output {
+        try await image_detail(Operations.Image_detail.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/image/hashIndex`.
+    /// - Remark: Generated from `#/paths//api/v1/image/hashIndex/get(image.hashIndex)`.
+    package func image_hashIndex(headers: Operations.Image_hashIndex.Input.Headers = .init()) async throws -> Operations.Image_hashIndex.Output {
+        try await image_hashIndex(Operations.Image_hashIndex.Input(headers: headers))
+    }
     /// - Remark: HTTP `POST /api/v1/image/markUploaded`.
     /// - Remark: Generated from `#/paths//api/v1/image/markUploaded/post(image.markUploaded)`.
     package func image_markUploaded(
@@ -542,6 +567,17 @@ extension APIProtocol {
         body: Operations.Image_markUploaded.Input.Body? = nil
     ) async throws -> Operations.Image_markUploaded.Output {
         try await image_markUploaded(Operations.Image_markUploaded.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/image/setPerceptualHashes`.
+    /// - Remark: Generated from `#/paths//api/v1/image/setPerceptualHashes/post(image.setPerceptualHashes)`.
+    package func image_setPerceptualHashes(
+        headers: Operations.Image_setPerceptualHashes.Input.Headers = .init(),
+        body: Operations.Image_setPerceptualHashes.Input.Body? = nil
+    ) async throws -> Operations.Image_setPerceptualHashes.Output {
+        try await image_setPerceptualHashes(Operations.Image_setPerceptualHashes.Input(
             headers: headers,
             body: body
         ))
