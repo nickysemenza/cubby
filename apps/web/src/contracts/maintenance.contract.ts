@@ -1,6 +1,8 @@
 import {
   awaitingWorkSchema,
   settleAwaitingWorkOutSchema,
+  repairImageDimensionsInputSchema,
+  repairImageDimensionsOutSchema,
 } from "@cubby/schemas/maintenance";
 import { z } from "zod";
 
@@ -19,5 +21,9 @@ export const maintenanceContract = defineContract("maintenance", {
   settleAwaitingWork: mutation({
     input: z.undefined(),
     output: settleAwaitingWorkOutSchema,
+  }),
+  repairImageDimensions: mutation({
+    input: repairImageDimensionsInputSchema,
+    output: repairImageDimensionsOutSchema,
   }),
 });

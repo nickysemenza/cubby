@@ -16,13 +16,49 @@ public actor PhotoUploader {
     }
 
     public struct Request: Sendable {
-        public let image: CGImage
-        public let format: ImageEncoding.Format
+        fileprivate let preparedPhoto: PreparedPhoto?
+        fileprivate let file: PhotoFile?
+        fileprivate let image: CGImage?
+        fileprivate let format: ImageEncoding.Format
+        fileprivate let sourceFingerprint: SourceFingerprint?
         public let entity: EntityKey
         public let entityID: String
         public let makeCover: Bool
         public let filenameBase: String
-        public let maxPixelSize: Int
+
+        public init(
+            photo: PreparedPhoto,
+            entity: EntityKey,
+            entityID: String,
+            makeCover: Bool = false
+        ) {
+            preparedPhoto = photo
+            file = nil
+            image = nil
+            format = .jpeg
+            sourceFingerprint = photo.sourceFingerprint
+            self.entity = entity
+            self.entityID = entityID
+            self.makeCover = makeCover
+            filenameBase = "photo"
+        }
+
+        public init(
+            file: PhotoFile,
+            entity: EntityKey,
+            entityID: String,
+            makeCover: Bool = false
+        ) {
+            preparedPhoto = nil
+            self.file = file
+            image = nil
+            format = .jpeg
+            sourceFingerprint = nil
+            self.entity = entity
+            self.entityID = entityID
+            self.makeCover = makeCover
+            filenameBase = "photo"
+        }
 
         public init(
             image: CGImage,
@@ -31,15 +67,17 @@ public actor PhotoUploader {
             entityID: String,
             makeCover: Bool = false,
             filenameBase: String = "photo",
-            maxPixelSize: Int = 2048
+            sourceFingerprint: SourceFingerprint? = nil
         ) {
+            preparedPhoto = nil
+            file = nil
             self.image = image
             self.format = format
+            self.sourceFingerprint = sourceFingerprint
             self.entity = entity
             self.entityID = entityID
             self.makeCover = makeCover
             self.filenameBase = filenameBase
-            self.maxPixelSize = maxPixelSize
         }
     }
 
@@ -65,7 +103,9 @@ public actor PhotoUploader {
 
     public init(
         service: any PhotoService,
-        put: @escaping PresignedUpload.Put = { try await PresignedUpload.put($0, to: $1, contentType: $2) }
+        put: @escaping PresignedUpload.FilePut = {
+            try await PresignedUpload.putFile($0, to: $1, contentType: $2)
+        }
     ) {
         self.service = service
         pending = PendingImageUpload(service: service, put: put)
@@ -107,16 +147,33 @@ public actor PhotoUploader {
         } catch { throw Failure(checkpoint: saved, underlying: error) }
     }
 
+    /// Reuses bytes already in Cubby. Existing images are attached directly: there is no
+    /// presign, PUT, or mark step because the stored image is already finalized.
+    public func attachExisting(
+        _ imageID: ImageCode,
+        entity: EntityKey,
+        entityID: String,
+        makeCover: Bool = false,
+        progress: (@Sendable (Step) -> Void)? = nil
+    ) async throws {
+        progress?(.attaching)
+        try await service.attachImages([imageID], to: entity, id: entityID)
+        if makeCover, entity == .product {
+            progress?(.ordering)
+            let product = ProductCode(entityID)
+            let existing = try await service.productImageIDs(product).filter { $0 != imageID }
+            try await service.setImageOrder([imageID] + existing, product: product)
+        }
+        progress?(.done)
+    }
+
     private func uploadBytes(_ request: Request, progress: (@Sendable (Step) -> Void)?) async throws
         -> Checkpoint
     {
         progress?(.encoding)
-        let scaled = try ImageEncoding.downscaled(request.image, maxPixelSize: request.maxPixelSize)
-        let data = try ImageEncoding.encode(scaled, as: request.format)
-
-        let filename = "\(request.filenameBase).\(request.format.fileExtension)"
+        let photo = try prepare(request)
         let result = try await pending.upload(
-            data, filename: filename, format: request.format, entity: request.entity
+            photo, entity: request.entity
         ) { phase in
             switch phase {
             case .presigning: progress?(.presigning)
@@ -125,6 +182,21 @@ public actor PhotoUploader {
         }
 
         return Checkpoint(
-            outcome: Outcome(imageID: result.imageID, url: result.url, byteCount: data.count))
+            outcome: Outcome(
+                imageID: result.imageID, url: result.url, byteCount: photo.file.size))
+    }
+
+    private func prepare(_ request: Request) throws -> PreparedPhoto {
+        if let preparedPhoto = request.preparedPhoto { return preparedPhoto }
+        if let file = request.file { return try PreparedPhoto.prepare(file: file) }
+        guard let image = request.image else { throw CocoaError(.fileReadUnknown) }
+        // CGImage input means the caller deliberately produced edited pixels. Encode every pixel;
+        // the former 2048px upload cap is intentionally absent.
+        let data = try ImageEncoding.encode(image, as: request.format)
+        let file = try PhotoFile.materialize(
+            data,
+            filename: "\(request.filenameBase).\(request.format.fileExtension)",
+            contentType: request.format.contentType)
+        return try PreparedPhoto.prepare(file: file, sourceFingerprint: request.sourceFingerprint)
     }
 }

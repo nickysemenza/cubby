@@ -44,16 +44,16 @@ struct DomainMark: View {
     }
 }
 
-/// The domain line(s) a top-level section works in. Capture and Identify both act on House
-/// records, and Browse and Search preview all four lines because they span all of them. Today and Dev
-/// are the shell itself and get no mark. The macOS sidebar shows this beside the row; the iOS tab
-/// bar cannot carry a custom view, so there it sits in the section's navigation bar instead.
+/// The domain line(s) a top-level section works in. Capture acts on House records, and Browse and
+/// Search preview all four lines because they span all of them. Today, Photos, and Dev are shell
+/// surfaces and get no mark. The macOS sidebar shows this beside the row; the iOS tab bar cannot
+/// carry a custom view, so there it sits in the section's navigation bar instead.
 struct SectionDomainMarks: View {
     let section: AppSection
 
     var body: some View {
         switch section {
-        case .capture, .identify:
+        case .capture:
             DomainMark(.house, size: 7)
         case .browse, .search:
             HStack(spacing: 3) {
@@ -61,7 +61,7 @@ struct SectionDomainMarks: View {
                     DomainMark(domain, size: 5)
                 }
             }
-        case .today, .dev:
+        case .today, .photos, .dev:
             EmptyView()
         }
     }

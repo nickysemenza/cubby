@@ -193,7 +193,15 @@ export const productionImageStoragePorts = {
 const initiatePendingUpload = async <TDatabase>(
   ports: ImageStoragePorts<TDatabase>,
   db: TDatabase,
-  input: { filename: string; contentType: string; size: number },
+  input: {
+    filename: string;
+    contentType: string;
+    size: number;
+    perceptualHash?: string;
+    sourceFingerprint?: { hash: string; aspectRatio: number };
+    width?: number;
+    height?: number;
+  },
   key: string,
 ) => {
   // Clean-on-write: the only way a PENDING row outlives its upload is a flow
@@ -215,6 +223,10 @@ const initiatePendingUpload = async <TDatabase>(
     contentType: input.contentType,
     size: input.size,
     key,
+    perceptualHash: input.perceptualHash,
+    sourceFingerprint: input.sourceFingerprint,
+    width: input.width,
+    height: input.height,
   });
   const uploadUrl = await ports.objectStorage.generatePresignedUploadUrl({
     key,

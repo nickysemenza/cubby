@@ -30,6 +30,8 @@ final class AppModel {
     /// One on-device index of product covers, shared by Identify and by Add photo (which indexes
     /// a new photo the moment it lands, so it matches before the next rebuild).
     let featurePrints = FeaturePrintIndex()
+    let photoMatches = PhotoMatchStore()
+    let photoLibrary = PhotoLibraryStore()
     var lastError: String?
 
     /// The app's model, for App Intents (which run in-process). Set once in `CubbyApp.init`.
@@ -71,7 +73,9 @@ final class AppModel {
 
     /// Re-reads the Keychain for the current host. Called at launch and after a base URL change.
     func restoreSession() async {
-        let current = await credentials.current()
+        let provider = credentials
+        let current = await provider.current()
+        guard credentials === provider, !Task.isCancelled else { return }
         credential = current
         phase = current == nil ? .signedOut : .signedIn
     }
@@ -99,6 +103,8 @@ final class AppModel {
             lastError = String(describing: error)
             Diagnostics.report(error, context: "auth.signOut")
         }
+        photoMatches.reset()
+        photoLibrary.reset()
         credential = nil
         phase = .signedOut
         await spotlight.wipe()
@@ -115,6 +121,8 @@ final class AppModel {
         if let apiError = error as? CubbyAPIError {
             lastError = apiError.detail?.message ?? "HTTP \(apiError.status)"
             if apiError.isUnauthorized {
+                photoMatches.reset()
+                photoLibrary.reset()
                 credential = nil
                 phase = .signedOut
             }
@@ -124,6 +132,8 @@ final class AppModel {
     }
 
     private func rebindClients() {
+        photoMatches.reset()
+        photoLibrary.reset()
         let credentials = CredentialProvider(host: host, store: store)
         self.credentials = credentials
         client = CubbyClient(baseURL: baseURL, credentials: credentials)

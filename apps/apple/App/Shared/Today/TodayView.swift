@@ -197,12 +197,16 @@ struct TodayContent: View {
                 }
                 .buttonStyle(.plain)
 
-                shortcut(
-                    to: .identify,
-                    title: "Identify",
-                    symbol: "camera.metering.center.weighted",
-                    detail: "Rank a photo"
-                )
+                Button {
+                    model.navigator.openIdentify()
+                } label: {
+                    ActionTile(
+                        title: "Identify",
+                        symbol: "camera.metering.center.weighted",
+                        detail: "Rank a photo"
+                    )
+                }
+                .buttonStyle(.plain)
                 shortcut(
                     action: { model.navigator.openDev() },
                     title: "Dev",

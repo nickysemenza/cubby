@@ -364,6 +364,11 @@ export const httpContract = httpContractBuilder.router(
         "detail",
         contracts.imageContract.ops["detail"],
       ),
+      hashIndex: rpcQuery(
+        "image",
+        "hashIndex",
+        contracts.imageContract.ops["hashIndex"],
+      ),
       importFromUrl: rpcMutation(
         "image",
         "importFromUrl",
@@ -379,6 +384,11 @@ export const httpContract = httpContractBuilder.router(
         "image",
         "projectSummaries",
         contracts.imageContract.ops["projectSummaries"],
+      ),
+      setPerceptualHashes: rpcMutation(
+        "image",
+        "setPerceptualHashes",
+        contracts.imageContract.ops["setPerceptualHashes"],
       ),
       update: rpcMutation(
         "image",
@@ -544,6 +554,11 @@ export const httpContract = httpContractBuilder.router(
         "maintenance",
         "awaitingWork",
         contracts.maintenanceContract.ops["awaitingWork"],
+      ),
+      repairImageDimensions: rpcMutation(
+        "maintenance",
+        "repairImageDimensions",
+        contracts.maintenanceContract.ops["repairImageDimensions"],
       ),
       settleAwaitingWork: rpcMutation(
         "maintenance",

@@ -1,0 +1,330 @@
+import CoreGraphics
+import CubbyKit
+import Foundation
+import Observation
+
+@Observable
+final class PhotoMatchStore {
+    private(set) var hasIndex = false
+    private(set) var isLoading = false
+    private(set) var isRepairing = false
+    private(set) var totalCount = 0
+    private(set) var remainingCount = 0
+    private(set) var error: String?
+    private(set) var repairFailures = 0
+    private(set) var candidates: [String: [DedupCandidate]] = [:]
+    private(set) var revision = 0
+
+    @ObservationIgnored private var entries: [ImageCode: ImageHashEntry] = [:]
+    @ObservationIgnored private var queries: [String: HashQuery] = [:]
+    @ObservationIgnored private var serverCandidates: [String: [DedupCandidate]] = [:]
+    @ObservationIgnored private var batchCandidates: [String: [DedupCandidate]] = [:]
+    @ObservationIgnored private var entriesRevision = 0
+    @ObservationIgnored private var repairTask: Task<Void, Never>?
+    @ObservationIgnored private var loadingTask: Task<Void, Never>?
+    @ObservationIgnored private var registrationTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingQueries: [String: HashQuery] = [:]
+    @ObservationIgnored private var generation = UUID()
+    @ObservationIgnored private var accountGeneration = UUID()
+    @ObservationIgnored private var observers: Set<UUID> = []
+
+    var coverage: String {
+        if error != nil {
+            return hasIndex
+                ? "Cubby could not be refreshed. Showing previously known matches."
+                : "Cubby could not be checked. Photos remain unchecked."
+        }
+        if !hasIndex { return isLoading ? "Checking Cubby…" : "Cubby has not been checked" }
+        if remainingCount == 0 { return "Checked \(totalCount) Cubby images" }
+        return
+            "Checked \(totalCount - remainingCount) of \(totalCount) Cubby images. More matches may appear."
+    }
+
+    func storedCandidates(for id: String) -> [DedupCandidate] {
+        (candidates[id] ?? []).filter { !$0.id.rawValue.hasPrefix("draft:") }
+    }
+
+    func acquire(_ id: UUID) {
+        observers.insert(id)
+        schedulePendingRegistrations()
+    }
+
+    func release(_ id: UUID) {
+        observers.remove(id)
+        if observers.isEmpty {
+            repairTask?.cancel()
+            registrationTask?.cancel()
+            registrationTask = nil
+        }
+    }
+
+    func reset() {
+        accountGeneration = UUID()
+        generation = UUID()
+        repairTask?.cancel(); loadingTask?.cancel(); registrationTask?.cancel()
+        repairTask = nil; loadingTask = nil; registrationTask = nil
+        entries = [:]; queries = [:]
+        pendingQueries = [:]
+        serverCandidates = [:]; batchCandidates = [:]; candidates = [:]
+        entriesRevision += 1
+        hasIndex = false; isLoading = false; isRepairing = false
+        totalCount = 0; remainingCount = 0; repairFailures = 0; error = nil
+        observers = []
+        revision += 1
+    }
+
+    func refresh(client: CubbyClient) async {
+        if let loadingTask { await loadingTask.value; return }
+        repairTask?.cancel(); registrationTask?.cancel()
+        isRepairing = false
+        registrationTask = nil
+        let token = UUID()
+        generation = token
+        let task = Task { [weak self] in
+            guard let self, generation == token, !Task.isCancelled else { return }
+            isLoading = true; error = nil
+            do {
+                let document = try await client.imageHashIndex()
+                guard generation == token, !Task.isCancelled else { return }
+                _ = try HashIndex(entries: [], algorithmRevision: document.algorithmRevision)
+                entries = Dictionary(uniqueKeysWithValues: document.items.map { ($0.id, $0) })
+                entriesRevision += 1
+                totalCount = document.items.count
+                remainingCount = document.repair.count
+                hasIndex = true
+                let querySnapshot = queries
+                let matched = try await Self.match(entries: document.items, queries: querySnapshot)
+                guard generation == token, !Task.isCancelled else { return }
+                publishServerMatches(matched, for: querySnapshot, replacing: true)
+                pendingQueries = pendingQueries.filter { queries[$0.key] != $0.value }
+                revision += 1
+                if !observers.isEmpty {
+                    repairTask = Task {
+                        await self.repair(document.repair, client: client, token: token)
+                    }
+                }
+            } catch is CancellationError {} catch {
+                guard generation == token else { return }
+                self.error = error.localizedDescription
+                Diagnostics.report(error, context: "photos.index")
+            }
+        }
+        loadingTask = task
+        await task.value
+        if generation == token {
+            isLoading = false
+            loadingTask = nil
+            schedulePendingRegistrations()
+        }
+    }
+
+    func register(id: String, query: HashQuery) async {
+        queries[id] = query
+        pendingQueries[id] = query
+        schedulePendingRegistrations()
+    }
+
+    func registerBatch(_ additions: [String: HashQuery]) async {
+        guard !additions.isEmpty else { return }
+        for (id, query) in additions { queries[id] = query }
+        guard hasIndex else { return }
+        while !Task.isCancelled {
+            let token = generation
+            let entryVersion = entriesRevision
+            let entrySnapshot = Array(entries.values)
+            let querySnapshot = additions.filter { queries[$0.key] == $0.value }
+            do {
+                let matched = try await Self.match(entries: entrySnapshot, queries: querySnapshot)
+                guard generation == token, !Task.isCancelled else { return }
+                if entriesRevision != entryVersion { continue }
+                publishServerMatches(matched, for: querySnapshot, replacing: true)
+                revision += 1
+                return
+            } catch is CancellationError {
+                return
+            } catch {
+                return
+            }
+        }
+    }
+
+    private func schedulePendingRegistrations() {
+        guard registrationTask == nil, !pendingQueries.isEmpty else { return }
+        let token = generation
+        registrationTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+            } catch {
+                return
+            }
+            guard let self, generation == token, !Task.isCancelled else { return }
+            let additions = pendingQueries
+            pendingQueries = [:]
+            registrationTask = nil
+            await registerBatch(additions)
+            if generation == token { schedulePendingRegistrations() }
+        }
+    }
+
+    func check(_ items: [PhotoSelectionItem], client: CubbyClient) async throws {
+        let account = accountGeneration
+        await refresh(client: client)
+        guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
+        guard hasIndex, error == nil else { throw PhotoCheckFailure.indexUnavailable(error) }
+        var batch: [ImageHashEntry] = []
+        var additions: [String: HashQuery] = [:]
+        for item in items {
+            let query = try await item.query()
+            guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
+            additions[item.id] = query
+            let previous = try await Self.match(entries: batch, queries: [item.id: query])[item.id] ?? []
+            guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
+            batchCandidates[item.id] = previous
+            // Draft codes only live in the review; they resolve to a prior item after its upload.
+            batch.append(
+                ImageHashEntry(
+                    id: item.existingImageID ?? ImageCode("draft:\(item.id)"),
+                    perceptualHash: query.perceptualHash, sourceFingerprint: query.sourceFingerprint,
+                    width: item.preview.width, height: item.preview.height))
+        }
+        await registerBatch(additions)
+        guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
+    }
+
+    private func repair(_ rows: [ImageHashRepair], client: CubbyClient, token: UUID) async {
+        guard generation == token, !Task.isCancelled, !rows.isEmpty else { return }
+        isRepairing = true; repairFailures = 0
+        defer { if generation == token { isRepairing = false } }
+        for offset in stride(from: 0, to: rows.count, by: 50) {
+            guard !Task.isCancelled, generation == token else { return }
+            let batch = Array(rows[offset..<min(offset + 50, rows.count)])
+            let results = await Self.fetchHashes(batch)
+            guard !Task.isCancelled, generation == token else { return }
+            let updates = results.compactMap { $0.update }
+            repairFailures += results.filter { $0.update == nil }.count
+            guard !updates.isEmpty else { continue }
+            do {
+                let written = try await client.setPerceptualHashes(updates)
+                guard !Task.isCancelled, generation == token else { return }
+                var added: [ImageHashEntry] = []
+                for update in written.items {
+                    guard let old = entries[update.id] else { continue }
+                    let entry = ImageHashEntry(
+                        id: old.id, perceptualHash: update.perceptualHash,
+                        sourceFingerprint: old.sourceFingerprint, width: old.width, height: old.height)
+                    entries[old.id] = entry
+                    added.append(entry)
+                }
+                entriesRevision += 1
+                let querySnapshot = queries
+                let matches = try await Self.match(entries: added, queries: querySnapshot)
+                guard generation == token, !Task.isCancelled else { return }
+                publishServerMatches(matches, for: querySnapshot, replacing: false)
+                remainingCount = entries.values.filter { $0.perceptualHash == nil }.count
+                repairFailures += written.unavailable.count
+                revision += 1
+            } catch is CancellationError { return } catch {
+                guard generation == token, !Task.isCancelled else { return }
+                repairFailures += updates.count
+                Diagnostics.report(error, context: "photos.repair")
+            }
+        }
+    }
+
+    nonisolated private static func merged(_ left: [DedupCandidate], _ right: [DedupCandidate])
+        -> [DedupCandidate]
+    {
+        Array(Set(left + right)).sorted {
+            if $0.confidence != $1.confidence { return $0.confidence == .strong }
+            if $0.distance != $1.distance { return $0.distance < $1.distance }
+            return $0.id.rawValue < $1.id.rawValue
+        }
+    }
+
+    private func publishServerMatches(
+        _ matches: [String: [DedupCandidate]],
+        for querySnapshot: [String: HashQuery],
+        replacing: Bool
+    ) {
+        var nextServerCandidates = serverCandidates
+        var nextCandidates = candidates
+        for (id, query) in querySnapshot where queries[id] == query {
+            let found = matches[id] ?? []
+            nextServerCandidates[id] =
+                replacing
+                ? found
+                : Self.merged(nextServerCandidates[id] ?? [], found)
+            nextCandidates[id] = Self.merged(
+                nextServerCandidates[id] ?? [], batchCandidates[id] ?? [])
+        }
+        serverCandidates = nextServerCandidates
+        candidates = nextCandidates
+    }
+
+    nonisolated private static func match(
+        entries: [ImageHashEntry], queries: [String: HashQuery]
+    ) async throws -> [String: [DedupCandidate]] {
+        let task = Task.detached(priority: .utility) {
+            try Task.checkCancellation()
+            let index = try HashIndex(entries: entries)
+            var result: [String: [DedupCandidate]] = [:]
+            result.reserveCapacity(queries.count)
+            for (id, query) in queries {
+                try Task.checkCancellation()
+                result[id] = index.candidates(for: query)
+            }
+            return result
+        }
+        return try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    nonisolated private struct RepairResult: Sendable {
+        let update: ImageHashUpdate?
+    }
+
+    nonisolated private static func fetchHashes(_ rows: [ImageHashRepair]) async -> [RepairResult] {
+        await withTaskGroup(of: RepairResult.self) { group in
+            var iterator = rows.makeIterator()
+            func enqueue(_ row: ImageHashRepair) {
+                group.addTask {
+                    do {
+                        try Task.checkCancellation()
+                        let (file, response) = try await URLSession.cubbyShared.download(
+                            from: ImageTransform.hashSource(row.url))
+                        defer { try? FileManager.default.removeItem(at: file) }
+                        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode)
+                        else {
+                            return RepairResult(update: nil)
+                        }
+                        let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+                        guard size > 0, size <= PhotoFile.maximumByteCount else {
+                            return RepairResult(update: nil)
+                        }
+                        let hash = try PerceptualHash64.compute(fileURL: file)
+                        return RepairResult(update: ImageHashUpdate(id: row.id, perceptualHash: hash))
+                    } catch { return RepairResult(update: nil) }
+                }
+            }
+            for _ in 0..<4 { if let row = iterator.next() { enqueue(row) } }
+            var results: [RepairResult] = []
+            for await result in group {
+                results.append(result)
+                if !Task.isCancelled, let row = iterator.next() { enqueue(row) }
+            }
+            return results
+        }
+    }
+}
+
+nonisolated enum PhotoCheckFailure: LocalizedError {
+    case indexUnavailable(String?)
+    var errorDescription: String? {
+        switch self {
+        case .indexUnavailable(let detail): detail ?? "Could not check Cubby. Please retry."
+        }
+    }
+}

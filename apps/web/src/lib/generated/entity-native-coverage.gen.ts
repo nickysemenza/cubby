@@ -38,7 +38,7 @@ export const ENTITY_NATIVE_COVERAGE = {
   "wish": {"httpActions":["get","list"],"imageAttach":false,"imageOrder":false,"rpcIds":[]},
   "expense": {"httpActions":["get","list"],"imageAttach":false,"imageOrder":false,"rpcIds":[]},
   "usda-food": {"httpActions":[],"imageAttach":false,"imageOrder":false,"rpcIds":[]},
-  "image": {"httpActions":[],"imageAttach":false,"imageOrder":false,"rpcIds":["image.markUploaded","image.uploadImage"]},
+  "image": {"httpActions":[],"imageAttach":false,"imageOrder":false,"rpcIds":["image.detail","image.hashIndex","image.markUploaded","image.setPerceptualHashes","image.uploadImage"]},
   "planting": {"httpActions":["get","list","update"],"imageAttach":true,"imageOrder":true,"rpcIds":[]},
   "gardenEntry": {"httpActions":["get","list","update"],"imageAttach":true,"imageOrder":true,"rpcIds":[]},
 } as const satisfies Record<Entity, NativeCoverage>;

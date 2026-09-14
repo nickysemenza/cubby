@@ -35,6 +35,7 @@ const storageJsonTypes = {
   "financialAccount.sourceAliases": "FinancialAccountSourceAlias[]",
   "financialTransaction.sourceRefs": "FinancialTransactionSourceRef[]",
   "ingredient.naKinds": "BaseKind[]",
+  "image.sourceFingerprint": "ImageSourceFingerprint | null",
   "inventory.amount": "Amount",
   "location.valuation": "LocationValuation | null",
   "product.dataExceptions": "DataException[]",
@@ -188,6 +189,7 @@ export const renderEntityColumnsArtifact = (
     'import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction";\n' +
     `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
     'import { imageStatusValues } from "@cubby/schemas/image";\n' +
+    'import type { ImageSourceFingerprint } from "@cubby/schemas/image";\n' +
     'import type { CookbookExtraction, CookbookRunReport } from "@cubby/schemas/cookbook";\n' +
     'import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";\n' +
     'import { mealKindValues, mealTypeValues } from "@cubby/schemas/meal-classification";\n' +

@@ -10,13 +10,15 @@ enum Route: Hashable {
     case audit(locationID: LocationCode?)
     /// The products-without-a-photo queue, optionally narrowed to a location.
     case needsPhoto(locationID: LocationCode?)
+    /// Product-photo matching, pushed from Capture so it stays part of the capture workflow.
+    case identify
     /// Dev is a pushed screen on iOS (see `AppSection.tabs`), reached via `Navigator.openDev()`.
     case dev
 }
 
 /// Top-level sections. Tabs on iOS, sidebar rows on macOS.
 enum AppSection: String, CaseIterable, Identifiable {
-    case today, capture, browse, search, identify, dev
+    case today, capture, photos, browse, search, dev
 
     var id: String { rawValue }
 
@@ -24,9 +26,9 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .today: "Today"
         case .capture: "Capture"
+        case .photos: "Photos"
         case .browse: "Browse"
         case .search: "Search"
-        case .identify: "Identify"
         case .dev: "Dev"
         }
     }
@@ -35,9 +37,9 @@ enum AppSection: String, CaseIterable, Identifiable {
         switch self {
         case .today: "sun.horizon"
         case .capture: "barcode.viewfinder"
+        case .photos: "photo.on.rectangle.angled"
         case .browse: "square.grid.2x2"
         case .search: "magnifyingglass"
-        case .identify: "camera.metering.center.weighted"
         case .dev: "wrench.and.screwdriver"
         }
     }

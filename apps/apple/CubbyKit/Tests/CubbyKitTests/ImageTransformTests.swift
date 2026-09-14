@@ -52,4 +52,12 @@ struct ImageTransformTests {
                 == "https://media.nickysemenza.com/cdn-cgi/image/width=128,quality=80,format=auto,fit=scale-down/products/abc.jpg?v=2"
         )
     }
+
+    @Test func hashSourceBoundsBothDimensionsAndPinsJPEG() throws {
+        let url = try #require(URL(string: "https://media.nickysemenza.com/products/abc.heic?v=2"))
+        #expect(
+            ImageTransform.hashSource(url).absoluteString
+                == "https://media.nickysemenza.com/cdn-cgi/image/width=256,height=256,quality=80,format=jpeg,fit=scale-down/products/abc.heic?v=2"
+        )
+    }
 }

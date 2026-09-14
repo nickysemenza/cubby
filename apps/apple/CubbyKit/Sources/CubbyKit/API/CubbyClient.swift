@@ -131,8 +131,12 @@ public actor CubbyClient {
     }
 
     public func recordGardenEntry(_ input: RecordGardenEntry) async throws {
+        _ = try await recordGardenEntryReturningID(input)
+    }
+
+    public func recordGardenEntryReturningID(_ input: RecordGardenEntry) async throws -> String {
         try await perform {
-            _ = try await api.garden_recordEntry(body: .json(GardenRecordInput(input))).ok
+            try await api.garden_recordEntry(body: .json(GardenRecordInput(input))).ok.body.json.id
         }
     }
 
@@ -371,6 +375,90 @@ public actor CubbyClient {
                 throw CubbyAPIError(status: 0, operationID: "image.uploadImage", detail: nil)
             }
             return upload
+        }
+    }
+
+    public func uploadImage(_ request: ImageUploadRequest) async throws -> ImageUpload {
+        try await perform {
+            guard request.algorithmRevision == PerceptualHash64.algorithmRevision else {
+                throw HashIndex.Failure.unsupportedRevision(request.algorithmRevision)
+            }
+            var input = UploadInput(
+                filename: request.filename, size: request.size, contentType: .imageJpeg)
+            guard let contentType = type(of: input.contentType).init(rawValue: request.contentType) else {
+                throw PhotoFile.Failure.unsupportedContentType(request.contentType)
+            }
+            input.contentType = contentType
+            input.entityType = Components.Schemas.EntityImage(
+                rawValue: request.entity.rawValue.uppercased())
+            input.algorithmRevision = Double(request.algorithmRevision)
+            input.perceptualHash = request.perceptualHash.hex
+            input.sourceFingerprint = .init(
+                hash: request.sourceFingerprint.hash.hex,
+                aspectRatio: request.sourceFingerprint.aspectRatio)
+            input.width = request.width
+            input.height = request.height
+            let output = try await api.image_uploadImage(
+                body: .json(input))
+            guard let upload = ImageUpload(try output.ok.body.json) else {
+                throw CubbyAPIError(status: 0, operationID: "image.uploadImage", detail: nil)
+            }
+            return upload
+        }
+    }
+
+    public func imageHashIndex() async throws -> ImageHashIndexDocument {
+        try await perform {
+            let result = try await api.image_hashIndex().ok.body.json
+            guard result.algorithmRevision == Double(PerceptualHash64.algorithmRevision) else {
+                throw HashIndex.Failure.unsupportedRevision(Int(result.algorithmRevision))
+            }
+            return try ImageHashIndexDocument(
+                algorithmRevision: Int(result.algorithmRevision),
+                items: result.items.map { row in
+                    try ImageHashEntry(
+                        id: ImageCode(row.id),
+                        perceptualHash: row.perceptualHash.map { try PerceptualHash64(hex: $0) },
+                        sourceFingerprint: row.sourceFingerprint.map {
+                            try SourceFingerprint(
+                                hash: PerceptualHash64(hex: $0.hash), aspectRatio: $0.aspectRatio)
+                        }, width: row.width, height: row.height)
+                },
+                repair: result.repair.map { row in
+                    guard let url = URL(string: row.url) else { throw PhotoFile.Failure.unreadable }
+                    return ImageHashRepair(id: ImageCode(row.id), url: url)
+                })
+        }
+    }
+
+    public func setPerceptualHashes(_ items: [ImageHashUpdate]) async throws -> ImageHashWriteResult {
+        try await perform {
+            let result = try await api.image_setPerceptualHashes(
+                body: .json(
+                    .init(
+                        algorithmRevision: Double(PerceptualHash64.algorithmRevision),
+                        items: items.map { .init(id: $0.id.rawValue, perceptualHash: $0.perceptualHash.hex) })
+                )
+            ).ok.body.json
+            return try ImageHashWriteResult(
+                items: result.items.map {
+                    try ImageHashUpdate(
+                        id: ImageCode($0.id), perceptualHash: PerceptualHash64(hex: $0.perceptualHash))
+                }, unavailable: result.unavailable.map { ImageCode($0) })
+        }
+    }
+
+    public func imageDetail(_ id: ImageCode) async throws -> CubbyImageDetail {
+        try await perform {
+            let result = try await api.image_detail(query: .init(id: id.rawValue)).ok.body.json
+            guard let url = URL(string: result.url) else { throw PhotoFile.Failure.unreadable }
+            return CubbyImageDetail(
+                id: ImageCode(result.id), url: url, filename: result.filename,
+                associations: result.associations.map {
+                    .init(
+                        entityType: $0.entityType.rawValue, entityID: $0.entityId,
+                        name: $0.entityName, role: $0.role.rawValue)
+                })
         }
     }
 

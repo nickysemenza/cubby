@@ -22,9 +22,9 @@ struct SectionView: View {
             switch section {
             case .today: TodayView()
             case .capture: CaptureView()
+            case .photos: PhotosRootView()
             case .browse: BrowseRootView()
             case .search: SearchView()
-            case .identify: IdentifyView()
             case .dev: DevView()
             }
         }
@@ -51,6 +51,7 @@ struct SectionView: View {
             case .gardenBedJournal(let id): GardenBedJournalView(locationID: id)
             case .audit(let locationID): AuditRootView(locationID: locationID)
             case .needsPhoto(let locationID): NeedsPhotoView(locationID: locationID)
+            case .identify: IdentifyView()
             case .dev: DevView()
             }
         }
@@ -64,4 +65,11 @@ struct SectionView: View {
         default: EntityDetailView(key: key, id: id)
         }
     }
+}
+
+#Preview {
+    NavigationStack {
+        SectionView(section: .capture)
+    }
+    .environment(PreviewFixtures.signedInModel())
 }

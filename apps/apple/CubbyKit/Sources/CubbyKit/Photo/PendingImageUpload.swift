@@ -24,28 +24,37 @@ public struct PendingImageUpload: Sendable {
     }
 
     private let service: any PhotoService
-    private let put: PresignedUpload.Put
+    private let put: PresignedUpload.FilePut
 
     public init(
         service: any PhotoService,
-        put: @escaping PresignedUpload.Put = { try await PresignedUpload.put($0, to: $1, contentType: $2) }
+        put: @escaping PresignedUpload.FilePut = {
+            try await PresignedUpload.putFile($0, to: $1, contentType: $2)
+        }
     ) {
         self.service = service
         self.put = put
     }
 
     public func upload(
-        _ bytes: Data,
-        filename: String,
-        format: ImageEncoding.Format,
+        _ photo: PreparedPhoto,
         entity: EntityKey,
         progress: (@Sendable (Phase) -> Void)? = nil
     ) async throws -> Result {
         progress?(.presigning)
+        let file = photo.file
         let upload = try await service.createUpload(
-            filename: filename, size: bytes.count, format: format, entity: entity)
+            ImageUploadRequest(
+                filename: file.filename,
+                size: file.size,
+                contentType: file.contentType,
+                entity: entity,
+                perceptualHash: photo.perceptualHash,
+                sourceFingerprint: photo.sourceFingerprint,
+                width: file.width,
+                height: file.height))
         progress?(.uploading)
-        try await put(bytes, upload.uploadUrl, format.contentType)
+        try await put(file.url, upload.uploadUrl, file.contentType)
         return Result(imageID: upload.imageId, url: upload.url)
     }
 }

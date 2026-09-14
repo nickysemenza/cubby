@@ -1,93 +1,167 @@
+import CoreGraphics
 import CubbyKit
+import Photos
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
 
 #if os(iOS)
+    import Photos
     import PhotosUI
     import UIKit
 #elseif os(macOS)
     import UniformTypeIdentifiers
 #endif
 
-/// Shared camera and library selection. Image processing belongs to the caller: Garden keeps
-/// scenes intact while product capture can offer subject lifting after selection.
+/// Shared camera and library selection. Sources retain their original bytes; only the bounded
+/// 256px preview is decoded for the UI. Callers decide whether to upload, match, or attach them.
 struct PhotoSourceButtons: View {
-    let onImages: ([CGImage]) -> Void
+    let onSelection: ([PhotoSelectionItem]) -> Void
     let maxSelectionCount: Int
+    let reviewsUploads: Bool
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var matchingSession = UUID()
+    @State private var showingLibrary = false
+    @State private var review: PhotoSelectionBatch?
 
     init(onImage: @escaping (CGImage) -> Void) {
         maxSelectionCount = 1
-        onImages = { images in if let first = images.first { onImage(first) } }
+        reviewsUploads = false
+        onSelection = { selections in
+            if let first = selections.first { onImage(first.preview) }
+        }
     }
 
-    init(maxSelectionCount: Int, onImages: @escaping ([CGImage]) -> Void) {
+    init(maxSelectionCount: Int, onSelection: @escaping ([PhotoSelectionItem]) -> Void) {
+        reviewsUploads = true
         self.maxSelectionCount = maxSelectionCount
-        self.onImages = onImages
+        self.onSelection = onSelection
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(macOS)
         @State private var photoItems: [PhotosPickerItem] = []
+        @State private var pendingPickedItems: [PhotosPickerItem] = []
+    #endif
+    #if os(iOS)
         @State private var showingCamera = false
-        @State private var failedItems: [PhotosPickerItem] = []
     #elseif os(macOS)
         @State private var showingFileImporter = false
         @State private var failedURLs: [URL] = []
+        @State private var fileImportActive = false
     #endif
     @State private var pickError: String?
     @State private var preparing = false
+    @State private var preparationProgress = 0.0
+    @State private var pendingSelections: [PhotoSelectionItem?] = []
+    @State private var failedIndexes: [Int] = []
+    @State private var preparationTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
             LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) { controls }
                 .disabled(preparing)
-            if preparing { ProgressView("Preparing photos…") }
+            if preparing { ProgressView("Preparing photos…", value: preparationProgress, total: 1) }
             if let pickError {
                 Text(pickError)
                     .font(.porcelainLabel)
                     .foregroundStyle(PorcelainTokens.destructive)
                     .fixedSize(horizontal: false, vertical: true)
-                Button("Retry selection") {
+                Button("Retry failed photos") {
                     #if os(iOS)
-                        Task { await loadPicked(failedItems) }
+                        preparationTask = Task { await retryPicked() }
                     #elseif os(macOS)
-                        handleFileImport(.success(failedURLs))
+                        if fileImportActive {
+                            handleFileImport(.success(failedURLs), retrying: true)
+                        } else {
+                            preparationTask = Task { await retryPicked() }
+                        }
                     #endif
                 }.disabled(preparing)
+                Button("Continue without failed photos") { finishPending(skipFailed: true) }
+                    .disabled(preparing || pendingSelections.compactMap { $0 }.isEmpty)
             }
         }
+        .sheet(isPresented: $showingLibrary) {
+            LibraryPickerSheet(maxSelectionCount: maxSelectionCount) { selections in
+                Task { @MainActor in
+                    await Task.yield()
+                    deliver(selections)
+                }
+            }
+        }
+        .sheet(item: $review) { batch in
+            PhotoMatchReviewSheet(items: batch.items, onContinue: onSelection)
+        }
+        #if os(iOS) || os(macOS)
+            .onChange(of: photoItems) { _, items in
+                guard !items.isEmpty else { return }
+                preparationTask?.cancel()
+                preparationTask = Task { await loadPicked(items) }
+            }
+        #endif
         #if os(iOS)
-            .onChange(of: photoItems) { _, items in Task { await loadPicked(items) } }
             .fullScreenCover(isPresented: $showingCamera) {
-                CameraPicker { onImages([$0]) }
+                CameraPicker { data in Task { await receiveCameraData(data) } }
                 .ignoresSafeArea()
             }
         #elseif os(macOS)
             .fileImporter(
                 isPresented: $showingFileImporter, allowedContentTypes: [.image],
                 allowsMultipleSelection: maxSelectionCount > 1
-            ) {
-                handleFileImport($0)
-            }
+            ) { handleFileImport($0) }
         #endif
+        .task {
+            if reviewsUploads {
+                appModel.photoMatches.acquire(matchingSession)
+                await appModel.photoMatches.refresh(client: appModel.client)
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active && reviewsUploads {
+                Task { await appModel.photoMatches.refresh(client: appModel.client) }
+            }
+        }
+        .onDisappear {
+            if reviewsUploads { appModel.photoMatches.release(matchingSession) }
+            preparationTask?.cancel()
+            preparationTask = nil
+        }
     }
 
     @ViewBuilder
     private var controls: some View {
-        #if os(iOS)
-            PhotosPicker(selection: $photoItems, maxSelectionCount: maxSelectionCount, matching: .images) {
+        if PHPhotoLibrary.authorizationStatus(for: .readWrite) == .authorized {
+            Button {
+                showingLibrary = true
+            } label: {
+                ActionTile(
+                    title: "Browse Photos", symbol: "photo.on.rectangle.angled",
+                    detail: "See what is in Cubby")
+            }.buttonStyle(.plain)
+        }
+        #if os(iOS) || os(macOS)
+            PhotosPicker(
+                selection: $photoItems, maxSelectionCount: maxSelectionCount, selectionBehavior: .ordered,
+                matching: .images, preferredItemEncoding: .current
+            ) {
                 ActionTile(
                     title: maxSelectionCount == 1 ? "Choose photo" : "Choose photos",
                     symbol: "photo.on.rectangle", detail: "From your library")
             }
             .buttonStyle(.plain)
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button {
-                    showingCamera = true
-                } label: {
-                    ActionTile(title: "Take photo", symbol: "camera", detail: "Use the camera")
+            #if os(iOS)
+                if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                    Button {
+                        showingCamera = true
+                    } label: {
+                        ActionTile(title: "Take photo", symbol: "camera", detail: "Use the camera")
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
-        #elseif os(macOS)
+            #endif
+        #endif
+        #if os(macOS)
             Button {
                 showingFileImporter = true
             } label: {
@@ -99,45 +173,167 @@ struct PhotoSourceButtons: View {
         #endif
     }
 
-    #if os(iOS)
+    private func deliver(_ selections: [PhotoSelectionItem]) {
+        if reviewsUploads { review = PhotoSelectionBatch(items: selections) } else { onSelection(selections) }
+    }
+
+    private func finishPending(skipFailed: Bool) {
+        guard skipFailed || failedIndexes.isEmpty else { return }
+        let selections = pendingSelections.compactMap { $0 }
+        guard !selections.isEmpty else { return }
+        pendingSelections = []
+        failedIndexes = []
+        pickError = nil
+        #if os(macOS)
+            fileImportActive = false
+        #endif
+        deliver(selections)
+    }
+
+    #if os(iOS) || os(macOS)
         private func loadPicked(_ items: [PhotosPickerItem]) async {
             guard !items.isEmpty else { return }
             pickError = nil
             preparing = true
-            failedItems = []
-            defer { preparing = false }
-            var decoded: [CGImage] = []
-            for item in items {
+            #if os(macOS)
+                fileImportActive = false
+            #endif
+            preparationProgress = 0
+            pendingPickedItems = items
+            pendingSelections = Array(repeating: nil, count: items.count)
+            failedIndexes = []
+            defer {
+                preparing = false
+                photoItems = []
+            }
+            for (index, item) in items.enumerated() {
                 do {
-                    guard let data = try await item.loadTransferable(type: Data.self) else {
-                        throw CocoaError(.fileReadCorruptFile)
+                    pendingSelections[index] = try await selection(for: item) { [self] fraction in
+                        Task { @MainActor in
+                            preparationProgress = (Double(index) + fraction) / Double(items.count)
+                        }
                     }
-                    decoded.append(try CoverImageLoader.decode(data))
+                    preparationProgress = Double(index + 1) / Double(items.count)
+                } catch is CancellationError {
+                    return
                 } catch {
-                    failedItems.append(item)
+                    failedIndexes.append(index)
                     pickError = error.localizedDescription
+                    Diagnostics.report(error, context: "photo.picker.prepare")
                 }
             }
-            if !decoded.isEmpty { onImages(decoded) }
-            photoItems = []
+            if failedIndexes.isEmpty { finishPending(skipFailed: false) }
         }
-    #elseif os(macOS)
-        private func handleFileImport(_ result: Result<[URL], any Error>) {
+
+        private func retryPicked() async {
+            guard !failedIndexes.isEmpty else { return }
+            preparing = true
             pickError = nil
-            failedURLs = []
+            let retryIndexes = failedIndexes
+            failedIndexes = []
+            defer { preparing = false }
+            for (offset, index) in retryIndexes.enumerated() {
+                do {
+                    pendingSelections[index] = try await selection(for: pendingPickedItems[index]) {
+                        [self] fraction in
+                        Task { @MainActor in
+                            preparationProgress = (Double(offset) + fraction) / Double(retryIndexes.count)
+                        }
+                    }
+                } catch is CancellationError {
+                    return
+                } catch {
+                    failedIndexes.append(index)
+                    pickError = error.localizedDescription
+                    Diagnostics.report(error, context: "photo.picker.prepare.retry")
+                }
+                preparationProgress = Double(offset + 1) / Double(retryIndexes.count)
+            }
+            if failedIndexes.isEmpty { finishPending(skipFailed: false) }
+        }
+
+        private func selection(
+            for item: PhotosPickerItem, progress: @escaping @Sendable (Double) -> Void
+        ) async throws -> PhotoSelectionItem {
+            if let identifier = item.itemIdentifier,
+                let asset = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil).firstObject
+            {
+                let preview = try await PhotoLibraryIO.shared.thumbnail(
+                    for: asset, network: true, progress: progress)
+                return PhotoSelectionItem(asset: asset, preview: preview)
+            }
+            guard let data = try await item.loadTransferable(type: Data.self) else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            let contentType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+            return try await Task.detached(priority: .userInitiated) {
+                let suffix = UTType(mimeType: contentType)?.preferredFilenameExtension ?? "jpg"
+                let file = try PhotoFile.materialize(
+                    data: data, filename: "photo.\(suffix)", contentType: contentType, capturedAt: nil)
+                return PhotoSelectionItem(file: file, preview: try file.thumbnail())
+            }.value
+        }
+
+    #endif
+    #if os(iOS)
+        private func receiveCameraData(_ data: Data) async {
+            do {
+                let selection = try await Task.detached(priority: .userInitiated) {
+                    let file = try PhotoFile.materialize(
+                        data: data, filename: "camera-photo.jpg", contentType: "image/jpeg", capturedAt: .now)
+                    return PhotoSelectionItem(file: file, preview: try file.thumbnail())
+                }.value
+                deliver([selection])
+            } catch {
+                pickError = error.localizedDescription
+                Diagnostics.report(error, context: "photo.camera.prepare")
+            }
+        }
+    #endif
+    #if os(macOS)
+        private func handleFileImport(_ result: Result<[URL], any Error>, retrying: Bool = false) {
+            pickError = nil
             do {
                 let urls = try result.get()
-                var images: [CGImage] = []
-                for url in urls {
+                if !retrying {
+                    pendingSelections = Array(repeating: nil, count: urls.count)
+                    failedIndexes = []
+                    failedURLs = urls
+                    fileImportActive = true
+                }
+                preparationTask?.cancel()
+                preparationTask = Task { await prepareFiles(urls, retrying: retrying) }
+            } catch {
+                pickError = error.localizedDescription
+                Diagnostics.report(error, context: "photo.file.prepare")
+            }
+        }
+
+        private func prepareFiles(_ urls: [URL], retrying: Bool) async {
+            preparing = true
+            preparationProgress = 0
+            let indexes = retrying ? failedIndexes : Array(urls.indices)
+            failedIndexes = []
+            defer { preparing = false }
+            for (offset, index) in indexes.enumerated() {
+                let url = urls[index]
+                do {
                     let accessing = url.startAccessingSecurityScopedResource()
                     defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-                    do { images.append(try CoverImageLoader.decode(contentsOf: url)) } catch {
-                        failedURLs.append(url); pickError = error.localizedDescription
-                    }
+                    pendingSelections[index] = try await Task.detached(priority: .userInitiated) {
+                        let file = try PhotoFile.materialize(from: url)
+                        return PhotoSelectionItem(file: file, preview: try file.thumbnail())
+                    }.value
+                } catch is CancellationError {
+                    return
+                } catch {
+                    failedIndexes.append(index)
+                    pickError = error.localizedDescription
+                    Diagnostics.report(error, context: "photo.file.prepare")
                 }
-                if !images.isEmpty { onImages(images) }
-            } catch { pickError = error.localizedDescription }
-
+                preparationProgress = Double(offset + 1) / Double(max(1, indexes.count))
+            }
+            if failedIndexes.isEmpty { finishPending(skipFailed: false) }
         }
     #endif
 }

@@ -22,29 +22,29 @@ public struct GardenImageUploader: Sendable {
 
     public init(
         service: any PhotoService,
-        put: @escaping PresignedUpload.Put = { try await PresignedUpload.put($0, to: $1, contentType: $2) }
+        put: @escaping PresignedUpload.FilePut = {
+            try await PresignedUpload.putFile($0, to: $1, contentType: $2)
+        }
     ) {
         pending = PendingImageUpload(service: service, put: put)
     }
 
     public func upload(
-        _ images: [CGImage],
+        _ files: [PhotoFile],
         progress: (@Sendable (Step) -> Void)? = nil
     ) async throws -> [ImageCode] {
         let entity = EntityKey(rawValue: "gardenEntry")!
         var ids: [ImageCode] = []
-        for (offset, image) in images.enumerated() {
+        for (offset, file) in files.enumerated() {
             let position = offset + 1
             do {
-                progress?(.encoding(position, images.count))
-                let data = try ImageEncoding.encode(image, as: .jpeg)
+                progress?(.encoding(position, files.count))
+                let photo = try PreparedPhoto.prepare(file: file)
                 let result = try await pending.upload(
-                    data,
-                    filename: "garden-entry-\(UUID().uuidString).jpg",
-                    format: .jpeg,
+                    photo,
                     entity: entity
                 ) { phase in
-                    if phase == .uploading { progress?(.uploading(position, images.count)) }
+                    if phase == .uploading { progress?(.uploading(position, files.count)) }
                 }
                 // Garden entry attachment marks pending images uploaded in the same transaction
                 // as the entry (see `PhotoService.markUploaded`'s doc comment — this path never
@@ -56,5 +56,25 @@ public struct GardenImageUploader: Sendable {
         }
         progress?(.done)
         return ids
+    }
+
+    public func upload(
+        _ images: [CGImage],
+        progress: (@Sendable (Step) -> Void)? = nil
+    ) async throws -> [ImageCode] {
+        var files: [PhotoFile] = []
+        do {
+            for image in images {
+                let data = try ImageEncoding.encode(image, as: .jpeg)
+                files.append(
+                    try PhotoFile.materialize(
+                        data,
+                        filename: "garden-entry-\(UUID().uuidString).jpg",
+                        contentType: ImageEncoding.Format.jpeg.contentType))
+            }
+        } catch {
+            throw PartialFailure(completedIDs: [], completedCount: 0, underlying: error)
+        }
+        return try await upload(files, progress: progress)
     }
 }

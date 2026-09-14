@@ -311,6 +311,8 @@ const INTENTIONAL_RESPELLINGS = {
   "image::initiateUploadWithoutEntitySchema::filename":
     IMAGE_NO_GENERATED_CREATE,
   "image::initiateUploadWithoutEntitySchema::size": IMAGE_NO_GENERATED_CREATE,
+  "image::initiateUploadWithoutEntitySchema::width": IMAGE_NO_GENERATED_CREATE,
+  "image::initiateUploadWithoutEntitySchema::height": IMAGE_NO_GENERATED_CREATE,
   "image::mcpAttachFileInput::contentType":
     "MCP attach_file tool input (attachFileFields) — its own .describe() MCP prose; no generated create schema exists for image to reference either (generatedImageFieldSchemas.create is empty)",
   "image::mcpAttachFileInput::filename":

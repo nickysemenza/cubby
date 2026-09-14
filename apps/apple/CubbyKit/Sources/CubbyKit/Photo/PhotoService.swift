@@ -21,6 +21,40 @@ public struct ImageUpload: Sendable, Hashable, Decodable {
     }
 }
 
+public struct ImageUploadRequest: Sendable, Hashable {
+    public let filename: String
+    public let size: Int
+    public let contentType: String
+    public let entity: EntityKey
+    public let algorithmRevision: Int
+    public let perceptualHash: PerceptualHash64
+    public let sourceFingerprint: SourceFingerprint
+    public let width: Int
+    public let height: Int
+
+    public init(
+        filename: String,
+        size: Int,
+        contentType: String,
+        entity: EntityKey,
+        algorithmRevision: Int = PerceptualHash64.algorithmRevision,
+        perceptualHash: PerceptualHash64,
+        sourceFingerprint: SourceFingerprint,
+        width: Int,
+        height: Int
+    ) {
+        self.filename = filename
+        self.size = size
+        self.contentType = contentType
+        self.entity = entity
+        self.algorithmRevision = algorithmRevision
+        self.perceptualHash = perceptualHash
+        self.sourceFingerprint = sourceFingerprint
+        self.width = width
+        self.height = height
+    }
+}
+
 extension EntityDescriptor {
     /// Whether `resources.<key>.update` takes `pendingImageIds`; read from the generated route
     /// table, so it tracks the server without a catalog change.
@@ -29,8 +63,7 @@ extension EntityDescriptor {
 
 /// The server calls behind adding a photo. `CubbyClient` conforms; tests stub it.
 public protocol PhotoService: Sendable {
-    func createUpload(filename: String, size: Int, format: ImageEncoding.Format, entity: EntityKey)
-        async throws -> ImageUpload
+    func createUpload(_ request: ImageUploadRequest) async throws -> ImageUpload
     /// Finalizes standalone uploads. Garden entry attachment finalizes its pending batch atomically.
     func markUploaded(_ id: ImageCode) async throws
     /// Attaches uploaded images to any entity whose update body takes `pendingImageIds`; throws
@@ -42,13 +75,8 @@ public protocol PhotoService: Sendable {
 }
 
 extension CubbyClient: PhotoService {
-    public func createUpload(
-        filename: String,
-        size: Int,
-        format: ImageEncoding.Format,
-        entity: EntityKey
-    ) async throws -> ImageUpload {
-        try await uploadImage(filename: filename, size: size, format: format, entity: entity)
+    public func createUpload(_ request: ImageUploadRequest) async throws -> ImageUpload {
+        try await uploadImage(request)
     }
 
     public func attachImages(_ ids: [ImageCode], to entity: EntityKey, id: String) async throws {

@@ -118,17 +118,20 @@ struct GardenEntrySheet: View {
     let model: GardenModel
     let target: GardenEntryTarget
     let uploader: GardenImageUploader
+    @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var kind: GardenEntryKind = .observation
     @State private var observedAt = Date.now
+    @State private var dateWasEdited = false
     @State private var note = ""
     @State private var harvestAmount = ""
-    @State private var images: [CGImage] = []
+    @State private var selections: [PhotoSelectionItem] = []
     @State private var uploadStatus: String?
     @State private var uploadError: String?
     @State private var uploadedIDs: [ImageCode] = []
-    @State private var uploadedImageCount = 0
     @State private var isUploading = false
+    @State private var photoDateNeedsConfirmation = false
+    @State private var saveTask: Task<Void, Never>?
     @State private var locationID: String
     @State private var plantingID: String
 
@@ -147,7 +150,14 @@ struct GardenEntrySheet: View {
                         Text("Harvest").tag(GardenEntryKind.harvest)
                     }
                     .pickerStyle(.segmented)
-                    DatePicker("Date", selection: $observedAt, displayedComponents: .date)
+                    GardenObservationDatePicker(
+                        selection: Binding(
+                            get: { observedAt },
+                            set: {
+                                dateWasEdited = true
+                                photoDateNeedsConfirmation = false
+                                observedAt = $0
+                            }))
                     GardenOptionPicker(
                         "Location", selection: $locationID, options: model.options.locations, required: true)
                     GardenOptionPicker(
@@ -159,28 +169,40 @@ struct GardenEntrySheet: View {
                 if let error = model.saveError { Text(error).foregroundStyle(PorcelainTokens.destructive) }
                 Section("Photos") {
                     PhotoBatch(
-                        photos: images.enumerated().map {
+                        photos: selections.map {
                             PhotoAttachment(
-                                id: "local-\($0.offset)", filename: "Garden photo \($0.offset + 1)",
-                                source: .local($0.element),
-                                status: $0.offset < uploadedImageCount ? "Uploaded" : nil)
+                                id: $0.id, filename: gardenPhotoLabel($0), source: .local($0.preview),
+                                imageID: $0.existingImageID?.rawValue,
+                                status: $0.existingImageID == nil ? nil : "Uploaded")
                         },
                         onRemove: isUploading
                             ? nil
                             : { id in
-                                guard let index = Int(id.replacingOccurrences(of: "local-", with: "")) else {
-                                    return
-                                }
-                                if index < uploadedImageCount {
-                                    uploadedIDs.remove(at: index)
-                                    uploadedImageCount -= 1
-                                }
-                                images.remove(at: index)
+                                selections.removeAll { $0.id == id }
+                                applyPhotoDateIfPossible()
                             })
-                    GardenPhotoSourceButtons { images.append(contentsOf: $0) }
+                    GardenPhotoSourceButtons(maxSelectionCount: remainingPhotoCapacity) {
+                        selections.append(contentsOf: $0)
+                        applyPhotoDateIfPossible()
+                    }
+                    if photoDateNeedsConfirmation {
+                        Text(
+                            "These photos have different or unavailable capture dates. Choose the entry date."
+                        )
+                        .font(.porcelainLabel)
+                        .foregroundStyle(PorcelainTokens.destructive)
+                        Button("Use \(observedAt.formatted(date: .abbreviated, time: .omitted))") {
+                            dateWasEdited = true
+                            photoDateNeedsConfirmation = false
+                        }
+                    }
                     if let uploadStatus { Text(uploadStatus).font(.porcelainLabel) }
                     if let uploadError {
                         Text(uploadError).font(.porcelainLabel).foregroundStyle(PorcelainTokens.destructive)
+                    }
+                    if let photoSelectionError {
+                        Text(photoSelectionError).font(.porcelainLabel)
+                            .foregroundStyle(PorcelainTokens.destructive)
                     }
                 }
             }
@@ -194,37 +216,37 @@ struct GardenEntrySheet: View {
                     Button("Cancel") { dismiss() }.disabled(model.isSaving || isUploading)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }
-                        .disabled(locationID.isEmpty || model.isSaving || isUploading)
+                    Button("Save") { startSave() }
+                        .disabled(
+                            locationID.isEmpty || model.isSaving || isUploading
+                                || photoSelectionError != nil || photoDateNeedsConfirmation)
                 }
             }
-        }.interactiveDismissDisabled(isUploading || model.isSaving)
+        }
+        .interactiveDismissDisabled(isUploading || model.isSaving)
+        .onDisappear { saveTask?.cancel() }
+    }
+
+    private func startSave() {
+        guard saveTask == nil else { return }
+        saveTask = Task {
+            await save()
+            saveTask = nil
+        }
     }
 
     private func save() async {
-        guard !locationID.isEmpty, !isUploading else { return }
+        guard !locationID.isEmpty, !isUploading, photoSelectionError == nil,
+            !photoDateNeedsConfirmation
+        else { return }
         uploadError = nil
         isUploading = true
         defer { isUploading = false }
         do {
-            let remaining = Array(images.dropFirst(uploadedImageCount))
-            let ids = try await uploader.upload(remaining) { step in
-                Task { @MainActor in
-                    uploadStatus =
-                        switch step {
-                        case .encoding(let index, let count): "Preparing photo \(index) of \(count)…"
-                        case .uploading(let index, let count): "Uploading photo \(index) of \(count)…"
-                        case .done: nil
-                        }
-                }
-            }
-            uploadedIDs += ids
-            uploadedImageCount = images.count
-        } catch let failure as GardenImageUploader.PartialFailure {
-            uploadedIDs += failure.completedIDs
-            uploadedImageCount += failure.completedCount
-            uploadError = failure.underlying.localizedDescription
-            Diagnostics.report(failure.underlying, context: "garden.entry.upload")
+            try Task.checkCancellation()
+            try await uploadNewSelections()
+            try Task.checkCancellation()
+        } catch is CancellationError {
             return
         } catch {
             uploadError = error.localizedDescription
@@ -237,8 +259,73 @@ struct GardenEntrySheet: View {
                 observedAt: observedAt,
                 note: note.nilIfEmpty, harvestAmount: kind == .harvest ? harvestAmount.nilIfEmpty : nil,
                 pendingImageIDs: uploadedIDs))
-        if saved { dismiss() }
+        guard !Task.isCancelled else { return }
+        if saved {
+            if !uploadedIDs.isEmpty, let client = model.service as? CubbyClient,
+                appModel.client === client
+            {
+                await appModel.photoMatches.refresh(client: client)
+            }
+            guard !Task.isCancelled else { return }
+            dismiss()
+        }
     }
+
+    private func uploadNewSelections() async throws {
+        let resolver = GardenPhotoSelectionResolver(sourceItems: selections) { file in
+            try Task.checkCancellation()
+            let ids = try await uploader.upload([file]) { step in
+                Task { @MainActor in
+                    uploadStatus =
+                        switch step {
+                        case .encoding(_, _): "Preparing photo…"
+                        case .uploading(_, _): "Uploading photo…"
+                        case .done: nil
+                        }
+                }
+            }
+            guard let imageID = ids.first else { throw GardenPhotoSelectionResolver.Failure.emptyUpload }
+            return imageID
+        }
+        defer {
+            for index in selections.indices {
+                if let imageID = resolver.resolvedBySelectionID[selections[index].id] {
+                    selections[index].existingImageID = imageID
+                }
+            }
+            uploadedIDs = uniqueImageIDs(selections.compactMap(\.existingImageID))
+        }
+        let resolution = try await resolver.resolve(selections)
+        uploadedIDs = resolution.imageIDs
+    }
+
+    private func applyPhotoDateIfPossible() {
+        guard !dateWasEdited else { return }
+        guard !selections.isEmpty else {
+            photoDateNeedsConfirmation = false
+            return
+        }
+        guard
+            let first = selections.first?.capturedAt,
+            let day = Calendar.current.dateInterval(of: .day, for: first)?.start,
+            selections.allSatisfy({
+                guard let date = $0.capturedAt else { return false }
+                return Calendar.current.isDate(date, inSameDayAs: first)
+            })
+        else {
+            photoDateNeedsConfirmation = true
+            return
+        }
+        observedAt = day
+        photoDateNeedsConfirmation = false
+    }
+
+    private var photoSelectionError: String? {
+        if selections.count > 20 { return "A garden entry can contain at most 20 photos." }
+        return GardenPhotoSelectionResolver.validationError(for: selections)
+    }
+
+    private var remainingPhotoCapacity: Int { max(0, 20 - selections.count) }
 }
 
 struct GardenPlantingActionSheet: View {
@@ -802,12 +889,14 @@ struct GardenHistoryView: View {
 
 struct GardenEntryCorrectionSheet: View {
     let model: GardenModel; let entry: GardenEntry; let uploader: GardenImageUploader
+    @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var date: Date; @State private var note: String; @State private var amount: String
     @State private var locationID: String; @State private var plantingID: String
-    @State private var images: [CGImage] = []; @State private var removed: Set<String> = []
-    @State private var uploadedIDs: [ImageCode] = []; @State private var uploadedImageCount = 0
+    @State private var selections: [PhotoSelectionItem] = []; @State private var removed: Set<String> = []
+    @State private var uploadedIDs: [ImageCode] = []
     @State private var uploadError: String?; @State private var isUploading = false
+    @State private var saveTask: Task<Void, Never>?
     init(model: GardenModel, entry: GardenEntry, uploader: GardenImageUploader) {
         self.model = model; self.entry = entry; self.uploader = uploader
         _date = State(initialValue: entry.observedAt); _note = State(initialValue: entry.note ?? "");
@@ -818,7 +907,7 @@ struct GardenEntryCorrectionSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                DatePicker("Date", selection: $date, displayedComponents: .date)
+                GardenObservationDatePicker(selection: $date)
                     .disabled(entry.kind == .move)
                 if entry.kind == .move {
                     LabeledContent(
@@ -847,25 +936,22 @@ struct GardenEntryCorrectionSheet: View {
                         },
                         onRemove: isUploading ? nil : { removed.insert($0) })
                     PhotoBatch(
-                        photos: images.enumerated().map {
+                        photos: selections.map {
                             PhotoAttachment(
-                                id: "local-\($0.offset)", filename: "Garden photo \($0.offset + 1)",
-                                source: .local($0.element),
-                                status: $0.offset < uploadedImageCount ? "Uploaded" : nil)
+                                id: $0.id, filename: gardenPhotoLabel($0), source: .local($0.preview),
+                                imageID: $0.existingImageID?.rawValue,
+                                status: $0.existingImageID == nil ? nil : "Uploaded")
                         },
                         onRemove: isUploading
                             ? nil
-                            : { id in
-                                guard let index = Int(id.replacingOccurrences(of: "local-", with: "")) else {
-                                    return
-                                }
-                                if index < uploadedImageCount {
-                                    uploadedIDs.remove(at: index); uploadedImageCount -= 1
-                                }
-                                images.remove(at: index)
-                            })
-                    GardenPhotoSourceButtons { images.append(contentsOf: $0) }
+                            : { id in selections.removeAll { $0.id == id } })
+                    GardenPhotoSourceButtons(maxSelectionCount: remainingPhotoCapacity) {
+                        selections.append(contentsOf: $0)
+                    }
                     if let uploadError { Text(uploadError).foregroundStyle(PorcelainTokens.destructive) }
+                    if let photoSelectionError {
+                        Text(photoSelectionError).foregroundStyle(PorcelainTokens.destructive)
+                    }
                 }
             }
             .disabled(isUploading || model.isSaving)
@@ -878,26 +964,34 @@ struct GardenEntryCorrectionSheet: View {
                     Button("Cancel") { dismiss() }.disabled(model.isSaving || isUploading)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await save() } }.disabled(
-                        locationID.isEmpty || model.isSaving || isUploading)
+                    Button("Save") { startSave() }.disabled(
+                        locationID.isEmpty || model.isSaving || isUploading
+                            || photoSelectionError != nil)
                 }
             }
-        }.interactiveDismissDisabled(isUploading || model.isSaving)
+        }
+        .interactiveDismissDisabled(isUploading || model.isSaving)
+        .onDisappear { saveTask?.cancel() }
     }
+
+    private func startSave() {
+        guard saveTask == nil else { return }
+        saveTask = Task {
+            await save()
+            saveTask = nil
+        }
+    }
+
     private func save() async {
-        guard !isUploading else { return }
+        guard !isUploading, photoSelectionError == nil else { return }
         isUploading = true
         uploadError = nil
         defer { isUploading = false }
         do {
-            let ids = try await uploader.upload(Array(images.dropFirst(uploadedImageCount)))
-            uploadedIDs += ids
-            uploadedImageCount = images.count
-        } catch let failure as GardenImageUploader.PartialFailure {
-            uploadedIDs += failure.completedIDs
-            uploadedImageCount += failure.completedCount
-            uploadError = failure.underlying.localizedDescription
-            Diagnostics.report(failure.underlying, context: "garden.entry.edit.upload")
+            try Task.checkCancellation()
+            try await uploadNewSelections()
+            try Task.checkCancellation()
+        } catch is CancellationError {
             return
         } catch {
             uploadError = error.localizedDescription
@@ -910,8 +1004,58 @@ struct GardenEntryCorrectionSheet: View {
                 observedAt: date, note: note.nilIfEmpty, harvestAmount: amount.nilIfEmpty,
                 pendingImageIDs: uploadedIDs, removeImageIDs: Array(removed)))
         {
+            guard !Task.isCancelled else { return }
+            if !uploadedIDs.isEmpty, let client = model.service as? CubbyClient,
+                appModel.client === client
+            {
+                await appModel.photoMatches.refresh(client: client)
+            }
+            guard !Task.isCancelled else { return }
             dismiss()
         }
+    }
+
+    private func uploadNewSelections() async throws {
+        let resolver = GardenPhotoSelectionResolver(sourceItems: selections) { file in
+            try Task.checkCancellation()
+            guard let imageID = try await uploader.upload([file]).first else {
+                throw GardenPhotoSelectionResolver.Failure.emptyUpload
+            }
+            return imageID
+        }
+        defer {
+            for index in selections.indices {
+                if let imageID = resolver.resolvedBySelectionID[selections[index].id] {
+                    selections[index].existingImageID = imageID
+                }
+            }
+            uploadedIDs = uniqueImageIDs(selections.compactMap(\.existingImageID))
+        }
+        let resolution = try await resolver.resolve(selections)
+        uploadedIDs = resolution.imageIDs
+    }
+
+    private var photoSelectionError: String? {
+        if retainedExistingPhotoCount + selections.count > 20 {
+            return "A garden entry can contain at most 20 photos."
+        }
+        return GardenPhotoSelectionResolver.validationError(for: selections)
+    }
+
+    private var retainedExistingPhotoCount: Int {
+        entry.images.lazy.filter { !removed.contains($0.id) }.count
+    }
+
+    private var remainingPhotoCapacity: Int {
+        max(0, 20 - retainedExistingPhotoCount - selections.count)
+    }
+}
+
+struct GardenObservationDatePicker: View {
+    @Binding var selection: Date
+
+    var body: some View {
+        DatePicker("Date", selection: $selection, displayedComponents: .date)
     }
 }
 

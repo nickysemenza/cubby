@@ -780,6 +780,10 @@ export const inventoryEntry = pgTable(
 
 export const image = pgTable("Image", generatedImageColumns(), (table) => [
   shortcodeUnique("Image", table.shortcode),
+  check(
+    "Image_perceptualHash_format_check",
+    sql`${table.perceptualHash} IS NULL OR ${table.perceptualHash} ~ '^[0-9a-f]{16}$'`,
+  ),
   uniqueIndex("Image_key_key")
     .on(table.key)
     .where(sql`${table.deletedAt} IS NULL`),

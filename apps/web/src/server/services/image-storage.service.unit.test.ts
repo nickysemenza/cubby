@@ -29,6 +29,10 @@ class MemoryImageStorage {
     contentType: string;
     size: number;
     key: string;
+    perceptualHash?: string;
+    sourceFingerprint?: { hash: string; aspectRatio: number };
+    width?: number;
+    height?: number;
   }> = [];
   readonly createdUploads: Array<{
     filename: string;
@@ -196,6 +200,30 @@ const attachmentTarget = {
 } satisfies Pick<McpAttachFileInput, "entityType" | "entityId">;
 
 describe("image storage ports", () => {
+  it("persists optional native hash metadata on the pending upload row", async () => {
+    const { service, storage } = setup();
+
+    await service.initiateImageUploadWithoutEntity(database, {
+      filename: "native.jpg",
+      contentType: "image/jpeg",
+      size: 1024,
+      algorithmRevision: 1,
+      perceptualHash: "0123456789abcdef",
+      sourceFingerprint: { hash: "fedcba9876543210", aspectRatio: 1.5 },
+      width: 1200,
+      height: 800,
+    });
+
+    expect(storage.createdPending).toEqual([
+      expect.objectContaining({
+        perceptualHash: "0123456789abcdef",
+        sourceFingerprint: { hash: "fedcba9876543210", aspectRatio: 1.5 },
+        width: 1200,
+        height: 800,
+      }),
+    ]);
+  });
+
   it("rolls back an imported object when the repository rejects its image row", async () => {
     const { service, storage } = setup();
     storage.createUploadError = new Error("database unavailable");

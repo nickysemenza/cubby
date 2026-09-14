@@ -1,0 +1,378 @@
+import CubbyKit
+import Photos
+import SwiftUI
+
+struct PhotosRootView: View {
+    @State private var destination: PhotoSelectionBatch?
+    var body: some View {
+        PhotoLibraryBrowser(maxSelectionCount: nil, picker: false) { items in
+            destination = PhotoSelectionBatch(items: items)
+        }
+        .sheet(item: $destination) { batch in
+            PhotoDestinationSheet(items: batch.items) { destination = nil }
+        }
+    }
+}
+
+struct LibraryPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let maxSelectionCount: Int
+    let onSelection: ([PhotoSelectionItem]) -> Void
+    var body: some View {
+        NavigationStack {
+            PhotoLibraryBrowser(maxSelectionCount: maxSelectionCount, picker: true) { items in
+                onSelection(items)
+                dismiss()
+            }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+        }
+        #if os(macOS)
+            .frame(minWidth: 660, minHeight: 600)
+        #endif
+    }
+}
+
+struct PhotoSelectionBatch: Identifiable {
+    let id = UUID()
+    let items: [PhotoSelectionItem]
+}
+
+private struct PhotoLibraryBrowser: View {
+    enum Filter: String, CaseIterable { case all = "All", missing = "Not in Cubby", found = "In Cubby" }
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.scenePhase) private var scenePhase
+    let maxSelectionCount: Int?
+    let picker: Bool
+    let onSelection: ([PhotoSelectionItem]) -> Void
+    @State private var filter: Filter = .all
+    @State private var selecting = false
+    @State private var pickerIDs: [String] = []
+    @State private var preview: AssetPreview?
+    @State private var session = UUID()
+    @State private var loading: Task<Void, Never>?
+    @State private var selectionError: String?
+    @State private var loadingSelection = false
+    private let columns = [GridItem(.adaptive(minimum: 100, maximum: 160), spacing: 3)]
+
+    private var library: PhotoLibraryStore { appModel.photoLibrary }
+    private var matches: PhotoMatchStore { appModel.photoMatches }
+    private var ids: [String] { picker ? pickerIDs : library.selectedIDs }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if library.hasFullAccess {
+                controls
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 12) {
+                            ForEach(library.months) { month in
+                                let assets = month.assets.filter(includes)
+                                if !assets.isEmpty {
+                                    Text(
+                                        month.id == .distantPast
+                                            ? "Undated" : month.id.formatted(.dateTime.month(.wide).year())
+                                    )
+                                    .font(.headline).padding(.horizontal, 12).id(month.id)
+                                    LazyVGrid(columns: columns, spacing: 3) {
+                                        ForEach(assets, id: \.localIdentifier) { asset in
+                                            PhotoLibraryCell(asset: asset, selection: selectionNumber(asset))
+                                            {
+                                                library.scrollID = asset.localIdentifier
+                                                if selecting || picker {
+                                                    toggle(asset.localIdentifier)
+                                                } else {
+                                                    preview = AssetPreview(asset: asset)
+                                                }
+                                            }.id(asset.localIdentifier)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 12)
+                    }
+                    .refreshable { await library.refresh(matches: matches, client: appModel.client) }
+                    .onAppear {
+                        if let id = library.scrollID { proxy.scrollTo(id, anchor: .center) }
+                    }
+                    .overlay {
+                        if library.count == 0 {
+                            ContentUnavailableView(
+                                "No photos", systemImage: "photo",
+                                description: Text("Photos in your accessible library will appear here."))
+                        }
+                    }
+                    .toolbar {
+                        ToolbarItem(placement: .automatic) {
+                            Menu("Jump to month", systemImage: "calendar") {
+                                ForEach(library.months) { month in
+                                    Button(month.id.formatted(.dateTime.month(.wide).year())) {
+                                        withAnimation { proxy.scrollTo(month.id, anchor: .top) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if selecting || picker { selectionBar }
+            } else {
+                permissionFallback
+            }
+        }
+        .navigationTitle("Photos")
+        .porcelainScreen()
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                if library.hasFullAccess && !picker {
+                    Button(selecting ? "Done selecting" : "Select") { selecting.toggle() }
+                }
+            }
+        }
+        .task { await library.activate(session, matches: matches, client: appModel.client) }
+        .onDisappear {
+            library.deactivate(session); loading?.cancel()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await library.refresh(matches: matches, client: appModel.client) } }
+        }
+        .sheet(item: $preview) { selected in
+            PhotoLibraryPreview(asset: selected.asset) {
+                toggle(selected.asset.localIdentifier); selecting = true
+            }
+        }
+        .alert(
+            "Could not load photos",
+            isPresented: Binding(get: { selectionError != nil }, set: { if !$0 { selectionError = nil } })
+        ) {
+            Button("OK") { selectionError = nil }
+        } message: {
+            Text(selectionError ?? "")
+        }
+    }
+
+    private var controls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker("Show", selection: $filter) {
+                ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }.pickerStyle(.segmented)
+            HStack(spacing: 6) {
+                if library.isScanning || matches.isLoading || matches.isRepairing {
+                    ProgressView().controlSize(.mini)
+                }
+                Text(library.isScanning ? "Checking your library…" : matches.coverage).font(.caption)
+                Spacer()
+                Button {
+                    Task { await library.refresh(matches: matches, client: appModel.client) }
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }.accessibilityLabel("Refresh photo matches")
+            }.foregroundStyle(.secondary)
+            if filter == .missing {
+                Text(
+                    "Includes unchecked photos and possible matches. More matches may appear while checking continues."
+                )
+                .font(.caption2).foregroundStyle(.secondary)
+            }
+        }.padding(12)
+    }
+
+    private var selectionBar: some View {
+        HStack {
+            Text("\(ids.count) selected").font(.subheadline)
+            Spacer()
+            if loadingSelection {
+                ProgressView(value: library.selectionProgress).frame(width: 70)
+                    .accessibilityLabel("Downloading selected photos")
+                Button("Cancel") {
+                    loading?.cancel(); loadingSelection = false
+                }
+            } else {
+                Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
+                    .buttonStyle(.borderedProminent).disabled(ids.isEmpty)
+            }
+        }.padding(12).background(.bar)
+    }
+
+    private var permissionFallback: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Image(systemName: "photo.on.rectangle.angled").font(.largeTitle)
+                Text("Your Photos library, alongside Cubby").font(.title2)
+                Text(
+                    "Allow full Photos access to browse your camera roll and see which photos are represented in Cubby. Uploads happen only when you choose a destination and add them."
+                )
+                if library.authorization == .notDetermined {
+                    Button("Allow Photos access") {
+                        Task { await library.requestAccess(matches: matches, client: appModel.client) }
+                    }.buttonStyle(.borderedProminent)
+                } else {
+                    Text(
+                        "Whole-library browsing needs full access. You can change Photos access in Settings, or select individual photos below."
+                    )
+                    .foregroundStyle(.secondary)
+                }
+                PhotoSourceButtons(maxSelectionCount: maxSelectionCount ?? 100, onSelection: onSelection)
+            }.padding(24).frame(maxWidth: 560)
+        }
+    }
+
+    private func includes(_ asset: PHAsset) -> Bool {
+        if filter == .all { return true }
+        let represented = matches.storedCandidates(for: asset.localIdentifier).contains {
+            $0.confidence == .strong
+        }
+        switch filter {
+        case .all: return true;
+        case .missing: return !represented;
+        case .found: return represented
+        }
+    }
+
+    private func selectionNumber(_ asset: PHAsset) -> Int? {
+        ids.firstIndex(of: asset.localIdentifier).map { $0 + 1 }
+    }
+
+    private func toggle(_ id: String) {
+        var selection = ids
+        if selection.contains(id) {
+            selection.removeAll { $0 == id }
+        } else if maxSelectionCount == nil || selection.count < maxSelectionCount! {
+            selection.append(id)
+        } else {
+            selectionError = "Choose up to \(maxSelectionCount!) photos."
+        }
+        if picker { pickerIDs = selection } else { library.selectedIDs = selection }
+    }
+
+    private func prepareSelection() {
+        let selected = ids
+        loadingSelection = true
+        loading = Task {
+            defer { loadingSelection = false }
+            do {
+                let items = try await library.selection(selected)
+                try Task.checkCancellation()
+                onSelection(items)
+            } catch is CancellationError {} catch {
+                selectionError = error.localizedDescription
+                Diagnostics.report(error, context: "photos.selection")
+            }
+        }
+    }
+}
+
+private struct AssetPreview: Identifiable {
+    let asset: PHAsset
+    var id: String { asset.localIdentifier }
+}
+
+private struct PhotoLibraryCell: View {
+    @Environment(AppModel.self) private var appModel
+    let asset: PHAsset
+    let selection: Int?
+    let onTap: () -> Void
+    @State private var image: CGImage?
+    private var known: Bool {
+        appModel.photoLibrary.checked.contains(asset.localIdentifier)
+            && appModel.photoMatches.hasIndex && appModel.photoMatches.error == nil
+            && appModel.photoMatches.candidates[asset.localIdentifier] != nil
+    }
+    private var represented: Bool {
+        appModel.photoMatches.storedCandidates(for: asset.localIdentifier).contains {
+            $0.confidence == .strong
+        }
+    }
+    private var possibleMatch: Bool {
+        !represented && !appModel.photoMatches.storedCandidates(for: asset.localIdentifier).isEmpty
+    }
+    var body: some View {
+        Button(action: onTap) {
+            Rectangle().fill(PorcelainTokens.inset).aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    if let image {
+                        Image(decorative: image, scale: 1).resizable().scaledToFill()
+                    } else {
+                        Image(systemName: "photo").foregroundStyle(.secondary)
+                    }
+                }.clipped()
+                .overlay(alignment: .bottomTrailing) {
+                    if let selection {
+                        Text("\(selection)").font(.caption.bold()).padding(7).background(.blue, in: Circle())
+                            .foregroundStyle(.white).padding(5)
+                    } else if represented {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.white, .blue).padding(6)
+                    } else if possibleMatch || !known {
+                        Image(systemName: "questionmark.circle").foregroundStyle(.white).shadow(radius: 2)
+                            .padding(6)
+                    }
+                }
+        }.buttonStyle(.plain)
+            .accessibilityLabel(
+                "\(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Undated photo"), \(represented ? "In Cubby" : possibleMatch ? "Possible Cubby match" : known ? "No known match" : "Not checked")"
+            )
+            .accessibilityValue(selection.map { "Selected photo \($0)" } ?? "")
+            .onDisappear { image = nil }
+            .task(id: asset.modificationDate) {
+                do {
+                    image = try await appModel.photoLibrary.thumbnail(asset, matches: appModel.photoMatches)
+                } catch
+                { /* Local-only grid requests can fail for cloud assets; selection retries with network access. */
+                }
+            }
+    }
+}
+
+private struct PhotoLibraryPreview: View {
+    @Environment(AppModel.self) private var appModel
+    @Environment(\.dismiss) private var dismiss
+    let asset: PHAsset
+    let onSelect: () -> Void
+    @State private var image: CGImage?
+    @State private var error: String?
+    var body: some View {
+        NavigationStack {
+            List {
+                if let image {
+                    Image(decorative: image, scale: 1).resizable().scaledToFit().frame(maxHeight: 400)
+                } else if let error {
+                    Text(error).foregroundStyle(PorcelainTokens.destructive)
+                } else {
+                    ProgressView("Loading photo…")
+                }
+                if let date = asset.creationDate { Text(date.formatted(date: .complete, time: .shortened)) }
+                Section("In Cubby") {
+                    let candidates = appModel.photoMatches.storedCandidates(for: asset.localIdentifier)
+                    if candidates.isEmpty { Text("No known match").foregroundStyle(.secondary) }
+                    ForEach(Array(candidates.enumerated()), id: \.offset) { _, candidate in
+                        MatchCandidateView(candidate: candidate)
+                    }
+                    Text(appModel.photoMatches.coverage).font(.caption).foregroundStyle(.secondary)
+                    if appModel.photoMatches.repairFailures > 0 {
+                        Text("Some images could not be checked. Refresh to retry.").font(.caption)
+                    }
+                    Text("Recognition does not certify the resolution of an older upload.").font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }.navigationTitle("Photo")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Select") {
+                            onSelect(); dismiss()
+                        }
+                    }
+                }
+                .task {
+                    do { image = try await PhotoLibraryIO.shared.thumbnail(for: asset, network: true) } catch
+                    {
+                        self.error = error.localizedDescription;
+                        Diagnostics.report(error, context: "photos.preview")
+                    }
+                }
+        }
+    }
+}
+
+#Preview { NavigationStack { PhotosRootView() }.environment(PreviewFixtures.signedInModel()) }

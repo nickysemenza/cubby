@@ -221,6 +221,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "image.detail": async () =>
     (await import("~/server/image-browser.server")).imageHandlers.operations
       .detail,
+  "image.hashIndex": async () =>
+    (await import("~/server/image-browser.server")).imageHandlers.operations
+      .hashIndex,
   "image.importFromUrl": async () =>
     (await import("~/server/image-browser.server")).imageUploadHandlers
       .operations.importFromUrl,
@@ -233,6 +236,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "image.projectSummaries": async () =>
     (await import("~/server/image-browser.server")).imageHandlers.operations
       .projectSummaries,
+  "image.setPerceptualHashes": async () =>
+    (await import("~/server/image-browser.server")).imageHandlers.operations
+      .setPerceptualHashes,
   "image.update": async () =>
     (await import("~/server/image-browser.server")).imageHandlers.operations
       .update,
@@ -326,6 +332,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "maintenance.awaitingWork": async () =>
     (await import("~/server/maintenance-browser.server")).maintenanceHandlers
       .operations.awaitingWork,
+  "maintenance.repairImageDimensions": async () =>
+    (await import("~/server/maintenance-browser.server")).maintenanceHandlers
+      .operations.repairImageDimensions,
   "maintenance.settleAwaitingWork": async () =>
     (await import("~/server/maintenance-browser.server")).maintenanceHandlers
       .operations.settleAwaitingWork,

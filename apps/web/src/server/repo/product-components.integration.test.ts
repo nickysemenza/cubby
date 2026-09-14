@@ -12,7 +12,7 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { product, productComponent } from "~/server/db/schema";
+import { image, product, productComponent } from "~/server/db/schema";
 
 import { getDb, notDeleted } from "./database-helpers";
 import { deleteProducts, updateProduct } from "./product";
@@ -65,9 +65,7 @@ describe("product ⟷ product component links (kit composition)", () => {
       contentType: PDF_CONTENT_TYPE,
     });
     const kitCover = await createImageFixture(ctx.db, "combo-kit-cover");
-    const drillMissing = await createImageFixture(ctx.db, "drill-missing", {
-      storageStatus: "missing",
-    });
+    const drillMissing = await createImageFixture(ctx.db, "drill-missing");
     const drillCover = await createImageFixture(ctx.db, "drill-cover");
     await updateProduct(
       ctx.db,
@@ -91,6 +89,10 @@ describe("product ⟷ product component links (kit composition)", () => {
       },
       ctx.actor,
     );
+    await getDb(ctx.db)
+      .update(image)
+      .set({ storageStatus: "missing" })
+      .where(eq(image.id, drillMissing.id));
 
     const first = await attachProductComponents(
       ctx.db,
