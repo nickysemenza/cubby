@@ -23,4 +23,8 @@ cost a few hundred tokens. A screenshot averages ~11k tokens — measured, they
 are a third of everything the agent reads across a session, and context that
 large is what makes each turn slower. Take one only when the question is
 genuinely visual (layout, spacing, colour) or as a single final proof for the
-user; never to confirm text, structure, or that a page loaded.
+user; never to confirm text, structure, or that a page loaded. Two preview-pane
+traps: a hidden tab has `visibilityState: "hidden"` (rAF suspended, blank
+below-the-fold screenshots, a fake "freeze") — verify with a tall viewport and a
+fresh navigation; and a ref-click can fail to fire a React `onClick` (silent
+no-op) where a coordinate click works.

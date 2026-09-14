@@ -37,3 +37,45 @@ present those candidates for a decision instead of silently skipping them.
 
 For a durable and its consumables, share a compatible tag but attach
 maintenance tasks to the durable Product, not its replacement consumable.
+
+## Standing import preferences
+
+Confirmed by the operator across several vendor imports; assume them without
+re-asking:
+
+- **Promote every receipt line to a Product**, consumables and sub-dollar items
+  included. Low-value rows in the Products table are not a concern.
+- **Create provisional FinancialAccounts** whenever the evidence supports a
+  truthful identity (statement names the card product, receipt gives the
+  tender) rather than leaving settlement unrecorded.
+- **Skip card-only spend with no line items** — report it, do not book it.
+  Spend is itemized or absent.
+- **The project is decided per batch**, never assumed — see
+  matching-and-duplicates.md for the "which project was accruing that day" test.
+- Perishables and live plants take `stockTracked: false`; accessories the
+  operator wants costed but not shelved likewise.
+- Groceries are fully in scope: every order booked, every line itemized, a
+  Product per line. Apparel is in scope too.
+
+## Sale rows must carry the Product
+
+A sale Expense with `productId: null` is financially correct but leaves the
+Product showing an acquisition and no exit, so a later historical backfill
+**re-stocks an item that was sold**. Link exits (`productQuantity: −|units|`)
+whenever the listing title or Seller Hub identifies the item; a "units bought
+vs units sold" group-by per Product then catches phantom sales and re-stocks at
+once. Credits booked with a *positive* quantity are invisible to the exits
+detector — hunt returned-but-still-stocked items on net spend ≤ 0 with live
+inventory, not on quantity signs, and remember a location name is not evidence
+of possession when the entry was never verified.
+
+A cancelled order's charge lines take **no `productQuantity`** (the unit never
+arrived and must not enter the derived-price sample); a `$0.00` warranty
+replacement likewise. A kept partial refund is a price concession and takes
+null, not `−1` — a `−1` there reads as a second disposal.
+
+## Kits, packs, and materials
+
+Splitting kits, allocating bundles and BOGO discounts, N-pack/single pairs, and
+the three lanes for construction materials leaving "Not on a shelf" are in
+[kits-and-bundles.md](kits-and-bundles.md).

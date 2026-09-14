@@ -60,7 +60,11 @@ history is the archive. Permanent product constraints live in the
    inventory flows.
 
 9. **Cookbook metadata editing.** Allow imported cookbook titles and other source
-   metadata to be corrected after import, including malformed OPF titles.
+   metadata to be corrected after import, including malformed OPF titles. Cookbook
+   is still write-once in the entity kernel (`bindings.unit.test.ts` asserts
+   `updateInput` is null), and a recipe's cookbook link cannot be re-pointed from
+   the recipe form even though the generated update field group already permits
+   `cookbookId` — wire both in the same slice.
 
 10. **Variance-targeted recount pass.** Seed a recount session from the
     shelf-versus-ledger disagreement worklist so the pass visits the products that
@@ -275,8 +279,41 @@ history is the archive. Permanent product constraints live in the
 - **Explicit idempotency key for `add_recipe_to_meal`** — Promote if a re-sent agent
   call actually duplicates a meal line in practice. A natural-key unique index is NOT
   the answer: a meal repeating a recipe at different scales is intended behavior, and
-  each occurrence must stay a distinguishable shopping-list contribution (see
-  `api/routers/meal.integration.test.ts`). Retry-safety needs a caller-supplied key.
+  each occurrence must stay a distinguishable shopping-list contribution. Retry-safety
+  needs a caller-supplied key. The guard test that named this as intentional was
+  deleted with the tRPC-era `meal.integration.test.ts` (#914) and never replaced, so
+  the first slice of this — or of any meal-line work — is a `workflows/meal.server.ts`
+  integration test asserting one meal holds one recipe twice at different scales with
+  two independent shopping-list contributions.
+- **Decode bytes in image verification** — Promote when a corrupt or fully transparent
+  cover is next found by eye. `inspectImageFile`
+  (`apps/web/src/server/services/image-integrity.ts`) checks magic bytes, header
+  dimensions, byte length and sha256 but never rasterizes, so `verify_product_images`
+  reports `verified` for files that will not render. A subagent citing the verify tool
+  is therefore not proof of a good image.
+- **Match book scans against ledger-imported books** — Promote when the next ISBN scan
+  mints a twin. `findOrCreateByISBN` (`product-orchestration.service.ts`) matches on GTIN
+  only, and Products created by the eBay/Amazon ledger imports carry no ISBN, so a scan
+  duplicates a book that already has purchase history; the merge that follows is lossy.
+  Either backfill ISBNs onto import-created book Products from their external ids, or
+  fall back to a title/author match before creating.
+- **Let the negative-expected-quantity worklist converge** — Promote when the
+  `negativeExpectedQuantity` view is next worked. It reads the kit-projected quantity
+  (`kit-projection.ts`), and after triage most survivors are settled decisions —
+  big-ticket items whose acquisition predates ledger coverage — with nowhere to be
+  recorded: `dataException` has no such check, yet `view-manifest.ts` asserts the view
+  converges. Two designs were costed and the operator chose to leave the detector alone
+  (2026-08-18): book the missing unit as an Expense with `cost: null,
+  productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
+  quantity's sign, but zero such rows exist today), or add a product data check with a
+  **ledger-derived** fingerprint — the obvious `updatedAt`-keyed version is unsafe,
+  because adding a real acquisition would not re-open the row.
+- **Promote harvested equivalences into the unit graph** — Promote when the
+  ingredient equivalences report's suggestions are repeatedly re-applied by hand. The
+  report (`lib/harvest-equivalences.ts`, `ingredients/equivalences-report.tsx`)
+  harvests ingredient-scoped unit equivalences from recipe parentheticals on demand;
+  writing an accepted one into a durable ingredient-level unit mapping is the deferred
+  next step, and there is no such store yet.
 - **Per-edge breakdown for purchase merges** — Promote if `merge_entity`'s empty
   `moved` array on purchase is noticed in use. `foldChargeInto` moves expenses and
   documents without counting them, so purchase reports a measured `merged` count but

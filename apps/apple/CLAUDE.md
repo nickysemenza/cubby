@@ -127,6 +127,29 @@ reinstall the app to refetch after a change. For a dev device, add
 `applinks:cubby.nickysemenza.com?mode=developer` to the entitlement and enable Developer Mode.
 Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemenza.com/LOC-XXXX`.
 
+### Traps that cost real time (fixed; do not rediscover)
+
+- macOS sandbox entitlements on the iOS target make `simctl launch` hang on a black screen with
+  no error and no process — targets keep per-platform entitlements files.
+- `build-rust.sh --targets sim` writes a ONE-slice xcframework; a macOS build or CLI link then
+  fails "no library for this platform". Run `--targets all` first. Never run two cargo commands
+  against the shared `CARGO_TARGET_DIR` at once.
+- The CLI's ad-hoc signature changes every rebuild, so Keychain re-prompts; it uses a file token
+  store under Application Support instead. `URL.path()` percent-encodes — use
+  `path(percentEncoded: false)` for FileManager.
+- The API emits `.000Z` timestamps the generated client rejects; use `Configuration.cubby`
+  (`LenientISO8601DateTranscoder`). Product list rows carry no image URLs (`coverImageUrl` is on
+  detail only); image `status` is `PENDING|UPLOADED|FAILED`.
+- A generator must never emit one giant array literal: a ~900-line `EntityCatalog.all` literal
+  made Release/WMO spend ~650 s single-threaded in the SIL `COWArrayOpt` pass. Per-entity
+  `private static let` descriptors listed in `all` cut it to 13 s. To find such a stall again:
+  `sample <swift-frontend pid>` shows the pass; `-Xllvm -sil-print-pass-name` is buffered, so
+  stream it through `script` under an `alarm` and demangle the last `Function:` line.
+  `xcodebuild archive` is not incremental — compare with `xcodebuild build -configuration Release`
+  and a `-derivedDataPath`.
+- Running `knip --cache` before `packages/wasm` exists poisons `node_modules/.cache/knip`
+  ("Unresolved imports …recipebridge_bg.js" on every later pre-commit); `rm -rf` that cache.
+
 ### Debugging on device
 
 Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white screen on
