@@ -20,7 +20,6 @@ import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
-import { sourceNutritionEstimate } from "~/lib/nutrition-format";
 import {
   getAllUnitMappingsFromProduct,
   getIngredientMappings,
@@ -31,7 +30,7 @@ import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "../nutrition/NutrientDensityStats";
-import { NutritionLabel } from "../nutrition/NutritionLabel";
+import { ProductNutritionLabel } from "../nutrition/ProductNutritionLabel";
 import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
@@ -114,9 +113,11 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
             placement: "supporting" as const,
             content: (
               <Stack gap="md">
-                <NutritionLabel
-                  estimates={sourceNutritionEstimate(nutritionNutrients)}
-                  servingLabel="per 100 g"
+                <ProductNutritionLabel
+                  nutrients={nutritionNutrients}
+                  mappings={nutritionMappings}
+                  portions={nutritionProduct.food?.portionInfoRaw ?? []}
+                  servingGrams={nutritionProduct.labelNutrition?.servingGrams}
                 />
                 <Description>
                   {nutritionProduct.labelNutrition
