@@ -269,7 +269,7 @@ public struct PhotoFile: Sendable, Hashable {
 }
 
 /// Shared by value-type copies of one app-created temporary photo.
-private final class TemporaryFileLease: @unchecked Sendable {
+private final class TemporaryFileLease: Sendable {
     let url: URL
 
     init(url: URL) {

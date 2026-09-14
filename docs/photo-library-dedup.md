@@ -176,7 +176,7 @@ encoded-file upload pipeline, progressive matching/review, existing picker
 integration, capture-day Garden imports, cancellation, and retry checkpoints.
 
 The server lane passes `pnpm check`, focused unit/OpenAPI/schema checks, and the
-real-PostgreSQL image family (87 tests). CubbyKit's complete suite passes 201
+real-PostgreSQL image family (87 tests). CubbyKit's complete suite passes 202
 tests, including byte preservation, full dimensions, matching, cache pruning,
 and temporary-file ownership. The simulator app-host matching and Garden suites
 pass 10 tests, including partial-save retries and destination stability. The PR

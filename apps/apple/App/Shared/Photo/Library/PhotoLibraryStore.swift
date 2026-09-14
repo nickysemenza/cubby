@@ -148,7 +148,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         thumbnails.setObject(
             ImageBox(image), forKey: asset.localIdentifier as NSString,
             cost: image.bytesPerRow * image.height)
-        let query = try await query(asset, image: image)
+        let query = try await query(asset)
         await matches.register(id: asset.localIdentifier, query: query)
         guard generation == token else { throw CancellationError() }
         checked.insert(asset.localIdentifier)
@@ -192,15 +192,16 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         }
     }
 
-    private func query(_ asset: PHAsset, image: CGImage? = nil) async throws -> HashQuery {
+    private func query(_ asset: PHAsset) async throws -> HashQuery {
         let token = generation
         let id = asset.localIdentifier
         let hash: PerceptualHash64
         if let cached = await cache.hash(forLocalIdentifier: id, modificationDate: asset.modificationDate) {
             hash = cached
         } else {
-            let source: CGImage
-            if let image { source = image } else { source = try await loadImage(asset) }
+            // Fingerprints use an independent final-quality, full-frame request. Grid cache
+            // entries must never become canonical hashes if display sizing/cropping changes.
+            let source = try await PhotoLibraryIO.shared.thumbnail(for: asset, network: false)
             hash = try await Task.detached(priority: .utility) { try PerceptualHash64.compute(source) }.value
             try await cache.store(hash, forLocalIdentifier: id, modificationDate: asset.modificationDate)
         }

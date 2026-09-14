@@ -157,6 +157,24 @@ final class StubPhotoService: PhotoService, Sendable {
 struct PhotoUploaderTests {
     let image = TestImages.canvas(width: 3000, height: 1500, subject: true)
 
+    @Test func temporarySourceSurvivesAnAsynchronousPut() async throws {
+        let original = try ImageEncoding.encode(
+            TestImages.canvas(width: 120, height: 80, subject: true), as: .png)
+        let uploadedURL = Mutex<URL?>(nil)
+        let pending = PendingImageUpload(service: StubPhotoService()) { fileURL, _, _ in
+            uploadedURL.withLock { $0 = fileURL }
+            await Task.yield()
+            try await Task.sleep(for: .milliseconds(20))
+            #expect(try Data(contentsOf: fileURL) == original)
+        }
+        _ = try await pending.upload(
+            PreparedPhoto.prepare(
+                file: PhotoFile.materialize(original, filename: "temporary.png")),
+            entity: .gardenEntry)
+        let url = try #require(uploadedURL.withLock { $0 })
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+    }
+
     @Test func uploadsInTheServerOrderAndOrdersTheCoverSecond() async throws {
         let service = StubPhotoService(existing: [ImageCode("IMG-0001"), ImageCode("IMG-2345")])
         let uploader = PhotoUploader(service: service) { fileURL, url, contentType in

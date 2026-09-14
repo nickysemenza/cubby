@@ -28,6 +28,7 @@ struct PhotoMatchStoreTests {
         let first = try selection(hash: "0123456789abcdef")
         let second = try selection(hash: "0123456789abcdef")
         try await store.check([first, second], client: client)
+        #expect(store.candidates[first.id]?.isEmpty == true)
         #expect(store.candidates[second.id]?.contains { $0.id.rawValue == "draft:\(first.id)" } == true)
         #expect(store.storedCandidates(for: second.id).isEmpty)
         await store.refresh(client: client)

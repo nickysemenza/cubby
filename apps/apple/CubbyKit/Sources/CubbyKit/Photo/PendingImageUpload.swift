@@ -43,6 +43,8 @@ public struct PendingImageUpload: Sendable {
     ) async throws -> Result {
         progress?(.presigning)
         let file = photo.file
+        // PUT receives only a URL; retain its temporary-file owner across the async transfer.
+        defer { withExtendedLifetime(file) {} }
         let upload = try await service.createUpload(
             ImageUploadRequest(
                 filename: file.filename,
