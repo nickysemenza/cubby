@@ -213,6 +213,8 @@ schemes:
         Cubby-iOS-Tests: [test]
     test:
       config: Debug
+      environmentVariables:
+        CUBBY_TEST_HOST: "1"
       targets:
         - Cubby-iOS-Tests
     run:

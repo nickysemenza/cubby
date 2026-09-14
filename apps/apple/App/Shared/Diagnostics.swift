@@ -12,6 +12,15 @@ import Sentry
 /// `nonisolated` because `report` is called from actors (`SpotlightIndexer`) as well as MainActor
 /// models, and the SDK is thread-safe. Nothing here holds mutable state.
 nonisolated enum Diagnostics {
+    /// Test hosts launch the real app before loading tests, including intentional error paths.
+    /// The scheme flag is available at startup; Xcode's markers also cover alternate test runners.
+    static func isTestHost(_ environment: [String: String] = ProcessInfo.processInfo.environment) -> Bool {
+        environment["CUBBY_TEST_HOST"] == "1"
+            || environment["XCTestConfigurationFilePath"] != nil
+            || environment["XCTestBundlePath"] != nil
+            || environment["XCTestSessionIdentifier"] != nil
+    }
+
     /// Project `cubby-apple`, separate from the web app's. A DSN is not a secret — it is embedded in
     /// the shipped binary by design — so hardcoding it is fine.
     static let dsn =
@@ -47,6 +56,7 @@ nonisolated enum Diagnostics {
     /// First thing in `CubbyApp.init`, before `AppModel` exists, so a crash during model setup is
     /// still caught.
     static func start(baseURL: URL) {
+        guard !isTestHost() else { return }
         let environment = environment(for: baseURL)
         SentrySDK.start { options in
             options.dsn = dsn
@@ -76,6 +86,7 @@ nonisolated enum Diagnostics {
     /// already handled by `AppModel.handle`) and a 404 (a stale deep link or Spotlight hit) —
     /// which become breadcrumbs so they still explain a later event without being one.
     static func report(_ error: any Error, context: String) {
+        guard !isTestHost() else { return }
         if error is CancellationError { return }
         if let urlError = error as? URLError, urlError.code == .cancelled { return }
         if let auth = error as? AuthError, auth == .invalidCredentials || auth == .rateLimited { return }
@@ -94,6 +105,7 @@ nonisolated enum Diagnostics {
     /// `tracePropagationTargets` is fixed at `start` — the SDK has no public way to change it
     /// live — so after switching hosts, traces reconnect to the Worker only on the next launch.
     static func setBaseURL(_ url: URL) {
+        guard !isTestHost() else { return }
         let environment = environment(for: url)
         SentrySDK.configureScope { scope in scope.setEnvironment(environment) }
     }
