@@ -31,6 +31,11 @@ compiler memory does not eliminate time spent in lint, Knip, and other repositor
 guards. The first check after changing compiler settings rebuilds its
 incremental state and is not a warm measurement.
 
+A single September 14, 2026 run of `pnpm --dir apps/web exec tsc --noEmit
+--incremental false --extendedDiagnostics 2>&1 | head -40` (14.345 s total,
+5,785,965K peak) printed no line naming a checker count, so the "Default
+checkers" row above stays unlabeled with an actual number rather than a guess.
+
 ## Calendar tests and generation
 
 ICS line folding previously allocated a UTF-8 byte array for every character.
@@ -74,10 +79,11 @@ or weakened to obtain these results.
 
 ## Declarative local tooling
 
-`project.json` replaces the custom check runner. Nx runs two tasks concurrently;
-`NX_PARALLEL` overrides that limit. Existing package scripts and mandatory Git
-hooks remain the entrypoints. Nx Cloud and analytics are disabled; the shared
-local task cache has a 2 GB limit with built-in eviction. Set
+`project.json` replaces the custom check runner. Nx runs four tasks
+concurrently (`nx.json` `"parallel": 4`); `NX_PARALLEL` overrides that limit.
+Existing package scripts and mandatory Git hooks remain the entrypoints. Nx
+Cloud and analytics are disabled; the shared local task cache has a 4 GB limit
+(`"maxCacheSize": "4GB"`) with built-in eviction. Set
 `NX_SKIP_NX_CACHE=true` for a fresh run. Workspace typechecking also caps package
 concurrency at two.
 
@@ -305,3 +311,43 @@ tests, 24 browser tests) so mandatory pre-push validation can run without bypass
 Merging the subsequent CalDAV change from main adds one contract file and four
 PostgreSQL cases; the combined branch retains its calendar Worker tests and uses
 60 contract files / 272 PostgreSQL tests.
+
+## Worktree WASM restore (September 14, 2026)
+
+Measured today on this machine (8-core ARM, 24 GB):
+
+| Case | Before | After |
+| --- | ---: | ---: |
+| Fresh worktree `pnpm agent:setup` WASM step | 54.8 s (Nx miss, full 69-crate build) | 1.6 s (Nx hit restores `packages/wasm`) |
+| Warm checkout `node scripts/ensure-wasm.ts` (nothing changed) | ~7 s (verified Nx hit re-hashes and re-copies outputs) | 0.3 s (in-package `.fingerprint` marker matches) |
+| Same commit, two checkouts — fingerprint equal? | no (untracked `recipebridge/Cargo.lock` re-resolved per checkout; `.DS_Store`/`.claude/` hashed) | yes |
+
+`recipebridge/Cargo.lock` is now tracked: untracked, it was re-resolved by
+cargo metadata on every fresh checkout and rewritten each time, so no two
+worktrees ever shared a fingerprint key. `.DS_Store` and `.claude/` are now
+pruned from the source digest, since Finder rewrites `.DS_Store` on browse and
+that invalidated the cached artifact for nothing. `ensure-wasm.ts` now
+short-circuits on an in-package marker the way `ensure-apple-ffi.ts` already
+did, which is why a warm, nothing-changed checkout drops from ~7 s to 0.3 s.
+
+## Cross-worktree Xcode caches (September 14, 2026)
+
+Wholesale sharing of `DerivedData` or SwiftPM's `.build` across worktrees is
+not worth trying: both key intermediates on absolute source paths, so a second
+worktree gets no hits and concurrent builds contend for one build database.
+Two path-independent slices were measured instead, each as a cold
+`xcodebuild … -scheme Cubby-iOS -destination "generic/platform=iOS Simulator"`
+into a fresh `-derivedDataPath`, run sequentially on an otherwise idle 8-core
+machine (one populate run, then the measured run):
+
+| Case | Cold build | DerivedData |
+| --- | ---: | ---: |
+| Baseline | 132 s | 4.5 GB |
+| `-clonedSourcePackagesDirPath <shared>` (second worktree) | 177 s | 1.1 GB (+3.5 GB shared) |
+| `COMPILATION_CACHE_ENABLE_CACHING=YES` + shared `COMPILATION_CACHE_CAS_PATH` (second worktree) | 121 s | 4.5 GB (+1.0 GB CAS) |
+
+Neither changes build time beyond run-to-run noise (the populate runs were
+116 s and 102 s), so neither flag was adopted. The shared clone directory is a
+disk-only win — 3.4 GB less `DerivedData` per worktree — and would need a
+check that two worktrees resolving packages concurrently serialize on
+SwiftPM's lock before it is worth a follow-up.

@@ -46,7 +46,7 @@ runs:
       with:
         path: packages/wasm
         # Exact key only: a prefix hit would restore the wrong parser revision.
-        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
+        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml', 'recipebridge/Cargo.lock', 'recipebridge/src/**', 'rust-toolchain.toml') }}
 
     - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1
       if: inputs.wasm == 'restore' && steps.wasm-cache.outputs.cache-hit != 'true'
@@ -82,7 +82,7 @@ runs:
       uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
         path: packages/wasm
-        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml', 'recipebridge/src/**', 'rust-toolchain.toml') }}
+        key: wasm-pkg-${{ runner.os }}-${{ hashFiles('recipebridge/Cargo.toml', 'recipebridge/Cargo.lock', 'recipebridge/src/**', 'rust-toolchain.toml') }}
 
     # Recreating links from the pnpm store is faster than restoring node_modules;
     # measurements live in docs/ci.md.

@@ -15,10 +15,20 @@ import { z } from "zod";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // Cargo.lock is skipped: the resolved graph it encodes is already hashed via
-// `cargo metadata` below, and a gitignored lock (recipebridge's) appears only
-// once that crate has been built in a checkout, which would flip the
-// fingerprint of every artifact depending on the crate mid-session.
-const PRUNE = new Set(["target", ".git", "node_modules", "Cargo.lock"]);
+// `cargo metadata` below, and `cargo metadata` rewrites the lock as it runs
+// (the ~/.cargo/config.toml patch turns git entries into path ones), so the
+// bytes on disk are a side effect of fingerprinting rather than an input.
+// .DS_Store and .claude/ are editor/Finder state that can never be a build
+// input; Finder rewrites .DS_Store on browse, which would invalidate every
+// artifact for nothing, and a per-checkout .claude/ breaks worktree sharing.
+const PRUNE = new Set([
+  "target",
+  ".git",
+  "node_modules",
+  "Cargo.lock",
+  ".DS_Store",
+  ".claude",
+]);
 
 // Include assets consumed by include_str!/include_bytes!, additions and deletions.
 // Checkout paths and mtimes aren't inputs: identical worktrees share one artifact.

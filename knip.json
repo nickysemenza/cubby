@@ -19,9 +19,9 @@
       "ignoreDependencies": ["vitest", "vite"],
       // xcode-select: ci-scope.ts's `apple` push check uses it to detect a
       // machine without Xcode (so it can skip, not fail). pkill: apple.ts
-      // quits the running Mac app before relaunching. Both are macOS system
-      // tools, never npm dependencies.
-      "ignoreBinaries": ["xcode-select", "pkill"]
+      // quits the running Mac app before relaunching. du: cache-gc.ts reports
+      // cache directory sizes. All are system tools, never npm dependencies.
+      "ignoreBinaries": ["xcode-select", "pkill", "du"]
     },
     "apps/web": {
       "entry": [

@@ -42,7 +42,8 @@
     "test:all": "pnpm test && concurrently --kill-others-on-fail --success all --names postgres,e2e \"pnpm test:postgres\" \"pnpm test:e2e\"",
     "test:local": "pnpm test:all",
     "apple": "node scripts/apple.ts",
-    "wasm": "CARGO_TARGET_DIR=\"${CARGO_TARGET_DIR:-$HOME/.cache/cubby/recipebridge-target}\" wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge",
+    "wasm": "CARGO_TARGET_DIR=\"${CARGO_TARGET_DIR:-$HOME/.cache/cubby/recipebridge-target}\" wasm-pack build --scope cubby --out-dir ../packages/wasm recipebridge && node scripts/ensure-wasm.ts --stamp",
+    "cache:gc": "node scripts/cache-gc.ts",
     "prepare": "husky"
   },
   "devDependencies": {

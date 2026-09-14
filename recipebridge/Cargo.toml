@@ -68,6 +68,11 @@ codegen-units = 1
 panic = "abort"
 strip = "debuginfo"
 
+# Line numbers are kept for backtraces; full DWARF only inflated the shared
+# target dir.
+[profile.dev]
+debug = "line-tables-only"
+
 # Dev-iteration tuning (mirrors ingredient-parser's). Optimizing dependencies even
 # in debug builds keeps `cargo test`/`cargo clippy` fast despite the heavy
 # `ingredient`/`serde` deps; a light opt-level on the test profile trims runtime

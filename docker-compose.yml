@@ -58,6 +58,9 @@ services:
         max-size: "50m"
         max-file: "3"
   jaeger-all-in-one:
+    # Opt-in like the app: it only exports traces when CUBBY_OTEL=1 (see
+    # apps/web/instrument.server.mjs), so the container is opt-in too.
+    profiles: ["tracing"]
     image: cr.jaegertracing.io/jaegertracing/jaeger:2.20.0
     restart: always
     ports:
