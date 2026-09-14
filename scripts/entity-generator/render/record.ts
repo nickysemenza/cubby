@@ -4,7 +4,7 @@ import { compactLiteral } from "../artifacts.ts";
  * Renders one `// oxfmt-ignore`-guarded generated record constant: a
  * `compactLiteral` object or array literal assigned to a single name, with an
  * optional leading comment and `satisfies` clause. Every compiled-entity
- * roster the generator emits this way (`SHORTCODE_PREFIX`, `entityNames`,
+ * roster the generator emits this way (`SHORTCODE_PREFIX`, `entitySummary`,
  * `generatedEntityFilterContractCases`, …) goes through this one function so
  * the shape of that emission — and the ignore comment oxfmt needs directly
  * above the statement it guards — stays in exactly one place instead of

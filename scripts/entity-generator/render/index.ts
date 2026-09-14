@@ -756,9 +756,15 @@ export const renderEntityArtifacts = (
         key,
         {
           ...rest,
-          fields: fieldModel.fields.map(
-            ({ validation: _validation, ...field }) => field,
-          ),
+          fields: fieldModel.fields.map(({ validation, ...field }) => ({
+            ...field,
+            // A field is required on create when it declares a create schema
+            // that rejects `undefined` — a field with no create schema at all
+            // is never required (it is not part of the create roster).
+            requiredOnCreate:
+              validation.create !== null &&
+              !validation.create.safeParse(undefined).success,
+          })),
         },
       ];
     }),
@@ -922,43 +928,16 @@ export const renderEntityArtifacts = (
         }),
     },
     {
-      relativePath: "packages/schemas/src/generated/entity-presentation.gen.ts",
-      source:
-        generatedHeader +
-        'import type { Entity } from "../entity-core";\n' +
-        'import type { EntityPresentation } from "../entity-definitions/definition";\n\n' +
-        'export { WAYFINDING_DOMAINS } from "../entity-definitions/definition";\n' +
-        'export type { EntityPresentation, WayfindingDomain } from "../entity-definitions/definition";\n\n' +
-        "/**\n" +
-        " * Each entity's `presentation` block, verbatim: domain, description,\n" +
-        " * empty-state copy, icon names, title field. Data only — like\n" +
-        " * `entityNames`, this is for eagerly-loaded client code (the entity\n" +
-        " * registry, navigation, empty states) that must not pull the inspector.\n" +
-        " */\n" +
-        renderRecord({
-          name: "entityPresentation",
-          entries: Object.fromEntries(
-            entities.map(({ key, inspector }) => {
-              const {
-                singular: _singular,
-                plural: _plural,
-                ...presentation
-              } = inspector;
-              return [key, presentation];
-            }),
-          ),
-          satisfies: "Record<Entity, EntityPresentation>",
-          comment: "// Generated presentation stays one entity per line.",
-        }),
-    },
-    {
-      relativePath: "packages/schemas/src/generated/entity-names.gen.ts",
+      relativePath: "packages/schemas/src/generated/entity-summary.gen.ts",
       source:
         generatedHeader +
         // `entity-core` rather than `entity`: this artifact is imported by
         // `identifiers.ts`, and `entity.ts` reaches back into the (much
         // larger) manifest module.
-        'import type { Entity } from "../entity-core";\n\n' +
+        'import type { Entity } from "../entity-core";\n' +
+        'import type { EntityPresentation } from "../entity-definitions/definition";\n\n' +
+        'export { WAYFINDING_DOMAINS } from "../entity-definitions/definition";\n' +
+        'export type { EntityPresentation, WayfindingDomain } from "../entity-definitions/definition";\n\n' +
         "/**\n" +
         " * Display names for one entity, exactly as its literal declares them.\n" +
         " *\n" +
@@ -966,17 +945,19 @@ export const renderEntityArtifacts = (
         " * nav/section name, which is not a pluralization of the singular (see the\n" +
         " * `names` block in `packages/schemas/src/entity-definitions/*.entity.ts`). It is\n" +
         " * `null` for the entities that have no browser route to name a section of.\n" +
-        " *\n" +
-        " * Deliberately its own artifact rather than a field read off\n" +
-        " * `entityInspectorMetadata`: these strings are needed by eagerly-loaded\n" +
-        " * client code (the entity registry, `identifiers.ts`), and the inspector\n" +
-        " * artifact is two orders of magnitude larger.\n" +
         " */\n" +
         "export type EntityNames = { singular: string; plural: string | null };\n\n" +
         "/**\n" +
+        " * One entity's names plus its `presentation` block, verbatim: domain,\n" +
+        " * description, empty-state copy, icon names, title field. Data only —\n" +
+        " * for eagerly-loaded client code (the entity registry, navigation, empty\n" +
+        " * states, `identifiers.ts`) that must not pull the inspector.\n" +
+        " */\n" +
+        "export type EntitySummary = EntityNames & EntityPresentation;\n\n" +
+        "/**\n" +
         " * Every entity key, in declaration order. The leaf roster: `entity-core`'s\n" +
         " * `entitySchema` is `z.enum(entityKeys)`, so this tuple carries no `Entity`\n" +
-        " * constraint of its own (the `satisfies` on `entityNames` below is fine —\n" +
+        " * constraint of its own (the `satisfies` on `entitySummary` below is fine —\n" +
         " * it only reads `Entity` after `entityKeys` is fixed).\n" +
         " */\n" +
         renderRecord({
@@ -985,15 +966,12 @@ export const renderEntityArtifacts = (
         }) +
         "\n" +
         renderRecord({
-          name: "entityNames",
+          name: "entitySummary",
           entries: Object.fromEntries(
-            entities.map(({ key, inspector }) => [
-              key,
-              { singular: inspector.singular, plural: inspector.plural },
-            ]),
+            entities.map(({ key, inspector }) => [key, inspector]),
           ),
-          satisfies: "Record<Entity, EntityNames>",
-          comment: "// Generated names stay one entity per line.",
+          satisfies: "Record<Entity, EntitySummary>",
+          comment: "// Generated summary stays one entity per line.",
         }),
     },
     {
@@ -1004,7 +982,7 @@ export const renderEntityArtifacts = (
         `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
         `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; detailSection: string; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "plainDate" | "timestamp" | "external-link" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; detailSection: string; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "plainDate" | "timestamp" | "external-link" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +

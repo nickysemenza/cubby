@@ -4,8 +4,8 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import {
   WAYFINDING_DOMAINS,
-  entityPresentation,
-} from "@cubby/schemas/entity-presentation";
+  entitySummary,
+} from "@cubby/schemas/entity-summary";
 import type { LinkProps } from "@tanstack/react-router";
 import {
   ArrowLeftRight,
@@ -251,7 +251,7 @@ const recordView = (entity: BrowserRoutedEntity): RecordViewDefinition => ({
   domain: recordDomain(entity),
   to: entities[entity].routes.list,
   label: entities[entity].pluralLabel,
-  description: entityPresentation[entity].description,
+  description: entitySummary[entity].description,
   icon: entities[entity].lucideIcon,
 });
 

@@ -124,7 +124,7 @@ compiler rejects one that is not), `domain` (a `WAYFINDING_DOMAINS` line or
 `null` for an entity on no line), `description`, `emptyState` copy, and icon
 names (`lucide` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
-as `entityPresentation` (`packages/schemas/src/generated/entity-presentation.gen.ts`,
+as part of `entitySummary` (`packages/schemas/src/generated/entity-summary.gen.ts`,
 data only, safe for eagerly-loaded client code), spreads it into the inspector,
 and writes `domain`/`sfSymbol` onto the Swift `EntityDescriptor`. Navigation
 grouping, the Records catalog, empty states and the native shell's sections

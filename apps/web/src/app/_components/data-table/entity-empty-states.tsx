@@ -1,8 +1,8 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import {
   type EntityPresentation,
-  entityPresentation,
-} from "@cubby/schemas/entity-presentation";
+  entitySummary,
+} from "@cubby/schemas/entity-summary";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 
@@ -31,7 +31,7 @@ import type { CubbyTable as Table } from "./table-features";
 type EntityEmptyConfig = EntityPresentation["emptyState"];
 
 const entityEmptyConfig = (entity: BrowserRoutedEntity): EntityEmptyConfig =>
-  entityPresentation[entity].emptyState;
+  entitySummary[entity].emptyState;
 
 interface EntityEmptyStateProps {
   entity: BrowserRoutedEntity;

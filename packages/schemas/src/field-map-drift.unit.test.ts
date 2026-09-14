@@ -137,6 +137,7 @@ const INTENTIONAL_RESPELLINGS = {
   "product::productUpdateData::unitMappings": PARTIAL_REWRAP,
   "product::productUpdateData::externalIds": PARTIAL_REWRAP,
   "product::productUpdateData::usdaUnavailable": PARTIAL_REWRAP,
+  "product::productUpdateData::labelNutrition": PARTIAL_REWRAP,
   "product::productUpdateData::stockTracked": PARTIAL_REWRAP,
   "product::productUpdateData::growsIngredientId": PARTIAL_REWRAP,
   "product::productUpdateData::pendingImageIds": PARTIAL_REWRAP,

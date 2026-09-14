@@ -6,7 +6,7 @@ import {
   shortcodeEntities,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
-import { entityPresentation } from "@cubby/schemas/entity-presentation";
+import { entitySummary } from "@cubby/schemas/entity-summary";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
@@ -303,7 +303,7 @@ export const LABEL_COLUMN_OVERRIDES = {
 export const resolveTitleFieldColumn = (
   entity: ShortcodeEntity,
 ): PgColumn | null => {
-  const titleField = entityPresentation[entity].titleField;
+  const titleField = entitySummary[entity].titleField;
   const model = entityFieldModels[entity];
   const field = model.fields.find((f) => f.readKey === titleField);
   const storageEntry = field
@@ -355,7 +355,7 @@ export const DISPLAY_NAME_COLUMN = shortcodeEntities.reduce(
 
     const column = resolveTitleFieldColumn(entity);
     if (!column) {
-      const titleField = entityPresentation[entity].titleField;
+      const titleField = entitySummary[entity].titleField;
       throw new Error(
         `DISPLAY_NAME_COLUMN: ${entity}'s titleField (${titleField}) has no derivable storage column and no LABEL_COLUMN_OVERRIDES entry to fall back on`,
       );

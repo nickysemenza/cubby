@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { generateOpenApi, type SchemaTransformerSync } from "@ts-rest/open-api";
 import { z } from "zod";
-import { entityKeys } from "@cubby/schemas/entity-names";
+import { entityKeys } from "@cubby/schemas/entity-summary";
 import { getCookies } from "better-auth/cookies";
 import type { HttpMetadata } from "../src/lib/http-api/router";
 import { discriminatorOf } from "../src/lib/http-api/wire";

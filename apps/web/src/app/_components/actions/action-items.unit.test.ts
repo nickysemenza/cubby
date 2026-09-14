@@ -2,8 +2,8 @@ import { allEntities } from "@cubby/schemas/entity-manifest";
 import { browserRoutedEntities } from "@cubby/schemas/entity-manifest";
 import {
   type EntityPresentation,
-  entityPresentation,
-} from "@cubby/schemas/entity-presentation";
+  entitySummary,
+} from "@cubby/schemas/entity-summary";
 import { describe, expect, it } from "vitest";
 
 import { entities } from "~/entities/entities";
@@ -69,7 +69,7 @@ describe("empty-state call-to-actions are reachable", () => {
   it.each(
     browserRoutedEntities.flatMap((entity) => {
       const emptyState: EntityPresentation["emptyState"] =
-        entityPresentation[entity].emptyState;
+        entitySummary[entity].emptyState;
       return emptyState.actionLabel === undefined
         ? []
         : [[entity, emptyState.actionLabel] as const];

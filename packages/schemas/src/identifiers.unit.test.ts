@@ -1,7 +1,7 @@
 import { AppErrors } from "@cubby/shared";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { type ShortcodeEntity, shortcodeEntities } from "./entity-manifest";
-import { entityNames } from "./generated/entity-names.gen";
+import { entitySummary } from "./generated/entity-summary.gen";
 import {
   ENTITY_ID_SCHEMA,
   ENTITY_LABEL,
@@ -73,7 +73,7 @@ describe("entity id lookups", () => {
       // value is the entity literal's `names.singular` with everything after
       // the first word lowered, so a manifest rename reaches server prose.
       expect(label.toLowerCase()).toBe(
-        entityNames[entity].singular.toLowerCase(),
+        entitySummary[entity].singular.toLowerCase(),
       );
     }
   });
