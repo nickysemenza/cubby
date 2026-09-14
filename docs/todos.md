@@ -20,100 +20,101 @@ history is the archive. Permanent product constraints live in the
 
 ## Ranked backlog
 
-1. **Ingredient detail editing and recipe-usage repair.** Make the ingredient
-   detail page self-sufficient: edit `naKinds`, manage its product/USDA and
-   price/unit-mapping relationships, and reparse an affected recipe line without
-   opening the recipe form or ingredient workbench. Use this representative
-   workflow to deepen the shared editing module only after its concrete needs are
-   proven; do not add speculative editor ports first.
+- **Ingredient detail editing and recipe-usage repair.** The ingredient detail
+  page already hosts product/USDA (`IngredientProductShelf`) and unit-mapping
+  (`UnitCoveragePanel`) sections. Remaining scope: let `naKinds` be edited
+  after creation (currently create-only), and add a reparse action to the
+  recipe-usage drift indicator, which is presently read-only. Use this
+  representative workflow to deepen the shared editing module only after its
+  concrete needs are proven; do not add speculative editor ports first.
 
-2. **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
-   completing an instance creates the next one, which naturally enters Needs
-   Attention. Cover every completion path with one idempotent transactional rule,
-   not a scheduler or RRULE system.
+- **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
+  completing an instance creates the next one, which naturally enters Needs
+  Attention. Cover every completion path with one idempotent transactional rule,
+  not a scheduler or RRULE system.
 
-3. **Manual shopping items with durable checks.** Give the shopping list
-   server-backed item identity so ad-hoc entries such as milk or paper towels and
-   checked state persist across date ranges and devices. Keep the list independent
-   of inventory writes.
+- **Manual shopping items with durable checks.** Give the shopping list
+  server-backed item identity so ad-hoc entries such as milk or paper towels and
+  checked state persist across date ranges and devices. Keep the list independent
+  of inventory writes.
 
-4. **Duplicate a meal or copy last week.** Add the remaining calendar round-trip
-   shortcuts for repeating an individual meal or a prior week without rebuilding
-   it by hand.
+- **Duplicate a meal or copy last week.** Add the remaining calendar round-trip
+  shortcuts for repeating an individual meal or a prior week without rebuilding
+  it by hand.
 
-5. **Actionable meal suggestions.** Link missing ingredients to their repair
-   surface, allow adding shortfalls to the shopping list, and make Suggestions
-   reachable from inventory as well as navigation.
+- **Actionable meal suggestions.** `/meals/suggestions` is already reachable
+  from navigation. Remaining scope: link missing ingredients to their repair
+  surface, allow adding shortfalls to the shopping list, and add an entry
+  point from inventory.
 
-6. **Recipe nutrition MCP projection.** Add
-   `get_recipe_nutrition(recipeId, servings)` over the existing recipe totals and
-   return explicit mapped/unmapped coverage rather than silently presenting a
-   partial total as complete.
+- **Recipe nutrition MCP projection.** Add
+  `get_recipe_nutrition(recipeId, servings)` over the existing recipe totals and
+  return explicit mapped/unmapped coverage rather than silently presenting a
+  partial total as complete.
 
-7. **Ingredient coverage visibility.** Surface nutrition/cost coverage quality on
-   the ingredient list so heavily used ingredients without a usable Product mapping
-   are easy to find and repair.
+- **Ingredient coverage visibility.** The ingredient list already shows a USDA
+  badge, a recipe-usage-count column, and a binary has/none product-presence
+  filter. Remaining scope: a combined, mapping-quality-aware signal/filter
+  that surfaces heavily used ingredients lacking a usable Product mapping
+  specifically, not just ones with no Product at all.
 
-8. **Guided placement pass for unlocated products.** Walk a value- or
-   category-bounded worklist one product at a time with three answers: not tracked,
-   place here, or skip. Reuse the existing location picker and immediate-write
-   inventory flows.
+- **Guided placement pass for unlocated products.** Walk a value- or
+  category-bounded worklist one product at a time with three answers: not tracked,
+  place here, or skip. Reuse the existing location picker and immediate-write
+  inventory flows.
 
-9. **Cookbook metadata editing.** Allow imported cookbook titles and other source
-   metadata to be corrected after import, including malformed OPF titles. Cookbook
-   is still write-once in the entity kernel (`bindings.unit.test.ts` asserts
-   `updateInput` is null), and a recipe's cookbook link cannot be re-pointed from
-   the recipe form even though the generated update field group already permits
-   `cookbookId` — wire both in the same slice.
+- **Cookbook metadata editing.** Allow imported cookbook titles and other source
+  metadata to be corrected after import, including malformed OPF titles. Cookbook
+  is still write-once in the entity kernel (`bindings.unit.test.ts` asserts
+  `updateInput` is null), and a recipe's cookbook link cannot be re-pointed from
+  the recipe form even though the generated update field group already permits
+  `cookbookId` — wire both in the same slice.
 
-10. **Variance-targeted recount pass.** Seed a recount session from the
-    shelf-versus-ledger disagreement worklist so the pass visits the products that
-    actually disagree wherever they live.
+- **Variance-targeted recount pass.** Seed a recount session from the
+  shelf-versus-ledger disagreement worklist so the pass visits the products that
+  actually disagree wherever they live.
 
-11. **Project materials and shortfalls.** Add a project-material edge with quantity,
-    free-text unit, optional Product resolution, and durable/consumable semantics;
-    derive have/need/buy through the availability engine without reservations or
-    automatic inventory decrement.
+- **Project materials and shortfalls.** Add a project-material edge with quantity,
+  free-text unit, optional Product resolution, and durable/consumable semantics;
+  derive have/need/buy through the availability engine without reservations or
+  automatic inventory decrement.
 
-12. **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
-    by giving cookbooks durable identity plus a merge/repoint path.
+- **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
+  by giving cookbooks durable identity plus a merge/repoint path.
 
-13. **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
-    facet. Partial-import repair stays on the existing Problems worklist.
+- **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
+  facet. Partial-import repair stays on the existing Problems worklist.
 
-14. **Recurring meals.** Add a focused recurrence model for meals as its own slice,
-    separate from templates and nutrition goals.
+- **Recurring meals.** Add a focused recurrence model for meals as its own slice,
+  separate from templates and nutrition goals.
 
-15. **Meal templates.** Save reusable meal compositions without coupling them to
-    recurrence.
+- **Meal templates.** Save reusable meal compositions without coupling them to
+  recurrence.
 
-16. **Meal nutrition goals.** Let meal planning compare planned nutrition with
-    explicit household goals using the existing recipe nutrition totals.
+- **Meal nutrition goals.** Let meal planning compare planned nutrition with
+  explicit household goals using the existing recipe nutrition totals.
 
-17. **Fix Meals table filtering.** Move filtering to the server-backed list path so
-    a paginated client page never presents itself as the complete filtered result.
+- **Fix actions for financial duplicate findings.** Give duplicate transaction
+  source-ref and account-alias Problems findings a safe targeted action, without
+  widening the general entity-merge system to money entities.
 
-18. **Fix actions for financial duplicate findings.** Give duplicate transaction
-    source-ref and account-alias Problems findings a safe targeted action, without
-    widening the general entity-merge system to money entities.
+- **Saved user-created views.** Persist named filter and sort sets using the
+  versioned external-state pattern, and render them alongside manifest-defined
+  views without creating a second query language.
 
-19. **Saved user-created views.** Persist named filter and sort sets using the
-    versioned external-state pattern, and render them alongside manifest-defined
-    views without creating a second query language.
+- **Server-backed table intelligence.** Extend exact facet counts and honest
+  aggregate summaries from Expenses to one justified server-paginated surface at
+  a time; never analyze a partially loaded client page as the full population.
 
-20. **Server-backed table intelligence.** Extend exact facet counts and honest
-    aggregate summaries from Expenses to one justified server-paginated surface at
-    a time; never analyze a partially loaded client page as the full population.
+- **Return parsed lines from recipe scraping.** Fold ingredient parsing into
+  `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
+  for the same lines.
 
-21. **Return parsed lines from recipe scraping.** Fold ingredient parsing into
-    `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
-    for the same lines.
-
-22. **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
-    `get_shopping_list` is a plain structured/text tool. The remaining USDA
-    Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
-    the local M3 development machine. Keep it only while refinement and explicit
-    selection materially outperform a plain `search_usda_foods` result.
+- **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
+  `get_shopping_list` is a plain structured/text tool. The remaining USDA
+  Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
+  the local M3 development machine. Keep it only while refinement and explicit
+  selection materially outperform a plain `search_usda_foods` result.
 
 ---
 
@@ -165,8 +166,11 @@ history is the archive. Permanent product constraints live in the
 - **TanStack Start observability** — Remove Cubby's observability wrapper when
   TanStack Start supplies equivalent named request/result/error events and trace
   hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
-- **Measured table-virtualizer investigation** — Revisit `directDomUpdates`
-  only during a measured desktop table-virtualizer investigation.
+- **Measured table-virtualizer investigation** — Revisit direct-DOM-write
+  virtualizer options only during a measured desktop table-virtualizer
+  investigation (re-check `@tanstack/react-virtual`'s current API for a
+  low-render-overhead update mode; the option this line previously named,
+  `directDomUpdates`, no longer exists in the installed version).
 - **Split compound ingredient lines** — Promote when `ingredient-parser` can emit
   two ingredients from one line. Blocked upstream, not locally: `parse_ingredient`
   is singular and upstream deliberately keeps "Salt and pepper" whole (`usage.rs`
