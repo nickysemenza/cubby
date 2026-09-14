@@ -7,10 +7,10 @@ import { match } from "ts-pattern";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
-import { Row, Stack } from "~/components/layout";
+import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
-import { StatusText } from "~/components/ui/status-text";
 import {
   Tooltip,
   TooltipContent,
@@ -127,6 +127,29 @@ function MoveToDialog({
           ? "Choose the location this becomes a sublocation of."
           : "Choose the location to move this item to."
       }
+      footer={
+        <Stack gap="sm">
+          {target.kind === "location" && (
+            <Button
+              variant="outline"
+              disabled={!target.roots[0]}
+              onClick={() => {
+                const home = target.roots[0];
+                if (home) commit(home.id);
+              }}
+            >
+              Move to Home
+            </Button>
+          )}
+          <DialogFormActions
+            onCancel={onClose}
+            submitLabel="Move"
+            error={error}
+            submitDisabled={destination === null}
+            onSubmit={() => destination && commit(destination.id)}
+          />
+        </Stack>
+      }
     >
       <Stack gap="md">
         <WithEntitySearch entity="location">
@@ -176,36 +199,6 @@ function MoveToDialog({
             />
           )}
         </WithEntitySearch>
-
-        {error && (
-          <StatusText as="div" tone="destructive" className="text-sm">
-            {error}
-          </StatusText>
-        )}
-
-        <Row justify="end" gap="sm" wrap>
-          {target.kind === "location" && (
-            <Button
-              variant="outline"
-              disabled={!target.roots[0]}
-              onClick={() => {
-                const home = target.roots[0];
-                if (home) commit(home.id);
-              }}
-            >
-              Move to Home
-            </Button>
-          )}
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            disabled={destination === null}
-            onClick={() => destination && commit(destination.id)}
-          >
-            Move
-          </Button>
-        </Row>
       </Stack>
     </ResponsiveDialog>
   );

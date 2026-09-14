@@ -11,6 +11,7 @@ import { EditableAmountCell } from "~/app/_components/data-table/editable-cell";
 import { EditableEntityCell } from "~/app/_components/data-table/editable-entity-cell";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { Row, Stack } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 
@@ -56,6 +57,17 @@ export function InventoryEntriesQuickEditDialog({
       size="md"
       title="Edit Inventory"
       description={`Amounts and locations for "${productName}". Changes save immediately.`}
+      footer={
+        <Row justify="end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            Done
+          </Button>
+        </Row>
+      }
     >
       <Stack gap="xs">
         {entries.length === 0 ? (

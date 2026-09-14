@@ -15,7 +15,12 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { getErrorMessage } from "~/lib/error-utils";
 import { householdLocalDate } from "~/lib/household-date";
 
-import { GardenField, GardenFormActions, GardenNotes } from "./garden-fields";
+import {
+  GARDEN_DIALOG_FORM_ID,
+  GardenField,
+  GardenFormActions,
+  GardenNotes,
+} from "./garden-fields";
 import { GardenPicker } from "./garden-picker";
 import { garden } from "./garden.functions";
 
@@ -84,6 +89,7 @@ export function PlantingActionForm({
   });
   return (
     <form
+      id={GARDEN_DIALOG_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);

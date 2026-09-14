@@ -5,6 +5,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { EntryForm } from "~/app/garden/entry-form";
+import { GardenDialogFooterSlot } from "~/app/garden/garden-fields";
 import { GardenTimeline } from "~/app/garden/garden-timeline";
 import { Row, Stack } from "~/components/layout";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
@@ -62,6 +63,7 @@ function GardenEntriesPage() {
           title="Log garden entry"
           size="lg"
           onOpenChange={setAdding}
+          footer={<GardenDialogFooterSlot />}
         >
           <EntryForm
             locationId={locationId}

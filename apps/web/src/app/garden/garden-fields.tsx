@@ -1,8 +1,11 @@
-import type { ReactNode } from "react";
-import { useId } from "react";
+import { useId, useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
-import { Row, Stack } from "~/components/layout";
-import { Button } from "~/components/ui/button";
+import { Stack } from "~/components/layout";
+import {
+  DialogFormActions,
+  type DialogFormActionsProps,
+} from "~/components/ui/dialog-form-actions";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
@@ -66,40 +69,62 @@ export function GardenNotes({
   );
 }
 
+/**
+ * Every garden dialog opens one leaf form (`EntryForm`, `PlantingForm`,
+ * `PlantingActionForm`, `GardenLocationForm`, plus two inline ones in
+ * `garden-home.tsx`/`location-history.tsx`) as `ResponsiveDialog`'s
+ * `children` — the scrollable body. Only one such dialog is ever
+ * interactable at a time (the underlying modal traps focus), so a single
+ * fixed pair of ids is enough to wire the two sides together without
+ * threading a form id down through every container.
+ */
+export const GARDEN_DIALOG_FORM_ID = "garden-dialog-form";
+const GARDEN_DIALOG_FOOTER_ID = "garden-dialog-footer";
+
+/**
+ * Marker each garden dialog container renders as `ResponsiveDialog`'s
+ * `footer` — outside the scroll region, so it stays reachable on phone.
+ * `GardenFormActions` portals its Cancel/Save into this node.
+ */
+export function GardenDialogFooterSlot() {
+  return <div id={GARDEN_DIALOG_FOOTER_ID} />;
+}
+
+/**
+ * Thin wrapper over `DialogFormActions`: garden forms render this as the
+ * last child of their `<form id={GARDEN_DIALOG_FORM_ID}>`, inside
+ * `ResponsiveDialog`'s scrollable body, but the actions must land in the
+ * dialog's `footer` slot to stay reachable on phone. Portals into the
+ * sibling `GardenDialogFooterSlot` when one is mounted (every real garden
+ * dialog renders one); the submit button targets the form by id since a
+ * portal moves it out of the form's DOM subtree.
+ *
+ * Falls back to rendering inline when no footer slot is present — e.g. a
+ * form under test in isolation, without a surrounding dialog — so existing
+ * standalone renders keep working unchanged.
+ */
 export function GardenFormActions({
   pending,
   error,
   onCancel,
   label = "Save",
-  children,
 }: {
   pending: boolean;
   error: string | null;
   onCancel: () => void;
   label?: string;
-  children?: ReactNode;
 }) {
-  return (
-    <Stack gap="md">
-      {error && (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-      {children}
-      <Row gap="sm" justify="end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onCancel}
-          disabled={pending}
-        >
-          Cancel
-        </Button>
-        <Button type="submit" disabled={pending}>
-          {pending ? "Saving…" : label}
-        </Button>
-      </Row>
-    </Stack>
-  );
+  const [target, setTarget] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    setTarget(document.getElementById(GARDEN_DIALOG_FOOTER_ID));
+  }, []);
+  const props: DialogFormActionsProps = {
+    pending,
+    error,
+    onCancel,
+    submitLabel: label,
+    form: target ? GARDEN_DIALOG_FORM_ID : undefined,
+  };
+  const actions = <DialogFormActions {...props} />;
+  return target ? createPortal(actions, target) : actions;
 }

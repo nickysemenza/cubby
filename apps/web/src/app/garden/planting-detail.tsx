@@ -17,6 +17,7 @@ import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 
 import { EntryForm } from "./entry-form";
+import { GardenDialogFooterSlot } from "./garden-fields";
 import { GardenGuide } from "./garden-guide";
 import { GardenTimeline } from "./garden-timeline";
 import type { GardenLocation } from "./location-form";
@@ -362,6 +363,7 @@ export function PlantingDetail({
           }}
           title={plantingDialogTitle(dialog)}
           size="lg"
+          footer={<GardenDialogFooterSlot />}
         >
           <PlantingDialogContent
             dialog={dialog}

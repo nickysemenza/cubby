@@ -18,7 +18,12 @@ import { entityMutation } from "~/entities/entity-mutation.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { getErrorMessage } from "~/lib/error-utils";
 
-import { GardenField, GardenFormActions, GardenNotes } from "./garden-fields";
+import {
+  GARDEN_DIALOG_FORM_ID,
+  GardenField,
+  GardenFormActions,
+  GardenNotes,
+} from "./garden-fields";
 import { GardenPicker } from "./garden-picker";
 
 export type GardenLocation = Pick<
@@ -77,6 +82,7 @@ export function GardenLocationForm({
   });
   return (
     <form
+      id={GARDEN_DIALOG_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);

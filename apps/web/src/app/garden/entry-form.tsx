@@ -17,7 +17,12 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { householdLocalDate } from "~/lib/household-date";
 
 import { EntryContextFields } from "./entry-context-fields";
-import { GardenField, GardenFormActions, GardenNotes } from "./garden-fields";
+import {
+  GARDEN_DIALOG_FORM_ID,
+  GardenField,
+  GardenFormActions,
+  GardenNotes,
+} from "./garden-fields";
 import {
   GardenPhotos,
   uploadGardenPhotos,
@@ -113,6 +118,7 @@ export function EntryForm({
   });
   return (
     <form
+      id={GARDEN_DIALOG_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         if (saving.current) return;

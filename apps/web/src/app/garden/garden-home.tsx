@@ -17,7 +17,12 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { householdLocalDate } from "~/lib/household-date";
 
 import { EntryForm } from "./entry-form";
-import { GardenField, GardenFormActions } from "./garden-fields";
+import {
+  GARDEN_DIALOG_FORM_ID,
+  GardenDialogFooterSlot,
+  GardenField,
+  GardenFormActions,
+} from "./garden-fields";
 import { garden } from "./garden.functions";
 import { GardenLocationForm, type GardenLocation } from "./location-form";
 import { PlantingForm } from "./planting-form";
@@ -60,6 +65,7 @@ function FinishSelected({
   });
   return (
     <form
+      id={GARDEN_DIALOG_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         save.mutate();
@@ -314,6 +320,7 @@ export function GardenHome() {
           }}
           title={dialogTitle}
           size="lg"
+          footer={<GardenDialogFooterSlot />}
         >
           {dialog.kind === "location" && (
             <GardenLocationForm

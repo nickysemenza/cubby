@@ -1,6 +1,8 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
+import { Row } from "~/components/layout";
+import { Button } from "~/components/ui/button";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
 interface AddInventoryDialogProps {
@@ -25,6 +27,17 @@ export function AddInventoryDialog({
       size="md"
       title={`Add Inventory to ${locationName}`}
       description="Add items to this location. The dialog stays open so you can add multiple items."
+      footer={
+        <Row justify="end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            Done
+          </Button>
+        </Row>
+      }
     >
       <QuickInventoryAdd locationId={locationId} onSuccess={onSuccess} />
     </ResponsiveDialog>

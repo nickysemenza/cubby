@@ -17,6 +17,7 @@ import { getErrorMessage } from "~/lib/error-utils";
 import { householdDateTime } from "~/lib/household-date";
 
 import { EntryForm } from "./entry-form";
+import { GardenDialogFooterSlot } from "./garden-fields";
 import { garden } from "./garden.functions";
 
 export function GardenEntryContent({ entry }: { entry: GardenEntryOut }) {
@@ -207,6 +208,7 @@ function GardenTimelineContent({
           }}
           title="Edit garden entry"
           size="lg"
+          footer={<GardenDialogFooterSlot />}
         >
           <EntryForm
             entry={editing}

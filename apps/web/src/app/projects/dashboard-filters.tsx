@@ -62,6 +62,13 @@ export function DashboardFilters(props: DashboardFiltersProps) {
         title="Project filters"
         description="Narrow projects, work, and spend together."
         size="lg"
+        footer={
+          <Row justify="end">
+            <Button type="button" onClick={() => setOpen(false)}>
+              Done
+            </Button>
+          </Row>
+        }
       >
         <DashboardFilterControls {...props} />
       </ResponsiveDialog>

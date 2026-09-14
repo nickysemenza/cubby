@@ -129,6 +129,18 @@ async function openMealPicker() {
 }
 
 describe("AddToMeal", () => {
+  it("renders Cancel and the primary action in the dialog's footer, not the scrollable body", async () => {
+    renderAddToMeal();
+    fireEvent.click(await screen.findByRole("button", { name: "Add to meal" }));
+
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    const submit = screen.getByRole("button", { name: "Create meal" });
+    // ResponsiveDialog's footer slot carries these classes on both its
+    // desktop Dialog and mobile Sheet branches; the scrollable body does not.
+    expect(cancel.closest(".border-t.bg-popover")).not.toBeNull();
+    expect(submit.closest(".border-t.bg-popover")).not.toBeNull();
+  });
+
   it("offers existing meal slots and adds the recipe to the selected slot", async () => {
     renderAddToMeal();
     const picker = await openMealPicker();

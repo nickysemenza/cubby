@@ -10,7 +10,12 @@ import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { getErrorMessage } from "~/lib/error-utils";
 
-import { GardenField, GardenFormActions } from "./garden-fields";
+import {
+  GARDEN_DIALOG_FORM_ID,
+  GardenDialogFooterSlot,
+  GardenField,
+  GardenFormActions,
+} from "./garden-fields";
 import { garden } from "./garden.functions";
 
 const historyOperations = {
@@ -61,6 +66,7 @@ function LocationDatesForm({
   });
   return (
     <form
+      id={GARDEN_DIALOG_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         if (save.isPending) return;
@@ -233,6 +239,7 @@ export function PlantingLocationHistory({
           }
           size="lg"
           onOpenChange={setEditing}
+          footer={<GardenDialogFooterSlot />}
         >
           <LocationDatesForm
             plantingId={plantingId}

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { DetailSections } from "~/app/_components/data-table/detail-page";
 import { EntryForm } from "~/app/garden/entry-form";
+import { GardenDialogFooterSlot } from "~/app/garden/garden-fields";
 import { GardenEntryContent } from "~/app/garden/garden-timeline";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
@@ -56,6 +57,7 @@ function GardenEntryPage() {
               onOpenChange={setEditing}
               title="Edit garden entry"
               size="lg"
+              footer={<GardenDialogFooterSlot />}
             >
               <EntryForm
                 entry={entry.data}
