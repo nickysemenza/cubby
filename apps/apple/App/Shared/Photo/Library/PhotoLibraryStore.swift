@@ -15,6 +15,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     private(set) var count = 0
     private(set) var checked: Set<String> = []
     private(set) var isScanning = false
+    private(set) var isLoadingLibrary = false
+    private(set) var scannedCount = 0
     private(set) var error: String?
     private(set) var selectionProgress: Double = 0
     var selectedIDs: [String] = []
@@ -29,6 +31,15 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var observing = false
     var hasFullAccess: Bool { authorization == .authorized }
+
+    var scanStatus: String {
+        if isLoadingLibrary { return "Loading your photo library…" }
+        if isScanning { return "Checking photo \(min(scannedCount + 1, count)) of \(count)…" }
+        let unchecked = count - checked.count
+        return unchecked > 0
+            ? "\(checked.count) of \(count) library photos checked · \(unchecked) unchecked"
+            : "\(count) library photos checked"
+    }
 
     override init() {
         super.init()
@@ -68,6 +79,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
     func refresh(matches: PhotoMatchStore, client: CubbyClient) async {
         stopWork()
         let token = generation
+        defer { if generation == token { isLoadingLibrary = false } }
         authorization = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         await matches.refresh(client: client)
         guard generation == token, !Task.isCancelled else { return }
@@ -78,6 +90,7 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             return
         }
         if !observing { PHPhotoLibrary.shared().register(self); observing = true }
+        isLoadingLibrary = true
         let result = await Task.detached(priority: .userInitiated) {
             let options = PHFetchOptions()
             options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
@@ -111,6 +124,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         selectedIDs.removeAll { assetsByID[$0] == nil }
         months = grouped.keys.sorted(by: >).map { Month(id: $0, assets: grouped[$0]!) }
         count = result.count
+        isLoadingLibrary = false
+        scannedCount = 0
         scanTask = Task { [weak self] in
             guard let self else { return }
             guard !Task.isCancelled, generation == token else { return }
@@ -119,11 +134,15 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
             // Let visible cells enqueue their user-initiated requests before the utility scan.
             try? await Task.sleep(for: .milliseconds(150))
             var pending: [String: HashQuery] = [:]
-            for asset in result {
+            for (offset, asset) in result.enumerated() {
                 guard !Task.isCancelled, generation == token else { return }
                 do { pending[asset.localIdentifier] = try await query(asset) } catch is CancellationError {
                     return
                 } catch { /* Cloud-only assets remain unknown until explicitly selected. */  }
+                // Coalesce progress even when cloud-only assets cannot be fingerprinted.
+                if offset.isMultiple(of: 32) || offset == result.count - 1 {
+                    scannedCount = offset + 1
+                }
                 if pending.count >= 32 {
                     await matches.registerBatch(pending)
                     guard generation == token else { return }
@@ -220,6 +239,8 @@ final class PhotoLibraryStore: NSObject, PHPhotoLibraryChangeObserver {
         for task in visibleWork.values { task.cancel() }
         visibleWork = [:]
         isScanning = false
+        isLoadingLibrary = false
+        scannedCount = 0
     }
 
     private func flush() async {

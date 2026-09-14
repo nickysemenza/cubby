@@ -158,10 +158,16 @@ private struct PhotoLibraryBrowser: View {
                 ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }.pickerStyle(.segmented)
             HStack(spacing: 6) {
-                if library.isScanning || matches.isLoading || matches.isRepairing {
+                if library.isLoadingLibrary || library.isScanning || matches.isLoading || matches.isRepairing
+                {
                     ProgressView().controlSize(.mini)
                 }
-                Text(library.isScanning ? "Checking your library…" : matches.coverage).font(.caption)
+                VStack(alignment: .leading, spacing: 2) {
+                    if library.hasFullAccess && (library.count > 0 || library.isLoadingLibrary) {
+                        Text(library.scanStatus)
+                    }
+                    Text(matches.isLoading ? "Refreshing Cubby photos…" : matches.coverage)
+                }.font(.caption).monospacedDigit()
                 Spacer()
                 Button {
                     Task { await library.refresh(matches: matches, client: appModel.client) }
