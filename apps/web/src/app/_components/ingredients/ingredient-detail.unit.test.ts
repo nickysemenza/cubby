@@ -38,6 +38,22 @@ const productWithoutFood = (shortcode: string, price: number | null) =>
     },
   });
 
+const productWithLabel = (shortcode: string, price: number | null) =>
+  mock(productWithMappingsAndFoodOut, {
+    seed: 4,
+    overrides: {
+      id: testShortcode("product", shortcode),
+      price,
+      externalIds: [],
+      food: null,
+      labelNutrition: {
+        servingGrams: 44,
+        nutrients: { kcal: 120 },
+        source: null,
+      },
+    },
+  });
+
 describe("selectNutritionProduct", () => {
   it("prefers the product that carries both nutrition and price over one with nutrition but no price", () => {
     // Regression fixture for the pre-existing bug: nutrition came from
@@ -76,5 +92,23 @@ describe("selectNutritionProduct", () => {
     const pricedNoFood = productWithoutFood("PRD-GGGG", 9.99);
 
     expect(selectNutritionProduct([pricedNoFood])).toBeUndefined();
+  });
+
+  it("prefers a labelled product over a USDA-nutrition product — same precedence as costing", () => {
+    const usdaProduct = productWithFood("PRD-HHHH", 5);
+    const labelledProduct = productWithLabel("PRD-IIII", null);
+
+    const selected = selectNutritionProduct([usdaProduct, labelledProduct]);
+
+    expect(selected?.id).toBe(labelledProduct.id);
+  });
+
+  it("among labelled products, still prefers the one that also carries price", () => {
+    const labelNoPrice = productWithLabel("PRD-JJJJ", null);
+    const labelWithPrice = productWithLabel("PRD-KKKK", 3.5);
+
+    const selected = selectNutritionProduct([labelNoPrice, labelWithPrice]);
+
+    expect(selected?.id).toBe(labelWithPrice.id);
   });
 });

@@ -16,7 +16,9 @@ import {
   emptyIngredient,
   getName,
   ingredientFromMappings,
+  ingredientWith,
   makeEntry,
+  makeProduct,
   makeRootRecipe,
   makeSubRecipe,
   makeSubRecipeEntry,
@@ -842,5 +844,77 @@ describe("calculateTotals diagnostics", () => {
     expect(errOf(noMappings?.gram)).toMatch(/weight/i);
     expect(errOf(noMappings?.nutrient)).toMatch(/nutrient/i);
     expect(r.missingByType.price).toEqual(["flour", "mystery"]);
+  });
+});
+
+describe("nutritionSource diagnostic", () => {
+  it('reports "label" when the only linked product carries a label nutrition override', () => {
+    const heroTortilla = ingredientWith("hero", "hero tortilla", [
+      makeProduct("hero", {
+        mappings: [
+          { a: { value: 1, unit: "each" }, b: { value: 44, unit: "g" } },
+        ],
+        labelNutrition: {
+          servingGrams: 44,
+          nutrients: { kcal: 80 },
+          source: "Hero package label",
+        },
+      }),
+    ]);
+    const r = calculateTotals(
+      [makeEntry("hero", "hero tortilla", [{ value: 1, unit: "each" }])],
+      { hero: heroTortilla },
+    );
+
+    expect(r.diagnostics[0]?.nutritionSource).toBe("label");
+    expect(
+      r.diagnostics[0]?.nutrient.ok && r.diagnostics[0].nutrient.kcal,
+    ).toBeCloseTo(80, 0);
+  });
+
+  it('reports "usda" when the only linked product carries USDA food data', () => {
+    const usdaItem = ingredientFromMappings(
+      "usda-item",
+      "usda item",
+      [{ a: { value: 1, unit: "each" }, b: { value: 44, unit: "g" } }],
+      { "208": 80 },
+    );
+    const r = calculateTotals(
+      [makeEntry("usda-item", "usda item", [{ value: 1, unit: "each" }])],
+      { "usda-item": usdaItem },
+    );
+
+    expect(r.diagnostics[0]?.nutritionSource).toBe("usda");
+  });
+
+  it('reports "none" when no linked product has any nutrition source', () => {
+    const noNutrition = ingredientFromMappings("plain", "plain widget", [
+      { a: { value: 1, unit: "each" }, b: { value: 5, unit: "dollar" } },
+    ]);
+    const r = calculateTotals(
+      [makeEntry("plain", "plain widget", [{ value: 1, unit: "each" }])],
+      { plain: noNutrition },
+    );
+
+    expect(r.diagnostics[0]?.nutritionSource).toBe("none");
+  });
+
+  it("reports null for a sub-recipe row (no products of its own)", () => {
+    const flourForSub = ingredientFromMappings("flour2", "flour", [
+      { a: { value: 1, unit: "cup" }, b: { value: 1, unit: "dollar" } },
+    ]);
+    const sub = makeSubRecipe(
+      "sub",
+      "sub recipe",
+      { value: 1, unit: "batch" },
+      [makeEntry("flour2", "flour", [{ value: 1, unit: "cup" }])],
+    );
+    const r = calculateTotals(
+      [makeSubRecipeEntry(sub, [{ value: 1, unit: "batch" }])],
+      { flour2: flourForSub },
+      { sub },
+    );
+
+    expect(r.diagnostics[0]?.nutritionSource).toBeNull();
   });
 });

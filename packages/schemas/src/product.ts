@@ -345,10 +345,12 @@ export const productFilterFields = {
    * deliberately NOT folded in: setting it doesn't clear the `fdc_id` or the
    * barcode, so a product can be
    * both "has key" and "confirmed unavailable", and conflating them would make
-   * neither recoverable.
+   * neither recoverable. A `labelNutrition` override counts as "has" outright
+   * — it supersedes the USDA lookup rather than keying it, so a labelled
+   * product is present even with neither `fdc_id` nor a barcode.
    */
   usdaPresenceFilter: presenceFilter.describe(
-    "Filter to products that do / don't have a USDA lookup key (an explicit fdc_id, or a UPC to auto-match). NOT whether USDA actually resolves a food for that key.",
+    "Filter to products that do / don't have a USDA lookup key (an explicit fdc_id, a UPC to auto-match, or a label nutrition override). NOT whether USDA actually resolves a food for that key.",
   ),
   imagePresenceFilter: presenceFilter.describe(
     "Filter to products that do / don't have at least one image (PDF manuals don't count).",
@@ -1064,6 +1066,7 @@ const productMcpFields = {
   // field's input shape (`unitMappingInput`) — registered in
   // INTENTIONAL_RESPELLINGS.
   unitMappings: z.array(mcpUnitMappingOut),
+  labelNutrition: generatedProductFieldSchemas.read.labelNutrition,
   dataQuality,
 };
 export const productMcpOut = z.object(productMcpFields);

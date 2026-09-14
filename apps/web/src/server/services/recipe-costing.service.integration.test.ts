@@ -135,6 +135,72 @@ describe("RecipeCostingService", () => {
     });
   });
 
+  describe("label nutrition override", () => {
+    // Hero tortilla: a product USDA has no entry for (no fdc_id), so nutrition
+    // comes entirely from a package-label override. Precedence: label > fdc_id
+    // (USDA) > none — this is the "label" leg with no USDA leg present at all.
+    it('costs a no-fdc_id product from its label, reporting complete coverage and nutritionSource "label"', async () => {
+      const ing = await findOrCreateIngredient(
+        ctx.db,
+        "Label Nutrition ingredient",
+      );
+      await createProduct(
+        ctx.db,
+        makeProductInput({
+          name: "Hero Tortilla",
+          ingredientId: ing.id,
+          labelNutrition: {
+            servingGrams: 44,
+            nutrients: { kcal: 80 },
+            source: "Hero package label",
+          },
+          unitMappings: [
+            {
+              a: { value: 1, unit: "each" },
+              b: { value: 44, unit: "g" },
+              source: "test",
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+      const recipe = await createRecipe(
+        ctx.db,
+        makeRecipeInput({
+          name: "Label Nutrition Recipe",
+          sections: [
+            {
+              instructions: [{ instruction: "Use tortilla" }],
+              ingredients: [
+                ingredientRef(ing.shortcode, {
+                  amounts: [{ value: 1, unit: "each" }],
+                }),
+              ],
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+
+      const result = await service().computeTotals([recipe]);
+      const entry = result.get(recipe.id);
+      expect(entry).toBeDefined();
+      expect(entry?.complete).toBe(true);
+      expect(entry?.totals.nutrition.kcal).toMatchObject({
+        status: "complete",
+        lower: expect.closeTo(80, 5),
+        coverage: { covered: 1, total: 1 },
+      });
+
+      const explanation = await service().explainRecipe(recipe.entityId);
+      expect(explanation.computed.complete).toBe(true);
+      expect(explanation.computed.usdaMisses).toEqual([]);
+      expect(explanation.computed.diagnostics[0]?.nutritionSource).toBe(
+        "label",
+      );
+    });
+  });
+
   describe("loadContext closure (via computeTotals)", () => {
     // Build A → B → C (recipe-as-ingredient links) and confirm the whole closure
     // is loaded (totals computed without error). A real bug here would surface as

@@ -759,6 +759,7 @@ export const loadProductsForCoverage = async (
       manufacturer: true,
       shortcode: true,
       fdc_id: true,
+      labelNutrition: true,
       price: true,
       usdaUnavailable: true,
       ingredientId: true,

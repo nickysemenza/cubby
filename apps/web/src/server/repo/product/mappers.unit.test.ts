@@ -86,6 +86,7 @@ const baseProduct = {
   price: 4.5,
   usdaUnavailable: null,
   stockTracked: null,
+  labelNutrition: null,
   expenseCount: 0,
   componentCount: 0,
   expenseTotal: 42.5,

@@ -101,6 +101,13 @@ export const rowDiagnostic = z.object({
   price: measureDiagnostic,
   gram: measureDiagnostic,
   nutrient: nutrientDiagnostic,
+  /**
+   * Which source this row's nutrition contribution comes from, unioned across
+   * its ingredient's linked products: "label" (only label overrides), "usda"
+   * (only USDA food data), "mixed" (both), "none" (neither). Null for
+   * `kind: "recipe"` rows — a sub-recipe has no products of its own.
+   */
+  nutritionSource: z.enum(["label", "usda", "mixed", "none"]).nullable(),
   missing: rowMissing,
   /** Unit-graph routes per measure (explain endpoint only; null = no path). */
   paths: z

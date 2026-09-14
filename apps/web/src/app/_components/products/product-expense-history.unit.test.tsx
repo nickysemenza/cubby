@@ -29,6 +29,7 @@ const product: ProductWithFoodOut = productWithFoodOut.parse({
   manufacturer: "Milwaukee",
   model: null,
   notes: null,
+  labelNutrition: null,
   expectedQuantity: null,
   category: "tools",
   images: [],

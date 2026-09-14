@@ -15,6 +15,7 @@ import {
 import { imageOut } from "./field-primitives.js";
 import { isbn } from "@cubby/schemas/isbn";
 import { money } from "@cubby/schemas/money";
+import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import {
   moneyNullable,
   positiveMoneyNullable,
@@ -291,6 +292,24 @@ export default defineEntity({
           read: null,
           create: z.array(unitMappingInput).default([]),
           update: z.array(unitMappingInput).optional(),
+        },
+      },
+      {
+        key: "labelNutrition",
+        kind: "json",
+        nullable: true,
+        label: "Label nutrition",
+        // No `display` — same as `unitMappings`, this keeps the generic
+        // detail/form renderer from touching it; a bespoke section owns the
+        // UI. Unlike `unitMappings` this has a real `readKey`/`read` schema
+        // (it's a physical Product column, not a synthesized child-table
+        // projection), so it still reaches `productTopLevelFields` (the
+        // output roster) for costing/API consumers.
+        control: { kind: "specialized", renderer: "structured-field" },
+        validation: {
+          read: productLabelNutrition.nullable(),
+          create: productLabelNutrition.nullable().optional(),
+          update: productLabelNutrition.nullable().optional(),
         },
       },
       {
@@ -586,6 +605,7 @@ export default defineEntity({
       { key: "price", specialized: "real" },
       "usdaUnavailable",
       "stockTracked",
+      { key: "labelNutrition", specialized: "json:labelNutrition" },
       {
         key: "dataExceptions",
         default: "literal",
@@ -609,6 +629,7 @@ export default defineEntity({
       "growsIngredientId",
       "price",
       "unitMappings",
+      "labelNutrition",
       "externalIds",
       "usdaUnavailable",
       "stockTracked",
@@ -630,6 +651,7 @@ export default defineEntity({
       "growsIngredientId",
       "price",
       "unitMappings",
+      "labelNutrition",
       "externalIds",
       "usdaUnavailable",
       "stockTracked",
@@ -651,6 +673,7 @@ export default defineEntity({
       "ingredientId",
       "growsIngredientId",
       "price",
+      "labelNutrition",
     ],
     sort: {
       fields: [
@@ -706,6 +729,7 @@ export default defineEntity({
           "price",
           "stockTracked",
           "unitMappings",
+          "labelNutrition",
           "notes",
         ],
         identity: ["name", "aliases", "manufacturer", "model", "category"],
@@ -734,6 +758,7 @@ export default defineEntity({
       "pricing",
       "usdaUnavailable",
       "stockTracked",
+      "labelNutrition",
       "dataQuality",
       "createdAt",
       "updatedAt",

@@ -75,6 +75,10 @@ export const loadValuationGraphs = async (
         id: parseShortcodeFor("product", row.shortcode),
         unitMappings: storedMappings[row.id] ?? [],
         food: null,
+        // Valuation is weight/price conversions only; a label override only
+        // ever adds nutrient edges, irrelevant here — and this query doesn't
+        // load the column anyway.
+        labelNutrition: null,
         price: row.price,
         pricing: { effectivePrice: exactPrices.get(row.id) ?? null },
       }),

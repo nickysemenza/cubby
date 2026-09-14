@@ -153,6 +153,7 @@ export const mapDbProductToTopLevel = (
   pricing: productData.pricing ?? resolveProductPricing(productData.price),
   usdaUnavailable: productData.usdaUnavailable,
   stockTracked: productData.stockTracked,
+  labelNutrition: productData.labelNutrition,
   dataQuality: productData.dataQuality,
   images: mapImages(productData.images),
   // Same derived cover rule as the picker (see
@@ -470,6 +471,7 @@ export const dbProductToAPI = (
     pricing: productData.pricing ?? resolveProductPricing(productData.price),
     usdaUnavailable: productData.usdaUnavailable,
     stockTracked: productData.stockTracked,
+    labelNutrition: productData.labelNutrition,
     dataQuality,
     createdAt: productData.createdAt,
     updatedAt: productData.updatedAt,

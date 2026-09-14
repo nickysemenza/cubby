@@ -71,6 +71,7 @@ export function slimProduct<TInput>(row: TInput) {
       b: mapping.b,
       source: mapping.source ?? null,
     })),
+    labelNutrition: product.labelNutrition ?? null,
     dataQuality: product.dataQuality,
   });
 }

@@ -19,6 +19,14 @@ import { NutritionLabel } from "./NutritionLabel";
 const resolveServingBasis = (
   mappings: UnitMapping[],
   portions: readonly FoodPortion[],
+  /**
+   * A package label's own stated serving (grams), used only when neither the
+   * unit-mapping graph nor USDA portions resolve a basis — a label has no
+   * portion list and only synthesizes per-100g nutrient edges (see
+   * `labelNutritionMappings`), not a "1 serving = X g" conversion, so without
+   * this fallback a labelled product's toggle would never appear.
+   */
+  labelServingGrams?: number,
 ): { label: string; grams: number } | null => {
   const serving = safeConvertAmount(
     { value: 1, unit: "serving" },
@@ -40,6 +48,9 @@ const resolveServingBasis = (
       grams: portion.gram_weight,
     };
   }
+  if (labelServingGrams != null && labelServingGrams > 0) {
+    return { label: "1 serving", grams: labelServingGrams };
+  }
   return null;
 };
 
@@ -55,14 +66,17 @@ export function ProductNutritionLabel({
   nutrients,
   mappings,
   portions,
+  servingGrams,
 }: {
   nutrients: NutrientsPer100;
   mappings: UnitMapping[];
   portions: readonly FoodPortion[];
+  /** A package label's stated serving grams — see `resolveServingBasis`. */
+  servingGrams?: number;
 }) {
   const basis = useMemo(
-    () => resolveServingBasis(mappings, portions),
-    [mappings, portions],
+    () => resolveServingBasis(mappings, portions, servingGrams),
+    [mappings, portions, servingGrams],
   );
   const [view, setView] = useState<"per100" | "serving">("per100");
 

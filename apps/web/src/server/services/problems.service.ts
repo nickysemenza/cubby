@@ -251,7 +251,7 @@ const findProductCoverageProblems = async (
       manufacturer: p.manufacturer,
       coverage: { covered: [...cov.covered], applicable: [...applicable] },
       hasPrice,
-      hasUsdaLink: p.food != null,
+      hasUsdaLink: p.food != null || p.labelNutrition != null,
       usdaUnavailable: p.usdaUnavailable ?? false,
       ingredientId: parseShortcodeFor("ingredient", p.ingredient.shortcode),
     });
@@ -565,7 +565,7 @@ const presentCoverageExactRows = async (
         applicable: coverage.applicableKinds,
       },
       hasPrice: product.price != null,
-      hasUsdaLink: product.food != null,
+      hasUsdaLink: product.food != null || product.labelNutrition != null,
       usdaUnavailable: product.usdaUnavailable ?? false,
       ingredientId: parseShortcodeFor(
         "ingredient",

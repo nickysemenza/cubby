@@ -133,7 +133,9 @@ const usdaMissesFor = (
     seen.add(row.ingredient.id);
     const entry = ingMap[row.ingredient.id];
     for (const p of entry?.product ?? []) {
-      if (p.fdc_id != null && p.food == null) {
+      // A label supersedes the fdc lookup outright, so a labelled product's
+      // fdc miss isn't a real gap — it already has nutrition.
+      if (p.fdc_id != null && p.food == null && p.labelNutrition == null) {
         misses.push({
           ingredientName: entry?.name ?? row.ingredient.name,
           productName: p.name,

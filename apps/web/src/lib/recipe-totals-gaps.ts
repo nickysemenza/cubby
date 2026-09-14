@@ -225,9 +225,13 @@ const classifyKind = (acc: FixInputs): IngredientTotalsGapKind | "done" => {
 
   // A product is USDA-associated if it carries (or intends to carry) food data:
   // resolved `food`, or an fdc_id/barcode link whose lookup may be transiently
-  // missing.
+  // missing — or a label nutrition override, which supersedes USDA outright.
   const usdaLinked = acc.products.some(
-    (p) => p.food != null || p.fdc_id != null || p.primaryGtin != null,
+    (p) =>
+      p.food != null ||
+      p.fdc_id != null ||
+      p.primaryGtin != null ||
+      p.labelNutrition != null,
   );
   const hasPrice = acc.products.some((p) => p.price != null);
 

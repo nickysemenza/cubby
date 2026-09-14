@@ -3,6 +3,7 @@ import {
   type ProductShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import {
   type FoodSummary,
@@ -12,6 +13,7 @@ import {
 } from "@cubby/usda-schemas";
 import type { ReadonlyDeep } from "type-fest";
 
+import { labelNutritionMappings } from "~/lib/label-nutrition";
 import { wasm } from "~/lib/wasm";
 
 // Mapping synthesis (portions, the bare-count-guarded serving edge, nutrition
@@ -73,8 +75,51 @@ export const unitMappingsFromFood = (food: FoodSummary): UnitMapping[] =>
   wasm.unit_mappings_from_food(toWFoodInput(food)).map(toUnitMapping);
 
 /**
+ * The shared `{unit_mappings, food}` half of a WASM product-mapping input —
+ * used by both `toWProductInput` (recipe-costing's batch WASM call) and
+ * `getAllUnitMappingsFromProduct` (the product/ingredient detail pages' mapping
+ * lists and coverage chips), so the two surfaces can't disagree about label
+ * precedence.
+ *
+ * Precedence is label > fdc_id (USDA) > none: a `labelNutrition` override
+ * synthesizes its own `100 g = X <unit>` edges and the USDA nutrient edges are
+ * dropped outright (`nutrients_per_100: []`) rather than merged — the label
+ * wins, it doesn't supplement. USDA's portion/serving weight edges are kept
+ * either way; only the nutrient contribution is a precedence choice.
+ */
+export const productWasmInputs = (product: {
+  id: ProductShortcode;
+  unitMappings: WUnitMapping[];
+  food: FoodSummary | null;
+  labelNutrition: ProductLabelNutrition | null;
+}): Pick<WProductInputLike, "unit_mappings" | "food"> => {
+  if (product.labelNutrition == null) {
+    return {
+      unit_mappings: product.unitMappings,
+      food: product.food ? toWFoodInput(product.food) : null,
+    };
+  }
+  return {
+    unit_mappings: [
+      ...product.unitMappings,
+      ...labelNutritionMappings(product.id, product.labelNutrition),
+    ],
+    food: product.food
+      ? { ...toWFoodInput(product.food), nutrients_per_100: [] }
+      : null,
+  };
+};
+
+/** The subset of `WProductInput` {@link productWasmInputs} projects. */
+type WProductInputLike = {
+  unit_mappings: WUnitMapping[];
+  food: WFoodInput | null;
+};
+
+/**
  * Gets all unit mappings from a product: stored measurement conversions, plus
- * conversions derived from food data, plus the synthesized price edge.
+ * conversions derived from food data (or a label nutrition override, which
+ * supersedes it), plus the synthesized price edge.
  */
 export const getAllUnitMappingsFromProduct = (product: {
   // All fields are required (not optional) on purpose: omitting one would
@@ -87,6 +132,7 @@ export const getAllUnitMappingsFromProduct = (product: {
   // provenance the synthesis ignores.
   unitMappings: WUnitMapping[];
   food: FoodSummary | null;
+  labelNutrition: ProductLabelNutrition | null;
   price: number | null;
   pricing?: { effectivePrice: number | null };
 }): UnitMapping[] =>
@@ -94,8 +140,7 @@ export const getAllUnitMappingsFromProduct = (product: {
     .product_unit_mappings({
       id: product.id,
       price: product.pricing?.effectivePrice ?? product.price,
-      unit_mappings: product.unitMappings,
-      food: product.food ? toWFoodInput(product.food) : null,
+      ...productWasmInputs(product),
     })
     .map(toUnitMapping);
 
@@ -109,6 +154,7 @@ export const getIngredientMappings = <
       id: ProductShortcode;
       unitMappings: UnitMapping[];
       food: FoodSummary | null;
+      labelNutrition: ProductLabelNutrition | null;
       price: number | null;
       pricing?: { effectivePrice: number | null };
     }>;

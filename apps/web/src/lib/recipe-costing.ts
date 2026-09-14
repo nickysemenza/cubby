@@ -36,11 +36,12 @@ import {
 } from "@cubby/usda-schemas";
 import { err, ok } from "neverthrow";
 
+import { productNutritionSource } from "~/lib/label-nutrition";
 import {
   fromNamedEstimates,
   fromWMeasureEstimate,
 } from "~/lib/nutrition-estimates";
-import { toWFoodInput } from "~/lib/unit-mapping-utils";
+import { productWasmInputs } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
 import type { Result } from "~/misc/result-types";
 
@@ -276,8 +277,7 @@ export const toWProductInput = (
 ): WProductInput => ({
   id: p.id,
   price: p.pricing.effectivePrice,
-  unit_mappings: p.unitMappings,
-  food: p.food ? toWFoodInput(p.food) : null,
+  ...productWasmInputs(p),
 });
 
 const KCAL_CODE = TIER1_NUTRIENTS.kcal.code;
@@ -299,7 +299,34 @@ const nutrientsToResult = (n: WNutrientsResult): Result<NutrientsPer100> => {
  * bindgen emits `undefined` for Rust `None`, so the nullable contract fields
  * are normalized to explicit null here.
  */
-const toRowDiagnostic = (r: WRowResult): RowDiagnostic => {
+/**
+ * Union a row's nutrition source across its ingredient's linked products.
+ * Null for sub-recipe rows (no products of their own) or an ingredient the
+ * costing input's `ingMap` doesn't carry (shouldn't happen — every row's
+ * ingredient is in the closure that built `ingMap` — but a stale-data edge
+ * case reports "no known nutrition" rather than a source it can't back up).
+ */
+const rowNutritionSource = (
+  row: CostingRow | undefined,
+  ingMap: Record<string, IngredientWithFoodLeanOut>,
+): RowDiagnostic["nutritionSource"] => {
+  if (!row || row.type !== "ingredient") return null;
+  const ing = ingMap[row.ingredient.id];
+  if (!ing) return "none";
+  const sources = ing.product.map((p) => productNutritionSource(p));
+  const hasLabel = sources.includes("label");
+  const hasUsda = sources.includes("usda");
+  if (hasLabel && hasUsda) return "mixed";
+  if (hasLabel) return "label";
+  if (hasUsda) return "usda";
+  return "none";
+};
+
+const toRowDiagnostic = (
+  r: WRowResult,
+  row: CostingRow | undefined,
+  ingMap: Record<string, IngredientWithFoodLeanOut>,
+): RowDiagnostic => {
   const diagnostic: RowDiagnostic = {
     id: r.id,
     name: r.name,
@@ -324,6 +351,7 @@ const toRowDiagnostic = (r: WRowResult): RowDiagnostic => {
           nutrientCount: r.nutrients.entries.length,
         }
       : { ok: false, error: r.nutrients.error },
+    nutritionSource: rowNutritionSource(row, ingMap),
     missing: r.missing,
   };
   if (r.paths) {
@@ -339,6 +367,7 @@ const toRowDiagnostic = (r: WRowResult): RowDiagnostic => {
 const projectRecipeCosting = (
   w: WRecipeCosting,
   rows: CostingRow[],
+  ingMap: Record<string, IngredientWithFoodLeanOut>,
 ): RecipeCosting => {
   const nutrients: NutrientsPer100 = {};
   const nutrientsUpper: NutrientsPer100 = {};
@@ -366,7 +395,7 @@ const projectRecipeCosting = (
       weight: [...w.missing_by_type.weight],
       nutrients: [...w.missing_by_type.nutrients],
     },
-    diagnostics: w.rows.map(toRowDiagnostic),
+    diagnostics: w.rows.map((r, i) => toRowDiagnostic(r, rows[i], ingMap)),
     estimates: {
       cost: fromWMeasureEstimate(w.estimates.cost),
       nutrition: fromNamedEstimates(w.estimates.nutrition),
@@ -453,7 +482,7 @@ export const computeRecipeCosting = (
     if (recipe)
       out.set(
         recipe.id,
-        projectRecipeCosting(w, flattenSections(recipe.sections)),
+        projectRecipeCosting(w, flattenSections(recipe.sections), ingMap),
       );
   });
   return out;

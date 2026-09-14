@@ -25,6 +25,7 @@ const productAt = (shortcode: string, componentCount = 0) =>
     manufacturer: "Test",
     model: null,
     notes: null,
+    labelNutrition: null,
     expectedQuantity: null,
     category: null,
     images: [],

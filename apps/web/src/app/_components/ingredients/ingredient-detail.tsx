@@ -19,6 +19,7 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import { sourceNutritionEstimate } from "~/lib/nutrition-format";
 import {
   getAllUnitMappingsFromProduct,
@@ -48,11 +49,15 @@ interface IngredientDetailProps {
  * misattribute cost. Deliberately pick the product carrying both (falling
  * back to nutrition alone when none has a price), rather than the previous
  * "any product with nutritionInfo" pick that left price unaccounted for.
+ * A `labelNutrition` override is preferred over USDA nutrition — same
+ * precedence as `productWasmInputs`' costing — before falling back to price.
  */
 export function selectNutritionProduct(
   products: ProductWithMappingsAndFoodOut[],
 ): ProductWithMappingsAndFoodOut | undefined {
   return (
+    products.find((p) => p.labelNutrition != null && p.price != null) ??
+    products.find((p) => p.labelNutrition != null) ??
     products.find((p) => p.food?.nutritionInfo && p.price != null) ??
     products.find((p) => p.food?.nutritionInfo)
   );
@@ -73,9 +78,11 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
   });
 
   // See selectNutritionProduct for why nutrition and price must come from
-  // the same product.
+  // the same product, and for the label > USDA precedence.
   const nutritionProduct = selectNutritionProduct(ingredient.product);
-  const nutritionInfo = nutritionProduct?.food?.nutritionInfo;
+  const nutritionNutrients = nutritionProduct?.labelNutrition
+    ? labelNutrientsPer100(nutritionProduct.labelNutrition)
+    : nutritionProduct?.food?.nutritionInfo?.nutrientsPer100;
   const nutritionMappings = nutritionProduct
     ? getAllUnitMappingsFromProduct(nutritionProduct)
     : [];
@@ -98,7 +105,7 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     }),
     // Custom section: Nutrition (only if available) — see nutritionProduct
     // above for which product supplies both the nutrients and the price.
-    ...(nutritionInfo && nutritionProduct
+    ...(nutritionNutrients && nutritionProduct
       ? [
           {
             id: "nutrition-information",
@@ -108,20 +115,21 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
             content: (
               <Stack gap="md">
                 <NutritionLabel
-                  estimates={sourceNutritionEstimate(
-                    nutritionInfo.nutrientsPer100,
-                  )}
+                  estimates={sourceNutritionEstimate(nutritionNutrients)}
                   servingLabel="per 100 g"
                 />
                 <Description>
-                  Shown from {nutritionProduct.name}
+                  {nutritionProduct.labelNutrition
+                    ? "From package label, shown from "
+                    : "Shown from "}
+                  {nutritionProduct.name}
                   {nutritionProduct.manufacturer
                     ? ` by ${nutritionProduct.manufacturer}`
                     : ""}
                   .
                 </Description>
                 <NutrientDensityStats
-                  nutrients={nutritionInfo.nutrientsPer100}
+                  nutrients={nutritionNutrients}
                   mappings={nutritionMappings}
                   price={
                     nutritionProduct.pricing.effectivePrice ??
@@ -133,7 +141,16 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
                     manufacturer: nutritionProduct.manufacturer,
                   }}
                 />
-                <FullNutrientBreakdown nutritionInfo={nutritionInfo} />
+                {/* USDA-only: full raw nutrient join behind a disclosure. A
+                    label override has no such join, and when both exist the
+                    label leads with no USDA fallback surfaced here — mirrors
+                    product-detail's minimal ingredient-page treatment. */}
+                {!nutritionProduct.labelNutrition &&
+                  nutritionProduct.food?.nutritionInfo && (
+                    <FullNutrientBreakdown
+                      nutritionInfo={nutritionProduct.food.nutritionInfo}
+                    />
+                  )}
               </Stack>
             ),
           },

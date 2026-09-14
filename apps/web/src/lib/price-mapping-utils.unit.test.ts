@@ -120,6 +120,7 @@ const graphFor = (
     id: testShortcode("product", "PRD-TEST"),
     unitMappings: stored.map((m) => ({ ...m, source: null })),
     food: null,
+    labelNutrition: null,
     price,
   });
 

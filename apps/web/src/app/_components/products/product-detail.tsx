@@ -1,9 +1,12 @@
 import { partitionEntityFiles } from "@cubby/schemas/image";
+import type { ProductLabelNutrition } from "@cubby/schemas/nutrition";
 import type {
   ProductCreateInput,
   ProductWithFoodOut,
 } from "@cubby/schemas/product";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { isNonFoodCategory } from "@cubby/shared";
+import type { NutritionInfo, NutrientsPer100 } from "@cubby/usda-schemas";
 import { useQuery } from "@tanstack/react-query";
 import {
   Apple,
@@ -37,6 +40,7 @@ import {
 } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityGraph } from "~/entities/entity-graph.functions";
+import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
@@ -116,6 +120,67 @@ function productExpectedStat(
   };
 }
 
+/**
+ * The Nutrition Information section body — a package-label override
+ * (`labelNutrition`) leads and takes precedence over a linked USDA food's
+ * nutrients (matching costing precedence in `productWasmInputs`), though the
+ * USDA food's portions still feed the per-serving toggle either way, and its
+ * full nutrient breakdown stays reachable (superseded) behind its own
+ * disclosure when both exist. Split out from `ProductDetail` so this
+ * section's own branching doesn't count against that component's
+ * complexity budget.
+ */
+function productNutritionContent({
+  product,
+  nutritionNutrients,
+  usdaNutritionInfo,
+  mappings,
+}: {
+  product: ProductWithFoodOut;
+  nutritionNutrients: NutrientsPer100;
+  usdaNutritionInfo: NutritionInfo | null;
+  mappings: UnitMapping[];
+}) {
+  const labelNutrition: ProductLabelNutrition | null = product.labelNutrition;
+  return (
+    <Stack gap="md">
+      <ProductNutritionLabel
+        nutrients={nutritionNutrients}
+        mappings={mappings}
+        portions={product.food?.portionInfoRaw ?? []}
+        servingGrams={labelNutrition?.servingGrams}
+      />
+      {labelNutrition && (
+        <Description size="xs">
+          From package label
+          {labelNutrition.source ? ` · ${labelNutrition.source}` : ""}
+        </Description>
+      )}
+      <NutrientDensityStats
+        nutrients={nutritionNutrients}
+        mappings={mappings}
+        price={product.pricing.effectivePrice ?? product.price}
+        mappingProduct={{
+          id: product.id,
+          name: product.name,
+          manufacturer: product.manufacturer,
+        }}
+      />
+      {usdaNutritionInfo && (
+        <>
+          {labelNutrition && (
+            <Description size="xs">
+              Superseded by the package label above — the USDA food&apos;s
+              portions still apply to unit conversions.
+            </Description>
+          )}
+          <FullNutrientBreakdown nutritionInfo={usdaNutritionInfo} />
+        </>
+      )}
+    </Stack>
+  );
+}
+
 export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const relationshipRouteQuery = useQuery(
     entityGraph.graph.queryOptions({
@@ -155,6 +220,15 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
   const [recordSaleOpen, setRecordSaleOpen] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
+
+  // A package-label override (`labelNutrition`) takes precedence over a
+  // linked USDA food, matching costing precedence in `productWasmInputs` —
+  // it leads the label and the USDA food's nutrients (if any) are superseded,
+  // though its portions still feed the per-serving toggle/unit conversions.
+  const usdaNutritionInfo = product.food?.nutritionInfo ?? null;
+  const nutritionNutrients = product.labelNutrition
+    ? labelNutrientsPer100(product.labelNutrition)
+    : usdaNutritionInfo?.nutrientsPer100;
 
   const sections: DetailSection[] = [
     editableDetailSection({
@@ -346,36 +420,21 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
     // custom "1 serving = X g" alias, a branded serving edge, or the food's
     // USDA household portion) leads, with the full raw USDA nutrient join
     // behind a disclosure so non-tier-1 nutrients stay reachable without
-    // competing with the label for attention.
-    ...(product.food?.nutritionInfo
+    // competing with the label for attention. See `nutritionNutrients` above
+    // for the label > USDA precedence.
+    ...(nutritionNutrients
       ? [
           {
             id: "nutrition-information",
             title: "Nutrition Information",
             icon: Apple,
             placement: "supporting" as const,
-            content: (
-              <Stack gap="md">
-                <ProductNutritionLabel
-                  nutrients={product.food.nutritionInfo.nutrientsPer100}
-                  mappings={mappings}
-                  portions={product.food.portionInfoRaw}
-                />
-                <NutrientDensityStats
-                  nutrients={product.food.nutritionInfo.nutrientsPer100}
-                  mappings={mappings}
-                  price={product.pricing.effectivePrice ?? product.price}
-                  mappingProduct={{
-                    id: product.id,
-                    name: product.name,
-                    manufacturer: product.manufacturer,
-                  }}
-                />
-                <FullNutrientBreakdown
-                  nutritionInfo={product.food.nutritionInfo}
-                />
-              </Stack>
-            ),
+            content: productNutritionContent({
+              product,
+              nutritionNutrients,
+              usdaNutritionInfo,
+              mappings,
+            }),
           },
         ]
       : []),
