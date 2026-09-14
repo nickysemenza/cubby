@@ -248,6 +248,8 @@ cp apps/web/.env.example apps/web/.env
 # 3. Local services for app development, PostgreSQL tests, and default Playwright
 #    (not needed for default Vitest or service-free `pnpm test:e2e:pglite`)
 docker compose -p cubby up -d
+# Starts Postgres + IntegreSQL. Add Jaeger when you want traces (CUBBY_OTEL=1):
+#   docker compose -p cubby --profile tracing up -d
 
 # 4. Web DB schema
 pnpm --filter @cubby/web run db:push
@@ -273,7 +275,7 @@ Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full f
 | `USDA_API_URL` | USDA service URL (defaults to `http://localhost:8787/` for local Wrangler dev) |
 | `UPC_LOOKUP_API_URL` / `UPC_LOOKUP_API_KEY` | UPC lookup worker |
 | `NOTION_API_KEY` | *(optional)* Notion recipes import |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger (`docker compose -p cubby --profile tracing up -d`) |
 
 ### Worktrees (parallel sessions)
 
@@ -301,9 +303,21 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   files and dependency revisions invalidate the package; checkout timestamps do
   not. Missing Cargo metadata fails setup rather than reusing an unverified build.
   A hit restores the complete `packages/wasm` package and skips Cargo,
-  wasm-bindgen and wasm-opt. The same entrypoint runs from dev and the
-  post-merge/post-checkout hooks. `pnpm wasm` remains an explicit uncached build.
-  Nx owns artifact storage and the existing 2 GB cache limit.
+  wasm-bindgen and wasm-opt; the key is also stamped into
+  `packages/wasm/.fingerprint`, so a checkout whose package already matches
+  skips Nx too (~0.3s instead of a multi-second verified hit). The same
+  entrypoint runs from dev and the post-merge/post-checkout hooks. `pnpm wasm`
+  remains an explicit uncached build. Nx owns artifact storage and the 4 GB
+  cache limit.
+- **`recipebridge/Cargo.lock` is tracked** so identical worktrees share one
+  artifact: `cargo metadata` re-resolves (and rewrites) an untracked lock in
+  every fresh checkout, which made every worktree's key unique and its first
+  WASM build a full one. The committed form is the one the global Cargo patch
+  produces here (parser crates as path entries, no `source =`), exactly like
+  `cubby-ffi/Cargo.lock`; CI re-resolves the pinned git revs without `--locked`.
+  After a Renovate bump of the parser revs, or when the sibling parser checkout
+  changes its own dependencies, the next local run rewrites the lock — commit
+  that churn, it is the point.
 - **Read-only checks reuse results.** `pnpm lint` and `pnpm format:check` use
   the same Nx targets as `pnpm check`. Documentation and Rust-only edits do not
   invalidate those two targets. `pnpm lint:fix` and `pnpm format` always execute
@@ -318,9 +332,10 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   the `Web` or `Dev stack` action from the local environment. Any linked worktree
   without an injected `PORT` auto-picks a free port; the main checkout remains
   strict on `:3000`.
-- **Shared services:** docker-compose (Postgres/IntegresQL/Jaeger) binds fixed host
-  ports — `docker-compose up -d` once from any checkout and all worktrees reuse
-  them for app development and the authoritative PostgreSQL and Playwright
+- **Shared services:** docker-compose (Postgres/IntegreSQL, plus Jaeger behind
+  the `tracing` profile) binds fixed host ports — `docker-compose up -d` once
+  from any checkout and all worktrees reuse them for app development and the
+  authoritative PostgreSQL and Playwright
   commands. Fast Vitest needs no Docker; PGlite is available only through the
   explicit experimental commands below.
 - **⚠ Always pass `-p cubby` to compose from a worktree.** Compose derives its

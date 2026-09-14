@@ -10,9 +10,11 @@
 - A failing test run already lists what failed, at the end of its output and in
   `apps/web/.vitest-failures.txt`. Read those instead of re-running the tier —
   measured, 24% of all test runs were a re-run of one that had just failed.
-- One agent owns each validation command. Others continue useful work while it
-  runs, return distilled evidence (result, command, duration, relevant output),
-  and the root performs one bounded final join rather than polling.
+- Subagents run `pnpm test:file` only; `pnpm typecheck`, `pnpm check`, `pnpm
+  test`, and Apple builds belong to the root's single final join, never to
+  parallel implementers. Others continue useful work while the owner runs,
+  return distilled evidence (result, command, duration, relevant output), and
+  the root performs one bounded final join rather than polling.
 - Production migrations have one exclusive owner; establish safe data and
   deployed-code compatibility before pushing, then verify the schema afterward.
 - Keep edits disjoint across agents/worktrees. The main task runs on whichever

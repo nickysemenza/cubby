@@ -36,6 +36,12 @@ expect_used = "deny"
 panic = "deny"
 uninlined_format_args = "warn"
 
+# Line numbers are kept for backtraces; full DWARF only inflated the shared
+# target dir. build-rust.sh only builds release|dist (which already strip), so
+# this affects `cargo test`/clippy builds only.
+[profile.dev]
+debug = "line-tables-only"
+
 # Plain release: fast inner-loop builds while iterating on the Swift side
 # (`build-rust.sh` default). No `panic = "abort"` here or in `dist` below:
 # UniFFI's generated scaffolding wraps every export in `catch_unwind`, which

@@ -3,8 +3,9 @@ import { createRequire } from "node:module";
 // Opt-in: `getNodeAutoInstrumentations()` patches ~40 modules at startup, and
 // measured on this preload that is ~1.6s of every `pnpm dev` — against 0.02s
 // for the Sentry half below. Almost no dev session actually reads the Jaeger
-// traces, so the common path shouldn't pay for them. Set CUBBY_OTEL=1 (with the
-// Jaeger container up) when you do want them.
+// traces, so the common path shouldn't pay for them. Set CUBBY_OTEL=1 (and
+// bring up the Jaeger container: `docker compose -p cubby --profile tracing
+// up -d`) when you do want them.
 //
 // Initialize OTEL before Sentry so Jaeger gets the global tracer provider.
 // Sentry.init() registers its own tracer provider, which would block ours.

@@ -13,6 +13,8 @@ import {
   cargoMetadataSchema,
   sourceDigest,
   sourceInputs,
+  stampWasm,
+  wasmIsCurrent,
 } from "./ensure-wasm.ts";
 
 test("WASM inputs follow contents across checkouts, including local dependency assets", (t) => {
@@ -43,6 +45,11 @@ test("WASM inputs follow contents across checkouts, including local dependency a
   mkdirSync(join(first, "target"));
   writeFileSync(join(first, "target", "artifact.wasm"), "ignored build output");
   assert.equal(sourceDigest(first), original);
+  // Finder and Claude Code state must not perturb the key (see PRUNE).
+  writeFileSync(join(first, ".DS_Store"), "finder");
+  mkdirSync(join(first, ".claude"));
+  writeFileSync(join(first, ".claude", "settings.local.json"), "{}");
+  assert.equal(sourceDigest(first), original);
   assert.throws(() => sourceDigest(join(root, "missing")));
 });
 
@@ -64,4 +71,17 @@ test("cargo metadata ingress requires package source and manifest path", () => {
     cargoMetadataSchema.safeParse({ packages: "not-an-array" }).success,
     false,
   );
+});
+
+test("the in-package marker short-circuits only when it matches and the binary exists", (t) => {
+  const pkg = mkdtempSync(join(tmpdir(), "cubby-wasm-marker-"));
+  t.after(() => rmSync(pkg, { recursive: true, force: true }));
+  assert.equal(wasmIsCurrent("key", pkg), false);
+  stampWasm("key", pkg);
+  assert.equal(wasmIsCurrent("key", pkg), false);
+  writeFileSync(join(pkg, "recipebridge_bg.wasm"), "binary");
+  assert.equal(wasmIsCurrent("key", pkg), true);
+  assert.equal(wasmIsCurrent("other", pkg), false);
+  stampWasm("other", pkg);
+  assert.equal(wasmIsCurrent("other", pkg), true);
 });

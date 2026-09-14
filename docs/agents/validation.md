@@ -104,7 +104,12 @@ verification is requested, observe its exact final commit result before merge.
 `claude-review` remains an opt-in PR label; previews are manually dispatched.
 
 One agent owns a particular gate; other agents continue useful work and consume
-the owner's distilled result instead of repeating it. At handoff report commands,
+the owner's distilled result instead of repeating it. Subagents run `pnpm
+test:file` only; `pnpm typecheck`, `pnpm check`, `pnpm test`, and Apple builds
+belong to the root's single final join, never to parallel implementers: each
+native `tsc` is ~3 GB RSS and xcodebuild fans out swift-frontend jobs at 1–2 GB
+each on a 24 GB machine, so three parallel implementers each running typecheck
+is what took the box's one-minute load to 200. At handoff report commands,
 results, and limitations. Do not describe an unrun hosted suite as passing.
 
 ## Quality policy
