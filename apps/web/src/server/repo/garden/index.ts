@@ -717,7 +717,13 @@ const assertGardenEntryStructure = (
       "Use location history to correct a structural move.",
     );
   }
-  if (data.kind !== undefined && data.kind !== current.kind) {
+  // Only `move` is structural; an observation may be retyped as a harvest
+  // (and back) like any other correction.
+  if (
+    data.kind !== undefined &&
+    data.kind !== current.kind &&
+    (data.kind === "move" || current.kind === "move")
+  ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "Move entries are created only by planting workflows.",

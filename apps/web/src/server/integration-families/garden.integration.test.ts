@@ -250,6 +250,13 @@ describe("garden workflows", () => {
         { observedOn: "2026-09-19" },
       ),
     ).rejects.toBeDefined();
+    await expect(
+      updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", moveEntryId!),
+        { kind: "observation" },
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
     const bedOverviewId = await resolveLiveShortcode(
       ctx.db,
       bedOverview.id,
@@ -267,6 +274,29 @@ describe("garden workflows", () => {
         },
       ),
     ).toMatchObject({ locationId: tray.id, plantingId: child.id });
+    // Regression: an ordinary observation can be retyped as a harvest; only
+    // `move` is structural.
+    expect(
+      await updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", bedOverviewId!),
+        { kind: "harvest", harvestAmount: "2 heads" },
+      ),
+    ).toMatchObject({ kind: "harvest", harvestAmount: "2 heads" });
+    await expect(
+      updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", bedOverviewId!),
+        { kind: "move" },
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    expect(
+      await updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", bedOverviewId!),
+        { kind: "observation", harvestAmount: null },
+      ),
+    ).toMatchObject({ kind: "observation", harvestAmount: null });
     for (const { observedOn, harvestAmount } of [
       { observedOn: "2026-10-05", harvestAmount: "6 tomatoes" },
       { observedOn: "2026-10-12", harvestAmount: "handful" },
