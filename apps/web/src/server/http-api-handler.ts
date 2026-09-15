@@ -31,7 +31,11 @@ import {
 
 interface HttpApiPorts {
   auth: {
-    getSession(options: { headers: Headers; returnHeaders: true }): Promise<{
+    getSession(options: {
+      headers: Headers;
+      query: { disableCookieCache: true };
+      returnHeaders: true;
+    }): Promise<{
       response: { user: { id: string }; session: { id: string } } | null;
       headers: Headers;
     }>;
@@ -253,6 +257,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
     } else {
       const sessionResult = await ports.auth.getSession({
         headers: request.headers,
+        query: { disableCookieCache: true },
         returnHeaders: true,
       });
       const session = sessionResult.response;
