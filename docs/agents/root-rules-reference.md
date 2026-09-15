@@ -123,12 +123,14 @@ column. Verified 2026-08-22, when `Product.upc` was dropped while the deployed
 build still declared it and every product read 500'd with
 `select ... "product"."upc" ... from "Product"`.
 
-**`drizzle-kit push` does not diff CHECK constraints, nor a partial index's
-`WHERE` clause.** Editing a `check(...)` — or the `.where(...)` on a
-`uniqueIndex(...)` — in `schema.ts` and pushing reports `Changes applied` and
-changes nothing: the verbose plan contains only the usual trgm GIN-index drift,
-never an `ALTER ... CONSTRAINT` or a `DROP INDEX`/`CREATE UNIQUE INDEX` pair. CI
-cannot catch either, because the integration-test template is built from
+**`drizzle-kit push` adds and drops named CHECK constraints, but it does not
+apply a definition edit when the CHECK keeps the same name; it also ignores a
+partial index's `WHERE` edit.** Editing an existing `check(...)` — or the
+`.where(...)` on a `uniqueIndex(...)` — in `schema.ts` and pushing reports
+`Changes applied` and changes nothing: the verbose plan contains only the usual
+trgm GIN-index drift, never an `ALTER ... CONSTRAINT` or a `DROP INDEX`/`CREATE
+UNIQUE INDEX` pair. CI cannot catch either, because the integration-test
+template is built from
 `schema.ts` via `pushSchema`, so tests exercise a constraint production does not
 have — and they PASS, which is worse than failing. Both must be applied by hand
 (`DROP INDEX x; CREATE UNIQUE INDEX x ... WHERE ...;` inside one transaction for

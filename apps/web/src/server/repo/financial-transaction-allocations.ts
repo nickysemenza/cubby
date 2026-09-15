@@ -28,8 +28,9 @@ import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
  * The invariant every path here upholds: a live transaction has EITHER zero live
  * allocations (unlinked evidence) OR live allocations that sum to its own amount
  * to the cent and share its sign. It is enforced in this module rather than by a
- * constraint because a row-level CHECK cannot see sibling rows, and because
- * `drizzle-kit push` cannot diff a CHECK edit anyway.
+ * constraint because a row-level CHECK cannot see sibling rows. Even a related
+ * row-level rule would need a deliberate migration when its CHECK definition
+ * changed under the same name because `drizzle-kit push` ignores that edit.
  * `findFinancialTransactionAllocationDefects` is the after-the-fact audit.
  */
 

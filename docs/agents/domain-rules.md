@@ -6,11 +6,13 @@ Serialize production schema changes: one owner verifies the migration and no
 push overlaps another session. Inspect constraints/data, run relevant checks,
 keep deployed and prepared code compatible, and use expand → backfill → deploy
 → cleanup for incompatible work. `db:push` is interactive: cancel ambiguous
-rename/drop prompts. It does not diff CHECK constraints or partial-index WHERE
-clauses; apply those deliberately and read the resulting schema back. Before a
-`DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the
-relational query builder selects every declared column, so the declaration is
-the read (see agent validation reference).
+rename/drop prompts. It adds and drops named CHECK constraints, but it does not
+apply a definition edit when the CHECK keeps the same name, nor does it diff a
+partial index's WHERE clause. Apply those edits deliberately and read the
+resulting schema back. Before a `DROP COLUMN`, remove the `schema.ts`
+declaration and DEPLOY first — the relational query builder selects every
+declared column, so the declaration is the read (see agent validation
+reference).
 
 Traps around `db:push`, all seen for real:
 

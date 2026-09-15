@@ -160,9 +160,9 @@ describe("financial transaction contracts", () => {
     ).toBe(true);
   });
 
-  // Pinned deliberately. `drizzle-kit push` does NOT diff CHECK constraints, so
-  // a change here will never reach a live database on its own — this test is the
-  // tripwire telling whoever changes the sign rules to apply the ALTER by hand.
+  // Pinned deliberately. `drizzle-kit push` does not apply a CHECK definition
+  // edit under the same name, so a change here will never reach a live database
+  // on its own. This is the tripwire to apply that ALTER deliberately.
   it("generates a settlement CHECK matching the TypeScript sign rules", () => {
     expect(
       purchaseSettlementCheckExpression({
