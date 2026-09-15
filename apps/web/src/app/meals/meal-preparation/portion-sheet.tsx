@@ -1,4 +1,7 @@
-import type { MealPreparationYieldBasis } from "@cubby/schemas/meal";
+import type {
+  MealFoodAmount,
+  MealPreparationYieldBasis,
+} from "@cubby/schemas/meal";
 import { format, parseISO } from "date-fns";
 import { Check, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,7 +14,9 @@ import { DialogFooter } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
+import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 
+import { FoodAmountEditor, formatFoodAmount } from "../food-amount-editor";
 import { MealNutritionEstimates } from "../meal-nutrition";
 import {
   mealLabel,
@@ -25,7 +30,7 @@ type PortionDraft = {
   id: string;
   targetMealId: PreparationTargetOption["id"] | null;
   eaterId: PreparationEaterOption["id"] | null;
-  grams: string;
+  amount: MealFoodAmount | null;
 };
 
 const portionKey = (targetMealId: string, eaterId: string) =>
@@ -39,13 +44,7 @@ function isCompleteDraft(row: PortionDraft): row is PortionDraft & {
 }
 
 function draftIsValid(row: PortionDraft): boolean {
-  const grams = Number(row.grams);
-  return (
-    isCompleteDraft(row) &&
-    row.grams !== "" &&
-    Number.isInteger(grams) &&
-    grams > 0
-  );
+  return isCompleteDraft(row) && row.amount != null;
 }
 
 function hasDuplicateDraft(rows: PortionDraft[]): boolean {
@@ -75,7 +74,7 @@ function setCommand(
     action: "set",
     mealId: row.targetMealId,
     ledgerPartyId: row.eaterId,
-    grams: Number(row.grams),
+    amount: row.amount!,
     // The redesigned editor records an entered amount directly. The legacy
     // confirmation field stays in the wire contract, but is no longer a UI
     // state people have to manage.
@@ -86,7 +85,6 @@ function setCommand(
 export function PortionSheet({
   source,
   currentMealId,
-  recipeServings,
   targetMeals,
   eaters,
   open,
@@ -96,7 +94,6 @@ export function PortionSheet({
 }: {
   source: MealPreparation;
   currentMealId: PreparationTargetOption["id"];
-  recipeServings?: number | null;
   targetMeals: PreparationTargetOption[];
   eaters: PreparationEaterOption[];
   open: boolean;
@@ -114,7 +111,7 @@ export function PortionSheet({
     id: `${source.mealRecipeId}:draft:${draftSequence.current++}`,
     targetMealId: firstTarget,
     eaterId: firstEater,
-    grams: "",
+    amount: null,
   });
   const [expectedYield, setExpectedYield] = useState(
     source.estimatedYieldGrams == null
@@ -130,7 +127,7 @@ export function PortionSheet({
           id: portionKey(portion.targetMeal.id, portion.eater.id),
           targetMealId: portion.targetMeal.id,
           eaterId: portion.eater.id,
-          grams: String(portion.grams),
+          amount: portion.amount,
         }))
       : [newDraft()],
   );
@@ -196,7 +193,9 @@ export function PortionSheet({
           portion.targetMeal.id === row.targetMealId &&
           portion.eater.id === row.eaterId,
       );
-      return original?.grams === Number(row.grams) ? [] : [setCommand(row)];
+      return original && amountsEqual(original.amount, row.amount)
+        ? []
+        : [setCommand(row)];
     });
 
     void onSave({
@@ -245,11 +244,6 @@ export function PortionSheet({
         <PeopleFields
           source={source}
           currentMealId={currentMealId}
-          gramsPerServing={gramsPerServing(
-            source.yieldBasis,
-            recipeServings,
-            source.scale,
-          )}
           rows={rows}
           eaters={eaters}
           targetMeals={targetMeals}
@@ -345,6 +339,20 @@ function YieldFields({
           ? "Made yield unlocks per-gram cost and nutrition estimates."
           : `Basis: ${yieldBasisLabel(source.yieldBasis)}.`}
       </Description>
+      {(source.recipeServings || source.recipeYield) && (
+        <Description size="xs">
+          Recipe declares{" "}
+          {[
+            source.recipeServings
+              ? `${source.recipeServings} serving${source.recipeServings === 1 ? "" : "s"}`
+              : null,
+            source.recipeYield ? formatFoodAmount(source.recipeYield) : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          .
+        </Description>
+      )}
       <details className="text-xs">
         <summary className="min-h-10 cursor-pointer content-center text-muted-foreground hover:text-foreground">
           Recipe nutrition details
@@ -360,7 +368,6 @@ function YieldFields({
 function PeopleFields({
   source,
   currentMealId,
-  gramsPerServing,
   rows,
   eaters,
   targetMeals,
@@ -370,7 +377,6 @@ function PeopleFields({
 }: {
   source: MealPreparation;
   currentMealId: PreparationTargetOption["id"];
-  gramsPerServing: number | null;
   rows: PortionDraft[];
   eaters: PreparationEaterOption[];
   targetMeals: PreparationTargetOption[];
@@ -393,7 +399,6 @@ function PeopleFields({
       index={index}
       eaters={eaters}
       targetMeals={targetMeals}
-      gramsPerServing={gramsPerServing}
       canRemove={rows.length > 1 || source.portions.length > 0}
       onRemove={() => onRemove(index)}
       onUpdate={(patch) => onUpdate(index, patch)}
@@ -438,7 +443,6 @@ function PortionDraftRow({
   index,
   eaters,
   targetMeals,
-  gramsPerServing,
   canRemove,
   onRemove,
   onUpdate,
@@ -448,11 +452,14 @@ function PortionDraftRow({
   index: number;
   eaters: PreparationEaterOption[];
   targetMeals: PreparationTargetOption[];
-  gramsPerServing: number | null;
   canRemove: boolean;
   onRemove: () => void;
   onUpdate: (patch: Partial<PortionDraft>) => void;
 }) {
+  const suggestedUnits = useMemo(
+    () => (source.recipeYield ? [source.recipeYield.unit] : []),
+    [source.recipeYield],
+  );
   return (
     <div className="space-y-2 border border-[var(--border)] bg-card p-3">
       <Row align="center" justify="between" gap="sm">
@@ -470,7 +477,7 @@ function PortionDraftRow({
           <Trash2 className="size-4" />
         </Button>
       </Row>
-      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_7rem]">
+      <div className="grid gap-2 sm:grid-cols-[1fr_1fr_minmax(11rem,0.9fr)]">
         <StaticPicker
           items={eaters.map((eater) => ({
             value: eater.id,
@@ -502,55 +509,37 @@ function PortionDraftRow({
           placeholder="Choose meal"
           className="min-w-0"
         />
-        <Stack gap="xs">
-          <Label htmlFor={`${source.mealRecipeId}-grams-${index}`}>Grams</Label>
-          <Input
-            id={`${source.mealRecipeId}-grams-${index}`}
-            type="number"
-            min={1}
-            inputMode="decimal"
-            className="h-11 tabular-nums"
-            placeholder="200"
-            value={row.grams}
-            onChange={(event) => onUpdate({ grams: event.target.value })}
-          />
-        </Stack>
-      </div>
-      {gramsPerServing ? (
-        <Row align="center" gap="xs" wrap>
-          <Description size="xs">
-            1 serving ≈ {Math.round(gramsPerServing)} g
-          </Description>
-          {[0.5, 1, 1.5].map((servings) => (
-            <Button
-              key={servings}
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                onUpdate({
-                  grams: String(Math.round(gramsPerServing * servings)),
+        <FoodAmountEditor
+          id={`${source.mealRecipeId}-amount-${index}`}
+          amount={row.amount}
+          onChange={(amount) => onUpdate({ amount })}
+          sourceKind="recipe"
+          suggestedUnits={suggestedUnits}
+          estimate={
+            row.amount
+              ? calculateFoodAmount(row.amount, {
+                  kind: "recipe",
+                  batch: source.totals,
+                  yieldBasis: source.yieldBasis,
+                  recipeYield: source.recipeYield,
+                  servings: source.recipeServings,
+                  scale: source.scale,
                 })
-              }
-            >
-              {servings}×
-            </Button>
-          ))}
-        </Row>
-      ) : null}
+              : null
+          }
+        />
+      </div>
     </div>
   );
 }
 
-function gramsPerServing(
-  basis: MealPreparationYieldBasis,
-  servings: number | null | undefined,
-  recipeScale: number,
-): number | null {
-  if (!servings || basis.kind === "missing") return null;
-  if (basis.upperGrams != null && basis.upperGrams !== basis.lowerGrams)
-    return null;
-  return basis.lowerGrams / (servings * recipeScale);
+function amountsEqual(
+  first: MealFoodAmount,
+  second: MealFoodAmount | null,
+): boolean {
+  return (
+    second != null && first.value === second.value && first.unit === second.unit
+  );
 }
 
 function yieldBasisLabel(basis: MealPreparationYieldBasis): string {

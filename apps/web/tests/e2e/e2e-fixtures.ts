@@ -376,11 +376,15 @@ export async function seedMealNutritionPrerequisite(
       kind: "guest",
     }),
   );
+  const ingredient = await createFixture(page, "ingredient", {
+    name: `${name} snack ingredient`,
+  });
   const product = await createFixture(
     page,
     "product",
     productCreateInput.parse({
       ...productFixtureInput(`${name} snack`, "E2E fixture"),
+      ingredientId: ingredient.id,
       labelNutrition: {
         servingGrams: 30,
         nutrients: { kcal: 120, protein: 3, carbs: 20, fat: 4 },
@@ -440,6 +444,7 @@ export async function seedMealNutritionPrerequisite(
     member,
     guest,
     product,
+    ingredient,
     meal,
     futureMeal,
     today,

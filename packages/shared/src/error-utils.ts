@@ -114,6 +114,7 @@ export const AppErrors = {
   // `ProductExternalId_gtin_digits_check`.
   PRODUCT_GTIN_INVALID: "BAD_REQUEST",
   INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
+  INGREDIENT_HAS_MEAL_FOOD_ENTRIES: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",
   // A merge that names its own keeper among the rows to merge away. One code
   // for all four merges: the resolver refuses the whole call rather than

@@ -1,7 +1,7 @@
 import { getTableConfig } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { mealRecipe, mealRecipePortion } from "./schema";
+import { mealFoodEntry, mealRecipe, mealRecipePortion } from "./schema";
 
 describe("meal preparation storage schema", () => {
   it("stores nullable positive whole-gram yields on MealRecipe", () => {
@@ -27,13 +27,18 @@ describe("meal preparation storage schema", () => {
         "mealRecipeId",
         "mealId",
         "ledgerPartyId",
+        "amount",
         "grams",
         "confirmedAt",
         "deletedAt",
       ]),
     );
-    expect(config.checks.map((constraint) => constraint.name)).toContain(
-      "MealRecipePortion_grams_check",
+    expect(config.checks.map((constraint) => constraint.name)).toEqual(
+      expect.arrayContaining([
+        "MealRecipePortion_grams_check",
+        "MealRecipePortion_amount_check",
+        "MealRecipePortion_amount_source_check",
+      ]),
     );
 
     const liveKey = config.indexes.find(
@@ -59,5 +64,38 @@ describe("meal preparation storage schema", () => {
         foreignKey.reference().columns[0]?.name === "mealRecipeId",
     );
     expect(sourceForeignKey?.onDelete).toBe("cascade");
+  });
+
+  it("stores exclusive ingredient, product, and manual food sources with canonical amounts", () => {
+    const config = getTableConfig(mealFoodEntry);
+
+    expect(config.columns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        "sourceKind",
+        "ingredientId",
+        "productId",
+        "amount",
+        "grams",
+        "name",
+        "nutrients",
+      ]),
+    );
+    expect(config.indexes.map((index) => index.config.name)).toContain(
+      "MealFoodEntry_ingredientId_idx",
+    );
+    expect(config.checks.map((constraint) => constraint.name)).toEqual(
+      expect.arrayContaining([
+        "MealFoodEntry_grams_check",
+        "MealFoodEntry_amount_check",
+        "MealFoodEntry_amount_compatibility_check",
+        "MealFoodEntry_source_check",
+      ]),
+    );
+    expect(
+      config.foreignKeys.some(
+        (foreignKey) =>
+          foreignKey.reference().columns[0]?.name === "ingredientId",
+      ),
+    ).toBe(true);
   });
 });

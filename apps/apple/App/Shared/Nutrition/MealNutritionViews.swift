@@ -67,12 +67,14 @@ struct MealNutritionPeopleView: View {
                 foodLink(food)
                     .font(.porcelainTitle)
                 Spacer(minLength: PorcelainTokens.Space.sm)
-                Text(
-                    food.grams.map { "\($0.formatted(.number.precision(.fractionLength(0...1)))) g" }
-                        ?? "Entered macros"
-                )
-                .font(.porcelainLabel.monospacedDigit())
-                .foregroundStyle(.secondary)
+                Text(food.amountDescription)
+                    .font(.porcelainLabel.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            if let amount = food.amount, amount.unit != "g" {
+                Text("Weight: \(food.weight.formatted(calories: false)) g")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             MacroGrid(totals: food.totals)
         }
@@ -85,6 +87,8 @@ struct MealNutritionPeopleView: View {
             NavigationLink(value: Route.entityDetail(.recipe, id: recipeID)) { Text(food.name) }
         case .product(_, let productID):
             NavigationLink(value: Route.entityDetail(.product, id: productID)) { Text(food.name) }
+        case .ingredient(_, let ingredientID):
+            NavigationLink(value: Route.entityDetail(.ingredient, id: ingredientID)) { Text(food.name) }
         case .manual:
             Text(food.name)
         }

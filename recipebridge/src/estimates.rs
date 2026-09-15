@@ -250,7 +250,7 @@ pub(crate) fn aggregate_estimates_impl(entries: &[WMeasureEstimate]) -> WMeasure
     }
 }
 
-fn scale_totals_impl(
+pub(crate) fn scale_totals_impl(
     totals: &WNutritionTotals,
     lower_factor: f64,
     upper_factor: Option<f64>,

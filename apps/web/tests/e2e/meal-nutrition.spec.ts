@@ -6,7 +6,7 @@ import { expect, test } from "./e2e-test";
 
 test.setTimeout(60_000);
 
-test("meal nutrition logs product servings and keeps manual unknowns truthful", async ({
+test("meal nutrition keeps entered product and ingredient amounts while deriving current estimates", async ({
   page,
 }, testInfo) => {
   const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
@@ -36,9 +36,9 @@ test("meal nutrition logs product servings and keeps manual unknowns truthful", 
     dialog.getByRole("combobox", { name: "Product" }),
     `${name} snack`,
   );
-  await dialog.getByRole("button", { name: "Servings" }).click();
-  await dialog.getByLabel("Number of servings").fill("1.5");
-  await expect(dialog).toContainText("1 serving = 30 g · Recording 45 g");
+  await dialog.getByLabel("Amount").fill("1 1/2");
+  await dialog.getByLabel("Unit").fill("serving");
+  await expect(dialog).toContainText("Estimated weight 45 g");
   const firstSaveRequest = page.waitForRequest(
     (request) =>
       request.method() === "POST" &&
@@ -52,30 +52,59 @@ test("meal nutrition logs product servings and keeps manual unknowns truthful", 
   const member = page.getByRole("region", {
     name: `${name} member nutrition`,
   });
+  const productRow = member.getByRole("listitem").filter({
+    has: page.getByText(`${name} snack`, { exact: true }),
+  });
   await expect(
     member.getByText(`${name} snack`, { exact: true }),
   ).toBeVisible();
-  await expect(member.getByText("45 g", { exact: true })).toBeVisible();
+  await expect(productRow.getByText(/servings?/)).toBeVisible();
+  await expect(productRow.getByText("Estimated weight 45 g")).toBeVisible();
   await expect(member.getByLabel(/^Calories: 180 kcal\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Protein: 4\.5 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Carbs: 30 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Fat: 6 g\./)).toHaveCount(2);
 
-  const productRow = member
-    .getByRole("listitem")
-    .filter({ hasText: `${name} snack` });
   await productRow.getByText("Details and editing", { exact: true }).click();
   await productRow.getByRole("button", { name: "Edit amount" }).click();
   const editDialog = page.getByRole("dialog", { name: "Edit food" });
-  await expect(editDialog.getByLabel("Amount (g)")).toHaveValue("45");
-  await editDialog.getByLabel("Amount (g)").fill("60");
+  await expect(editDialog.getByLabel("Amount")).toHaveValue("1 1/2");
+  await expect(editDialog.getByLabel("Unit")).toHaveValue("serving");
+  await editDialog.getByLabel("Amount").fill("2");
   await editDialog.getByRole("button", { name: "Save changes" }).click();
   await expect(editDialog).not.toBeVisible();
-  await expect(member.getByText("60 g", { exact: true })).toBeVisible();
+  await expect(productRow.getByText(/2 servings?/)).toBeVisible();
+  await expect(member.getByText("Estimated weight 60 g")).toBeVisible();
   await expect(member.getByLabel(/^Calories: 240 kcal\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Protein: 6 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Carbs: 40 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Fat: 8 g\./)).toHaveCount(2);
+
+  await page.getByRole("button", { name: "Add food", exact: true }).click();
+  const ingredientDialog = page.getByRole("dialog", { name: "Add food" });
+  await ingredientDialog
+    .getByRole("button", { name: "Ingredient", exact: true })
+    .click();
+  await selectComboboxItem(
+    page,
+    ingredientDialog.getByRole("combobox", { name: "Person" }),
+    `${name} member`,
+  );
+  await selectComboboxItem(
+    page,
+    ingredientDialog.getByRole("combobox", { name: "Ingredient" }),
+    `${name} snack ingredient`,
+  );
+  await ingredientDialog.getByLabel("Amount").fill("1/2");
+  await ingredientDialog.getByLabel("Unit").fill("serving");
+  await expect(ingredientDialog).toContainText("Estimated weight 15 g");
+  await ingredientDialog.getByRole("button", { name: "Add food" }).click();
+  await expect(ingredientDialog).not.toBeVisible();
+  const ingredientRow = member
+    .getByRole("listitem")
+    .filter({ hasText: `${name} snack ingredient` });
+  await expect(ingredientRow.getByText(/serving/)).toBeVisible();
+  await expect(ingredientRow.getByText("Estimated weight 15 g")).toBeVisible();
 
   const productDetails = productRow.locator("details").first();
   if ((await productDetails.getAttribute("open")) !== null) {
@@ -120,7 +149,9 @@ test("meal nutrition logs product servings and keeps manual unknowns truthful", 
   const refreshedProductRow = page
     .getByRole("region", { name: `${name} member nutrition` })
     .getByRole("listitem")
-    .filter({ hasText: `${name} snack` });
+    .filter({
+      has: page.getByText(`${name} snack`, { exact: true }),
+    });
   await refreshedProductRow
     .getByText("Details and editing", { exact: true })
     .click();
@@ -130,6 +161,16 @@ test("meal nutrition logs product servings and keeps manual unknowns truthful", 
   await expect(
     page.getByText(`${name} snack`, { exact: true }),
   ).not.toBeVisible();
+  const refreshedIngredientRow = page
+    .getByRole("region", { name: `${name} member nutrition` })
+    .getByRole("listitem")
+    .filter({ hasText: `${name} snack ingredient` });
+  await refreshedIngredientRow
+    .getByText("Details and editing", { exact: true })
+    .click();
+  await refreshedIngredientRow
+    .getByRole("button", { name: "Remove food" })
+    .click();
   await expect(
     page.getByRole("region", { name: `${name} member nutrition` }),
   ).toHaveCount(0);
@@ -160,6 +201,11 @@ test("meal nutrition logs product servings and keeps manual unknowns truthful", 
   await dailyFoodDialog.getByLabel("Calories (kcal)").fill("90");
   await dailyFoodDialog.getByLabel("Protein (g)").fill("7");
   await dailyFoodDialog.getByLabel("Carbs (g)").fill("0");
+  await dailyFoodDialog.getByLabel(/Serving amount/).fill("1/2");
+  await dailyFoodDialog.getByLabel("Unit").fill("bowl");
+  await expect(dailyFoodDialog).toContainText(
+    "Current conversion unavailable; this amount can still be saved.",
+  );
 
   let failedSave = false;
   const failFirstManualSave = async (route: Route) => {
@@ -183,6 +229,8 @@ test("meal nutrition logs product servings and keeps manual unknowns truthful", 
   await expect(dailyFoodDialog.getByLabel("Calories (kcal)")).toHaveValue("90");
   await expect(dailyFoodDialog.getByLabel("Protein (g)")).toHaveValue("7");
   await expect(dailyFoodDialog.getByLabel("Carbs (g)")).toHaveValue("0");
+  await expect(dailyFoodDialog.getByLabel(/Serving amount/)).toHaveValue("1/2");
+  await expect(dailyFoodDialog.getByLabel("Unit")).toHaveValue("bowl");
 
   const successfulRetry = page.waitForResponse(
     (response) =>
@@ -198,7 +246,10 @@ test("meal nutrition logs product servings and keeps manual unknowns truthful", 
     name: `${name} member nutrition`,
   });
   await expect(inlineSummary.getByText(dailyFoodName)).toBeVisible();
-  await expect(inlineSummary.getByText("Entered macros")).toBeVisible();
+  await expect(inlineSummary.getByText(/bowl/)).toBeVisible();
+  await expect(
+    inlineSummary.getByText(/Current conversion unavailable/),
+  ).toBeVisible();
   await expect(inlineSummary.getByLabel(/^Calories: 90 kcal\./)).toHaveCount(3);
   await expect(inlineSummary.getByLabel(/^Protein: 7 g\./)).toHaveCount(3);
   await expect(inlineSummary.getByLabel(/^Carbs: 0 g\./)).toHaveCount(3);

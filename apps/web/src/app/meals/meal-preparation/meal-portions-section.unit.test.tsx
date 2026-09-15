@@ -39,6 +39,8 @@ function viewWithPortions(): MealPreparationsView {
         sourceMeal: { id: mealToday, date: "2026-08-31", name: "Dinner" },
         recipe: { id: recipePasta, name: "Pasta" },
         scale: 1,
+        recipeServings: 4,
+        recipeYield: { value: 500, unit: "g" },
         estimatedYieldGrams: 500,
         actualYieldGrams: 500,
         yieldBasis: { kind: "actual", lowerGrams: 500, upperGrams: null },
@@ -46,6 +48,7 @@ function viewWithPortions(): MealPreparationsView {
         sourceSummary: {
           assignedGrams: 200,
           confirmedGrams: 0,
+          assignedShare: { ...complete, lower: 0.4, upper: null },
           unassignedGrams: 300,
         },
         portions: [
@@ -57,7 +60,10 @@ function viewWithPortions(): MealPreparationsView {
               mealKind: "cooked",
             },
             eater: { id: partyMemberA, name: "Member A", kind: "member" },
+            amount: { value: 1, unit: "serving" },
             grams: 200,
+            weight: { ...complete, lower: 200, upper: null },
+            batchShare: { ...complete, lower: 0.4, upper: null },
             confirmedAt: null,
             servedHere: true,
             totals: nutritionTotals,
@@ -70,6 +76,8 @@ function viewWithPortions(): MealPreparationsView {
         sourceMeal: { id: mealToday, date: "2026-08-31", name: "Dinner" },
         recipe: { id: recipeSalad, name: "Salad" },
         scale: 1,
+        recipeServings: null,
+        recipeYield: { value: 300, unit: "g" },
         estimatedYieldGrams: 300,
         actualYieldGrams: 300,
         yieldBasis: { kind: "actual", lowerGrams: 300, upperGrams: null },
@@ -77,6 +85,7 @@ function viewWithPortions(): MealPreparationsView {
         sourceSummary: {
           assignedGrams: 150,
           confirmedGrams: 150,
+          assignedShare: { ...complete, lower: 0.5, upper: null },
           unassignedGrams: 150,
         },
         portions: [
@@ -88,7 +97,10 @@ function viewWithPortions(): MealPreparationsView {
               mealKind: "cooked",
             },
             eater: { id: partyMemberB, name: "Member B", kind: "member" },
-            grams: 150,
+            amount: { value: 1, unit: "bowl" },
+            grams: null,
+            weight: { status: "unavailable", reason: "no_data" },
+            batchShare: { status: "unavailable", reason: "no_data" },
             confirmedAt: new Date("2026-08-31T19:00:00Z"),
             servedHere: true,
             totals: nutritionTotals,
@@ -115,8 +127,9 @@ describe("MealPortionsSection", () => {
 
     expect(screen.getByText("Pasta")).toBeVisible();
     expect(screen.getByText("Salad")).toBeVisible();
-    expect(screen.getByText("Member A 200 g")).toBeVisible();
-    expect(screen.getByText("Member B 150 g")).toBeVisible();
+    expect(screen.getByText(/Member A 1 serving/)).toBeVisible();
+    expect(screen.getByText(/Member B 1 bowl/)).toBeVisible();
+    expect(screen.getByText(/Current conversion unavailable/)).toBeVisible();
     expect(screen.queryByText("350 g")).not.toBeInTheDocument();
     expect(screen.queryByText("Planned")).not.toBeInTheDocument();
     expect(screen.queryByText("Confirmed")).not.toBeInTheDocument();

@@ -47,14 +47,14 @@ use ingredient::usage::IngredientUsage;
 use super::consumption::{ComponentSource, PlanTrio, plan_for};
 use super::types::{
     WBakerPct, WCostingInput, WCostingRecipe, WCostingRow, WMeasureOk, WMeasureResult,
-    WMissingByType, WNutrientAmount, WNutrientCoverage, WNutrientsOk, WNutrientsResult,
-    WRecipeCosting, WRowKind, WRowMissing, WRowPaths, WRowResult,
+    WMissingByType, WNutrientAmount, WNutrientCoverage, WNutrientTarget, WNutrientsOk,
+    WNutrientsResult, WRecipeCosting, WRowKind, WRowMissing, WRowPaths, WRowResult,
 };
 use crate::WConversionStep;
 use crate::food_mappings::{ProductPairs, WProductInput, product_non_price_mapping_pairs};
 use crate::reconcile::finite;
 use crate::{
-    WMeasureEstimate, WNamedEstimate, WNutritionTotals, WUnavailableReason,
+    WAmount, WMeasureEstimate, WNamedEstimate, WNutritionTotals, WUnavailableReason,
     aggregate_estimates_impl,
 };
 
@@ -251,6 +251,21 @@ struct Target {
     kind: MeasureKind,
 }
 
+fn targets_from(inputs: &[WNutrientTarget]) -> Vec<Target> {
+    inputs
+        .iter()
+        .map(|target| Target {
+            code: target.code.clone(),
+            unit: target.unit.clone(),
+            kind: if target.unit == "kcal" {
+                MeasureKind::Calories
+            } else {
+                MeasureKind::Nutrient(target.unit.clone())
+            },
+        })
+        .collect()
+}
+
 /// One linked product with a scalar price: its own package edges and the
 /// graph the price leg resolves `each` on (shared edges + those package edges).
 struct PricedProduct {
@@ -400,19 +415,7 @@ impl<'a> Engine<'a> {
                 // `IngredientCtx::cheapest_price`.
                 .map(|i| (i.id.as_str(), IngredientCtx::new(&i.products)))
                 .collect(),
-            targets: input
-                .nutrient_targets
-                .iter()
-                .map(|t| Target {
-                    code: t.code.clone(),
-                    unit: t.unit.clone(),
-                    kind: if t.unit == "kcal" {
-                        MeasureKind::Calories
-                    } else {
-                        MeasureKind::Nutrient(t.unit.clone())
-                    },
-                })
-                .collect(),
+            targets: targets_from(&input.nutrient_targets),
             empty_ctx: IngredientCtx::new(&[]),
             sub_totals: RefCell::new(HashMap::new()),
         }
@@ -1220,6 +1223,46 @@ impl<'a> Engine<'a> {
             baker_percentages,
         }
     }
+}
+
+/// Direct one-amount resolution through the same ingredient context as recipe
+/// rows. Meal food entries are not recipes: this seam deliberately bypasses
+/// row classification and the consumption model while sharing product graph
+/// merging, label/USDA mappings, and per-product cheapest-price isolation.
+pub(crate) fn resolve_mapped_food(
+    amount: &WAmount,
+    products: &[WProductInput],
+    nutrient_targets: &[WNutrientTarget],
+) -> (WNutritionTotals, WMeasureEstimate) {
+    let engine = Engine {
+        recipes: HashMap::new(),
+        ingredients: HashMap::new(),
+        targets: targets_from(nutrient_targets),
+        empty_ctx: IngredientCtx::new(&[]),
+        sub_totals: RefCell::new(HashMap::new()),
+    };
+    let ctx = IngredientCtx::new(products);
+    let amounts = [amount.to_measure()];
+    let trio = engine.measures(&amounts, ctx.graph(), ctx.cheapest_price(&amounts));
+    let missing_nutrient_codes = engine.missing_nutrient_codes(&trio.nutrients);
+    let totals = WNutritionTotals {
+        cost: engine.estimate_for_measure(
+            &trio.price,
+            measure_is_missing(&trio.price),
+            WUnavailableReason::NoData,
+        ),
+        nutrition: engine.nutrition_estimates_for_row(
+            &trio,
+            &missing_nutrient_codes,
+            WUnavailableReason::NoData,
+        ),
+    };
+    let weight = engine.estimate_for_measure(
+        &trio.gram,
+        measure_is_missing(&trio.gram),
+        WUnavailableReason::NoData,
+    );
+    (totals, weight)
 }
 
 #[cfg(test)]

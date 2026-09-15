@@ -67,6 +67,7 @@ public struct MealNutritionFood: Identifiable, Sendable, Hashable {
     public enum Source: Sendable, Hashable {
         case recipe(mealRecipeID: String, recipeID: String, sourceMealID: String)
         case product(id: String, productID: String)
+        case ingredient(id: String, ingredientID: String)
         case manual(id: String)
     }
 
@@ -74,15 +75,20 @@ public struct MealNutritionFood: Identifiable, Sendable, Hashable {
     public let meal: MealNutritionMeal
     public let name: String
     public let grams: Double?
+    public let amount: Amount?
+    public let weight: NutritionAmount
     public let totals: MacroSummary
 
     public init(
-        source: Source, meal: MealNutritionMeal, name: String, grams: Double?, totals: MacroSummary
+        source: Source, meal: MealNutritionMeal, name: String, grams: Double?, totals: MacroSummary,
+        amount: Amount? = nil, weight: NutritionAmount = .unavailable
     ) {
         self.source = source
         self.meal = meal
         self.name = name
         self.grams = grams
+        self.amount = amount
+        self.weight = weight
         self.totals = totals
     }
 
@@ -90,14 +96,24 @@ public struct MealNutritionFood: Identifiable, Sendable, Hashable {
         switch source {
         case .recipe(let mealRecipeID, _, _): "recipe:\(meal.id):\(mealRecipeID)"
         case .product(let id, _): "product:\(id)"
+        case .ingredient(let id, _): "ingredient:\(id)"
         case .manual(let id): "manual:\(id)"
         }
+    }
+
+    public var amountDescription: String {
+        if let amount {
+            return "\(amount.value.formatted(.number.precision(.fractionLength(0...6)))) \(amount.unit)"
+        }
+        return grams.map { "\($0.formatted(.number.precision(.fractionLength(0...1)))) g" }
+            ?? "Entered macros"
     }
 
     public var sourceKind: String {
         switch source {
         case .recipe: "Recipe"
         case .product: "Product"
+        case .ingredient: "Ingredient"
         case .manual: "Manual"
         }
     }

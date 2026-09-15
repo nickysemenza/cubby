@@ -3,7 +3,7 @@ import type {
   RecipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { toast } from "sonner";
 
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
@@ -17,7 +17,7 @@ import { useMealPreparationController } from "./use-meal-preparation-controller"
 
 /**
  * Completes the Recipe branch of Add food: create one meal occurrence, then
- * immediately collect its weighed portions. Keeping this state here lets the
+ * immediately collect its portions. Keeping this state here lets the
  * meal detail and day view share the same complete interaction.
  */
 export function RecipeFoodDialog({
@@ -33,7 +33,6 @@ export function RecipeFoodDialog({
 }) {
   const invalidate = useInvalidateMeals();
   const attemptedRecipe = useRef<RecipeShortcode | null>(null);
-  const [recipeServings, setRecipeServings] = useState<number | null>(null);
   const controller = useMealPreparationController({
     mealId,
     mealDate: date,
@@ -60,7 +59,6 @@ export function RecipeFoodDialog({
         onClose();
         return;
       }
-      setRecipeServings(added.recipe.servings ?? null);
       await controller.refetchPreparations();
       controller.openCurrentPreparation(added.id);
       invalidate();
@@ -79,7 +77,6 @@ export function RecipeFoodDialog({
   });
   const resetRecipe = useEffectEvent(() => {
     attemptedRecipe.current = null;
-    setRecipeServings(null);
     controller.closePreparation();
   });
 
@@ -112,7 +109,6 @@ export function RecipeFoodDialog({
         <PortionSheet
           source={controller.selectedPreparation}
           currentMealId={mealId}
-          recipeServings={recipeServings}
           targetMeals={controller.targetMeals}
           eaters={controller.eaters}
           open

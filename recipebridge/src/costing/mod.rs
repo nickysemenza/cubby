@@ -14,6 +14,7 @@ pub use types::*;
 use std::collections::HashSet;
 
 use engine::Engine;
+pub(crate) use engine::resolve_mapped_food;
 use wasm_bindgen::prelude::*;
 
 /// Cost every root recipe in the input: one `WRecipeCosting` per `root_ids`

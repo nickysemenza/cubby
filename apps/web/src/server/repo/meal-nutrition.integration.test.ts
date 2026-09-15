@@ -15,6 +15,7 @@ import {
   mealRecipe,
   mealRecipePortion,
   product,
+  productUnitMappings,
   recipe,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
@@ -408,9 +409,10 @@ describe("meal nutrition service", () => {
     });
     const stored = await getDb(ctx.db).query.mealFoodEntry.findFirst({
       where: eq(mealFoodEntry.id, saved.id),
-      columns: { grams: true },
+      columns: { amount: true, grams: true },
     });
-    expect(stored?.grams).toBe(25);
+    expect(stored?.amount).toEqual({ value: 25, unit: "g" });
+    expect(stored?.grams).toBeNull();
   });
 
   it("keeps a stale product entry visible with unavailable nutrition and refuses new saves to the deleted source", async () => {
@@ -461,5 +463,180 @@ describe("meal nutrition service", () => {
         and(eq(mealFoodEntry.mealId, meal.id), isNull(mealFoodEntry.deletedAt)),
       );
     expect(liveEntries).toHaveLength(1);
+  });
+  it("keeps ingredient quantities while mapping corrections change existing meal nutrition", async () => {
+    const [meal, eater, ing, food] = await Promise.all([
+      seedMeal("2026-09-18", "Ingredient amounts"),
+      seedParty("Ingredient eater"),
+      insertWithShortcode(ctx.db, "ingredient", { name: "Example grain" }),
+      seedProduct("Example grain package", { kcal: 100 }),
+    ]);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ ingredientId: ing.id })
+      .where(eq(product.id, food.id));
+    const mapping = await insertAndReturn(ctx.db, productUnitMappings, {
+      productId: food.id,
+      a: { value: 1, unit: "cup" },
+      b: { value: 100, unit: "g" },
+    });
+    const saved = await saveMealFood(
+      ctx.db,
+      {
+        sourceKind: "ingredient",
+        ingredientId: parseShortcodeFor("ingredient", ing.shortcode),
+        mealId: mealCode(meal.shortcode),
+        ledgerPartyId: partyCode(eater.shortcode),
+        amount: { value: 1, unit: "cup" },
+      },
+      ctx.actor,
+    );
+    const read = () =>
+      getMealNutrition(ctx.db, { mealId: mealCode(meal.shortcode) }, noUsda);
+    expect((await read()).people[0]?.foods[0]).toMatchObject({
+      sourceKind: "ingredient",
+      amount: { value: 1, unit: "cup" },
+      grams: 100,
+      totals: { nutrition: { kcal: { lower: 200 } } },
+    });
+    await getDb(ctx.db)
+      .update(productUnitMappings)
+      .set({ b: { value: 200, unit: "g" } })
+      .where(eq(productUnitMappings.id, mapping.id));
+    expect((await read()).people[0]?.foods[0]).toMatchObject({
+      amount: { value: 1, unit: "cup" },
+      grams: 200,
+      totals: { nutrition: { kcal: { lower: 400 } } },
+    });
+    expect(
+      await getDb(ctx.db).query.mealFoodEntry.findFirst({
+        where: eq(mealFoodEntry.id, saved.id),
+        columns: { amount: true, grams: true },
+      }),
+    ).toEqual({ amount: { value: 1, unit: "cup" }, grams: null });
+  });
+
+  it("records unmapped product amounts and resolves them when a source mapping is added", async () => {
+    const [meal, eater, food] = await Promise.all([
+      seedMeal("2026-09-19", "Unknown conversion"),
+      seedParty("Unknown unit eater"),
+      seedProduct("Example snack package", { kcal: 100 }),
+    ]);
+    await saveMealFood(
+      ctx.db,
+      {
+        sourceKind: "product",
+        productId: productCode(food.shortcode),
+        mealId: mealCode(meal.shortcode),
+        ledgerPartyId: partyCode(eater.shortcode),
+        amount: { value: 2, unit: "bowl" },
+      },
+      ctx.actor,
+    );
+    const read = () =>
+      getMealNutrition(ctx.db, { mealId: mealCode(meal.shortcode) }, noUsda);
+    expect((await read()).people[0]?.foods[0]).toMatchObject({
+      amount: { value: 2, unit: "bowl" },
+      grams: null,
+      totals: { nutrition: { kcal: { status: "unavailable" } } },
+    });
+    await insertAndReturn(ctx.db, productUnitMappings, {
+      productId: food.id,
+      a: { value: 1, unit: "bowl" },
+      b: { value: 50, unit: "g" },
+    });
+    expect((await read()).people[0]?.foods[0]).toMatchObject({
+      amount: { value: 2, unit: "bowl" },
+      grams: 100,
+      totals: { nutrition: { kcal: { lower: 200 } } },
+    });
+  });
+
+  it("recalculates unweighed recipe servings after serving corrections and preserves batch fractions", async () => {
+    const [sourceMeal, targetMeal, eater, dish] = await Promise.all([
+      seedMeal("2026-09-20", "Preparation"),
+      seedMeal("2026-09-21", "Leftover"),
+      seedParty("Serving eater"),
+      insertWithShortcode(ctx.db, "recipe", {
+        name: "Example dish",
+        servings: 4,
+        yield: null,
+        totals: recipeTotals({ kcal: 800, protein: 40, carbs: 100, fat: 20 }),
+        totalsComputedAt: new Date(),
+      }),
+    ]);
+    const occurrence = await insertAndReturn(ctx.db, mealRecipe, {
+      mealId: sourceMeal.id,
+      recipeId: dish.id,
+      scale: 2,
+    });
+    await saveMealRecipePreparation(
+      ctx.db,
+      {
+        mealRecipeId: occurrence.id,
+        changes: [
+          {
+            action: "set",
+            mealId: mealCode(sourceMeal.shortcode),
+            ledgerPartyId: partyCode(eater.shortcode),
+            amount: { value: 1, unit: "serving" },
+            confirmed: true,
+          },
+          {
+            action: "set",
+            mealId: mealCode(targetMeal.shortcode),
+            ledgerPartyId: partyCode(eater.shortcode),
+            amount: { value: 0.25, unit: "batch" },
+            confirmed: true,
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    const read = (code: string) =>
+      getMealNutrition(ctx.db, { mealId: mealCode(code) }, noUsda);
+    expect(
+      (await read(sourceMeal.shortcode)).people[0]?.foods[0],
+    ).toMatchObject({
+      amount: { value: 1, unit: "serving" },
+      grams: null,
+      totals: { nutrition: { kcal: { lower: 200 } } },
+    });
+    await getDb(ctx.db)
+      .update(recipe)
+      .set({ servings: 8 })
+      .where(eq(recipe.id, dish.id));
+    expect(
+      (await read(sourceMeal.shortcode)).people[0]?.foods[0],
+    ).toMatchObject({
+      amount: { value: 1, unit: "serving" },
+      grams: null,
+      totals: { nutrition: { kcal: { lower: 100 } } },
+    });
+    expect(
+      (await read(targetMeal.shortcode)).people[0]?.foods[0],
+    ).toMatchObject({
+      amount: { value: 0.25, unit: "batch" },
+      grams: null,
+      totals: { nutrition: { kcal: { lower: 400 } } },
+    });
+    await expect(
+      saveMealRecipePreparation(
+        ctx.db,
+        {
+          mealRecipeId: occurrence.id,
+          changes: [
+            {
+              action: "set",
+              mealId: mealCode(sourceMeal.shortcode),
+              ledgerPartyId: partyCode(eater.shortcode),
+              amount: { value: 1, unit: "batch" },
+              confirmed: true,
+            },
+          ],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow("exceed");
   });
 });

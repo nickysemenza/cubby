@@ -882,19 +882,32 @@ extension MealNutritionFood {
         case .manual(let food):
             self.init(
                 source: .manual(id: food.id), meal: MealNutritionMeal(food.meal), name: food.name,
-                grams: food.grams, totals: MacroSummary(food.totals))
+                grams: food.grams, totals: MacroSummary(food.totals),
+                amount: food.amount.map { Amount(value: $0.value, unit: $0.unit) },
+                weight: NutritionAmount(food.weight))
         case .product(let food):
             self.init(
                 source: .product(id: food.id, productID: food.productId),
                 meal: MealNutritionMeal(food.meal), name: food.name, grams: food.grams,
-                totals: MacroSummary(food.totals))
+                totals: MacroSummary(food.totals),
+                amount: food.amount.map { Amount(value: $0.value, unit: $0.unit) },
+                weight: NutritionAmount(food.weight))
+        case .ingredient(let food):
+            self.init(
+                source: .ingredient(id: food.id, ingredientID: food.ingredientId),
+                meal: MealNutritionMeal(food.meal), name: food.name, grams: food.grams,
+                totals: MacroSummary(food.totals),
+                amount: food.amount.map { Amount(value: $0.value, unit: $0.unit) },
+                weight: NutritionAmount(food.weight))
         case .recipe(let food):
             self.init(
                 source: .recipe(
                     mealRecipeID: food.mealRecipeId, recipeID: food.recipeId,
                     sourceMealID: food.sourceMealId),
                 meal: MealNutritionMeal(food.meal), name: food.name, grams: food.grams,
-                totals: MacroSummary(food.totals))
+                totals: MacroSummary(food.totals),
+                amount: food.amount.map { Amount(value: $0.value, unit: $0.unit) },
+                weight: NutritionAmount(food.weight))
         }
     }
 }

@@ -32,7 +32,8 @@ test("phone meal nutrition stacks people and keeps the food form in bounds", asy
   await dialog.getByRole("button", { name: "Manual" }).click();
   await expect(dialog.getByLabel("Food name")).toBeVisible();
   await expect(dialog.getByLabel("Calories (kcal)")).toBeVisible();
-  await expect(dialog.getByLabel("Weight (g, optional)")).toBeVisible();
+  await expect(dialog.getByLabel(/Serving amount/)).toBeVisible();
+  await expect(dialog.getByLabel("Unit")).toHaveValue("g");
   await expectViewportBounded(page);
 
   await page.screenshot({

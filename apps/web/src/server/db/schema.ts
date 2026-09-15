@@ -26,7 +26,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { ContributionRole } from "@cubby/schemas/ledger-party";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
-import type { MealFoodNutrients } from "@cubby/schemas/meal";
+import type { MealFoodAmount, MealFoodNutrients } from "@cubby/schemas/meal";
 import {
   type PurchaseDocumentKind,
   purchaseDocumentKindValues,
@@ -187,6 +187,25 @@ const pkUuid = <T extends string = string>() =>
  */
 const shortcodeUnique = (tableName: string, column: AnyPgColumn) =>
   uniqueIndex(`${tableName}_shortcode_unique`).on(column);
+
+/** Exact scalar meal amount shape shared by food entries and served portions. */
+const validMealFoodAmount = (column: AnyPgColumn) => sql`
+  ${column} IS NULL OR COALESCE((
+    jsonb_typeof(${column}) = 'object'
+    AND ${column} ? 'value'
+    AND ${column} ? 'unit'
+    AND ${column} - 'value' - 'unit' = '{}'::jsonb
+    AND CASE
+      WHEN jsonb_typeof(${column}->'value') = 'number' THEN
+        (${column}->>'value')::numeric > 0
+        AND (${column}->>'value')::numeric < 'Infinity'::numeric
+      ELSE false
+    END
+    AND jsonb_typeof(${column}->'unit') = 'string'
+    AND length(trim(${column}->>'unit')) > 0
+    AND ${column}->>'unit' = trim(${column}->>'unit')
+  ), false)
+`;
 
 export const recipe = pgTable(
   "Recipe",
@@ -405,7 +424,9 @@ export const mealRecipePortion = pgTable(
       .notNull()
       .$type<LedgerPartyId>()
       .references(() => ledgerParty.id),
-    grams: integer("grams").notNull(),
+    amount: jsonb("amount").$type<MealFoodAmount>(),
+    // Expand-migration compatibility only. New writes use `amount`.
+    grams: integer("grams"),
     confirmedAt: timestamp("confirmedAt", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
@@ -417,7 +438,15 @@ export const mealRecipePortion = pgTable(
     index("MealRecipePortion_mealRecipeId_idx").on(table.mealRecipeId),
     index("MealRecipePortion_mealId_idx").on(table.mealId),
     index("MealRecipePortion_ledgerPartyId_idx").on(table.ledgerPartyId),
-    check("MealRecipePortion_grams_check", sql`${table.grams} > 0`),
+    check(
+      "MealRecipePortion_grams_check",
+      sql`${table.grams} IS NULL OR ${table.grams} > 0`,
+    ),
+    check("MealRecipePortion_amount_check", validMealFoodAmount(table.amount)),
+    check(
+      "MealRecipePortion_amount_source_check",
+      sql`(${table.amount} IS NULL) <> (${table.grams} IS NULL)`,
+    ),
   ],
 );
 
@@ -433,10 +462,17 @@ export const mealFoodEntry = pgTable(
       .notNull()
       .$type<LedgerPartyId>()
       .references((): AnyPgColumn => ledgerParty.id),
-    sourceKind: text("sourceKind").notNull().$type<"product" | "manual">(),
+    sourceKind: text("sourceKind")
+      .notNull()
+      .$type<"ingredient" | "product" | "manual">(),
+    ingredientId: uuid("ingredientId")
+      .$type<IngredientId>()
+      .references((): AnyPgColumn => ingredient.id),
     productId: uuid("productId")
       .$type<ProductId>()
       .references((): AnyPgColumn => product.id),
+    amount: jsonb("amount").$type<MealFoodAmount>(),
+    // Expand-migration compatibility only. New writes use `amount`.
     grams: doublePrecision("grams"),
     name: text("name"),
     nutrients: jsonb("nutrients").$type<MealFoodNutrients>(),
@@ -446,14 +482,20 @@ export const mealFoodEntry = pgTable(
   (table) => [
     index("MealFoodEntry_mealId_idx").on(table.mealId),
     index("MealFoodEntry_ledgerPartyId_idx").on(table.ledgerPartyId),
+    index("MealFoodEntry_ingredientId_idx").on(table.ingredientId),
     index("MealFoodEntry_productId_idx").on(table.productId),
     check(
       "MealFoodEntry_grams_check",
       sql`${table.grams} IS NULL OR (${table.grams} > 0 AND ${table.grams} < 'Infinity'::float8)`,
     ),
+    check("MealFoodEntry_amount_check", validMealFoodAmount(table.amount)),
+    check(
+      "MealFoodEntry_amount_compatibility_check",
+      sql`${table.amount} IS NULL OR ${table.grams} IS NULL`,
+    ),
     check(
       "MealFoodEntry_source_check",
-      sql`(${table.sourceKind} = 'product' AND ${table.productId} IS NOT NULL AND ${table.grams} IS NOT NULL AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'manual' AND ${table.productId} IS NULL AND length(trim(${table.name})) > 0 AND ${table.name} IS NOT NULL AND ${table.nutrients} IS NOT NULL AND jsonb_typeof(${table.nutrients}) = 'object' AND ${table.nutrients} <> '{}'::jsonb)`,
+      sql`(${table.sourceKind} = 'ingredient' AND ${table.ingredientId} IS NOT NULL AND ${table.productId} IS NULL AND (${table.amount} IS NOT NULL OR ${table.grams} IS NOT NULL) AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'product' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NOT NULL AND (${table.amount} IS NOT NULL OR ${table.grams} IS NOT NULL) AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'manual' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NULL AND length(trim(${table.name})) > 0 AND ${table.name} IS NOT NULL AND ${table.nutrients} IS NOT NULL AND jsonb_typeof(${table.nutrients}) = 'object' AND ${table.nutrients} <> '{}'::jsonb)`,
     ),
   ],
 );
@@ -1928,6 +1970,7 @@ export const ingredientRelations = relations(ingredient, ({ one, many }) => ({
   recipeSectionIngredient: many(recipeSectionIngredient),
   product: many(product, { relationName: "ProductIngredient" }),
   grownByProducts: many(product, { relationName: "ProductGrowsIngredient" }),
+  mealFoodEntries: many(mealFoodEntry),
 }));
 
 export const recipeSectionIngredientRelations = relations(
@@ -1947,6 +1990,7 @@ export const recipeSectionIngredientRelations = relations(
 export const mealRelations = relations(meal, ({ many }) => ({
   recipes: many(mealRecipe),
   recipePortions: many(mealRecipePortion),
+  foodEntries: many(mealFoodEntry),
   images: many(mealImage),
 }));
 
@@ -1980,6 +2024,25 @@ export const mealRecipePortionRelations = relations(
   }),
 );
 
+export const mealFoodEntryRelations = relations(mealFoodEntry, ({ one }) => ({
+  meal: one(meal, {
+    fields: [mealFoodEntry.mealId],
+    references: [meal.id],
+  }),
+  ledgerParty: one(ledgerParty, {
+    fields: [mealFoodEntry.ledgerPartyId],
+    references: [ledgerParty.id],
+  }),
+  ingredient: one(ingredient, {
+    fields: [mealFoodEntry.ingredientId],
+    references: [ingredient.id],
+  }),
+  product: one(product, {
+    fields: [mealFoodEntry.productId],
+    references: [product.id],
+  }),
+}));
+
 export const productRelations = relations(product, ({ one, many }) => ({
   ingredient: one(ingredient, {
     fields: [product.ingredientId],
@@ -1992,6 +2055,7 @@ export const productRelations = relations(product, ({ one, many }) => ({
     relationName: "ProductGrowsIngredient",
   }),
   unitMappings: many(productUnitMappings),
+  mealFoodEntries: many(mealFoodEntry),
   conversionCoverage: one(productConversionCoverage),
   externalIds: many(productExternalId),
   inventoryEntry: many(inventoryEntry),

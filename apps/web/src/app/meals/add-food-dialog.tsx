@@ -1,4 +1,5 @@
 import {
+  type IngredientShortcode,
   type LedgerPartyShortcode,
   type MealShortcode,
   type ProductShortcode,
@@ -10,7 +11,7 @@ import {
   type MealFoodNutrients,
 } from "@cubby/schemas/meal";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useId, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
@@ -23,8 +24,13 @@ import { Input } from "~/components/ui/input";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { getErrorMessage } from "~/lib/error-utils";
-import { productServingGrams } from "~/lib/meal-food-nutrition";
+import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
+import {
+  getAllUnitMappingsFromProduct,
+  getIngredientMappings,
+} from "~/lib/unit-mapping-utils";
 
+import { FoodAmountEditor } from "./food-amount-editor";
 import { meal } from "./meal.functions";
 
 const MACRO_FIELDS = [
@@ -33,7 +39,9 @@ const MACRO_FIELDS = [
   { key: "carbs", label: "Carbs (g)" },
   { key: "fat", label: "Fat (g)" },
 ] as const;
+const NO_SUGGESTED_UNITS: string[] = [];
 type EditableFood = Exclude<MealNutritionFood, { sourceKind: "recipe" }>;
+type FoodKind = EditableFood["sourceKind"] | "recipe";
 
 export function AddFoodDialog(props: {
   mealId: MealShortcode;
@@ -63,6 +71,7 @@ function FoodEntryForm({
     eaterId,
     setEaterId,
     productItem,
+    ingredientItem,
     amount,
     name,
     nutrients,
@@ -72,8 +81,7 @@ function FoodEntryForm({
   const options = eaters.data?.filter((p) => p.kind !== "household");
   const selectedEater =
     eaterId == null ? options?.[0] : options?.find((p) => p.id === eaterId);
-  const calculation = useProductAmount(draft);
-  const { product, grams } = calculation;
+  const calculation = useFoodAmount(draft);
   const save = useMutation(
     meal.saveFood.mutationOptions({
       onSuccess: () => {
@@ -84,6 +92,14 @@ function FoodEntryForm({
     }),
   );
   const submit = () => {
+    if (!draft.amountIsValid) {
+      setError(
+        kind === "manual"
+          ? "Enter a valid serving amount or leave it blank."
+          : "Enter a valid food amount.",
+      );
+      return;
+    }
     const common = {
       id: original?.id,
       mealId,
@@ -91,14 +107,26 @@ function FoodEntryForm({
     };
     const data =
       kind === "product"
-        ? { ...common, sourceKind: kind, productId: productItem?.id, grams }
-        : {
+        ? {
             ...common,
-            sourceKind: "manual",
-            name,
-            grams: amount.trim() ? Number(amount) : null,
-            nutrients: draftNutrients(original, nutrients),
-          };
+            sourceKind: kind,
+            productId: productItem?.id,
+            amount,
+          }
+        : kind === "ingredient"
+          ? {
+              ...common,
+              sourceKind: kind,
+              ingredientId: ingredientItem?.id,
+              amount,
+            }
+          : {
+              ...common,
+              sourceKind: "manual",
+              name,
+              amount,
+              nutrients: draftNutrients(original, nutrients),
+            };
     const parsed = saveMealFoodInput.safeParse(data);
     if (!parsed.success) {
       setError(
@@ -133,7 +161,8 @@ function FoodEntryForm({
               disabled={
                 save.isPending ||
                 !selectedEater ||
-                (kind === "product" && (!product.data || product.isFetching))
+                (kind === "product" && !productItem) ||
+                (kind === "ingredient" && !ingredientItem)
               }
               onClick={submit}
             >
@@ -150,7 +179,7 @@ function FoodEntryForm({
       <Stack gap="lg">
         {!editing && (
           <Row gap="sm" aria-label="Food source">
-            {(["product", "recipe", "manual"] as const)
+            {(["product", "ingredient", "recipe", "manual"] as const)
               .filter((source) => source !== "recipe" || onRecipe)
               .map((source) => (
                 <Button
@@ -160,14 +189,19 @@ function FoodEntryForm({
                   aria-pressed={kind === source}
                   onClick={() => {
                     setKind(source);
+                    draft.setAmountIsValid(
+                      draft.amount != null || source === "manual",
+                    );
                     setError(null);
                   }}
                 >
                   {source === "product"
                     ? "Product"
-                    : source === "recipe"
-                      ? "Recipe"
-                      : "Manual"}
+                    : source === "ingredient"
+                      ? "Ingredient"
+                      : source === "recipe"
+                        ? "Recipe"
+                        : "Manual"}
                 </Button>
               ))}
           </Row>
@@ -201,8 +235,10 @@ function FoodEntryForm({
             />
             {kind === "product" ? (
               <ProductFields draft={draft} calculation={calculation} />
+            ) : kind === "ingredient" ? (
+              <IngredientFields draft={draft} calculation={calculation} />
             ) : (
-              <ManualFields draft={draft} />
+              <ManualFields draft={draft} calculation={calculation} />
             )}
           </>
         )}
@@ -218,21 +254,33 @@ function FoodEntryForm({
 
 function useFoodDraft(editing: Parameters<typeof AddFoodDialog>[0]["editing"]) {
   const original = editing?.food;
-  const [kind, setKind] = useState<"product" | "manual" | "recipe">(
-    original?.sourceKind ?? "product",
-  );
+  const [kind, setKind] = useState<FoodKind>(original?.sourceKind ?? "product");
   const [productItem, setProductItem] =
     useState<ComboboxItem<ProductShortcode> | null>(
       original?.sourceKind === "product"
         ? { id: original.productId, name: original.name }
         : null,
     );
+  const [ingredientItem, setIngredientItem] =
+    useState<ComboboxItem<IngredientShortcode> | null>(
+      original?.sourceKind === "ingredient"
+        ? { id: original.ingredientId, name: original.name }
+        : null,
+    );
   const [eaterId, setEaterId] = useState<LedgerPartyShortcode | null>(
     editing?.eaterId ?? null,
   );
-  const [unit, setUnit] = useState<"grams" | "servings">("grams");
-  const [amount, setAmount] = useState(original?.grams?.toString() ?? "");
-  const [packageGrams, setPackageGrams] = useState("");
+  const [amount, setAmount] = useState(
+    original?.amount ??
+      (original?.grams == null
+        ? null
+        : { value: original.grams, unit: "g" as const }),
+  );
+  const [amountIsValid, setAmountIsValid] = useState(
+    original?.amount != null ||
+      original?.grams != null ||
+      original?.sourceKind === "manual",
+  );
   const [name, setName] = useState(original?.name ?? "");
   const [nutrients, setNutrients] = useState<
     Partial<Record<(typeof MACRO_FIELDS)[number]["key"], string>>
@@ -253,36 +301,80 @@ function useFoodDraft(editing: Parameters<typeof AddFoodDialog>[0]["editing"]) {
     setKind,
     productItem,
     setProductItem,
+    ingredientItem,
+    setIngredientItem,
     eaterId,
     setEaterId,
-    unit,
-    setUnit,
     amount,
     setAmount,
-    packageGrams,
-    setPackageGrams,
+    amountIsValid,
+    setAmountIsValid,
     name,
     setName,
     nutrients,
     setNutrients,
   };
 }
-function useProductAmount(draft: ReturnType<typeof useFoodDraft>) {
+function sourceUnits(
+  mappings: Array<{ a: { unit: string }; b: { unit: string } }>,
+): string[] {
+  const nutrientUnit = /^(g|mg|ug|µg|mcg|iu|kj)\s+\S/i;
+  return [
+    ...new Set(
+      mappings
+        .flatMap((mapping) => [mapping.a.unit, mapping.b.unit])
+        .filter(
+          (unit) =>
+            unit !== "dollar" && unit !== "kcal" && !nutrientUnit.test(unit),
+        ),
+    ),
+  ];
+}
+
+function useFoodAmount(draft: ReturnType<typeof useFoodDraft>) {
   const product = useQuery(
     entityDetailFor("product").queryOptions(draft.productItem?.id ?? "", {
       enabled: draft.kind === "product" && draft.productItem != null,
     }),
   );
-  const knownServingGrams = product.data
-    ? productServingGrams(product.data)
-    : null;
-  const servingGrams = knownServingGrams ?? Number(draft.packageGrams);
-  const grams =
-    draft.unit === "servings"
-      ? Number(draft.amount) * servingGrams
-      : Number(draft.amount);
+  const ingredient = useQuery(
+    entityDetailFor("ingredient").queryOptions(draft.ingredientItem?.id ?? "", {
+      enabled: draft.kind === "ingredient" && draft.ingredientItem != null,
+    }),
+  );
+  const source = useMemo(
+    () =>
+      draft.kind === "product" && product.data
+        ? ({ kind: "product", product: product.data } as const)
+        : draft.kind === "ingredient" && ingredient.data
+          ? ({ kind: "ingredient", ingredient: ingredient.data } as const)
+          : draft.kind === "manual"
+            ? ({
+                kind: "manual",
+                nutrients: draftNutrients(draft.original, draft.nutrients),
+              } as const)
+            : null,
+    [
+      draft.kind,
+      draft.nutrients,
+      draft.original,
+      ingredient.data,
+      product.data,
+    ],
+  );
+  const estimate =
+    draft.amount && source ? calculateFoodAmount(draft.amount, source) : null;
+  const suggestedUnits = useMemo(
+    () =>
+      product.data
+        ? sourceUnits(getAllUnitMappingsFromProduct(product.data))
+        : ingredient.data
+          ? sourceUnits(getIngredientMappings(ingredient.data))
+          : NO_SUGGESTED_UNITS,
+    [ingredient.data, product.data],
+  );
 
-  return { product, knownServingGrams, servingGrams, grams };
+  return { product, ingredient, estimate, suggestedUnits };
 }
 function draftNutrients(
   original: EditableFood | undefined,
@@ -333,9 +425,9 @@ function ProductFields({
   calculation,
 }: {
   draft: ReturnType<typeof useFoodDraft>;
-  calculation: ReturnType<typeof useProductAmount>;
+  calculation: ReturnType<typeof useFoodAmount>;
 }) {
-  const { product, knownServingGrams, servingGrams, grams } = calculation;
+  const { product, estimate, suggestedUnits } = calculation;
   return (
     <>
       <WithEntitySearch entity="product">
@@ -344,10 +436,7 @@ function ProductFields({
             {...search}
             entity="product"
             value={draft.productItem}
-            setValue={(item) => {
-              draft.setProductItem(item);
-              draft.setPackageGrams("");
-            }}
+            setValue={draft.setProductItem}
             label="Product"
             placeholder="Find a packaged food"
           />
@@ -358,47 +447,63 @@ function ProductFields({
           {getErrorMessage(product.error)}
         </p>
       )}
-      <Row gap="sm">
-        {(["grams", "servings"] as const).map((option) => (
-          <Button
-            key={option}
-            variant={draft.unit === option ? "default" : "outline"}
-            className="min-h-11 flex-1"
-            aria-pressed={draft.unit === option}
-            onClick={() => {
-              draft.setUnit(option);
-              draft.setAmount("");
-            }}
-          >
-            {option === "grams" ? "Grams" : "Servings"}
-          </Button>
-        ))}
-      </Row>
-      <FoodField
-        label={draft.unit === "grams" ? "Amount (g)" : "Number of servings"}
-        value={draft.amount}
+      <FoodAmountEditor
+        amount={draft.amount}
         onChange={draft.setAmount}
+        onValidityChange={draft.setAmountIsValid}
+        sourceKind="product"
+        suggestedUnits={suggestedUnits}
+        estimate={estimate}
       />
-      {draft.unit === "servings" && (
-        <>
-          {knownServingGrams == null && (
-            <FoodField
-              label="Grams per serving on the package"
-              value={draft.packageGrams}
-              onChange={draft.setPackageGrams}
-            />
-          )}
-          <p className="text-sm text-muted-foreground" aria-live="polite">
-            {servingGrams > 0
-              ? `1 serving = ${servingGrams.toLocaleString()} g${grams > 0 ? ` · Recording ${Number(grams.toFixed(2)).toLocaleString()} g` : ""}`
-              : "Enter the serving weight printed on the package."}
-          </p>
-        </>
-      )}
     </>
   );
 }
-function ManualFields({ draft }: { draft: ReturnType<typeof useFoodDraft> }) {
+
+function IngredientFields({
+  draft,
+  calculation,
+}: {
+  draft: ReturnType<typeof useFoodDraft>;
+  calculation: ReturnType<typeof useFoodAmount>;
+}) {
+  return (
+    <>
+      <WithEntitySearch entity="ingredient">
+        {(search) => (
+          <EntityPicker<IngredientShortcode>
+            {...search}
+            entity="ingredient"
+            value={draft.ingredientItem}
+            setValue={draft.setIngredientItem}
+            label="Ingredient"
+            placeholder="Find an ingredient"
+          />
+        )}
+      </WithEntitySearch>
+      {calculation.ingredient.error && (
+        <p role="alert" className="text-sm text-destructive">
+          {getErrorMessage(calculation.ingredient.error)}
+        </p>
+      )}
+      <FoodAmountEditor
+        amount={draft.amount}
+        onChange={draft.setAmount}
+        onValidityChange={draft.setAmountIsValid}
+        sourceKind="ingredient"
+        suggestedUnits={calculation.suggestedUnits}
+        estimate={calculation.estimate}
+      />
+    </>
+  );
+}
+
+function ManualFields({
+  draft,
+  calculation,
+}: {
+  draft: ReturnType<typeof useFoodDraft>;
+  calculation: ReturnType<typeof useFoodAmount>;
+}) {
   return (
     <>
       <FoodField
@@ -408,8 +513,17 @@ function ManualFields({ draft }: { draft: ReturnType<typeof useFoodDraft> }) {
         onChange={draft.setName}
         placeholder="e.g. Yogurt with fruit"
       />
+      <FoodAmountEditor
+        amount={draft.amount}
+        onChange={draft.setAmount}
+        onValidityChange={draft.setAmountIsValid}
+        sourceKind="manual"
+        estimate={calculation.estimate}
+        label="Serving amount"
+        required={false}
+      />
       <p className="text-sm text-muted-foreground">
-        Macros for this person’s amount. Leave unknown values blank.
+        Macros for this entered serving. Leave unknown values blank.
       </p>
       <div className="grid grid-cols-2 gap-4">
         {MACRO_FIELDS.map(({ key, label }) => (
@@ -423,11 +537,6 @@ function ManualFields({ draft }: { draft: ReturnType<typeof useFoodDraft> }) {
           />
         ))}
       </div>
-      <FoodField
-        label="Weight (g, optional)"
-        value={draft.amount}
-        onChange={draft.setAmount}
-      />
     </>
   );
 }

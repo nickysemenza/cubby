@@ -1,7 +1,7 @@
 /**
  * Ingredient soft-delete with dependency guards.
- * Refuses to delete ingredients used in live recipes or linked to products,
- * locking the rows and logging the audit trail inside one transaction.
+ * Refuses to delete ingredients retained by live recipes, products, meal food
+ * entries, or garden history, inside one locked transaction.
  */
 
 import type { ActorContext } from "@cubby/schemas/context";
@@ -13,6 +13,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   ingredient,
+  mealFoodEntry,
   planting,
   product,
   recipe,
@@ -30,6 +31,12 @@ import { countByTarget } from "~/server/repo/impact";
 import { removeEntity } from "~/server/repo/removal";
 
 export const INGREDIENT_DELETE_EDGE_POLICY = {
+  "MealFoodEntry.ingredientId": {
+    code: "block-live-meal-food-entry",
+    effect: "block",
+    description:
+      "An ingredient recorded in a live meal food entry cannot be deleted.",
+  },
   "RecipeSectionIngredient.ingredientId": {
     code: "block-live-recipe-usage",
     effect: "block",
@@ -104,6 +111,18 @@ const findLiveProductsLinkedToIngredients = (
     columns: { ingredientId: true },
   });
 
+const findLiveMealFoodEntriesForIngredients = (
+  db: Database | DrizzleTransaction,
+  ids: IngredientId[],
+) =>
+  unwrapDb(db).query.mealFoodEntry.findMany({
+    where: and(
+      inArray(mealFoodEntry.ingredientId, ids),
+      notDeleted(mealFoodEntry),
+    ),
+    columns: { ingredientId: true },
+  });
+
 /**
  * Soft delete ingredients by setting deletedAt timestamp.
  * Throws if any ingredient is used in recipes or linked to products.
@@ -150,6 +169,20 @@ export const deleteIngredients = async (
       reason: "INGREDIENT_HAS_PRODUCTS",
       message: (count, names) =>
         `Cannot delete ${count} ingredient(s): ${names} have linked products.`,
+    });
+
+    const mealFoodEntries = await findLiveMealFoodEntriesForIngredients(
+      tx,
+      ids,
+    );
+    await assertNoDependents({
+      offendingParentIds: mealFoodEntries.flatMap((entry) =>
+        entry.ingredientId ? [entry.ingredientId] : [],
+      ),
+      fetchNames: fetchIngredientNames,
+      reason: "INGREDIENT_HAS_MEAL_FOOD_ENTRIES",
+      message: (count, names) =>
+        `Cannot delete ${count} ingredient(s): ${names} are recorded in meal food entries.`,
     });
 
     // INGREDIENT_DELETE_EDGE_POLICY declares both garden edges `block`;

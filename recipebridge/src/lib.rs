@@ -5,6 +5,7 @@
 //! - [`parse`] — ingredient lines, rich instruction text, scraped recipes, yields
 //! - [`conversion`] — unit-kind conversion, explained paths, graph debugging
 //! - [`food_mappings`] — USDA food/product → unit-mapping synthesis
+//! - [`food_calculation`] — live product, ingredient, recipe, and manual food totals
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
 //! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
 //! - [`epub`] — EPUB cookbook extraction (re-exported from upstream `cookbook::wasm`)
@@ -35,6 +36,7 @@ mod costing;
 #[cfg(target_arch = "wasm32")]
 mod epub;
 mod estimates;
+mod food_calculation;
 mod food_mappings;
 mod needs;
 mod parse;
@@ -46,6 +48,7 @@ pub use costing::*;
 #[cfg(target_arch = "wasm32")]
 pub use epub::*;
 pub use estimates::*;
+pub use food_calculation::*;
 pub use food_mappings::*;
 pub use needs::*;
 pub use parse::*;

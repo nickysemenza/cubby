@@ -1,7 +1,14 @@
 import { z } from "zod";
+import {
+  mealFoodAmount,
+  mealAmountInputFields,
+  hasOneMealAmountInput,
+  hasRequiredMealAmount,
+} from "./meal-amount";
 import { nutrientKey } from "./nutrition";
 import {
   ledgerPartyShortcode,
+  ingredientShortcode,
   mealFoodEntryId,
   mealRecipeId,
   mealShortcode,
@@ -10,7 +17,7 @@ import {
 } from "./identifiers";
 import { mealDate } from "./meal-shared";
 import { generatedMealFieldSchemas } from "./generated/entity-field-schemas.meal.gen";
-import { nutritionTotals } from "./nutrition";
+import { nutritionTotals, measureEstimate } from "./nutrition";
 
 export const mealFoodNutrients = z
   .partialRecord(nutrientKey, z.number().nonnegative())
@@ -25,19 +32,34 @@ const foodEntryCommon = {
   ledgerPartyId: ledgerPartyShortcode,
 };
 export const saveMealFoodInput = z.discriminatedUnion("sourceKind", [
-  z.object({
-    ...foodEntryCommon,
-    sourceKind: z.literal("product"),
-    productId: productShortcode,
-    grams: z.number().positive(),
-  }),
-  z.object({
-    ...foodEntryCommon,
-    sourceKind: z.literal("manual"),
-    name: z.string().trim().min(1).max(200),
-    nutrients: mealFoodNutrients,
-    grams: z.number().positive().nullable(),
-  }),
+  z
+    .object({
+      ...foodEntryCommon,
+      sourceKind: z.literal("product"),
+      productId: productShortcode,
+      ...mealAmountInputFields,
+    })
+    .refine(hasRequiredMealAmount, "Enter either amount or legacy grams"),
+  z
+    .object({
+      ...foodEntryCommon,
+      sourceKind: z.literal("ingredient"),
+      ingredientId: ingredientShortcode,
+      ...mealAmountInputFields,
+    })
+    .refine(hasRequiredMealAmount, "Enter either amount or legacy grams"),
+  z
+    .object({
+      ...foodEntryCommon,
+      sourceKind: z.literal("manual"),
+      name: z.string().trim().min(1).max(200),
+      nutrients: mealFoodNutrients,
+      ...mealAmountInputFields,
+    })
+    .refine(
+      hasOneMealAmountInput,
+      "Enter either amount or legacy grams, not both",
+    ),
 ]);
 export type SaveMealFoodInput = z.infer<typeof saveMealFoodInput>;
 export const removeMealFoodInput = z.object({
@@ -62,10 +84,19 @@ export const nutritionMeal = z.object({
 const foodCommon = {
   meal: nutritionMeal,
   name: z.string(),
+  amount: mealFoodAmount.nullable(),
   grams: z.number().positive().nullable(),
+  weight: measureEstimate,
+  batchShare: measureEstimate,
   totals: nutritionTotals,
 };
 export const mealNutritionFood = z.discriminatedUnion("sourceKind", [
+  z.object({
+    ...foodCommon,
+    sourceKind: z.literal("ingredient"),
+    id: mealFoodEntryId,
+    ingredientId: ingredientShortcode,
+  }),
   z.object({
     ...foodCommon,
     sourceKind: z.literal("recipe"),

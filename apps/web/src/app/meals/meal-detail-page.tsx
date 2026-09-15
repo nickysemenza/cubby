@@ -414,7 +414,6 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
       />
       <MealPreparationOverlays
         preparation={preparation}
-        recipes={meal.recipes}
         currentMealId={mealId}
       />
       <AddFoodDialog
@@ -439,11 +438,9 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
 
 function MealPreparationOverlays({
   preparation,
-  recipes,
   currentMealId,
 }: {
   preparation: ReturnType<typeof useMealPreparationController>;
-  recipes: MealRecipeOut[];
   currentMealId: MealShortcode;
 }) {
   return (
@@ -498,12 +495,6 @@ function MealPreparationOverlays({
         <PortionSheet
           source={preparation.selectedPreparation}
           currentMealId={currentMealId}
-          recipeServings={
-            recipes.find(
-              (recipe) =>
-                recipe.id === preparation.selectedPreparation?.mealRecipeId,
-            )?.recipe.servings ?? preparation.selectedSourceChoice?.servings
-          }
           targetMeals={preparation.targetMeals}
           eaters={preparation.eaters}
           open
