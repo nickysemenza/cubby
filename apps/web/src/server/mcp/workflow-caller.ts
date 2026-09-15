@@ -199,11 +199,20 @@ const callerDomains = {
     getNutrition:
       (context: CallerContext) =>
       (input: Parameters<typeof getMealNutritionWorkflow>[1]) =>
-        getMealNutritionWorkflow(context.readDb, input, context.usdaClient),
+        getMealNutritionWorkflow(
+          context.readDb,
+          input,
+          context.usdaClient,
+          context.services.recipeCosting,
+        ),
     getPreparations:
       (context: CallerContext) =>
       (input: Parameters<typeof getMealPreparationsWorkflow>[1]) =>
-        getMealPreparationsWorkflow(context.readDb, input),
+        getMealPreparationsWorkflow(
+          context.readDb,
+          input,
+          context.services.recipeCosting,
+        ),
     addRecipe:
       (context: CallerContext) =>
       (input: Parameters<typeof addRecipeToMealWorkflow>[1]) =>

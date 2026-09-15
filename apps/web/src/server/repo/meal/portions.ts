@@ -46,6 +46,8 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/repo/shortcode-resolver";
+import type { RecipeCostingService } from "~/server/services/recipe-costing.service";
+import { repairStaleRecipesForRead } from "~/server/services/repair-stale-recipes-for-read";
 
 type PortionRow = {
   id: string;
@@ -358,7 +360,7 @@ export const saveMealRecipePreparation = async (
  * receives one of its portions. Source summaries and target totals then use
  * their own directions so a same-meal portion cannot be counted twice.
  */
-export const getMealPreparations = async (
+const getMealPreparationsRaw = async (
   db: Database,
   input: GetMealPreparationsInput,
 ): Promise<GetMealPreparationsOut> => {
@@ -592,4 +594,29 @@ export const getMealPreparations = async (
       },
     },
   });
+};
+
+export const getMealPreparations = async (
+  db: Database,
+  input: GetMealPreparationsInput,
+  recipeCosting?: RecipeCostingService,
+): Promise<GetMealPreparationsOut> => {
+  const initial = await getMealPreparationsRaw(db, input);
+  if (!recipeCosting) return initial;
+  const codes = [
+    ...new Set(initial.preparations.map((entry) => entry.recipe.id)),
+  ];
+  const resolved = await resolveAllOrThrow(
+    recipeCosting.database,
+    "recipe",
+    codes,
+  );
+  const repaired = await repairStaleRecipesForRead(
+    recipeCosting,
+    resolved,
+    "meal.getPreparations",
+  );
+  return repaired
+    ? getMealPreparationsRaw(recipeCosting.database, input)
+    : initial;
 };

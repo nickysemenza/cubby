@@ -132,6 +132,7 @@ export function SettleExpenseDialog({
       }}
       title={`Mark "${expense.name}" purchased`}
       description="Log the final cost and date — this moves the expense off the Planned list."
+      bodyMode="form"
     >
       <FormWrapper<SettleExpenseValues>
         form={form}
@@ -140,6 +141,7 @@ export function SettleExpenseDialog({
         error={updateMutation.error ? updateMutation.error.message : undefined}
         onCancel={() => onOpenChange(false)}
         submitButtonText="Mark purchased"
+        footerMode="dialog"
       >
         <NullableNumericField
           form={form}

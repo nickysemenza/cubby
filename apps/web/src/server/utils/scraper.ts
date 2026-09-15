@@ -77,6 +77,7 @@ export const scrapedToImportRecipe = (w: WScrapedRecipe): ImportRecipe => {
     sections: w.sections.map((section) => ({
       name: sanitizeSectionName(section.name) ?? undefined,
       ingredients: section.ingredients,
+      parsedIngredients: section.parsed_ingredients,
       instructions: section.instructions,
     })),
     servings: w.servings,

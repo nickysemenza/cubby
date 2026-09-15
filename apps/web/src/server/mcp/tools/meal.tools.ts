@@ -1,3 +1,4 @@
+import { plainDate } from "@cubby/schemas/base-entity";
 import {
   ledgerPartyShortcode,
   mealShortcode,
@@ -49,14 +50,29 @@ const compactEstimate = z.union([
   }),
 ]);
 const compactNutrition = z.partialRecord(nutrientKey, compactEstimate);
+const addRecipeNutritionDetail = z
+  .enum(["none", "kcal", "macros", "full"])
+  .default("none");
+const addRecipeToMealInput = mealAddRecipeInput.extend({
+  nutrition: addRecipeNutritionDetail,
+});
+const addRecipeToMealOut = z.object({
+  id: mealShortcode,
+  name: z.string(),
+  coverage: z.object({
+    cost: compactEstimate,
+    kcal: compactEstimate,
+  }),
+  nutrition: compactNutrition.optional(),
+});
 const dailyIntakeInput = z.object({
-  date: z.iso.date(),
+  date: plainDate,
   partyId: ledgerPartyShortcode,
   nutrition: z.enum(["macros", "full"]).default("macros"),
   includeFoods: z.boolean().default(false),
 });
 const dailyIntakeOut = z.object({
-  date: z.iso.date(),
+  date: plainDate,
   partyId: ledgerPartyShortcode,
   status: z.enum(["planned", "logged"]),
   nutrition: compactNutrition.nullable(),
@@ -215,9 +231,9 @@ export function registerMealTools(server: McpServer) {
   registerRouterTool(server, {
     name: "add_recipe_to_meal",
     description:
-      "Plan a recipe into a meal at a given scale multiplier (1 = as-written).",
-    inputSchema: mealAddRecipeInput,
-    outputSchema: mealMcpOut,
+      "Plan a recipe into a meal at a given scale multiplier (1 = as-written). Returns compact meal identity plus cost/kcal coverage. Nutrition defaults to none; request kcal, macros, or full when needed.",
+    inputSchema: addRecipeToMealInput,
+    outputSchema: addRecipeToMealOut,
     annotations: WRITE_CLOSED,
     call: async (caller, params) => {
       const result = await caller.meal.addRecipe({
@@ -226,7 +242,32 @@ export function registerMealTools(server: McpServer) {
         scale: params.scale,
         sortOrder: params.sortOrder,
       });
-      return respond(result, slimMeal);
+      const meal = respond(result, slimMeal);
+      const keys =
+        params.nutrition === "full"
+          ? nutrientKey.options
+          : params.nutrition === "macros"
+            ? macroKeys
+            : params.nutrition === "kcal"
+              ? (["kcal"] as const)
+              : [];
+      return {
+        id: meal.id,
+        name: meal.name ?? meal.mealType ?? meal.date,
+        coverage: {
+          cost: compactValue(meal.totals.cost),
+          kcal: compactValue(meal.totals.nutrition.kcal),
+        },
+        nutrition:
+          keys.length > 0
+            ? Object.fromEntries(
+                keys.map((key) => [
+                  key,
+                  compactValue(meal.totals.nutrition[key]),
+                ]),
+              )
+            : undefined,
+      };
     },
   });
 

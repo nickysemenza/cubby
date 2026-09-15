@@ -21,6 +21,7 @@ import {
   generatedMcpEntityBulkUpdateCommandSchema,
   generatedMcpEntityCreateCommandSchema,
   generatedMcpEntityUpdateCommandSchema,
+  ENTITY_SCHEMA_BINDINGS,
 } from "~/server/generated/entity-bindings.gen";
 import {
   generatedEntityKernelEntities,
@@ -59,6 +60,37 @@ const listFields = {
     .optional(),
   groupBy: z.string().min(1).optional(),
 };
+
+const resultDetail = z.enum(["summary", "full"]).default("summary");
+const resultDetailFields = z.object({ resultDetail });
+
+const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
+  (entity) => {
+    const binding = ENTITY_SCHEMA_BINDINGS[entity];
+    const filters = binding.filters
+      .extend({ ids: z.array(binding.id).min(1).max(500).optional() })
+      .strict()
+      .default({});
+    return z.object({
+      action: z.literal("list"),
+      entity: z.literal(entity),
+      filters,
+      sort: listFields.sort,
+      pagination: listFields.pagination,
+      groupBy: listFields.groupBy,
+      resultDetail,
+    });
+  },
+);
+const mcpListCommandSchema = z.union(
+  // SAFETY: the generated entity roster is non-empty and contains far more
+  // than Zod's required two union members.
+  mcpListCommandCases as [
+    (typeof mcpListCommandCases)[number],
+    (typeof mcpListCommandCases)[number],
+    ...(typeof mcpListCommandCases)[number][],
+  ],
+);
 
 const entityQueryCommandSchema = z.discriminatedUnion("action", [
   z.object({
@@ -132,18 +164,15 @@ export const entityCommandSchema = z.union([
   entityMutationCommandSchema,
 ]);
 
-export const entityMcpReadCommandSchema = z.discriminatedUnion("action", [
+export const entityMcpReadCommandSchema = z.union([
   z.object({
     action: z.literal("get"),
     entity: z.enum(generatedMcpEntityActionEntities.get),
     id: anyShortcodeSchema(generatedMcpEntityActionEntities.get),
     missing: z.enum(["error", "null"]).default("error"),
+    resultDetail,
   }),
-  z.object({
-    action: z.literal("list"),
-    entity: z.enum(generatedMcpEntityActionEntities.list),
-    ...listFields,
-  }),
+  mcpListCommandSchema,
   z.object({
     action: z.literal("search"),
     entity: z.enum(generatedMcpEntityActionEntities.search),
@@ -161,13 +190,14 @@ const mcpMergeCommandSchema = z.object({
   action: z.literal("merge"),
   entity: z.enum(generatedMcpEntityActionEntities.merge),
   data: z.record(z.string(), z.unknown()),
+  resultDetail,
 });
 
 /** MCP ingress is generated from executable actions each literal exposes. */
 export const entityMcpCommandSchema = z.union([
   entityMcpReadCommandSchema,
-  generatedMcpEntityCreateCommandSchema,
-  generatedMcpEntityUpdateCommandSchema,
+  generatedMcpEntityCreateCommandSchema.and(resultDetailFields),
+  generatedMcpEntityUpdateCommandSchema.and(resultDetailFields),
   mcpDeleteCommandSchema,
   generatedMcpEntityBulkUpdateCommandSchema(uniqueEntityIdsSchema),
   generatedMcpEntityRelationCommandSchema,

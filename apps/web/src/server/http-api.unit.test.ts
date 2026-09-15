@@ -35,10 +35,11 @@ beforeEach(() => {
 });
 
 describe("HTTP boundary", () => {
-  it("uses the session cache and bounded-stale database for bearer lists", async () => {
+  it("verifies the session and supports bounded-stale database reads", async () => {
     expect((await request("recipes")).status).toBe(200);
     expect(ports.getSession).toHaveBeenCalledWith({
       headers: expect.any(Headers),
+      query: { disableCookieCache: true },
       returnHeaders: true,
     });
     expect(ports.context).toHaveBeenCalledWith({
@@ -229,6 +230,7 @@ describe("HTTP boundary", () => {
     // runs, so the boundary still reads the session authoritatively.
     expect(ports.getSession).toHaveBeenCalledWith({
       headers: expect.any(Headers),
+      query: { disableCookieCache: true },
       returnHeaders: true,
     });
     expect(ports.verifyApiKey).not.toHaveBeenCalled();

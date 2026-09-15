@@ -50,6 +50,10 @@ describe("parse_scraped_recipe → scrapedToImportRecipe", () => {
       "2 cups flour",
       "1 cup milk",
     ]);
+    expect(
+      recipe.sections[0]?.parsedIngredients?.map((line) => line.name),
+    ).toEqual(["flour", "milk"]);
+    expect(recipe.sections[0]?.parsedIngredients).toHaveLength(2);
     expect(recipe.sections[0]?.instructions).toHaveLength(2);
     // Unnamed main section.
     expect(recipe.sections[0]?.name).toBeUndefined();

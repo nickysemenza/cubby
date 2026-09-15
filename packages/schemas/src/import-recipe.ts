@@ -60,11 +60,52 @@ export const composeNotesMarkdown = (
   return parts.length > 0 ? parts.join("\n\n") : null;
 };
 
-const importRecipeSection = z.object({
-  name: z.string().optional(),
-  ingredients: z.array(z.string()),
-  instructions: z.array(z.string()).default([]),
+const importedParsedIngredient = z.object({
+  name: z.string(),
+  amounts: z.array(
+    z.object({
+      unit: z.string(),
+      value: z.number(),
+      upper_value: z.number().optional(),
+    }),
+  ),
+  modifier: z.string().optional(),
+  optional: z.boolean().optional(),
+  usage: z.enum([
+    "normal",
+    "frying_medium",
+    "pan_grease",
+    "seasoning",
+    "dredging",
+    "garnish",
+    "marinade",
+  ]),
+  parse_notes: z.object({
+    confidence: z.enum(["high", "medium", "low"]),
+    fell_back: z.boolean(),
+    unparsed_digit: z.boolean(),
+  }),
 });
+
+const importRecipeSection = z
+  .object({
+    name: z.string().optional(),
+    ingredients: z.array(z.string()),
+    parsedIngredients: z.array(importedParsedIngredient).optional(),
+    instructions: z.array(z.string()).default([]),
+  })
+  .superRefine((section, ctx) => {
+    if (
+      section.parsedIngredients &&
+      section.parsedIngredients.length !== section.ingredients.length
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["parsedIngredients"],
+        message: "Parsed ingredients must align one-for-one with raw lines",
+      });
+    }
+  });
 
 const publicRecipeImageUrl = z
   .url()

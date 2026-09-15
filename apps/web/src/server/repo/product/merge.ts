@@ -32,6 +32,7 @@ import {
   inventoryEntry,
   location,
   mealFoodEntry,
+  planting,
   product,
   productComponent,
   productConversionCoverage,
@@ -651,6 +652,7 @@ interface ProductMergePlan {
   cookbooks: ProductAssociationRow[];
   mealFoodEntries: ProductAssociationRow[];
   conversionCoverage: ProductAssociationRow[];
+  sourcePlantings: ProductAssociationRow[];
   survivorImageIds: string[];
   aliases: string[];
   aliasesAdded: string[];
@@ -922,6 +924,20 @@ async function buildProductMergePlan(
     ...row,
     productId: parseEntityId("product", row.productId),
   }));
+  const sourcePlantings = (
+    await db
+      .select({ id: planting.id, productId: planting.sourceProductId })
+      .from(planting)
+      .where(
+        and(
+          inArray(planting.sourceProductId, liveLoserIds),
+          notDeleted(planting),
+        ),
+      )
+  ).map((row): ProductAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const aliases = uniq([
     ...keeper.aliases,
     ...losers.map((row) => row.name),
@@ -1008,6 +1024,7 @@ async function buildProductMergePlan(
     cookbooks,
     mealFoodEntries,
     conversionCoverage,
+    sourcePlantings,
     survivorImageIds: imageRows
       .filter((row) => row.productId === input.keepId)
       .map((row) => row.id),
@@ -2002,6 +2019,14 @@ export const previewMergeProducts = async (
   ]);
 
   const sideEffects = [
+    sideEffect({
+      code: "preserve-planting-source-product",
+      label: "plantings retain merged source product provenance",
+      description:
+        "Live plantings keep the merged product tombstone as their recorded source rather than rewriting history.",
+      total: plan.sourcePlantings.length,
+      byTargetId: byProduct(plan.sourcePlantings),
+    }),
     sideEffect({
       code: "resync-inventory-valuations",
       label: "stock entries re-valued",

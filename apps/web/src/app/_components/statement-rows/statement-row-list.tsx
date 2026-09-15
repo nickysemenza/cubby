@@ -530,9 +530,8 @@ export function StatementRowList() {
             header: "Transaction",
             enableSorting: false,
             meta: { className: "w-28" },
-            // financialTransaction has no EntityInlineLink/hover-preview case (see
-            // apps/web/CLAUDE.md), so this is the plain truncated-link-with-title
-            // shape rather than EntityInlineLink.
+            // This narrow projection only carries the transaction shortcode, not
+            // the displayName required by EntityInlineLink.
             cell: (info) => {
               const transactionId = info.getValue();
               if (!transactionId) return <NoneValue />;

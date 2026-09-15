@@ -495,7 +495,7 @@ const entityDefinitions = withEntityNames({
   },
   "usda-food": {
     ...generatedBrowserRoutes["usda-food"],
-    color: INK.positive,
+    color: INK.primary,
     // USDA foods are read-only, no detail conventions needed. Default sort
     // ("fdc_id") comes from `model.sort` in `17-usda-food.entity.ts`.
   },

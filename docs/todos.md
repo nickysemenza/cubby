@@ -25,67 +25,6 @@ history is the archive. Permanent product constraints live in the
 
 ## Easy fixes
 
-- (P3) **`EntityInlineLink` lacks cases for `financialAccount`,
-  `financialTransaction`, `wish`, and `image`.** Unrelated to garden directly,
-  but found auditing generic entity-link rendering during this pass.
-
-- **`entity merge product` keeps the loser's secondary external ids.** Products
-  legitimately hold several `amazon/asin` slots (`patch_products_external_ids`
-  already supports it), but merge discards a colliding `(source, kind)` — that
-  is how PRD-WDHJ lost B079M85N83 and needed a hand re-link.
-
-- (P3) **`FormWrapper` renders its action bar in the dialog body.**
-  `apps/web/src/app/_components/form-utils.tsx`'s `FormWrapper` has no footer
-  mode, so `settle-expense` and `create-project-from-tasks` can't render
-  their actions in `ResponsiveDialog`'s footer the way every other dialog
-  does. Add a footer mode so those two forms can adopt it.
-
-- (P3) **`usda-food` uses the status-green `INK.positive` entity color.**
-  Same audit pass; the color reads as a status signal rather than an entity
-  identity color.
-
-- (P3) **Apple `MappingTests` meal-name fallback is now a separate
-  client-side rule.** Since `meal` carries a server-computed `displayName`,
-  the Apple-side fallback name logic in `MappingTests` duplicates the
-  contract rather than reading the server value.
-
-- **Delete the stale remote `native-poc` branch** — Still on origin
-  (`c7ce160f`), old history plus one commit; the permission classifier blocked
-  the delete during #1020. `git push origin --delete native-poc` whenever
-  convenient.
-
-- **MCP read projection and strict list filters.** A 16-order Amazon import on
-  2026-09-14 spent most of ~600k tokens on reads, not writes: `entity list
-  purchase` returned 25 full rows (~30k tokens, `dataQuality` gap text
-  repeated three times per row) to learn the latest booked order date, and
-  `entity get product` (~4k each, with `recipeUsages` and USDA nutrients) was
-  called only for `externalIds`. Add `resultDetail: "summary"` or a `fields`
-  projection to `list`/`get`, and reject unknown filter keys — `filters.ids`
-  on `list product` is not a field and was silently ignored, returning page 1
-  of the whole catalog (~40k tokens). Add a real `ids` filter while there.
-
-- **MCP write projection.** Planning one dinner (MEL-WB6Y, 2026-09-14) spent
-  most of its tokens on write echoes: every `entity update product` returned
-  the full product (images, `dataQuality`, pricing, ~1.5k tokens) to confirm
-  one field, and each `add_recipe_to_meal` returned the meal with 22-nutrient
-  totals three times (recipe, `scaledTotals`, meal; ~6k tokens). Writes should
-  default to `{id, name}` plus a coverage headline, with the
-  `nutrition: full|kcal|none` knob `get_meal_preparations` already has.
-
-- **Recipe nutrition MCP projection.** Add
-  `get_recipe_nutrition(recipeId, servings)` over the existing recipe totals and
-  return explicit mapped/unmapped coverage rather than silently presenting a
-  partial total as complete.
-
-- **Return parsed lines from recipe scraping.** Fold ingredient parsing into
-  `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
-  for the same lines.
-
-- **Vendor coverage query.** Every import starts with "latest purchase date
-  and the set of `orderId`s for vendor X in [from, to]". Expose that as one
-  cheap read (on `entity get vendor` or a `get_vendor_coverage` tool) instead
-  of the full purchase list above.
-
 ---
 
 ## Ready projects
@@ -122,11 +61,6 @@ history is the archive. Permanent product constraints live in the
 - (P3) **Bulk "Finish selected" on Apple.** Web has no equivalent gap; the
   native client lacks a multi-select finish action for plantings, so
   finishing several plantings at once still means one Finish per planting.
-
-- **Compute-if-stale on dependent reads.** After a product unit-mapping change,
-  `get_meal_preparations` returned `pending: totals_stale` until
-  `explain_recipe_costing` forced the recompute. Reads that hit a stale total
-  should compute it rather than report pending.
 
 - **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
   facet. Partial-import repair stays on the existing Problems worklist.
@@ -206,12 +140,6 @@ history is the archive. Permanent product constraints live in the
   recipe-usage drift indicator, which is presently read-only. Use this
   representative workflow to deepen the shared editing module only after its
   concrete needs are proven; do not add speculative editor ports first.
-
-- (P3) **Ingredient merge drops `gardenGuideKey`.** Merging two Ingredients
-  silently discards the losing Ingredient's `gardenGuideKey` rather than
-  carrying or surfacing it. Separately, Product merge can leave a Planting
-  pointed at the tombstoned source Product without surfacing that planting in
-  the merge preview.
 
 - **Itemization and settlement verdict on the transactions list.** The
   linkage exists (`FinancialTransaction ──< Allocation >── Purchase ──<

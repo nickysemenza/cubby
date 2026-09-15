@@ -142,3 +142,49 @@ describe("EntityInlineLink display images", () => {
     expect(link.querySelector("svg")).toBeNull();
   });
 });
+
+describe("EntityInlineLink complete preview roster", () => {
+  it("links all four entities using their real title fields", () => {
+    render(
+      <>
+        <EntityInlineLink
+          entity="financialAccount"
+          data={{ id: "FAC-TEST", name: "Checking" }}
+          displayImage={null}
+        />
+        <EntityInlineLink
+          entity="financialTransaction"
+          data={{ id: "FTX-TEST", displayName: "Market purchase" }}
+          displayImage={null}
+        />
+        <EntityInlineLink
+          entity="wish"
+          data={{ id: "WSH-TEST", name: "Garden bench" }}
+          displayImage={null}
+        />
+        <EntityInlineLink
+          entity="image"
+          data={{ id: "IMG-TEST", filename: "bench.jpg" }}
+          displayImage={null}
+        />
+      </>,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(screen.getByRole("link", { name: "Checking" })).toHaveAttribute(
+      "href",
+      "/financial-accounts/FAC-TEST",
+    );
+    expect(
+      screen.getByRole("link", { name: "Market purchase" }),
+    ).toHaveAttribute("href", "/financial-transactions/FTX-TEST");
+    expect(screen.getByRole("link", { name: "Garden bench" })).toHaveAttribute(
+      "href",
+      "/wishes/WSH-TEST",
+    );
+    expect(screen.getByRole("link", { name: "bench.jpg" })).toHaveAttribute(
+      "href",
+      "/images/IMG-TEST",
+    );
+  });
+});

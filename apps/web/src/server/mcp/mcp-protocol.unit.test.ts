@@ -120,6 +120,67 @@ describe("MCP protocol smoke", () => {
     });
   });
 
+  it("defaults entity reads to identity summaries and keeps compact product ids", async () => {
+    const product = mock(productWithFoodOut, {
+      overrides: {
+        externalIds: [
+          {
+            id: "00000000-0000-4000-8000-000000000001",
+            source: "amazon",
+            kind: "asin",
+            externalId: "B012345678",
+            url: "https://www.amazon.com/dp/B012345678",
+            isPrimary: true,
+            createdAt: new Date("2026-01-01"),
+            updatedAt: new Date("2026-01-01"),
+          },
+        ],
+      },
+    });
+    const runEntity: ExecuteEntity = async () => ({
+      action: "get",
+      entity: "product",
+      item: { ...product, displayImages: [], attachments: [] },
+    });
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerEntityTools(server, runEntity);
+
+    const result = await callMcpTool(
+      server,
+      "get_entities",
+      { command: { action: "get", entity: "product", id: product.id } },
+      {},
+      {
+        entityKernel: {
+          db: null,
+          readDb: null,
+          actorContext: null,
+          usdaClient: null,
+          upcLookupClient: null,
+          services: null,
+        },
+      },
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({
+      action: "get",
+      entity: "product",
+      item: {
+        id: product.id,
+        name: product.name,
+        externalIds: [
+          {
+            source: "amazon",
+            kind: "asin",
+            externalId: "B012345678",
+            isPrimary: true,
+          },
+        ],
+      },
+    });
+  });
+
   it("projects storage-only child ids out of generic entity results", async () => {
     const totals: NutritionTotals = {
       cost: { status: "unavailable", reason: "no_data" },
@@ -152,7 +213,7 @@ describe("MCP protocol smoke", () => {
     const result = await callMcpTool(
       server,
       "entity",
-      { command: { action: "list", entity: "meal" } },
+      { command: { action: "list", entity: "meal", resultDetail: "full" } },
       {},
       {
         entityKernel: {
@@ -241,14 +302,28 @@ describe("MCP protocol smoke", () => {
     const productRead = await callMcpTool(
       server,
       "get_entities",
-      { command: { action: "get", entity: "product", id: product.id } },
+      {
+        command: {
+          action: "get",
+          entity: "product",
+          id: product.id,
+          resultDetail: "full",
+        },
+      },
       {},
       nullKernel,
     );
     const ingredientRead = await callMcpTool(
       server,
       "get_entities",
-      { command: { action: "get", entity: "ingredient", id: ingredient.id } },
+      {
+        command: {
+          action: "get",
+          entity: "ingredient",
+          id: ingredient.id,
+          resultDetail: "full",
+        },
+      },
       {},
       nullKernel,
     );

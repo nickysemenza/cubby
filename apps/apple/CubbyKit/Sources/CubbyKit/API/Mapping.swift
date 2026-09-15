@@ -820,7 +820,7 @@ extension TodayMeal {
     init(_ out: MealRowOut) {
         self.init(
             id: out.id,
-            name: out.name ?? out.mealType?.rawValue.capitalized ?? out.date,
+            name: out.displayName,
             mealType: out.mealType?.rawValue,
             mealKind: out.mealKind.rawValue,
             recipeNames: out.recipes.map(\.recipe.name)
@@ -833,7 +833,7 @@ extension TodayMeal {
     init(_ out: MealListRowOut) {
         self.init(
             id: out.id,
-            name: out.name ?? out.mealType?.rawValue.capitalized ?? out.date,
+            name: out.displayName,
             mealType: out.mealType?.rawValue,
             mealKind: out.mealKind.rawValue,
             recipeNames: out.recipes.map(\.recipe.name)

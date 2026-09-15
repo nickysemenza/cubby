@@ -7,6 +7,7 @@ import {
   mutationEvents,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
+import { repairStaleRecipesForRead } from "~/server/services/repair-stale-recipes-for-read";
 
 import {
   createRecipe,
@@ -16,7 +17,7 @@ import {
   recipeList,
   updateRecipe,
 } from "./crud";
-import { findParentRecipeIdsBatch, selectStaleRecipeIds } from "./totals";
+import { findParentRecipeIdsBatch } from "./totals";
 
 const recipeShortcodes = bindShortcodeResolver("recipe");
 
@@ -41,17 +42,12 @@ export const recipeEntityAdapter = defineEntityAdapter({
       const [entityId] = await recipeShortcodes.present(ctx.db, [id]);
       if (!entityId) return null;
       const strongDb = ctx.services.recipeCosting.database;
-      const stale = await selectStaleRecipeIds(strongDb, [entityId]);
-      if (stale.length === 0) return getRecipeByShortcode(ctx.db, id);
-      try {
-        await ctx.services.recipeCosting.recomputeQueued(stale);
-      } catch (error) {
-        console.warn("[recipe.get] repair-on-read failed", {
-          recipe: id,
-          error,
-        });
-      }
-      return getRecipeByShortcode(strongDb, id);
+      const repaired = await repairStaleRecipesForRead(
+        ctx.services.recipeCosting,
+        [entityId],
+        "recipe.get",
+      );
+      return getRecipeByShortcode(repaired ? strongDb : ctx.db, id);
     },
     list: (ctx, filters, sorts, pagination) =>
       recipeList(ctx.db, filters, sorts, pagination),

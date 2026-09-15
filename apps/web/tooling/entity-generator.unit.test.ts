@@ -893,7 +893,7 @@ describe("typed entity compiler", () => {
       'LEGACY_SHORTCODE_PREFIX = {"P-":"product","L-":"location"}',
     );
     expect(artifact("entity-details.gen.ts")).toContain(
-      '"product": productWithFoodOut',
+      '"product": withEntityDetailMedia(productWithFoodOut)',
     );
     expect(artifact("entity-details.gen.ts")).toContain(
       "z.output<(typeof ENTITY_DETAIL_OUTPUT_SCHEMAS)[E]>",

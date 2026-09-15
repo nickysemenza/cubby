@@ -10,15 +10,21 @@ import {
   recipesUsingIngredientOut,
   scrapeRecipeMcpOut,
 } from "@cubby/schemas/mcp";
+import { nutritionEstimate } from "@cubby/schemas/nutrition";
+import type { RecipeCostingExplain } from "@cubby/schemas/recipe-shared";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
 import { cookbookContract } from "~/contracts/cookbook.contract";
 import { recipeContract } from "~/contracts/recipe.contract";
-import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
+import { scaleTotals } from "~/lib/nutrition-estimates";
+import { executeEntity } from "~/server/entity-kernel";
+import { createAppError } from "~/server/errors/app-error";
 import { listCookbooks } from "~/server/repo/cookbook";
+import { resolveLiveShortcodes } from "~/server/repo/shortcode-resolver";
 
+import { getEntityKernelContext } from "../kernel-context";
 import {
   getCaller,
   idParam,
@@ -41,7 +47,127 @@ const recipeTagsListOut = mcpItemsEnvelope(
   fromContract(recipeContract.ops.getAllTags),
 );
 
+const recipeNutritionInput = z.object({
+  recipeId: idParam("recipe"),
+  servings: z.number().positive(),
+});
+const recipeNutritionOut = z.object({
+  recipe: z.object({ id: idParam("recipe"), name: z.string() }),
+  recipeServings: z.number().positive(),
+  requestedServings: z.number().positive(),
+  nutrition: nutritionEstimate,
+  coverage: z.object({
+    totalLines: z.number().int().nonnegative(),
+    mappedLines: z.number().int().nonnegative(),
+    unmappedLines: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        reasons: z.array(z.enum(["weight", "nutrients"])),
+      }),
+    ),
+  }),
+});
+
+type RecipeServingBasis = {
+  servings?: number | null;
+  yield?: { value: number; unit: string } | null;
+};
+
+export const effectiveRecipeServings = (recipe: RecipeServingBasis) =>
+  recipe.servings ??
+  (recipe.yield?.unit === "servings" ? recipe.yield.value : null);
+
+export const buildRecipeNutrition = (input: {
+  recipe: { id: string; name: string };
+  recipeServings: number;
+  requestedServings: number;
+  explain: RecipeCostingExplain;
+}) => {
+  const scaled = scaleTotals(
+    input.explain.computed.totals,
+    input.requestedServings / input.recipeServings,
+  );
+  const unmappedLines = input.explain.computed.diagnostics.flatMap((line) => {
+    const reasons = [
+      ...(line.missing.weight ? (["weight"] as const) : []),
+      ...(line.missing.nutrients ? (["nutrients"] as const) : []),
+    ];
+    return reasons.length > 0
+      ? [{ id: line.id, name: line.name, reasons }]
+      : [];
+  });
+  return recipeNutritionOut.parse({
+    recipe: input.recipe,
+    recipeServings: input.recipeServings,
+    requestedServings: input.requestedServings,
+    nutrition: scaled.nutrition,
+    coverage: {
+      totalLines: input.explain.computed.diagnostics.length,
+      mappedLines:
+        input.explain.computed.diagnostics.length - unmappedLines.length,
+      unmappedLines,
+    },
+  });
+};
+
 export function registerRecipeTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "get_recipe_nutrition",
+    description:
+      "Return recipe nutrient totals scaled to a requested serving count, plus mapped-line coverage and compact reasons for unmapped lines. Refuses recipes with no effective serving basis instead of guessing.",
+    inputSchema: recipeNutritionInput,
+    outputSchema: recipeNutritionOut,
+    annotations: READ_ONLY_CLOSED,
+    handler: async (params, extra) => {
+      const context = getEntityKernelContext(extra);
+      const detail = await executeEntity(context, {
+        action: "get",
+        entity: "recipe",
+        id: params.recipeId,
+        missing: "error",
+      });
+      if (detail.action !== "get" || !detail.item) {
+        throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+      }
+      const recipe = z
+        .object({
+          id: z.string(),
+          name: z.string(),
+          servings: z.number().nullable().optional(),
+          yield: z
+            .object({ value: z.number(), unit: z.string() })
+            .nullable()
+            .optional(),
+        })
+        .parse(detail.item);
+      const recipeServings = effectiveRecipeServings(recipe);
+      if (!recipeServings || recipeServings <= 0) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `Recipe ${params.recipeId} has no effective serving basis`,
+        );
+      }
+      const resolved = await resolveLiveShortcodes(
+        context.db,
+        [params.recipeId],
+        "recipe",
+      );
+      const recipeId = resolved.get(params.recipeId);
+      if (!recipeId) {
+        throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+      }
+      const explain =
+        await context.services.recipeCosting.explainRecipe(recipeId);
+      return buildRecipeNutrition({
+        recipe: { id: params.recipeId, name: recipe.name },
+        recipeServings,
+        requestedServings: params.servings,
+        explain,
+      });
+    },
+  });
+
   registerRouterTool(server, {
     name: "find_cookable_recipes",
     description:
@@ -161,12 +287,7 @@ export function registerRecipeTools(server: McpServer) {
     outputSchema: cookbookSummariesMcpOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (_params, extra) => {
-      const rawContext = extra.authInfo?.extra?.entityKernel;
-      const context =
-        rawContext === undefined
-          ? undefined
-          : entityKernelContextSchema.parse(rawContext);
-      if (!context) throw new Error("MCP entity kernel context is missing");
+      const context = getEntityKernelContext(extra);
       const result = await listCookbooks(context.readDb);
       return { items: result };
     },

@@ -173,7 +173,7 @@ describe("generated HTTP OpenAPI document", () => {
     // (see the fold-bug regression test below): the old replacer-array
     // allowlist erased distinct nested shapes down to `{}`, so it had been
     // incorrectly folding distinct positionals together and undercounting.
-    expect(positional.length).toBeLessThanOrEqual(60);
+    expect(positional.length).toBeLessThanOrEqual(70);
     expect(schemas).toHaveProperty("ProductTopLevelOut");
     expect(schemas).toHaveProperty("LocationShortcode");
     expect(schemas).toHaveProperty("VendorCreateInput");
@@ -222,7 +222,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(329);
+    expect(operations).toHaveLength(332);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -280,7 +280,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 156, post: 135, patch: 19, delete: 19 });
+    expect(methods).toEqual({ get: 156, post: 138, patch: 19, delete: 19 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();
@@ -340,7 +340,7 @@ describe("generated HTTP OpenAPI document", () => {
     // string with format "uri". Guard both the specific known casualties and
     // the aggregate count.
     const valuationRef = schemaNode.parse(
-      schemas.InventoryListItemOut?.properties?.valuation,
+      schemas.InventoryWithLocationAndProductOut?.properties?.valuation,
     ).$ref;
     expect(resolve(valuationRef ?? "").schema).toMatchObject({
       type: "number",

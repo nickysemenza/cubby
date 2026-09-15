@@ -80,7 +80,14 @@ async function expenseRecommendations(
   });
   return {
     source,
-    basisKey: [row.shortcode, row.updatedAt].join("|"),
+    basisKey: [
+      row.shortcode,
+      row.date,
+      row.trade,
+      row.productId,
+      currentTarget?.id,
+      row.updatedAt,
+    ].join("|"),
     groups: [
       { kind: "expense-project", status: "ready", currentTarget, proposals },
     ],

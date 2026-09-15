@@ -2,13 +2,17 @@ import { referentialLivenessViolationSchema } from "@cubby/schemas/entity-integr
 import { problemsCountSchema } from "@cubby/schemas/mcp";
 import {
   mealNutritionOut,
+  mealOut,
   nutritionMeal,
   getMealPreparationsOut,
 } from "@cubby/schemas/meal";
 import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import { productResolveNamesOut } from "@cubby/schemas/product";
 import { expenseAnalyticsOut } from "@cubby/schemas/project";
-import { recipeCostingExplain } from "@cubby/schemas/recipe-shared";
+import {
+  recipeCostingExplain,
+  rowDiagnostic,
+} from "@cubby/schemas/recipe-shared";
 import { similarEntitiesOut } from "@cubby/schemas/search";
 import type { McpToolCallTelemetry } from "@cubby/schemas/telemetry";
 import { testShortcode } from "@cubby/schemas/testing";
@@ -18,6 +22,10 @@ import { mock } from "~/lib/test/mock-schema";
 
 import { callMcpTool } from "./mcp-test-utils";
 import { createMcpServer } from "./server";
+import {
+  buildRecipeNutrition,
+  effectiveRecipeServings,
+} from "./tools/recipe.tools";
 
 /** The mock generator can't satisfy the coverage refine; build totals by hand. */
 const knownTotals: NutritionTotals = {
@@ -40,6 +48,92 @@ const knownTotals: NutritionTotals = {
 };
 
 describe("MCP workflow tools", () => {
+  it("scales recipe nutrition and reports compact unmapped coverage", () => {
+    const explain = mock(recipeCostingExplain, {
+      overrides: {
+        computed: {
+          totals: knownTotals,
+          diagnostics: [
+            mock(rowDiagnostic, {
+              overrides: {
+                id: "line-covered",
+                name: "Covered line",
+                missing: { price: false, weight: false, nutrients: false },
+              },
+            }),
+            mock(rowDiagnostic, {
+              overrides: {
+                id: "line-unmapped",
+                name: "Unmapped line",
+                missing: { price: false, weight: true, nutrients: true },
+              },
+            }),
+          ],
+        },
+      },
+    });
+
+    const result = buildRecipeNutrition({
+      recipe: { id: "RCP-4K7M", name: "Test recipe" },
+      recipeServings: 4,
+      requestedServings: 2,
+      explain,
+    });
+
+    expect(result.nutrition.kcal).toMatchObject({ lower: 60 });
+    expect(result.coverage).toEqual({
+      totalLines: 2,
+      mappedLines: 1,
+      unmappedLines: [
+        {
+          id: "line-unmapped",
+          name: "Unmapped line",
+          reasons: ["weight", "nutrients"],
+        },
+      ],
+    });
+    expect(effectiveRecipeServings({ servings: null, yield: null })).toBeNull();
+    expect(
+      effectiveRecipeServings({ yield: { value: 1, unit: "loaf" } }),
+    ).toBeNull();
+    expect(
+      effectiveRecipeServings({ yield: { value: 8, unit: "servings" } }),
+    ).toBe(8);
+  });
+
+  it("add_recipe_to_meal defaults to compact coverage and opts into nutrition", async () => {
+    const meal = mock(mealOut, {
+      overrides: { name: "Dinner", totals: knownTotals, recipes: [] },
+    });
+    const addRecipe = vi.fn(async () => meal);
+    const server = createMcpServer();
+    const params = {
+      mealId: meal.id,
+      recipeId: testShortcode("recipe", "meal-recipe"),
+    };
+
+    const compact = await callMcpTool(server, "add_recipe_to_meal", params, {
+      meal: { addRecipe },
+    });
+    const macros = await callMcpTool(
+      server,
+      "add_recipe_to_meal",
+      { ...params, nutrition: "macros" },
+      { meal: { addRecipe } },
+    );
+
+    expect(compact.isError).not.toBe(true);
+    expect(compact.structuredContent).toEqual({
+      id: meal.id,
+      name: "Dinner",
+      coverage: { cost: 1.5, kcal: 120 },
+    });
+    expect(macros.structuredContent).toMatchObject({
+      coverage: { cost: 1.5, kcal: 120 },
+      nutrition: { kcal: 120, protein: "pending" },
+    });
+  });
+
   it("reads compact daily macros for one eater and only includes foods on request", async () => {
     const meal = mock(nutritionMeal);
     const view = mealNutritionOut.parse({

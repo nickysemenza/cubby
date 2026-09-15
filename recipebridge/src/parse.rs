@@ -143,14 +143,22 @@ pub struct WRecipeSection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     pub ingredients: Vec<String>,
+    /// Parsed in the same pass as scraping; index-aligned with `ingredients`.
+    pub parsed_ingredients: Vec<WIngredient>,
     pub instructions: Vec<String>,
 }
 
 impl From<RecipeSection> for WRecipeSection {
     fn from(s: RecipeSection) -> Self {
+        let parsed_ingredients = s
+            .ingredients
+            .iter()
+            .map(|line| WIngredient::from(parse_ingredient_str(line)))
+            .collect();
         Self {
             name: s.name,
             ingredients: s.ingredients,
+            parsed_ingredients,
             instructions: s.instructions,
         }
     }
@@ -689,6 +697,20 @@ mod tests {
                 .any(|s| s.ingredients.iter().any(|i| i.contains("flour"))),
             "ingredient lines carried through into sections"
         );
+        for section in &r.sections {
+            assert_eq!(
+                section.parsed_ingredients.len(),
+                section.ingredients.len(),
+                "parsed ingredients stay index-aligned with raw lines"
+            );
+        }
+        let flour = r
+            .sections
+            .iter()
+            .flat_map(|section| section.parsed_ingredients.iter())
+            .find(|ingredient| ingredient.name.contains("flour"))
+            .expect("flour parsed");
+        assert_eq!(flour.name, "flour");
     }
 
     /// `parse_yield` pins the cookbook/web yield-consistency contract: a count

@@ -15,12 +15,14 @@ import {
   mealRecipe,
   mealRecipePortion,
   product,
+  recipe,
 } from "~/server/db/schema";
 import { getDb, insertAndReturn } from "~/server/repo/database-helpers";
 import { saveMealFood, removeMealFood } from "~/server/repo/meal/food";
 import { saveMealRecipePreparation } from "~/server/repo/meal/portions";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
 import { getMealNutrition } from "~/server/services/meal-nutrition.service";
+import { RecipeCostingService } from "~/server/services/recipe-costing.service";
 import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 
 const noUsda: UsdaFoodBatchPort = {
@@ -244,6 +246,48 @@ describe("meal nutrition service", () => {
       carbs: { status: "partial", lower: 5 },
       fat: { status: "complete", lower: 3.5 },
     });
+  });
+
+  it("repairs stale recipe totals before a dependent daily nutrition read", async () => {
+    const [sourceMeal, targetMeal, eater, staleRecipe] = await Promise.all([
+      seedMeal("2026-09-18", "Repair source"),
+      seedMeal("2026-09-18", "Repair target"),
+      seedParty("Repair eater"),
+      insertWithShortcode(ctx.db, "recipe", {
+        name: "Stale empty recipe",
+        yield: { value: 100, unit: "g" },
+        totals: recipeTotals({ kcal: 999, protein: 0, carbs: 0, fat: 0 }),
+        totalsComputedAt: null,
+      }),
+    ]);
+    const occurrence = await insertAndReturn(ctx.db, mealRecipe, {
+      mealId: sourceMeal.id,
+      recipeId: staleRecipe.id,
+      scale: 1,
+    });
+    await insertAndReturn(ctx.db, mealRecipePortion, {
+      mealRecipeId: occurrence.id,
+      mealId: targetMeal.id,
+      ledgerPartyId: eater.id,
+      grams: 50,
+    });
+
+    const result = await getMealNutrition(
+      ctx.db,
+      { date: "2026-09-18" },
+      noUsda,
+      new RecipeCostingService(ctx.db, noUsda),
+    );
+
+    expect(
+      await getDb(ctx.db).query.recipe.findFirst({
+        where: eq(recipe.id, staleRecipe.id),
+        columns: { totalsComputedAt: true },
+      }),
+    ).toEqual({ totalsComputedAt: expect.any(Date) });
+    expect(result.people[0]?.foods[0]?.totals.nutrition.kcal.status).not.toBe(
+      "pending",
+    );
   });
 
   it("edits and removes the same food entry without leaving stale intake", async () => {

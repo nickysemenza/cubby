@@ -59,5 +59,17 @@ describe("SettleExpenseDialog", () => {
     expect(
       screen.getByRole("button", { name: "Mark purchased" }),
     ).toBeVisible();
+    const form = screen
+      .getByRole("button", { name: "Mark purchased" })
+      .closest("form");
+    const body = form?.querySelector('[data-slot="dialog-form-body"]');
+    const footer = form?.querySelector('[data-slot="dialog-form-footer"]');
+    expect(body).toBeTruthy();
+    expect(footer).toContainElement(
+      screen.getByRole("button", { name: "Mark purchased" }),
+    );
+    expect(body).not.toContainElement(
+      screen.getByRole("button", { name: "Mark purchased" }),
+    );
   });
 });

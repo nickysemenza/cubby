@@ -1,6 +1,7 @@
 import type { AgentStreamEvent } from "@cubby/schemas/agent";
 import { testUserId } from "@cubby/schemas/testing";
-import { wishCreateInput, wishOut } from "@cubby/schemas/wish";
+import { vendorCreateInput } from "@cubby/schemas/vendor";
+import { wishCreateInput } from "@cubby/schemas/wish";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { EventType } from "@tanstack/ai";
 import { withTestDb } from "tooling/test-setup";
@@ -22,7 +23,13 @@ import { callMcpTool } from "./mcp-test-utils";
 import { registerEntityTools } from "./tools/entity.tools";
 import type { ToolArguments } from "./tools/tool-registration";
 
-const wishResultSchema = z.object({ item: wishOut });
+const wishSummaryResultSchema = z.object({
+  item: z.object({ id: z.string(), name: z.string() }).strict(),
+});
+const listSummarySchema = z.object({
+  items: z.array(z.object({ id: z.string(), name: z.string() }).strict()),
+  meta: z.object({ totalCount: z.number().int() }),
+});
 
 describe("MCP entity kernel boundary", () => {
   const ctx = withTestDb("mcp");
@@ -177,7 +184,19 @@ describe("MCP entity kernel boundary", () => {
       }),
     });
     expect(created.isError).not.toBe(true);
-    const createdWish = wishResultSchema.parse(created.structuredContent).item;
+    const createdWish = wishSummaryResultSchema.parse(
+      created.structuredContent,
+    ).item;
+    const other = await callEntity({
+      action: "create",
+      entity: "vendor",
+      data: mock(vendorCreateInput, {
+        overrides: { name: "MCP list filter vendor" },
+      }),
+    });
+    const otherVendor = wishSummaryResultSchema.parse(
+      other.structuredContent,
+    ).item;
 
     const fetched = await callEntity(
       {
@@ -188,9 +207,23 @@ describe("MCP entity kernel boundary", () => {
       "get_entities",
     );
     expect(fetched.isError).not.toBe(true);
-    expect(wishResultSchema.parse(fetched.structuredContent).item.name).toBe(
-      "MCP kernel boundary wish",
+    expect(
+      wishSummaryResultSchema.parse(fetched.structuredContent).item.name,
+    ).toBe("MCP kernel boundary wish");
+
+    const filtered = await callEntity(
+      {
+        action: "list",
+        entity: "vendor",
+        filters: { ids: [otherVendor.id] },
+      },
+      "get_entities",
     );
+    expect(filtered.isError).not.toBe(true);
+    expect(listSummarySchema.parse(filtered.structuredContent)).toMatchObject({
+      items: [{ id: otherVendor.id, name: "MCP list filter vendor" }],
+      meta: { totalCount: 1 },
+    });
 
     const wrongPrefix = await callEntity({
       action: "get",

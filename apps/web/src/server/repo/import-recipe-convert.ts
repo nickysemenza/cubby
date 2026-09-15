@@ -130,7 +130,9 @@ const importRecipeToRecipeInput = async (
           // One batch WASM call for the whole section instead of one per line
           // — output order matches input (parse_ingredient_lines contract),
           // so indexing by position below is safe.
-          const parsedLines = wasm.parse_ingredient_lines(section.ingredients);
+          const parsedLines =
+            section.parsedIngredients ??
+            wasm.parse_ingredient_lines(section.ingredients);
           return {
             name: section.name,
             instructions: section.instructions,
