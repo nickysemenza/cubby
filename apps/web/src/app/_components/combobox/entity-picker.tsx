@@ -226,6 +226,7 @@ function EntityPickerPopup<TId extends string>({
   clearable,
   value,
   noun,
+  clearLabel,
   setValue,
   setQuery,
   changeOpen,
@@ -245,6 +246,7 @@ function EntityPickerPopup<TId extends string>({
    * "Create …" text.
    */
   noun: string;
+  clearLabel: string;
   setValue: (value: ComboboxItem<TId> | null) => void;
   setQuery: (query: string) => void;
   changeOpen: (open: boolean) => void;
@@ -299,7 +301,7 @@ function EntityPickerPopup<TId extends string>({
           {clearable && value ? (
             <button
               type="button"
-              aria-label={`Clear ${noun}`}
+              aria-label={clearLabel}
               className="flex min-h-9 w-full shrink-0 items-center gap-2 border-b border-[var(--border)] px-2 py-2 text-left text-sm text-muted-foreground hover:bg-accent hover:text-foreground max-sm:min-h-11"
               onClick={(event) => {
                 event.preventDefault();
@@ -310,7 +312,7 @@ function EntityPickerPopup<TId extends string>({
               }}
             >
               <XIcon className="size-3.5" />
-              Clear {noun}
+              {clearLabel}
             </button>
           ) : null}
           <ComboboxPrimitive.List className="max-h-112 min-h-0 flex-1 overflow-y-auto overscroll-contain p-1 outline-none">
@@ -371,6 +373,9 @@ function pickerNaming(
   return {
     ariaLabel: label ?? entityName ?? "",
     noun: entityNoun ?? label ?? "item",
+    // The clear control names the field it clears ("Clear parent location"),
+    // which is the visible caption when one is given.
+    clearLabel: `Clear ${label ?? entityNoun ?? "value"}`,
     placeholderDefault: entityNoun
       ? `Choose ${/^[aeiou]/i.test(entityNoun) ? "an" : "a"} ${entityNoun}…`
       : "Choose…",
@@ -382,7 +387,7 @@ function EntityPickerInput<TId extends string>({
   anchorRef,
   inputRef,
   ariaLabel,
-  noun,
+  clearLabel,
   placeholderDefault,
   placeholder,
   compact,
@@ -395,11 +400,8 @@ function EntityPickerInput<TId extends string>({
   inputRef: React.RefObject<HTMLInputElement | null>;
   /** Visible caption (or entity fallback) — accessible name for the input. */
   ariaLabel: string;
-  /**
-   * Entity noun (never the caller's sentence-length caption) for "Clear …"
-   * text.
-   */
-  noun: string;
+  /** "Clear <caption>" — names the field the control clears. */
+  clearLabel: string;
   /**
    * "Choose a <entity>…", or "Choose…" with no entity key — overridden by
    * `placeholder`.
@@ -437,7 +439,7 @@ function EntityPickerInput<TId extends string>({
         />
         {clearable && value ? (
           <ComboboxPrimitive.Clear
-            aria-label={`Clear ${noun}`}
+            aria-label={clearLabel}
             className="flex h-full shrink-0 items-center justify-center px-2 text-muted-foreground transition-colors hover:text-foreground max-sm:min-h-11 max-sm:min-w-11"
             onMouseDown={(event) => event.preventDefault()}
             onClick={(event) => {
@@ -486,7 +488,10 @@ export function EntityPicker<TId extends string>({
   const anchorRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const { ariaLabel, noun, placeholderDefault } = pickerNaming(entity, label);
+  const { ariaLabel, noun, clearLabel, placeholderDefault } = pickerNaming(
+    entity,
+    label,
+  );
 
   const selectedLabel = value
     ? value.secondary
@@ -604,7 +609,7 @@ export function EntityPicker<TId extends string>({
         anchorRef={anchorRef}
         inputRef={inputRef}
         ariaLabel={ariaLabel}
-        noun={noun}
+        clearLabel={clearLabel}
         placeholderDefault={placeholderDefault}
         placeholder={placeholder}
         compact={compact}
@@ -620,6 +625,7 @@ export function EntityPicker<TId extends string>({
         clearable={clearable}
         value={value}
         noun={noun}
+        clearLabel={clearLabel}
         setValue={setValue}
         setQuery={setQuery}
         changeOpen={changeOpen}
