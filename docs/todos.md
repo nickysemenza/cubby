@@ -1,14 +1,19 @@
 # Cubby — Work List
 
-The canonical backlog. The **Ranked backlog** is one global order: if choosing
-the next Cubby project today, start at the top. Rank reflects real-use friction,
-urgency, enabling leverage, and the fact that this is a personal project where
-interesting work has legitimate value. Reorder it whenever actual use changes.
+The canonical backlog, organized by the kind of work needed next rather than
+priority. Items are not ranked within or across sections. Choose among sections
+based on the work that fits the moment.
 
-**Triggered** items are not ranked until their stated evidence appears.
-**Visions** preserve desirable directions without pretending they are ready
-implementation slices. **Operational passes** are household data work, not
-software projects.
+**Easy fixes** are contained, decision-ready changes without schema work.
+**Ready projects** are larger decision-ready implementations without schema
+changes. **Requires database changes** is reserved for work that needs schema,
+migration, or compatibility planning. **Requires thought or evidence** holds
+unresolved decisions, investigations, external triggers, and long-term
+directions. **Operational passes** are household data work, not software
+projects.
+
+Each item lives in one primary section based on its next blocker: an unresolved
+decision or missing evidence takes precedence over an eventual database change.
 
 Keep entries concise and outcome-oriented. Record only constraints that would
 change selection or implementation, with a pointer to the code or focused doc
@@ -18,121 +23,36 @@ history is the archive. Permanent product constraints live in the
 
 ---
 
-## Ranked backlog
+## Easy fixes
 
-- **Ingredient detail editing and recipe-usage repair.** The ingredient detail
-  page already hosts product/USDA (`IngredientProductShelf`) and unit-mapping
-  (`UnitCoveragePanel`) sections. Remaining scope: let `naKinds` be edited
-  after creation (currently create-only), and add a reparse action to the
-  recipe-usage drift indicator, which is presently read-only. Use this
-  representative workflow to deepen the shared editing module only after its
-  concrete needs are proven; do not add speculative editor ports first.
+- (P3) **`EntityInlineLink` lacks cases for `financialAccount`,
+  `financialTransaction`, `wish`, and `image`.** Unrelated to garden directly,
+  but found auditing generic entity-link rendering during this pass.
 
-- **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
-  completing an instance creates the next one, which naturally enters Needs
-  Attention. Cover every completion path with one idempotent transactional rule,
-  not a scheduler or RRULE system.
+- **`entity merge product` keeps the loser's secondary external ids.** Products
+  legitimately hold several `amazon/asin` slots (`patch_products_external_ids`
+  already supports it), but merge discards a colliding `(source, kind)` — that
+  is how PRD-WDHJ lost B079M85N83 and needed a hand re-link.
 
-- **Manual shopping items with durable checks.** Give the shopping list
-  server-backed item identity so ad-hoc entries such as milk or paper towels and
-  checked state persist across date ranges and devices. Keep the list independent
-  of inventory writes.
+- (P3) **`FormWrapper` renders its action bar in the dialog body.**
+  `apps/web/src/app/_components/form-utils.tsx`'s `FormWrapper` has no footer
+  mode, so `settle-expense` and `create-project-from-tasks` can't render
+  their actions in `ResponsiveDialog`'s footer the way every other dialog
+  does. Add a footer mode so those two forms can adopt it.
 
-- **Duplicate a meal or copy last week.** Add the remaining calendar round-trip
-  shortcuts for repeating an individual meal or a prior week without rebuilding
-  it by hand.
+- (P3) **`usda-food` uses the status-green `INK.positive` entity color.**
+  Same audit pass; the color reads as a status signal rather than an entity
+  identity color.
 
-- **Actionable meal suggestions.** `/meals/suggestions` is already reachable
-  from navigation. Remaining scope: link missing ingredients to their repair
-  surface, allow adding shortfalls to the shopping list, and add an entry
-  point from inventory.
+- (P3) **Apple `MappingTests` meal-name fallback is now a separate
+  client-side rule.** Since `meal` carries a server-computed `displayName`,
+  the Apple-side fallback name logic in `MappingTests` duplicates the
+  contract rather than reading the server value.
 
-- **Recipe nutrition MCP projection.** Add
-  `get_recipe_nutrition(recipeId, servings)` over the existing recipe totals and
-  return explicit mapped/unmapped coverage rather than silently presenting a
-  partial total as complete.
-
-- **Ingredient coverage visibility.** The ingredient list already shows a USDA
-  badge, a recipe-usage-count column, and a binary has/none product-presence
-  filter. Remaining scope: a combined, mapping-quality-aware signal/filter
-  that surfaces heavily used ingredients lacking a usable Product mapping
-  specifically, not just ones with no Product at all.
-
-- **Guided placement pass for unlocated products.** Walk a value- or
-  category-bounded worklist one product at a time with three answers: not tracked,
-  place here, or skip. Reuse the existing location picker and immediate-write
-  inventory flows.
-
-- **Cookbook metadata editing.** Allow imported cookbook titles and other source
-  metadata to be corrected after import, including malformed OPF titles. Cookbook
-  is still write-once in the entity kernel (`bindings.unit.test.ts` asserts
-  `updateInput` is null), and a recipe's cookbook link cannot be re-pointed from
-  the recipe form even though the generated update field group already permits
-  `cookbookId` — wire both in the same slice.
-
-- **Import extracted cookbook bundles.** Accept ingredient-parser's `.cookbook`
-  archives with extracted recipes and images through the existing cookbook
-  review/import flow (`cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
-  incrementally in a Web Worker and upload selected assets with bounded
-  concurrency; keep validation and recipe creation on the server. Large bundles
-  must not require loading the entire archive into memory. The first version
-  requires an open tab; add R2 staging or Workflows only when unattended or
-  resumable imports become a demonstrated need.
-
-- **Variance-targeted recount pass.** Seed a recount session from the
-  shelf-versus-ledger disagreement worklist so the pass visits the products that
-  actually disagree wherever they live.
-
-- **Project materials and shortfalls.** Add a project-material edge with quantity,
-  free-text unit, optional Product resolution, and durable/consumable semantics;
-  derive have/need/buy through the availability engine without reservations or
-  automatic inventory decrement.
-
-- **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
-  by giving cookbooks durable identity plus a merge/repoint path.
-
-- **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
-  facet. Partial-import repair stays on the existing Problems worklist.
-
-- **Recurring meals.** Add a focused recurrence model for meals as its own slice,
-  separate from templates and nutrition goals.
-
-- **Meal templates.** Save reusable meal compositions without coupling them to
-  recurrence.
-
-- **Meal nutrition goals.** Let meal planning compare planned nutrition with
-  explicit household goals using the existing recipe nutrition totals.
-
-- **Itemization and settlement verdict on the transactions list.** The
-  linkage exists (`FinancialTransaction ──< Allocation >── Purchase ──<
-  Expense`) but the two halves of "is this charge itemized?" sit on different
-  lists: `/finance` transactions have only the has/none purchase-presence
-  filter, and the reconciliation verdict (`unknown`/`match`/`refund_adjusted`/
-  `mismatch`, `financial-reconciliation.ts`) lives on `/purchases`. Add a
-  derived transaction column with a filter over: bare (no Purchase), linked to
-  a single productless lump line (order booked, not itemized), itemized and
-  reconciled, itemized and mismatched. Measured 2026-09-14 over 3,337 non-void
-  rows: 657 bare, 147 lump-line, 1,567 reconciled, 944 one-of-several charges
-  on a shared purchase (installments, combined Amazon charges — not
-  mismatches), 22 true sole-charge mismatches. Count product-linked lines per
-  allocated purchase; do not compare a shared purchase's lines against one
-  charge's amount.
-
-- **Fix actions for financial duplicate findings.** Give duplicate transaction
-  source-ref and account-alias Problems findings a safe targeted action, without
-  widening the general entity-merge system to money entities.
-
-- **Saved user-created views.** Persist named filter and sort sets using the
-  versioned external-state pattern, and render them alongside manifest-defined
-  views without creating a second query language.
-
-- **Server-backed table intelligence.** Extend exact facet counts and honest
-  aggregate summaries from Expenses to one justified server-paginated surface at
-  a time; never analyze a partially loaded client page as the full population.
-
-- **Return parsed lines from recipe scraping.** Fold ingredient parsing into
-  `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
-  for the same lines.
+- **Delete the stale remote `native-poc` branch** — Still on origin
+  (`c7ce160f`), old history plus one commit; the permission classifier blocked
+  the delete during #1020. `git push origin --delete native-poc` whenever
+  convenient.
 
 - **MCP read projection and strict list filters.** A 16-order Amazon import on
   2026-09-14 spent most of ~600k tokens on reads, not writes: `entity list
@@ -152,27 +72,26 @@ history is the archive. Permanent product constraints live in the
   default to `{id, name}` plus a coverage headline, with the
   `nutrition: full|kcal|none` knob `get_meal_preparations` already has.
 
-- **Coverage diagnostics on recipe and product writes.** Recipe create returned
-  `totals: pending`, so finding the uncosted lines took a separate
-  `explain_recipe_costing` per recipe per fix (five calls that evening). Return
-  the per-line `missing: [price|weight|nutrients]` list inline on recipe
-  create/update, and on product updates report which recipe lines the change
-  closed (the jar-weight mapping on PRD-Q7KK fixed 14 recipes silently).
+- **Recipe nutrition MCP projection.** Add
+  `get_recipe_nutrition(recipeId, servings)` over the existing recipe totals and
+  return explicit mapped/unmapped coverage rather than silently presenting a
+  partial total as complete.
 
-- **Line-level recipe patch over MCP.** Three one-field edits (onion `1 whole`
-  → `150 g`, basil `1 handful` → `15 g`, pasta 175 → 150 g) each resent all 12
-  lines and 6 instructions because the read projection strips section/line ids
-  and an update without section `id` replaces every section (see the compound
-  ingredient split note). Add `{action: "patchLine", recipeId, lineId, …}`;
-  `explain_recipe_costing` already exposes line ids.
+- **Return parsed lines from recipe scraping.** Fold ingredient parsing into
+  `parse_scraped_recipe` so imports do not cross the WASM boundary a second time
+  for the same lines.
 
-- **Count units resolve on the ingredient, never via product `each`.** `1 whole
-  yellow onion` costed as 1,360 g because the linked product is a 48 oz bag and
-  its `each` satisfied `whole`. Product `each` means *package*; recipe
-  `whole/bunch/crown/clove` means *piece*. Garlic resolved correctly only
-  because a USDA portion supplied clove → 3 g. Rule: piece units come from USDA
-  `portionInfo` or an ingredient-level mapping, and product `each` prices the
-  package only — it must never satisfy a piece unit.
+- **Vendor coverage query.** Every import starts with "latest purchase date
+  and the set of `orderId`s for vendor X in [from, to]". Expose that as one
+  cheap read (on `entity get vendor` or a `get_vendor_coverage` tool) instead
+  of the full purchase list above.
+
+---
+
+## Ready projects
+
+- (P3) **`/locations/arrange` and `/locations/photo-pass` ignore growing
+  areas.** Neither existing bulk-location tool is garden-aware.
 
 - **`resolve_ingredients` suggests product links.** It created `ground chicken`
   (ING-ZEU3) while PRD-FGC5 "Ground Chicken Breast" sat unlinked; four of the
@@ -180,48 +99,6 @@ history is the archive. Permanent product constraints live in the
   hand-linked. Return `candidateProducts` by name similarity and accept
   `linkProductId` in the same call. Pairs with the coverage-visibility entry
   above.
-
-- **Inferred-zero nutrients for label data.** USDA `branded_food` records and
-  household `labelNutrition` carry only what the label prints (11 nutrients
-  for chicken, panko, parm, chilies), so macro coverage read 11/12 with the
-  only "missing" line being salt's protein. FDA labels must declare calories,
-  total/saturated/trans fat, cholesterol, sodium, carbs, fiber, sugars, added
-  sugars, protein, vitamin D, calcium, iron, potassium; a manufacturer may omit
-  one only as "not a significant source" (below rounding). So for label-sourced
-  records a missing *mandatory* nutrient is an inferred zero and a missing
-  micronutrient (zinc, B12, magnesium, folate…) stays unknown. Model nutrient
-  values as `measured | inferred-zero | unknown`; count inferred zeros as
-  covered but flag them. Manual override: extend ingredient `naKinds` with
-  nutrient keys for true edge cases — but not salt, which is the largest sodium
-  source, and whose unmeasured "to taste" line is currently planned at 1% of
-  pot weight (13.6 g salt ≈ 5 g sodium in a 1.3 kg pot), worth a sanity check.
-
-- **Portion shares alongside grams.** Once the household stops weighing and
-  serves by eye ("Nicky ~36% of the pot"), grams are a proxy that goes stale
-  when `estimatedYieldGrams` changes. Accept `{share}` per portion in
-  `save_meal_recipe_preparation` and derive grams at read time from the
-  current yield.
-
-- **Compute-if-stale on dependent reads.** After a product unit-mapping change,
-  `get_meal_preparations` returned `pending: totals_stale` until
-  `explain_recipe_costing` forced the recompute. Reads that hit a stale total
-  should compute it rather than report pending.
-
-- **USDA search ranking and product-driven suggestion.** `search_usda_foods`
-  is phrase/AND matching: `"chicken breast ground raw"` (sr_legacy) → 0,
-  `"chicken, ground"` → 344. Tokenize and rank, and add
-  `suggest_usda_for_product(productId)` that searches on name + brand + GTIN
-  (Mary's chicken resolved to Pitman Farms only by knowing the parent brand).
-
-- **Label photo → `labelNutrition`.** The Brami panel was transcribed by hand
-  from a photo pasted into chat. Accept an attached image on the product and
-  extract the Nutrition Facts panel into `labelNutrition` with the image as
-  provenance.
-
-- **Vendor coverage query.** Every import starts with "latest purchase date
-  and the set of `orderId`s for vendor X in [from, to]". Expose that as one
-  cheap read (on `entity get vendor` or a `get_vendor_coverage` tool) instead
-  of the full purchase list above.
 
 - **`resolve_products` should share `global_search`'s lexical engine.** It
   returned no candidates for `Organic Banana`, `Organic Cauliflower`, `Organic
@@ -232,68 +109,49 @@ history is the archive. Permanent product constraints live in the
   externalIds[]}` per line and returning exact-id hits, alias hits, and lexical
   candidates together.
 
-- **`entity merge product` keeps the loser's secondary external ids.** Products
-  legitimately hold several `amazon/asin` slots (`patch_products_external_ids`
-  already supports it), but merge discards a colliding `(source, kind)` — that
-  is how PRD-WDHJ lost B079M85N83 and needed a hand re-link.
+- **Actionable meal suggestions.** `/meals/suggestions` is already reachable
+  from navigation. Remaining scope: link missing ingredients to their repair
+  surface, allow adding shortfalls to the shopping list, and add an entry
+  point from inventory.
 
-- **Measured quantity on Expense lines.** Amazon states `0.99 lb @ $8.99/lb`
-  and `0.77 lb @ $3.49/lb`; the only legal booking is `productQuantity: null`,
-  which discards the fact a pantry cares about most and leaves weight-priced
-  Products (Mary's chicken breast: $11.89 / $14.98 / $15.58 / $34.52 booked
-  as four "units") with a meaningless derived unit price. Let
-  `productQuantity` carry `{value, unit}` (lb, oz, each) and normalize through
-  the Product's `unitMappings`, so derived pricing becomes price-per-measure
-  for weight lines and stays per-unit for packaged ones.
+- (P3) **Apple day-grouped photo import is reachable only from Photos › Add
+  to….** The generic "attach to Plantings / Garden Entries" chooser bypasses
+  journal semantics (anchor locking, area journal placement) since it doesn't
+  route through the garden entry form.
 
-- **Ingredient as the grocery dedupe hub.** Product is SKU-grade and
-  Ingredient is the commodity layer, but imports never fill `ingredientId`,
-  so the catalog now holds `Cauliflower` / `Organic Cauliflower, 1 Each`,
-  `Organic Kiwi` / `Organic Green Kiwi, 16 oz`, `Broccoli Crowns` /
-  `Broccoli Crowns (Conventional)`, and three ground-beef 80/20s with nothing
-  tying them together — each a defensible SKU, none reachable from the
-  others. Suggest or require an Ingredient on grocery Product creation and
-  make `resolve_products` search ingredient aliases, so "banana" resolves
-  regardless of which storefront's ASIN the receipt carries.
+- (P3) **Bulk "Finish selected" on Apple.** Web has no equivalent gap; the
+  native client lacks a multi-select finish action for plantings, so
+  finishing several plantings at once still means one Finish per planting.
 
-- **Line-level discounts with a Product link.** Whole Foods promos and Amazon
-  Buy-Again are per line, but a `discount` row cannot carry `productId`, so
-  they are booked order-level and every promoted grocery's cost basis is list
-  price (Applegate patties $14.79, paid $11.10; 8× Ellenos at $3.49 list
-  inside a $15.86 order savings). Allow `productId` (no quantity) on
-  `discount` rows and fold linked discounts into derived cost basis without
-  changing `SUM(Expense.cost)`.
+- **Compute-if-stale on dependent reads.** After a product unit-mapping change,
+  `get_meal_preparations` returned `pending: totals_stale` until
+  `explain_recipe_costing` forced the recompute. Reads that hit a stale total
+  should compute it rather than report pending.
 
-- **Consumable vs durable as a Product attribute.** The distinction is
-  currently encoded by convention as "expense on `PRJ-HSHD` vs no project",
-  living only in the purchase-import skill notes; `stockTracked` half-encodes
-  it. A first-class `Product.kind` (or consumable flag) would let the import
-  default the project, the shelf worklists filter, and the convention stop
-  needing rediscovery per importer.
+- **Cookbook browsing.** Add search, sorting, and a browsable/filterable subjects
+  facet. Partial-import repair stays on the existing Problems worklist.
 
-- **Marketplace seller on Amazon purchases.** `Sold by:` (YANTURION, MIYATCH
-  SHOP, Neighborhoodcircle) is lost except in Purchase notes; it decides
-  returns and warranty routing. A small `sellerName` on Purchase or Expense
-  is enough — do not mint a Vendor per marketplace seller.
+- **Cookbook metadata editing.** Allow imported cookbook titles and other source
+  metadata to be corrected after import, including malformed OPF titles. Cookbook
+  is still write-once in the entity kernel (`bindings.unit.test.ts` asserts
+  `updateInput` is null), and a recipe's cookbook link cannot be re-pointed from
+  the recipe form even though the generated update field group already permits
+  `cookbookId` — wire both in the same slice.
 
-- **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
-  `get_shopping_list` is a plain structured/text tool. The remaining USDA
-  Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
-  the local M3 development machine. Keep it only while refinement and explicit
-  selection materially outperform a plain `search_usda_foods` result.
+- **Coverage diagnostics on recipe and product writes.** Recipe create returned
+  `totals: pending`, so finding the uncosted lines took a separate
+  `explain_recipe_costing` per recipe per fix (five calls that evening). Return
+  the per-line `missing: [price|weight|nutrients]` list inline on recipe
+  create/update, and on product updates report which recipe lines the change
+  closed (the jar-weight mapping on PRD-Q7KK fixed 14 recipes silently).
 
-- **Swift 6.4 / OS 27 readiness pass on the Apple app.** Before a toolchain or
-  deployment-floor change, audit state initialization, concurrency boundaries,
-  availability, and resizing against the actual SDK. Verify custom initializers and
-  Sendable assumptions with focused behavior tests.
-  Preserve the supported OS 26 path until a floor bump is explicitly chosen. Owners:
-  `apps/apple/project.yml`, `apps/apple/App`, and `CubbyKit`.
+- **Duplicate a meal or copy last week.** Add the remaining calendar round-trip
+  shortcuts for repeating an individual meal or a prior week without rebuilding
+  it by hand.
 
----
-
-## Triggered
-
-### Garden audit follow-ups (2026-09-14)
+- **Fix actions for financial duplicate findings.** Give duplicate transaction
+  source-ref and account-alias Problems findings a safe targeted action, without
+  widening the general entity-merge system to money entities.
 
 - (P2) **Growing-area Location page still trails its design canvas**
   (https://claude.ai/artifact/Y7fvFetWNAndGYjJe2AeDu, "Location detail —
@@ -320,44 +178,412 @@ history is the archive. Permanent product constraints live in the
   the supporting "Planting details" table with mono labels and a Source
   link, location-history periods as a dated table with linked areas, and
   the guide as a collapsed row instead of a `<details>`.
-- (P3) **Bulk "Finish selected" on Apple.** Web has no equivalent gap; the
-  native client lacks a multi-select finish action for plantings, so
-  finishing several plantings at once still means one Finish per planting.
+
+- **Guided placement pass for unlocated products.** Walk a value- or
+  category-bounded worklist one product at a time with three answers: not tracked,
+  place here, or skip. Reuse the existing location picker and immediate-write
+  inventory flows.
+
+- **Import extracted cookbook bundles.** Accept ingredient-parser's `.cookbook`
+  archives with extracted recipes and images through the existing cookbook
+  review/import flow (`cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
+  incrementally in a Web Worker and upload selected assets with bounded
+  concurrency; keep validation and recipe creation on the server. Large bundles
+  must not require loading the entire archive into memory. The first version
+  requires an open tab; add R2 staging or Workflows only when unattended or
+  resumable imports become a demonstrated need.
+
+- **Ingredient coverage visibility.** The ingredient list already shows a USDA
+  badge, a recipe-usage-count column, and a binary has/none product-presence
+  filter. Remaining scope: a combined, mapping-quality-aware signal/filter
+  that surfaces heavily used ingredients lacking a usable Product mapping
+  specifically, not just ones with no Product at all.
+
+- **Ingredient detail editing and recipe-usage repair.** The ingredient detail
+  page already hosts product/USDA (`IngredientProductShelf`) and unit-mapping
+  (`UnitCoveragePanel`) sections. Remaining scope: let `naKinds` be edited
+  after creation (currently create-only), and add a reparse action to the
+  recipe-usage drift indicator, which is presently read-only. Use this
+  representative workflow to deepen the shared editing module only after its
+  concrete needs are proven; do not add speculative editor ports first.
+
 - (P3) **Ingredient merge drops `gardenGuideKey`.** Merging two Ingredients
   silently discards the losing Ingredient's `gardenGuideKey` rather than
   carrying or surfacing it. Separately, Product merge can leave a Planting
   pointed at the tombstoned source Product without surfacing that planting in
   the merge preview.
-- (P3) **Planting/entry delete is API/MCP-only.** No web or Apple UI
-  affordance calls delete for `planting` or `gardenEntry` today; decide
-  whether one is wanted before adding it.
-- (P3) **Apple day-grouped photo import is reachable only from Photos › Add
-  to….** The generic "attach to Plantings / Garden Entries" chooser bypasses
-  journal semantics (anchor locking, area journal placement) since it doesn't
-  route through the garden entry form.
-- (P3) **`/locations/arrange` and `/locations/photo-pass` ignore growing
-  areas.** Neither existing bulk-location tool is garden-aware.
-- (lead) **React #418 hydration error on `/garden` and `/garden-entries`.**
-  Logged in production on both route loads; reproduce in dev before deciding
-  on a fix.
+
+- **Itemization and settlement verdict on the transactions list.** The
+  linkage exists (`FinancialTransaction ──< Allocation >── Purchase ──<
+  Expense`) but the two halves of "is this charge itemized?" sit on different
+  lists: `/finance` transactions have only the has/none purchase-presence
+  filter, and the reconciliation verdict (`unknown`/`match`/`refund_adjusted`/
+  `mismatch`, `financial-reconciliation.ts`) lives on `/purchases`. Add a
+  derived transaction column with a filter over: bare (no Purchase), linked to
+  a single productless lump line (order booked, not itemized), itemized and
+  reconciled, itemized and mismatched. Measured 2026-09-14 over 3,337 non-void
+  rows: 657 bare, 147 lump-line, 1,567 reconciled, 944 one-of-several charges
+  on a shared purchase (installments, combined Amazon charges — not
+  mismatches), 22 true sole-charge mismatches. Count product-linked lines per
+  allocated purchase; do not compare a shared purchase's lines against one
+  charge's amount.
+
+- **Label photo → `labelNutrition`.** The Brami panel was transcribed by hand
+  from a photo pasted into chat. Accept an attached image on the product and
+  extract the Nutrition Facts panel into `labelNutrition` with the image as
+  provenance.
+
+- **Line-level recipe patch over MCP.** Three one-field edits (onion `1 whole`
+  → `150 g`, basil `1 handful` → `15 g`, pasta 175 → 150 g) each resent all 12
+  lines and 6 instructions because the read projection strips section/line ids
+  and an update without section `id` replaces every section (see the compound
+  ingredient split note). Add `{action: "patchLine", recipeId, lineId, …}`;
+  `explain_recipe_costing` already exposes line ids.
+
+- **USDA search ranking and product-driven suggestion.** `search_usda_foods`
+  is phrase/AND matching: `"chicken breast ground raw"` (sr_legacy) → 0,
+  `"chicken, ground"` → 344. Tokenize and rank, and add
+  `suggest_usda_for_product(productId)` that searches on name + brand + GTIN
+  (Mary's chicken resolved to Pitman Farms only by knowing the parent brand).
+
+- **Variance-targeted recount pass.** Seed a recount session from the
+  shelf-versus-ledger disagreement worklist so the pass visits the products that
+  actually disagree wherever they live.
+
+---
+
+## Requires database changes
+
+- **Cookbook identity merge.** Stop same-title collisions and renamed-EPUB forks
+  by giving cookbooks durable identity plus a merge/repoint path.
+
+- **Count units resolve on the ingredient, never via product `each`.** `1 whole
+  yellow onion` costed as 1,360 g because the linked product is a 48 oz bag and
+  its `each` satisfied `whole`. Product `each` means *package*; recipe
+  `whole/bunch/crown/clove` means *piece*. Garlic resolved correctly only
+  because a USDA portion supplied clove → 3 g. Rule: piece units come from USDA
+  `portionInfo` or an ingredient-level mapping, and product `each` prices the
+  package only — it must never satisfy a piece unit.
+
+- **Line-level discounts with a Product link.** Whole Foods promos and Amazon
+  Buy-Again are per line, but a `discount` row cannot carry `productId`, so
+  they are booked order-level and every promoted grocery's cost basis is list
+  price (Applegate patties $14.79, paid $11.10; 8× Ellenos at $3.49 list
+  inside a $15.86 order savings). Allow `productId` (no quantity) on
+  `discount` rows and fold linked discounts into derived cost basis without
+  changing `SUM(Expense.cost)`.
+
+- **Manual shopping items with durable checks.** Give the shopping list
+  server-backed item identity so ad-hoc entries such as milk or paper towels and
+  checked state persist across date ranges and devices. Keep the list independent
+  of inventory writes.
+
+- **Measured quantity on Expense lines.** Amazon states `0.99 lb @ $8.99/lb`
+  and `0.77 lb @ $3.49/lb`; the only legal booking is `productQuantity: null`,
+  which discards the fact a pantry cares about most and leaves weight-priced
+  Products (Mary's chicken breast: $11.89 / $14.98 / $15.58 / $34.52 booked
+  as four "units") with a meaningless derived unit price. Let
+  `productQuantity` carry `{value, unit}` (lb, oz, each) and normalize through
+  the Product's `unitMappings`, so derived pricing becomes price-per-measure
+  for weight lines and stays per-unit for packaged ones.
+
+- **Portion shares alongside grams.** Once the household stops weighing and
+  serves by eye ("Nicky ~36% of the pot"), grams are a proxy that goes stale
+  when `estimatedYieldGrams` changes. Accept `{share}` per portion in
+  `save_meal_recipe_preparation` and derive grams at read time from the
+  current yield.
+
+- **Project materials and shortfalls.** Add a project-material edge with quantity,
+  free-text unit, optional Product resolution, and durable/consumable semantics;
+  derive have/need/buy through the availability engine without reservations or
+  automatic inventory decrement.
+
+- **Recurring maintenance tasks.** Add simple every-N-weeks/months recurrence;
+  completing an instance creates the next one, which naturally enters Needs
+  Attention. Cover every completion path with one idempotent transactional rule,
+  not a scheduler or RRULE system.
+
+- **Saved user-created views.** Persist named filter and sort sets using the
+  versioned external-state pattern, and render them alongside manifest-defined
+  views without creating a second query language.
+
+---
+
+## Requires thought or evidence
+
+### Needs a decision or investigation
+
+- **Consumable vs durable as a Product attribute.** The distinction is
+  currently encoded by convention as "expense on `PRJ-HSHD` vs no project",
+  living only in the purchase-import skill notes; `stockTracked` half-encodes
+  it. A first-class `Product.kind` (or consumable flag) would let the import
+  default the project, the shelf worklists filter, and the convention stop
+  needing rediscovery per importer.
+
 - (idea) **Guide planting windows as a calendar overlay.** Render the
   Planting guide's reference windows on top of the garden calendar lane
   instead of as a separate lookup.
-- (P3) **`EntityInlineLink` lacks cases for `financialAccount`,
-  `financialTransaction`, `wish`, and `image`.** Unrelated to garden directly,
-  but found auditing generic entity-link rendering during this pass.
-- (P3) **`usda-food` uses the status-green `INK.positive` entity color.**
-  Same audit pass; the color reads as a status signal rather than an entity
-  identity color.
-- (P3) **Apple `MappingTests` meal-name fallback is now a separate
-  client-side rule.** Since `meal` carries a server-computed `displayName`,
-  the Apple-side fallback name logic in `MappingTests` duplicates the
-  contract rather than reading the server value.
-- (P3) **`FormWrapper` renders its action bar in the dialog body.**
-  `apps/web/src/app/_components/form-utils.tsx`'s `FormWrapper` has no footer
-  mode, so `settle-expense` and `create-project-from-tasks` can't render
-  their actions in `ResponsiveDialog`'s footer the way every other dialog
-  does. Add a footer mode so those two forms can adopt it.
+
+- **Inferred-zero nutrients for label data.** USDA `branded_food` records and
+  household `labelNutrition` carry only what the label prints (11 nutrients
+  for chicken, panko, parm, chilies), so macro coverage read 11/12 with the
+  only "missing" line being salt's protein. FDA labels must declare calories,
+  total/saturated/trans fat, cholesterol, sodium, carbs, fiber, sugars, added
+  sugars, protein, vitamin D, calcium, iron, potassium; a manufacturer may omit
+  one only as "not a significant source" (below rounding). So for label-sourced
+  records a missing *mandatory* nutrient is an inferred zero and a missing
+  micronutrient (zinc, B12, magnesium, folate…) stays unknown. Model nutrient
+  values as `measured | inferred-zero | unknown`; count inferred zeros as
+  covered but flag them. Manual override: extend ingredient `naKinds` with
+  nutrient keys for true edge cases — but not salt, which is the largest sodium
+  source, and whose unmeasured "to taste" line is currently planned at 1% of
+  pot weight (13.6 g salt ≈ 5 g sodium in a 1.3 kg pot), worth a sanity check.
+
+- **Ingredient as the grocery dedupe hub.** Product is SKU-grade and
+  Ingredient is the commodity layer, but imports never fill `ingredientId`,
+  so the catalog now holds `Cauliflower` / `Organic Cauliflower, 1 Each`,
+  `Organic Kiwi` / `Organic Green Kiwi, 16 oz`, `Broccoli Crowns` /
+  `Broccoli Crowns (Conventional)`, and three ground-beef 80/20s with nothing
+  tying them together — each a defensible SKU, none reachable from the
+  others. Suggest or require an Ingredient on grocery Product creation and
+  make `resolve_products` search ingredient aliases, so "banana" resolves
+  regardless of which storefront's ASIN the receipt carries.
+
+- **Marketplace seller on Amazon purchases.** `Sold by:` (YANTURION, MIYATCH
+  SHOP, Neighborhoodcircle) is lost except in Purchase notes; it decides
+  returns and warranty routing. A small `sellerName` on Purchase or Expense
+  is enough — do not mint a Vendor per marketplace seller.
+
+- **Meal nutrition goals.** Let meal planning compare planned nutrition with
+  explicit household goals using the existing recipe nutrition totals.
+
+- **Meal templates.** Save reusable meal compositions without coupling them to
+  recurrence.
+
+- (P3) **Planting/entry delete is API/MCP-only.** No web or Apple UI
+  affordance calls delete for `planting` or `gardenEntry` today; decide
+  whether one is wanted before adding it.
+
+- (lead) **React #418 hydration error on `/garden` and `/garden-entries`.**
+  Logged in production on both route loads; reproduce in dev before deciding
+  on a fix.
+
+- **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
+  `get_shopping_list` is a plain structured/text tool. The remaining USDA
+  Picker template is 352,004 bytes raw / 83,655 gzip and builds in 132 ms on
+  the local M3 development machine. Keep it only while refinement and explicit
+  selection materially outperform a plain `search_usda_foods` result.
+
+- **Recurring meals.** Add a focused recurrence model for meals as its own slice,
+  separate from templates and nutrition goals.
+
+- **Server-backed table intelligence.** Extend exact facet counts and honest
+  aggregate summaries from Expenses to one justified server-paginated surface at
+  a time; never analyze a partially loaded client page as the full population.
+
+- **Swift 6.4 / OS 27 readiness pass on the Apple app.** Before a toolchain or
+  deployment-floor change, audit state initialization, concurrency boundaries,
+  availability, and resizing against the actual SDK. Verify custom initializers and
+  Sendable assumptions with focused behavior tests.
+  Preserve the supported OS 26 path until a floor bump is explicitly chosen. Owners:
+  `apps/apple/project.yml`, `apps/apple/App`, and `CubbyKit`.
+
+### Waiting for a trigger
+
+- **`PurchaseLine` SKU annotation** — Promote when store SKU, quantity, or unit-price
+  detail is genuinely wanted. It is annotation only; `Expense` remains financial
+  truth.
+
+- **Aggregate range materiality** — Promote if always-on cost/calorie/weight ranges
+  create visible noise; keep authored line ranges and collapse only immaterial
+  aggregate spreads.
+
+- **Before-drywall spatial capture** — Promote immediately when construction is
+  scheduled; define the smallest room/wall-indexed photo packet before walls close.
+
+- **Budget-aware MCP pagination** — Promote when a real tool result hits an output
+  limit or is measurably too large; use stable keyset cursors and an explicit compact
+  JSON byte budget.
+
+- **Core native inventory experience.** Promote when everyday use of the native
+  redesign exposes a specific inventory bottleneck. Deepen location-first browsing,
+  stock comparison, capture/recount, and photo completion; introduce sortable Mac
+  tables, filtering, unit-aware steppers, bulk actions, or drag/drop only for a
+  demonstrated workflow. Owners: `apps/apple/App/Shared/Browse`, `Capture`, and
+  `Audit`; see [native design](../apps/apple/DESIGN.md).
+
+- **Decode bytes in image verification** — Promote when a corrupt or fully transparent
+  cover is next found by eye. `inspectImageFile`
+  (`apps/web/src/server/services/image-integrity.ts`) checks magic bytes, header
+  dimensions, byte length and sha256 but never rasterizes, so `verify_product_images`
+  reports `verified` for files that will not render. A subagent citing the verify tool
+  is therefore not proof of a good image.
+
+- **Durable import checkpoints** — Promote when an import genuinely spans sessions
+  and cannot resume from source keys plus normal MCP queries.
+
+- **Entity relation runtime dispatch** — Promote when attach/detach genericization
+  resumes. Generate dispatch only for declared runtime ports and make unsupported
+  semantic edges fail explicitly; catalog relationships must not imply executable
+  mutation behavior.
+
+- **Estimated-allocation analytics caveat** — Promote when materials-versus-labor
+  analytics inform a real decision; disclose the allocation-basis portion without
+  excluding it from total spend.
+
+- **Exact entity attribution for `attach_files`** — Promote if mixed-entity batches
+  distort the MCP usage dashboard. The batch attributes telemetry to its first item's
+  entity because one row has nowhere to put a set; a batch spanning entities
+  under-reports the rest.
+
+- **Exact nutrition source tracing** — Resume when upstream conversion work is in
+  scope. Extend `ingredient-parser` reports to retain actual mapping identities,
+  directions, and competing mappings from the selected calculation path. Then
+  update Cubby and expose Product/USDA/manual-mapping provenance through nutrient
+  cells and nested recipes, including consumption and yield adjustments. Show
+  selected results with conflicting alternatives and repair links, preserving
+  existing resolution rules. Return inspected values and traces from the same
+  computation; never infer selected sources from matching values or linked-product
+  lists. The Cubby-only nutrition overhaul does not depend on this work.
+
+- **Explicit idempotency key for `add_recipe_to_meal`** — Promote if a re-sent agent
+  call actually duplicates a meal line in practice. A natural-key unique index is NOT
+  the answer: a meal repeating a recipe at different scales is intended behavior, and
+  each occurrence must stay a distinguishable shopping-list contribution. Retry-safety
+  needs a caller-supplied key. The guard test that named this as intentional was
+  deleted with the tRPC-era `meal.integration.test.ts` (#914) and never replaced, so
+  the first slice of this — or of any meal-line work — is a `workflows/meal.server.ts`
+  integration test asserting one meal holds one recipe twice at different scales with
+  two independent shopping-list contributions.
+
+- **Finish `listScaffold` adoption and retire the hand-built list rosters** —
+  Promote when the next list repository is written or a hand-built list drifts
+  from its declared columns. After the entity-spine work, predicates over
+  subqueries, OR-groups and array columns stay hand-written and several
+  repositories compose lists outside `listScaffold`; one vendor combobox
+  builder also remains hand-rolled. Reconcile per repository, not with a new
+  abstraction.
+
+- **Generated eager-route filter mirrors** — Promote if a third schema mirror
+  appears; generate build-time projections rather than importing validation graphs
+  into the eager route tree.
+
+- **Harden `createDeleteProcedure`'s id contract** — Promote if a second hand-rolled
+  delete procedure appears. It infers its id type from the callback and then casts
+  (`id as TId`), so a branded parameter alone does not catch a caller passing the
+  wrong id form — that is how shortcode-vs-uuid image deletion shipped to review.
+  Every entity going through `createEntityCrudRouter` is safe today because that
+  config requires an `idSchema`; a hand-rolled call site can still omit one.
+
+- **iOS parity for the garden-flow audit findings** — Promote when the web
+  garden audit PR (2026-09-14, worktree `tanstack-best-practices`) merges. That
+  audit fixed web only by decision; what iOS does differently was recorded as
+  findings, not changed. Pull the iOS batch from that PR's report rather than
+  re-auditing.
+
+- **Let the negative-expected-quantity worklist converge** — Promote when the
+  `negativeExpectedQuantity` view is next worked. It reads the kit-projected quantity
+  (`kit-projection.ts`), and after triage most survivors are settled decisions —
+  big-ticket items whose acquisition predates ledger coverage — with nowhere to be
+  recorded: `dataException` has no such check, yet `view-manifest.ts` asserts the view
+  converges. Two designs were costed and the operator chose to leave the detector alone
+  (2026-08-18): book the missing unit as an Expense with `cost: null,
+  productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
+  quantity's sign, but zero such rows exist today), or add a product data check with a
+  **ledger-derived** fingerprint — the obvious `updatedAt`-keyed version is unsafe,
+  because adding a real acquisition would not re-open the row.
+
+- **Location subtree filters** — Promote when direct-child filtering demonstrably
+  blocks a location or inventory workflow; use a scoped descendant-id helper rather
+  than the relation-heavy whole-tree CTE.
+
+- **Match book scans against ledger-imported books** — Promote when the next ISBN scan
+  mints a twin. `findOrCreateByISBN` (`product-orchestration.service.ts`) matches on GTIN
+  only, and Products created by the eBay/Amazon ledger imports carry no ISBN, so a scan
+  duplicates a book that already has purchase history; the merge that follows is lossy.
+  Either backfill ISBNs onto import-created book Products from their external ids, or
+  fall back to a title/author match before creating.
+
+- **Measured table-virtualizer investigation** — Revisit direct-DOM-write
+  virtualizer options only during a measured desktop table-virtualizer
+  investigation (re-check `@tanstack/react-virtual`'s current API for a
+  low-render-overhead update mode; the option this line previously named,
+  `directDomUpdates`, no longer exists in the installed version).
+
+- **Move the UPC-batch detector out of the problem-count badge** — Promote if
+  the badge's refresh-behind-read ever shows up in request timings: one detector
+  (`productsWithBetterUpcData`) calls the external UPC lookup, so the badge
+  refresh is not pure SQL. Moving it to the coverage page (computed on that
+  page's load) keeps the badge cheap without losing the detector.
+
+- **Multi-product Expense links** — Promote when one Expense genuinely needs several
+  Products and `splitExpense` cannot truthfully split the money.
+
+- **Native workflow parity with web.** Promote when a recurring household task
+  still requires switching to the web. Port one complete create/edit/action loop
+  at a time, preserving existing contracts and specialized behavior. Owners:
+  `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability context
+  lives in [the native README](../apps/apple/README.md).
+
+- **Natural CI evidence** — Revisit sharding only when ordinary exact-head runs
+  show a repeatable tail imbalance or regression. Use native reporter output;
+  do not add duration databases, custom sequencers, or manufactured timing runs.
+
+- **On-device Apple Intelligence.** Promote when supported household devices and a
+  measured capture friction justify one concrete draft-assistance workflow. Evaluate
+  against representative fixtures, preserve manual entry and existing services, and
+  require confirmation before writes. Owners: `apps/apple/App/Shared/Identify`,
+  `Photo`, and `Intents`. Confirm actual SDK/device support before selecting APIs.
+
+- **Per-edge breakdown for purchase merges** — Promote if `merge_entity`'s empty
+  `moved` array on purchase is noticed in use. `foldChargeInto` moves expenses and
+  documents without counting them, so purchase reports a measured `merged` count but
+  no per-edge detail, unlike the other three merge entities.
+
+- **Persisted Collections and operational dashboard** — Temporary smart starters
+  now evaluate manufacturer, exact tags, Location/ancestor name substrings, and
+  historical actual Expense Trades, with editable OR rules and source evidence.
+  Promote when Collection tags need metadata, rename-safe empty identity,
+  durable rule editing, richer rules (for example, minimum effective price), or combined
+  Project/Task/Expense views; migrate `collection:*` tags into durable records
+  rather than layering on a parallel mapping. Smart membership should evaluate
+  a saved Product filter at read time rather than auto-tagging matching records.
+  Extend the existing historical Trade predicate with deterministic “primary
+  inferred Trade matches” by reusing Product-to-Trade inference. Trade remains
+  on the Product's linked Expense lines, not its parent Purchase. Dashboard
+  expansion still includes combined Project/Task/Expense views.
+
+- **Persisted query cache across account changes** — Promote when sign-out or
+  account switching exposes stale cached state, or auth-lifecycle work changes
+  cache ownership. `integrations/tanstack-query/persister.ts` uses one device-wide
+  key, and `root-provider.tsx` busts it by deploy revision. Review account scoping
+  and clearing of both persisted and in-memory state together; verify sign-out,
+  account switching, and same-account relaunch before treating this as resolved.
+
+- **Portion solver** — Promote if agent-side amount iteration remains painful after
+  the recipe nutrition MCP projection ships; solve component weights against macro
+  constraints in one call.
+
+- **Product external-ID collision worklist** — Promote a broader Problems surface if
+  auto-minting imports create a persistent operator queue beyond the existing
+  `product.externalIdCollisions` query.
+
+- **Production query-cost repair** — Promote the specific offender confirmed by a
+  fresh production trace, including a Problems count-only path or whole-catalog
+  purchase aggregates; remeasure before restructuring counters.
+
+- **Promote harvested equivalences into the unit graph** — Promote when the
+  ingredient equivalences report's suggestions are repeatedly re-applied by hand. The
+  report (`lib/harvest-equivalences.ts`, `ingredients/equivalences-report.tsx`)
+  harvests ingredient-scoped unit equivalences from recipe parentheticals on demand;
+  writing an accepted one into a durable ingredient-level unit mapping is the deferred
+  next step, and there is no such store yet.
+
+- **Purchase evidence references** — Promote when Gmail, Drive, or portal evidence
+  must be queried repeatedly beyond Purchase notes and attached documents.
+
+- **Purchase replacement/exchange relations** — Promote when those relationships
+  need navigation or querying rather than truthful Purchase notes.
 
 - **Push change feed for post-mutation refresh** — Promote only when a derived
   value users actually wait on (an AI location description, a recipe total
@@ -370,56 +596,40 @@ history is the archive. Permanent product constraints live in the
   workerd test) in a repo whose direction is removing execution infrastructure,
   and the fixed refetch covers the observed latencies for a single-user tool.
 
-- **Move the UPC-batch detector out of the problem-count badge** — Promote if
-  the badge's refresh-behind-read ever shows up in request timings: one detector
-  (`productsWithBetterUpcData`) calls the external UPC lookup, so the badge
-  refresh is not pure SQL. Moving it to the coverage page (computed on that
-  page's load) keeps the badge cheap without losing the detector.
+- **Record the TestFlight build-number rule where the archive script lives** —
+  Promote on the next rejected upload. ASC rejects a repeated
+  `CURRENT_PROJECT_VERSION`; it must be bumped in `project.yml` (not the
+  gitignored `.xcodeproj`) per upload, and neither `apps/apple/README.md` nor
+  `scripts/apple.ts` says so yet.
 
-- **Core native inventory experience.** Promote when everyday use of the native
-  redesign exposes a specific inventory bottleneck. Deepen location-first browsing,
-  stock comparison, capture/recount, and photo completion; introduce sortable Mac
-  tables, filtering, unit-aware steppers, bulk actions, or drag/drop only for a
-  demonstrated workflow. Owners: `apps/apple/App/Shared/Browse`, `Capture`, and
-  `Audit`; see [native design](../apps/apple/DESIGN.md).
+- **Repeat-purchase ranking** — Promote when enough Products have genuine repeated
+  acquisitions to make a cross-product ranking useful.
 
-- **Native workflow parity with web.** Promote when a recurring household task
-  still requires switching to the web. Port one complete create/edit/action loop
-  at a time, preserving existing contracts and specialized behavior. Owners:
-  `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability context
-  lives in [the native README](../apps/apple/README.md).
+- **Residual N+1 repair** — Promote only when a fresh network trace finds a concrete
+  products, recipes, or inventory-detail query fan-out.
 
-- **On-device Apple Intelligence.** Promote when supported household devices and a
-  measured capture friction justify one concrete draft-assistance workflow. Evaluate
-  against representative fixtures, preserve manual entry and existing services, and
-  require confirmation before writes. Owners: `apps/apple/App/Shared/Identify`,
-  `Photo`, and `Intents`. Confirm actual SDK/device support before selecting APIs.
+- **Returned-unit price advisory** — Promote when another stocked Product has a
+  materially inflated derived price or a structural signal can distinguish returns
+  from sales. Keep the response advisory until that distinction is reliable; an
+  ambiguous heuristic must not silently rewrite valuation.
 
-- **Exact nutrition source tracing** — Resume when upstream conversion work is in
-  scope. Extend `ingredient-parser` reports to retain actual mapping identities,
-  directions, and competing mappings from the selected calculation path. Then
-  update Cubby and expose Product/USDA/manual-mapping provenance through nutrient
-  cells and nested recipes, including consumption and yield adjustments. Show
-  selected results with conflicting alternatives and repair links, preserving
-  existing resolution rules. Return inspected values and traces from the same
-  computation; never infer selected sources from matching values or linked-product
-  lists. The Cubby-only nutrition overhaul does not depend on this work.
+- **Selection-control consolidation** — Promote a specific selector family when
+  visual or keyboard inconsistency becomes painful; preserve specialized interaction
+  contracts rather than forcing one universal control.
 
-- **Persisted query cache across account changes** — Promote when sign-out or
-  account switching exposes stale cached state, or auth-lifecycle work changes
-  cache ownership. `integrations/tanstack-query/persister.ts` uses one device-wide
-  key, and `root-provider.tsx` busts it by deploy revision. Review account scoping
-  and clearing of both persisted and in-memory state together; verify sign-out,
-  account switching, and same-account relaunch before treating this as resolved.
+- **Selective SSR expansion** — Promote another route family only if the
+  product-detail pilot wins a cold-cache browser comparison without an INP, CLS, or
+  Worker-error regression.
 
-- **TanStack Start observability** — Remove Cubby's observability wrapper when
-  TanStack Start supplies equivalent named request/result/error events and trace
-  hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
-- **Measured table-virtualizer investigation** — Revisit direct-DOM-write
-  virtualizer options only during a measured desktop table-virtualizer
-  investigation (re-check `@tanstack/react-virtual`'s current API for a
-  low-render-overhead update mode; the option this line previously named,
-  `directDomUpdates`, no longer exists in the installed version).
+- **Sentry lazy initialization** — Promote if a fresh bundle treemap shows Sentry is
+  still a material critical-path dependency.
+
+- **Services-with-product advisory** — Promote when the first live row appears or an
+  import repeatedly creates one; keep it advisory rather than a database constraint.
+
+- **Shopping pack rounding** — Promote when a real shopping workflow needs it and a
+  representative purchasable Product/pack mapping has an explicit selection rule.
+
 - **Split compound ingredient lines** — Promote when `ingredient-parser` can emit
   two ingredients from one line. Blocked upstream, not locally: `parse_ingredient`
   is singular and upstream deliberately keeps "Salt and pepper" whole (`usage.rs`
@@ -439,85 +649,12 @@ history is the archive. Permanent product constraints live in the
   second, to limit `lineId` churn. MCP cannot drive it: the read projection
   strips section and line ids, so an update omitting section `id` replaces every
   section.
-- **Entity relation runtime dispatch** — Promote when attach/detach genericization
-  resumes. Generate dispatch only for declared runtime ports and make unsupported
-  semantic edges fail explicitly; catalog relationships must not imply executable
-  mutation behavior.
-- **Natural CI evidence** — Revisit sharding only when ordinary exact-head runs
-  show a repeatable tail imbalance or regression. Use native reporter output;
-  do not add duration databases, custom sequencers, or manufactured timing runs.
-- **Persisted Collections and operational dashboard** — Temporary smart starters
-  now evaluate manufacturer, exact tags, Location/ancestor name substrings, and
-  historical actual Expense Trades, with editable OR rules and source evidence.
-  Promote when Collection tags need metadata, rename-safe empty identity,
-  durable rule editing, richer rules (for example, minimum effective price), or combined
-  Project/Task/Expense views; migrate `collection:*` tags into durable records
-  rather than layering on a parallel mapping. Smart membership should evaluate
-  a saved Product filter at read time rather than auto-tagging matching records.
-  Extend the existing historical Trade predicate with deterministic “primary
-  inferred Trade matches” by reusing Product-to-Trade inference. Trade remains
-  on the Product's linked Expense lines, not its parent Purchase. Dashboard
-  expansion still includes combined Project/Task/Expense views.
-- **Portion solver** — Promote if agent-side amount iteration remains painful after
-  the recipe nutrition MCP projection ships; solve component weights against macro
-  constraints in one call.
-- **Aggregate range materiality** — Promote if always-on cost/calorie/weight ranges
-  create visible noise; keep authored line ranges and collapse only immaterial
-  aggregate spreads.
-- **USDA duplicate collapsing** — Promote if repeated UPC versions return to useful
-  search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler rather than changing
-  usda-api pagination semantics.
-- **Product external-ID collision worklist** — Promote a broader Problems surface if
-  auto-minting imports create a persistent operator queue beyond the existing
-  `product.externalIdCollisions` query.
-- **Residual N+1 repair** — Promote only when a fresh network trace finds a concrete
-  products, recipes, or inventory-detail query fan-out.
-- **Sentry lazy initialization** — Promote if a fresh bundle treemap shows Sentry is
-  still a material critical-path dependency.
-- **Shopping pack rounding** — Promote when a real shopping workflow needs it and a
-  representative purchasable Product/pack mapping has an explicit selection rule.
-- **Location subtree filters** — Promote when direct-child filtering demonstrably
-  blocks a location or inventory workflow; use a scoped descendant-id helper rather
-  than the relation-heavy whole-tree CTE.
-- **`PurchaseLine` SKU annotation** — Promote when store SKU, quantity, or unit-price
-  detail is genuinely wanted. It is annotation only; `Expense` remains financial
-  truth.
-- **Multi-product Expense links** — Promote when one Expense genuinely needs several
-  Products and `splitExpense` cannot truthfully split the money.
-- **Estimated-allocation analytics caveat** — Promote when materials-versus-labor
-  analytics inform a real decision; disclose the allocation-basis portion without
-  excluding it from total spend.
-- **Services-with-product advisory** — Promote when the first live row appears or an
-  import repeatedly creates one; keep it advisory rather than a database constraint.
-- **Repeat-purchase ranking** — Promote when enough Products have genuine repeated
-  acquisitions to make a cross-product ranking useful.
-- **Returned-unit price advisory** — Promote when another stocked Product has a
-  materially inflated derived price or a structural signal can distinguish returns
-  from sales. Keep the response advisory until that distinction is reliable; an
-  ambiguous heuristic must not silently rewrite valuation.
-- **Purchase evidence references** — Promote when Gmail, Drive, or portal evidence
-  must be queried repeatedly beyond Purchase notes and attached documents.
-- **Durable import checkpoints** — Promote when an import genuinely spans sessions
-  and cannot resume from source keys plus normal MCP queries.
-- **Purchase replacement/exchange relations** — Promote when those relationships
-  need navigation or querying rather than truthful Purchase notes.
-- **Before-drywall spatial capture** — Promote immediately when construction is
-  scheduled; define the smallest room/wall-indexed photo packet before walls close.
-- **Production query-cost repair** — Promote the specific offender confirmed by a
-  fresh production trace, including a Problems count-only path or whole-catalog
-  purchase aggregates; remeasure before restructuring counters.
-- **Selective SSR expansion** — Promote another route family only if the
-  product-detail pilot wins a cold-cache browser comparison without an INP, CLS, or
-  Worker-error regression.
-- **Selection-control consolidation** — Promote a specific selector family when
-  visual or keyboard inconsistency becomes painful; preserve specialized interaction
-  contracts rather than forcing one universal control.
-- **Budget-aware MCP pagination** — Promote when a real tool result hits an output
-  limit or is measurably too large; use stable keyset cursors and an explicit compact
-  JSON byte budget.
-- **Generated eager-route filter mirrors** — Promote if a third schema mirror
-  appears; generate build-time projections rather than importing validation graphs
-  into the eager route tree.
+
+- **Splitwise re-export dedupe** — Promote if the Coachella-era Splitwise rows
+  are ever re-imported. That export carries no row id, so source keys were
+  derived from date + description + cost; a later export with an edited
+  description will not dedupe against the first import.
+
 - **StatementRow and StatementImport as manifest entities** — Promote once the
   `supersededByRowId` disposition is decided (block, detach, or cascade for a live
   predecessor pointing at a deleted row); "add an edge policy" is not the decision.
@@ -529,123 +666,48 @@ history is the archive. Permanent product constraints live in the
   exhaustive `Record<Entity, …>` tables. Backfill in batches with an in-memory
   set of existing codes; `generateUniqueShortcode` does a SELECT per candidate
   and is wrong for bulk.
-- **Explicit idempotency key for `add_recipe_to_meal`** — Promote if a re-sent agent
-  call actually duplicates a meal line in practice. A natural-key unique index is NOT
-  the answer: a meal repeating a recipe at different scales is intended behavior, and
-  each occurrence must stay a distinguishable shopping-list contribution. Retry-safety
-  needs a caller-supplied key. The guard test that named this as intentional was
-  deleted with the tRPC-era `meal.integration.test.ts` (#914) and never replaced, so
-  the first slice of this — or of any meal-line work — is a `workflows/meal.server.ts`
-  integration test asserting one meal holds one recipe twice at different scales with
-  two independent shopping-list contributions.
-- **Decode bytes in image verification** — Promote when a corrupt or fully transparent
-  cover is next found by eye. `inspectImageFile`
-  (`apps/web/src/server/services/image-integrity.ts`) checks magic bytes, header
-  dimensions, byte length and sha256 but never rasterizes, so `verify_product_images`
-  reports `verified` for files that will not render. A subagent citing the verify tool
-  is therefore not proof of a good image.
-- **Match book scans against ledger-imported books** — Promote when the next ISBN scan
-  mints a twin. `findOrCreateByISBN` (`product-orchestration.service.ts`) matches on GTIN
-  only, and Products created by the eBay/Amazon ledger imports carry no ISBN, so a scan
-  duplicates a book that already has purchase history; the merge that follows is lossy.
-  Either backfill ISBNs onto import-created book Products from their external ids, or
-  fall back to a title/author match before creating.
-- **Let the negative-expected-quantity worklist converge** — Promote when the
-  `negativeExpectedQuantity` view is next worked. It reads the kit-projected quantity
-  (`kit-projection.ts`), and after triage most survivors are settled decisions —
-  big-ticket items whose acquisition predates ledger coverage — with nowhere to be
-  recorded: `dataException` has no such check, yet `view-manifest.ts` asserts the view
-  converges. Two designs were costed and the operator chose to leave the detector alone
-  (2026-08-18): book the missing unit as an Expense with `cost: null,
-  productQuantity: 1` (no code change; the ledger already reads a NULL cost by the
-  quantity's sign, but zero such rows exist today), or add a product data check with a
-  **ledger-derived** fingerprint — the obvious `updatedAt`-keyed version is unsafe,
-  because adding a real acquisition would not re-open the row.
-- **Promote harvested equivalences into the unit graph** — Promote when the
-  ingredient equivalences report's suggestions are repeatedly re-applied by hand. The
-  report (`lib/harvest-equivalences.ts`, `ingredients/equivalences-report.tsx`)
-  harvests ingredient-scoped unit equivalences from recipe parentheticals on demand;
-  writing an accepted one into a durable ingredient-level unit mapping is the deferred
-  next step, and there is no such store yet.
-- **Per-edge breakdown for purchase merges** — Promote if `merge_entity`'s empty
-  `moved` array on purchase is noticed in use. `foldChargeInto` moves expenses and
-  documents without counting them, so purchase reports a measured `merged` count but
-  no per-edge detail, unlike the other three merge entities.
-- **Exact entity attribution for `attach_files`** — Promote if mixed-entity batches
-  distort the MCP usage dashboard. The batch attributes telemetry to its first item's
-  entity because one row has nowhere to put a set; a batch spanning entities
-  under-reports the rest.
-- **Harden `createDeleteProcedure`'s id contract** — Promote if a second hand-rolled
-  delete procedure appears. It infers its id type from the callback and then casts
-  (`id as TId`), so a branded parameter alone does not catch a caller passing the
-  wrong id form — that is how shortcode-vs-uuid image deletion shipped to review.
-  Every entity going through `createEntityCrudRouter` is safe today because that
-  config requires an `idSchema`; a hand-rolled call site can still omit one.
 
-- **iOS parity for the garden-flow audit findings** — Promote when the web
-  garden audit PR (2026-09-14, worktree `tanstack-best-practices`) merges. That
-  audit fixed web only by decision; what iOS does differently was recorded as
-  findings, not changed. Pull the iOS batch from that PR's report rather than
-  re-auditing.
-- **Finish `listScaffold` adoption and retire the hand-built list rosters** —
-  Promote when the next list repository is written or a hand-built list drifts
-  from its declared columns. After the entity-spine work, predicates over
-  subqueries, OR-groups and array columns stay hand-written and several
-  repositories compose lists outside `listScaffold`; one vendor combobox
-  builder also remains hand-rolled. Reconcile per repository, not with a new
-  abstraction.
-- **Delete the stale remote `native-poc` branch** — Still on origin
-  (`c7ce160f`), old history plus one commit; the permission classifier blocked
-  the delete during #1020. `git push origin --delete native-poc` whenever
-  convenient.
-- **Record the TestFlight build-number rule where the archive script lives** —
-  Promote on the next rejected upload. ASC rejects a repeated
-  `CURRENT_PROJECT_VERSION`; it must be bumped in `project.yml` (not the
-  gitignored `.xcodeproj`) per upload, and neither `apps/apple/README.md` nor
-  `scripts/apple.ts` says so yet.
-- **Splitwise re-export dedupe** — Promote if the Coachella-era Splitwise rows
-  are ever re-imported. That export carries no row id, so source keys were
-  derived from date + description + cost; a later export with an edited
-  description will not dedupe against the first import.
+- **TanStack Start observability** — Remove Cubby's observability wrapper when
+  TanStack Start supplies equivalent named request/result/error events and trace
+  hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
 
----
+- **USDA duplicate collapsing** — Promote if repeated UPC versions return to useful
+  search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler rather than changing
+  usda-api pagination semantics.
 
-## Visions
+### Long-term visions
 
-- **Recipe scaling extensions.** Explore pan-size targets, interactive parse
-  clarification, and baker's-percentage comparison without replacing Product-owned
-  density mappings with a global reference table.
-- **House timeline.** A chronological house journal with project milestones,
-  before/after photos, and an annual wrapped-style view over existing records.
-- **Household balance sheet.** Generalize location valuation into replacement
-  forecasts, cost-per-project analysis, and insurance or cost-basis exports.
 - **Ambient capture.** Accept voice memos, forwarded email, shared photos, and NFC
   entry points so reality reaches Cubby with minimal ceremony.
-- **Standing household agents.** A registrar for records, quartermaster for
-  consumable shortfalls, and foreman for stale or blocked projects, with approval
-  before durable writes.
-- **Digital twin and spatial memory.** Attach shutoffs, breaker maps, paint, hidden
-  utilities, and other building knowledge to the location tree.
-- **Grow-to-table loop.** Model beds and plantings, receive harvests into pantry
-  inventory, and ask what the yard can supply this week.
-- **Seasonal garden planning and photo comparison.** Build on the existing
-  [journals and planting guides](garden.md) to propose revisable seasonal plans
-  for seeds and starts, compare dated bed/tree photos with AI, and explain
-  forecast changes and keep-versus-replace recommendations. Keep the workflow
-  occasional and lightweight; planting windows alone do not establish maturity
-  or harvest forecasts.
-- **Heirloom outputs.** Produce a future-owner house manual, project yearbooks, and a
-  durable archive/export format.
-- **Home Assistant to Cubby.** Turn runtime, energy, fault, weather, and area/device
-  signals into maintenance, project evidence, and correctly scoped tasks.
+
 - **Cubby to Home Assistant.** Expose computed shopping shortfalls, maintenance due,
   actionable weekend work, and tonight's meal for household display and voice.
+
+- **Digital twin and spatial memory.** Attach shutoffs, breaker maps, paint, hidden
+  utilities, and other building knowledge to the location tree.
+
+- **Grow-to-table loop.** Model beds and plantings, receive harvests into pantry
+  inventory, and ask what the yard can supply this week.
+
+- **Heirloom outputs.** Produce a future-owner house manual, project yearbooks, and a
+  durable archive/export format.
+
+- **Home Assistant to Cubby.** Turn runtime, energy, fault, weather, and area/device
+  signals into maintenance, project evidence, and correctly scoped tasks.
+
+- **Household balance sheet.** Generalize location valuation into replacement
+  forecasts, cost-per-project analysis, and insurance or cost-basis exports.
+
 - **Household cash-flow projection.** A scenario input, not a synced entity:
   expected inflows (a vesting date, price, withholding) and the ledger's
   recurring outflows projected forward, calibrated against `SUM(Expense.cost)`
   history. Needs no schema change and no money-bearing table. Net worth and
   retirement stay out until the trusted-household tenet is amended for a
   time-series table as an explicit decision.
+
+- **House timeline.** A chronological house journal with project milestones,
+  before/after photos, and an annual wrapped-style view over existing records.
+
 - **Receipt-shaped import.** Move the deterministic half of a vendor import
   server-side: a `create_purchase_with_lines` (or `import_vendor_orders`)
   call takes a header plus lines with per-order defaults, dedupes on
@@ -655,12 +717,37 @@ history is the archive. Permanent product constraints live in the
   model spends ~150 tool calls per 16 orders on that mechanical part and ~20
   on the judgment part.
 
+- **Recipe scaling extensions.** Explore pan-size targets, interactive parse
+  clarification, and baker's-percentage comparison without replacing Product-owned
+  density mappings with a global reference table.
+
+- **Seasonal garden planning and photo comparison.** Build on the existing
+  [journals and planting guides](garden.md) to propose revisable seasonal plans
+  for seeds and starts, compare dated bed/tree photos with AI, and explain
+  forecast changes and keep-versus-replace recommendations. Keep the workflow
+  occasional and lightweight; planting windows alone do not establish maturity
+  or harvest forecasts.
+
+- **Standing household agents.** A registrar for records, quartermaster for
+  consumable shortfalls, and foreman for stale or blocked projects, with approval
+  before durable writes.
+
 ---
 
 ## Operational passes
 
 - **Fill ingredient density gaps.** Use the existing missing-weight list to add
   Product `UnitMapping` data organically as ingredients need it.
+
+- **Fill missing acquisition quantities.** Work through Expenses → Missing quantities
+  and record known counts on existing Product-linked acquisition rows; do not freeze
+  a changing row count into this file.
+
+- **Register the household's other payment instruments.** Every card or bank
+  account either member pays vendors with belongs in Cubby as a
+  `FinancialAccount`, or its statement rows can never settle anything. Add the
+  missing ones with aliases before the next statement import.
+
 - **Settle the bare card charges.** 618 posted `purchase`-kind transactions
   ($38.6k) plus 31 refunds and 8 income rows have no Purchase allocation as of
   2026-09-14; the 22 sole-charge mismatches are a separate short list. Work
@@ -668,10 +755,3 @@ history is the archive. Permanent product constraints live in the
   existing Purchases before booking new ones (`match_expenses`,
   `suggest_financial_transfer_pairs`). The 147 lump-line orders are a lower
   tier: itemize only where a receipt is on hand.
-- **Register the household's other payment instruments.** Every card or bank
-  account either member pays vendors with belongs in Cubby as a
-  `FinancialAccount`, or its statement rows can never settle anything. Add the
-  missing ones with aliases before the next statement import.
-- **Fill missing acquisition quantities.** Work through Expenses → Missing quantities
-  and record known counts on existing Product-linked acquisition rows; do not freeze
-  a changing row count into this file.
