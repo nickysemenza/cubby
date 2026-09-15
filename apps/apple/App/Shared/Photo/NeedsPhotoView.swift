@@ -127,9 +127,8 @@ extension PhotoCaptureModel: Identifiable {
     var id: String { "\(entity.rawValue)/\(entityID)" }
 }
 
-#Preview {
+#Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack {
         NeedsPhotoView(locationID: nil)
     }
-    .environment(PreviewFixtures.signedInModel())
 }

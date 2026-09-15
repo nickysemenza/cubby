@@ -54,9 +54,8 @@ struct RouteDestinationView: View {
     }
 }
 
-#Preview {
+#Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack {
         SectionView(section: .capture)
     }
-    .environment(PreviewFixtures.signedInModel())
 }

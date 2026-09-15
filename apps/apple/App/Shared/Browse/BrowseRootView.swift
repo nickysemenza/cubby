@@ -195,6 +195,6 @@ func entitySymbol(for key: EntityKey) -> String {
     EntityCatalog[key].sfSymbol
 }
 
-#Preview {
-    NavigationStack { BrowseRootView() }.environment(PreviewFixtures.signedInModel())
+#Preview(traits: .modifier(SignedInPreview())) {
+    NavigationStack { BrowseRootView() }
 }

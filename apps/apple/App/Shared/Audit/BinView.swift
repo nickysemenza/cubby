@@ -299,8 +299,9 @@ private struct BinPassHeader: View {
 }
 
 #Preview("Bin — empty session") {
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
     NavigationStack {
-        BinView(session: RecountSession(service: PreviewFixtures.signedInModel().client))
+        BinView(session: RecountSession(service: appModel.client))
     }
-    .environment(PreviewFixtures.signedInModel())
+    .environment(appModel)
 }

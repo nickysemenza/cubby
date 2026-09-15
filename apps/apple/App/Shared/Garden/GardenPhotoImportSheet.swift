@@ -434,7 +434,6 @@ private struct GardenPhotoImportContent: View {
     }
 }
 
-#Preview {
+#Preview(traits: .modifier(SignedInPreview())) {
     GardenPhotoImportSheet(items: [], onDone: {})
-        .environment(PreviewFixtures.signedInModel())
 }

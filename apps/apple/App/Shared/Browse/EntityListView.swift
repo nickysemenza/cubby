@@ -99,6 +99,12 @@ struct EntityListView: View {
                 }
                 .disabled(model.activity != .idle)
                 .accessibilityIdentifier("browse.\(key.rawValue).loadMore")
+                // Scrolling to the row loads the next page; the button stays for retry after an error
+                // (a failed page never auto-retries) and for VoiceOver.
+                .onScrollVisibilityChange(threshold: 0.5) { visible in
+                    guard visible, model.activity == .idle, model.nextPageError == nil else { return }
+                    Task { await model.loadNextPage() }
+                }
             }
         }
         .listStyle(.plain)

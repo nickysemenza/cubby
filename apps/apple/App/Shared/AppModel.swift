@@ -26,6 +26,9 @@ final class AppModel {
     private(set) var auth: AuthFlow
     private(set) var credentials: CredentialProvider
     let navigator = Navigator()
+    /// Today's open-problem count, mirrored here so the iOS tab badge can show it without owning
+    /// `TodayModel` (which `TodayView` creates per host). `TodayModel.fetchProblems` writes it.
+    var problemsTotal: Int?
     let spotlight = SpotlightIndexer()
     /// One on-device index of product covers, shared by Identify and by Add photo (which indexes
     /// a new photo the moment it lands, so it matches before the next rebuild).
@@ -125,6 +128,7 @@ final class AppModel {
         #if os(macOS)
             DockBadge.clear()
         #endif
+        problemsTotal = nil
     }
 
     /// Called by any screen that receives a `CubbyAPIError`: a 401 means the middleware already

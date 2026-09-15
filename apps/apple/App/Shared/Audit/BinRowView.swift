@@ -151,9 +151,10 @@ private struct BinMoveToSheet: View {
 }
 
 #Preview("Bin row — expected") {
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
     List {
         BinRowView(
-            session: RecountSession(service: PreviewFixtures.signedInModel().client),
+            session: RecountSession(service: appModel.client),
             row: AuditPreviewData.sampleRow,
             resolution: nil,
             isDuplicate: false
@@ -163,9 +164,10 @@ private struct BinMoveToSheet: View {
 }
 
 #Preview("Bin row — resolved") {
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
     List {
         BinRowView(
-            session: RecountSession(service: PreviewFixtures.signedInModel().client),
+            session: RecountSession(service: appModel.client),
             row: AuditPreviewData.sampleRow,
             resolution: .adjust(Amount(value: 2, unit: "each")),
             isDuplicate: true

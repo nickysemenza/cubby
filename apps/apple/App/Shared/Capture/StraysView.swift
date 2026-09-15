@@ -95,5 +95,6 @@ struct StraysView: View {
 }
 
 #Preview {
-    StraysView(session: ScanSession(service: PreviewFixtures.signedInModel().client))
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
+    StraysView(session: ScanSession(service: appModel.client))
 }

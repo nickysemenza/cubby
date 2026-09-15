@@ -145,6 +145,6 @@ extension AppModel {
     }
 }
 
-#Preview {
-    NavigationStack { SettingsView() }.environment(PreviewFixtures.signedInModel())
+#Preview(traits: .modifier(SignedInPreview())) {
+    NavigationStack { SettingsView() }
 }

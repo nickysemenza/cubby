@@ -77,6 +77,7 @@ struct SearchContent: View {
             .porcelainScreen()
             .navigationTitle("Search")
             .searchable(text: $search.query, placement: Self.searchPlacement, prompt: searchPrompt)
+            .searchToolbarBehavior(.minimize)
             .searchFocused($searchFieldFocused)
             .accessibilityIdentifier("search.content")
             .searchSuggestions {
@@ -293,9 +294,9 @@ private struct SearchHitRow: View {
     }
 }
 
-#Preview("Empty") {
+#Preview("Empty", traits: .modifier(SignedInPreview())) {
     NavigationStack {
-        SearchView().environment(PreviewFixtures.signedInModel())
+        SearchView()
     }
 }
 

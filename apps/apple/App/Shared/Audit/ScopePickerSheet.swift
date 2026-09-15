@@ -118,8 +118,9 @@ struct ScopePickerSheet: View {
 }
 
 #Preview("Scope picker") {
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
     NavigationStack {
-        ScopePickerSheet(session: RecountSession(service: PreviewFixtures.signedInModel().client))
+        ScopePickerSheet(session: RecountSession(service: appModel.client))
     }
-    .environment(PreviewFixtures.signedInModel())
+    .environment(appModel)
 }

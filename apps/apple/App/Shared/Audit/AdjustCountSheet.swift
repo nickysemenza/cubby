@@ -79,8 +79,9 @@ struct AdjustCountSheet: View {
 }
 
 #Preview("Adjust count") {
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
     AdjustCountSheet(
-        session: RecountSession(service: PreviewFixtures.signedInModel().client),
+        session: RecountSession(service: appModel.client),
         id: AuditPreviewData.sampleRow.id,
         amount: AuditPreviewData.sampleRow.amount
     )

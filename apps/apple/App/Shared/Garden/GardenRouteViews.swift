@@ -247,6 +247,6 @@ struct GardenBedJournalView: View {
     }
 }
 
-#Preview {
-    NavigationStack { GardenBedJournalView(locationID: nil) }.environment(PreviewFixtures.signedInModel())
+#Preview(traits: .modifier(SignedInPreview())) {
+    NavigationStack { GardenBedJournalView(locationID: nil) }
 }
