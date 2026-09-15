@@ -10,6 +10,63 @@ import SwiftUI
 final class Navigator {
     var section: AppSection = .today
     var paths: [AppSection: [Route]] = [:]
+    var browseKey: EntityKey?
+    var browsingGarden = false
+    var selectedRecords: [AppSection: RecordSelection] = [:]
+
+    var macDestination: SidebarDestination {
+        get {
+            if section == .browse {
+                if browsingGarden { return .garden }
+                if let browseKey { return .entity(browseKey) }
+            }
+            return .section(section)
+        }
+        set {
+            guard newValue != macDestination else { return }
+            switch newValue {
+            case .section(let section):
+                self.section = section
+                if section == .browse {
+                    browseKey = nil
+                    browsingGarden = false
+                    selectedRecords[.browse] = nil
+                    paths[.browse] = []
+                }
+            case .entity(let key):
+                section = .browse
+                if browseKey != key { selectedRecords[.browse] = nil }
+                if browseKey != key || browsingGarden { paths[.browse] = [] }
+                browseKey = key
+                browsingGarden = false
+            case .garden:
+                section = .browse
+                browsingGarden = true
+                paths[.browse] = []
+            }
+        }
+    }
+
+    func selectRecord(_ record: RecordSelection?, in section: AppSection) {
+        selectedRecords[section] = record
+        paths[section] = []
+    }
+
+    func openRecord(_ record: RecordSelection) {
+        #if os(macOS)
+            if (section == .browse && !browsingGarden) || section == .search {
+                if selectedRecords[section] == nil {
+                    selectRecord(record, in: section)
+                } else {
+                    paths[section, default: []].append(.entityDetail(record.key, id: record.id))
+                }
+            } else {
+                paths[section, default: []].append(.entityDetail(record.key, id: record.id))
+            }
+        #else
+            paths[section, default: []].append(.entityDetail(record.key, id: record.id))
+        #endif
+    }
     /// Set by a `capture?location=` link; `CaptureView` takes it once its locations have loaded.
     var pendingCaptureLocation: LocationCode?
     /// A code found while looking something up elsewhere (Search's scan sheet), destined for
@@ -38,7 +95,13 @@ final class Navigator {
         switch link {
         case .entity(let key, let id):
             section = .browse
-            paths[.browse] = [.entityDetail(key, id: id)]
+            #if os(macOS)
+                browseKey = key
+                browsingGarden = false
+                selectRecord(RecordSelection(key: key, id: id), in: .browse)
+            #else
+                paths[.browse] = [.entityDetail(key, id: id)]
+            #endif
         case .capture(let location):
             section = .capture
             paths[.capture] = []
@@ -85,7 +148,7 @@ final class Navigator {
     /// audit, today, search) still move sections.
     func openInPlace(_ link: CubbyLink) {
         if case .entity(let key, let id) = link {
-            paths[section, default: []].append(.entityDetail(key, id: id))
+            openRecord(RecordSelection(key: key, id: id))
         } else {
             open(link)
         }
@@ -105,4 +168,15 @@ final class Navigator {
         defer { pendingSearchQuery = nil }
         return pendingSearchQuery
     }
+}
+
+struct RecordSelection: Hashable {
+    let key: EntityKey
+    let id: String
+}
+
+enum SidebarDestination: Hashable {
+    case section(AppSection)
+    case entity(EntityKey)
+    case garden
 }

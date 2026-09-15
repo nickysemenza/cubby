@@ -7,52 +7,74 @@ struct AdjustCountSheet: View {
     let session: RecountSession
     let id: InventoryEntryCode
     let unit: String
+    private let initialText: String
     @Environment(\.dismiss) private var dismiss
-    @State private var text: String
+    @State private var draft: AdjustmentQuantityDraft
+    @State private var draftDismissal = DraftDismissalState()
 
     init(session: RecountSession, id: InventoryEntryCode, amount: Amount) {
         self.session = session
         self.id = id
         self.unit = amount.unit
-        _text = State(initialValue: Self.formatted(amount.value))
+        let draft = AdjustmentQuantityDraft(value: amount.value)
+        initialText = draft.text
+        _draft = State(initialValue: draft)
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("New count") {
+                Section {
                     HStack(spacing: PorcelainTokens.Space.sm) {
-                        TextField("Count", text: $text)
+                        TextField("Count", text: $draft.text)
                             .keyboardDismissBar()
                             #if os(iOS)
                                 .keyboardType(.decimalPad)
                             #endif
                             .font(.porcelainData)
+                            .accessibilityIdentifier("audit.adjust-count.amount")
                         Text(unit)
                             .font(.porcelainLabel)
                             .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                    }
+                } header: {
+                    Text("New count")
+                } footer: {
+                    if hasValidationError {
+                        Label("Enter an amount greater than zero.", systemImage: "exclamationmark.circle")
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("audit.adjust-count.error")
                     }
                 }
             }
             .navigationTitle("Adjust count")
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        draftDismissal.request(isDirty: isDirty, dismiss: dismiss)
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save).disabled(Double(text) == nil)
+                    Button("Save", action: save)
+                        .disabled(draft.value == nil)
+                        .accessibilityIdentifier("audit.adjust-count.save")
                 }
             }
         }
-        .porcelainForm(size: .compact)
+        .nativeSheet(.adjustment)
+        .draftDismissal($draftDismissal, isDirty: isDirty, isSaving: false) { dismiss() }
     }
 
     private func save() {
-        guard let value = Double(text) else { return }
+        guard let value = draft.value else { return }
         session.stage(.adjust(Amount(value: value, unit: unit)), for: id)
         dismiss()
     }
 
-    private static func formatted(_ value: Double) -> String {
-        value.truncatingRemainder(dividingBy: 1) == 0 ? String(Int(value)) : String(value)
+    private var isDirty: Bool { draft.text != initialText }
+
+    private var hasValidationError: Bool {
+        !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && draft.value == nil
     }
 }
 

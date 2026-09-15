@@ -6,31 +6,32 @@ import SwiftUI
 /// upload. Garden entries have their own destination because their pending images finalize with
 /// the entry attachment mutation.
 struct PhotoDestinationSheet: View {
-    @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
-    let items: [PhotoSelectionItem]
     let onDone: () -> Void
-    @State private var destination: PhotoDestination?
+    @State private var flow: PhotoImportFlowModel
+
+    init(items: [PhotoSelectionItem], onDone: @escaping () -> Void) {
+        self.onDone = onDone
+        _flow = State(initialValue: PhotoImportFlowModel(items: items))
+    }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $flow.path) {
             List {
                 Section("Garden") {
                     Button {
-                        destination = .garden
+                        flow.chooseGarden()
                     } label: {
                         Label("New garden entries", systemImage: "leaf")
                     }
+                    .accessibilityIdentifier("photos.destination.garden")
                 }
                 Section("Add to a Cubby record") {
                     ForEach(EntityCatalog.all.filter(\.acceptsImages), id: \.key) { descriptor in
-                        NavigationLink {
-                            PhotoEntityChooser(
-                                key: descriptor.key,
-                                onSelect: { id in destination = .entity(descriptor.key, id: id) })
-                        } label: {
+                        NavigationLink(value: PhotoImportRoute.entityPicker(descriptor.key.rawValue)) {
                             Label(descriptor.plural, systemImage: entitySymbol(for: descriptor.key))
                         }
+                        .accessibilityIdentifier("photos.destination.\(descriptor.key.rawValue)")
                     }
                 }
             }
@@ -38,17 +39,35 @@ struct PhotoDestinationSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
-        }
-        #if os(macOS)
-            .frame(minWidth: 520, idealWidth: 620, minHeight: 520, idealHeight: 680)
-        #endif
-        .sheet(item: $destination) { destination in
-            switch destination {
-            case .garden:
-                PhotoGardenReviewFlow(items: items, onDone: finish)
-            case .entity(let key, let id):
-                PhotoEntityReviewFlow(items: items, key: key, id: id, onDone: finish)
+            .navigationDestination(for: PhotoImportRoute.self) { route in
+                destination(for: route)
             }
+        }
+        .nativeSheet(.photo)
+    }
+
+    @ViewBuilder
+    private func destination(for route: PhotoImportRoute) -> some View {
+        switch route {
+        case .entityPicker(let rawKey):
+            if let key = EntityKey(rawValue: rawKey) {
+                PhotoEntityChooser(key: key) { flow.chooseEntity(key, id: $0) }
+            } else {
+                ContentUnavailableView("Destination unavailable", systemImage: "exclamationmark.triangle")
+            }
+        case .review:
+            PhotoMatchReviewContent(
+                draft: flow.reviewDraft,
+                onCancel: { dismiss() },
+                onContinue: { flow.completeReview($0) })
+        case .entityUpload(let rawKey, let id):
+            if let key = EntityKey(rawValue: rawKey) {
+                PhotoUploadProgress(items: flow.reviewItems, key: key, id: id, onDone: finish)
+            } else {
+                ContentUnavailableView("Destination unavailable", systemImage: "exclamationmark.triangle")
+            }
+        case .gardenImport:
+            GardenPhotoImportSheet(items: flow.reviewItems, onDone: finish)
         }
     }
 
@@ -58,37 +77,53 @@ struct PhotoDestinationSheet: View {
     }
 }
 
-private struct PhotoGardenReviewFlow: View {
-    let items: [PhotoSelectionItem]
-    let onDone: () -> Void
-    @State private var reviewedItems: [PhotoSelectionItem]?
-
-    var body: some View {
-        Group {
-            if let reviewedItems {
-                NavigationStack {
-                    GardenPhotoImportSheet(items: reviewedItems, onDone: onDone)
-                }
-            } else {
-                PhotoMatchReviewSheet(items: items, dismissOnContinue: false) {
-                    reviewedItems = $0
-                }
-            }
-        }
-        #if os(macOS)
-            .frame(minWidth: 540, minHeight: 620)
-        #endif
-    }
-}
-
-private enum PhotoDestination: Identifiable {
+enum PhotoImportDestination: Equatable {
     case garden
     case entity(EntityKey, id: String)
+}
 
-    var id: String {
-        switch self {
-        case .garden: "garden"
-        case .entity(let key, let id): "\(key.rawValue):\(id)"
+enum PhotoImportRoute: Hashable {
+    case entityPicker(String)
+    case review
+    case entityUpload(String, String)
+    case gardenImport
+}
+
+@MainActor
+@Observable
+final class PhotoImportFlowModel {
+    let items: [PhotoSelectionItem]
+    let reviewDraft: PhotoReviewDraft
+    var path: [PhotoImportRoute] = []
+    private(set) var destination: PhotoImportDestination?
+    private(set) var reviewedItems: [PhotoSelectionItem]?
+
+    init(items: [PhotoSelectionItem]) {
+        self.items = items
+        reviewDraft = PhotoReviewDraft(items: items)
+    }
+
+    var reviewItems: [PhotoSelectionItem] { reviewedItems ?? items }
+
+    func chooseGarden() {
+        destination = .garden
+        path.append(.review)
+    }
+
+    func chooseEntity(_ key: EntityKey, id: String) {
+        destination = .entity(key, id: id)
+        path.append(.review)
+    }
+
+    func completeReview(_ items: [PhotoSelectionItem]) {
+        reviewedItems = items
+        switch destination {
+        case .garden:
+            path.append(.gardenImport)
+        case .entity(let key, let id):
+            path.append(.entityUpload(key.rawValue, id))
+        case nil:
+            break
         }
     }
 }
@@ -97,68 +132,83 @@ private struct PhotoEntityChooser: View {
     @Environment(AppModel.self) private var appModel
     let key: EntityKey
     let onSelect: (String) -> Void
-    @State private var rows: [EntityRow] = []
-    @State private var page = 1
-    @State private var hasMore = false
-    @State private var loading = false
-    @State private var error: String?
+    @State private var model: GenericEntityListModel?
+
+    private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
     var body: some View {
+        Group {
+            if let model {
+                if model.rows.isEmpty {
+                    emptyState(model)
+                } else {
+                    destinationList(model)
+                }
+            } else {
+                LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
+            }
+        }
+        .navigationTitle(descriptor.plural)
+        .task(id: key) {
+            if model == nil {
+                model = GenericEntityListModel(descriptor: descriptor, client: appModel.client)
+            }
+            await model?.loadInitial()
+        }
+        .refreshControl { await model?.refresh() }
+    }
+
+    @ViewBuilder
+    private func emptyState(_ model: GenericEntityListModel) -> some View {
+        switch model.phase {
+        case .idle, .loading:
+            LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
+        case .failed(let message), .unavailable(let message):
+            ContentUnavailableView {
+                Label("Couldn't load \(descriptor.plural)", systemImage: "exclamationmark.triangle")
+            } description: {
+                Text(message)
+            } actions: {
+                Button("Retry") { Task { await model.loadInitial() } }
+                    .accessibilityIdentifier("photos.destination.retry")
+            }
+        case .loaded:
+            ContentUnavailableView("No \(descriptor.plural) yet", systemImage: entitySymbol(for: key))
+        }
+    }
+
+    private func destinationList(_ model: GenericEntityListModel) -> some View {
         List {
-            if let error { Text(error).foregroundStyle(PorcelainTokens.destructive) }
-            ForEach(rows) { row in
+            if let error = model.refreshError {
+                Section {
+                    Text(error).foregroundStyle(.secondary)
+                    Button("Retry refresh") { Task { await model.refresh() } }
+                }
+            }
+            ForEach(model.rows) { row in
                 Button {
                     onSelect(row.id)
                 } label: {
                     EntityRowView(key: key, row: row)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("photos.destination.row.\(row.id)")
             }
-            if hasMore {
-                Button(loading ? "Loading…" : "Load more") { Task { await loadMore() } }
-                    .disabled(loading)
-            }
-        }
-        .navigationTitle(EntityCatalog[key].plural)
-        .task { await loadMore(reset: true) }
-    }
-
-    private func loadMore(reset: Bool = false) async {
-        guard !loading else { return }
-        loading = true
-        defer { loading = false }
-        let nextPage = reset ? 1 : page + 1
-        do {
-            let result = try await appModel.client.list(EntityCatalog[key], page: nextPage, pageSize: 50)
-            if reset { rows = result.items } else { rows.append(contentsOf: result.items) }
-            page = nextPage
-            hasMore = result.meta.totalCount > rows.count
-            error = nil
-        } catch {
-            self.error = error.localizedDescription
-            Diagnostics.report(error, context: "photos.destination.list")
-        }
-    }
-}
-
-private struct PhotoEntityReviewFlow: View {
-    let items: [PhotoSelectionItem]
-    let key: EntityKey
-    let id: String
-    let onDone: () -> Void
-    @State private var reviewedItems: [PhotoSelectionItem]?
-
-    var body: some View {
-        Group {
-            if let reviewedItems {
-                PhotoUploadProgress(items: reviewedItems, key: key, id: id, onDone: onDone)
-            } else {
-                PhotoMatchReviewSheet(items: items, dismissOnContinue: false) { reviewedItems = $0 }
+            if model.hasMore {
+                if let error = model.nextPageError { Text(error).foregroundStyle(.secondary) }
+                Button {
+                    Task { await model.loadNextPage() }
+                } label: {
+                    if model.activity == .loadingNextPage {
+                        LoadingIndicator(label: "Loading more \(descriptor.plural)")
+                    } else {
+                        Text(model.nextPageError == nil ? "Load more" : "Retry loading more")
+                    }
+                }
+                .disabled(model.activity != .idle)
+                .accessibilityIdentifier("photos.destination.loadMore")
             }
         }
-        #if os(macOS)
-            .frame(minWidth: 540, minHeight: 620)
-        #endif
     }
 }
 
@@ -172,46 +222,46 @@ private struct PhotoUploadProgress: View {
     @State private var uploader: PhotoBatchUploadModel?
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let uploader {
-                    VStack(spacing: PorcelainTokens.Space.lg) {
-                        if let error = uploader.error {
-                            Text(error).foregroundStyle(PorcelainTokens.destructive)
-                        }
-                        if uploader.finished {
-                            Label(
-                                "Added \(items.count) photo\(items.count == 1 ? "" : "s")",
-                                systemImage: "checkmark.circle")
-                        } else if uploader.isRunning {
-                            ProgressView(uploader.status)
-                            Button("Cancel") { uploader.cancel() }
-                        } else {
-                            if key == .product {
-                                Toggle(
-                                    "Make first photo the cover",
-                                    isOn: Binding(
-                                        get: { uploader.makeCover },
-                                        set: { uploader.makeCover = $0 }))
-                            }
-                            Button(uploader.error == nil ? "Add photos" : "Retry") {
-                                Task {
-                                    await uploader.run()
-                                    if uploader.finished { onDone(); dismiss() }
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
+        Group {
+            if let uploader {
+                VStack(spacing: PorcelainTokens.Space.lg) {
+                    if let error = uploader.error {
+                        Text(error).foregroundStyle(PorcelainTokens.destructive)
                     }
-                    .padding(PorcelainTokens.Space.lg)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Close") { dismiss() }.disabled(uploader.isRunning)
+                    if uploader.finished {
+                        Label(
+                            "Added \(items.count) photo\(items.count == 1 ? "" : "s")",
+                            systemImage: "checkmark.circle")
+                    } else if uploader.isRunning {
+                        ProgressView(uploader.status)
+                        Button("Cancel upload") { uploader.cancel() }
+                            .accessibilityIdentifier("photos.upload.cancel")
+                    } else {
+                        if key == .product {
+                            Toggle(
+                                "Make first photo the cover",
+                                isOn: Binding(
+                                    get: { uploader.makeCover },
+                                    set: { uploader.makeCover = $0 }))
                         }
+                        Button(uploader.error == nil ? "Add photos" : "Retry") {
+                            Task {
+                                await uploader.run()
+                                if uploader.finished { onDone(); dismiss() }
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("photos.upload.commit")
                     }
-                } else {
-                    LoadingIndicator(label: "Preparing upload")
                 }
+                .padding(PorcelainTokens.Space.lg)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }.disabled(uploader.isRunning)
+                    }
+                }
+            } else {
+                LoadingIndicator(label: "Preparing upload")
             }
         }
         .task {
@@ -220,6 +270,7 @@ private struct PhotoUploadProgress: View {
             }
         }
         .interactiveDismissDisabled(uploader?.isRunning == true)
+        .navigationBarBackButtonHidden(uploader?.hasStarted == true)
         .onDisappear { uploader?.cancel() }
         .navigationTitle("Adding photos")
     }
@@ -241,6 +292,7 @@ private final class PhotoBatchUploadModel {
     private(set) var error: String?
     private(set) var finished = false
     private(set) var isRunning = false
+    private(set) var hasStarted = false
     var makeCover = false
 
     init(client: CubbyClient, items: [PhotoSelectionItem], key: EntityKey, id: String) {
@@ -249,6 +301,7 @@ private final class PhotoBatchUploadModel {
 
     func run() async {
         guard !finished, !isRunning else { return }
+        hasStarted = true
         isRunning = true
         cancelled = false
         let task = Task { await performRun() }

@@ -9,20 +9,24 @@ struct AddPhotoSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var previewing = false
-    @State private var editedReview: PhotoSelectionItem?
+    @State private var reviewDraft: PhotoReviewDraft?
+    @State private var path: [AddPhotoRoute] = []
     @State private var preparingUpload = false
     @State private var operationTask: Task<Void, Never>?
     @State private var refreshingMatches = false
+    @State private var draftDismissal = DraftDismissalState()
+    @State private var keepsPendingWriteAfterDismiss = false
+    @State private var deliveredResult = false
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
                     switch capture.phase {
                     case .picking:
                         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
                             Eyebrow("Photo")
-                            PhotoSourceButtons(maxSelectionCount: 1) { selections in
+                            PhotoSourceButtons(maxSelectionCount: 1, reviewsUploads: false) { selections in
                                 if let selection = selections.first {
                                     capture.receive(selection)
                                 }
@@ -103,30 +107,46 @@ struct AddPhotoSheet: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .disabled(isUploading || preparingUpload)
+                    Button("Cancel") { requestCancel() }
+                        .accessibilityIdentifier("photo.add.cancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     switch capture.phase {
                     case .done(let id):
                         Button("Done") {
-                            onDone(id)
+                            deliverResult(id)
                             dismiss()
                         }
                         .disabled(refreshingMatches)
+                        .accessibilityIdentifier("photo.add.done")
                     case .ready, .failed:
                         Button("Upload") { startPreparingUpload() }
                             .disabled(capture.chosen == nil || !capture.canUpload || preparingUpload)
+                            .accessibilityIdentifier("photo.add.upload")
                     default:
                         EmptyView()
                     }
                 }
             }
+            .navigationDestination(for: AddPhotoRoute.self) { route in
+                switch route {
+                case .review:
+                    if let reviewDraft {
+                        PhotoMatchReviewContent(
+                            draft: reviewDraft,
+                            onCancel: { path.removeLast() },
+                            onContinue: { reviewed in
+                                guard let reviewed = reviewed.first else { return }
+                                capture.acceptFinalReview(reviewed)
+                                path.removeLast()
+                                startUpload()
+                            })
+                    }
+                }
+            }
         }
-        #if os(macOS)
-            .frame(minWidth: 480, minHeight: 520)
-        #endif
-        .sheet(isPresented: $previewing) {
+        .nativeSheet(.photo)
+        .photoPreviewPresentation(isPresented: $previewing) {
             if let image = capture.chosen {
                 PhotoPreview(
                     photos: [
@@ -134,14 +154,17 @@ struct AddPhotoSheet: View {
                     ], selectedID: "selection")
             }
         }
-        .sheet(item: $editedReview) { item in
-            PhotoMatchReviewSheet(items: [item]) { reviewed in
-                guard let reviewed = reviewed.first else { return }
-                capture.acceptFinalReview(reviewed)
-                startUpload()
+        .draftDismissal(
+            $draftDismissal, isDirty: capture.hasDraft,
+            isSaving: isUploading || preparingUpload,
+            onDiscard: { dismiss() },
+            onCloseWhileSaving: {
+                keepsPendingWriteAfterDismiss = true
+                dismiss()
             }
-        }
+        )
         .onDisappear {
+            guard !keepsPendingWriteAfterDismiss else { return }
             operationTask?.cancel()
             operationTask = nil
             capture.cancelPendingWork()
@@ -177,6 +200,7 @@ struct AddPhotoSheet: View {
                             .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
                     )
                 }.buttonStyle(.plain).accessibilityLabel("Preview selected photo")
+                    .accessibilityIdentifier("photo.add.preview")
             }
             if capture.lifted?.foundSubject == false {
                 Text("No subject found; the photo goes up as it is.")
@@ -207,6 +231,7 @@ struct AddPhotoSheet: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(!capture.canLift)
+                    .accessibilityIdentifier("photo.add.liftSubject")
                     PanelDivider()
                 }
                 if capture.lifted?.foundSubject == true {
@@ -241,6 +266,7 @@ struct AddPhotoSheet: View {
                         .padding(PorcelainTokens.Space.md)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("photo.add.chooseAnother")
             }
             .disabled(isUploading || preparingUpload)
         }
@@ -264,7 +290,10 @@ struct AddPhotoSheet: View {
                 capture.acceptFinalReview(item)
                 await uploadAndRefreshMatches()
             } else {
-                editedReview = item
+                if reviewDraft?.items.first?.id != item.id {
+                    reviewDraft = PhotoReviewDraft(items: [item])
+                }
+                path.append(.review)
             }
         } catch is CancellationError {
         } catch {
@@ -282,14 +311,29 @@ struct AddPhotoSheet: View {
         operationTask = Task { await uploadAndRefreshMatches() }
     }
 
+    private func requestCancel() {
+        draftDismissal.request(
+            isDirty: capture.hasDraft, isSaving: isUploading,
+            dismiss: dismiss)
+    }
+
     private func uploadAndRefreshMatches() async {
         await capture.upload()
         guard !Task.isCancelled, capture.uses(client: appModel.client) else { return }
-        if case .done = capture.phase {
+        if case .done(let id) = capture.phase {
             refreshingMatches = true
             await appModel.photoMatches.refresh(client: appModel.client)
-            if !Task.isCancelled { refreshingMatches = false }
+            if !Task.isCancelled {
+                refreshingMatches = false
+                if keepsPendingWriteAfterDismiss { deliverResult(id) }
+            }
         }
+    }
+
+    private func deliverResult(_ id: ImageCode) {
+        guard !deliveredResult else { return }
+        deliveredResult = true
+        onDone(id)
     }
 
     private static func label(for step: PhotoUploader.Step) -> String {
@@ -303,6 +347,10 @@ struct AddPhotoSheet: View {
         case .done: "Done"
         }
     }
+}
+
+private enum AddPhotoRoute: Hashable {
+    case review
 }
 
 #Preview {

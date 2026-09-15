@@ -1,14 +1,9 @@
 import SwiftUI
 
 extension View {
-    /// The porcelain canvas behind a screen. Safe on any container: the hidden scroll background
-    /// is a no-op where there is nothing scrolling.
+    /// Screen-level keyboard dismissal without overriding the system's surface or scroll edges.
     func porcelainScreen() -> some View {
-        scrollContentBackground(.hidden)
-            .background(PorcelainTokens.canvas)
-            // Dragging any screen's content dismisses the keyboard; a permanent entry field with
-            // no Done key otherwise traps it on iOS.
-            .scrollDismissesKeyboard(.interactively)
+        scrollDismissesKeyboard(.interactively)
     }
 
     /// A "Done" key above the software keyboard. Attached to a field, it shows only while that
@@ -17,61 +12,11 @@ extension View {
         modifier(KeyboardDismissBar())
     }
 
-    /// White row over the canvas, with the cool hairline as the separator. Applied per row so a
-    /// plain `List` reads as a stack of working planes rather than a stock grouped form.
+    /// Compatibility for specialized lists: the system owns row surfaces and separators.
     func porcelainListRow() -> some View {
-        listRowBackground(PorcelainTokens.surface)
-            .listRowSeparatorTint(PorcelainTokens.hairline)
+        self
     }
 
-    /// The one shared shape for a `Form`-based sheet or screen: `.formStyle(.grouped)` on every
-    /// platform (without it, macOS renders section headers as plain text and floats the
-    /// navigation title mid-sheet), plus a macOS-only sizing frame sized for the sheet's content.
-    /// iOS/iPadOS ignore `size` — the sheet or push already sizes itself there.
-    func porcelainForm(size: PorcelainFormSize = .regular) -> some View {
-        modifier(PorcelainFormModifier(size: size))
-    }
-}
-
-/// The two sheet shapes in use: a couple of fields (`AdjustCountSheet`) versus a full editor
-/// (the Garden forms). Add a case here rather than hand-rolling another `#if os(macOS) .frame(...)`.
-enum PorcelainFormSize {
-    case compact
-    case regular
-    /// The host already owns the window size (the Settings scene is a fixed 420pt window);
-    /// only the grouped style applies. A sizing frame here pushes the form off-screen.
-    case host
-
-    fileprivate var frame: (minWidth: CGFloat, idealWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat)?
-    {
-        switch self {
-        case .compact: (320, 380, 220, 300)
-        case .regular: (520, 620, 560, 720)
-        case .host: nil
-        }
-    }
-}
-
-private struct PorcelainFormModifier: ViewModifier {
-    let size: PorcelainFormSize
-
-    func body(content: Content) -> some View {
-        #if os(macOS)
-            if let frame = size.frame {
-                content
-                    .formStyle(.grouped)
-                    .frame(
-                        minWidth: frame.minWidth, idealWidth: frame.idealWidth,
-                        minHeight: frame.minHeight, idealHeight: frame.idealHeight
-                    )
-            } else {
-                content.formStyle(.grouped)
-            }
-        #else
-            content
-                .formStyle(.grouped)
-        #endif
-    }
 }
 
 /// A `ProgressView` with an accessibility label — a bare `ProgressView()` reads nothing to
@@ -81,8 +26,7 @@ struct LoadingIndicator: View {
     var label: String = "Loading"
 
     var body: some View {
-        ProgressView()
-            .accessibilityLabel(label)
+        ProgressView(label)
     }
 
     static func screen(label: String = "Loading") -> some View {
@@ -118,12 +62,12 @@ struct ActionTile: View {
                 .font(.porcelainTitle)
                 .foregroundStyle(PorcelainTokens.graphite)
                 .multilineTextAlignment(.leading)
-                .lineLimit(2)
+
             if let detail {
                 Text(detail)
                     .font(.porcelainLabel)
                     .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                    .lineLimit(1)
+
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -142,8 +86,7 @@ struct ActionTile: View {
 
 /// Two equal columns on the 12pt rhythm — the shape every grid on these screens uses.
 let porcelainTwoColumns = [
-    GridItem(.flexible(), spacing: PorcelainTokens.Space.md),
-    GridItem(.flexible(), spacing: PorcelainTokens.Space.md),
+    GridItem(.adaptive(minimum: 160), spacing: PorcelainTokens.Space.md)
 ]
 
 #Preview("Action tiles") {
@@ -175,6 +118,54 @@ private struct KeyboardDismissBar: ViewModifier {
                 }
         #else
             content
+        #endif
+    }
+}
+
+/// Presentation role is a property of a task, independent of how its fields are laid out.
+enum NativeSheetPurpose {
+    case adjustment, picker, editor, photo, preview
+}
+
+extension View {
+    func nativeSheet(_ purpose: NativeSheetPurpose) -> some View {
+        modifier(NativeSheetPresentation(purpose: purpose))
+    }
+}
+
+private struct NativeSheetPresentation: ViewModifier {
+    let purpose: NativeSheetPurpose
+    @Environment(\.dynamicTypeSize) private var textSize
+    @State private var detent: PresentationDetent = .medium
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+            switch purpose {
+            case .adjustment:
+                content.presentationSizing(.form)
+                    .frame(minWidth: 320, idealWidth: 380, minHeight: 220)
+            case .picker, .editor:
+                content.presentationSizing(.form)
+                    .frame(minWidth: 480, idealWidth: 620, minHeight: 440, idealHeight: 680)
+            case .photo, .preview:
+                content.presentationSizing(.page)
+                    .frame(minWidth: 520, idealWidth: 800, minHeight: 440, idealHeight: 680)
+            }
+        #else
+            switch purpose {
+            case .adjustment:
+                content.presentationSizing(.form)
+                    .presentationDetents(
+                        textSize.isAccessibilitySize ? [.large] : [.medium, .large], selection: $detent
+                    )
+                    .presentationDragIndicator(.visible)
+                    .onAppear { detent = textSize.isAccessibilitySize ? .large : .medium }
+                    .onChange(of: textSize) { if textSize.isAccessibilitySize { detent = .large } }
+            case .picker, .editor:
+                content.presentationSizing(.form).presentationDetents([.large])
+            case .photo, .preview:
+                content.presentationSizing(.page).presentationDetents([.large])
+            }
         #endif
     }
 }

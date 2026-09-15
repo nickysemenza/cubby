@@ -28,9 +28,6 @@ struct LibraryPickerSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
         }
-        #if os(macOS)
-            .frame(minWidth: 660, minHeight: 600)
-        #endif
     }
 }
 
@@ -146,7 +143,7 @@ private struct PhotoLibraryBrowser: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { Task { await library.refresh(matches: matches, client: appModel.client) } }
         }
-        .sheet(item: $preview) { selected in
+        .photoPreviewPresentation(item: $preview) { selected in
             PhotoLibraryPreview(asset: selected.asset) {
                 toggle(selected.asset.localIdentifier); selecting = true
             }
@@ -165,7 +162,9 @@ private struct PhotoLibraryBrowser: View {
         VStack(alignment: .leading, spacing: 8) {
             Picker("Show", selection: $filter) {
                 ForEach(Filter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }.pickerStyle(.segmented)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("photos.filter")
             HStack(spacing: 6) {
                 if library.isLoadingLibrary || library.isScanning || matches.isLoading || matches.isRepairing
                 {
@@ -182,7 +181,9 @@ private struct PhotoLibraryBrowser: View {
                     Task { await library.refresh(matches: matches, client: appModel.client) }
                 } label: {
                     Image(systemName: "arrow.clockwise")
-                }.accessibilityLabel("Refresh photo matches")
+                }
+                .accessibilityLabel("Refresh photo matches")
+                .accessibilityIdentifier("photos.refresh")
             }.foregroundStyle(.secondary)
             if filter == .missing {
                 Text(
@@ -206,6 +207,7 @@ private struct PhotoLibraryBrowser: View {
             } else {
                 Button(picker ? "Choose photos" : "Add to…") { prepareSelection() }
                     .buttonStyle(.borderedProminent).disabled(ids.isEmpty)
+                    .accessibilityIdentifier(picker ? "photos.choose" : "photos.addTo")
             }
         }.padding(12).background(.bar)
     }
@@ -376,11 +378,15 @@ private struct PhotoLibraryPreview: View {
                 }
             }.navigationTitle("Photo")
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                            .accessibilityIdentifier("photos.libraryPreview.close")
+                    }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Select") {
                             onSelect(); dismiss()
                         }
+                        .accessibilityIdentifier("photos.libraryPreview.select")
                     }
                 }
                 .task {
@@ -391,9 +397,6 @@ private struct PhotoLibraryPreview: View {
                     }
                 }
         }
-        #if os(macOS)
-            .frame(minWidth: 540, idealWidth: 720, minHeight: 620, idealHeight: 780)
-        #endif
     }
 }
 

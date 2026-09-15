@@ -1,9 +1,7 @@
 import CubbyKit
 import SwiftUI
 
-/// Base URL and session. On iOS it is a sheet from Login and a Dev-tab row; on macOS the
-/// Settings scene. The one screen that stays a `Form`: it is a settings form, and pretending
-/// otherwise would cost the platform's own field behaviour for nothing.
+/// Server and session preferences, presented in a separate Settings scene on macOS.
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
@@ -80,6 +78,16 @@ struct SettingsView: View {
                 Eyebrow("Session")
             }
 
+            if model.phase == .signedIn {
+                Section("Utilities") {
+                    Button("Developer tools", systemImage: "wrench.and.screwdriver") {
+                        model.navigator.openDev()
+                        dismiss()
+                    }
+                    .accessibilityIdentifier("settings.developerTools")
+                }
+            }
+
             #if os(macOS)
                 Section {
                     Toggle("Show problem count in Dock", isOn: $showProblemsInDock)
@@ -89,7 +97,7 @@ struct SettingsView: View {
                 }
             #endif
         }
-        .porcelainForm(size: .host)
+        .formStyle(.grouped)
         .font(.porcelainBody)
         .porcelainScreen()
         .navigationTitle("Settings")

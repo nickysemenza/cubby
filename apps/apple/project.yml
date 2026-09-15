@@ -178,7 +178,7 @@ targets:
     platform: macOS
   # Snapshot tests for iOS-only screens (App/Tests/Snapshots). Hosted by Cubby-iOS so
   # `@testable import Cubby` and `.environment`/`AppModel` work exactly as the app's own
-  # `#Preview`s do; no macOS counterpart exists yet.
+  # `#Preview`s do. macOS hosts the cross-platform navigation contracts below.
   Cubby-iOS-Tests:
     type: bundle.unit-test
     platform: iOS
@@ -205,6 +205,21 @@ targets:
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Cubby.app/Cubby"
         BUNDLE_LOADER: "$(TEST_HOST)"
 
+  Cubby-macOS-Tests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: App/Tests/Navigation
+    dependencies:
+      - target: Cubby-macOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.nickysemenza.cubby.mac-tests
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Cubby.app/Contents/MacOS/Cubby"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
 schemes:
   Cubby-iOS:
     build:
@@ -223,6 +238,13 @@ schemes:
     build:
       targets:
         Cubby-macOS: all
+        Cubby-macOS-Tests: [test]
+    test:
+      config: Debug
+      environmentVariables:
+        CUBBY_TEST_HOST: "1"
+      targets:
+        - Cubby-macOS-Tests
     run:
       config: Debug
   # Launching under LLDB indexes CubbyKit's ~60k generated lines and shows a 10-30s white

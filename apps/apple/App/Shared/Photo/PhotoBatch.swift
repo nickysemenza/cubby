@@ -1,6 +1,10 @@
 import CubbyKit
 import SwiftUI
 
+#if os(iOS)
+    import UIKit
+#endif
+
 /// An image ready for presentation. Local selections deliberately have no Image-record link.
 struct PhotoAttachment: Identifiable {
     enum Source { case local(CGImage), remote(URL) }
@@ -22,8 +26,7 @@ struct PhotoAttachmentImage: View {
     var body: some View {
         switch photo.source {
         case .local(let image):
-            Image(decorative: image, scale: 1).resizable().scaledToFit()
-                .accessibilityLabel(photo.filename)
+            Image(image, scale: 1, label: Text(photo.filename)).resizable().scaledToFit()
         case .remote(let url):
             let displayURL = renderedWidth.map { ImageTransform.transformed(url, renderedWidth: $0) } ?? url
             AsyncImage(url: displayURL) { phase in
@@ -72,7 +75,9 @@ struct PhotoBatch: View {
                 }
             }
         }
-        .sheet(item: $selection) { PhotoPreview(photos: photos, selectedID: $0.id) }
+        .photoPreviewPresentation(item: $selection) {
+            PhotoPreview(photos: photos, selectedID: $0.id)
+        }
     }
 }
 
@@ -101,6 +106,7 @@ struct PhotoPreview: View {
                             Label("Previous", systemImage: "chevron.left")
                         }
                         .disabled(index == 0)
+                        .accessibilityIdentifier("photo.preview.previous")
                         Spacer()
                         Text("\(index + 1) of \(photos.count)").foregroundStyle(.secondary)
                         Spacer()
@@ -110,6 +116,7 @@ struct PhotoPreview: View {
                             Label("Next", systemImage: "chevron.right")
                         }
                         .disabled(index + 1 == photos.count)
+                        .accessibilityIdentifier("photo.preview.next")
                     }
                     if let imageID = photo.imageID {
                         NavigationLink {
@@ -117,15 +124,71 @@ struct PhotoPreview: View {
                         } label: {
                             Label("View Image details", systemImage: "info.circle")
                         }
+                        .accessibilityIdentifier("photo.preview.details")
                     }
                 }
                 .padding()
                 .navigationTitle(photo.filename)
-                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Done") { dismiss() } } }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Close") { dismiss() }
+                            .accessibilityIdentifier("photo.preview.close")
+                    }
+                }
             }
         }
-        #if os(macOS)
-            .frame(minWidth: 520, idealWidth: 800, minHeight: 440, idealHeight: 680)
+    }
+}
+
+extension View {
+    /// Photo viewing fills an iPhone and remains a bounded page on larger Apple platforms.
+    func photoPreviewPresentation<Destination: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> Destination
+    ) -> some View {
+        modifier(PhotoPreviewBooleanPresentation(isPresented: isPresented, destination: content))
+    }
+
+    func photoPreviewPresentation<Item: Identifiable, Destination: View>(
+        item: Binding<Item?>,
+        @ViewBuilder content: @escaping (Item) -> Destination
+    ) -> some View {
+        modifier(PhotoPreviewItemPresentation(item: item, destination: content))
+    }
+}
+
+private struct PhotoPreviewBooleanPresentation<Destination: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    let destination: () -> Destination
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                content.fullScreenCover(isPresented: $isPresented, content: destination)
+            } else {
+                content.sheet(isPresented: $isPresented) { destination().nativeSheet(.preview) }
+            }
+        #else
+            content.sheet(isPresented: $isPresented) { destination().nativeSheet(.preview) }
+        #endif
+    }
+}
+
+private struct PhotoPreviewItemPresentation<Item: Identifiable, Destination: View>: ViewModifier {
+    @Binding var item: Item?
+    let destination: (Item) -> Destination
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        #if os(iOS)
+            if UIDevice.current.userInterfaceIdiom == .phone {
+                content.fullScreenCover(item: $item, content: destination)
+            } else {
+                content.sheet(item: $item) { destination($0).nativeSheet(.preview) }
+            }
+        #else
+            content.sheet(item: $item) { destination($0).nativeSheet(.preview) }
         #endif
     }
 }

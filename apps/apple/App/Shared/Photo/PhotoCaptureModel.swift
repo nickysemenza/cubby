@@ -75,6 +75,14 @@ final class PhotoCaptureModel {
 
     var canMakeCover: Bool { entity == .product }
     var canUpload: Bool { phase == .ready || uploadFailureCanRetry }
+    var hasDraft: Bool {
+        switch phase {
+        case .picking, .done:
+            false
+        default:
+            true
+        }
+    }
     var canLift: Bool {
         selection != nil && (phase == .ready || (!uploadFailureCanRetry && isFailed))
     }

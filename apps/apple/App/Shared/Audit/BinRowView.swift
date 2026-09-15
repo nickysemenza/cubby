@@ -146,9 +146,7 @@ private struct BinMoveToSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
             }
         }
-        #if os(macOS)
-            .frame(minWidth: 360, minHeight: 420)
-        #endif
+        .nativeSheet(.picker)
     }
 }
 

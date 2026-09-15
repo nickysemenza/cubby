@@ -9,6 +9,13 @@ import Testing
 nonisolated private final class TodayModelStub: URLProtocol, @unchecked Sendable {
     typealias Handler = @Sendable (URLRequest, TodayModelStub) -> Void
     static let handler = Mutex<Handler?>(nil)
+    // URLProtocol is Foundation-owned and remains alive until the test completes the response.
+    // Each token is removed under the mutex before its one response, and this fixture never
+    // cancels a deferred request. No protocol reference crosses the AsyncStream boundary.
+    private struct PendingResponse: @unchecked Sendable {
+        let stub: TodayModelStub
+    }
+    private static let pending = Mutex<[UUID: PendingResponse]>([:])
 
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -31,6 +38,21 @@ nonisolated private final class TodayModelStub: URLProtocol, @unchecked Sendable
         client?.urlProtocolDidFinishLoading(self)
     }
 
+    static func deferResponse(for stub: TodayModelStub) -> UUID {
+        let token = UUID()
+        pending.withLock { $0[token] = PendingResponse(stub: stub) }
+        return token
+    }
+
+    static func respond(to token: UUID, status: Int, data: Data) {
+        let stub = pending.withLock { $0.removeValue(forKey: token) }
+        stub?.stub.respond(status: status, data: data)
+    }
+
+    static func clearPendingResponses() {
+        pending.withLock { $0.removeAll() }
+    }
+
     static func session() -> URLSession {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [self]
@@ -43,15 +65,18 @@ nonisolated private final class TodayModelStub: URLProtocol, @unchecked Sendable
 struct TodayModelTests {
     @Test(.timeLimit(.minutes(1)))
     func eachSectionPublishesWhenItsOwnRequestCompletes() async throws {
-        defer { TodayModelStub.handler.withLock { $0 = nil } }
-        let (pendingRequests, pendingContinuation) = AsyncStream<TodayModelStub>.makeStream()
+        defer {
+            TodayModelStub.handler.withLock { $0 = nil }
+            TodayModelStub.clearPendingResponses()
+        }
+        let (pendingRequests, pendingContinuation) = AsyncStream<UUID>.makeStream()
         TodayModelStub.handler.withLock { handler in
             handler = { request, stub in
                 switch request.url!.path() {
                 case "/api/v1/task/todayBriefing":
                     stub.respond(status: 200, data: Self.tasksPayload)
                 default:
-                    pendingContinuation.yield(stub)
+                    pendingContinuation.yield(TodayModelStub.deferResponse(for: stub))
                 }
             }
         }
@@ -66,8 +91,8 @@ struct TodayModelTests {
         await waitUntil { Self.loadedTaskName(model.tasks) == "Water seedlings" }
         #expect(model.mealsIsLoading && model.problemsIsLoading)
         #expect(Self.loadedTaskName(model.tasks) == "Water seedlings")
-        firstPending.respond(status: 500, data: Self.failurePayload)
-        secondPending.respond(status: 500, data: Self.failurePayload)
+        TodayModelStub.respond(to: firstPending, status: 500, data: Self.failurePayload)
+        TodayModelStub.respond(to: secondPending, status: 500, data: Self.failurePayload)
         pendingContinuation.finish()
         await refresh.value
     }

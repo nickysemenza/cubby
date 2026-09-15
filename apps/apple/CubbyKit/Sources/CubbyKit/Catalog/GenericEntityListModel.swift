@@ -32,7 +32,7 @@ public final class GenericEntityListModel {
 
     public var hasMore: Bool {
         guard let meta else { return false }
-        return rows.count < meta.totalCount
+        return page * meta.pageSize < meta.totalCount
     }
 
     private let client: CubbyClient

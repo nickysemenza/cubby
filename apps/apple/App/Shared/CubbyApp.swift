@@ -28,39 +28,44 @@ struct CubbyApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
-            RootView()
-                .environment(model)
-                .tint(PorcelainTokens.cobalt)
-                // Porcelain Transit is a light-only palette (DESIGN.md). Pin the scheme so the
-                // system chrome never goes dark over a porcelain canvas; dark tokens come later.
-                .preferredColorScheme(.light)
-                .task { await model.restoreSession() }
-                .onOpenURL { url in
-                    if let link = CubbyLink(url: url) { model.navigator.open(link) }
-                }
-                .onContinueUserActivity(CSSearchableItemActionType) { activity in
-                    if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-                        let link = SpotlightIndexer.link(from: id)
-                    {
-                        model.navigator.open(link)
-                    }
-                }
-                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
-                    if let url = activity.webpageURL, let link = CubbyLink(url: url) {
-                        model.navigator.open(link)
-                    }
-                }
-        }
-        // `Commands` is honoured on both macOS (menu bar) and iPadOS (hardware-keyboard shortcuts
-        // screen), so this stays outside any `#if os(macOS)` — see `CubbyCommands`'s doc comment.
-        .commands { CubbyCommands() }
+        #if os(macOS)
+            Window("Cubby", id: "main") {
+                appContent
+            }
+            .defaultSize(width: 1200, height: 800)
+            .commands {
+                CubbyCommands(); SidebarCommands()
+            }
+        #else
+            WindowGroup { appContent }
+                .commands { CubbyCommands() }
+        #endif
         #if os(macOS)
             Settings {
-                SettingsView()
-                    .environment(model)
-                    .frame(width: 420)
+                SettingsView().environment(model).frame(width: 420)
             }
         #endif
+    }
+
+    private var appContent: some View {
+        RootView()
+            .environment(model)
+            .tint(PorcelainTokens.cobalt)
+            .task { await model.restoreSession() }
+            .onOpenURL { url in
+                if let link = CubbyLink(url: url) { model.navigator.open(link) }
+            }
+            .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                if let id = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                    let link = SpotlightIndexer.link(from: id)
+                {
+                    model.navigator.open(link)
+                }
+            }
+            .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                if let url = activity.webpageURL, let link = CubbyLink(url: url) {
+                    model.navigator.open(link)
+                }
+            }
     }
 }

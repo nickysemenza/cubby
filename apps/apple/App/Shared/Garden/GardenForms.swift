@@ -23,6 +23,7 @@ struct GardenPlantingSheet: View {
     @State private var inLocationSince = Date.now
     @State private var inLocationSinceKind: GardenLocationStartKind = .actual
     @State private var rememberSource = false
+    @State private var draftDismissal = DraftDismissalState()
 
     var body: some View {
         NavigationStack {
@@ -89,7 +90,7 @@ struct GardenPlantingSheet: View {
                         axis: .vertical)
                 }
             }
-            .porcelainForm()
+            .formStyle(.grouped)
             .navigationTitle(GardenStrings.addPlanting)
             .onChange(of: productID) { _, id in
                 // Prefill only when the crop is still empty: picking a product must never clobber
@@ -100,7 +101,11 @@ struct GardenPlantingSheet: View {
                 ingredientID = ingredient
             }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(GardenStrings.cancel) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(model.isSaving ? "Close" : GardenStrings.cancel) {
+                        draftDismissal.request(isDirty: isDirty, isSaving: model.isSaving, dismiss: dismiss)
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(GardenStrings.save) { Task { await save() } }
                         .disabled(
@@ -109,10 +114,21 @@ struct GardenPlantingSheet: View {
                 }
             }
         }
+        .nativeSheet(.editor)
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: model.isSaving,
+            onDiscard: { dismiss() }, onCloseWhileSaving: { dismiss() })
     }
 
     private var currentGrowsIngredientID: String? {
         model.options.products.first(where: { $0.id == productID })?.growsIngredientID
+    }
+
+    private var isDirty: Bool {
+        !ingredientID.isEmpty || !locationID.isEmpty || !intendedLocationID.isEmpty || !productID.isEmpty
+            || status != .growing || !variety.isEmpty || !quantity.isEmpty || !plannedWindow.isEmpty
+            || !notes.isEmpty || useSowingDate || usePlannedDate || useTransplantDate
+            || useInLocationSince || rememberSource
     }
 
     private func save() async {
@@ -162,11 +178,17 @@ struct GardenEntrySheet: View {
     @State private var isUploading = false
     @State private var photoDateNeedsConfirmation = false
     @State private var saveTask: Task<Void, Never>?
+    @State private var allowsSaveToFinishAfterDismissal = false
     @State private var locationID: String
     @State private var plantingID: String
+    @State private var draftDismissal = DraftDismissalState()
+    private let initialObservedAt: Date
 
     init(model: GardenModel, target: GardenEntryTarget, uploader: GardenImageUploader) {
         self.model = model; self.target = target; self.uploader = uploader
+        let observedAt = Date.now
+        initialObservedAt = observedAt
+        _observedAt = State(initialValue: observedAt)
         _locationID = State(initialValue: target.locationID ?? "")
         _plantingID = State(initialValue: target.planting?.id ?? "")
     }
@@ -240,12 +262,15 @@ struct GardenEntrySheet: View {
                     }
                 }
             }
-            .porcelainForm()
+            .formStyle(.grouped)
             .disabled(isUploading || model.isSaving)
             .navigationTitle(kind == .harvest ? "Log harvest" : GardenStrings.logEntry)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(GardenStrings.cancel) { dismiss() }.disabled(model.isSaving || isUploading)
+                    Button(isUploading || model.isSaving ? "Close" : GardenStrings.cancel) {
+                        draftDismissal.request(
+                            isDirty: isDirty, isSaving: isUploading || model.isSaving, dismiss: dismiss)
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(GardenStrings.save) { startSave() }
@@ -255,8 +280,18 @@ struct GardenEntrySheet: View {
                 }
             }
         }
-        .interactiveDismissDisabled(isUploading || model.isSaving)
-        .onDisappear { saveTask?.cancel() }
+        .nativeSheet(.editor)
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: isUploading || model.isSaving,
+            onDiscard: { dismiss() },
+            onCloseWhileSaving: {
+                allowsSaveToFinishAfterDismissal = true
+                dismiss()
+            }
+        )
+        .onDisappear {
+            if !allowsSaveToFinishAfterDismissal { saveTask?.cancel() }
+        }
     }
 
     private func startSave() {
@@ -358,6 +393,12 @@ struct GardenEntrySheet: View {
     }
 
     private var remainingPhotoCapacity: Int { max(0, 20 - selections.count) }
+
+    private var isDirty: Bool {
+        kind != .observation || observedAt != initialObservedAt || !note.isEmpty || !harvestAmount.isEmpty
+            || !selections.isEmpty || locationID != (target.locationID ?? "")
+            || plantingID != (target.planting?.id ?? "")
+    }
 }
 
 #Preview("Garden entry (whole area)") {
@@ -391,6 +432,16 @@ struct GardenPlantingActionSheet: View {
     @State private var note = ""
     @State private var date = Date.now
     @State private var startMethod: GardenStartMethod = .sow
+    @State private var draftDismissal = DraftDismissalState()
+    private let initialDate: Date
+
+    init(model: GardenModel, action: GardenPlantingAction) {
+        self.model = model
+        self.action = action
+        let date = Date.now
+        initialDate = date
+        _date = State(initialValue: date)
+    }
 
     private var planting: GardenPlanting {
         switch action {
@@ -466,16 +517,24 @@ struct GardenPlantingActionSheet: View {
                     }
                 }
             }
-            .porcelainForm()
+            .formStyle(.grouped)
             .navigationTitle(title)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(GardenStrings.cancel) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(model.isSaving ? "Close" : GardenStrings.cancel) {
+                        draftDismissal.request(isDirty: isDirty, isSaving: model.isSaving, dismiss: dismiss)
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(GardenStrings.save) { Task { await save() } }
                         .disabled((needsLocation && locationID.isEmpty) || model.isSaving)
                 }
             }
         }
+        .nativeSheet(.adjustment)
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: model.isSaving,
+            onDiscard: { dismiss() }, onCloseWhileSaving: { dismiss() })
     }
 
     private var needsLocation: Bool {
@@ -486,6 +545,10 @@ struct GardenPlantingActionSheet: View {
     }
     private var isSplit: Bool { if case .split = action { true } else { false } }
     private var needsNote: Bool { if case .entry = action { false } else { true } }
+    private var isDirty: Bool {
+        !locationID.isEmpty || !quantity.isEmpty || !note.isEmpty || date != initialDate
+            || startMethod != .sow
+    }
 
     private func save() async {
         let saved: Bool
@@ -553,12 +616,13 @@ struct FinishedPlantingsSheet: View {
                     }
                 }
             }
-            .porcelainForm()
+            .formStyle(.grouped)
             .navigationTitle("Finished plantings")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(GardenStrings.done) { dismiss() } }
             }
         }
+        .nativeSheet(.picker)
     }
 }
 
@@ -773,6 +837,7 @@ private struct GardenPlantingCorrectionSheet: View {
     @State private var planned: Date; @State private var sowed: Date; @State private var transplanted: Date
     @State private var hasPlanned: Bool; @State private var hasSowed: Bool;
     @State private var hasTransplanted: Bool
+    @State private var draftDismissal = DraftDismissalState()
     init(model: GardenModel, planting: GardenPlanting) {
         self.model = model; self.planting = planting
         _ingredientID = State(initialValue: planting.ingredient.id);
@@ -821,16 +886,33 @@ private struct GardenPlantingCorrectionSheet: View {
                         GardenStrings.transplantedOn, selection: $transplanted, displayedComponents: .date)
                 }
             }
-            .porcelainForm()
+            .formStyle(.grouped)
             .navigationTitle(GardenStrings.editPlanting)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(GardenStrings.cancel) { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(model.isSaving ? "Close" : GardenStrings.cancel) {
+                        draftDismissal.request(isDirty: isDirty, isSaving: model.isSaving, dismiss: dismiss)
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(GardenStrings.save) { Task { await save() } }.disabled(
                         ingredientID.isEmpty || model.isSaving)
                 }
             }
         }
+        .nativeSheet(.editor)
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: model.isSaving,
+            onDiscard: { dismiss() }, onCloseWhileSaving: { dismiss() })
+    }
+    private var isDirty: Bool {
+        ingredientID != planting.ingredient.id || productID != (planting.product?.id ?? "")
+            || intendedID != (planting.intendedLocation?.id ?? "") || variety != (planting.variety ?? "")
+            || quantity != (planting.quantity ?? "") || notes != (planting.notes ?? "")
+            || window != (planting.plannedWindow ?? "") || hasPlanned != (planting.plannedDate != nil)
+            || hasSowed != (planting.sownAt != nil) || hasTransplanted != (planting.transplantedAt != nil)
+            || (hasPlanned && planned != planting.plannedDate) || (hasSowed && sowed != planting.sownAt)
+            || (hasTransplanted && transplanted != planting.transplantedAt)
     }
     private func save() async {
         let input = EditGardenPlanting(
@@ -999,7 +1081,7 @@ struct GardenSetupSheet: View {
                     }
                 }
             }
-            .porcelainForm()
+            .formStyle(.grouped)
             .navigationTitle(GardenStrings.gardenSetup)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(GardenStrings.done) { dismiss() } }
@@ -1015,6 +1097,7 @@ struct GardenSetupSheet: View {
                 GardenIngredientForm(model: model, ingredient: $0)
             }
         }
+        .nativeSheet(.editor)
     }
 
     private func ingredientName(_ id: String?) -> String? {
@@ -1062,6 +1145,7 @@ private struct GardenAddProductSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button(GardenStrings.cancel) { dismiss() } }
             }
         }
+        .nativeSheet(.picker)
     }
 }
 
@@ -1097,6 +1181,7 @@ private struct GardenAddIngredientSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button(GardenStrings.cancel) { dismiss() } }
             }
         }
+        .nativeSheet(.picker)
     }
 }
 
@@ -1115,6 +1200,7 @@ private struct GardenLocationForm: View {
     @State private var name: String
     @State private var kind: GardenLocationKind
     @State private var conditions: String
+    @State private var draftDismissal = DraftDismissalState()
 
     init(model: GardenModel, location: GardenLocation?) {
         self.model = model
@@ -1134,13 +1220,28 @@ private struct GardenLocationForm: View {
             }
             TextField(GardenStrings.growingConditions, text: $conditions, axis: .vertical)
         }
-        .porcelainForm()
+        .formStyle(.grouped)
         .navigationTitle(location == nil ? GardenStrings.addGrowingArea : GardenStrings.editGrowingArea)
+        .navigationBarBackButtonHidden(model.isSaving)
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(model.isSaving ? "Close" : GardenStrings.cancel) {
+                    draftDismissal.request(isDirty: isDirty, isSaving: model.isSaving, dismiss: dismiss)
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button(GardenStrings.save) { Task { await save() } }.disabled(name.isEmpty || model.isSaving)
             }
         }
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: model.isSaving,
+            onDiscard: { dismiss() }, onCloseWhileSaving: { dismiss() })
+    }
+
+    private var isDirty: Bool {
+        name != (location?.name ?? "")
+            || kind != (GardenLocationKind(rawValue: location?.gardenKind ?? "") ?? .bed)
+            || conditions != (location?.conditions ?? "")
     }
 
     private func save() async {
@@ -1164,6 +1265,7 @@ private struct GardenProductForm: View {
     let product: GardenProductOption
     @Environment(\.dismiss) private var dismiss
     @State private var ingredientID: String
+    @State private var draftDismissal = DraftDismissalState()
 
     init(model: GardenModel, product: GardenProductOption) {
         self.model = model
@@ -1178,9 +1280,15 @@ private struct GardenProductForm: View {
             Text(GardenStrings.productWriteBackExplanation)
                 .font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphiteSecondary)
         }
-        .porcelainForm()
+        .formStyle(.grouped)
         .navigationTitle(product.name)
+        .navigationBarBackButtonHidden(model.isSaving)
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(model.isSaving ? "Close" : GardenStrings.cancel) {
+                    draftDismissal.request(isDirty: isDirty, isSaving: model.isSaving, dismiss: dismiss)
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button(GardenStrings.save) {
                     Task {
@@ -1192,7 +1300,12 @@ private struct GardenProductForm: View {
                 }
             }
         }
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: model.isSaving,
+            onDiscard: { dismiss() }, onCloseWhileSaving: { dismiss() })
     }
+
+    private var isDirty: Bool { ingredientID != (product.growsIngredientID ?? "") }
 }
 
 private struct GardenIngredientForm: View {
@@ -1200,6 +1313,7 @@ private struct GardenIngredientForm: View {
     let ingredient: GardenOption
     @Environment(\.dismiss) private var dismiss
     @State private var guideKey: String
+    @State private var draftDismissal = DraftDismissalState()
 
     init(model: GardenModel, ingredient: GardenOption) {
         self.model = model
@@ -1214,9 +1328,15 @@ private struct GardenIngredientForm: View {
                 ForEach(model.guides.guides, id: \.key) { guide in Text(guide.name).tag(guide.key) }
             }
         }
-        .porcelainForm()
+        .formStyle(.grouped)
         .navigationTitle(ingredient.name)
+        .navigationBarBackButtonHidden(model.isSaving)
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(model.isSaving ? "Close" : GardenStrings.cancel) {
+                    draftDismissal.request(isDirty: isDirty, isSaving: model.isSaving, dismiss: dismiss)
+                }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 Button(GardenStrings.save) {
                     Task {
@@ -1227,7 +1347,12 @@ private struct GardenIngredientForm: View {
                 }
             }
         }
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: model.isSaving,
+            onDiscard: { dismiss() }, onCloseWhileSaving: { dismiss() })
     }
+
+    private var isDirty: Bool { guideKey != (ingredient.gardenGuideKey ?? "") }
 }
 
 #Preview("Product write-back") {
@@ -1271,6 +1396,8 @@ struct GardenEntryCorrectionSheet: View {
     @State private var uploadedIDs: [ImageCode] = []
     @State private var uploadError: String?; @State private var isUploading = false
     @State private var saveTask: Task<Void, Never>?
+    @State private var allowsSaveToFinishAfterDismissal = false
+    @State private var draftDismissal = DraftDismissalState()
     init(model: GardenModel, entry: GardenEntry, uploader: GardenImageUploader) {
         self.model = model; self.entry = entry; self.uploader = uploader
         _date = State(initialValue: entry.observedAt); _note = State(initialValue: entry.note ?? "");
@@ -1345,12 +1472,15 @@ struct GardenEntryCorrectionSheet: View {
                     }
                 }
             }
-            .porcelainForm()
+            .formStyle(.grouped)
             .disabled(isUploading || model.isSaving)
             .navigationTitle(entry.anchorsPeriod ? GardenStrings.editNote : GardenStrings.editEntry)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(GardenStrings.cancel) { dismiss() }.disabled(model.isSaving || isUploading)
+                    Button(isUploading || model.isSaving ? "Close" : GardenStrings.cancel) {
+                        draftDismissal.request(
+                            isDirty: isDirty, isSaving: isUploading || model.isSaving, dismiss: dismiss)
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(GardenStrings.save) { startSave() }.disabled(
@@ -1359,8 +1489,18 @@ struct GardenEntryCorrectionSheet: View {
                 }
             }
         }
-        .interactiveDismissDisabled(isUploading || model.isSaving)
-        .onDisappear { saveTask?.cancel() }
+        .nativeSheet(.editor)
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: isUploading || model.isSaving,
+            onDiscard: { dismiss() },
+            onCloseWhileSaving: {
+                allowsSaveToFinishAfterDismissal = true
+                dismiss()
+            }
+        )
+        .onDisappear {
+            if !allowsSaveToFinishAfterDismissal { saveTask?.cancel() }
+        }
     }
 
     private func startSave() {
@@ -1437,6 +1577,12 @@ struct GardenEntryCorrectionSheet: View {
 
     private var remainingPhotoCapacity: Int {
         max(0, 20 - retainedExistingPhotoCount - selections.count)
+    }
+
+    private var isDirty: Bool {
+        date != entry.observedAt || note != (entry.note ?? "") || amount != (entry.harvestAmount ?? "")
+            || locationID != entry.locationID || plantingID != (entry.plantingID ?? "")
+            || !selections.isEmpty || !removed.isEmpty
     }
 }
 
@@ -1551,12 +1697,20 @@ private struct GardenLocationHistoryView: View {
     /// Set once from the *first* load, so the title never flips from "Confirm" to "Correct" the
     /// moment a not-yet-saved period is added locally (`docs/terminology.md` § Garden).
     @State private var hadExistingPeriods = false
+    @State private var draftDismissal = DraftDismissalState()
     @Environment(\.dismiss) private var dismiss
+    private let originalInitialLocationDate: Date
+    private let originalInitialLastDay: Date
 
     init(service: any GardenService, planting: GardenPlanting) {
         self.service = service; self.planting = planting
         _history = State(initialValue: GardenLocationHistoryModel(service: service, planting: planting))
-        _initialLastDay = State(initialValue: planting.finishedAt ?? .now)
+        let initialLocationDate = Date.now
+        let initialLastDay = planting.finishedAt ?? .now
+        originalInitialLocationDate = initialLocationDate
+        originalInitialLastDay = initialLastDay
+        _initialLocationDate = State(initialValue: initialLocationDate)
+        _initialLastDay = State(initialValue: initialLastDay)
     }
 
     private var title: String {
@@ -1628,8 +1782,9 @@ private struct GardenLocationHistoryView: View {
                 }
             }
         }
-        .porcelainForm()
+        .formStyle(.grouped)
         .navigationTitle(title)
+        .navigationBarBackButtonHidden(history.isSaving)
         .task {
             await history.load()
             revised = history.periods
@@ -1640,14 +1795,27 @@ private struct GardenLocationHistoryView: View {
         }
         .disabled(history.isSaving)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button(GardenStrings.cancel) { dismiss() } }
-            ToolbarItem(placement: .primaryAction) {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(history.isSaving ? "Close" : GardenStrings.cancel) {
+                    draftDismissal.request(isDirty: isDirty, isSaving: history.isSaving, dismiss: dismiss)
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
                 Button(GardenStrings.save) {
                     Task { if await history.save(revised) { revised = history.periods; dismiss() } }
                 }
                 .disabled(history.isSaving || revised.isEmpty)
             }
         }
+        .nativeSheet(.editor)
+        .draftDismissal(
+            $draftDismissal, isDirty: isDirty, isSaving: history.isSaving,
+            onDiscard: { dismiss() }, onCloseWhileSaving: { dismiss() })
+    }
+
+    private var isDirty: Bool {
+        revised != history.periods || initialLocationDate != originalInitialLocationDate
+            || initialLastDay != originalInitialLastDay
     }
 
     private func saveInitialPeriod(location: GardenOption) async {

@@ -1,153 +1,123 @@
 import CubbyKit
 import SwiftUI
 
-/// One entity's list screen. Owns a `GenericEntityListModel` created per host (mirrors
-/// `CaptureView`/`CaptureModel`), and accumulates pages into view state since the model itself
-/// replaces `rows` with whichever page was last requested.
 struct EntityListView: View {
     let key: EntityKey
-
     @Environment(AppModel.self) private var appModel
     @State private var model: GenericEntityListModel?
-    @State private var loadedRows: [EntityRow] = []
+    init(key: EntityKey, model: GenericEntityListModel? = nil) {
+        self.key = key
+        _model = State(initialValue: model)
+    }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
     var body: some View {
-        content
-            .porcelainScreen()
-            .navigationTitle(descriptor.plural)
-            .task(id: appModel.host) { await setup() }
-            .refreshControl { await reload() }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if let model {
-            switch model.phase {
-            case .idle:
-                loading
-            case .loading:
-                if loadedRows.isEmpty {
-                    loading
-                } else {
-                    rowList(model: model)
-                }
-            case .unavailable(let message):
-                ContentUnavailableView(message, systemImage: entitySymbol(for: key))
-            case .failed(let message):
-                if loadedRows.isEmpty {
-                    ContentUnavailableView(
-                        "Couldn't load \(descriptor.plural)",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(message)
-                    )
-                } else {
-                    rowList(model: model)
-                }
-            case .loaded:
-                if loadedRows.isEmpty {
-                    ContentUnavailableView("No \(descriptor.plural) yet", systemImage: entitySymbol(for: key))
-                } else {
-                    rowList(model: model)
-                }
-            }
-        } else {
-            loading
-        }
-    }
-
-    private var loading: some View {
-        LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
-            .background(PorcelainTokens.canvas)
-    }
-
-    private func rowList(model: GenericEntityListModel) -> some View {
-        List {
-            if let meta = model.meta {
-                Eyebrow(countLabel(total: meta.totalCount))
-                    .padding(.top, PorcelainTokens.Space.md)
-                    .padding(.bottom, PorcelainTokens.Space.xs)
-                    .listRowInsets(
-                        EdgeInsets(
-                            top: 0, leading: PorcelainTokens.Space.lg,
-                            bottom: 0, trailing: PorcelainTokens.Space.lg
-                        )
-                    )
-                    .listRowBackground(PorcelainTokens.canvas)
-                    .listRowSeparator(.hidden)
-            }
-            ForEach(loadedRows) { row in
-                NavigationLink(value: Route.entityDetail(key, id: row.id)) {
-                    EntityRowView(key: key, row: row)
-                }
-                .contextMenu {
-                    Button {
-                        Clipboard.copy(appModel.webURL(for: row.id).absoluteString)
-                    } label: {
-                        Label("Copy link", systemImage: "link")
-                    }
-                    Button {
-                        Clipboard.copy(row.id)
-                    } label: {
-                        Label("Copy shortcode", systemImage: "number")
-                    }
-                    ShareLink(item: appModel.webURL(for: row.id)) {
-                        Label("Share…", systemImage: "square.and.arrow.up")
-                    }
-                }
-                .porcelainListRow()
-            }
-            if let meta = model.meta, meta.totalCount > loadedRows.count {
-                Button {
-                    Task { await loadMore() }
-                } label: {
-                    HStack {
-                        Spacer()
-                        if model.phase == .loading {
-                            LoadingIndicator(label: "Loading more \(descriptor.plural)").controlSize(.small)
-                        } else {
-                            Text("Load \(min(50, meta.totalCount - loadedRows.count)) more")
-                                .font(.porcelainTitle)
-                                .foregroundStyle(PorcelainTokens.cobalt)
+        Group {
+            if let model {
+                if model.rows.isEmpty {
+                    switch model.phase {
+                    case .idle, .loading:
+                        LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
+                    case .unavailable(let message):
+                        ContentUnavailableView(message, systemImage: entitySymbol(for: key))
+                    case .failed(let message):
+                        ContentUnavailableView {
+                            Label(
+                                "Couldn't load \(descriptor.plural)", systemImage: "exclamationmark.triangle")
+                        } description: {
+                            Text(message)
+                        } actions: {
+                            Button("Retry") { Task { await model.loadInitial() } }
                         }
-                        Spacer()
+                    case .loaded:
+                        ContentUnavailableView(
+                            "No \(descriptor.plural) yet", systemImage: entitySymbol(for: key))
                     }
-                    .frame(minHeight: PorcelainTokens.touchTarget)
+                } else {
+                    rowList(model)
                 }
-                .buttonStyle(.plain)
-                .disabled(model.phase == .loading)
-                .porcelainListRow()
-                .listRowSeparator(.hidden)
+            } else {
+                LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
+            }
+        }
+        .porcelainScreen()
+        .navigationTitle(descriptor.plural)
+        .accessibilityIdentifier("browse.\(key.rawValue).list")
+        .task(id: key) {
+            if model == nil {
+                model = GenericEntityListModel(descriptor: descriptor, client: appModel.client)
+            }
+            await model?.loadInitial()
+        }
+        .refreshControl { await model?.refresh() }
+    }
+
+    private var selection: Binding<RecordSelection?>? {
+        #if os(macOS)
+            Binding(
+                get: { appModel.navigator.selectedRecords[.browse] },
+                set: { appModel.navigator.selectRecord($0, in: .browse) })
+        #else
+            nil
+        #endif
+    }
+
+    private func rowList(_ model: GenericEntityListModel) -> some View {
+        List(selection: selection) {
+            if let error = model.refreshError {
+                Section {
+                    Text(error).foregroundStyle(.secondary)
+                    Button("Retry refresh") { Task { await model.refresh() } }
+                }
+            }
+            if let meta = model.meta {
+                Text("\(meta.totalCount.formatted()) total · \(model.rows.count.formatted()) shown")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(model.rows) { row in
+                rowContent(row)
+                    .contextMenu {
+                        Button("Copy link", systemImage: "link") {
+                            Clipboard.copy(appModel.webURL(for: row.id).absoluteString)
+                        }
+                        Button("Copy shortcode", systemImage: "number") { Clipboard.copy(row.id) }
+                        ShareLink(item: appModel.webURL(for: row.id))
+                    }
+                    .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
+            }
+            if model.hasMore {
+                if let error = model.nextPageError { Text(error).foregroundStyle(.secondary) }
+                Button {
+                    Task { await model.loadNextPage() }
+                } label: {
+                    if model.activity == .loadingNextPage {
+                        LoadingIndicator(label: "Loading more \(descriptor.plural)")
+                    } else {
+                        Text(model.nextPageError == nil ? "Load more" : "Retry loading more")
+                    }
+                }
+                .disabled(model.activity != .idle)
+                .accessibilityIdentifier("browse.\(key.rawValue).loadMore")
             }
         }
         .listStyle(.plain)
     }
 
-    private func countLabel(total: Int) -> String {
-        let noun = total == 1 ? descriptor.singular.lowercased() : descriptor.plural.lowercased()
-        return "\(total.formatted()) \(noun) · showing \(loadedRows.count.formatted())"
-    }
-
-    private func setup() async {
-        let model = GenericEntityListModel(descriptor: descriptor, client: appModel.client)
-        self.model = model
-        await model.load(page: 1)
-        loadedRows = model.rows
-    }
-
-    private func reload() async {
-        guard let model else { return }
-        await model.load(page: 1)
-        loadedRows = model.rows
-    }
-
-    private func loadMore() async {
-        guard let model, model.phase != .loading else { return }
-        let nextPage = model.page + 1
-        await model.load(page: nextPage)
-        guard model.phase == .loaded else { return }
-        loadedRows.append(contentsOf: model.rows)
+    @ViewBuilder private func rowContent(_ row: EntityRow) -> some View {
+        #if os(macOS)
+            if appModel.navigator.section == .browse && appModel.navigator.browseKey == key {
+                EntityRowView(key: key, row: row).tag(RecordSelection(key: key, id: row.id))
+            } else {
+                NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                    EntityRowView(key: key, row: row)
+                }
+            }
+        #else
+            NavigationLink(value: Route.entityDetail(key, id: row.id)) {
+                EntityRowView(key: key, row: row)
+            }
+        #endif
     }
 }
 
@@ -158,12 +128,9 @@ struct EntityRowView: View {
     let key: EntityKey
     let row: EntityRow
 
-    @Environment(\.zoomNamespace) private var zoomNamespace
-
     var body: some View {
         HStack(spacing: PorcelainTokens.Space.md) {
             Thumb(url: row.imageURL, size: 56, symbol: entitySymbol(for: key))
-                .zoomSource(id: row.id, in: zoomNamespace)
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.title)
                     .font(.body.weight(.semibold))

@@ -1,35 +1,37 @@
 import CubbyKit
 import SwiftUI
 
-/// Porcelain Transit: the web app's design language (apps/web/DESIGN.md) expressed as colors,
-/// metrics, and type roles. System chrome stays stock SwiftUI so the iOS 26 SDK's own materials
-/// (Liquid Glass on bars, tabs, and sheets) apply without us re-drawing them.
-///
-/// Three color channels never substitute for one another: cobalt is interaction, the five domain
-/// lines are wayfinding, and positive/warning/destructive are condition.
+/// Semantic native appearance. Legacy token names keep specialized workbenches consistent while
+/// their content uses the system's lists, forms, controls, and adaptive surfaces (see ../DESIGN.md).
 enum PorcelainTokens {
-    // Planes and ink.
-    static let canvas = Color(hex: 0xF7F9FC)
-    static let surface = Color(hex: 0xFFFFFF)
-    static let inset = Color(hex: 0xF1F4F8)
-    static let graphite = Color(hex: 0x171A21)
-    static let graphiteSecondary = Color(hex: 0x667085)
-    static let hairline = Color(hex: 0xD9DEE7)
+    #if os(macOS)
+        static let canvas = Color(nsColor: .windowBackgroundColor)
+        static let surface = Color(nsColor: .controlBackgroundColor)
+        static let inset = Color(nsColor: .underPageBackgroundColor)
+        static let hairline = Color(nsColor: .separatorColor)
+    #else
+        static let canvas = Color(uiColor: .systemGroupedBackground)
+        static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+        static let inset = Color(uiColor: .tertiarySystemGroupedBackground)
+        static let hairline = Color(uiColor: .separator)
+    #endif
+    static let graphite = Color.primary
+    static let graphiteSecondary = Color.secondary
 
     // Interaction.
-    static let cobalt = Color(hex: 0x2563EB)
+    static let cobalt = Color("AccentColor")
 
     // Condition.
-    static let positive = Color(hex: 0x16845B)
-    static let warning = Color(hex: 0xB66A00)
-    static let destructive = Color(hex: 0xC93636)
+    static let positive = Color("Positive")
+    static let warning = Color("Warning")
+    static let destructive = Color("Destructive")
 
     // Domain lines. Marks only — a dot, an icon tint, or a single hairline. Never a fill.
-    static let cookSaffron = Color(hex: 0xD97706)
-    static let pantryGreen = Color(hex: 0x16845B)
-    static let planViolet = Color(hex: 0x6D5BD0)
-    static let houseCyan = Color(hex: 0x147D92)
-    static let financeMagenta = Color(hex: 0xB5477C)
+    static let cookSaffron = Color("Cook")
+    static let pantryGreen = Color("Pantry")
+    static let planViolet = Color("Plan")
+    static let houseCyan = Color("House")
+    static let financeMagenta = Color("Finance")
 
     // Shapes: controls 6, panels 8, chips 5. Boundaries are 1px; no shadow at rest.
     static let radiusControl: CGFloat = 6
@@ -123,9 +125,9 @@ extension Font {
     /// Panels, rows, and section titles.
     static let porcelainTitle = Font.subheadline.weight(.semibold)
     /// Explanations and continuous reading.
-    static let porcelainBody = Font.subheadline
+    static let porcelainBody = Font.body
     /// Quantities, money, dates, and aligned comparison values.
-    static let porcelainData = Font.footnote.monospacedDigit()
+    static let porcelainData = Font.body.monospacedDigit()
     /// Compact metadata, sentence case.
     static let porcelainLabel = Font.caption.weight(.medium)
     /// Shortcodes and raw payloads: the second voice, and only ever for codes.

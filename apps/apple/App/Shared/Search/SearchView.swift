@@ -8,6 +8,10 @@ struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var search: SearchModel?
 
+    init(search: SearchModel? = nil) {
+        _search = State(initialValue: search)
+    }
+
     var body: some View {
         Group {
             if let search {
@@ -17,10 +21,11 @@ struct SearchView: View {
             }
         }
         .task(id: model.host) {
-            let search = SearchModel(client: model.client)
-            self.search = search
-            await search.start()
-            applyPendingQuery(to: search)
+            if search == nil { search = SearchModel(client: model.client) }
+            if let search {
+                applyPendingQuery(to: search)
+                await search.start()
+            }
         }
         .onChange(of: model.navigator.pendingSearchQuery) {
             if let search { applyPendingQuery(to: search) }
@@ -73,6 +78,7 @@ struct SearchContent: View {
             .navigationTitle("Search")
             .searchable(text: $search.query, placement: Self.searchPlacement, prompt: searchPrompt)
             .searchFocused($searchFieldFocused)
+            .accessibilityIdentifier("search.content")
             .searchSuggestions {
                 if search.query.isEmpty {
                     ForEach(search.recents) { recent in
@@ -121,7 +127,7 @@ struct SearchContent: View {
                 }
             }
             .sheet(isPresented: $scanning) {
-                ScanLookupSheet(onTextResolved: { search.query = $0 })
+                ScanLookupSheet(onTextResolved: { search.query = $0 }).nativeSheet(.picker)
             }
             .task { applyPendingFocusRequest() }
             .onChange(of: model.navigator.focusSearchRequest) { applyPendingFocusRequest() }
@@ -150,15 +156,19 @@ struct SearchContent: View {
             case .idle:
                 emptyState
             case .searching:
-                LoadingIndicator.screen(label: "Searching")
+                List { LoadingIndicator(label: "Searching") }.listStyle(.plain)
             case .results(let groups):
                 resultsList(groups)
             case .empty:
                 ContentUnavailableView.search(text: search.query)
             case .failed(let message):
-                ContentUnavailableView(
-                    "Couldn't search Cubby", systemImage: "exclamationmark.triangle",
-                    description: Text(message))
+                ContentUnavailableView {
+                    Label("Couldn't search Cubby", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Retry") { search.retry() }
+                }
             }
         }
     }
@@ -176,16 +186,26 @@ struct SearchContent: View {
     }
 
     private func resultsList(_ groups: [SearchModel.ResultGroup]) -> some View {
-        List {
+        List(
+            selection: Binding<RecordSelection?>(
+                get: { model.navigator.selectedRecords[.search] },
+                set: { model.navigator.selectRecord($0, in: .search) }
+            )
+        ) {
             ForEach(groups) { group in
                 Section(EntityCatalog[group.key].plural) {
                     ForEach(group.hits) { hit in
-                        NavigationLink(value: Route.entityDetail(group.key, id: hit.id)) {
+                        #if os(macOS)
                             SearchHitRow(hit: hit)
-                        }
-                        .simultaneousGesture(
-                            TapGesture().onEnded { RecentEntities.record(hit.id) }
-                        )
+                                .tag(RecordSelection(key: group.key, id: hit.id))
+                                .accessibilityIdentifier("search.result.\(hit.id)")
+                        #else
+                            NavigationLink(value: Route.entityDetail(group.key, id: hit.id)) {
+                                SearchHitRow(hit: hit)
+                            }
+                            .simultaneousGesture(TapGesture().onEnded { RecentEntities.record(hit.id) })
+                            .accessibilityIdentifier("search.result.\(hit.id)")
+                        #endif
                     }
                 }
             }
@@ -250,14 +270,11 @@ struct SearchContent: View {
 private struct SearchHitRow: View {
     let hit: SearchHit
 
-    @Environment(\.zoomNamespace) private var zoomNamespace
-
     var body: some View {
         HStack(spacing: PorcelainTokens.Space.md) {
             Thumb(
                 url: hit.imageURL, size: 48, symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square"
             )
-            .zoomSource(id: hit.id, in: zoomNamespace)
             VStack(alignment: .leading, spacing: 2) {
                 Text(hit.title)
                     .font(.body.weight(.semibold))

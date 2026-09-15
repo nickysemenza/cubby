@@ -3,19 +3,8 @@ import SwiftUI
 
 /// Routes a top-level section to its screen and owns the shared `Route` destinations, so the
 /// iOS tab stacks and the macOS detail column resolve pushes identically.
-///
-/// Also opens the one `Namespace` a section's list and search rows share with its entity detail
-/// destination, for the iOS 18+ zoom transition (`EntityRowView`/`SearchHitRow`'s thumbnails are
-/// the `.matchedTransitionSource`s; `zoomSource(id:in:)` reads it back out of the environment).
-/// It lives here, not lower in the tree, because `.navigationDestination` and the rows that push
-/// into it are siblings under this view, not ancestor/descendant of each other — an environment
-/// value set any lower would never reach the destination closure below.
 struct SectionView: View {
     let section: AppSection
-
-    #if os(iOS)
-        @Namespace private var zoomNamespace
-    #endif
 
     var body: some View {
         Group {
@@ -29,7 +18,6 @@ struct SectionView: View {
             }
         }
         #if os(iOS)
-            .environment(\.zoomNamespace, zoomNamespace)
             // The tab bar renders only a title and an image, so the mark the macOS sidebar shows
             // beside each row lives in the section root's navigation bar here. Pushed routes have
             // their own toolbars and do not inherit it.
@@ -41,16 +29,7 @@ struct SectionView: View {
             }
         #endif
         .navigationDestination(for: Route.self) { route in
-            #if os(iOS)
-                if case .entityDetail(_, let id) = route {
-                    RouteDestinationView(route: route)
-                        .navigationTransition(.zoom(sourceID: id, in: zoomNamespace))
-                } else {
-                    RouteDestinationView(route: route)
-                }
-            #else
-                RouteDestinationView(route: route)
-            #endif
+            RouteDestinationView(route: route)
         }
     }
 }
@@ -60,6 +39,7 @@ struct RouteDestinationView: View {
     let route: Route
     var body: some View {
         switch route {
+        case .garden: GardenRootView()
         case .entityDetail(.planting, let id): GardenPlantingRouteView(id: id)
         case .entityDetail(.gardenEntry, let id): GardenEntryRouteView(id: id)
         case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))

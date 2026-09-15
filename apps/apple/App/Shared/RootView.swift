@@ -10,9 +10,6 @@ struct RootView: View {
         case .restoring:
             VStack(spacing: PorcelainTokens.Space.md) {
                 LoadingIndicator(label: "Checking sign-in")
-                Text("Checking sign-in…")
-                    .font(.porcelainBody)
-                    .foregroundStyle(PorcelainTokens.graphiteSecondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(PorcelainTokens.canvas)
@@ -50,10 +47,10 @@ struct RootView: View {
     #endif
 }
 
-#Preview("Signed out") {
-    RootView().environment(PreviewFixtures.signedOutModel())
+#Preview("Signed out", traits: .modifier(SignedOutPreview())) {
+    RootView()
 }
 
-#Preview("Signed in") {
-    RootView().environment(PreviewFixtures.signedInModel())
+#Preview("Signed in", traits: .modifier(SignedInPreview())) {
+    RootView()
 }

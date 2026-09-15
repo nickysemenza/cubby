@@ -12,12 +12,17 @@ private struct RefreshControl: ViewModifier {
         content
             .refreshable { await runIfNeeded() }
             #if os(macOS)
+                .focusedValue(
+                    \.nativeRefresh,
+                    NativeRefreshAction(
+                        isEnabled: !refreshing, run: { Task { await runIfNeeded() } }
+                    )
+                )
                 .toolbar {
                     ToolbarItem(placement: .secondaryAction) {
                         Button("Refresh", systemImage: "arrow.clockwise") {
                             Task { await runIfNeeded() }
                         }
-                        .keyboardShortcut("r", modifiers: .command)
                         .disabled(refreshing)
                     }
                 }
@@ -36,18 +41,24 @@ private struct RefreshControl: ViewModifier {
 }
 
 extension View {
-    /// Applies `.refreshable { await action() }` on every platform and, on macOS, a matching
-    /// toolbar Refresh button + ⌘R (see `RefreshControl`'s doc comment for why). `nonisolated` to
-    /// mirror `View.refreshable(action:)` itself, which is declared the same way.
-    ///
-    /// A closure literal built inline at the call site (`.refreshControl { await model.load() }`)
-    /// satisfies `@Sendable` for free. A closure stored first as a plain `let` property (as
-    /// `TodayContent.onRefresh` was) does not — under this target's
-    /// `SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor`, an unannotated `() async -> Void` property
-    /// infers a caller-isolated (`nonisolated(nonsending)`) type, which cannot cross into a
-    /// `@Sendable` parameter. Declare such a property `@Sendable () async -> Void` instead, as
-    /// `onRefresh` now is.
-    nonisolated func refreshControl(_ action: @escaping @Sendable () async -> Void) -> some View {
+    /// Refresh gesture on iOS, toolbar action on Mac, and a focused menu command.
+    func refreshControl(_ action: @escaping @Sendable () async -> Void) -> some View {
         modifier(RefreshControl(action: action))
+    }
+}
+
+struct NativeRefreshAction {
+    let isEnabled: Bool
+    let run: @MainActor () -> Void
+}
+
+private struct NativeRefreshKey: FocusedValueKey {
+    typealias Value = NativeRefreshAction
+}
+
+extension FocusedValues {
+    var nativeRefresh: NativeRefreshAction? {
+        get { self[NativeRefreshKey.self] }
+        set { self[NativeRefreshKey.self] = newValue }
     }
 }

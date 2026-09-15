@@ -131,6 +131,28 @@ struct GenericEntityListModelTests {
         #expect(model.nextPageError == nil)
     }
 
+    @Test func overlappingFinalPageDeduplicatesAndStopsPagination() async throws {
+        defer { ListStub.handler.withLock { $0 = nil } }
+        let first = try productPage(id: "PRD-2345", name: "First", page: 1, total: 2)
+        let overlappingFinal = try productPage(
+            id: "PRD-2345", name: "First", page: 2, total: 2)
+        ListStub.handler.withLock { handler in
+            handler = { request in
+                (200, Self.page(in: request) == 1 ? first : overlappingFinal)
+            }
+        }
+        let model = GenericEntityListModel(
+            descriptor: EntityCatalog[.product], client: try makeClient(), pageSize: 1)
+
+        await model.loadInitial()
+        #expect(model.hasMore)
+        await model.loadNextPage()
+
+        #expect(model.rows.map(\.id) == ["PRD-2345"])
+        #expect(model.page == 2)
+        #expect(model.hasMore == false)
+    }
+
     @Test func refreshFailureRetainsLoadedContent() async throws {
         defer { ListStub.handler.withLock { $0 = nil } }
         let calls = Mutex(0)

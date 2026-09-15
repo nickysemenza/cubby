@@ -1,9 +1,6 @@
 import CubbyKit
 import SwiftUI
 
-/// The landing screen: what needs attention today (tasks, meals, open problems), and the ways in.
-/// Each section loads independently — a failure in one never blanks the others — and the whole
-/// screen supports pull-to-refresh.
 struct TodayView: View {
     @Environment(AppModel.self) private var model
     @State private var today: TodayModel?
@@ -13,27 +10,24 @@ struct TodayView: View {
             if let today {
                 TodayContent(
                     dateText: Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()),
-                    tasks: today.tasks,
-                    meals: today.meals,
-                    problems: today.problems,
-                    onRefresh: { await today.refresh() }
+                    tasks: today.tasks, meals: today.meals, problems: today.problems,
+                    onRefresh: { await today.refresh() },
+                    tasksError: today.tasksError, mealsError: today.mealsError,
+                    problemsError: today.problemsError,
+                    onRetryTasks: { await today.refreshTasks() },
+                    onRetryMeals: { await today.refreshMeals() },
+                    onRetryProblems: { await today.refreshProblems() },
+                    tasksIsLoading: today.tasksIsLoading,
+                    mealsIsLoading: today.mealsIsLoading,
+                    problemsIsLoading: today.problemsIsLoading
                 )
             } else {
                 LoadingIndicator.screen(label: "Loading Today")
             }
         }
-        .porcelainScreen()
         .navigationTitle("Today")
-        .toolbar {
-            ToolbarItem {
-                Button {
-                    model.navigator.openDev()
-                } label: {
-                    Label("Dev", systemImage: "wrench.and.screwdriver")
-                }
-            }
-        }
         .task(id: model.host) {
+            guard today == nil else { return }
             let today = TodayModel(client: model.client)
             self.today = today
             await today.refresh()
@@ -41,229 +35,118 @@ struct TodayView: View {
     }
 }
 
-/// The plain-data half of `TodayView`, so previews can feed it fixtures instead of a network call.
 struct TodayContent: View {
     let dateText: String
     let tasks: TodaySectionState<[TodayTask]>
     let meals: TodaySectionState<[TodayMeal]>
     let problems: TodaySectionState<TodayProblemCounts>
     let onRefresh: @Sendable () async -> Void
-
-    @Environment(\.sectionSelection) private var sectionSelection
+    var tasksError: String?
+    var mealsError: String?
+    var problemsError: String?
+    var onRetryTasks: (@Sendable () async -> Void)?
+    var onRetryMeals: (@Sendable () async -> Void)?
+    var onRetryProblems: (@Sendable () async -> Void)?
+    var tasksIsLoading = false
+    var mealsIsLoading = false
+    var problemsIsLoading = false
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
-                Eyebrow(dateText)
-                tasksSection
-                mealsSection
-                problemsSection
-                shortcutsSection
+        List {
+            Section {
+                Text(dateText).foregroundStyle(.secondary)
             }
-            .padding(PorcelainTokens.Space.lg)
-            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
-            .frame(maxWidth: .infinity)
-        }
-        .porcelainScreen()
-        .refreshControl { await onRefresh() }
-    }
-
-    // MARK: Tasks
-
-    @ViewBuilder
-    private var tasksSection: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow("Tasks")
-            switch tasks {
-            case .loading:
-                Panel { loadingRow("Loading tasks") }
-            case .failed(let message):
-                Panel { errorText(message) }
-            case .loaded(let tasks) where tasks.isEmpty:
-                Panel {
-                    Text("Nothing due")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                }
-            case .loaded(let tasks):
-                Panel(padding: 0, spacing: 0) {
-                    ForEach(Array(tasks.enumerated()), id: \.element.id) { index, task in
-                        if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg) }
-                        NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
-                            TaskRow(task: task)
-                        }
-                        .buttonStyle(.plain)
+            Section("Tasks") {
+                switch tasks {
+                case .loading: LoadingIndicator(label: "Loading tasks")
+                case .failed(let message):
+                    failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                case .loaded(let rows):
+                    if rows.isEmpty { Text("Nothing due").foregroundStyle(.secondary) }
+                    ForEach(rows) { task in
+                        NavigationLink(value: Route.entityDetail(.task, id: task.id)) { TaskRow(task: task) }
                     }
                 }
-            }
-        }
-    }
-
-    // MARK: Meals
-
-    @ViewBuilder
-    private var mealsSection: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow("Meals today")
-            switch meals {
-            case .loading:
-                Panel { loadingRow("Loading meals") }
-            case .failed(let message):
-                Panel { errorText(message) }
-            case .loaded(let meals) where meals.isEmpty:
-                Panel {
-                    Text("No meals planned")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                if let tasksError {
+                    failure(tasksError, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                 }
-            case .loaded(let meals):
-                Panel(padding: 0, spacing: 0) {
-                    ForEach(Array(meals.enumerated()), id: \.element.id) { index, meal in
-                        if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg) }
-                        NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
-                            MealRow(meal: meal)
-                        }
-                        .buttonStyle(.plain)
+            }
+            Section("Meals today") {
+                switch meals {
+                case .loading: LoadingIndicator(label: "Loading meals")
+                case .failed(let message):
+                    failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                case .loaded(let rows):
+                    if rows.isEmpty { Text("No meals planned").foregroundStyle(.secondary) }
+                    ForEach(rows) { meal in
+                        NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) { MealRow(meal: meal) }
                     }
                 }
-            }
-        }
-    }
-
-    // MARK: Problems
-
-    @ViewBuilder
-    private var problemsSection: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow("Problems")
-            switch problems {
-            case .loading:
-                Panel { loadingRow("Loading problems") }
-            case .failed(let message):
-                Panel { errorText(message) }
-            case .loaded(let counts):
-                LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
-                    StatTile(label: "Open problems", value: "\(counts.total)")
-                    StatTile(label: "Coverage", value: "\(counts.coverageTotal)")
+                if let mealsError {
+                    failure(mealsError, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                 }
             }
-        }
-    }
-
-    // MARK: Shortcuts
-
-    private var shortcutsSection: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow("Shortcuts")
-            LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
+            Section("Problems") {
+                switch problems {
+                case .loading: LoadingIndicator(label: "Loading problems")
+                case .failed(let message):
+                    failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                case .loaded(let counts):
+                    LabeledContent("Open problems", value: counts.total.formatted())
+                    LabeledContent("Coverage", value: counts.coverageTotal.formatted())
+                }
+                if let problemsError {
+                    failure(problemsError, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                }
+            }
+            Section("Shortcuts") {
                 NavigationLink(value: Route.entityList(.product)) {
-                    ActionTile(
-                        title: "Browse products",
-                        symbol: "shippingbox",
-                        detail: "Catalog and stock"
-                    )
+                    Label("Browse products", systemImage: "shippingbox")
                 }
-                .buttonStyle(.plain)
-
-                shortcut(
-                    to: .capture,
-                    title: "Capture",
-                    symbol: "barcode.viewfinder",
-                    detail: "Sweep a location"
-                )
-
+                Button {
+                    model.navigator.section = .capture
+                } label: {
+                    Label("Capture", systemImage: "barcode.viewfinder")
+                }
                 Button {
                     model.navigator.section = .capture
                     model.navigator.paths[.capture] = [.audit(locationID: nil)]
                 } label: {
-                    ActionTile(
-                        title: "Walk the shelf",
-                        symbol: "checklist",
-                        detail: "Recount a bin"
-                    )
+                    Label("Walk the shelf", systemImage: "checklist")
                 }
-                .buttonStyle(.plain)
-
-                Button {
-                    model.navigator.section = .browse
-                    model.navigator.paths[.browse] = [.needsPhoto(locationID: nil)]
-                } label: {
-                    ActionTile(
-                        title: "Needs a photo",
-                        symbol: "camera.badge.ellipsis",
-                        detail: "Work down the backlog"
-                    )
+                NavigationLink(value: Route.needsPhoto(locationID: nil)) {
+                    Label("Needs a photo", systemImage: "camera.badge.ellipsis")
                 }
-                .buttonStyle(.plain)
-
                 Button {
                     model.navigator.openIdentify()
                 } label: {
-                    ActionTile(
-                        title: "Identify",
-                        symbol: "camera.metering.center.weighted",
-                        detail: "Rank a photo"
-                    )
+                    Label("Identify a photo", systemImage: "camera.metering.center.weighted")
                 }
-                .buttonStyle(.plain)
-                shortcut(
-                    action: { model.navigator.openDev() },
-                    title: "Dev",
-                    symbol: "wrench.and.screwdriver",
-                    detail: "Parser and API"
-                )
+                NavigationLink(value: Route.garden) { Label("Garden", systemImage: "leaf") }
+                #if os(macOS)
+                    SettingsLink { Label("Settings", systemImage: "gearshape") }
+                #else
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Label("Settings", systemImage: "gearshape")
+                    }
+                #endif
             }
         }
+        .refreshControl(onRefresh)
+        .accessibilityIdentifier("today.sections")
     }
 
-    /// A tile that moves the shell's selection. Without a shell (previews) there is nothing to
-    /// move, so the tile stays inert rather than pretending to navigate.
-    @ViewBuilder
-    private func shortcut(
-        to section: AppSection,
-        title: String,
-        symbol: String,
-        detail: String
-    ) -> some View {
-        Button {
-            sectionSelection?.wrappedValue = section
-        } label: {
-            ActionTile(title: title, symbol: symbol, detail: detail)
+    private func failure(_ message: String, isLoading: Bool, retry: @escaping @Sendable () async -> Void)
+        -> some View
+    {
+        VStack(alignment: .leading) {
+            Text(message).font(.callout).foregroundStyle(.secondary)
+            if isLoading { LoadingIndicator(label: "Retrying") }
+            Button("Retry") { Task { await retry() } }.disabled(isLoading)
         }
-        .buttonStyle(.plain)
-        .disabled(sectionSelection == nil)
-    }
-
-    /// A tile that performs an arbitrary action rather than moving the shell's selection — Dev is
-    /// a pushed screen (see `AppSection.tabs`), not a top-level section, so its tile can't go
-    /// through `shortcut(to:)`.
-    private func shortcut(
-        action: @escaping () -> Void,
-        title: String,
-        symbol: String,
-        detail: String
-    ) -> some View {
-        Button(action: action) {
-            ActionTile(title: title, symbol: symbol, detail: detail)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: Shared section chrome
-
-    private func loadingRow(_ label: String) -> some View {
-        HStack {
-            LoadingIndicator(label: label)
-            Spacer()
-        }
-    }
-
-    private func errorText(_ message: String) -> some View {
-        Text(message)
-            .font(.porcelainLabel)
-            .foregroundStyle(PorcelainTokens.destructive)
-            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -278,19 +161,18 @@ private struct TaskRow: View {
                 Text(task.name)
                     .font(.porcelainTitle)
                     .foregroundStyle(PorcelainTokens.graphite)
-                    .lineLimit(2)
+
                 if let subtitle {
                     Text(subtitle)
                         .font(.porcelainLabel)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        .lineLimit(1)
+
                 }
             }
             Spacer(minLength: PorcelainTokens.Space.sm)
             StatusChip(text: statusLabel, tone: statusTone)
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.md)
+        .padding(.vertical, 4)
         .frame(minHeight: PorcelainTokens.touchTarget)
     }
 
@@ -319,7 +201,7 @@ private struct MealRow: View {
                     Text(meal.name)
                         .font(.porcelainTitle)
                         .foregroundStyle(PorcelainTokens.graphite)
-                        .lineLimit(1)
+
                     if let mealType = meal.mealType {
                         Text(mealType.capitalized)
                             .font(.porcelainLabel)
@@ -330,13 +212,12 @@ private struct MealRow: View {
                     Text(meal.recipeNames.joined(separator: ", "))
                         .font(.porcelainLabel)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        .lineLimit(1)
+
                 }
             }
             Spacer(minLength: PorcelainTokens.Space.sm)
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.md)
+        .padding(.vertical, 4)
         .frame(minHeight: PorcelainTokens.touchTarget)
     }
 }

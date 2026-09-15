@@ -10,6 +10,8 @@ import SwiftUI
 /// .active`, a static weak reference `CubbyApp.init` sets once, is the seam every command goes
 /// through instead (see that property's doc comment).
 struct CubbyCommands: Commands {
+    @FocusedValue(\.nativeRefresh) private var refresh
+
     var body: some Commands {
         CommandGroup(after: .toolbar) {
             ForEach(Array(AppSection.tabs.enumerated()), id: \.element) { index, section in
@@ -19,6 +21,9 @@ struct CubbyCommands: Commands {
                 .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
             }
             Divider()
+            Button("Refresh") { refresh?.run() }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(refresh?.isEnabled != true)
             Button("Search") {
                 guard let model = AppModel.active else { return }
                 model.navigator.section = .search

@@ -8,6 +8,31 @@ import Testing
 @MainActor
 @Suite("Garden photo import")
 struct GardenPhotoImportModelTests {
+    @Test func destinationAndDraftEditsMarkImportDirty() async throws {
+        let model = await model(
+            items: [try selection(capturedAt: Date(timeIntervalSince1970: 1_700_000_000))])
+        #expect(!model.isDirty)
+
+        model.locationID = "LOC-1"
+
+        #expect(model.isDirty)
+    }
+
+    @Test func failedSaveRetainsDraftInput() async throws {
+        let model = await model(
+            items: [try selection(capturedAt: Date(timeIntervalSince1970: 1_700_000_000))],
+            record: { _ in throw TestFailure.record })
+        model.locationID = "LOC-1"
+        let draftID = try #require(model.drafts.first?.id)
+        model.drafts[0].note = "Powdery mildew on lower leaves"
+
+        #expect(!(await model.save()))
+        #expect(model.drafts.first?.id == draftID)
+        #expect(model.drafts.first?.note == "Powdery mildew on lower leaves")
+        #expect(model.isDirty)
+        #expect(model.hasStarted)
+    }
+
     @Test func existingOnlySelectionIsAttached() async throws {
         var item = try selection(capturedAt: Date(timeIntervalSince1970: 1_700_000_000))
         item.existingImageID = ImageCode("IMG-EXISTING")

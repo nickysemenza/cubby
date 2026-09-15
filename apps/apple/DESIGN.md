@@ -1,0 +1,53 @@
+# Cubby native design
+
+The Apple app follows platform conventions. This is the native design authority;
+`apps/web/DESIGN.md` applies to the web application.
+
+## Appearance
+
+Use system surfaces, primary/secondary text, standard text styles, and native
+List, Form, Section, LabeledContent, toolbar, and sheet presentations. Respect
+system light/dark appearance. Cubby's adaptive cobalt accent denotes interaction;
+small domain marks denote wayfinding. Status always includes a word or symbol.
+Do not recreate system bars or apply glass to content backgrounds.
+
+Specialized workbenches can group content with GroupBox. Ordinary data rows use
+native separators and selection. Phone targets are at least 44 points; Mac
+controls use native density. Content wraps or stacks at accessibility text sizes.
+Use monospaced digits for quantities and a monospaced face only for identifiers.
+
+## Navigation
+
+On iPhone retain Today, Capture, Photos, Browse, and Search, each with an independent
+navigation stack. Returning from details preserves the current session's query,
+selection, and scroll position. No new persisted phone resume state.
+
+Mac has one main Window and separate Settings. Catalog and Search browsing use a
+sidebar, selectable record list, and adjacent detail. Other workflows use the
+workspace directly. Navigator owns selections and related-record history, outside
+adaptive layout branches. Controls remain keyboard accessible. Primary record
+content belongs in detail, not an inspector. Media alone uses immersive transitions.
+
+## Tasks and feedback
+
+Form style does not determine sheet size: apply nativeSheet to the presented root.
+Short adjustments offer medium/large on iPhone (large at accessibility text sizes);
+searchable pickers and editors are large. Photo review/import is page-sized, and
+photo viewing is full-screen on iPhone with an explicit Close. Native camera/library
+presentation stays system-owned.
+
+Changed drafts offer Discard from Cancel. Failed saves preserve input. In-flight
+writes prevent dismissal, with explicit progress. Preserve every workflow's existing
+immediate/staged-write contract. Recount quantities are finite positive numbers;
+zero is the separate Remove action.
+
+Initial loads expose labelled progress and retryable errors. Same-context refreshes
+retain loaded content and show errors inline. New queries invalidate stale matches.
+Do not render preview fixtures as loading data. Preserve existing scan feedback,
+avoid duplicate haptics, and respect Reduce Motion.
+
+## Acceptance
+
+Validate iPhone and Mac workflows, iPad resizing, light/dark, accessibility text,
+VoiceOver, keyboard-only navigation, Reduce Motion, and Reduce Transparency.
+Snapshots are visual regressions, not interaction or physical-camera signoff.

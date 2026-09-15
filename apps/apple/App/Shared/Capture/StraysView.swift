@@ -75,9 +75,8 @@ struct StraysView: View {
                 }
             }
         }
-        #if os(macOS)
-            .frame(minWidth: 360, minHeight: 320)
-        #endif
+        .nativeSheet(.editor)
+        .interactiveDismissDisabled(resolving)
     }
 
     private func resolve() async {

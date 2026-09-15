@@ -97,9 +97,7 @@ struct LoginView: View {
             .porcelainScreen()
             .sheet(isPresented: $showServer) {
                 NavigationStack { SettingsView() }.environment(model)
-                    #if os(macOS)
-                        .frame(minWidth: 480, minHeight: 480)
-                    #endif
+                    .nativeSheet(.editor)
             }
         }
     }

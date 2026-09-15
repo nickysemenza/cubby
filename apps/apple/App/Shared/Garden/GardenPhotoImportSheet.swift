@@ -11,6 +11,8 @@ struct GardenPhotoImportSheet: View {
     let onDone: () -> Void
     @State private var importModel: GardenPhotoImportModel?
     @State private var saveTask: Task<Void, Never>?
+    @State private var allowsSaveToFinishAfterDismissal = false
+    @State private var draftDismissal = DraftDismissalState()
 
     var body: some View {
         Group {
@@ -27,7 +29,11 @@ struct GardenPhotoImportSheet: View {
         }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }.disabled(importModel?.isSaving == true)
+                Button(importModel?.isSaving == true ? "Close" : "Cancel") {
+                    draftDismissal.request(
+                        isDirty: importModel?.isDirty == true,
+                        isSaving: importModel?.isSaving == true, dismiss: dismiss)
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
                 Button("Save") {
@@ -48,8 +54,20 @@ struct GardenPhotoImportSheet: View {
                 .disabled(importModel?.isReady != true || importModel?.isSaving == true)
             }
         }
-        .interactiveDismissDisabled(importModel?.isSaving == true)
-        .onDisappear { saveTask?.cancel() }
+        .nativeSheet(.photo)
+        .draftDismissal(
+            $draftDismissal, isDirty: importModel?.isDirty == true,
+            isSaving: importModel?.isSaving == true,
+            onDiscard: { dismiss() },
+            onCloseWhileSaving: {
+                allowsSaveToFinishAfterDismissal = true
+                dismiss()
+            }
+        )
+        .navigationBarBackButtonHidden(importModel?.hasStarted == true)
+        .onDisappear {
+            if !allowsSaveToFinishAfterDismissal { saveTask?.cancel() }
+        }
     }
 }
 
@@ -68,6 +86,14 @@ final class GardenPhotoImportModel {
         var items: [PhotoSelectionItem]
     }
 
+    private struct DraftSnapshot: Equatable {
+        let id: UUID
+        let date: Date
+        let requiresDateConfirmation: Bool
+        let note: String
+        let itemIDs: [String]
+    }
+
     private(set) var options = GardenOptions(ingredients: [], locations: [], products: [])
     var locationID = ""
     var plantingID = ""
@@ -75,6 +101,7 @@ final class GardenPhotoImportModel {
     private(set) var isLoading = true
     private(set) var optionsLoaded = false
     private(set) var isSaving = false
+    private(set) var hasStarted = false
     private(set) var error: String?
     private(set) var confirmedEntryIDs: [String] = []
     private(set) var uploadedIDs: [ImageCode] = []
@@ -82,6 +109,7 @@ final class GardenPhotoImportModel {
     private(set) var selectionError: String?
     private let resolver: GardenPhotoSelectionResolver
     private let recordEntry: RecordEntry
+    private let initialDrafts: [DraftSnapshot]
     fileprivate let client: CubbyClient?
     private var committedDestination: (locationID: String, plantingID: String?)?
 
@@ -111,12 +139,14 @@ final class GardenPhotoImportModel {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = requestedCalendar.timeZone
         let groups = GardenPhotoGrouping.groups(capturedAt: items.map(\.capturedAt), calendar: calendar)
-        self.drafts = groups.map { group in
+        let drafts = groups.map { group in
             let date = group.day ?? .now
             return Draft(
                 date: date, requiresDateConfirmation: group.day == nil,
                 items: group.indexes.map { items[$0] })
         }
+        self.drafts = drafts
+        initialDrafts = Self.snapshots(for: drafts)
         resolver = GardenPhotoSelectionResolver(sourceItems: items, uploadPhoto: uploadPhoto)
         self.recordEntry = recordEntry
         self.client = client
@@ -136,6 +166,11 @@ final class GardenPhotoImportModel {
         !locationID.isEmpty && drafts.contains { !$0.items.isEmpty }
             && !drafts.contains { $0.requiresDateConfirmation && !$0.items.isEmpty }
             && selectionError == nil && !isLoading && optionsLoaded
+    }
+
+    var isDirty: Bool {
+        !locationID.isEmpty || !plantingID.isEmpty || Self.snapshots(for: drafts) != initialDrafts
+            || !uploadedIDs.isEmpty || !confirmedDraftIDs.isEmpty
     }
 
     func remove(_ itemID: String, from draftID: UUID) {
@@ -158,6 +193,7 @@ final class GardenPhotoImportModel {
         }
         refreshSelectionError()
         guard selectionError == nil else { return false }
+        hasStarted = true
         isSaving = true
         error = nil
         defer { isSaving = false }
@@ -208,6 +244,14 @@ final class GardenPhotoImportModel {
 
     private func refreshSelectionError() {
         selectionError = GardenPhotoSelectionResolver.validationError(for: drafts.flatMap(\.items))
+    }
+
+    private static func snapshots(for drafts: [Draft]) -> [DraftSnapshot] {
+        drafts.map {
+            DraftSnapshot(
+                id: $0.id, date: $0.date, requiresDateConfirmation: $0.requiresDateConfirmation,
+                note: $0.note, itemIDs: $0.items.map(\.id))
+        }
     }
 }
 
