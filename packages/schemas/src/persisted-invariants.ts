@@ -1,8 +1,16 @@
 import { z } from "zod";
 
+import { expenseLineKindSchema } from "./expense-line-kind";
+import { financialTransactionNonZeroAmount } from "./financial-transaction-fields";
+import { plantingLocationStartKind } from "./garden-fields";
+import { perceptualHashSchema } from "./image";
+import { contributionRole } from "./ledger-party";
+import { ledgerPartyKind } from "./ledger-party-fields";
+import { ledgerTransferAmount } from "./ledger-transfer-fields";
 import { locationType } from "./location-fields";
 import { mealFoodAmount } from "./meal-amount";
 import { mealFoodNutrients } from "./meal-nutrition";
+import { mealYieldGrams } from "./meal-shared";
 import { wholeCentAmount } from "./money";
 import {
   statementDateKind,
@@ -11,11 +19,6 @@ import {
 } from "./statement-row";
 
 const positiveFinite = z.number().finite().positive();
-const nonZeroWholeCent = wholeCentAmount.refine((value) => value !== 0, {
-  message: "must be non-zero",
-});
-const positiveWholeCent = wholeCentAmount.positive();
-const nullablePositiveInteger = z.number().int().positive().nullable();
 
 const addIssue = (
   context: z.RefinementCtx,
@@ -24,8 +27,8 @@ const addIssue = (
 ): void => context.addIssue({ code: "custom", path, message });
 
 export const mealRecipePersistedInvariant = z.object({
-  estimatedYieldGrams: nullablePositiveInteger,
-  actualYieldGrams: nullablePositiveInteger,
+  estimatedYieldGrams: mealYieldGrams.nullable(),
+  actualYieldGrams: mealYieldGrams.nullable(),
 });
 
 export const mealRecipePortionPersistedInvariant = z
@@ -106,14 +109,11 @@ export const locationPersistedInvariant = z
   });
 
 export const imagePersistedInvariant = z.object({
-  perceptualHash: z
-    .string()
-    .regex(/^[0-9a-f]{16}$/, "must be a lowercase 16-digit hexadecimal hash")
-    .nullable(),
+  perceptualHash: perceptualHashSchema.nullable(),
 });
 
 export const plantingLocationPeriodPersistedInvariant = z.object({
-  startKind: z.enum(["actual", "recorded"]),
+  startKind: plantingLocationStartKind,
 });
 
 export const dependencyPersistedInvariant = z
@@ -124,7 +124,7 @@ export const dependencyPersistedInvariant = z
   });
 
 export const ledgerPartyPersistedInvariant = z.object({
-  kind: z.enum(["household", "member", "guest"]),
+  kind: ledgerPartyKind,
 });
 
 export const purchasePersistedInvariant = z.object({
@@ -144,7 +144,7 @@ export const productComponentPersistedInvariant = z
 
 export const financialTransactionPersistedInvariant = z
   .object({
-    amount: nonZeroWholeCent,
+    amount: financialTransactionNonZeroAmount,
     status: z.string(),
     postedDate: z.string().nullable(),
   })
@@ -155,11 +155,11 @@ export const financialTransactionPersistedInvariant = z
   });
 
 export const financialTransactionAllocationPersistedInvariant = z.object({
-  amount: nonZeroWholeCent,
+  amount: financialTransactionNonZeroAmount,
 });
 
 export const ledgerTransferPersistedInvariant = z.object({
-  amount: positiveWholeCent,
+  amount: ledgerTransferAmount,
 });
 
 export const statementImportPersistedInvariant = z.object({
@@ -169,8 +169,8 @@ export const statementImportPersistedInvariant = z.object({
 
 export const statementRowPersistedInvariant = z
   .object({
-    amount: nonZeroWholeCent,
-    providerAmount: nonZeroWholeCent,
+    amount: financialTransactionNonZeroAmount,
+    providerAmount: financialTransactionNonZeroAmount,
     providerStatus: statementRowProviderStatus.nullable(),
     disposition: z.enum(["open", "ignored"]),
     dispositionReason: statementRowDispositionReason.nullable(),
@@ -204,7 +204,7 @@ export const expensePersistedInvariant = z
     cost: wholeCentAmount.nullable(),
     productId: z.string().nullable(),
     productQuantity: z.number().finite().nullable(),
-    lineKind: z.string(),
+    lineKind: expenseLineKindSchema,
   })
   .superRefine((row, context) => {
     if (
@@ -228,7 +228,7 @@ export const expensePersistedInvariant = z
   });
 
 export const expenseAttributionPersistedInvariant = z.object({
-  role: z.enum(["beneficiary", "funder"]),
+  role: contributionRole,
   weight: z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER),
 });
 
@@ -269,7 +269,3 @@ export const ledgerSourceClaimPersistedInvariant = z
       );
     }
   });
-
-export type MealFoodEntryPersistedInvariant = z.output<
-  typeof mealFoodEntryPersistedInvariant
->;

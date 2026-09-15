@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type MealRecipeId,
+  type RecipeId,
   parseShortcodeFor,
   type RecipeId,
 } from "@cubby/schemas/identifiers";
