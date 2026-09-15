@@ -138,6 +138,7 @@ export const desktopNav: NavNode[] = [
       { to: "/activity", label: "Activity", icon: Activity },
       { to: "/collections", label: "Collections", icon: Palette },
       { to: "/entities", label: "Entity explorer", icon: Network },
+      { to: "/graph", label: "Graph", icon: Network },
       { to: "/ask", label: "Ask AI", icon: Bot },
       { to: "/search", label: "Search", icon: Search },
       settingsNavItem,
@@ -191,6 +192,7 @@ function leafAt(to: LinkProps["to"]): NavItem {
 
 /** Four household jobs that earn persistent desktop attention. */
 export const todayNavItems: NavItem[] = [
+  leafAt("/graph"),
   leafAt("/inventory/session"),
   leafAt("/meals/shopping-list"),
   leafAt("/projects"),

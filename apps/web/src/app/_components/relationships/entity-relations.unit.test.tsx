@@ -580,6 +580,53 @@ describe("shared entity Relations", () => {
     expect(requests).toEqual([recipe.entityId]);
   });
 
+  it("restores a selected record hidden inside a counted branch", async () => {
+    const grouped = {
+      ...initial,
+      branches: initial.branches.map((branch) => ({
+        ...branch,
+        totalCount:
+          branch.relationshipKey === "recipes" ? 250 : branch.totalCount,
+      })),
+    };
+    let pathReads = 0;
+    const operations = {
+      ...entityGraph,
+      explore: entityGraph.explore.withTransport(async () => grouped),
+      graphPaths: entityGraph.graphPaths.withTransport(async () => {
+        pathReads++;
+        return {
+          nodes: initial.nodes,
+          edges: initial.edges,
+          paths: [{ nodeRefs: [root, recipe], edgeIds: ["test-edge"] }],
+          completion: "exhausted",
+          shortestPathCertain: true,
+        };
+      }),
+    };
+    harness.queryClient.setQueryData(
+      operations.explore.queryOptions({ root, depth: 1 }).queryKey,
+      grouped,
+    );
+    render(
+      <EntityRelations
+        entity="cookbook"
+        sourceId={root.entityId}
+        operations={operations}
+        state={{ view: "graph", selected: "recipe:RCP-4K7M" }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      await screen.findByRole("button", { name: "Path 1 · 1 connections" }),
+    ).toBeVisible();
+    expect(pathReads).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Clear path" }));
+    expect(
+      await screen.findByRole("heading", { name: "Weeknight cookbook" }),
+    ).toBeVisible();
+  });
+
   it("keeps a completed path response hidden after returning to explored records", async () => {
     let resolvePaths!: (value: {
       nodes: EntityGraphOutput["nodes"];
@@ -616,9 +663,7 @@ describe("shared entity Relations", () => {
     }
     render(<CancelHarness />, { wrapper: harness.wrapper });
     expect(await screen.findByText("Searching for paths…")).toBeVisible();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Return to explored records" }),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear path" }));
     await act(async () =>
       resolvePaths({
         nodes: initial.nodes,
@@ -629,7 +674,7 @@ describe("shared entity Relations", () => {
       }),
     );
     expect(
-      screen.queryByRole("button", { name: "Path 1 · 1 hops" }),
+      screen.queryByRole("button", { name: "Path 1 · 1 connections" }),
     ).not.toBeInTheDocument();
   });
 

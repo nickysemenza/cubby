@@ -13,6 +13,16 @@ final class Navigator {
     var browseKey: EntityKey?
     var browsingGarden = false
     var selectedRecords: [AppSection: RecordSelection] = [:]
+    var graphWorkspace: GraphWorkspaceSession?
+
+    func openGraph(root: EntityReference? = nil) {
+        #if os(macOS)
+            section = .graph
+            paths[.graph] = root.map { [.graph($0)] } ?? []
+        #else
+            paths[section, default: []].append(.graph(root))
+        #endif
+    }
 
     var macDestination: SidebarDestination {
         get {

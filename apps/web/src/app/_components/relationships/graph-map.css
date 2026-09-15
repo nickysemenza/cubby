@@ -1,0 +1,55 @@
+.graph-map {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--muted);
+}
+.graph-map .react-flow {
+  --xy-background-color-default: var(--muted);
+  --xy-edge-stroke-default: var(--border);
+  --xy-controls-button-background-color-default: var(--card);
+  --xy-controls-button-color-default: var(--foreground);
+  --xy-controls-button-border-color-default: var(--border);
+  --xy-minimap-background-color-default: var(--card);
+  --xy-minimap-node-background-color-default: var(--border);
+}
+.graph-map-record {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  width: 196px;
+  height: 104px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--foreground);
+}
+.graph-map-record[data-selected="true"] {
+  border-color: var(--primary);
+  outline: 1px solid var(--primary);
+}
+.graph-map-record .react-flow__handle {
+  opacity: 0;
+}
+.graph-map .react-flow__node:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+.graph-map .graph-map-edge-active .react-flow__edge-path {
+  stroke: var(--primary);
+  stroke-width: 1.5px;
+}
+.graph-map .graph-map-edge .react-flow__edge-path {
+  stroke: var(--muted-foreground);
+  opacity: 0.3;
+}
+.graph-map .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+}
+@media (max-width: 767px) {
+  .graph-map .react-flow__controls-button {
+    width: 44px;
+    height: 44px;
+  }
+}

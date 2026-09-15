@@ -10,7 +10,8 @@ that can be shared from domain calculations that must retain their own meaning.
 | --- | --- | --- |
 | `app/_components/charts/kit.tsx` | Expense analytics, portfolio analytics, ingredient usage | Shared Nivo bar, donut, and spend-trend presentation. This audit moves ingredient usage onto `RankedBarBreakdown`; ranking, sizing, empty state, tooltip, keyboard-safe click support, and screen-reader summary now have one implementation. |
 | `lib/nivo-theme.ts` + `ChartTooltip` + `ChartEmpty` | All Nivo statistical charts | Shared Porcelain Transit chrome, currency ticks, no-motion policy, tooltip surface, and empty state. Keep `ChartTooltip` separate from absolute `VizTooltip`: Nivo owns tooltip placement and measurement. |
-| `visualizations/dependency-graph-*` | Recipe and work dependency views | Generalize for the new entity relationship explorer. Keep directed dependency semantics, worker layout, viewport controls, transitive reduction, and cycle checks specific to dependency adapters. |
+| `visualizations/dependency-graph-*` | Recipe and work dependency views | Keep directed dependency semantics, worker layout, viewport controls, transitive reduction, and cycle checks specific to dependency adapters. |
+| `relationships/graph-explorer.tsx` + `graph-map-*` | Top-level `/graph` and detail-page relationship maps | React Flow with incremental worker placement, viewport culling, a retained camera, and explicit branch expansion. Generic map layout is independent of dependency layout. |
 | `visualizations/viz-overlay.tsx` + `visualization-panel.tsx` | D3 hierarchy, force, and bespoke SVG views | Retain as the common overlay/frame for bespoke canvases. Do not force Nivo charts or Gantt into it. |
 | `project-chart-data.ts`, `expense-aggregate-sql.ts`, `repo/expense/analytics.ts` | Project and expense financial views | Keep money assembly server-owned: filtered SQL aggregates preserve `SUM(Expense.cost)`, credits, null-date treatment, and the distinction between principal spend and adjustments. |
 
@@ -178,3 +179,43 @@ Read-only local checks also verified 18 nodes with nine thumbnails in a small
 example and exactly 61 nodes with 40 thumbnails in a dense neighborhood. No local
 household data was added to fixtures or this report. No PR or merge verification
 was performed as part of this local implementation handoff.
+
+### Graph workspace follow-up
+
+The generic explorer now has a top-level `/graph` entry, a starting-record picker,
+and the same map inside record details. The legacy `/entities?tab=explore` entry
+redirects to it. Native Graph is available from the macOS sidebar and iPhone
+Browse. Each session retains its map and camera when opening a record and returning.
+
+Selection inspects a record without fetching or rearranging its neighborhood.
+Expansion is explicit; branches larger than 12 records start collapsed and reveal
+12 at a time. Collapsing retains cached records. One map is bounded to 500 records
+and 1,000 connections, with an explicit action to start again from a selected
+record. Search, visited-record history, a list alternative, and connection evidence
+remain available. Web destination-path search retains its existing server bounds.
+
+Web uses lazy-loaded React Flow and a worker for incremental placement. Native
+uses SwiftUI Canvas, background placement, visible-card culling, and lightweight
+Canvas marks below 0.35 zoom; no third-party Swift package was added. Existing
+positions remain fixed until Reorganize or a native text-size change. Focused
+recipe/work graphs retain their existing renderer and domain behavior.
+
+Five local runs placing 500 synthetic web records took 17.87, 13.95, 16.20, 16.77,
+and 14.16 ms (median 16.20 ms). This measures placement CPU time, not rendering
+frame rate. Native tests also cover 500-record placement, nonoverlap, and stable
+coordinates. A phone browser check at 390 × 844 confirmed no horizontal overflow
+and graph controls above the bottom navigation.
+
+Validation: `pnpm check`, 1,352 web UI tests, focused graph projection/layout tests,
+all four graph browser scenarios against a fresh Cloudflare build,
+233 native tests, and arm64 iOS simulator Debug/macOS
+Release builds passed. Native interactive checking stopped at the app's
+“Checking sign-in” state. Physical iPhone Safari/PWA acceptance and native
+frame-rate profiling remain unverified; no hosted CI or merge verification was run.
+
+Native readability follow-up: between 35% and 85% zoom, cards show two-line titles
+at a readable screen size and omit metadata. Read labels returns to 100% zoom.
+Ordinary hub connections remain muted; selected paths and edges receive stronger
+highlighting. The inspector pins the selected record heading above compact branch
+rows. Synthetic 28-record views were rendered through the actual macOS SwiftUI
+hosting view and inspected in light and dark mode at 40% zoom.

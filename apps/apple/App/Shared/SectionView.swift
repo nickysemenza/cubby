@@ -15,6 +15,7 @@ struct SectionView: View {
             case .browse: BrowseRootView()
             case .search: SearchView()
             case .dev: DevView()
+            case .graph: GraphWorkspaceView()
             }
         }
         #if os(iOS)
@@ -39,6 +40,7 @@ struct RouteDestinationView: View {
     let route: Route
     var body: some View {
         switch route {
+        case .graph(let root): GraphWorkspaceView(initialRoot: root)
         case .garden: GardenRootView()
         case .nutrition(let day): DailyNutritionView(day: day)
         case .entityDetail(.planting, let id): GardenPlantingRouteView(id: id)
