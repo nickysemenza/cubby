@@ -53,7 +53,7 @@ import {
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 83 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 84 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -480,6 +480,17 @@ const SOURCE_FACTORIES = {
       recipeSectionId: section.id,
       ingredientId: parseEntityId("ingredient", targetId),
       amounts: [],
+    });
+  },
+
+  "MealFoodEntry.ingredientId": async (db, targetId) => {
+    const [meal, party] = await Promise.all([mkMeal(db), mkLedgerParty(db)]);
+    return insertAndReturn(db, mealFoodEntry, {
+      mealId: meal.id,
+      ledgerPartyId: party.id,
+      sourceKind: "ingredient",
+      ingredientId: parseEntityId("ingredient", targetId),
+      amount: { value: 1, unit: "g" },
     });
   },
 
@@ -1103,11 +1114,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 83 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 84 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(83);
+    expect(derivedMustTargetLiveEdges).toHaveLength(84);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

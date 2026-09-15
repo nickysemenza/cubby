@@ -18,11 +18,13 @@ import { toast } from "sonner";
 
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Description } from "~/components/ui/description";
 import { entityDetailLink } from "~/entities/entities";
 import { getErrorMessage } from "~/lib/error-utils";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 
 import { AddFoodDialog } from "./add-food-dialog";
+import { FoodAmountReadout } from "./food-amount-editor";
 import { MealNutritionEstimates } from "./meal-nutrition";
 import { meal } from "./meal.functions";
 
@@ -80,12 +82,27 @@ function FoodName({ food }: { food: MealNutritionFood }) {
     <Link
       {...(food.sourceKind === "recipe"
         ? entityDetailLink("recipe", food.recipeId)
-        : entityDetailLink("product", food.productId))}
+        : food.sourceKind === "ingredient"
+          ? entityDetailLink("ingredient", food.ingredientId)
+          : entityDetailLink("product", food.productId))}
       className="hover:underline"
     >
       {food.name}
     </Link>
   );
+}
+
+function sourceEstimateDescription(food: MealNutritionFood): string {
+  switch (food.sourceKind) {
+    case "product":
+      return "This entered amount stays fixed; estimates follow the product’s current nutrition and unit mappings.";
+    case "ingredient":
+      return "This entered amount stays fixed; estimates follow the ingredient’s currently linked products.";
+    case "recipe":
+      return "This entered amount stays fixed; estimates follow the current recipe and preparation yield.";
+    case "manual":
+      return "Nutrition was entered directly for this serving.";
+  }
 }
 
 function NutritionPeople({
@@ -177,10 +194,11 @@ function NutritionPeople({
                         <div className="min-w-0 text-sm font-medium break-words">
                           <FoodName food={food} />
                         </div>
-                        <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
-                          {food.grams != null
-                            ? `${number(food.grams)} g`
-                            : "Entered macros"}
+                        <span className="shrink-0">
+                          <FoodAmountReadout
+                            amount={food.amount}
+                            estimate={food}
+                          />
                         </span>
                       </Row>
                       <Macros totals={food.totals} />
@@ -189,6 +207,9 @@ function NutritionPeople({
                           Details and editing
                         </summary>
                         <Stack gap="md">
+                          <Description size="xs">
+                            {sourceEstimateDescription(food)}
+                          </Description>
                           <MealNutritionEstimates totals={food.totals} />
                           <Row gap="sm">
                             {food.sourceKind === "recipe" &&

@@ -43,6 +43,8 @@ const view = getMealPreparationsOut.parse({
       },
       recipe: { id: testShortcode("recipe", "RCP-4K7M"), name: "Pasta" },
       scale: 1,
+      recipeServings: 4,
+      recipeYield: { value: 500, unit: "g" },
       estimatedYieldGrams: 600,
       actualYieldGrams: 500,
       yieldBasis: { kind: "actual", lowerGrams: 500, upperGrams: 500 },
@@ -50,6 +52,7 @@ const view = getMealPreparationsOut.parse({
       sourceSummary: {
         assignedGrams: 350,
         confirmedGrams: 200,
+        assignedShare: complete(0.7),
         unassignedGrams: 150,
       },
       portions: [
@@ -65,7 +68,10 @@ const view = getMealPreparationsOut.parse({
             name: "Member A",
             kind: "member",
           },
+          amount: { value: 200, unit: "g" },
           grams: 200,
+          weight: complete(200),
+          batchShare: complete(0.4),
           confirmedAt: new Date("2026-08-31T19:00:00Z"),
           servedHere: true,
           totals: nutritionTotals(4, 400, 32),
@@ -188,7 +194,7 @@ describe("PortionSheet", () => {
     expect(
       screen.queryByRole("checkbox", { name: /confirmed/i }),
     ).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Grams"), {
+    fireEvent.change(screen.getByLabelText("Amount"), {
       target: { value: "225" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save portions" }));
@@ -200,7 +206,7 @@ describe("PortionSheet", () => {
             action: "set",
             mealId: source.sourceMeal.id,
             ledgerPartyId: source.portions[0]!.eater.id,
-            grams: 225,
+            amount: { value: 225, unit: "g" },
             confirmed: true,
           },
         ],
@@ -208,48 +214,7 @@ describe("PortionSheet", () => {
     );
   });
 
-  it("offers serving shortcuts when the recipe has an exact gram yield", () => {
-    render(
-      <PortionSheet
-        source={source}
-        currentMealId={source.sourceMeal.id}
-        recipeServings={4}
-        targetMeals={targetMeals}
-        eaters={eaters}
-        open
-        onOpenChange={vi.fn()}
-        onSave={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("1 serving ≈ 125 g")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "1.5×" }));
-    expect(screen.getByLabelText("Grams")).toHaveValue(188);
-  });
-
-  it("scales the serving count with a scaled recipe occurrence", () => {
-    render(
-      <PortionSheet
-        source={{
-          ...source,
-          scale: 2,
-          actualYieldGrams: 1000,
-          yieldBasis: { kind: "actual", lowerGrams: 1000, upperGrams: 1000 },
-        }}
-        currentMealId={source.sourceMeal.id}
-        recipeServings={4}
-        targetMeals={targetMeals}
-        eaters={eaters}
-        open
-        onOpenChange={vi.fn()}
-        onSave={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("1 serving ≈ 125 g")).toBeVisible();
-  });
-
-  it("requires integer gram measurements before saving", () => {
+  it("saves a fractional serving amount without replacing it with grams", () => {
     const onSave = vi.fn();
     render(
       <PortionSheet
@@ -263,13 +228,51 @@ describe("PortionSheet", () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText("Grams"), {
-      target: { value: "200.5" },
+    fireEvent.change(screen.getByLabelText("Amount"), {
+      target: { value: "1 1/2" },
     });
-    expect(
-      screen.getByRole("button", { name: "Save portions" }),
-    ).toBeDisabled();
-    expect(onSave).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("Unit"), {
+      target: { value: "serving" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save portions" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: [
+          expect.objectContaining({ amount: { value: 1.5, unit: "serving" } }),
+        ],
+      }),
+    );
+  });
+
+  it("keeps an amount with an unknown unit saveable", () => {
+    const onSave = vi.fn();
+    render(
+      <PortionSheet
+        source={{ ...source, portions: [] }}
+        currentMealId={source.sourceMeal.id}
+        targetMeals={targetMeals}
+        eaters={eaters}
+        open
+        onOpenChange={vi.fn()}
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Amount"), {
+      target: { value: "1/2" },
+    });
+    fireEvent.change(screen.getByLabelText("Unit"), {
+      target: { value: "wedge" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save portions" }));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: [
+          expect.objectContaining({ amount: { value: 0.5, unit: "wedge" } }),
+        ],
+      }),
+    );
   });
 
   it("adopts default meal and eater options that finish loading after the sheet", async () => {
@@ -298,7 +301,7 @@ describe("PortionSheet", () => {
         onSave={onSave}
       />,
     );
-    fireEvent.change(screen.getByLabelText("Grams"), {
+    fireEvent.change(screen.getByLabelText("Amount"), {
       target: { value: "200" },
     });
 

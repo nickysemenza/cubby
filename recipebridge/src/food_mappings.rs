@@ -310,6 +310,17 @@ pub(crate) fn product_non_price_mapping_pairs(product: &WProductInput) -> Produc
     if let Some(food) = product.food.as_ref() {
         shared.extend(mappings_from_food(food).iter().map(WUnitMapping::to_pair));
     }
+    // Meal food calculation adds the package label's explicit serving weight
+    // to `unit_mappings`. USDA serving synthesis happens above, after ordinary
+    // stored rows, so repeat this specifically-marked edge last: label serving
+    // size and label nutrients must have the same label > USDA precedence.
+    shared.extend(
+        product
+            .unit_mappings
+            .iter()
+            .filter(|mapping| mapping.source.as_deref() == Some("label serving"))
+            .map(WUnitMapping::to_pair),
+    );
     ProductPairs { package, shared }
 }
 

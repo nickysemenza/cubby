@@ -4,7 +4,12 @@ import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { formatEstimate } from "~/lib/nutrition-format";
 
+import {
+  formatFoodAmount,
+  formatFoodAmountEstimate,
+} from "../food-amount-editor";
 import { type MealPreparation, type MealPreparationsView } from "./types";
 
 export function MealPortionsSection({
@@ -25,8 +30,8 @@ export function MealPortionsSection({
     <Stack gap="sm">
       <Row align="start" justify="between" gap="sm" wrap>
         <Description size="xs">
-          Record cooked yields and assign weighed portions. Each amount stays
-          with the meal where it was served.
+          Record cooked yields and assign portions in the unit you know. Each
+          amount stays with the meal where it was served.
         </Description>
         {onAddPreparedPortion ? (
           <Button
@@ -47,7 +52,7 @@ export function MealPortionsSection({
             <span className="text-sm font-medium">No recipe portions yet</span>
             <Description size="xs">
               Add a recipe or bring in leftovers, then record who had how many
-              grams.
+              servings, grams, or another known amount.
             </Description>
           </Stack>
         </div>
@@ -97,7 +102,7 @@ function PreparationRow({
             </Description>
           ) : preparation.sourceSummary ? (
             <Description size="xs">
-              {preparation.sourceSummary.assignedGrams} g assigned
+              {assignedAmountText(preparation)}
               {preparation.sourceSummary.unassignedGrams == null
                 ? " · remainder unknown"
                 : preparation.sourceSummary.unassignedGrams < 0
@@ -106,11 +111,15 @@ function PreparationRow({
             </Description>
           ) : null}
           {portionsHere.length ? (
-            <span className="text-xs text-muted-foreground">
-              {portionsHere
-                .map((portion) => `${portion.eater.name} ${portion.grams} g`)
-                .join(" · ")}
-            </span>
+            <ul className="grid gap-1 text-xs text-muted-foreground">
+              {portionsHere.map((portion) => (
+                <li key={portion.eater.id}>
+                  <span className="text-foreground">{portion.eater.name}</span>{" "}
+                  {formatFoodAmount(portion.amount)} ·{" "}
+                  {formatFoodAmountEstimate(portion)}
+                </li>
+              ))}
+            </ul>
           ) : (
             <span className="text-xs text-muted-foreground">
               No one assigned yet
@@ -125,6 +134,19 @@ function PreparationRow({
       </Row>
     </div>
   );
+}
+
+function assignedAmountText(preparation: MealPreparation): string {
+  const summary = preparation.sourceSummary;
+  if (!summary) return "";
+  if (summary.assignedGrams != null)
+    return `${Number(summary.assignedGrams.toFixed(1)).toLocaleString()} g assigned`;
+  if (
+    summary.assignedShare.status === "complete" ||
+    summary.assignedShare.status === "partial"
+  )
+    return `${formatEstimate(summary.assignedShare, (value) => `${Number((value * 100).toFixed(1)).toLocaleString()}%`)} of batch assigned`;
+  return "Assigned weight unknown";
 }
 
 function yieldLabel(preparation: MealPreparation): string {

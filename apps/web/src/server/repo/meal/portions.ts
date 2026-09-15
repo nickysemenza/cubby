@@ -5,6 +5,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   type GetMealPreparationsInput,
+  type MealFoodAmount,
+  mealFoodAmountFromStored,
   type GetMealPreparationsOut,
   getMealPreparationsOut,
   type MealPreparationYieldBasis,
@@ -13,16 +15,16 @@ import {
   saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
 import type { MealKind } from "@cubby/schemas/meal-classification";
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
+import { type NutritionTotals } from "@cubby/schemas/nutrition";
 import type { RecipeTotals, RecipeYield } from "@cubby/schemas/recipe-shared";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import {
   aggregateTotals,
+  aggregateEstimates,
   pendingTotals,
-  scaleEstimate,
-  scaleNutrition,
   scaleTotals,
 } from "~/lib/nutrition-estimates";
 import { safeConvertAmount } from "~/lib/recipe-costing";
@@ -60,7 +62,7 @@ type PortionRow = {
   ledgerPartyShortcode: string;
   ledgerPartyName: string;
   ledgerPartyKind: "member" | "guest" | "household";
-  grams: number;
+  amount: MealFoodAmount;
   confirmedAt: Date | null;
 };
 
@@ -126,22 +128,18 @@ export const portionTotalsFor = (
   batch: NutritionTotals,
   yieldBasis: MealPreparationYieldBasis,
   grams: number,
-): NutritionTotals => {
-  if (yieldBasis.kind === "missing") {
-    const estimate = {
-      status: "unavailable" as const,
-      reason: "yield_missing" as const,
-    };
-    return { cost: estimate, nutrition: buildNutrition(() => estimate) };
-  }
-  const upperYield = yieldBasis.upperGrams ?? yieldBasis.lowerGrams;
-  const lowerFactor = grams / upperYield;
-  const upperFactor = grams / yieldBasis.lowerGrams;
-  return {
-    cost: scaleEstimate(batch.cost, lowerFactor, upperFactor),
-    nutrition: scaleNutrition(batch.nutrition, lowerFactor, upperFactor),
-  };
-};
+): NutritionTotals =>
+  calculateFoodAmount(
+    { value: grams, unit: "g" },
+    {
+      kind: "recipe",
+      batch,
+      yieldBasis,
+      recipeYield: null,
+      servings: null,
+      scale: 1,
+    },
+  ).totals;
 
 const updatePreparationYields = async (
   tx: DrizzleTransaction,
@@ -181,6 +179,8 @@ export const saveMealRecipePreparation = async (
       .select({
         id: mealRecipe.id,
         mealId: mealRecipe.mealId,
+        recipeId: mealRecipe.recipeId,
+        scale: mealRecipe.scale,
         estimatedYieldGrams: mealRecipe.estimatedYieldGrams,
         actualYieldGrams: mealRecipe.actualYieldGrams,
       })
@@ -228,6 +228,8 @@ export const saveMealRecipePreparation = async (
       .select({
         id: mealRecipe.id,
         mealId: mealRecipe.mealId,
+        recipeId: mealRecipe.recipeId,
+        scale: mealRecipe.scale,
         estimatedYieldGrams: mealRecipe.estimatedYieldGrams,
         actualYieldGrams: mealRecipe.actualYieldGrams,
       })
@@ -243,6 +245,7 @@ export const saveMealRecipePreparation = async (
         mealId: mealRecipePortion.mealId,
         ledgerPartyId: mealRecipePortion.ledgerPartyId,
         grams: mealRecipePortion.grams,
+        amount: mealRecipePortion.amount,
         confirmedAt: mealRecipePortion.confirmedAt,
       })
       .from(mealRecipePortion)
@@ -260,31 +263,70 @@ export const saveMealRecipePreparation = async (
         portion,
       ]),
     );
-    const finalGrams = new Map(
+    const finalAmounts = new Map(
       existing.map((portion) => [
         `${portion.mealId}:${portion.ledgerPartyId}`,
-        portion.grams,
+        mealFoodAmountFromStored(portion),
       ]),
     );
     for (const [index, change] of input.changes.entries()) {
       const targetId = targetIds[index]!;
       const party = parties[index]!;
       const key = `${targetId}:${party.id}`;
-      if (change.action === "remove") finalGrams.delete(key);
-      else finalGrams.set(key, change.grams);
+      if (change.action === "remove") finalAmounts.delete(key);
+      else finalAmounts.set(key, mealFoodAmountFromStored(change));
     }
     const nextActualYield =
       input.actualYieldGrams === undefined
         ? occurrence.actualYieldGrams
         : input.actualYieldGrams;
-    const assignedGrams = [...finalGrams.values()].reduce(
-      (sum, grams) => sum + grams,
-      0,
+    const [sourceRecipe] = await tx
+      .select({
+        servings: recipe.servings,
+        yield: recipe.yield,
+        totals: recipe.totals,
+        totalsComputedAt: recipe.totalsComputedAt,
+      })
+      .from(recipe)
+      .where(and(eq(recipe.id, occurrence.recipeId), notDeleted(recipe)));
+    if (!sourceRecipe)
+      throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+    const basis = yieldBasisFor(
+      nextActualYield,
+      input.estimatedYieldGrams === undefined
+        ? occurrence.estimatedYieldGrams
+        : input.estimatedYieldGrams,
+      sourceRecipe.yield,
+      occurrence.scale,
     );
-    if (nextActualYield != null && assignedGrams > nextActualYield)
+    const definiteShares = [...finalAmounts.values()].map((amount) => {
+      // Estimated cooked weight is advisory, not evidence of over-allocation.
+      if (
+        !amount ||
+        (nextActualYield == null &&
+          safeConvertAmount(amount, [], "weight").isOk())
+      )
+        return 0;
+      const share = calculateFoodAmount(amount, {
+        kind: "recipe",
+        batch: batchTotalsFor(
+          sourceRecipe.totals,
+          sourceRecipe.totalsComputedAt,
+          occurrence.scale,
+        ),
+        yieldBasis: basis,
+        recipeYield: sourceRecipe.yield,
+        servings: sourceRecipe.servings,
+        scale: occurrence.scale,
+      }).batchShare;
+      return share.status === "complete" || share.status === "partial"
+        ? share.lower
+        : 0;
+    });
+    if (definiteShares.reduce((sum, share) => sum + share, 0) > 1 + 1e-9)
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        "Assigned portions exceed the actual cooked yield.",
+        "Assigned portions exceed the actual cooked yield or the whole batch.",
       );
 
     const now = new Date();
@@ -302,19 +344,25 @@ export const saveMealRecipePreparation = async (
         continue;
       }
       // Confirmation is the consumed-at fact, not the last time this form was
-      // saved. A later gram correction must not rewrite when it was consumed.
+      // saved. A later amount correction must not rewrite when it was consumed.
       const confirmedAt = change.confirmed ? (prior?.confirmedAt ?? now) : null;
       if (prior)
         await tx
           .update(mealRecipePortion)
-          .set({ grams: change.grams, confirmedAt, deletedAt: null })
+          .set({
+            amount: mealFoodAmountFromStored(change),
+            grams: null,
+            confirmedAt,
+            deletedAt: null,
+          })
           .where(eq(mealRecipePortion.id, prior.id));
       else
         await tx.insert(mealRecipePortion).values({
           mealRecipeId: occurrence.id,
           mealId: targetId,
           ledgerPartyId: party.id,
-          grams: change.grams,
+          amount: mealFoodAmountFromStored(change),
+          grams: null,
           confirmedAt,
         });
     }
@@ -376,6 +424,7 @@ const getMealPreparationsRaw = async (
       recipeShortcode: recipe.shortcode,
       recipeName: recipe.name,
       recipeYield: recipe.yield,
+      recipeServings: recipe.servings,
       recipeTotals: recipe.totals,
       totalsComputedAt: recipe.totalsComputedAt,
       scale: mealRecipe.scale,
@@ -392,6 +441,7 @@ const getMealPreparationsRaw = async (
       ledgerPartyName: ledgerParty.name,
       ledgerPartyKind: ledgerParty.kind,
       grams: mealRecipePortion.grams,
+      amount: mealRecipePortion.amount,
       confirmedAt: mealRecipePortion.confirmedAt,
     })
     .from(mealRecipe)
@@ -439,6 +489,8 @@ const getMealPreparationsRaw = async (
       estimatedYieldGrams: number | null;
       actualYieldGrams: number | null;
       yieldBasis: MealPreparationYieldBasis;
+      recipeYield: RecipeYield | null;
+      recipeServings: number | null;
       totals: NutritionTotals;
       portions: PortionRow[];
     }
@@ -468,6 +520,8 @@ const getMealPreparationsRaw = async (
         estimatedYieldGrams: row.estimatedYieldGrams,
         actualYieldGrams: row.actualYieldGrams,
         yieldBasis,
+        recipeYield: row.recipeYield,
+        recipeServings: row.recipeServings,
         totals: batchTotalsFor(
           row.recipeTotals,
           row.totalsComputedAt,
@@ -487,7 +541,7 @@ const getMealPreparationsRaw = async (
       row.ledgerPartyShortcode != null &&
       row.ledgerPartyName != null &&
       row.ledgerPartyKind != null &&
-      row.grams != null
+      (row.amount != null || row.grams != null)
     ) {
       preparation.portions.push({
         id: row.portionId,
@@ -500,7 +554,7 @@ const getMealPreparationsRaw = async (
         ledgerPartyShortcode: row.ledgerPartyShortcode,
         ledgerPartyName: row.ledgerPartyName,
         ledgerPartyKind: row.ledgerPartyKind,
-        grams: row.grams,
+        amount: mealFoodAmountFromStored(row)!,
         confirmedAt: row.confirmedAt,
       });
     }
@@ -512,19 +566,30 @@ const getMealPreparationsRaw = async (
   let projectedCount = 0;
   const outputPreparations = [...preparations.values()].map((preparation) => {
     const preparedHere = preparation.sourceMealId === requestedMealId;
-    const assignedGrams = preparation.portions.reduce(
-      (sum, portion) => sum + portion.grams,
-      0,
+    const calculated = preparation.portions.map((portion) => ({
+      portion,
+      result: calculateFoodAmount(portion.amount, {
+        kind: "recipe",
+        batch: preparation.totals,
+        yieldBasis: preparation.yieldBasis,
+        recipeYield: preparation.recipeYield,
+        servings: preparation.recipeServings,
+        scale: preparation.scale,
+      }),
+    }));
+    const sumGrams = (entries: typeof calculated) =>
+      entries.some(({ result }) => result.grams == null)
+        ? null
+        : entries.reduce((sum, { result }) => sum + (result.grams ?? 0), 0);
+    const assignedGrams = sumGrams(calculated);
+    const confirmedGrams = sumGrams(
+      calculated.filter(({ portion }) => portion.confirmedAt != null),
     );
-    const confirmedGrams = preparation.portions
-      .filter((portion) => portion.confirmedAt != null)
-      .reduce((sum, portion) => sum + portion.grams, 0);
-    const portions = preparation.portions.map((portion) => {
-      const totals = portionTotalsFor(
-        preparation.totals,
-        preparation.yieldBasis,
-        portion.grams,
-      );
+    const assignedShare = aggregateEstimates(
+      calculated.map(({ result }) => result.batchShare),
+    );
+    const portions = calculated.map(({ portion, result }) => {
+      const { totals } = result;
       const servedHere = portion.targetMealId === requestedMealId;
       if (servedHere) {
         projectedCount += 1;
@@ -551,7 +616,10 @@ const getMealPreparationsRaw = async (
           name: portion.ledgerPartyName,
           kind: portion.ledgerPartyKind,
         },
-        grams: portion.grams,
+        amount: portion.amount,
+        grams: result.grams,
+        weight: result.weight,
+        batchShare: result.batchShare,
         confirmedAt: portion.confirmedAt,
         servedHere,
         totals,
@@ -566,13 +634,18 @@ const getMealPreparationsRaw = async (
       estimatedYieldGrams: preparation.estimatedYieldGrams,
       actualYieldGrams: preparation.actualYieldGrams,
       yieldBasis: preparation.yieldBasis,
+      recipeYield: preparation.recipeYield,
+      recipeServings: preparation.recipeServings,
       totals: preparation.totals,
       sourceSummary: preparedHere
         ? {
             assignedGrams,
             confirmedGrams,
+            assignedShare,
             unassignedGrams:
-              preparation.yieldBasis.lowerGrams == null
+              preparation.yieldBasis.lowerGrams == null ||
+              assignedGrams == null ||
+              preparation.yieldBasis.upperGrams != null
                 ? null
                 : preparation.yieldBasis.lowerGrams - assignedGrams,
           }

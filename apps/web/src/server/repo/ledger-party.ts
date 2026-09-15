@@ -15,6 +15,10 @@ import type {
   LedgerPartyUpdateData,
 } from "@cubby/schemas/ledger-party";
 import { ledgerPartyOut } from "@cubby/schemas/ledger-party";
+import {
+  type MealFoodAmount,
+  mealFoodAmountFromStored,
+} from "@cubby/schemas/meal";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { buildTakeSkip } from "@cubby/schemas/pagination";
 import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
@@ -117,7 +121,7 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     code: "merge-meal-portions",
     effect: "move-dedupe",
     description:
-      "Colliding portions for one preparation and target meal are summed; confirmation survives only when every folded portion was confirmed.",
+      "Colliding portions for one preparation and target meal are summed when their entered units match; confirmation survives only when every folded portion was confirmed.",
   },
   "MealFoodEntry.ledgerPartyId": {
     code: "repoint-meal-food-entries",
@@ -621,6 +625,7 @@ const foldMealRecipePortions = async (
       mealRecipeId: mealRecipePortion.mealRecipeId,
       mealId: mealRecipePortion.mealId,
       ledgerPartyId: mealRecipePortion.ledgerPartyId,
+      amount: mealRecipePortion.amount,
       grams: mealRecipePortion.grams,
       confirmedAt: mealRecipePortion.confirmedAt,
     })
@@ -640,13 +645,33 @@ const foldMealRecipePortions = async (
     if (group) group.push(portion);
     else groups.set(key, [portion]);
   }
-  for (const group of groups.values()) {
-    const grams = group.reduce((total, portion) => total + portion.grams, 0);
-    if (!Number.isSafeInteger(grams))
+  const foldedAmounts = new Map<string, MealFoodAmount>();
+  for (const [key, group] of groups) {
+    const amounts = group.map((portion) => mealFoodAmountFromStored(portion));
+    if (amounts.some((amount) => amount === null))
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        "Merged meal portion grams exceed the safe integer range.",
+        "A meal portion is missing its amount; reconcile the portion before merging ledger parties.",
       );
+    const presentAmounts = amounts.filter(
+      (amount): amount is MealFoodAmount => amount !== null,
+    );
+    const units = new Set(presentAmounts.map((amount) => amount.unit));
+    if (units.size !== 1)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Meal portions for the same preparation and meal use different units; reconcile the portion units before merging ledger parties.",
+      );
+    const value = presentAmounts.reduce(
+      (total, amount) => total + amount.value,
+      0,
+    );
+    if (!Number.isFinite(value))
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Merged meal portion amount is outside the supported numeric range.",
+      );
+    foldedAmounts.set(key, { value, unit: presentAmounts[0]!.unit });
   }
   if (portions.length === 0) return 0;
   await tx
@@ -658,14 +683,15 @@ const foldMealRecipePortions = async (
         notDeleted(mealRecipePortion),
       ),
     );
-  for (const group of groups.values()) {
+  for (const [key, group] of groups) {
     const first = group[0]!;
     const allConfirmed = group.every((portion) => portion.confirmedAt != null);
     await tx.insert(mealRecipePortion).values({
       mealRecipeId: first.mealRecipeId,
       mealId: first.mealId,
       ledgerPartyId: keepId,
-      grams: group.reduce((total, portion) => total + portion.grams, 0),
+      amount: foldedAmounts.get(key)!,
+      grams: null,
       confirmedAt: allConfirmed
         ? new Date(
             Math.max(...group.map((portion) => portion.confirmedAt!.getTime())),

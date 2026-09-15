@@ -4,13 +4,19 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 
 export const meal = defineOperationDomain(mealContract, {
   getNutrition: {
-    tags: [["meal", "getNutrition"], ["product"], ["recipe"], ["ledgerParty"]],
+    tags: [
+      ["meal", "getNutrition"],
+      ["product"],
+      ["ingredient"],
+      ["recipe"],
+      ["ledgerParty"],
+    ],
   },
   saveFood: { invalidates: ripple.meal },
   removeFood: { invalidates: ripple.meal },
   getByDateRange: { tags: [["meal", "getByDateRange"]] },
   upcomingSummary: { tags: [["meal", "upcomingSummary"]] },
-  getPreparations: { tags: [["meal", "getPreparations"]] },
+  getPreparations: { tags: [["meal", "getPreparations"], ["recipe"]] },
   getShoppingList: { tags: [["meal", "getShoppingList"]] },
   addRecipe: { invalidates: ripple.meal },
   updateRecipe: { invalidates: ripple.meal },

@@ -313,6 +313,14 @@ export const ENTITY_EDGES = {
     },
   }),
   ingredient: edges({
+    "MealFoodEntry.ingredientId": {
+      column: mealFoodEntry.ingredientId,
+      role: "usage",
+      label: "meal food entries",
+      description:
+        "A recorded ingredient quantity assigned to an eater at a meal, retaining the ingredient as its authored source.",
+      liveness: { kind: "must-target-live" },
+    },
     "RecipeSectionIngredient.ingredientId": {
       column: recipeSectionIngredient.ingredientId,
       role: "usage",
@@ -367,7 +375,7 @@ export const ENTITY_EDGES = {
       role: "association",
       label: "served portions",
       description:
-        "A gram portion from a recipe preparation assigned for consumption at this meal, including portions from an earlier leftovers source.",
+        "A recorded portion from a recipe preparation assigned for consumption at this meal, including portions from an earlier leftovers source.",
       liveness: { kind: "must-target-live" },
     },
     "MealImage.mealId": {
@@ -423,7 +431,7 @@ export const ENTITY_EDGES = {
       role: "association",
       label: "meal portions",
       description:
-        "A planned or confirmed gram portion naming this member or guest as its eater.",
+        "A planned or confirmed recipe portion naming this member or guest as its eater.",
       liveness: { kind: "must-target-live" },
     },
   }),
@@ -433,7 +441,7 @@ export const ENTITY_EDGES = {
       role: "reference",
       label: "meal food entries",
       description:
-        "A recorded product amount whose nutrition is recalculated from the current product source while its gram amount remains fixed.",
+        "A recorded product amount whose nutrition is recalculated from the current product source while its entered quantity remains fixed.",
       liveness: { kind: "must-target-live" },
     },
     "ProductExternalId.productId": {

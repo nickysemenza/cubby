@@ -4,6 +4,8 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { ENTITY_LIFECYCLE_REGISTRY } from "~/server/repo/entity-lifecycle-registry";
+import { INGREDIENT_DELETE_EDGE_POLICY } from "~/server/repo/ingredient/deletion";
+import { INGREDIENT_MERGE_EDGE_POLICY } from "~/server/repo/ingredient/merge";
 import {
   isRetainingEdgeKey,
   PRODUCT_DELETE_EDGE_POLICY,
@@ -34,6 +36,15 @@ describe("incoming-edge operation policies", () => {
     expect(Object.keys(PRODUCT_EDGE_ROLES).sort()).toEqual(
       Object.keys(INCOMING_EDGES.product).sort(),
     );
+  });
+
+  it("blocks ingredient deletion and re-points merges for meal food entries", () => {
+    expect(
+      INGREDIENT_DELETE_EDGE_POLICY["MealFoodEntry.ingredientId"].effect,
+    ).toBe("block");
+    expect(
+      INGREDIENT_MERGE_EDGE_POLICY["MealFoodEntry.ingredientId"].effect,
+    ).toBe("repoint");
   });
 });
 

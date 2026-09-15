@@ -65,9 +65,14 @@ One physical cooking of one Recipe occurrence planned into a Meal. A Meal Recipe
 _Avoid_: inventory batch, recipe version
 
 **Meal portion**:
-A gram amount assigned to one Meal eater from a source Meal preparation at a target Meal. A portion is planned until explicitly confirmed as consumed.
+An entered quantity and unit assigned to one Meal eater from a source Meal preparation at a target Meal. Nutrition is derived from the current preparation and Recipe. Future portions are planned; today and past portions are logged according to the household date.
 _Avoid_: serving, inventory decrement
 
 **Meal eater**:
-A member or guest Ledger Party named on a Meal portion. The Household Party is not a Meal eater.
+A member or guest Ledger Party named on a Meal portion or Meal food entry. The Household Party is not a Meal eater.
 _Avoid_: household, unknown person
+
+**Meal food entry**:
+A quantity and unit of an Ingredient or Product, or named manual nutrient totals,
+assigned to one eater at a Meal. Source conversions and nutrition remain live;
+the entered amount is retained even when its nutrition cannot yet be calculated.

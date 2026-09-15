@@ -4619,9 +4619,21 @@
           "primaryKey": false,
           "notNull": true
         },
+        "ingredientId": {
+          "name": "ingredientId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "productId": {
           "name": "productId",
           "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "amount": {
+          "name": "amount",
+          "type": "jsonb",
           "primaryKey": false,
           "notNull": false
         },
@@ -4695,6 +4707,21 @@
           "method": "btree",
           "with": {}
         },
+        "MealFoodEntry_ingredientId_idx": {
+          "name": "MealFoodEntry_ingredientId_idx",
+          "columns": [
+            {
+              "expression": "ingredientId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "MealFoodEntry_productId_idx": {
           "name": "MealFoodEntry_productId_idx",
           "columns": [
@@ -4738,6 +4765,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "MealFoodEntry_ingredientId_Ingredient_id_fk": {
+          "name": "MealFoodEntry_ingredientId_Ingredient_id_fk",
+          "tableFrom": "MealFoodEntry",
+          "tableTo": "Ingredient",
+          "columnsFrom": [
+            "ingredientId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "MealFoodEntry_productId_Product_id_fk": {
           "name": "MealFoodEntry_productId_Product_id_fk",
           "tableFrom": "MealFoodEntry",
@@ -4760,9 +4800,17 @@
           "name": "MealFoodEntry_grams_check",
           "value": "\"MealFoodEntry\".\"grams\" IS NULL OR (\"MealFoodEntry\".\"grams\" > 0 AND \"MealFoodEntry\".\"grams\" < 'Infinity'::float8)"
         },
+        "MealFoodEntry_amount_check": {
+          "name": "MealFoodEntry_amount_check",
+          "value": "\n  \"MealFoodEntry\".\"amount\" IS NULL OR COALESCE((\n    jsonb_typeof(\"MealFoodEntry\".\"amount\") = 'object'\n    AND \"MealFoodEntry\".\"amount\" ? 'value'\n    AND \"MealFoodEntry\".\"amount\" ? 'unit'\n    AND \"MealFoodEntry\".\"amount\" - 'value' - 'unit' = '{}'::jsonb\n    AND CASE\n      WHEN jsonb_typeof(\"MealFoodEntry\".\"amount\"->'value') = 'number' THEN\n        (\"MealFoodEntry\".\"amount\"->>'value')::numeric > 0\n        AND (\"MealFoodEntry\".\"amount\"->>'value')::numeric < 'Infinity'::numeric\n      ELSE false\n    END\n    AND jsonb_typeof(\"MealFoodEntry\".\"amount\"->'unit') = 'string'\n    AND length(trim(\"MealFoodEntry\".\"amount\"->>'unit')) > 0\n    AND \"MealFoodEntry\".\"amount\"->>'unit' = trim(\"MealFoodEntry\".\"amount\"->>'unit')\n  ), false)\n"
+        },
+        "MealFoodEntry_amount_compatibility_check": {
+          "name": "MealFoodEntry_amount_compatibility_check",
+          "value": "\"MealFoodEntry\".\"amount\" IS NULL OR \"MealFoodEntry\".\"grams\" IS NULL"
+        },
         "MealFoodEntry_source_check": {
           "name": "MealFoodEntry_source_check",
-          "value": "(\"MealFoodEntry\".\"sourceKind\" = 'product' AND \"MealFoodEntry\".\"productId\" IS NOT NULL AND \"MealFoodEntry\".\"grams\" IS NOT NULL AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'manual' AND \"MealFoodEntry\".\"productId\" IS NULL AND length(trim(\"MealFoodEntry\".\"name\")) > 0 AND \"MealFoodEntry\".\"name\" IS NOT NULL AND \"MealFoodEntry\".\"nutrients\" IS NOT NULL AND jsonb_typeof(\"MealFoodEntry\".\"nutrients\") = 'object' AND \"MealFoodEntry\".\"nutrients\" <> '{}'::jsonb)"
+          "value": "(\"MealFoodEntry\".\"sourceKind\" = 'ingredient' AND \"MealFoodEntry\".\"ingredientId\" IS NOT NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND (\"MealFoodEntry\".\"amount\" IS NOT NULL OR \"MealFoodEntry\".\"grams\" IS NOT NULL) AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'product' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NOT NULL AND (\"MealFoodEntry\".\"amount\" IS NOT NULL OR \"MealFoodEntry\".\"grams\" IS NOT NULL) AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'manual' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND length(trim(\"MealFoodEntry\".\"name\")) > 0 AND \"MealFoodEntry\".\"name\" IS NOT NULL AND \"MealFoodEntry\".\"nutrients\" IS NOT NULL AND jsonb_typeof(\"MealFoodEntry\".\"nutrients\") = 'object' AND \"MealFoodEntry\".\"nutrients\" <> '{}'::jsonb)"
         }
       },
       "isRLSEnabled": false
@@ -5079,11 +5127,17 @@
           "primaryKey": false,
           "notNull": true
         },
+        "amount": {
+          "name": "amount",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "grams": {
           "name": "grams",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "confirmedAt": {
           "name": "confirmedAt",
@@ -5234,7 +5288,15 @@
       "checkConstraints": {
         "MealRecipePortion_grams_check": {
           "name": "MealRecipePortion_grams_check",
-          "value": "\"MealRecipePortion\".\"grams\" > 0"
+          "value": "\"MealRecipePortion\".\"grams\" IS NULL OR \"MealRecipePortion\".\"grams\" > 0"
+        },
+        "MealRecipePortion_amount_check": {
+          "name": "MealRecipePortion_amount_check",
+          "value": "\n  \"MealRecipePortion\".\"amount\" IS NULL OR COALESCE((\n    jsonb_typeof(\"MealRecipePortion\".\"amount\") = 'object'\n    AND \"MealRecipePortion\".\"amount\" ? 'value'\n    AND \"MealRecipePortion\".\"amount\" ? 'unit'\n    AND \"MealRecipePortion\".\"amount\" - 'value' - 'unit' = '{}'::jsonb\n    AND CASE\n      WHEN jsonb_typeof(\"MealRecipePortion\".\"amount\"->'value') = 'number' THEN\n        (\"MealRecipePortion\".\"amount\"->>'value')::numeric > 0\n        AND (\"MealRecipePortion\".\"amount\"->>'value')::numeric < 'Infinity'::numeric\n      ELSE false\n    END\n    AND jsonb_typeof(\"MealRecipePortion\".\"amount\"->'unit') = 'string'\n    AND length(trim(\"MealRecipePortion\".\"amount\"->>'unit')) > 0\n    AND \"MealRecipePortion\".\"amount\"->>'unit' = trim(\"MealRecipePortion\".\"amount\"->>'unit')\n  ), false)\n"
+        },
+        "MealRecipePortion_amount_source_check": {
+          "name": "MealRecipePortion_amount_source_check",
+          "value": "(\"MealRecipePortion\".\"amount\" IS NULL) <> (\"MealRecipePortion\".\"grams\" IS NULL)"
         }
       },
       "isRLSEnabled": false

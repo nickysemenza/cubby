@@ -1,28 +1,25 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   mealNutritionFood,
+  mealFoodAmountFromStored,
   mealNutritionOut,
   nutritionMeal,
   type MealNutritionInput,
   type MealNutritionPerson,
 } from "@cubby/schemas/meal";
-import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 
-import { manualFoodTotals, productFoodTotals } from "~/lib/meal-food-nutrition";
-import { aggregateTotals, scaleTotals } from "~/lib/nutrition-estimates";
+import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
+import { aggregateTotals } from "~/lib/nutrition-estimates";
 import type { Database } from "~/server/db";
 import { getMealNutritionRows } from "~/server/repo/meal/food";
-import {
-  batchTotalsFor,
-  portionTotalsFor,
-  yieldBasisFor,
-} from "~/server/repo/meal/portions";
+import { batchTotalsFor, yieldBasisFor } from "~/server/repo/meal/portions";
 import {
   foodLookupParamFromProduct,
   getProductsByShortcodes,
 } from "~/server/repo/product";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
+import { getIngredientsByIDs } from "./ingredient.service";
 import type { RecipeCostingService } from "./recipe-costing.service";
 import { repairStaleRecipesForRead } from "./repair-stale-recipes-for-read";
 import { batchEnrichWithFood, type UsdaFoodBatchPort } from "./usda-helpers";
@@ -65,12 +62,20 @@ export async function getMealNutrition(
   ];
   const products = await batchEnrichWithFood(
     await getProductsByShortcodes(db, codes),
-    (p) => (p.labelNutrition ? null : foodLookupParamFromProduct(p)),
+    foodLookupParamFromProduct,
     usdaClient,
   );
-  const productTotals = new Map(
-    products.map((p) => [p.id, productFoodTotals(p, 100)]),
-  );
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const ingredients = await getIngredientsByIDs(db, usdaClient, [
+    ...new Set(
+      rows.foods.flatMap((row) =>
+        row.entry.ingredientId && row.ingredientDeletedAt == null
+          ? [row.entry.ingredientId]
+          : [],
+      ),
+    ),
+  ]);
+  const ingredientById = new Map(ingredients.map((i) => [i.id, i]));
   const people = new Map<string, MealNutritionPerson>();
   const append = (
     eaterId: string,
@@ -92,7 +97,21 @@ export async function getMealNutrition(
     }
     person.foods.push(food);
   };
-  for (const p of rows.portions)
+  for (const p of rows.portions) {
+    const amount = mealFoodAmountFromStored(p);
+    const result = calculateFoodAmount(amount, {
+      kind: "recipe",
+      batch: batchTotalsFor(p.recipeTotals, p.totalsComputedAt, p.scale),
+      yieldBasis: yieldBasisFor(
+        p.actualYieldGrams,
+        p.estimatedYieldGrams,
+        p.recipeYield,
+        p.scale,
+      ),
+      recipeYield: p.recipeYield,
+      servings: p.recipeServings,
+      scale: p.scale,
+    });
     append(
       p.eaterId,
       p.eaterName,
@@ -100,57 +119,82 @@ export async function getMealNutrition(
         sourceKind: "recipe",
         meal: meals.get(p.mealId),
         name: p.name,
-        grams: p.grams,
+        amount,
         mealRecipeId: p.mealRecipeId,
         recipeId: p.recipeId,
         sourceMealId: p.sourceMealId,
-        totals: portionTotalsFor(
-          batchTotalsFor(p.recipeTotals, p.totalsComputedAt, p.scale),
-          yieldBasisFor(
-            p.actualYieldGrams,
-            p.estimatedYieldGrams,
-            p.recipeYield,
-            p.scale,
-          ),
-          p.grams,
-        ),
+        ...result,
       }),
     );
+  }
   for (const row of rows.foods) {
     const e = row.entry;
-    if (e.sourceKind === "product") {
-      const totals =
-        (row.productId && row.productDeletedAt == null
-          ? productTotals.get(parseShortcodeFor("product", row.productId))
-          : null) ?? unavailableSourceTotals;
-      if (!row.productId || !row.productName || e.grams == null) continue;
+    const amount = mealFoodAmountFromStored(e);
+    const common = { id: e.id, meal: meals.get(e.mealId), amount };
+    if (e.sourceKind === "product" && row.productId && row.productName) {
+      const source =
+        row.productDeletedAt == null
+          ? productById.get(parseShortcodeFor("product", row.productId))
+          : undefined;
       append(
         row.eaterId,
         row.eaterName,
         mealNutritionFood.parse({
+          ...common,
           sourceKind: "product",
-          id: e.id,
           productId: row.productId,
-          meal: meals.get(e.mealId),
           name: row.productName,
-          grams: e.grams,
-          totals: scaleTotals(totals, e.grams / 100),
+          ...calculateFoodAmount(
+            amount,
+            source
+              ? { kind: "product", product: source }
+              : { kind: "unavailable" },
+          ),
         }),
       );
-    } else if (e.nutrients && e.name)
+    } else if (
+      e.sourceKind === "ingredient" &&
+      row.ingredientId &&
+      row.ingredientName
+    ) {
+      const source =
+        row.ingredientDeletedAt == null
+          ? ingredientById.get(
+              parseShortcodeFor("ingredient", row.ingredientId),
+            )
+          : undefined;
       append(
         row.eaterId,
         row.eaterName,
         mealNutritionFood.parse({
-          sourceKind: "manual",
-          id: e.id,
-          meal: meals.get(e.mealId),
-          name: e.name,
-          grams: e.grams,
-          nutrients: e.nutrients,
-          totals: manualFoodTotals(e.nutrients),
+          ...common,
+          sourceKind: "ingredient",
+          ingredientId: row.ingredientId,
+          name: row.ingredientName,
+          ...calculateFoodAmount(
+            amount,
+            source
+              ? { kind: "ingredient", ingredient: source }
+              : { kind: "unavailable" },
+          ),
         }),
       );
+    } else if (e.sourceKind === "manual" && e.nutrients && e.name) {
+      append(
+        row.eaterId,
+        row.eaterName,
+        mealNutritionFood.parse({
+          ...common,
+          sourceKind: "manual",
+          name: e.name,
+          nutrients: e.nutrients,
+          ...calculateFoodAmount(amount, {
+            kind: "manual",
+            nutrients: e.nutrients,
+          }),
+        }),
+      );
+    }
   }
   for (const person of people.values()) {
     person.foods.sort(
@@ -173,12 +217,3 @@ export async function getMealNutrition(
     ),
   });
 }
-
-const unavailableEstimate = {
-  status: "unavailable" as const,
-  reason: "no_data" as const,
-};
-const unavailableSourceTotals: NutritionTotals = {
-  cost: unavailableEstimate,
-  nutrition: buildNutrition(() => unavailableEstimate),
-};

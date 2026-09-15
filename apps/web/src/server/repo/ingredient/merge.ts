@@ -53,6 +53,12 @@ type IngredientSurvivorChanges = {
 };
 
 export const INGREDIENT_MERGE_EDGE_POLICY = {
+  "MealFoodEntry.ingredientId": {
+    code: "repoint-to-survivor",
+    effect: "repoint",
+    description:
+      "Meal food entries retain their entered amounts while moving to the surviving ingredient.",
+  },
   "RecipeSectionIngredient.ingredientId": {
     code: "repoint-to-survivor",
     effect: "repoint",
@@ -313,15 +319,13 @@ export const mergeIngredients = async (
       })
       .where(eq(ingredient.id, target));
 
-    // Re-point every recipe line, and every product linked to an alias
-    // ingredient, onto the target. The product repoint isn't optional: the FK
-    // from Product.ingredientId would block the hard delete below (and this is
-    // the whole point of merging — the surviving ingredient inherits the
-    // others' products, e.g. "share this USDA food / price").
+    // Re-point every recipe line, product, and meal food entry linked to an
+    // alias ingredient onto the target. None is optional: every FK would block
+    // the hard delete below. The surviving ingredient inherits both the
+    // aliases' product enrichment and their recorded meal history.
     //
-    // `liveOnly: false` on both: the delete below is a HARD delete, and the FK
-    // constraint applies to every row regardless of `deletedAt`, so a
-    // soft-deleted product left pointing at an alias would abort the merge.
+    // `liveOnly: false` throughout: the delete below is a HARD delete, and FK
+    // constraints apply to every row regardless of `deletedAt`.
     await repointEdge(
       tx,
       "ingredient",
@@ -333,6 +337,11 @@ export const mergeIngredients = async (
       },
     );
     await repointEdge(tx, "ingredient", "Product.ingredientId", {
+      from: uniqueAliases,
+      to: target,
+      liveOnly: false,
+    });
+    await repointEdge(tx, "ingredient", "MealFoodEntry.ingredientId", {
       from: uniqueAliases,
       to: target,
       liveOnly: false,

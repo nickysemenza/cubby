@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   mealAddRecipeInput,
+  mealFoodAmount,
   getMealPreparationsMcpInput,
   getMealPreparationsMcpOut,
   type MealPreparationNutritionDetail,
@@ -86,7 +87,8 @@ const dailyIntakeOut = z.object({
           z.object({
             name: z.string(),
             grams: z.number().nullable(),
-            sourceKind: z.enum(["recipe", "product", "manual"]),
+            amount: mealFoodAmount.nullable(),
+            sourceKind: z.enum(["recipe", "product", "ingredient", "manual"]),
             nutrition: compactNutrition,
           }),
         )
@@ -167,6 +169,7 @@ export function registerMealTools(server: McpServer) {
                   .map((food) => ({
                     name: food.name,
                     grams: food.grams,
+                    amount: food.amount,
                     sourceKind: food.sourceKind,
                     nutrition: compactTotals(food.totals, params.nutrition),
                   }))

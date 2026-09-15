@@ -234,7 +234,7 @@ export type RecipeCosting = {
  * source of truth for the list (usda-api shares the package and must not need
  * WASM); the engine special-cases `unit === "kcal"` to the Calories kind.
  */
-const nutrientTargets = (): WCostingInput["nutrient_targets"] =>
+export const nutrientTargets = (): WCostingInput["nutrient_targets"] =>
   TIER1_NUTRIENT_KEYS.map((key) => ({
     code: TIER1_NUTRIENTS[key].code,
     unit: getNutrientUnitString(key),

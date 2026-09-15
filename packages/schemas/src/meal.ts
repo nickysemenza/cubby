@@ -1,5 +1,12 @@
 import { z } from "zod";
 export * from "./meal-nutrition";
+export * from "./meal-amount";
+import {
+  mealFoodAmount,
+  mealAmountInputFields,
+  hasRequiredMealAmount,
+} from "./meal-amount";
+import { recipeYieldSchema } from "./recipe-shared";
 import { auditDateFilterFields, uniqueBy } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { mealRelatedFilterFields } from "./related-view";
@@ -20,7 +27,11 @@ import {
 import { ledgerPartyKind } from "./ledger-party";
 import { mealKindSchema, mealTypeSchema } from "./meal-classification";
 import { mealDate, mealScale, mealYieldGrams } from "./meal-shared";
-import { nutritionTotals, nutritionTotalsPartial } from "./nutrition";
+import {
+  nutritionTotals,
+  nutritionTotalsPartial,
+  measureEstimate,
+} from "./nutrition";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import { mealRecipeOut, mealTotals } from "./meal-fields";
 import {
@@ -138,13 +149,15 @@ export type MealPreparationYieldBasis = z.infer<
   typeof mealPreparationYieldBasis
 >;
 
-const mealRecipePreparationSetChange = z.object({
-  action: z.literal("set"),
-  mealId: mealShortcode,
-  ledgerPartyId: ledgerPartyShortcode,
-  grams: mealYieldGrams,
-  confirmed: z.boolean(),
-});
+const mealRecipePreparationSetChange = z
+  .object({
+    action: z.literal("set"),
+    mealId: mealShortcode,
+    ledgerPartyId: ledgerPartyShortcode,
+    ...mealAmountInputFields,
+    confirmed: z.boolean(),
+  })
+  .refine(hasRequiredMealAmount, "Enter either amount or legacy grams");
 
 const mealRecipePreparationRemoveChange = z.object({
   action: z.literal("remove"),
@@ -202,7 +215,10 @@ const mealPreparationEaterOut = z.object({
 export const mealRecipePreparationPortionOut = z.object({
   targetMeal: mealPreparationTargetMealOut,
   eater: mealPreparationEaterOut,
-  grams: mealYieldGrams,
+  amount: mealFoodAmount,
+  grams: z.number().positive().nullable(),
+  weight: measureEstimate,
+  batchShare: measureEstimate,
   confirmedAt: z.date().nullable(),
   servedHere: z.boolean(),
   totals: nutritionTotals,
@@ -212,8 +228,9 @@ export type MealRecipePreparationPortionOut = z.infer<
 >;
 
 const mealRecipePreparationSourceSummaryOut = z.object({
-  assignedGrams: z.number().int().nonnegative(),
-  confirmedGrams: z.number().int().nonnegative(),
+  assignedGrams: z.number().nonnegative().nullable(),
+  confirmedGrams: z.number().nonnegative().nullable(),
+  assignedShare: measureEstimate,
   // Negative is meaningful: it exposes an over-assigned preparation.
   unassignedGrams: z.number().nullable(),
 });
@@ -230,6 +247,8 @@ const mealRecipePreparationFields = {
   sourceMeal: mealPreparationSourceMealOut,
   recipe: z.object({ id: recipeShortcode, name: z.string() }),
   scale: mealScale,
+  recipeServings: z.number().positive().nullable(),
+  recipeYield: recipeYieldSchema.nullable(),
   estimatedYieldGrams: mealYieldGrams.nullable(),
   actualYieldGrams: mealYieldGrams.nullable(),
   yieldBasis: mealPreparationYieldBasis,

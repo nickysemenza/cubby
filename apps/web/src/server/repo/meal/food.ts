@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   mealFoodMutationOut,
+  mealFoodAmountFromStored,
   type MealNutritionInput,
   type SaveMealFoodInput,
   type removeMealFoodInput,
@@ -16,6 +17,7 @@ import {
   mealRecipePortion,
   ledgerParty,
   product,
+  ingredient,
   recipe,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -62,12 +64,32 @@ export const saveMealFood = (
       if (!source)
         throw createAppError("PRODUCT_NOT_FOUND", "Product not found");
     }
+    const ingredientId =
+      input.sourceKind === "ingredient"
+        ? await resolveOrThrow(tx, "ingredient", input.ingredientId)
+        : null;
+    if (ingredientId) {
+      const [source] = await tx
+        .select({ id: ingredient.id, recipeId: ingredient.recipeId })
+        .from(ingredient)
+        .where(and(eq(ingredient.id, ingredientId), notDeleted(ingredient)))
+        .for("key share");
+      if (!source)
+        throw createAppError("INGREDIENT_NOT_FOUND", "Ingredient not found");
+      if (source.recipeId)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Use a recipe portion for this ingredient.",
+        );
+    }
     const values = {
       mealId,
       ledgerPartyId: eater.id,
       productId,
+      ingredientId,
       sourceKind: input.sourceKind,
-      grams: input.grams,
+      amount: mealFoodAmountFromStored(input),
+      grams: null,
       name: input.sourceKind === "manual" ? input.name : null,
       nutrients: input.sourceKind === "manual" ? input.nutrients : null,
     };
@@ -165,6 +187,7 @@ export async function getMealNutritionRows(
             eaterId: ledgerParty.shortcode,
             eaterName: ledgerParty.name,
             grams: mealRecipePortion.grams,
+            amount: mealRecipePortion.amount,
             mealRecipeId: mealRecipe.id,
             sourceMealId: sourceMeal.shortcode,
             recipeId: recipe.shortcode,
@@ -172,6 +195,7 @@ export async function getMealNutritionRows(
             recipeTotals: recipe.totals,
             totalsComputedAt: recipe.totalsComputedAt,
             recipeYield: recipe.yield,
+            recipeServings: recipe.servings,
             scale: mealRecipe.scale,
             actualYieldGrams: mealRecipe.actualYieldGrams,
             estimatedYieldGrams: mealRecipe.estimatedYieldGrams,
@@ -214,6 +238,9 @@ export async function getMealNutritionRows(
             productId: product.shortcode,
             productName: product.name,
             productDeletedAt: product.deletedAt,
+            ingredientId: ingredient.shortcode,
+            ingredientName: ingredient.name,
+            ingredientDeletedAt: ingredient.deletedAt,
           })
           .from(mealFoodEntry)
           .innerJoin(
@@ -226,6 +253,8 @@ export async function getMealNutritionRows(
           // includes-deleted: a corrupted out-of-band Product deletion must not
           // erase the recorded food amount from the eater's nutrition history.
           .leftJoin(product, eq(mealFoodEntry.productId, product.id))
+          // includes-deleted: preserve the entered amount after an out-of-band source deletion.
+          .leftJoin(ingredient, eq(mealFoodEntry.ingredientId, ingredient.id))
           .where(
             and(inArray(mealFoodEntry.mealId, ids), notDeleted(mealFoodEntry)),
           )
