@@ -70,6 +70,15 @@ history is the archive. Permanent product constraints live in the
   the recipe form even though the generated update field group already permits
   `cookbookId` — wire both in the same slice.
 
+- **Import extracted cookbook bundles.** Accept ingredient-parser's `.cookbook`
+  archives with extracted recipes and images through the existing cookbook
+  review/import flow (`cookbook-import/cookbook-dropzone.tsx`). Read ZIP entries
+  incrementally in a Web Worker and upload selected assets with bounded
+  concurrency; keep validation and recipe creation on the server. Large bundles
+  must not require loading the entire archive into memory. The first version
+  requires an open tab; add R2 staging or Workflows only when unattended or
+  resumable imports become a demonstrated need.
+
 - **Variance-targeted recount pass.** Seed a recount session from the
   shelf-versus-ledger disagreement worklist so the pass visits the products that
   actually disagree wherever they live.
@@ -329,6 +338,13 @@ history is the archive. Permanent product constraints live in the
   computation; never infer selected sources from matching values or linked-product
   lists. The Cubby-only nutrition overhaul does not depend on this work.
 
+- **Persisted query cache across account changes** — Promote when sign-out or
+  account switching exposes stale cached state, or auth-lifecycle work changes
+  cache ownership. `integrations/tanstack-query/persister.ts` uses one device-wide
+  key, and `root-provider.tsx` busts it by deploy revision. Review account scoping
+  and clearing of both persisted and in-memory state together; verify sign-out,
+  account switching, and same-account relaunch before treating this as resolved.
+
 - **TanStack Start observability** — Remove Cubby's observability wrapper when
   TanStack Start supplies equivalent named request/result/error events and trace
   hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
@@ -545,6 +561,12 @@ history is the archive. Permanent product constraints live in the
   utilities, and other building knowledge to the location tree.
 - **Grow-to-table loop.** Model beds and plantings, receive harvests into pantry
   inventory, and ask what the yard can supply this week.
+- **Seasonal garden planning and photo comparison.** Build on the existing
+  [journals and planting guides](garden.md) to propose revisable seasonal plans
+  for seeds and starts, compare dated bed/tree photos with AI, and explain
+  forecast changes and keep-versus-replace recommendations. Keep the workflow
+  occasional and lightweight; planting windows alone do not establish maturity
+  or harvest forecasts.
 - **Heirloom outputs.** Produce a future-owner house manual, project yearbooks, and a
   durable archive/export format.
 - **Home Assistant to Cubby.** Turn runtime, energy, fault, weather, and area/device

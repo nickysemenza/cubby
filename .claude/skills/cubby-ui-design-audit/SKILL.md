@@ -31,7 +31,10 @@ contracts and validation. Do not copy either source into this skill.
    automated detector output as a lead, not a finding.
 6. If implementation is requested, fix the smallest coherent set of root causes.
    Preserve intentional workflow differences, and add a regression test at the
-   lowest seam that can observe each confirmed behavioral failure.
+   lowest seam that can observe each confirmed behavioral failure. Before
+   sharing a component, compare focus, event handling, parent measurement, and
+   positioning ownership; a library-positioned render prop and an absolutely
+   positioned overlay can look alike while requiring different contracts.
 7. Perform one bounded visual inspection pass across the coverage matrix, batch
    the resulting corrections, then perform at most one confirmation pass as
    directed by Impeccable.

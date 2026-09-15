@@ -112,6 +112,15 @@ each on a 24 GB machine, so three parallel implementers each running typecheck
 is what took the box's one-minute load to 200. At handoff report commands,
 results, and limitations. Do not describe an unrun hosted suite as passing.
 
+## Phone acceptance
+
+Changes to phone navigation, safe areas, keyboard handling, or installed-PWA
+launch/return behavior need a physical iPhone Safari and installed-PWA pass
+before merge. Exercise the affected workflows and record the device, modes,
+observed behavior, and remaining gaps. Playwright WebKit and simulator runs
+provide automated coverage, not physical-device signoff. Reconcile historical
+"QA pending" notes with current evidence before carrying them into a worklist.
+
 ## Quality policy
 
 Oxlint treats correctness and suspicious diagnostics as errors and rejects
