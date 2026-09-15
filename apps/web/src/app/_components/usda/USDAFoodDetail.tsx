@@ -23,6 +23,7 @@ import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { sourceNutritionEstimate } from "~/lib/nutrition-format";
 import {
   getAllUnitMappingsFromProduct,
+  servingBasisUnit,
   unitMappingsFromFood,
 } from "~/lib/unit-mapping-utils";
 
@@ -204,11 +205,13 @@ export const USDAFoodDetail: React.FC<{
     </div>
   );
 
+  const nutrientBasis = servingBasisUnit(food);
+
   const nutritionSection = (
     <Stack gap="sm">
       <NutritionLabel
         estimates={sourceNutritionEstimate(nutritionInfo.nutrientsPer100)}
-        servingLabel="per 100 g"
+        servingLabel={`per 100 ${nutrientBasis === "ml" ? "mL" : "g"}`}
       />
       {/* An unlinked food has no price — gate on a linked product existing at
           all, per the linkedProducts.length check below. */}

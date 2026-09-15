@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   computeNutrientDensityFigures,
-  resolveGramsPerEach,
+  resolveBasisAmountPerEach,
 } from "./NutrientDensityStats";
 
 // "1 each = 500 g" — the shape a stored product weight mapping takes in the
@@ -14,21 +14,32 @@ const weightMapping = manualUnitMapping(
   { value: 500, unit: "g" },
 );
 
-describe("resolveGramsPerEach", () => {
+// "1 each = 750 ml" — the volume analogue for an mL-serving branded food
+// whose USDA nutrient record is stated per 100 mL, not per 100 g.
+const volumeMapping = manualUnitMapping(
+  { value: 1, unit: "each" },
+  { value: 750, unit: "ml" },
+);
+
+describe("resolveBasisAmountPerEach", () => {
   it("resolves grams-per-each from a stored weight mapping", () => {
-    expect(resolveGramsPerEach([weightMapping])).toBe(500);
+    expect(resolveBasisAmountPerEach([weightMapping], "g")).toBe(500);
   });
 
-  it("returns null when no mapping resolves an each-to-weight edge", () => {
-    expect(resolveGramsPerEach([])).toBeNull();
+  it("resolves mL-per-each from a stored volume mapping when the basis is ml", () => {
+    expect(resolveBasisAmountPerEach([volumeMapping], "ml")).toBe(750);
   });
 
-  it("returns null for a mapping that doesn't reach weight (e.g. price only)", () => {
+  it("returns null when no mapping resolves an each-to-basis edge", () => {
+    expect(resolveBasisAmountPerEach([], "g")).toBeNull();
+  });
+
+  it("returns null for a mapping that doesn't reach the basis kind (e.g. price only)", () => {
     const priceOnly = manualUnitMapping(
       { value: 1, unit: "each" },
       { value: 5, unit: "dollar" },
     );
-    expect(resolveGramsPerEach([priceOnly])).toBeNull();
+    expect(resolveBasisAmountPerEach([priceOnly], "g")).toBeNull();
   });
 });
 
