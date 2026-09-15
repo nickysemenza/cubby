@@ -190,7 +190,7 @@ function leafAt(to: LinkProps["to"]): NavItem {
   return item;
 }
 
-/** Four household jobs that earn persistent desktop attention. */
+/** Household destinations that earn persistent desktop attention. */
 export const todayNavItems: NavItem[] = [
   leafAt("/graph"),
   leafAt("/inventory/session"),

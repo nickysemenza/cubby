@@ -116,7 +116,9 @@ export function GraphMapCanvas({
     camera.positions ?? EMPTY_POSITIONS,
   );
   const positionsRef = useRef(positions);
-  positionsRef.current = positions;
+  useEffect(() => {
+    positionsRef.current = positions;
+  }, [positions]);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState(false);
   const [layingOut, setLayingOut] = useState(false);
