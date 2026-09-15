@@ -46,7 +46,14 @@ function schemaHasMock<T>(value: T): boolean {
 function stringSchemas(node: JSONType): JsonObject[] {
   if (Array.isArray(node)) return node.flatMap(stringSchemas);
   if (!isJsonObject(node)) return [];
-  if (node.type === "string") return [node];
+  // zod 4.5 emits nullable strings as `type: ["string", "null"]` rather than
+  // an `anyOf` branch; both spellings must stay visible to the id-field guard.
+  if (
+    node.type === "string" ||
+    (Array.isArray(node.type) && node.type.includes("string"))
+  ) {
+    return [node];
+  }
   if (node.type === "array" && node.items !== undefined) {
     return stringSchemas(node.items);
   }
