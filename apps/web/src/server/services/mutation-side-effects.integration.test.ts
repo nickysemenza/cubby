@@ -34,8 +34,8 @@ import {
 
 /**
  * Real find-embedding-refs and refreshSearchDocuments ports (so embedding
- * fan-out still reads the actual DB), but publishTasks/markProblemCountsDirty
- * are captured in-memory instead of hitting the queue or KV.
+ * fan-out still reads the actual DB), while publishTasks is captured in-memory
+ * instead of hitting the queue.
  */
 function capturingPorts(): MutationSideEffectPorts & {
   published: BackgroundTaskInput[][];
@@ -47,7 +47,6 @@ function capturingPorts(): MutationSideEffectPorts & {
     publishTasks: async (_db, tasks) => {
       published.push([...tasks]);
     },
-    markProblemCountsDirty: async () => undefined,
   };
 }
 

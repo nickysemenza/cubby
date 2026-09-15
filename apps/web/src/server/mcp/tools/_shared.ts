@@ -18,7 +18,6 @@ export { stripMockFromJsonSchema } from "./tool-json-schema";
 export {
   type Caller,
   getCaller,
-  getReadCaller,
   READ_ONLY_CLOSED,
   READ_ONLY_OPEN,
   registerMcpTool,

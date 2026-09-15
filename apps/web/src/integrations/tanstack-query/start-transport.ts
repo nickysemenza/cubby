@@ -1,10 +1,6 @@
 import { z } from "zod";
 
 import {
-  freshReadRequestHeaders,
-  markFreshReads,
-} from "~/lib/fresh-read-marker";
-import {
   isStartOperationEntity,
   registeredStartOperationKind,
   type StartOperationId,
@@ -92,13 +88,8 @@ async function observedStartCall<T>(options: {
     input: options.input,
   });
   try {
-    const headers = new Headers(operationHeaders(observed));
-    for (const [name, value] of Object.entries(freshReadRequestHeaders())) {
-      headers.set(name, value);
-    }
-    const result = await options.call(headers);
+    const result = await options.call(new Headers(operationHeaders(observed)));
     finishObservedOperation(observed, { result });
-    if (registeredKind === "mutation") markFreshReads();
     return result;
   } catch (error) {
     finishObservedOperation(observed, { error });

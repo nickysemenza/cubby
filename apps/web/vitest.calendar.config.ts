@@ -16,7 +16,10 @@ export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
     name: "calendar-worker",
-    include: ["src/server/calendar/**/*.workers.test.ts"],
+    include: [
+      "src/server/calendar/**/*.workers.test.ts",
+      "src/server/database-freshness/**/*.workers.test.ts",
+    ],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     fileParallelism: false,

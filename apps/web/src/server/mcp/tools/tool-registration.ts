@@ -10,9 +10,12 @@ import type {
 import { z } from "zod";
 
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
+import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import { parseMcpWorkflowCaller } from "~/server/mcp/caller-contract";
+import { McpOperationContext } from "~/server/mcp/operation-context";
 import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
+import type { ReadPolicy } from "~/server/read-policy";
 
 import { declareToolOutputSchema } from "./tool-catalog";
 import { requireObjectInputSchema, sdkOutputSchema } from "./tool-json-schema";
@@ -49,14 +52,24 @@ type RegisterMcpToolConfig<
   annotations: ToolAnnotations;
   handler: ToolHandler<TInput, TOutput>;
   telemetryEntity?: (params: z.output<TInput>) => string | undefined;
+  /** Explicit exceptions shared with Start-operation read policy. */
+  readPolicy?: (params: z.output<TInput>) => ReadPolicy;
+  /**
+   * A small number of tools carry both reads and writes in one public schema.
+   * Their parsed input, rather than the broad SDK annotation, decides whether
+   * this execution needs the authoritative database and advances freshness.
+   */
+  isMutation?: (params: z.output<TInput>) => boolean;
 };
 
 export interface McpToolRegistrationRuntime {
   markCalendarDirty(reason: string): void;
+  recordDatabaseWrite?(source: string): Promise<void>;
 }
 
 const productionMcpToolRegistrationRuntime: McpToolRegistrationRuntime = {
   markCalendarDirty: (reason) => scheduleCalendarFeedDirty(reason),
+  recordDatabaseWrite,
 };
 
 const toolEntityExtractors = new WeakMap<
@@ -178,10 +191,7 @@ function formatToolError<T>(error: T): string {
   return reason ? `${code}: ${message} (${reason})` : `${code}: ${message}`;
 }
 
-function callerFromExtra(
-  extra: ToolExtra,
-  key: "caller" | "readCaller",
-): Caller | undefined {
+function callerFromExtra(extra: ToolExtra, key: "caller"): Caller | undefined {
   const candidate = extra.authInfo?.extra?.[key];
   return candidate === undefined
     ? undefined
@@ -194,8 +204,27 @@ export function getCaller(extra: ToolExtra): Caller {
   return caller;
 }
 
-export function getReadCaller(extra: ToolExtra): Caller {
-  return callerFromExtra(extra, "readCaller") ?? getCaller(extra);
+function operationContextFromExtra(
+  extra: ToolExtra,
+): McpOperationContext | undefined {
+  const candidate = extra.authInfo?.extra?.operationContext;
+  return candidate instanceof McpOperationContext ? candidate : undefined;
+}
+
+async function prepareToolExtra(
+  extra: ToolExtra,
+  policy: ReadPolicy,
+): Promise<ToolExtra> {
+  const operationContext = operationContextFromExtra(extra);
+  if (!operationContext || !extra.authInfo) return extra;
+  const prepared = await operationContext.prepare(policy);
+  return {
+    ...extra,
+    authInfo: {
+      ...extra.authInfo,
+      extra: { ...extra.authInfo?.extra, ...prepared },
+    },
+  };
 }
 
 export function registerMcpTool<
@@ -221,16 +250,35 @@ export function registerMcpTool<
     params: ToolArguments,
     extra: ToolExtra,
   ): Promise<CallToolResult> => {
+    let mutation = false;
+    let enteredHandler = false;
     try {
       const parsedParams = z.parse(inputSchema, params);
-      const result = await config.handler(parsedParams, extra);
+      mutation =
+        config.isMutation?.(parsedParams) ??
+        config.annotations.readOnlyHint !== true;
+      const configuredReadPolicy = config.readPolicy?.(parsedParams);
+      const preparedExtra = await prepareToolExtra(
+        extra,
+        mutation ? "strong" : (configuredReadPolicy ?? "context"),
+      );
+      enteredHandler = true;
+      const result = await config.handler(parsedParams, preparedExtra);
       const response = structuredSuccess(result, config.outputSchema);
-      if (config.annotations.readOnlyHint !== true) {
+      if (mutation) {
         runtime.markCalendarDirty(`mcp.${config.name}`);
       }
       return response;
     } catch (error) {
       return structuredError(error);
+    } finally {
+      // A tool can commit before later validation or another item in a batch
+      // fails. Advancing the shared window here keeps every client strong for
+      // that possible partial write without turning a committed response into
+      // an error when the Durable Object is unavailable.
+      if (enteredHandler && mutation) {
+        await runtime.recordDatabaseWrite?.(`mcp.${config.name}`);
+      }
     }
   };
 

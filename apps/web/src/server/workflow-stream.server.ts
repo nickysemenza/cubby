@@ -4,8 +4,9 @@ import type { z } from "zod";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import { REQUEST_ID_HEADER } from "~/lib/request-id";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
-import { applyBrowserReadPolicy } from "~/server/browser-read-policy";
+import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { observeOperation } from "~/server/observed-request";
+import { applyReadPolicy } from "~/server/read-policy";
 import type { PublicStartOperationError } from "~/server/start-operation.contract";
 import {
   type AuthenticatedStartOperationContext,
@@ -57,21 +58,36 @@ const hasSameOrigin = (request: Request) => {
   return origin === null || origin === new URL(request.url).origin;
 };
 
+export interface WorkflowStreamRuntime {
+  authenticate: typeof authenticateStartOperation;
+  observe: typeof observeOperation;
+  recordDatabaseWrite: typeof recordDatabaseWrite;
+}
+
+const productionWorkflowStreamRuntime = {
+  authenticate: authenticateStartOperation,
+  observe: observeOperation,
+  recordDatabaseWrite,
+} satisfies WorkflowStreamRuntime;
+
 export async function workflowStreamResponse<
   InputSchema extends z.ZodType,
   Event,
->(options: {
-  request: Request;
-  operation: StartOperationIdOfKind<"subscription">;
-  inputSchema: InputSchema;
-  eventSchema: z.ZodType<Event>;
-  workload?: Workload;
-  run: (
-    context: AuthenticatedStartOperationContext,
-    input: z.output<InputSchema>,
-    signal: AbortSignal,
-  ) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>;
-}): Promise<Response> {
+>(
+  options: {
+    request: Request;
+    operation: StartOperationIdOfKind<"subscription">;
+    inputSchema: InputSchema;
+    eventSchema: z.ZodType<Event>;
+    workload?: Workload;
+    run: (
+      context: AuthenticatedStartOperationContext,
+      input: z.output<InputSchema>,
+      signal: AbortSignal,
+    ) => AsyncIterable<unknown> | Promise<AsyncIterable<unknown>>;
+  },
+  runtime: WorkflowStreamRuntime = productionWorkflowStreamRuntime,
+): Promise<Response> {
   if (!hasSameOrigin(options.request)) {
     return new Response("Cross-origin workflow streams are not allowed", {
       status: 403,
@@ -85,6 +101,12 @@ export async function workflowStreamResponse<
     return errorResponse(error, "input", getRequestId(options.request.headers));
   }
 
+  const abortController = new AbortController();
+  const signal = AbortSignal.any([
+    options.request.signal,
+    abortController.signal,
+  ]);
+  let mutationStarted = false;
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       void (async () => {
@@ -94,7 +116,7 @@ export async function workflowStreamResponse<
         // never gets to report before an unauthorized caller does.
         let stage: OperationStage = "context";
         try {
-          await observeOperation(
+          await runtime.observe(
             startOperationDefinition(options.operation),
             {
               origin: "ui",
@@ -102,9 +124,9 @@ export async function workflowStreamResponse<
             },
             async (span) => {
               span.setAttribute("cubby.authenticated", false);
-              throwIfStartOperationAborted(options.request.signal);
-              const context = applyBrowserReadPolicy(
-                await authenticateStartOperation(options.request.headers, span),
+              throwIfStartOperationAborted(signal);
+              const context = applyReadPolicy(
+                await runtime.authenticate(options.request.headers, span),
                 "strong",
               );
 
@@ -112,15 +134,14 @@ export async function workflowStreamResponse<
               const input = options.inputSchema.parse(rawInput);
 
               stage = "run";
-              const events = await options.run(
-                context,
-                input,
-                options.request.signal,
-              );
+              mutationStarted = options.operation !== "agent.askStream";
+              const events = await options.run(context, input, signal);
               for await (const event of events) {
-                throwIfStartOperationAborted(options.request.signal);
+                throwIfStartOperationAborted(signal);
                 stage = "output";
                 const parsed = options.eventSchema.parse(event);
+                if (mutationStarted)
+                  await runtime.recordDatabaseWrite(options.operation);
                 controller.enqueue(
                   encodeFrame({
                     kind: "event",
@@ -132,7 +153,7 @@ export async function workflowStreamResponse<
             },
           );
         } catch (error) {
-          if (!options.request.signal.aborted) {
+          if (!signal.aborted) {
             const normalized = normalizeStartOperationError(
               error,
               stage,
@@ -143,9 +164,15 @@ export async function workflowStreamResponse<
             );
           }
         } finally {
-          controller.close();
+          if (mutationStarted)
+            await runtime.recordDatabaseWrite(options.operation);
+          if (!abortController.signal.aborted) controller.close();
         }
       })();
+    },
+    async cancel(reason) {
+      abortController.abort(reason);
+      if (mutationStarted) await runtime.recordDatabaseWrite(options.operation);
     },
   });
 

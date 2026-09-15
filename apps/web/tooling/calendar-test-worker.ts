@@ -14,3 +14,5 @@ export default {
     return await object.fetch(request);
   },
 };
+
+export { DatabaseFreshnessDurableObject } from "~/server/database-freshness/durable-object";

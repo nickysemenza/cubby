@@ -7,7 +7,6 @@ import {
   operationHeaders,
 } from "~/integrations/tanstack-query/operation-recorder";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
-import { markFreshReads } from "~/lib/fresh-read-marker";
 import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import { publicStartOperationErrorSchema } from "~/server/start-operation.contract";
 
@@ -31,10 +30,9 @@ const streamFrameSchema = z.discriminatedUnion("kind", [
 
 type StreamFrame = z.infer<typeof streamFrameSchema>;
 
-/** The two browser edges the stream owns; tests supply a local runtime. */
+/** The browser edge the stream owns; tests supply a local runtime. */
 export interface WorkflowStreamRuntime {
   fetch: typeof fetch;
-  markFreshReads: () => void;
 }
 
 const productionWorkflowStreamRuntime: WorkflowStreamRuntime = {
@@ -42,7 +40,6 @@ const productionWorkflowStreamRuntime: WorkflowStreamRuntime = {
   // it with the runtime object as `this`, which browsers reject with
   // "Illegal invocation" and which broke every durable maintenance stream.
   fetch: (input, init) => fetch(input, init),
-  markFreshReads,
 };
 
 const parseFrame = (line: string): StreamFrame => {
@@ -133,7 +130,6 @@ export async function openWorkflowStream<
         })) {
           yield event;
         }
-        if (options.kind === "mutation") runtime.markFreshReads();
         finishObservedOperation(observed, { result: "stream-complete" });
       } catch (error) {
         finishObservedOperation(observed, { error });

@@ -3,8 +3,8 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
-import type { BrowserReadPolicy } from "~/server/browser-read-policy";
 import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
+import type { ReadPolicy } from "~/server/read-policy";
 import { createRequestContext, requireActor } from "~/server/request-context";
 import type {
   AuthenticatedStartOperationContext,
@@ -37,7 +37,7 @@ interface ExecutionObservation {
   inputSchema: z.ZodType;
   outputSchema: object;
   request: StartOperationRequest;
-  readPolicy: BrowserReadPolicy;
+  readPolicy: ReadPolicy;
 }
 
 function isOutputSchemaResolver<Input, OutputSchema extends z.ZodType>(

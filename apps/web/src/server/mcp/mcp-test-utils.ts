@@ -7,6 +7,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import type { EntityKernelContext } from "~/server/entity-kernel";
+import type { McpOperationContext } from "~/server/mcp/operation-context";
 
 import type { ToolArguments } from "./tools/tool-registration";
 import type { McpWorkflowCaller } from "./workflow-caller";
@@ -169,7 +170,7 @@ type McpTestEntityKernelContext = {
 
 interface ToolCallExtra {
   entityKernel?: McpTestEntityKernelContext;
-  readCaller?: McpTestCaller;
+  operationContext?: McpOperationContext;
   telemetry?: {
     identity: McpTelemetryIdentity;
     emit: (event: McpToolCallTelemetry) => Promise<void>;
@@ -199,9 +200,6 @@ export async function callMcpTool(
         extra: {
           caller: completeTestCaller(caller),
           ...extra,
-          readCaller: extra.readCaller
-            ? completeTestCaller(extra.readCaller)
-            : undefined,
         },
       },
     });

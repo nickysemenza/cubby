@@ -1,12 +1,11 @@
 import { type AgentToolCall, agentToolCallSchema } from "@cubby/schemas/agent";
-import type { UserId } from "@cubby/schemas/identifiers";
 import type { McpTelemetryIdentity } from "@cubby/schemas/telemetry";
 import { type Tool, toolDefinition } from "@tanstack/ai";
 import { type JSONType, z } from "zod";
 
 import { getErrorMessage } from "~/lib/error-utils";
-import type { Database } from "~/server/db";
-import type { McpWorkflowCaller } from "~/server/mcp/workflow-caller";
+import { McpOperationContext } from "~/server/mcp/operation-context";
+import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
 import { emitTelemetry } from "~/server/telemetry";
 
 /**
@@ -40,23 +39,23 @@ export type ToolCallRecord = AgentToolCall & {
 };
 
 function createAgentMcpExtra(
-  caller: McpWorkflowCaller | undefined,
-  db: Database | undefined,
-  userId: UserId | undefined,
+  context: AuthenticatedStartOperationContext | undefined,
 ) {
-  const telemetry =
-    db && userId
-      ? {
-          identity: {
-            userId,
-            clientId: "cubby-agent",
-            surface: "in_app_agent",
-          } satisfies McpTelemetryIdentity,
-          emit: (event: Parameters<typeof emitTelemetry>[1]) =>
-            emitTelemetry(db, event),
-        }
-      : undefined;
-  return { caller, telemetry };
+  const telemetry = context
+    ? {
+        identity: {
+          userId: context.actorContext.userId,
+          clientId: "cubby-agent",
+          surface: "in_app_agent",
+        } satisfies McpTelemetryIdentity,
+        emit: (event: Parameters<typeof emitTelemetry>[1]) =>
+          emitTelemetry(context.db, event),
+      }
+    : undefined;
+  return {
+    operationContext: context ? new McpOperationContext(context) : undefined,
+    telemetry,
+  };
 }
 
 const mcpInputSchema = z.record(z.string(), z.json());
@@ -70,14 +69,11 @@ interface AgentToolset {
 }
 
 /**
- * Build the read-only agent toolset bound to an authenticated workflow caller.
- * The caller is injected into every MCP message via authInfo, mirroring how
- * `api/mcp.ts` passes `extra: { caller }` over HTTP.
+ * Build the read-only agent toolset bound to an authenticated operation
+ * context. Every in-process tool call resolves shared freshness independently.
  */
 export async function createAgentToolset(
-  caller?: McpWorkflowCaller,
-  db?: Database,
-  userId?: UserId,
+  context?: AuthenticatedStartOperationContext,
 ): Promise<AgentToolset> {
   // Imported dynamically, not at module scope. This module hangs off the agent
   // router graph (root.ts → routers/agent.ts → runtime.ts → here), so a static
@@ -102,10 +98,10 @@ export async function createAgentToolset(
     InMemoryTransport.createLinkedPair();
 
   // The MCP Client doesn't set authInfo on outgoing requests, so wrap the
-  // client transport's send to attach the caller on every message.
+  // client transport's send to attach the operation context on every message.
   const originalSend = clientTransport.send.bind(clientTransport);
   clientTransport.send = (message, options) => {
-    const extra = createAgentMcpExtra(caller, db, userId);
+    const extra = createAgentMcpExtra(context);
     return originalSend(message, {
       ...options,
       authInfo: {

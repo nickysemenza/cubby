@@ -12,6 +12,7 @@ import {
   describeToolError,
   getCaller,
   registerMcpTool,
+  type McpToolRegistrationRuntime,
   type ToolErrorDetail,
 } from "./tool-registration";
 
@@ -105,6 +106,7 @@ export function registerBatchTool<
       context: EntityKernelContext | undefined,
     ) => Promise<z.output<TItemOutput>>;
   },
+  runtime?: McpToolRegistrationRuntime,
 ): void {
   const items = z
     .array(config.itemInputSchema)
@@ -122,55 +124,61 @@ export function registerBatchTool<
     : baseInputSchema;
   const outputSchema = batchOutputSchema(config.itemOutputSchema);
 
-  registerMcpTool(server, {
-    name: config.name,
-    description: config.description,
-    inputSchema,
-    outputSchema,
-    annotations: config.annotations,
-    telemetryEntity: config.telemetryEntity,
-    handler: async (params, extra) => {
-      const caller = getCaller(extra);
-      const context =
-        extra.authInfo?.extra?.entityKernel === undefined
-          ? undefined
-          : entityKernelContextSchema.parse(extra.authInfo.extra.entityKernel);
-      const results: Array<BatchResult<z.output<TItemOutput>>> = [];
+  registerMcpTool(
+    server,
+    {
+      name: config.name,
+      description: config.description,
+      inputSchema,
+      outputSchema,
+      annotations: config.annotations,
+      telemetryEntity: config.telemetryEntity,
+      handler: async (params, extra) => {
+        const caller = getCaller(extra);
+        const context =
+          extra.authInfo?.extra?.entityKernel === undefined
+            ? undefined
+            : entityKernelContextSchema.parse(
+                extra.authInfo.extra.entityKernel,
+              );
+        const results: Array<BatchResult<z.output<TItemOutput>>> = [];
 
-      for (const [index, item] of params.items.entries()) {
-        try {
-          const produced = config.itemOutputSchema.parse(
-            await config.run(caller, item, context),
-          );
-          const success: BatchSuccess<z.output<TItemOutput>> = {
-            index,
-            status: "succeeded",
-            reference: config.projectReference(produced),
-          };
-          if (params.resultDetail === "full") success.item = produced;
-          results.push(success);
-        } catch (error) {
-          results.push({
-            index,
-            status: "failed",
-            error: describeToolError(error),
-          });
+        for (const [index, item] of params.items.entries()) {
+          try {
+            const produced = config.itemOutputSchema.parse(
+              await config.run(caller, item, context),
+            );
+            const success: BatchSuccess<z.output<TItemOutput>> = {
+              index,
+              status: "succeeded",
+              reference: config.projectReference(produced),
+            };
+            if (params.resultDetail === "full") success.item = produced;
+            results.push(success);
+          } catch (error) {
+            results.push({
+              index,
+              status: "failed",
+              error: describeToolError(error),
+            });
+          }
         }
-      }
 
-      const succeeded = results.filter(
-        (result) => result.status === "succeeded",
-      ).length;
-      return {
-        summary: {
-          requested: results.length,
-          succeeded,
-          failed: results.length - succeeded,
-        },
-        results,
-      };
+        const succeeded = results.filter(
+          (result) => result.status === "succeeded",
+        ).length;
+        return {
+          summary: {
+            requested: results.length,
+            succeeded,
+            failed: results.length - succeeded,
+          },
+          results,
+        };
+      },
     },
-  });
+    runtime,
+  );
 }
 
 export function rejectDuplicateIds<TItem extends { id?: string }>(

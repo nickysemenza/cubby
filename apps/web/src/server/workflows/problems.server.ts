@@ -22,10 +22,7 @@ import { z } from "zod";
 import { getProblemCountsCache } from "~/server/cf-env";
 import { recipeUsageCountsByProduct } from "~/server/repo/problems";
 import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
-import {
-  getCachedProblemCounts,
-  markProblemCountsDirtyBestEffort,
-} from "~/server/services/problem-counts-cache";
+import { getCachedProblemCounts } from "~/server/services/problem-counts-cache";
 import {
   findAllViewProblemIds,
   findViewProblems,
@@ -177,9 +174,6 @@ export const deleteUnusedIngredientsWorkflow = bindWorkflow(
         context.actorContext,
       ),
     )
-    .effect("badge", async () => {
-      await markProblemCountsDirtyBestEffort("problems.deleteUnused");
-    })
     .call("presented", async (_, { shortcodes, entityIds, deleted }) => {
       const shortcodeByEntityId = new Map(
         shortcodes.map((shortcode, index) => [entityIds[index], shortcode]),
@@ -226,9 +220,6 @@ const reparseStaleDefinition = defineCoordinatorStream({
       );
       return updated;
     })
-    .effect("badge", async () => {
-      await markProblemCountsDirtyBestEffort("problems.reparseStale");
-    })
     .output(({ recipes }) => ({
       updated: recipes.updated,
       recipesAffected: recipes.recipesAffected.length,
@@ -267,9 +258,6 @@ const pruneAllUnusedAliasesDefinition = defineCoordinatorStream({
     .commit("pruned", async ({ context }, { input: { selection } }) =>
       pruneUnusedIngredientAliasesBatch(context.db, selection),
     )
-    .effect("badge", async () => {
-      await markProblemCountsDirtyBestEffort("problems.pruneAllUnusedAliases");
-    })
     .output(({ pruned }) => pruned),
   total: (selection) => selection.length,
 });

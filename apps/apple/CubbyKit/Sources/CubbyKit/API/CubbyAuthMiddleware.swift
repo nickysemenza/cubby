@@ -18,11 +18,9 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
     public static let maxErrorBodyBytes = 1 << 20
 
     private let credentials: CredentialProvider
-    private let now: @Sendable () -> Date
 
-    public init(credentials: CredentialProvider, now: @escaping @Sendable () -> Date = Date.init) {
+    public init(credentials: CredentialProvider) {
         self.credentials = credentials
-        self.now = now
     }
 
     public func intercept(
@@ -33,15 +31,12 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
         next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?)
     ) async throws -> (HTTPResponse, HTTPBody?) {
         var request = request
-        Self.apply(await credentials.requestState(at: now()), to: &request.headerFields)
+        Self.apply(await credentials.currentState(), to: &request.headerFields)
 
         let (response, responseBody) = try await next(request, body, baseURL)
         await credentials.updateSessionDataCookies(
             from: response.headerFields[values: .setCookie]
         )
-        if let value = response.headerFields[.xCubbyFreshReadSeconds], let seconds = Int(value) {
-            await credentials.markFreshReads(seconds: seconds, now: now())
-        }
         guard response.status.code >= 400 else { return (response, responseBody) }
 
         if response.status.code == 401 { await credentials.invalidate() }
@@ -67,7 +62,6 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
     static func apply(_ state: CubbyAuthState?, to fields: inout HTTPFields) {
         apply(state?.credential, to: &fields)
         guard let state else { return }
-        fields[.xCubbyReadConsistency] = "bounded-stale"
         if case .bearer = state.credential {
             if !state.sessionDataCookies.isEmpty {
                 fields[.cookie] = state.sessionDataCookies
@@ -76,12 +70,5 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
                     .joined(separator: "; ")
             }
         }
-        if state.freshReadUntil != nil { fields[.xCubbyFreshRead] = "1" }
     }
-}
-
-extension HTTPField.Name {
-    static let xCubbyReadConsistency = HTTPField.Name("x-cubby-read-consistency")!
-    static let xCubbyFreshRead = HTTPField.Name("x-cubby-fresh-read")!
-    static let xCubbyFreshReadSeconds = HTTPField.Name("x-cubby-fresh-read-seconds")!
 }

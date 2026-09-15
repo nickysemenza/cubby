@@ -6,11 +6,8 @@ import {
   type StartOperationDefinition,
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
-import {
-  applyBrowserReadPolicy,
-  type BrowserReadPolicy,
-} from "~/server/browser-read-policy";
 import { scheduleCalendarFeedDirty } from "~/server/calendar/client";
+import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import {
   appErrorFromUnknown,
   toPublicErrorPayload,
@@ -22,7 +19,12 @@ import {
   observeOperation,
   parseObservedFailure,
 } from "~/server/observed-request";
-import { createRequestContext, requireActor } from "~/server/request-context";
+import { type ReadPolicy, readPolicyFor } from "~/server/read-policy";
+import {
+  createRequestContext,
+  requireActor,
+  selectOperationContext,
+} from "~/server/request-context";
 import type {
   PublicStartOperationError,
   StartOperationResult,
@@ -35,8 +37,6 @@ export type StartOperationRequest = {
   signal: AbortSignal;
   /** Supplied only by the authenticated HTTP adapter, never request JSON. */
   apiContext?: AuthenticatedStartOperationContext;
-  /** Read policy chosen by the authenticated HTTP adapter from route semantics. */
-  apiReadPolicy?: BrowserReadPolicy;
 };
 
 export type AuthenticatedStartOperationContext = ReturnType<
@@ -178,6 +178,8 @@ export interface StartOperationRuntime {
     headers: Headers,
     operation: StartOperationId,
   ): void;
+  /** Best-effort post-write notification; failures never alter the response. */
+  recordDatabaseWrite?(operation: StartOperationId): Promise<void>;
 }
 
 type OutputSchemaResolver<
@@ -206,7 +208,7 @@ export type RunStartOperationOptions<
   inputSchema: InputSchema;
   outputSchema: OutputSchema | OutputSchemaResolver<InputSchema, OutputSchema>;
   request: StartOperationRequest;
-  readPolicy?: BrowserReadPolicy;
+  readPolicy?: ReadPolicy;
   workload?: Workload;
   run: (
     context: AuthenticatedStartOperationContext,
@@ -247,6 +249,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
       async (span) => {
         span.setAttribute("cubby.authenticated", false);
         let stage: OperationStage = "context";
+        let mutationStarted = false;
         try {
           throwIfStartOperationAborted(options.request.signal);
           const authenticated =
@@ -254,11 +257,14 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             (await runtime.authenticate(options.request.headers, span));
           span.setAttribute("cubby.authenticated", true);
           const readPolicy =
-            (options.request.apiContext
-              ? (options.request.apiReadPolicy ?? "strong")
-              : options.readPolicy) ??
-            (options.type === "mutation" ? "strong" : "context");
-          const context = applyBrowserReadPolicy(authenticated, readPolicy);
+            options.type !== "query"
+              ? "strong"
+              : (options.readPolicy ??
+                readPolicyFor(options.operation, "query"));
+          const context = await selectOperationContext(
+            authenticated,
+            readPolicy,
+          );
           span.setAttributes({
             "cubby.request_origin": context.requestOrigin,
             "cubby.read.consistency":
@@ -285,6 +291,7 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           throwIfStartOperationAborted(options.request.signal);
 
           stage = "run";
+          mutationStarted = options.type === "mutation";
           const rawOutput = await options.run(context, input);
           throwIfStartOperationAborted(options.request.signal);
 
@@ -322,6 +329,12 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             result,
             observedError: normalized.observedError,
           };
+        } finally {
+          if (mutationStarted) {
+            await (runtime.recordDatabaseWrite ?? recordDatabaseWrite)(
+              options.operation,
+            );
+          }
         }
       },
     );
@@ -347,6 +360,7 @@ const productionStartOperationRuntime = {
       },
     );
   },
+  recordDatabaseWrite,
 } satisfies StartOperationRuntime;
 
 export const runStartOperation = createStartOperationRunner(

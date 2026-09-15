@@ -58,6 +58,9 @@ export function registerProblemsTools(server: McpServer) {
       problemsUnknownTypeOut,
     ]),
     annotations: READ_ONLY_CLOSED,
+    // Counts are the KV snapshot computation and retain its authoritative
+    // detector reads; the detail displays share the normal cache policy.
+    readPolicy: (params) => (params.countsOnly ? "strong" : "context"),
     handler: async (params, extra) => {
       const caller = getCaller(extra);
       if (params.countsOnly) {

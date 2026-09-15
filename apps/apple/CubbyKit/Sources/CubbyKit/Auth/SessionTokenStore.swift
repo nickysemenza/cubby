@@ -6,17 +6,14 @@ public struct CubbyAuthState: Sendable, Equatable, Codable {
     public let version: Int
     public var credential: CubbyCredential
     public var sessionDataCookies: [String: String]
-    public var freshReadUntil: Date?
 
     public init(
         credential: CubbyCredential,
-        sessionDataCookies: [String: String] = [:],
-        freshReadUntil: Date? = nil
+        sessionDataCookies: [String: String] = [:]
     ) {
         self.version = 1
         self.credential = credential
         self.sessionDataCookies = sessionDataCookies
-        self.freshReadUntil = freshReadUntil
     }
 }
 

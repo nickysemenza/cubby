@@ -406,9 +406,8 @@ describe("MCP workflow tools", () => {
     expect(similar).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the bounded-stale caller only for MCP search tools", async () => {
-    const strongSimilar = vi.fn();
-    const readSimilar = vi.fn(async () =>
+  it("uses the execution caller for MCP search tools", async () => {
+    const similar = vi.fn(async () =>
       similarEntitiesOut.parse({
         source: { entityType: "product", entityId: "PRD-2222" },
         status: "uncomputed",
@@ -420,13 +419,11 @@ describe("MCP workflow tools", () => {
       createMcpServer(),
       "find_similar_entities",
       { pair: "product_to_product", sourceId: "PRD-2222", limit: 3 },
-      { search: { similar: strongSimilar } },
-      { readCaller: { search: { similar: readSimilar } } },
+      { search: { similar } },
     );
 
     expect(result.isError).not.toBe(true);
-    expect(readSimilar).toHaveBeenCalledOnce();
-    expect(strongSimilar).not.toHaveBeenCalled();
+    expect(similar).toHaveBeenCalledOnce();
   });
 
   it("resolve_products is a pure lookup that forwards trimmed names", async () => {

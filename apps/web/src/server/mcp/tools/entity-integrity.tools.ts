@@ -20,6 +20,7 @@ export function registerEntityIntegrityTools(server: McpServer) {
     inputSchema: generatedMcpEntityRelationPreviewInputSchema,
     outputSchema: previewOperationSchema,
     annotations: READ_ONLY_CLOSED,
+    readPolicy: () => "strong",
     call: (caller, params) =>
       caller.entityIntegrity.previewOperation(
         generatedMcpEntityRelationCommandSchema.parse(params),

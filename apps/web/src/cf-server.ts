@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 // CF Workers production entry point.
 //
 // 1. Dynamic import catches module-level errors (which would otherwise be silent 500s)
@@ -5,8 +6,6 @@
 //    TCP connections, and fetch invocations use a per-request pg.Pool so a single
 //    request's query fan-out runs in parallel instead of serializing.
 // 3. Intercepts console.error to capture real error details for `wrangler tail`.
-
-import { AsyncLocalStorage } from "node:async_hooks";
 
 import * as Sentry from "@sentry/cloudflare";
 import type * as ServerEntry from "@tanstack/react-start/server-entry";
@@ -34,6 +33,7 @@ import {
 } from "./server/calendar/client";
 import { createCalendarFeedHandler } from "./server/calendar/feed";
 import { runWithExecutionCtx, setCfEnv } from "./server/cf-env";
+import { recordDatabaseWrite } from "./server/database-freshness/client";
 import { withRequestDb, withRequestDbClient } from "./server/db";
 import type { TelemetryQueueBatch } from "./server/telemetry-queue-types";
 import { getRequestId, withManualTrace, withTrace } from "./server/tracing";
@@ -355,6 +355,7 @@ const handler = {
               Sentry.captureException(error);
             },
             afterSuccess: async () => {
+              await recordDatabaseWrite("background-job");
               const state = await calendarFeedStateFor(env.APP_ORIGIN);
               await state.markDirty("background-job");
             },
@@ -472,3 +473,5 @@ export default Sentry.withSentry(
   }),
   handler,
 );
+
+export { DatabaseFreshnessDurableObject } from "./server/database-freshness/durable-object";

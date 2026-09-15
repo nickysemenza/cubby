@@ -1,32 +1,73 @@
-import { readFileSync } from "node:fs";
-
 import { describe, expect, it } from "vitest";
 
-const read = (path: string) =>
-  readFileSync(new URL(path, import.meta.url), "utf8");
+import { registeredStartOperationKind } from "~/lib/start-operation-observability";
+import { Database } from "~/server/db";
 
-describe("MCP cached-read allowlist", () => {
-  it("keeps distinct strong and bounded-stale callers at the route seam", () => {
-    const route = read("../routes/api/mcp.ts");
+import {
+  applyReadPolicy,
+  readPolicyFor,
+  STRONG_QUERY_OPERATIONS,
+} from "./read-policy";
 
-    expect(route).toContain("const caller = createMcpWorkflowCaller(ctx)");
-    expect(route).toContain("readDb: boundedStaleDb");
-    expect(route).toContain("readCaller,");
-    expect(route).toContain("entityKernel: {");
-    expect(route).toContain("db: ctx.db");
+const database = (label: string) =>
+  new Database(() => {
+    throw new Error(`${label} must not resolve during policy tests`);
   });
 
-  it("uses the bounded-stale caller only for public search tools", () => {
-    const searchTools = read("./mcp/tools/search.tools.ts");
-    const dataQualityTools = read("./mcp/tools/data-quality.tools.ts");
-    const registration = read("./mcp/tools/tool-registration.ts");
-
-    expect(searchTools).toContain("getReadCaller(extra)");
-    expect(searchTools).not.toContain("getCaller(extra)");
-    expect(dataQualityTools).toContain("getCaller(extra)");
-    expect(dataQualityTools).not.toContain("getReadCaller(extra)");
-    expect(registration).toContain(
-      'callerFromExtra(extra, "readCaller") ?? getCaller(extra)',
+describe("shared read policy", () => {
+  it("keeps every registry member query-shaped and strong", () => {
+    expect(new Set(STRONG_QUERY_OPERATIONS).size).toBe(
+      STRONG_QUERY_OPERATIONS.length,
     );
+
+    for (const operation of STRONG_QUERY_OPERATIONS) {
+      expect(registeredStartOperationKind(operation)).toBe("query");
+      expect(readPolicyFor(operation, "query")).toBe("strong");
+    }
+  });
+
+  it("uses bounded-stale context for representative display reads", () => {
+    for (const operation of [
+      "ai.usageRecent",
+      "auditLog.list",
+      "meal.getShoppingList",
+      "problems.getByType",
+      "suggestions.getRecipeAvailability",
+      "calendar.range",
+      "collection.detail",
+      "cookbook.detail",
+      "dashboard.counts",
+      "expense.analytics",
+      "image.projectSummaries",
+      "ingredient.recipeUsages",
+      "location.makeTree",
+      "meal.getPreparations",
+      "project.dashboardSummary",
+      "recommendations.placement",
+      "recipe.getDependencyGraph",
+      "task.board",
+    ] as const) {
+      expect(readPolicyFor(operation, "query")).toBe("context");
+    }
+  });
+
+  it("makes every mutation strong regardless of its operation family", () => {
+    expect(readPolicyFor("entity.mutate", "mutation")).toBe("strong");
+    expect(readPolicyFor("calendar.rotateFeed", "mutation")).toBe("strong");
+  });
+
+  it("exposes only the selected database to an operation", () => {
+    const strong = database("strong");
+    const cached = database("cached");
+    const context = { db: strong, readDb: cached, requestId: "request-1" };
+
+    const ordinary = applyReadPolicy(context, "context");
+    expect(ordinary).toMatchObject({ requestId: "request-1" });
+    expect(ordinary.db).toBe(cached);
+    expect(ordinary.readDb).toBe(cached);
+
+    const authoritative = applyReadPolicy(context, "strong");
+    expect(authoritative.db).toBe(strong);
+    expect(authoritative.readDb).toBe(strong);
   });
 });

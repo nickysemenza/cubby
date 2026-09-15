@@ -46,6 +46,7 @@ export function registerFinancialTools(server: McpServer) {
     inputSchema: financialStatementImportPreviewInput,
     outputSchema: financialStatementImportPreviewOut,
     annotations: READ_ONLY_CLOSED,
+    readPolicy: () => "strong",
     call: (caller, params) =>
       caller.financialTransaction.previewStatementImport(params),
   });
@@ -67,6 +68,7 @@ export function registerFinancialTools(server: McpServer) {
     inputSchema: listStatementRowsInput,
     outputSchema: statementRowListOut,
     annotations: READ_ONLY_CLOSED,
+    readPolicy: () => "strong",
     call: (caller, params) => caller.statementRow.list(params),
   });
 
@@ -77,6 +79,7 @@ export function registerFinancialTools(server: McpServer) {
     inputSchema: statementRowSummaryInput,
     outputSchema: statementRowSummaryOut,
     annotations: READ_ONLY_CLOSED,
+    readPolicy: () => "strong",
     call: (caller, params) => caller.statementRow.summary(params),
   });
 
@@ -87,6 +90,7 @@ export function registerFinancialTools(server: McpServer) {
     inputSchema: listStatementImportsInput,
     outputSchema: statementImportListOut,
     annotations: READ_ONLY_CLOSED,
+    readPolicy: () => "strong",
     call: (caller, params) => caller.statementRow.imports(params),
   });
 

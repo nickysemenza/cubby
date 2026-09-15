@@ -358,13 +358,17 @@ projections use the same Start operation module for authentication, validation,
 errors, cancellation checkpoints, tracing, and console observability. Every
 entity browser operation uses this Start transport.
 
-The browser operation module chooses one database adapter before invoking a
-handler and exposes that adapter through both context handles. Ordinary browser
-queries therefore use Hyperdrive's short bounded-stale binding unless their
-operation is in the server-owned strong-read registry. Non-browser requests,
-fresh-after-write requests, mutations, and workflow streams remain
-authoritative. Generic detail, list, and filter reads follow the same policy;
-the MCP entity/search allowlist remains a separate transport decision.
+The server operation boundary chooses one database adapter before invoking a
+handler and exposes that adapter through both context handles. Ordinary queries
+across browser, native, HTTP and MCP use Hyperdrive's bounded-stale binding when
+the shared household freshness object reports no write in the last 90 seconds.
+The server-owned strong-read registry retains credentials, interactive inventory,
+import preparation and diagnostics. Mutations and mutating workflow streams
+remain authoritative, including their internal reads. HTTP methods do not decide
+policy: a query transported through POST is still cache-eligible. Each MCP tool
+execution, including an in-process agent tool, selects a new caller from the same
+freshness state. Availability reads use the selected database; recipe repairs and
+their immediate follow-up reads remain strong.
 
 Workflow operations are explicit Start functions with no entity business logic in
 the transport adapter. Removing an operation has no deployment shim: a tab loaded

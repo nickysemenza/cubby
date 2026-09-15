@@ -19,7 +19,6 @@ import {
 } from "~/lib/http-api/resource-query";
 import { type HttpMetadata, httpMetadataSchema } from "~/lib/http-api/router";
 import { httpRoutes } from "~/lib/http-api/routes";
-import { HYPERDRIVE_CACHE_POLICY } from "~/lib/hyperdrive-cache-policy";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import type { RequestActor, requireActor } from "~/server/request-context";
 import type { dispatchStartOperation } from "~/server/start-operation-dispatch.server";
@@ -49,14 +48,12 @@ interface HttpApiPorts {
   context: (options: {
     headers: Headers;
     actor: RequestActor;
-    clientAllowsBoundedStale: boolean;
   }) => Promise<ReturnType<typeof requireActor>>;
   dispatch: typeof dispatchStartOperation;
 }
 
 type ApiRequest = TsRestRequest & {
   apiContext?: ReturnType<typeof requireActor>;
-  apiReadPolicy?: "strong" | "context";
   sessionDataCookies?: string[];
 };
 
@@ -219,9 +216,6 @@ const hasExplicitCredential = (request: Request) =>
   request.headers.has("x-api-key") ||
   /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
 
-const clientPrefersBoundedStale = (request: Request) =>
-  request.headers.get("x-cubby-read-consistency") === "bounded-stale";
-
 const sessionDataCookieName =
   /^(?:__Secure-)?better-auth\.session_data(?:\.\d+)?$/u;
 
@@ -237,10 +231,7 @@ const sessionDataCookiesFrom = (headers: Headers): string[] =>
 export function createHttpApiHandler(ports: HttpApiPorts) {
   const methods = methodTable(httpContract);
 
-  const authenticate = async (
-    request: ApiRequest,
-    clientAllowsBoundedStale: boolean,
-  ) => {
+  const authenticate = async (request: ApiRequest) => {
     const url = new URL(request.url);
     let actor: RequestActor | null = null;
     if (request.headers.has("x-api-key")) {
@@ -287,22 +278,13 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
     request.apiContext = await ports.context({
       headers,
       actor,
-      clientAllowsBoundedStale,
     });
-    request.apiReadPolicy = clientAllowsBoundedStale ? "context" : "strong";
   };
 
   const implement = (route: AppRoute) => {
     const metadata = httpMetadataSchema.parse(route.metadata);
-    const boundedStaleList = (request: ApiRequest) =>
-      route.method === "GET" &&
-      metadata.resource === "list" &&
-      clientPrefersBoundedStale(request);
     return {
-      middleware: [
-        async (request: ApiRequest) =>
-          authenticate(request, boundedStaleList(request)),
-      ],
+      middleware: [async (request: ApiRequest) => authenticate(request)],
       handler: async (
         args: { body?: unknown; query?: unknown; params?: unknown },
         context: { request: ApiRequest; responseHeaders: Headers },
@@ -326,7 +308,6 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
             headers,
             signal: request.signal,
             apiContext,
-            apiReadPolicy: request.apiReadPolicy,
           },
         });
         if (!result.ok)
@@ -344,20 +325,11 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
           };
         if (metadata.resource === "create") {
           responseHeaders.set(
-            "x-cubby-fresh-read-seconds",
-            String(HYPERDRIVE_CACHE_POLICY.freshReadSeconds),
-          );
-          responseHeaders.set(
             "Location",
             `${url.pathname}/${encodeURIComponent(createdSchema.parse(result.data).item.id)}`,
           );
           return { status: StatusCodes.CREATED, body: result.data };
         }
-        if (startOperationDefinitionFor(operation)?.kind === "mutation")
-          responseHeaders.set(
-            "x-cubby-fresh-read-seconds",
-            String(HYPERDRIVE_CACHE_POLICY.freshReadSeconds),
-          );
         return { status: StatusCodes.OK, body: result.data };
       },
     };

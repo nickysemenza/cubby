@@ -255,12 +255,7 @@ export const defineEntityOperations = <
         parseSchema<S["id"], string>(binding.schemas.id, input.id),
       )
       .call("item", async ({ context }, { id }) =>
-        binding.repository.get(
-          context.actorContext.source === "ui" && context.readDb !== context.db
-            ? { ...context, db: context.readDb }
-            : context,
-          id,
-        ),
+        binding.repository.get({ ...context, db: context.readDb }, id),
       )
       .call("media", async ({ context }, { item }) =>
         item === null

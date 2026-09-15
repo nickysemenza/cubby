@@ -7,12 +7,12 @@ import { getBindingFetcher } from "~/server/cf-env";
 import { NotionClient } from "~/server/clients/notion";
 import { createUpcLookupClient } from "~/server/clients/upc-lookup";
 import { USDAClient } from "~/server/clients/usda";
+import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
 import { createAppError } from "~/server/errors/app-error";
 import {
   decideReadConsistency,
-  isBrowserUiRequest,
   type ReadConsistencyDecision,
 } from "~/server/read-consistency";
 import {
@@ -74,28 +74,9 @@ interface ReadDatabaseSelection {
   readConsistency: ReadConsistencyDecision;
 }
 
-const selectReadDatabase = (opts: {
-  headers: Pick<Headers, "get">;
-  actor?: RequestActor;
-  clientAllowsBoundedStale?: boolean;
-}): ReadDatabaseSelection => {
-  const readConsistency = decideReadConsistency({
-    browserRequest: !opts.actor && isBrowserUiRequest(opts.headers),
-    clientAllowsBoundedStale: opts.clientAllowsBoundedStale,
-    boundedStaleAvailable: boundedStaleDb !== db,
-    headers: opts.headers,
-  });
-  return {
-    readDb:
-      readConsistency.consistency === "bounded-stale" ? boundedStaleDb : db,
-    readConsistency,
-  };
-};
-
 export const createRequestContext = async (opts: {
   headers: Headers;
   actor?: RequestActor;
-  clientAllowsBoundedStale?: boolean;
 }) => {
   const headersObj: Record<string, string> = {};
   opts.headers.forEach((value, key) => {
@@ -104,7 +85,13 @@ export const createRequestContext = async (opts: {
 
   return await extractTraceContext(headersObj, async () => {
     const crudServices = buildCrudServices(db);
-    const readSelection = selectReadDatabase(opts);
+    const readSelection: ReadDatabaseSelection = {
+      readDb: db,
+      readConsistency: {
+        consistency: "strong",
+        reason: "authoritative-operation",
+      } satisfies ReadConsistencyDecision,
+    };
 
     if (opts.actor) {
       const { userId, sessionId, source } = opts.actor;
@@ -156,3 +143,46 @@ export function requireActor(context: RequestContext) {
     actorContext: context.actorContext,
   };
 }
+
+export interface DatabaseReadRouting {
+  cachedDb: Database;
+  readFreshness: typeof readDatabaseFreshness;
+}
+
+const productionReadRouting: DatabaseReadRouting = {
+  cachedDb: boundedStaleDb,
+  readFreshness: readDatabaseFreshness,
+};
+
+/** Resolve once per logical operation; later operations consult shared state again. */
+export async function selectOperationContext<
+  Context extends ReturnType<typeof requireActor>,
+>(
+  context: Context,
+  policy: "context" | "strong",
+  routing: DatabaseReadRouting = productionReadRouting,
+): Promise<Context> {
+  const readConsistency: ReadConsistencyDecision =
+    policy === "strong"
+      ? { consistency: "strong", reason: "authoritative-operation" }
+      : decideReadConsistency({
+          boundedStaleAvailable: routing.cachedDb !== context.db,
+          freshness: await routing.readFreshness(),
+        });
+  const selected =
+    readConsistency.consistency === "bounded-stale"
+      ? routing.cachedDb
+      : context.db;
+  return {
+    ...context,
+    db: selected,
+    readDb: selected,
+    readConsistency,
+    services: {
+      ...context.services,
+      availability: new AvailabilityService(selected, context.usdaClient),
+    },
+  };
+}
+
+export type AuthenticatedRequestContext = ReturnType<typeof requireActor>;

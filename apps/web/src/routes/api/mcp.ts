@@ -7,11 +7,10 @@ async function handler({ request }: { request: Request }) {
     const { handleMcpRequest } = await import("~/server/mcp/server");
     const { unauthorizedResponse, verifyMcpToken } =
       await import("~/server/mcp/auth");
-    const { createMcpWorkflowCaller } =
-      await import("~/server/mcp/workflow-caller");
+    const { McpOperationContext } =
+      await import("~/server/mcp/operation-context");
     const { createRequestContext, requireActor } =
       await import("~/server/request-context");
-    const { boundedStaleDb } = await import("~/server/db");
     const { emitTelemetry } = await import("~/server/telemetry");
 
     // OAuth 2.1 only. Clients (claude.ai connectors, Claude Code) discover the
@@ -27,35 +26,12 @@ async function handler({ request }: { request: Request }) {
       }),
     );
 
-    const caller = createMcpWorkflowCaller(ctx);
-    const readContext: typeof ctx = {
-      ...ctx,
-      readDb: boundedStaleDb,
-      readConsistency: {
-        consistency: "bounded-stale",
-        reason: "cached-policy",
-      },
-    };
-    const readCaller = createMcpWorkflowCaller(readContext);
-
     return await handleMcpRequest(request, {
       token: "",
       clientId: actor.clientId ?? "unknown-oauth-client",
       scopes: [],
       extra: {
-        caller,
-        readCaller,
-        entityKernel: {
-          db: ctx.db,
-          readDb: boundedStaleDb,
-          actorContext: ctx.actorContext,
-          usdaClient: ctx.usdaClient,
-          usdaService: ctx.usdaService,
-          upcLookupClient: ctx.upcLookupClient,
-          services: {
-            recipeCosting: ctx.services.recipeCosting,
-          },
-        },
+        operationContext: new McpOperationContext(ctx),
         telemetry: {
           identity: {
             userId: actor.userId,

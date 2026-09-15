@@ -21,7 +21,6 @@ const responseFor = (...frames: unknown[]) =>
 describe("workflow JSONL stream", () => {
   it("parses progressive SuperJSON events", async () => {
     const at = new Date("2026-08-25T12:00:00.000Z");
-    let freshReads = 0;
     let requestInit: RequestInit | undefined;
     const runtime: WorkflowStreamRuntime = {
       fetch: async (_input, init) => {
@@ -30,9 +29,6 @@ describe("workflow JSONL stream", () => {
           kind: "event",
           payload: superjson.serialize({ type: "progress", done: 1, at }),
         });
-      },
-      markFreshReads: () => {
-        freshReads += 1;
       },
     };
 
@@ -50,7 +46,6 @@ describe("workflow JSONL stream", () => {
     const events = [];
     for await (const event of stream) events.push(event);
     expect(events).toEqual([{ type: "progress", done: 1, at }]);
-    expect(freshReads).toBe(1);
     const headers = new Headers(requestInit?.headers);
     expect(headers.get("x-cubby-operation")).toBe("agent.askStream");
     expect(headers.get("x-cubby-operation-kind")).toBe("subscription");
@@ -68,7 +63,6 @@ describe("workflow JSONL stream", () => {
             message: "Invalid input",
           },
         }),
-      markFreshReads: () => undefined,
     };
 
     const stream = await openWorkflowStream(

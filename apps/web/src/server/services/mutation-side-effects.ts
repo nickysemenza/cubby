@@ -10,7 +10,6 @@ import {
   type PublishOptions,
   publishInBackground,
 } from "~/server/background-tasks/publish";
-import { getProblemCountsCache } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   findCommercialEmbeddingRefsForExpenses,
@@ -29,8 +28,6 @@ import {
   findWishEmbeddingRefsForProducts,
 } from "~/server/repo/entity-embedding";
 import { refreshSearchDocuments } from "~/server/repo/search-document";
-
-import { markProblemCountsDirty } from "./problem-counts-dirty";
 
 const mutationSideEffectEntities = [
   "product",
@@ -84,8 +81,6 @@ export interface MutationSideEffectPorts {
     tasks: readonly BackgroundTaskInput[],
     options: PublishOptions,
   ) => Promise<void>;
-  /** One KV write; the badge read refreshes the snapshot when it sees it. */
-  readonly markProblemCountsDirty: () => Promise<void>;
   readonly findInventoryEmbeddingRefsForProducts: typeof findInventoryEmbeddingRefsForProducts;
   readonly findInventoryEmbeddingRefsForLocations: typeof findInventoryEmbeddingRefsForLocations;
   readonly findRecipeEmbeddingRefsForIngredients: typeof findRecipeEmbeddingRefsForIngredients;
@@ -108,10 +103,6 @@ export interface MutationSideEffectPorts {
 
 const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   publishTasks: publishInBackground,
-  markProblemCountsDirty: async () => {
-    const cache = getProblemCountsCache();
-    if (cache) await markProblemCountsDirty(cache);
-  },
   findInventoryEmbeddingRefsForProducts,
   findInventoryEmbeddingRefsForLocations,
   findRecipeEmbeddingRefsForIngredients,
@@ -685,22 +676,6 @@ async function runManifestHandlers(
   }
 }
 
-/**
- * Problem counts are a derived, stale-safe snapshot: the mutation only marks
- * it dirty, and the next badge read refreshes it under a lock. A failed mark
- * must not turn an already-committed entity mutation into an apparent failure.
- */
-async function markProblemCountsDirtyBestEffort(
-  source: string,
-  ports: MutationSideEffectPorts,
-): Promise<void> {
-  try {
-    await ports.markProblemCountsDirty();
-  } catch (error) {
-    console.error("problems.counts.dirty-mark.failed", { source, error });
-  }
-}
-
 export interface RunMutationSideEffectsOptions {
   /**
    * `"skip"` when the caller already refreshed the projections inside its own
@@ -721,7 +696,6 @@ export async function runMutationSideEffects(
     await refreshProjectionsForEvent(db, event, ports);
   }
   await runManifestHandlers(db, event, ports);
-  await markProblemCountsDirtyBestEffort(event.source, ports);
 }
 
 export async function runMutationSideEffectsForEntities(
@@ -760,10 +734,6 @@ export async function runMutationSideEffectsForEntities(
   if (waveEmbeddingRefs.length > 0 && firstEvent) {
     await publishEmbeddingRefreshes(db, waveEmbeddingRefs, firstEvent, ports);
   }
-  await markProblemCountsDirtyBestEffort(
-    firstEvent?.source ?? "mutation.bulk",
-    ports,
-  );
 }
 
 /**

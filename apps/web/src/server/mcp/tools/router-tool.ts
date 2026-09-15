@@ -6,6 +6,7 @@ import {
   type EntityKernelContext,
   entityKernelContextSchema,
 } from "~/server/entity-kernel";
+import type { ReadPolicy } from "~/server/read-policy";
 
 import {
   type Caller,
@@ -26,6 +27,7 @@ export function registerRouterTool<
     outputSchema: TOutput;
     annotations: ToolAnnotations;
     telemetryEntity?: (params: z.output<TInput>) => string | undefined;
+    readPolicy?: (params: z.output<TInput>) => ReadPolicy;
     call: (
       caller: Caller,
       params: z.output<TInput>,
@@ -40,6 +42,7 @@ export function registerRouterTool<
     outputSchema: config.outputSchema,
     annotations: config.annotations,
     telemetryEntity: config.telemetryEntity,
+    readPolicy: config.readPolicy,
     handler: async (params, extra) =>
       config.call(
         getCaller(extra),

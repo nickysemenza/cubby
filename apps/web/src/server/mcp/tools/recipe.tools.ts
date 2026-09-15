@@ -315,6 +315,7 @@ export function registerRecipeTools(server: McpServer) {
     }),
     outputSchema: recipeCostingExplainMcpOut,
     annotations: READ_ONLY_CLOSED,
+    readPolicy: () => "strong",
     call: async (caller, params) => {
       const explain = await caller.recipe.explainCosting({ id: params.id });
       if (params.detail === "full") return explain;
