@@ -40,6 +40,12 @@
       "enabled": false
     },
     {
+      "description": "better-auth minors ship auth schema migrations and drop plugin options that tsc does not flag (oauthProvider options are not excess-property checked), so they get their own PR and a manual MCP OAuth check",
+      "matchPackageNames": ["better-auth", "@better-auth/*"],
+      "groupName": "better-auth",
+      "groupSlug": "better-auth"
+    },
+    {
       "matchPackageNames": ["@playwright/test", "mcr.microsoft.com/playwright"],
       "groupName": "Playwright runtime",
       "groupSlug": "playwright-runtime"
