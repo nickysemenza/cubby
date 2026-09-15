@@ -73,12 +73,20 @@
   "durable_objects": {
     "bindings": [
       {
+        "name": "DB_FRESHNESS",
+        "class_name": "DatabaseFreshnessDurableObject"
+      },
+      {
         "name": "CALENDAR_FEED",
         "class_name": "CalendarFeedDurableObject"
       }
     ]
   },
   "exports": {
+    "DatabaseFreshnessDurableObject": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
     "CalendarFeedDurableObject": {
       "type": "durable-object",
       "storage": "sqlite"

@@ -448,24 +448,28 @@ Key constraints:
 - **Hyperdrive** pools TCP connections at CF's edge. Two bindings point at the
   same direct Neon origin: `env.HYPERDRIVE.connectionString` is the
   authoritative/strong-read path, while `env.HYPERDRIVE_CACHED.connectionString`
-  is reserved for explicitly allowlisted ordinary browser reads.
+  serves ordinary cache-eligible reads across all transports.
 - **Per-request pools** remain lazy and bounded: up to five connections for
   `HYPERDRIVE` and one for `HYPERDRIVE_CACHED` (six Worker-side connections in
   the largest request). The shared Neon origin budget is 55 Hyperdrive
   connections for the authoritative object plus 5 for the cached object.
-- **Cached reads are bounded-stale by design.** Desired timings live together in
-  `src/lib/hyperdrive-cache-policy.ts`: ordinary browser reads may be served for
-  60 seconds plus 15 seconds of stale-while-revalidate. Hyperdrive cache
-  settings are account-level state, not a `wrangler.jsonc` field; apply and
-  inspect them with `wrangler hyperdrive update/get`. The server-only browser
-  read policy keeps credentials, live operations, diagnostics, imports, and
-  modules that own authoritative database helpers on `HYPERDRIVE`; other
-  browser queries receive only the request-selected adapter. Successful browser
-  mutations stay authoritative for 90 seconds, beyond the maximum cached serve
-  window. Non-browser callers remain strong except for the deliberately narrow
-  MCP entity/search allowlist. Do not rely on SQL cache busting or Hyperdrive
-  invalidation: rollback is disabling caching on `HYPERDRIVE_CACHED` while
-  leaving the binding in place.
+- **Shared freshness controls cached reads.** Desired timings live in
+  `src/lib/hyperdrive-cache-policy.ts`: 60 seconds cached plus 15 seconds of
+  stale-while-revalidate, with 90 seconds of strong reads after household
+  writes. `DatabaseFreshnessDurableObject` (`DB_FRESHNESS`, named `household`,
+  Western North America placement) stores one monotonic write timestamp per
+  database environment. Browser, native, HTTP and MCP operations consult it
+  independently; a missing binding or one-second RPC timeout selects strong
+  reads. Mutations, credentials, interactive inventory, import preparation and
+  explicit diagnostics remain authoritative. Notification failures are logged
+  without failing committed writes. Direct SQL and missed notifications can
+  remain briefly stale. Clients carry no freshness cookies or headers.
+  Problems snapshots reuse the shared timestamp and retain their age fallback.
+  Hyperdrive settings are account-level state, not a `wrangler.jsonc` field;
+  inspect them with `wrangler hyperdrive get`. Retain both bindings: strong
+  caching disabled, cached binding at 60/15. Rollback is disabling caching on
+  `HYPERDRIVE_CACHED` while leaving its binding in place. Deploy server support
+  before releasing native cleanup; old clients' freshness headers are ignored.
 - **WASM uses `?init`** because `vite-plugin-wasm` doesn't apply to CF's SSR environment. `cfWasmPlugin()` redirects `@cubby/recipebridge` to `recipebridge-cf.ts`.
 - **`__CF_WORKERS__` define** eliminates module-level Pool creation from the CF build.
 - **Background tasks are self-contained queue messages.** `cubby-background`

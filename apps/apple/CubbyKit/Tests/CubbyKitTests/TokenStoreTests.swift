@@ -61,18 +61,42 @@ struct TokenStoreTests {
         #expect(try store.load(for: "cubby.example") == .apiKey("prod-key"))
     }
 
-    @Test("round-trips cached session data and a fresh-read deadline")
+    @Test("round-trips cached session data")
     func authStateRoundTrip() throws {
         let store = InMemorySessionTokenStore()
-        let deadline = Date(timeIntervalSince1970: 1_000)
         let state = CubbyAuthState(
             credential: .bearer("token-abc"),
-            sessionDataCookies: ["better-auth.session_data": "signed-cache"],
-            freshReadUntil: deadline
+            sessionDataCookies: ["better-auth.session_data": "signed-cache"]
         )
 
         try store.saveState(state, for: "localhost:3000")
 
         #expect(try store.loadState(for: "localhost:3000") == state)
+    }
+
+    @Test("decodes legacy stored freshness state")
+    func decodesLegacyFreshnessState() throws {
+        struct LegacyAuthState: Codable {
+            let version: Int
+            let credential: CubbyCredential
+            let sessionDataCookies: [String: String]
+            let freshReadUntil: Date?
+        }
+
+        let data = try JSONEncoder().encode(
+            LegacyAuthState(
+                version: 1,
+                credential: .bearer("token-abc"),
+                sessionDataCookies: ["better-auth.session_data": "signed-cache"],
+                freshReadUntil: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+
+        let decoded = try JSONDecoder().decode(CubbyAuthState.self, from: data)
+
+        #expect(decoded == CubbyAuthState(
+            credential: .bearer("token-abc"),
+            sessionDataCookies: ["better-auth.session_data": "signed-cache"]
+        ))
     }
 }

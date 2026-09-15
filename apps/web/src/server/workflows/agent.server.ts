@@ -6,23 +6,12 @@ import {
   extractSources,
   streamAgentChat,
 } from "~/server/agent/runtime";
-import { createMcpWorkflowCaller } from "~/server/mcp/workflow-caller";
 import type { AuthenticatedStartOperationContext } from "~/server/start-operation.server";
 import {
   bindWorkflow,
   WorkflowCancelledError,
   workflow,
 } from "~/server/workflow-runtime";
-
-const createAgentCaller = (context: AuthenticatedStartOperationContext) =>
-  createMcpWorkflowCaller({
-    ...context,
-    readDb: context.db,
-    readConsistency: {
-      consistency: "strong" as const,
-      reason: "non-browser-origin" as const,
-    },
-  });
 
 type AgentContext = AuthenticatedStartOperationContext;
 type AgentToolset = Awaited<ReturnType<typeof createAgentToolset>>;
@@ -51,11 +40,7 @@ export async function* askAgentStreamWorkflow(
       });
   };
   checkCancelled();
-  const resource: AgentToolset = await dependencies.acquire(
-    createAgentCaller(context),
-    context.db,
-    context.actorContext.userId,
-  );
+  const resource: AgentToolset = await dependencies.acquire(context);
   try {
     checkCancelled();
     for await (const event of dependencies.stream(

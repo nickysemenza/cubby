@@ -46,11 +46,13 @@ const span: AppSpan = {
 };
 const authenticate = vi.fn<StartOperationRuntime["authenticate"]>();
 const markCalendarDirty = vi.fn<StartOperationRuntime["markCalendarDirty"]>();
+const recordDatabaseWrite = vi.fn(async () => undefined);
 const observedOperations: string[] = [];
 const inspections: ObservedResult[] = [];
 const runtime: StartOperationRuntime = {
   authenticate,
   markCalendarDirty,
+  recordDatabaseWrite,
   observe: async (definition, observation, run) => {
     observedOperations.push(definition.id);
     const result = await run(span);
@@ -74,7 +76,7 @@ describe("runStartOperation", () => {
     authenticate.mockResolvedValue(context);
   });
 
-  it("uses a trusted API context once and overrides browser stale-read policy", async () => {
+  it("uses a trusted API context once and fails closed without freshness", async () => {
     const result = await runStartOperation({
       operation: "dashboard.counts",
       type: "query",
@@ -96,7 +98,7 @@ describe("runStartOperation", () => {
     expect(authenticate).not.toHaveBeenCalled();
   });
 
-  it("honors the HTTP adapter's bounded-stale policy for safe list reads", async () => {
+  it("resolves server policy for HTTP list reads", async () => {
     const run = vi.fn(async () => true as const);
     await runStartOperation({
       operation: "entity.list",
@@ -107,13 +109,12 @@ describe("runStartOperation", () => {
       request: {
         ...request(),
         apiContext: { ...context, requestOrigin: "api" },
-        apiReadPolicy: "context",
       },
       run,
     });
 
     expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ db: database, readDb: cachedDatabase }),
+      expect.objectContaining({ db: database, readDb: database }),
       {},
     );
   });
@@ -150,7 +151,7 @@ describe("runStartOperation", () => {
 
     expect(authenticate).toHaveBeenCalledOnce();
     expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({ db: cachedDatabase, readDb: cachedDatabase }),
+      expect.objectContaining({ db: database, readDb: database }),
       { count: 3 },
     );
     expect(observedOperations).toEqual(["entity.detail"]);
@@ -199,6 +200,62 @@ describe("runStartOperation", () => {
       expect.any(Headers),
       "entity.mutate",
     );
+    expect(recordDatabaseWrite).toHaveBeenCalledWith("entity.mutate");
+  });
+
+  it("records freshness when a mutation handler fails after partial work", async () => {
+    await expect(
+      runStartOperation({
+        operation: "entity.mutate",
+        type: "mutation",
+        input: {},
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        request: request(),
+        run: async () => {
+          throw new Error("write committed before follow-up failed");
+        },
+      }),
+    ).resolves.toMatchObject({ ok: false });
+
+    expect(recordDatabaseWrite).toHaveBeenCalledOnce();
+    expect(recordDatabaseWrite).toHaveBeenCalledWith("entity.mutate");
+  });
+
+  it("records freshness when mutation output validation fails", async () => {
+    await expect(
+      runStartOperation({
+        operation: "entity.mutate",
+        type: "mutation",
+        input: {},
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        request: request(),
+        run: async () =>
+          fromAny<{ ok: boolean }, { ok: string }>({ ok: "bad" }),
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { reason: "INVALID_OUTPUT" },
+    });
+
+    expect(recordDatabaseWrite).toHaveBeenCalledOnce();
+  });
+
+  it("does not record freshness for a pure read", async () => {
+    await expect(
+      runStartOperation({
+        operation: "entity.detail",
+        type: "query",
+        input: {},
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        request: request(),
+        run: async () => ({ ok: true }),
+      }),
+    ).resolves.toEqual({ ok: true, data: { ok: true } });
+
+    expect(recordDatabaseWrite).not.toHaveBeenCalled();
   });
 
   it("keeps a default query strong when request context carries the fresh marker decision", async () => {

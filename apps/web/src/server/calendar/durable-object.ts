@@ -3,6 +3,7 @@ import { userId, type UserId } from "@cubby/schemas/identifiers";
 import { DurableObject } from "cloudflare:workers";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
+import { recordDatabaseWrite } from "~/server/database-freshness/client";
 import { withTrace } from "~/server/tracing";
 
 import { authenticateCalendar, calendarDigest } from "./caldav-auth";
@@ -314,7 +315,9 @@ export class CalendarFeedDurableObject
     let committed = false;
     try {
       await this.markDirty("caldav-write", origin);
-      const result = await this.execute(write, origin);
+      const result = await this.execute(write, origin).finally(() =>
+        recordDatabaseWrite("caldav.write"),
+      );
       committed = true;
       this.store.rememberIdentity({
         entity,

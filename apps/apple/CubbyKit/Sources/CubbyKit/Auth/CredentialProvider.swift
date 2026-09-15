@@ -34,28 +34,11 @@ public actor CredentialProvider {
         cached = .some(state)
     }
 
-    func requestState(at date: Date) -> CubbyAuthState? {
-        guard var state = currentState() else { return nil }
-        if let deadline = state.freshReadUntil, deadline <= date {
-            state.freshReadUntil = nil
-            try? store.saveState(state, for: host)
-            cached = .some(state)
-        }
-        return state
-    }
-
     func updateSessionDataCookies(from setCookieHeaders: [String]) {
         guard var state = currentState(), case .bearer = state.credential else { return }
         let cookies = Self.sessionDataCookies(from: setCookieHeaders)
         guard cookies.sawSessionDataCookie else { return }
         state.sessionDataCookies = cookies.values
-        try? store.saveState(state, for: host)
-        cached = .some(state)
-    }
-
-    func markFreshReads(seconds: Int, now: Date) {
-        guard (1...300).contains(seconds), var state = currentState() else { return }
-        state.freshReadUntil = now.addingTimeInterval(TimeInterval(seconds))
         try? store.saveState(state, for: host)
         cached = .some(state)
     }

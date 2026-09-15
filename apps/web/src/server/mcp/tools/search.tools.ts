@@ -7,7 +7,7 @@ import { similarEntitiesInputSchema } from "@cubby/schemas/search";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
 
-import { getReadCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
+import { getCaller, READ_ONLY_CLOSED, registerMcpTool } from "./_shared";
 
 const RELATED_NOT_REQUESTED: z.output<
   typeof globalSearchMcpOut
@@ -22,7 +22,7 @@ export function registerSearchTools(server: McpServer) {
     outputSchema: globalSearchMcpOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
-      const caller = getReadCaller(extra);
+      const caller = getCaller(extra);
       const { includeRelated, ...query } = params;
       const results = await caller.search.find(query);
 
@@ -56,7 +56,7 @@ export function registerSearchTools(server: McpServer) {
     outputSchema: similarEntitiesMcpOut,
     annotations: READ_ONLY_CLOSED,
     handler: async (params, extra) => {
-      const caller = getReadCaller(extra);
+      const caller = getCaller(extra);
       return await caller.search.similar(params);
     },
   });

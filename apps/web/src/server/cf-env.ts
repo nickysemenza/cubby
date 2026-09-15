@@ -129,3 +129,5 @@ export const getBindingFetcher = (
   return ((input, init) =>
     binding.fetch(input as never, init as never)) as typeof fetch;
 };
+
+export const getDatabaseFreshnessNamespace = () => cfEnv?.DB_FRESHNESS;

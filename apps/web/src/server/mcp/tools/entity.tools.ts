@@ -34,6 +34,7 @@ import {
   READ_ONLY_CLOSED,
   WRITE_DESTRUCTIVE_CLOSED,
 } from "./_shared";
+import type { McpToolRegistrationRuntime } from "./tool-registration";
 
 const entityToolInput = z.object({ command: entityMcpCommandSchema });
 const entityReadToolInput = z.object({ command: entityMcpReadCommandSchema });
@@ -248,6 +249,7 @@ const runKernelEntity: ExecuteEntity = async (context, command) =>
 export function registerEntityTools(
   server: McpServer,
   runEntity: ExecuteEntity = runKernelEntity,
+  runtime?: McpToolRegistrationRuntime,
 ) {
   server.registerResource(
     "entities_catalog",
@@ -271,59 +273,75 @@ export function registerEntityTools(
     }),
   );
 
-  registerMcpTool(server, {
-    name: "get_entities",
-    description:
-      "Get, list, or search household entities through { command }. This read-only capability accepts only get, list, and search actions. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings.",
-    inputSchema: entityReadToolInput,
-    outputSchema: z.union([entityReadToolOutput, entitySummaryResultSchema]),
-    annotations: READ_ONLY_CLOSED,
-    telemetryEntity: (params) =>
-      entityMcpReadCommandSchema.parse(params.command).entity,
-    handler: async (params, extra) => {
-      const command = entityMcpReadCommandSchema.parse(params.command);
-      const result = await runEntity(
-        getEntityKernelContext(extra),
-        kernelCommand(command),
-      );
-      return z
-        .union([entityReadToolOutput, entitySummaryResultSchema])
-        .parse(projectEntityResult(command, result));
+  registerMcpTool(
+    server,
+    {
+      name: "get_entities",
+      description:
+        "Get, list, or search household entities through { command }. This read-only capability accepts only get, list, and search actions. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings.",
+      inputSchema: entityReadToolInput,
+      outputSchema: z.union([entityReadToolOutput, entitySummaryResultSchema]),
+      annotations: READ_ONLY_CLOSED,
+      telemetryEntity: (params) =>
+        entityMcpReadCommandSchema.parse(params.command).entity,
+      handler: async (params, extra) => {
+        const command = entityMcpReadCommandSchema.parse(params.command);
+        const result = await runEntity(
+          getEntityKernelContext(extra),
+          kernelCommand(command),
+        );
+        return z
+          .union([entityReadToolOutput, entitySummaryResultSchema])
+          .parse(projectEntityResult(command, result));
+      },
     },
-  });
+    runtime,
+  );
 
-  registerMcpTool(server, {
-    name: "entity",
-    description:
-      "Read or mutate one supported household entity through { command }. Read entities://catalog first: it publishes the supported entity list and exact action union. This replaces per-entity CRUD tools; workflow-shaped tools remain separate. For many creates/updates in one call use entity_batch.",
-    inputSchema: entityToolInput,
-    outputSchema: entityToolOutput,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    telemetryEntity: (params) =>
-      entityMcpCommandSchema.parse(params.command).entity,
-    handler: async (params, extra) => {
-      const command = entityMcpCommandSchema.parse(params.command);
-      const result = await runEntity(
-        getEntityKernelContext(extra),
-        kernelCommand(command),
-      );
-      return entityToolOutput.parse(projectEntityResult(command, result));
+  registerMcpTool(
+    server,
+    {
+      name: "entity",
+      description:
+        "Read or mutate one supported household entity through { command }. Read entities://catalog first: it publishes the supported entity list and exact action union. This replaces per-entity CRUD tools; workflow-shaped tools remain separate. For many creates/updates in one call use entity_batch.",
+      inputSchema: entityToolInput,
+      outputSchema: entityToolOutput,
+      annotations: WRITE_DESTRUCTIVE_CLOSED,
+      isMutation: (params) => {
+        const command = entityMcpCommandSchema.parse(params.command);
+        return !["get", "list", "search"].includes(command.action);
+      },
+      telemetryEntity: (params) =>
+        entityMcpCommandSchema.parse(params.command).entity,
+      handler: async (params, extra) => {
+        const command = entityMcpCommandSchema.parse(params.command);
+        const result = await runEntity(
+          getEntityKernelContext(extra),
+          kernelCommand(command),
+        );
+        return entityToolOutput.parse(projectEntityResult(command, result));
+      },
     },
-  });
+    runtime,
+  );
 
-  registerBatchTool(server, {
-    name: "entity_batch",
-    description:
-      "Run up to 50 entity create/update commands in request order, each with the same validation, side effects and result shape as the `entity` tool. Items succeed or fail independently — a failed item does not stop or roll back the others — so read every result. Use this instead of 50 separate `entity` calls when importing a receipt's lines or promoting a batch of products.",
-    itemInputSchema: entityBatchItemInput,
-    itemOutputSchema: entityBatchItemOutput,
-    projectReference: (result) => result.item.id,
-    annotations: WRITE_DESTRUCTIVE_CLOSED,
-    telemetryEntity: ({ items }) => items[0]?.entity,
-    run: async (_caller, item, context) => {
-      if (!context)
-        throw new Error("Authenticated entity-kernel context is missing");
-      return entityBatchItemOutput.parse(await runEntity(context, item));
+  registerBatchTool(
+    server,
+    {
+      name: "entity_batch",
+      description:
+        "Run up to 50 entity create/update commands in request order, each with the same validation, side effects and result shape as the `entity` tool. Items succeed or fail independently — a failed item does not stop or roll back the others — so read every result. Use this instead of 50 separate `entity` calls when importing a receipt's lines or promoting a batch of products.",
+      itemInputSchema: entityBatchItemInput,
+      itemOutputSchema: entityBatchItemOutput,
+      projectReference: (result) => result.item.id,
+      annotations: WRITE_DESTRUCTIVE_CLOSED,
+      telemetryEntity: ({ items }) => items[0]?.entity,
+      run: async (_caller, item, context) => {
+        if (!context)
+          throw new Error("Authenticated entity-kernel context is missing");
+        return entityBatchItemOutput.parse(await runEntity(context, item));
+      },
     },
-  });
+    runtime,
+  );
 }

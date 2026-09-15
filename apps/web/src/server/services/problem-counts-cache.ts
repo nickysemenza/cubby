@@ -7,44 +7,22 @@ import { z } from "zod";
 import type { UnparsedError } from "~/lib/error-utils";
 import {
   getExecutionCtx,
-  getProblemCountsCache,
   type ProblemCountsCacheAdapter,
 } from "~/server/cf-env";
 import type { UPCLookupClient } from "~/server/clients/upc-lookup";
+import { readDatabaseFreshness } from "~/server/database-freshness/client";
 import type { Database } from "~/server/db";
 import { findProblemCounts } from "~/server/services/problems.service";
 
-import {
-  markProblemCountsDirty,
-  PROBLEM_COUNTS_DIRTY_KEY,
-} from "./problem-counts-dirty";
-
-export { markProblemCountsDirty };
-
-/**
- * For writers outside the entity mutation pipeline (Problems-page fixes,
- * statement rows, purchase/project attach) that cannot call
- * `runMutationSideEffects`. Never throws: a failed mark must not turn an
- * already-committed write into an apparent failure.
- */
-export async function markProblemCountsDirtyBestEffort(
-  source: string,
-): Promise<void> {
-  const cache = getProblemCountsCache();
-  if (!cache) return;
-  try {
-    await markProblemCountsDirty(cache);
-  } catch (error) {
-    console.error("problems.counts.dirty-mark.failed", { source, error });
-  }
-}
-
 export interface ProblemCountsPort {
   countProblems: typeof findProblemCounts;
+  /** Null means the shared freshness object was unavailable. */
+  readFreshness: typeof readDatabaseFreshness;
 }
 
 const productionProblemCountsPort: ProblemCountsPort = {
   countProblems: findProblemCounts,
+  readFreshness: readDatabaseFreshness,
 };
 
 const PROBLEM_COUNTS_CACHE_KEY = "problem-counts:v1";
@@ -95,30 +73,26 @@ async function writeProblemCountsSnapshot(
   return snapshot;
 }
 
-/** Above one detector pass; below the point staleness would be noticeable
- * on the badge. Safety net for writers that never call
- * `markProblemCountsDirtyBestEffort` (or a future one that forgets to). */
+/** Above one detector pass and a safety net for changes that bypass the DO. */
 const MAX_SNAPSHOT_AGE_MS = 10 * 60_000;
 
 /**
- * Whether the snapshot predates the latest dirty mark. KV is eventually
- * consistent across edges, so a mark may be seen a little late; that delays
- * the refresh, never loses it.
- *
- * Also refreshes once a snapshot is simply too old, regardless of a dirty
- * mark: this replaces the removed `cron.problem-counts` sweep and covers
- * writers outside the mutation pipeline that mark best-effort (direct repo
- * deletes and the problems/statement-row/purchase/project workflows).
+ * Returns the horizon a refresh must cover. A null freshness response is
+ * deliberately treated as dirty: retain the existing result but ask the
+ * bounded refresh path to recompute it from the authoritative database.
  */
-async function snapshotIsDirty(
-  cache: ProblemCountsCacheAdapter,
+async function snapshotRefreshHorizon(
   snapshot: ProblemCountsSnapshot,
+  port: ProblemCountsPort,
 ): Promise<string | null> {
-  const dirtyAt = await cache.get(PROBLEM_COUNTS_DIRTY_KEY);
-  if (dirtyAt && !Number.isNaN(Date.parse(dirtyAt))) {
-    if (Date.parse(dirtyAt) > Date.parse(snapshot.coveredThrough)) {
-      return dirtyAt;
-    }
+  const freshness = await port.readFreshness();
+  if (!freshness) {
+    return new Date(
+      Math.max(Date.now(), Date.parse(snapshot.coveredThrough) + 1),
+    ).toISOString();
+  }
+  if (freshness.lastWriteAt > Date.parse(snapshot.coveredThrough)) {
+    return new Date(freshness.lastWriteAt).toISOString();
   }
   return Date.now() - Date.parse(snapshot.coveredThrough) > MAX_SNAPSHOT_AGE_MS
     ? new Date().toISOString()
@@ -166,15 +140,27 @@ export async function getCachedProblemCounts(
   if (cache) {
     const snapshot = await readProblemCountsSnapshot(cache);
     if (snapshot) {
-      const dirtyAt = await snapshotIsDirty(cache, snapshot);
-      if (dirtyAt) {
-        await refreshBehindRead(db, upcLookupClient, cache, dirtyAt, port);
+      const refreshHorizon = await snapshotRefreshHorizon(snapshot, port);
+      if (refreshHorizon) {
+        await refreshBehindRead(
+          db,
+          upcLookupClient,
+          cache,
+          refreshHorizon,
+          port,
+        );
       }
       return snapshot.counts;
     }
   }
 
-  const requestedAt = new Date().toISOString();
+  // Capture the shared horizon before detector work. A write that arrives
+  // while this runs remains newer than the stored snapshot and refreshes it
+  // on the next read.
+  const freshness = await port.readFreshness();
+  const requestedAt = new Date(
+    Math.max(Date.now(), freshness?.lastWriteAt ?? 0),
+  ).toISOString();
   const counts = await port.countProblems(db, upcLookupClient);
   if (cache) {
     try {
@@ -203,6 +189,9 @@ export async function refreshCachedProblemCounts(
   ) {
     return "skipped";
   }
+  // The caller has already captured its horizon before deciding that this
+  // refresh is necessary. Do not read it after computing: that would let a
+  // concurrent write be incorrectly covered by an earlier detector pass.
   const counts = await port.countProblems(db, upcLookupClient);
   await writeProblemCountsSnapshot(cache, counts, requestedAt);
   return "succeeded";

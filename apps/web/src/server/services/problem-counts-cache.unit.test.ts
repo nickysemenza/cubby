@@ -8,13 +8,13 @@ import { Database } from "~/server/db";
 
 import {
   getCachedProblemCounts,
-  markProblemCountsDirty,
   type ProblemCountsPort,
   refreshCachedProblemCounts,
 } from "./problem-counts-cache";
 
 const countProblems = vi.fn<ProblemCountsPort["countProblems"]>();
-const port: ProblemCountsPort = { countProblems };
+const readFreshness = vi.fn<ProblemCountsPort["readFreshness"]>();
+const port: ProblemCountsPort = { countProblems, readFreshness };
 
 const counts = (total: number) =>
   problemsCountSchema.parse({
@@ -46,11 +46,13 @@ describe("problem-counts KV snapshot", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-20T18:00:00.000Z"));
+    readFreshness.mockResolvedValue(null);
   });
 
   afterEach(() => {
     vi.useRealTimers();
     countProblems.mockReset();
+    readFreshness.mockReset();
   });
 
   it("returns a valid KV hit without running detectors", async () => {
@@ -180,7 +182,7 @@ describe("problem-counts KV snapshot", () => {
     expect(adapter.put).not.toHaveBeenCalled();
   });
 
-  describe("dirty mark", () => {
+  describe("shared freshness horizon", () => {
     const snapshot = (coveredThrough: string) =>
       JSON.stringify({
         version: 1,
@@ -189,16 +191,16 @@ describe("problem-counts KV snapshot", () => {
         coveredThrough,
       });
 
-    it("serves the snapshot and refreshes once when a mutation marked it dirty", async () => {
+    it("serves the snapshot and refreshes once after a shared write", async () => {
       const fresh = counts(11);
       countProblems.mockResolvedValue(fresh);
       const { adapter, values } = memoryCache(
         snapshot("2026-08-20T17:00:00.000Z"),
       );
-      await markProblemCountsDirty(
-        adapter,
-        new Date("2026-08-20T17:30:00.000Z"),
-      );
+      readFreshness.mockResolvedValue({
+        lastWriteAt: Date.parse("2026-08-20T17:30:00.000Z"),
+        strongUntil: Date.parse("2026-08-20T17:31:30.000Z"),
+      });
 
       // Outside a Worker request there is no waitUntil: the refresh runs inline
       // after the read decided to serve the old snapshot.
@@ -225,26 +227,37 @@ describe("problem-counts KV snapshot", () => {
         snapshot("2026-08-20T17:00:00.000Z"),
       );
       values.set("problem-counts:refreshing", "2026-08-20T17:30:00.000Z");
-      await markProblemCountsDirty(
-        adapter,
-        new Date("2026-08-20T17:31:00.000Z"),
-      );
+      readFreshness.mockResolvedValue({
+        lastWriteAt: Date.parse("2026-08-20T17:31:00.000Z"),
+        strongUntil: Date.parse("2026-08-20T17:32:30.000Z"),
+      });
       await expect(
         getCachedProblemCounts(db, upc, adapter, port),
       ).resolves.toEqual(counts(4));
       expect(countProblems).not.toHaveBeenCalled();
     });
 
-    it("ignores a mark older than the snapshot's horizon", async () => {
+    it("ignores a shared write older than the snapshot's horizon", async () => {
       const { adapter } = memoryCache(snapshot("2026-08-20T17:55:00.000Z"));
-      await markProblemCountsDirty(
-        adapter,
-        new Date("2026-08-20T17:50:00.000Z"),
-      );
+      readFreshness.mockResolvedValue({
+        lastWriteAt: Date.parse("2026-08-20T17:50:00.000Z"),
+        strongUntil: Date.parse("2026-08-20T17:51:30.000Z"),
+      });
       await expect(
         getCachedProblemCounts(db, upc, adapter, port),
       ).resolves.toEqual(counts(4));
       expect(countProblems).not.toHaveBeenCalled();
+    });
+
+    it("keeps serving a snapshot and requests a bounded refresh when freshness is unavailable", async () => {
+      const fresh = counts(11);
+      countProblems.mockResolvedValue(fresh);
+      const { adapter } = memoryCache(snapshot("2026-08-20T17:55:00.000Z"));
+
+      await expect(
+        getCachedProblemCounts(db, upc, adapter, port),
+      ).resolves.toEqual(counts(4));
+      expect(countProblems).toHaveBeenCalledTimes(1);
     });
   });
 

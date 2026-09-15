@@ -26,7 +26,8 @@ struct MiddlewareTests {
         ) { request, body, _ in
             #expect(request.headerFields[.authorization] == "Bearer tok.sig")
             #expect(request.headerFields[.xAPIKey] == nil)
-            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
+            #expect(request.headerFields[HTTPField.Name("x-cubby-read-consistency")!] == nil)
+            #expect(request.headerFields[HTTPField.Name("x-cubby-fresh-read")!] == nil)
             return (HTTPResponse(status: .ok), body)
         }
         #expect(response.status == .ok)
@@ -62,34 +63,6 @@ struct MiddlewareTests {
         }
     }
 
-    @Test func mutationFreshnessForcesSubsequentAPIKeyReadsUntilDeadline() async throws {
-        let now = Date(timeIntervalSince1970: 1_000)
-        let (credentials, _) = try provider(with: .apiKey("cubby_x"))
-        let middleware = CubbyAuthMiddleware(credentials: credentials, now: { now })
-        var fields = HTTPFields()
-        fields[.xCubbyFreshReadSeconds] = "90"
-        let responseHeaders = fields
-        _ = try await middleware.intercept(
-            HTTPRequest(method: .patch, scheme: nil, authority: nil, path: "/api/v1/products/PRD-A"),
-            body: nil,
-            baseURL: URL(string: "http://localhost:3000")!,
-            operationID: "resources.product.update"
-        ) { _, body, _ in
-            (HTTPResponse(status: .ok, headerFields: responseHeaders), body)
-        }
-
-        _ = try await middleware.intercept(
-            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
-            body: nil,
-            baseURL: URL(string: "http://localhost:3000")!,
-            operationID: "resources.product.list"
-        ) { request, body, _ in
-            #expect(request.headerFields[.xCubbyFreshRead] == "1")
-            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
-            return (HTTPResponse(status: .ok), body)
-        }
-    }
-
     @Test func injectsAPIKeyHeader() async throws {
         let (credentials, _) = try provider(with: .apiKey("cubby_x"))
         let middleware = CubbyAuthMiddleware(credentials: credentials)
@@ -101,7 +74,8 @@ struct MiddlewareTests {
         ) { request, body, _ in
             #expect(request.headerFields[.xAPIKey] == "cubby_x")
             #expect(request.headerFields[.authorization] == nil)
-            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
+            #expect(request.headerFields[HTTPField.Name("x-cubby-read-consistency")!] == nil)
+            #expect(request.headerFields[HTTPField.Name("x-cubby-fresh-read")!] == nil)
             return (HTTPResponse(status: .ok), body)
         }
     }

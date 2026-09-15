@@ -8,11 +8,8 @@ import {
   type StartOperationId,
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
-import {
-  type BrowserReadPolicy,
-  browserReadPolicyFor,
-} from "~/server/browser-read-policy";
 import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
+import { type ReadPolicy, readPolicyFor } from "~/server/read-policy";
 import type { StartOperationResult } from "~/server/start-operation.contract";
 import {
   type AuthenticatedStartOperationContext,
@@ -92,7 +89,7 @@ export type OperationExecutionOptions<Input, OutputSchema extends z.ZodType> = {
   inputSchema: z.ZodType<Input>;
   outputSchema: OutputSchema | ((input: Input) => OutputSchema);
   request: Parameters<StartOperationHandler>[0]["request"];
-  readPolicy: BrowserReadPolicy;
+  readPolicy: ReadPolicy;
   run: (
     context: AuthenticatedStartOperationContext,
     input: Input,
@@ -165,10 +162,7 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
       inputSchema,
       outputSchema,
       request: options.request,
-      readPolicy: browserReadPolicyFor(
-        descriptor.id,
-        descriptor.definition.kind,
-      ),
+      readPolicy: readPolicyFor(descriptor.id, descriptor.definition.kind),
       run: (context, parsed) =>
         configured.run({ ...context, signal: options.request.signal }, parsed),
     };

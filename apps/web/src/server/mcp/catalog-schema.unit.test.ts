@@ -1,9 +1,11 @@
 import { PUBLIC_SHORTCODE_PREFIXES } from "@cubby/shared";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { callMcpTool } from "./mcp-test-utils";
+import { McpOperationContext } from "./operation-context";
 import { listMcpToolCatalog } from "./server";
 import { registerMcpTool, stripMockFromJsonSchema } from "./tools/_shared";
 
@@ -243,6 +245,75 @@ describe("MCP catalog schemas", () => {
     );
     await callMcpTool(failingServer, "calendar_failed_write", {}, {});
     expect(markCalendarDirty).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a possible write when output validation fails after the handler", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    const recordDatabaseWrite = vi.fn(async () => {});
+    registerMcpTool(
+      server,
+      {
+        name: "write_with_invalid_output",
+        description: "writes before returning an invalid response",
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        annotations: { readOnlyHint: false },
+        handler: async () =>
+          fromAny<{ ok: boolean }, { ok: string }>({ ok: "invalid" }),
+      },
+      { markCalendarDirty: vi.fn(), recordDatabaseWrite },
+    );
+
+    const result = await callMcpTool(
+      server,
+      "write_with_invalid_output",
+      {},
+      {},
+    );
+
+    expect(result.isError).toBe(true);
+    expect(recordDatabaseWrite).toHaveBeenCalledWith(
+      "mcp.write_with_invalid_output",
+    );
+  });
+
+  it("resolves shared freshness separately for each tool execution", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    const operationContext = new McpOperationContext(fromAny({}));
+    const prepare = vi
+      .spyOn(operationContext, "prepare")
+      .mockResolvedValue(fromAny({ caller: {}, entityKernel: {} }));
+    registerMcpTool(server, {
+      name: "freshness_scoped_read",
+      description: "reads",
+      inputSchema: z.object({}),
+      outputSchema: z.object({ ok: z.boolean() }),
+      annotations: { readOnlyHint: true },
+      handler: async () => ({ ok: true }),
+    });
+
+    await callMcpTool(
+      server,
+      "freshness_scoped_read",
+      {},
+      {},
+      {
+        operationContext,
+      },
+    );
+    await callMcpTool(
+      server,
+      "freshness_scoped_read",
+      {},
+      {},
+      {
+        operationContext,
+      },
+    );
+
+    expect(prepare).toHaveBeenCalledTimes(2);
+    expect(prepare).toHaveBeenNthCalledWith(1, "context");
+    expect(prepare).toHaveBeenNthCalledWith(2, "context");
   });
 
   it("publishes concrete, mock-free input and output schemas for the live catalog", async () => {

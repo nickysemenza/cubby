@@ -40,7 +40,6 @@ import {
   mutationEvents,
   runMutationSideEffectsForEntities,
 } from "~/server/services/mutation-side-effects";
-import { markProblemCountsDirtyBestEffort } from "~/server/services/problem-counts-cache";
 import {
   bindWorkflow,
   defineWorkflowOperation,
@@ -179,9 +178,6 @@ export const projectAttachResourcesWorkflow = bindWorkflow(
         context.actor,
       ),
     )
-    .effect("badge", async () => {
-      await markProblemCountsDirtyBestEffort("project.attachResources");
-    })
     .output(({ attached }) => attached),
   (db: Database, input: ResourceMutationInput, actor: ActorContext) => ({
     context: { db, actor },
@@ -202,9 +198,6 @@ export const projectDetachResourcesWorkflow = bindWorkflow(
         context.actor,
       ),
     )
-    .effect("badge", async () => {
-      await markProblemCountsDirtyBestEffort("project.detachResources");
-    })
     .output(({ detached }) => detached),
   (db: Database, input: ResourceMutationInput, actor: ActorContext) => ({
     context: { db, actor },
@@ -232,9 +225,6 @@ export const projectRepointUsesWorkflow = bindWorkflow(
         context.actor,
       ),
     )
-    .effect("badge", async () => {
-      await markProblemCountsDirtyBestEffort("project.repointUses");
-    })
     .output(({ repointed }) => repointed),
   (db: Database, input: RepointInput, actor: ActorContext) => ({
     context: { db, actor },
@@ -277,9 +267,6 @@ export const projectSetToolUsageWorkflow = bindWorkflow(
         context.actor,
       ),
     )
-    .effect("badge", async () => {
-      await markProblemCountsDirtyBestEffort("project.setToolUsage");
-    })
     .output(({ input, usage }) => ({
       projectId: input.projectId,
       productId: input.productId,

@@ -89,7 +89,11 @@ describe("MCP protocol smoke", () => {
         meta: { pageIndex: 0, pageSize: 10, totalCount: 0 },
       };
     });
-    registerEntityTools(server, runEntity);
+    const recordDatabaseWrite = vi.fn(async () => {});
+    registerEntityTools(server, runEntity, {
+      markCalendarDirty: vi.fn(),
+      recordDatabaseWrite,
+    });
 
     // The tool boundary validates the injected kernel capability before it
     // dispatches. The executor is mocked here, so only that capability shape
@@ -118,6 +122,7 @@ describe("MCP protocol smoke", () => {
       entity: "expense",
       meta: { pageIndex: 0, pageSize: 10, totalCount: 0 },
     });
+    expect(recordDatabaseWrite).not.toHaveBeenCalled();
   });
 
   it("defaults entity reads to identity summaries and keeps compact product ids", async () => {
@@ -355,7 +360,11 @@ describe("MCP protocol smoke", () => {
       };
     });
     const server = new McpServer({ name: "test", version: "1.0.0" });
-    registerEntityTools(server, runEntity);
+    const recordDatabaseWrite = vi.fn(async () => {});
+    registerEntityTools(server, runEntity, {
+      markCalendarDirty: vi.fn(),
+      recordDatabaseWrite,
+    });
 
     const result = await callMcpTool(
       server,
@@ -381,5 +390,7 @@ describe("MCP protocol smoke", () => {
         { index: 2, status: "succeeded", reference: created.id },
       ],
     });
+    expect(recordDatabaseWrite).toHaveBeenCalledOnce();
+    expect(recordDatabaseWrite).toHaveBeenCalledWith("mcp.entity_batch");
   });
 });

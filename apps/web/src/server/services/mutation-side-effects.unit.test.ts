@@ -1,6 +1,6 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import { testEntityId } from "@cubby/schemas/testing";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import type { PublishOptions } from "~/server/background-tasks/publish";
 import { Database } from "~/server/db";
@@ -33,16 +33,10 @@ class InMemoryMutationSideEffectPorts {
     entityType: "gardenEntry";
     entityId: string;
   }> = [];
-  readonly markProblemCountsDirty = vi.fn(async () => {
-    if (this.problemCountsError) throw this.problemCountsError;
-  });
-  problemCountsError: Error | null = null;
-
   readonly ports = {
     publishTasks: async (_db, tasks, options) => {
       this.published.push({ tasks, options });
     },
-    markProblemCountsDirty: () => this.markProblemCountsDirty(),
     findInventoryEmbeddingRefsForProducts: async () => this.inventoryRefs,
     findInventoryEmbeddingRefsForLocations: async () => [],
     findRecipeEmbeddingRefsForIngredients: async () => [],
@@ -306,37 +300,6 @@ describe("runMutationSideEffects", () => {
 
     expect(memory.refreshed).toEqual([]);
   });
-
-  it("does not reject a committed mutation when marking problem counts dirty fails", async () => {
-    memory.problemCountsError = new Error("KV write failed");
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-
-    await expect(
-      runMutationSideEffects(
-        db,
-        {
-          action: "updated",
-          entity: {
-            entity: "project",
-            id: testEntityId("project", "00000000-0000-4000-8000-000000000008"),
-          },
-          source: "project.update",
-        },
-        memory.ports,
-      ),
-    ).resolves.toBeUndefined();
-    expect(memory.markProblemCountsDirty).toHaveBeenCalledTimes(1);
-    expect(consoleError).toHaveBeenCalledWith(
-      "problems.counts.dirty-mark.failed",
-      expect.objectContaining({
-        source: "project.update",
-        error: memory.problemCountsError,
-      }),
-    );
-    consoleError.mockRestore();
-  });
 });
 
 describe("runMutationSideEffectsForEntities batching", () => {
@@ -439,35 +402,6 @@ describe("runMutationSideEffectsForEntities batching", () => {
     );
 
     expect(memory.refreshed).toEqual([]);
-  });
-
-  it("does not reject the wave when marking problem counts dirty fails", async () => {
-    memory.problemCountsError = new Error("KV write failed");
-    const consoleError = vi
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
-
-    await expect(
-      runMutationSideEffectsForEntities(
-        db,
-        [
-          {
-            action: "updated",
-            entity: {
-              entity: "project",
-              id: testEntityId(
-                "project",
-                "00000000-0000-4000-8000-000000000016",
-              ),
-            },
-            source: "test.bulk",
-          },
-        ],
-        memory.ports,
-      ),
-    ).resolves.toBeUndefined();
-    expect(memory.markProblemCountsDirty).toHaveBeenCalledTimes(1);
-    consoleError.mockRestore();
   });
 });
 
