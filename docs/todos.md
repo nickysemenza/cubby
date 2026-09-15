@@ -297,6 +297,31 @@ history is the archive. Permanent product constraints live in the
 
 ### Garden audit follow-ups (2026-09-14)
 
+- (P2) **Growing-area Location page still trails its design canvas**
+  (https://claude.ai/artifact/Y7fvFetWNAndGYjJe2AeDu, "Location detail —
+  growing-area variant"). #1050 landed the Garden section; the rest, in
+  order of leverage:
+  1. Inventory panels are not demoted — the compartment map, contents, and
+     recount actions still render full-width under the Garden section.
+     `DetailSections` (`app/_components/data-table/detail-page.tsx`) has no
+     collapsible/`defaultCollapsed` section flag; add it at that seam, then
+     collapse the inventory-first sections into one "Inventory · N items" row
+     whenever `gardenKind` is set.
+  2. The hero carries no growing-area identity or actions: add the
+     "growing area · <kind>" chip beside the title and Log entry / Add
+     planting / More actions through `detailPage`'s `heroActions`.
+  3. Planting rows lack the per-row Actions ▾ (Start for planned), the "here
+     since <date>" wording, and the amber "location dates unconfirmed" state;
+     reuse `PlantingActionRow`'s menu and the location-history data.
+  4. Recent entries are plain text: add the `JournalPhotoStrip` and link each
+     line to its entry.
+  5. Kind / conditions / parent belong in a supporting "Growing area" card
+     with an **Edit area** action (the growing-area form is only on `/garden`
+     today), plus a collapsed "Photos of the area" row for location photos.
+  Planting detail (`Main.dc.html` on the same canvas) is close; remaining:
+  the supporting "Planting details" table with mono labels and a Source
+  link, location-history periods as a dated table with linked areas, and
+  the guide as a collapsed row instead of a `<details>`.
 - (P3) **Bulk "Finish selected" on Apple.** Web has no equivalent gap; the
   native client lacks a multi-select finish action for plantings, so
   finishing several plantings at once still means one Finish per planting.
