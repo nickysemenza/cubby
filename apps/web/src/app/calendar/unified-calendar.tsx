@@ -99,6 +99,11 @@ const KIND_LABELS = {
   task: "Tasks",
   expense: "Expenses",
   project: "Projects",
+  // Never indexed at runtime: `ALL_KINDS` (this file's day-sheet
+  // creatable-kind list) never includes "planting" — see the `create`-field
+  // note on `CalendarKindSpec` in calendar-kind-registry.tsx. Present only so
+  // this `satisfies Record<CalendarItemKind, string>` still compiles.
+  planting: "Plantings",
 } satisfies Record<CalendarItemKind, string>;
 
 // No second color map. A calendar chip and the entity's own chrome are the

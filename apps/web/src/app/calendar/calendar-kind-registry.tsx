@@ -1,4 +1,8 @@
-import type { CalendarItem, CalendarItemKind } from "@cubby/schemas/calendar";
+import {
+  CALENDAR_PLANTING_MILESTONE_LABELS,
+  type CalendarItem,
+  type CalendarItemKind,
+} from "@cubby/schemas/calendar";
 import type { Entity } from "@cubby/schemas/entity";
 import {
   MEAL_KIND_LABELS,
@@ -64,7 +68,13 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   // No `entity` field: every calendar kind IS the entity it shows, and
   // `item.kind` already carries it to the one place that asked. Restating it
   // per entry only created a way for `meal` to claim it was a task.
-  create: (date?: string) => EntityEditDialogRequest;
+  //
+  // Optional: a kind with no calendar-originated creation flow (`planting`,
+  // whose records only ever start from the Garden surface) omits it entirely
+  // rather than supplying a throwing stub. `ALL_KINDS` in unified-calendar.tsx
+  // is the day-sheet's own creatable-kind list and never includes such a kind,
+  // so `calendarItemCreateRequest` is never called with one in practice.
+  create?: (date?: string) => EntityEditDialogRequest;
   icon: (item: ItemOf<K>) => LucideIcon;
   cover: (
     item: ItemOf<K>,
@@ -257,6 +267,29 @@ const calendarKindRegistry = {
       priority: 100,
     }),
   },
+  planting: {
+    // No `create`: a planting only ever starts from the Garden surface — see
+    // the optional-field note on `CalendarKindSpec.create`.
+    icon: () => KIND_ICONS.planting,
+    cover: () => undefined,
+    metadata: (item) =>
+      [
+        CALENDAR_PLANTING_MILESTONE_LABELS[item.milestone],
+        item.plannedWindow,
+        item.locationName,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    edit: (_item) => ({
+      mode: "read-only",
+      entity: "planting",
+      reason: "Planting dates are edited from the planting.",
+    }),
+    event: (_item, _today) => ({
+      color: entities.planting.color.accent,
+      priority: 10,
+    }),
+  },
 } satisfies {
   [K in CalendarItemKind]: CalendarKindSpec<K>;
 };
@@ -304,6 +337,12 @@ function calendarItemPresentation(item: CalendarItem, today = "") {
         calendarKindRegistry.project,
         today,
       );
+    case "planting":
+      return calendarItemPresentationFor(
+        item,
+        calendarKindRegistry.planting,
+        today,
+      );
   }
 }
 
@@ -319,11 +358,25 @@ function calendarItemEditDescriptor(
       return calendarKindRegistry.expense.edit(item);
     case "project":
       return calendarKindRegistry.project.edit(item);
+    case "planting":
+      return calendarKindRegistry.planting.edit(item);
   }
 }
 
 function calendarItemCreateRequest(kind: CalendarItemKind, date?: string) {
-  return calendarKindRegistry[kind].create(date);
+  // SAFETY: indexing the registry by a union key yields a union of specs
+  // whose `item` parameters are incompatible; only the `create` member is
+  // needed, and every member's `create` is optional with this same shape.
+  const { create } = calendarKindRegistry[kind] as {
+    create?: (date?: string) => EntityEditDialogRequest;
+  };
+  if (!create) {
+    // Callers only ever pass a kind from a creatable-kind list (e.g.
+    // `ALL_KINDS` in unified-calendar.tsx) — reaching here is a caller bug,
+    // not a state a user action can trigger.
+    throw new Error(`Calendar kind "${kind}" has no creation flow.`);
+  }
+  return create(date);
 }
 
 export {

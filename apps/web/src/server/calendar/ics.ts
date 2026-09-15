@@ -1,4 +1,7 @@
-import type { CalendarItem } from "@cubby/schemas/calendar";
+import {
+  CALENDAR_PLANTING_MILESTONE_LABELS,
+  type CalendarItem,
+} from "@cubby/schemas/calendar";
 import {
   MEAL_KIND_LABELS,
   MEAL_SLOT_DURATION_MINUTES,
@@ -37,7 +40,7 @@ const CRLF = "\r\n";
 /** RFC 5545 §3.1: lines are folded at 75 *octets*, excluding the CRLF. */
 const MAX_LINE_OCTETS = 75;
 
-export type IcsFeed = "meals" | "tasks" | "all";
+export type IcsFeed = "meals" | "tasks" | "all" | "garden";
 
 /** Nonempty by construction — `calendarRangeInput.kinds` rejects an empty list,
  * since "no kinds" would silently mean "no events" rather than "everything". */
@@ -47,6 +50,10 @@ const FEED_KINDS = {
   meals: ["meal"],
   tasks: ["task"],
   all: ["meal", "task"],
+  // A separate feed, not folded into `all`: `all` is the long-subscribed
+  // meals+tasks feed and stays exactly what it always published — adding a
+  // kind to it would silently change what every existing subscriber sees.
+  garden: ["planting"],
 } as const satisfies Record<IcsFeed, FeedKinds>;
 
 type PublishableKind = (typeof FEED_KINDS)[IcsFeed][number];
@@ -56,6 +63,7 @@ const FEED_NAMES = {
   meals: "Cubby Meals",
   tasks: "Cubby Tasks",
   all: "Cubby",
+  garden: "Cubby Garden",
 } satisfies Record<IcsFeed, string>;
 
 /** Which calendar kinds a given feed publishes. */
@@ -138,6 +146,13 @@ interface CalendarKindSpec<K extends PublishableKind> {
    */
   detailBase: string;
   /**
+   * Override the default `${item.id}@${UID_DOMAIN}` UID. A planting needs
+   * this: `mapPlantingItems` emits one item per populated milestone, all
+   * sharing the same planting id, so the plain default would collide two
+   * milestones of the same planting into one calendar event.
+   */
+  uid?: (item: ItemOfKind<K>) => string;
+  /**
    * Per-item filter *within* a kind — not feed membership, which `FEED_KINDS`
    * owns. This is where "a done task is noise on a calendar" lives.
    */
@@ -208,6 +223,25 @@ const KIND_SPECS = {
       return parts.join("\n");
     },
   },
+  planting: {
+    detailBase: "/plantings",
+    // `mapPlantingItems` emits one item per populated milestone, all sharing
+    // the planting's id — without this, two milestones of one planting would
+    // collide onto the same UID and the second would silently overwrite the
+    // first in a subscribed calendar.
+    uid: (item) => `${item.id}-${item.milestone}@${UID_DOMAIN}`,
+    includes: (_item: ItemOfKind<"planting">) => true,
+    summary: (item) =>
+      `${item.title} — ${CALENDAR_PLANTING_MILESTONE_LABELS[item.milestone]}`,
+    description: (item) => {
+      const parts: string[] = [];
+      if (item.locationName) parts.push(`Location: ${item.locationName}`);
+      if (item.plannedWindow) {
+        parts.push(`Planned window: ${item.plannedWindow}`);
+      }
+      return parts.length > 0 ? parts.join("\n") : null;
+    },
+  },
 } satisfies {
   [K in PublishableKind]: CalendarKindSpec<K>;
 };
@@ -221,6 +255,7 @@ function isPublishable(
   if (!kinds.includes(item.kind)) return false;
   if (item.kind === "meal") return KIND_SPECS.meal.includes(item);
   if (item.kind === "task") return KIND_SPECS.task.includes(item);
+  if (item.kind === "planting") return KIND_SPECS.planting.includes(item);
   return false;
 }
 
@@ -272,7 +307,10 @@ function toEventFor<K extends PublishableKind>(
   // rather than duplicating it. Shortcodes are permanent and never reassigned
   // (not even on merge), which is exactly the guarantee a UID needs.
   const event = new ICAL.Component("vevent");
-  event.addPropertyWithValue("uid", `${item.id}@${UID_DOMAIN}`);
+  event.addPropertyWithValue(
+    "uid",
+    spec.uid ? spec.uid(item) : `${item.id}@${UID_DOMAIN}`,
+  );
   event.addPropertyWithValue("dtstamp", icalDateTime(opts.now));
   addBoundaries(event, item, spec);
   event.addPropertyWithValue("summary", spec.summary(item));
@@ -290,9 +328,9 @@ function toEvent(
   item: PublishableCalendarItem,
   opts: IcsOptions,
 ): ICAL.Component {
-  return item.kind === "meal"
-    ? toEventFor(item, KIND_SPECS.meal, opts)
-    : toEventFor(item, KIND_SPECS.task, opts);
+  if (item.kind === "meal") return toEventFor(item, KIND_SPECS.meal, opts);
+  if (item.kind === "task") return toEventFor(item, KIND_SPECS.task, opts);
+  return toEventFor(item, KIND_SPECS.planting, opts);
 }
 
 /**

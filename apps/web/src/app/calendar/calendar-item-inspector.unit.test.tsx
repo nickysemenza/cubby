@@ -168,6 +168,32 @@ describe("EditableCalendarItem", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
+  it("keeps plantings read-only with a full-record route", () => {
+    const planting: Extract<CalendarItem, { kind: "planting" }> = {
+      kind: "planting",
+      id: testShortcode("planting", "PLT-3B2C"),
+      milestone: "sowed",
+      title: "Tomato · Brandywine",
+      locationName: "Raised bed 2",
+      plannedWindow: "Late spring",
+      startDate: "2026-08-18",
+      endDateExclusive: "2026-08-19",
+      interaction: "read-only",
+    };
+    render(
+      <CalendarInspectorBody item={planting} onCancel={() => undefined} />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      screen.getByText(/Planting dates are edited from the planting/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open full record" }),
+    ).toHaveAttribute("href", `/plantings/${planting.id}`);
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+  });
+
   it("keeps actual expenses read-only with a full-record route", () => {
     render(
       <CalendarInspectorBody

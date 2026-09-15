@@ -43,6 +43,7 @@ const CALENDAR_FEED_FILENAMES = {
   "meals.ics": "meals",
   "tasks.ics": "tasks",
   "all.ics": "all",
+  "garden.ics": "garden",
 } as const satisfies Record<string, IcsFeed>;
 
 const CALENDAR_FEED_PATH = /^\/api\/calendar\/([^/]+)\/([^/]+)\/?$/;

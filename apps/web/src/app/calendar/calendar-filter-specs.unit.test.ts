@@ -71,6 +71,12 @@ describe("buildCalendarFilters", () => {
     );
   });
 
+  it("accepts the planting item kind alongside the others", () => {
+    expect(buildCalendarFilters({ kinds: "planting,task" })).toEqual({
+      kinds: ["planting", "task"],
+    });
+  });
+
   it("reads an old bookmark's kinds and projectKinds unchanged", () => {
     expect(
       buildCalendarFilters({ kinds: "meal,task", projectKinds: "renovation" }),

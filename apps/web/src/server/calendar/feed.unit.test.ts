@@ -46,6 +46,23 @@ describe("published calendar feed", () => {
     expect(read).toHaveBeenCalledWith("strong-token", "all", null);
   });
 
+  it("serves the garden feed at its own filename", async () => {
+    const read = vi.fn<CalendarFeedState["read"]>(async () => ({
+      result: "served",
+      ...document,
+    }));
+    const handler = createCalendarFeedHandler(async () => state(read));
+
+    const response = await handler({
+      request: new Request(
+        "https://cubby.example/api/calendar/strong-token/garden.ics",
+      ),
+    });
+
+    expect(response.status).toBe(200);
+    expect(read).toHaveBeenCalledWith("strong-token", "garden", null);
+  });
+
   it("returns 304 without a body for a matching ETag", async () => {
     const handler = createCalendarFeedHandler(async () =>
       state(async () => ({ result: "not_modified", ...document })),

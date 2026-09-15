@@ -44,6 +44,7 @@ const KIND_LABELS = {
   task: "Tasks",
   expense: "Expenses",
   project: "Projects",
+  planting: "Plantings",
 } satisfies Record<CalendarItemKind, string>;
 
 const itemKindOptions: FilterableComboboxItem[] = calendarItemKind.options.map(
