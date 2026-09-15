@@ -3,6 +3,7 @@ import { useId, useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
+import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { Stack } from "~/components/layout";
 import { Label } from "~/components/ui/label";
 
@@ -62,19 +63,30 @@ export function GardenPicker({
           </span>
         )}
       </Label>
-      <EntityPicker
-        inputId={id}
-        entity={entity}
-        label={label}
-        items={items}
-        value={value}
-        setValue={onChange}
-        onSearchChange={setSearch}
-        isLoading={options.isPending}
-        placeholder={placeholder}
-        clearable
-        disabled={disabled}
-      />
+      {/* `WithEntitySearch` is used only for its create-from-picker dialog
+          (a brand-new crop or growing area typed straight into the field);
+          the item source stays the garden-scoped roster above. */}
+      <WithEntitySearch entity={entity}>
+        {(search) => (
+          <EntityPicker
+            inputId={id}
+            entity={entity}
+            label={label}
+            items={items}
+            value={value}
+            setValue={onChange}
+            onSearchChange={(query) => {
+              setSearch(query);
+              search.onSearchChange(query);
+            }}
+            onCreateNew={search.onCreateNew}
+            isLoading={options.isPending}
+            placeholder={placeholder}
+            clearable
+            disabled={disabled}
+          />
+        )}
+      </WithEntitySearch>
     </Stack>
   );
 }

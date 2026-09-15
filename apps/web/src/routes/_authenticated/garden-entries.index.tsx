@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { EntryForm } from "~/app/garden/entry-form";
 import { GardenDialogFooterSlot } from "~/app/garden/garden-fields";
+import { gardenStrings } from "~/app/garden/garden-strings";
 import { GardenTimeline } from "~/app/garden/garden-timeline";
 import { Stack } from "~/components/layout";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
@@ -37,6 +38,8 @@ function GardenEntriesPage() {
       variant="list"
       title={areaTitle}
       decoration="none"
+      // The breadcrumb is the only way back to the garden on a phone.
+      mobileTitleVisible
       eyebrow={
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span>House</span>
@@ -59,7 +62,7 @@ function GardenEntriesPage() {
       <Stack gap="lg">
         {locationId && (
           <Button onClick={() => setAdding(true)} className="self-start">
-            Add photos / Log entry
+            {gardenStrings.home.logEntry}
           </Button>
         )}
         <GardenTimeline locationId={locationId} />

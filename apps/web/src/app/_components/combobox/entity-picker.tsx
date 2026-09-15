@@ -371,7 +371,9 @@ function pickerNaming(
   return {
     ariaLabel: label ?? entityName ?? "",
     noun: entityNoun ?? label ?? "item",
-    placeholderDefault: entityNoun ? `Choose a ${entityNoun}…` : "Choose…",
+    placeholderDefault: entityNoun
+      ? `Choose ${/^[aeiou]/i.test(entityNoun) ? "an" : "a"} ${entityNoun}…`
+      : "Choose…",
   };
 }
 

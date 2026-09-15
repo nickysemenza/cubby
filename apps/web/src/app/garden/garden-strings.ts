@@ -47,7 +47,7 @@ export const gardenStrings = {
     submitAdd: "Add planting",
     cropField: "Crop",
     rememberSourceLabel: "Remember that this product grows this crop",
-    locationField: "Growing location",
+    locationField: "Location",
     intendedDestinationField: "Intended destination",
     stateField: "Planting state",
     stateGrowing: "Growing now",
@@ -80,7 +80,7 @@ export const gardenStrings = {
     finishExplanation:
       "This finishes only this planting. Its photos and harvest history stay available.",
     dateField: "Date",
-    startingLocationField: "Starting location",
+    startingLocationField: "Location",
     destinationField: "Destination",
   },
   entry: {
@@ -110,7 +110,7 @@ export const gardenStrings = {
     noPlantingsInLocation: "No current or planned plantings.",
     logEntry: "Log entry",
     editConditions: "Edit growing area",
-    bedJournal: "Bed journal",
+    bedJournal: "Area journal",
     finishedPlantingsSummary: (n: number) => `Finished plantings (${n})`,
     finishedEmpty: "Finished plantings will stay here with their history.",
     finishDialogTitle: "Finish selected plantings",
