@@ -334,6 +334,9 @@ Desktop navigation groups Cook, Pantry, Plan, House, and Finance using stable
 domain marks on a quiet white rail. Active routes use a neutral inset and domain
 context rather than a floating pill. Phone navigation keeps five reachable
 destinations, safe-area ownership, and contextual back behavior.
+Navigation history is session-only. Do not persist the last visited page or add
+a Resume destination across launches; resumable domain workflows such as an
+inventory recount own their separate progress contracts.
 
 ### Tables and inspectors
 

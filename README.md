@@ -703,7 +703,9 @@ usdaClient.getFoodSummaryByID(fdcId);
 
 ## 🗺️ Roadmap
 
-Framed as **Now / Next / Later** (no dates — it's a personal project). The canonical backlog, with per-item design decisions inline, is [docs/todos.md](docs/todos.md); the links are pointers, not summaries, so they don't rot.
+The canonical backlog, with priority order and per-item design decisions, is
+[docs/todos.md](docs/todos.md). Conditional work, visions, and operational passes
+have separate sections there.
 
 ### Recently shipped
 
@@ -719,8 +721,8 @@ Framed as **Now / Next / Later** (no dates — it's a personal project). The can
 
 ### Current and future work
 
-The authoritative Now / Next / Later ordering lives only in the
-[backlog triage board](docs/todos.md#triage-board), alongside each item's design
+The authoritative priority order lives only in the
+[ranked backlog](docs/todos.md#ranked-backlog), alongside each item's design
 constraints and promotion triggers. The README deliberately does not mirror the
 queue.
 
