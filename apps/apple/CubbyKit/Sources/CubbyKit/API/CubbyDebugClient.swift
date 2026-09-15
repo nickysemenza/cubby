@@ -46,7 +46,8 @@ public actor CubbyDebugClient {
         request.httpMethod = route.method.rawValue
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         var fields = HTTPFields()
-        CubbyAuthMiddleware.apply(await credentials.current(), to: &fields)
+        let authentication = await credentials.requestState()
+        CubbyAuthMiddleware.apply(authentication, to: &fields)
         for field in fields {
             request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }
@@ -56,11 +57,28 @@ public actor CubbyDebugClient {
         }
 
         let (data, response) = try await session.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let http = response as? HTTPURLResponse
+        let status = http?.statusCode ?? 0
+        await credentials.processResponse(
+            for: authentication,
+            status: status,
+            setAuthToken: http?.value(forHTTPHeaderField: "set-auth-token"),
+            setCookieHeaders: Self.setCookieHeaders(from: http),
+            responseURL: http?.url ?? url
+        )
         guard (200..<300).contains(status) else {
-            if status == 401 { await credentials.invalidate() }
             throw CubbyAPIError.decode(status: status, operationID: route.operationID, body: data)
         }
         return data
+    }
+
+    private static func setCookieHeaders(from response: HTTPURLResponse?) -> [String] {
+        guard let response else { return [] }
+        return response.allHeaderFields.compactMap { key, value in
+            guard String(describing: key).caseInsensitiveCompare("Set-Cookie") == .orderedSame
+            else { return nil }
+            if let values = value as? [String] { return values }
+            return [String(describing: value)]
+        }.flatMap { $0 }
     }
 }

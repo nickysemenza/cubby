@@ -17,6 +17,7 @@ public actor AuthFlow {
 
     /// Signs in with email + password, stores the returned bearer token, and returns it.
     public func signIn(email: String, password: String) async throws -> CubbyCredential {
+        let authentication = await credentials.requestState()
         var request = URLRequest(url: baseURL.appending(path: "/api/auth/sign-in/email"))
         request.httpMethod = "POST"
         request.setValue("cubby-mobile://", forHTTPHeaderField: "Origin")
@@ -36,23 +37,29 @@ public actor AuthFlow {
             throw AuthError.missingToken
         }
         let credential = CubbyCredential.bearer(token)
-        try await credentials.set(credential)
-        await updateSessionDataCookies(from: http)
-        // Idempotent given the token we just stored, but keeps sign-in and sign-out sharing one
-        // "did the server hand us a different token" code path.
-        await refreshTokenIfRotated(from: http)
+        guard
+            try await credentials.completeSignIn(
+                credential,
+                for: authentication,
+                setCookieHeaders: Self.setCookieHeaders(from: http),
+                responseURL: http.url ?? baseURL
+            )
+        else {
+            throw AuthError.superseded
+        }
         return credential
     }
 
     /// Signs out on the server, then always clears the stored credential — even if the request
     /// fails — so a dead session on the server never leaves a stale credential on the device.
     public func signOut() async throws {
+        let authentication = await credentials.requestState()
         var request = URLRequest(url: baseURL.appending(path: "/api/auth/sign-out"))
         request.httpMethod = "POST"
         request.setValue("cubby-mobile://", forHTTPHeaderField: "Origin")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var fields = HTTPFields()
-        CubbyAuthMiddleware.apply(await credentials.current(), to: &fields)
+        CubbyAuthMiddleware.apply(authentication, to: &fields)
         for field in fields {
             request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }
@@ -61,39 +68,25 @@ public actor AuthFlow {
         do {
             let (data, response) = try await session.data(for: request)
             let http = response as? HTTPURLResponse
-            if let http {
-                await refreshTokenIfRotated(from: http)
-                await updateSessionDataCookies(from: http)
-            }
             let status = http?.statusCode ?? 0
             guard (200..<300).contains(status) else {
-                await credentials.invalidate()
+                await credentials.invalidate(for: authentication)
                 throw Self.error(for: status, body: data)
             }
-            await credentials.invalidate()
+            await credentials.invalidate(for: authentication)
         } catch {
-            await credentials.invalidate()
+            await credentials.invalidate(for: authentication)
             throw error
         }
     }
 
-    /// If the response carries a `set-auth-token` that differs from the currently stored bearer,
-    /// overwrite it. Best-effort: a Keychain write failure here is not worth failing sign-in/out over.
-    private func refreshTokenIfRotated(from response: HTTPURLResponse) async {
-        guard let token = response.value(forHTTPHeaderField: "set-auth-token") else { return }
-        if case .bearer(let current) = await credentials.current(), current == token { return }
-        try? await credentials.set(.bearer(token))
-    }
-
-    private func updateSessionDataCookies(from response: HTTPURLResponse) async {
-        guard let url = response.url,
-            let raw = response.value(forHTTPHeaderField: "Set-Cookie")
-        else { return }
-        let cookies = HTTPCookie.cookies(
-            withResponseHeaderFields: ["Set-Cookie": raw],
-            for: url
-        ).map { "\($0.name)=\($0.value)" }
-        await credentials.updateSessionDataCookies(from: cookies)
+    private static func setCookieHeaders(from response: HTTPURLResponse) -> [String] {
+        response.allHeaderFields.compactMap { key, value in
+            guard String(describing: key).caseInsensitiveCompare("Set-Cookie") == .orderedSame
+            else { return nil }
+            if let values = value as? [String] { return values }
+            return [String(describing: value)]
+        }.flatMap { $0 }
     }
 
     private static func error(for status: Int, body: Data) -> AuthError {
@@ -118,6 +111,7 @@ public enum AuthError: Error, Sendable, Equatable {
     case invalidCredentials
     case originRejected
     case rateLimited
+    case superseded
     case http(status: Int, body: String)
 
     public var message: String {
@@ -130,6 +124,8 @@ public enum AuthError: Error, Sendable, Equatable {
             return "The server rejected this app's origin."
         case .rateLimited:
             return "Too many sign-in attempts. Wait a moment and try again."
+        case .superseded:
+            return "Your authentication state changed before sign-in completed."
         case .http(let status, let body):
             return "HTTP \(status): \(body)"
         }

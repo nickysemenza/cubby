@@ -26,7 +26,7 @@ beforeEach(() => {
   ports.getSession.mockResolvedValue({
     response: {
       user: { id: "user-fixture" },
-      session: { id: "session-fixture" },
+      session: { id: "session-fixture", token: "token" },
     },
     headers: new Headers(),
   });
@@ -39,7 +39,6 @@ describe("HTTP boundary", () => {
     expect((await request("recipes")).status).toBe(200);
     expect(ports.getSession).toHaveBeenCalledWith({
       headers: expect.any(Headers),
-      query: { disableCookieCache: true },
       returnHeaders: true,
     });
     expect(ports.context).toHaveBeenCalledWith({
@@ -105,7 +104,7 @@ describe("HTTP boundary", () => {
     ports.getSession.mockResolvedValue({
       response: {
         user: { id: "user-fixture" },
-        session: { id: "session-fixture" },
+        session: { id: "session-fixture", token: "token" },
       },
       headers,
     });
@@ -117,6 +116,20 @@ describe("HTTP boundary", () => {
       "better-auth.session_data.0=cache-a",
     );
     expect(response.headers.get("set-cookie")).not.toContain("session_token");
+  });
+
+  it("forwards a refreshed bearer credential with session cache cookies", async () => {
+    ports.getSession.mockResolvedValue({
+      response: {
+        user: { id: "user-fixture" },
+        session: { id: "session-fixture", token: "token" },
+      },
+      headers: new Headers({ "set-auth-token": "token.new-signature" }),
+    });
+    const response = await request("recipes", {
+      headers: { authorization: "Bearer token.signature" },
+    });
+    expect(response.headers.get("set-auth-token")).toBe("token.new-signature");
   });
   it.each(["", "invalid"])(
     "never falls back from an explicit rejected key (%s)",
@@ -186,10 +199,9 @@ describe("HTTP boundary", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("x-cubby-fresh-read-seconds")).toBeNull();
     // The bearer plugin turns the header into a session before getSession
-    // runs, so the boundary still reads the session authoritatively.
+    // runs, while the signed session cache can avoid a database lookup.
     expect(ports.getSession).toHaveBeenCalledWith({
       headers: expect.any(Headers),
-      query: { disableCookieCache: true },
       returnHeaders: true,
     });
     expect(ports.verifyApiKey).not.toHaveBeenCalled();

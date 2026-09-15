@@ -88,6 +88,8 @@ export const auth = betterAuth({
     cookieCache: {
       enabled: true,
       maxAge: 5 * 60, // 5 minutes
+      strategy: "compact",
+      refreshCache: false,
     },
     // Disable the "session must be fresh" gate on sensitive endpoints
     // (list-sessions, change-password, delete-user). better-auth defaults it to
@@ -155,7 +157,8 @@ export const auth = betterAuth({
     // it unchanged. `requireSignature` accepts only the signed `token.sig` form
     // the server itself hands out, so a raw session token from the DB cannot be
     // replayed as a bearer credential. Only the session-token cookie is
-    // injected, never the cookie cache, so bearer reads always hit the DB.
+    // injected. Native API clients also replay the signed session-data cache;
+    // the HTTP boundary binds that cache to the supplied bearer identity.
     bearer({ requireSignature: true }),
     tanstackStartCookies(), // Must be last
   ],

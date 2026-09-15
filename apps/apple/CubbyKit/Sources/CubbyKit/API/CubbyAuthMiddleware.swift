@@ -31,15 +31,19 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
         next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?)
     ) async throws -> (HTTPResponse, HTTPBody?) {
         var request = request
-        Self.apply(await credentials.currentState(), to: &request.headerFields)
+        let authentication = await credentials.requestState()
+        Self.apply(authentication, to: &request.headerFields)
 
         let (response, responseBody) = try await next(request, body, baseURL)
-        await credentials.updateSessionDataCookies(
-            from: response.headerFields[values: .setCookie]
+        await credentials.processResponse(
+            for: authentication,
+            status: response.status.code,
+            setAuthToken: response.headerFields[HTTPField.Name("set-auth-token")!],
+            setCookieHeaders: response.headerFields[values: .setCookie],
+            responseURL: baseURL
         )
         guard response.status.code >= 400 else { return (response, responseBody) }
 
-        if response.status.code == 401 { await credentials.invalidate() }
         let data: Data
         if let responseBody {
             data = try await Data(collecting: responseBody, upTo: Self.maxErrorBodyBytes)
@@ -49,7 +53,7 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
         throw CubbyAPIError.decode(status: response.status.code, operationID: operationID, body: data)
     }
 
-    /// Shared with `CubbyDebugClient` and `PresignedUpload`, which do not go through
+    /// Shared with `CubbyDebugClient` and `AuthFlow`, which do not go through
     /// OpenAPIRuntime.
     static func apply(_ credential: CubbyCredential?, to fields: inout HTTPFields) {
         switch credential {
@@ -59,9 +63,8 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
         }
     }
 
-    static func apply(_ state: CubbyAuthState?, to fields: inout HTTPFields) {
-        apply(state?.credential, to: &fields)
-        guard let state else { return }
+    static func apply(_ state: CredentialProvider.RequestState, to fields: inout HTTPFields) {
+        apply(state.credential, to: &fields)
         if case .bearer = state.credential {
             if !state.sessionDataCookies.isEmpty {
                 fields[.cookie] = state.sessionDataCookies

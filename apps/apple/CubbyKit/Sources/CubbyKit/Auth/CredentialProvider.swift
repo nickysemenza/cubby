@@ -3,12 +3,13 @@ import Foundation
 /// The single owner of "which credential goes on the next request" for one base URL.
 ///
 /// Reads through to the `SessionTokenStore` once, then serves the cached value; `set` and
-/// `invalidate` write through. `CubbyAuthMiddleware` calls `invalidate()` on a 401 so the app
-/// falls back to LoginView, and `AuthFlow` calls `set` after sign-in.
+/// `invalidate` write through. Each outbound request captures a state snapshot, and a response
+/// may affect authentication only while that snapshot remains current.
 public actor CredentialProvider {
     public let host: String
     private let store: any SessionTokenStore
     private var cached: CubbyAuthState??
+    private var revision = 0
 
     /// - Parameter host: the Keychain key. Use `CubbyBaseURL.host(of:)` so dev and prod tokens
     ///   never collide.
@@ -21,6 +22,14 @@ public actor CredentialProvider {
         currentState()?.credential
     }
 
+    /// A replayable snapshot captured immediately before a request leaves the client.
+    /// A response may change stored authentication only while this snapshot is current.
+    struct RequestState: Sendable {
+        let credential: CubbyCredential?
+        let sessionDataCookies: [String: String]
+        fileprivate let revision: Int
+    }
+
     func currentState() -> CubbyAuthState? {
         if let cached { return cached }
         let loaded = try? store.loadState(for: host)
@@ -28,37 +37,114 @@ public actor CredentialProvider {
         return loaded
     }
 
+    func requestState() -> RequestState {
+        let state = currentState()
+        return RequestState(
+            credential: state?.credential,
+            sessionDataCookies: state?.sessionDataCookies ?? [:],
+            revision: revision
+        )
+    }
+
     public func set(_ credential: CubbyCredential) throws {
         let state = CubbyAuthState(credential: credential)
         try store.saveState(state, for: host)
         cached = .some(state)
+        revision += 1
     }
 
-    func updateSessionDataCookies(from setCookieHeaders: [String]) {
+    /// Stores a successful interactive sign-in only if nothing changed while it
+    /// was in flight. A late sign-in response must not restore a signed-out or
+    /// switched account.
+    func completeSignIn(
+        _ credential: CubbyCredential,
+        for request: RequestState,
+        setCookieHeaders: [String],
+        responseURL: URL
+    ) throws -> Bool {
+        guard isCurrent(request) else { return false }
+        var state = CubbyAuthState(credential: credential)
+        Self.applySessionDataCookies(
+            setCookieHeaders,
+            responseURL: responseURL,
+            to: &state
+        )
+        try store.saveState(state, for: host)
+        cached = .some(state)
+        revision += 1
+        return true
+    }
+
+    /// Atomically applies one response to the credential that sent its request.
+    /// Token rotation, signed session-data cookies, and 401 invalidation share
+    /// this conditional so an older response cannot overwrite newer auth state.
+    func processResponse(
+        for request: RequestState,
+        status: Int,
+        setAuthToken: String?,
+        setCookieHeaders: [String],
+        responseURL: URL
+    ) {
+        guard isCurrent(request) else { return }
+        if status == 401 {
+            clearCurrentState()
+            return
+        }
         guard var state = currentState(), case .bearer = state.credential else { return }
-        let cookies = Self.sessionDataCookies(from: setCookieHeaders)
-        guard cookies.sawSessionDataCookie else { return }
-        state.sessionDataCookies = cookies.values
+        let previous = state
+
+        if let setAuthToken, !setAuthToken.isEmpty {
+            state.credential = .bearer(setAuthToken)
+            if state.credential != previous.credential {
+                state.sessionDataCookies = [:]
+            }
+        }
+        Self.applySessionDataCookies(
+            setCookieHeaders,
+            responseURL: responseURL,
+            to: &state
+        )
+        guard state != previous else { return }
         try? store.saveState(state, for: host)
         cached = .some(state)
+        if state.credential != previous.credential { revision += 1 }
     }
 
-    private static func sessionDataCookies(from headers: [String]) -> (
-        sawSessionDataCookie: Bool, values: [String: String]
+    /// Sign-out owns its explicit clear, but only for the request's account.
+    func invalidate(for request: RequestState) {
+        guard isCurrent(request) else { return }
+        clearCurrentState()
+    }
+
+    private func isCurrent(_ request: RequestState) -> Bool {
+        revision == request.revision && currentState()?.credential == request.credential
+    }
+
+    private func clearCurrentState() {
+        try? store.clear(for: host)
+        cached = .some(nil)
+        revision += 1
+    }
+
+    private static func applySessionDataCookies(
+        _ headers: [String],
+        responseURL: URL,
+        to state: inout CubbyAuthState
     ) {
-        var sawSessionDataCookie = false
-        var values: [String: String] = [:]
+        let now = Date()
         for header in headers {
-            let pair = header.split(separator: ";", maxSplits: 1)[0]
-            let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
-            guard parts.count == 2 else { continue }
-            let name = String(parts[0]).trimmingCharacters(in: .whitespaces)
-            guard isSessionDataCookieName(name) else { continue }
-            sawSessionDataCookie = true
-            let deleting = header.range(of: "max-age=0", options: .caseInsensitive) != nil
-            if !deleting && !parts[1].isEmpty { values[name] = String(parts[1]) }
+            let parsed = HTTPCookie.cookies(
+                withResponseHeaderFields: ["Set-Cookie": header],
+                for: responseURL
+            )
+            for cookie in parsed where isSessionDataCookieName(cookie.name) {
+                if isDeletion(cookie, now: now) {
+                    state.sessionDataCookies.removeValue(forKey: cookie.name)
+                } else {
+                    state.sessionDataCookies[cookie.name] = cookie.value
+                }
+            }
         }
-        return (sawSessionDataCookie, values)
     }
 
     private static func isSessionDataCookieName(_ name: String) -> Bool {
@@ -69,9 +155,18 @@ public actor CredentialProvider {
         return normalized.dropFirst(base.count + 1).allSatisfy(\.isNumber)
     }
 
+    private static func isDeletion(_ cookie: HTTPCookie, now: Date) -> Bool {
+        if cookie.value.isEmpty { return true }
+        if let maximumAge = cookie.properties?[.maximumAge],
+            (Int(String(describing: maximumAge)) ?? 1) <= 0
+        {
+            return true
+        }
+        return cookie.expiresDate.map { $0 <= now } ?? false
+    }
+
     public func invalidate() {
-        try? store.clear(for: host)
-        cached = .some(nil)
+        clearCurrentState()
     }
 }
 

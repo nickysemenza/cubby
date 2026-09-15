@@ -20,6 +20,10 @@ import {
 import { type HttpMetadata, httpMetadataSchema } from "~/lib/http-api/router";
 import { httpRoutes } from "~/lib/http-api/routes";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
+import {
+  authenticateHttpSession,
+  type HttpSessionReader,
+} from "~/server/http-session-cache";
 import type { RequestActor, requireActor } from "~/server/request-context";
 import type { dispatchStartOperation } from "~/server/start-operation-dispatch.server";
 import {
@@ -30,14 +34,7 @@ import {
 
 interface HttpApiPorts {
   auth: {
-    getSession(options: {
-      headers: Headers;
-      query: { disableCookieCache: true };
-      returnHeaders: true;
-    }): Promise<{
-      response: { user: { id: string }; session: { id: string } } | null;
-      headers: Headers;
-    }>;
+    getSession: HttpSessionReader;
     verifyApiKey(options: {
       body: { key: string; configId: "http-api" };
     }): Promise<{
@@ -55,6 +52,7 @@ interface HttpApiPorts {
 type ApiRequest = TsRestRequest & {
   apiContext?: ReturnType<typeof requireActor>;
   sessionDataCookies?: string[];
+  sessionAuthToken?: string;
 };
 
 const statuses = new Map(Object.entries(StatusCodes));
@@ -246,12 +244,15 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
           source: "api",
         };
     } else {
-      const sessionResult = await ports.auth.getSession({
+      const sessionResult = await authenticateHttpSession({
         headers: request.headers,
-        query: { disableCookieCache: true },
-        returnHeaders: true,
+        getSession: ports.auth.getSession,
       });
       const session = sessionResult.response;
+      if (session && request.headers.has("authorization")) {
+        request.sessionAuthToken =
+          sessionResult.headers.get("set-auth-token") ?? undefined;
+      }
       request.sessionDataCookies = sessionDataCookiesFrom(
         sessionResult.headers,
       );
@@ -293,6 +294,8 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         if (!isOrdinaryOperation(operation))
           throw failure("NOT_FOUND", "Unknown operation");
         const { request, responseHeaders } = context;
+        if (request.sessionAuthToken)
+          responseHeaders.set("set-auth-token", request.sessionAuthToken);
         for (const cookie of request.sessionDataCookies ?? [])
           responseHeaders.append("Set-Cookie", cookie);
         const apiContext = request.apiContext;
