@@ -7,6 +7,7 @@ import {
 } from "./generated/entity-field-schemas.ledgerParty.gen";
 import { ledgerPartyShortcode } from "./identifiers";
 import { createPaginatedResponseSchema } from "./pagination";
+import { ledgerPartyRelatedFilterFields } from "./related-view";
 export {
   ledgerAttributionInput,
   ledgerAttributions,
@@ -40,6 +41,7 @@ export type LedgerPartyUpdateInput = z.infer<typeof ledgerPartyUpdateInput>;
 export const ledgerPartyFilterFields = {
   ...auditDateFilterFields,
   ...generatedLedgerPartyFilterFields,
+  ...ledgerPartyRelatedFilterFields,
 };
 export const ledgerPartyFiltersSchema = z.object(ledgerPartyFilterFields);
 export type LedgerPartyFilters = z.infer<typeof ledgerPartyFiltersSchema>;

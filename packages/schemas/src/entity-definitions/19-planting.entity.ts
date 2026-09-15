@@ -442,6 +442,50 @@ export default defineEntity({
         ],
       },
     },
+    {
+      key: "location-history",
+      label: "Location history",
+      target: "location",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "PlantingLocationPeriod.plantingId", direction: "incoming" },
+          { edge: "PlantingLocationPeriod.locationId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "PlantingLocationPeriod.locationId", direction: "incoming" },
+          { edge: "PlantingLocationPeriod.plantingId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "location-history-entries",
+      label: "Location history entries",
+      target: "gardenEntry",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "PlantingLocationPeriod.plantingId", direction: "incoming" },
+          {
+            edge: "PlantingLocationPeriod.sourceGardenEntryId",
+            direction: "outgoing",
+          },
+        ],
+      },
+      inverse: {
+        steps: [
+          {
+            edge: "PlantingLocationPeriod.sourceGardenEntryId",
+            direction: "incoming",
+          },
+          { edge: "PlantingLocationPeriod.plantingId", direction: "outgoing" },
+        ],
+      },
+    },
   ],
   // `displayName` is a non-null projected title (ingredient + variety), so
   // Cmd-K / `/search` can index plantings like every other named entity.

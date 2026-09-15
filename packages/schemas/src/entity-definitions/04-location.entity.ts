@@ -543,6 +543,25 @@ export default defineEntity({
         placeholder: "Filter related ingredients presence...",
         urlOnly: true,
       },
+      {
+        columnId: "related:location.plantingHistory",
+        field: "plantingSearch",
+        urlKey: "related-planting",
+        kind: "text",
+        placeholder: "Search related plantings...",
+      },
+      {
+        columnId: "plantingId",
+        kind: "idMulti",
+        placeholder: "Filter by related plantings id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "plantingPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related plantings presence...",
+        urlOnly: true,
+      },
     ],
   },
   relations: [
@@ -609,6 +628,25 @@ export default defineEntity({
         steps: [
           { edge: "LocationImage.imageId", direction: "incoming" },
           { edge: "LocationImage.locationId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "planting-history",
+      label: "Planting history",
+      target: "planting",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "PlantingLocationPeriod.locationId", direction: "incoming" },
+          { edge: "PlantingLocationPeriod.plantingId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "PlantingLocationPeriod.plantingId", direction: "incoming" },
+          { edge: "PlantingLocationPeriod.locationId", direction: "outgoing" },
         ],
       },
     },

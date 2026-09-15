@@ -1,4 +1,7 @@
-import type { IngredientFilters } from "@cubby/schemas/ingredient";
+import {
+  type IngredientFilters,
+  ingredientFiltersSchema,
+} from "@cubby/schemas/ingredient";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,12 +11,13 @@ import {
 
 import { buildIngredientListWhere } from "./search";
 
-// SAFETY: test-only partial filter set; buildIngredientListWhere only reads
-// the keys under test, so a partial object is safe to pass here.
+// Parsed rather than asserted: the related-view filter trios carry branded
+// shortcodes, and every filter field is optional, so the schema accepts the
+// partial set under test.
 const where = (filters: Partial<IngredientFilters> = {}) =>
   buildIngredientListWhere(
     mockWhereDatabase(),
-    filters as IngredientFilters,
+    ingredientFiltersSchema.parse(filters),
   ).then(renderWhereSql);
 
 describe("buildIngredientListWhere", () => {

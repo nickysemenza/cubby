@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { entityManifest } from "./entity-manifest";
 import { financialAccountFilterFields } from "./financial-account";
 import { financialTransactionFilterFields } from "./financial-transaction";
+import { ingredientFilterFields } from "./ingredient";
 import { inventoryFilterFields } from "./inventory";
+import { ledgerPartyFilterFields } from "./ledger-party";
 import { locationFilterFields } from "./location";
 import { mealFilterFields } from "./meal";
 import { productFilterFields } from "./product";
@@ -161,6 +163,8 @@ describe("relatedViewRegistry", () => {
     const fields = {
       product: productFilterFields,
       recipe: recipeFilterFields,
+      ingredient: ingredientFilterFields,
+      ledgerParty: ledgerPartyFilterFields,
       location: locationFilterFields,
       inventory: inventoryFilterFields,
       meal: mealFilterFields,

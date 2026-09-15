@@ -65,6 +65,7 @@ import {
   enrichProductRowsWithPricing,
   loadProductPricingForIngredientIds,
 } from "~/server/repo/product/pricing";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 
 import {
   appearsInRecipesRefsForIngredientSql,
@@ -592,6 +593,7 @@ export const buildIngredientListWhere = async (
       filters.ownRecipePresenceFilter,
       ingredientIdsInOwnRecipes,
     ),
+    ...relatedWhereConditions("ingredient", filters, ingredient.id),
   );
 
   const whereClause = and(...conditions);

@@ -27,6 +27,7 @@ import {
 } from "./recipe";
 import { mutationSideEffectsSchema } from "./background-jobs";
 import { displayImagesField } from "./display-images";
+import { ingredientRelatedFilterFields } from "./related-view";
 
 export const ingredientBaseFields = {
   name: generatedIngredientFieldSchemas.read.name,
@@ -59,6 +60,7 @@ export const ingredientFilterFields = {
   recipePresenceFilter: presenceFilter.describe(
     "Filter to ingredients that are / aren't used by at least one live recipe",
   ),
+  ...ingredientRelatedFilterFields,
 };
 
 export const ingredientFiltersSchema = z.object(ingredientFilterFields);

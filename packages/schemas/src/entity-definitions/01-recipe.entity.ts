@@ -714,6 +714,33 @@ export default defineEntity({
           { edge: "MealRecipe.recipeId", direction: "outgoing" },
         ],
       },
+      sources: [
+        {
+          key: "served-portions",
+          label: "Served portions",
+          provenance: {
+            kind: "local-path",
+            steps: [
+              { edge: "MealRecipe.recipeId", direction: "incoming" },
+              {
+                edge: "MealRecipePortion.mealRecipeId",
+                direction: "incoming",
+              },
+              { edge: "MealRecipePortion.mealId", direction: "outgoing" },
+            ],
+          },
+          inverse: {
+            steps: [
+              { edge: "MealRecipePortion.mealId", direction: "incoming" },
+              {
+                edge: "MealRecipePortion.mealRecipeId",
+                direction: "outgoing",
+              },
+              { edge: "MealRecipe.recipeId", direction: "outgoing" },
+            ],
+          },
+        },
+      ],
     },
   ],
   search: { enabled: true },

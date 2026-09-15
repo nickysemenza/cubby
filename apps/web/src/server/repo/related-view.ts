@@ -108,15 +108,39 @@ const SQL_RELATED_VIEWS = {
   "product.tasks": named(
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
+  "product.meals": dated(
+    `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
+    `t."date"`,
+  ),
+  "product.eaters": named(),
+  "ingredient.meals": dated(
+    `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
+    `t."date"`,
+  ),
+  "ingredient.eaters": named(),
   "recipe.ingredients": named(),
   "recipe.meals": dated(
     `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
     `t."date"`,
   ),
   "meal.recipes": named(),
+  "meal.foodProducts": named(),
+  "meal.foodIngredients": named(),
+  // The `eaters` list column reads only the primary (food-entry) source; the
+  // `portions` (served-portion) source is graph-only (`relatedViewPath`
+  // compiles `provenance.steps`, never `sources`).
+  "meal.eaters": named(),
   // includes-installed: identity/relation views, not a browse/count surface
   // — a fixture's related ingredient must stay reachable either direction.
   "location.ingredients": named(),
+  "location.plantingHistory": dated(
+    `COALESCE(
+      (SELECT i."name" FROM "Ingredient" i WHERE i."id" = t."ingredientId")
+        || COALESCE(' · ' || NULLIF(t."variety", ''), ''),
+      t."shortcode"
+    )`,
+    `COALESCE(t."sowedOn", t."plannedDate", t."createdAt"::date)`,
+  ),
   "inventory.ingredient": named(),
   "project.blockedBy": named(),
   "project.tasks": named(
@@ -197,6 +221,14 @@ const SQL_RELATED_VIEWS = {
   ),
   "financialTransaction.products": named(),
   "wish.candidates": named(),
+  // The `meals` list column reads only the primary (food-entry) source; the
+  // `portions` (served-portion) source is graph-only (`relatedViewPath`
+  // compiles `provenance.steps`, never `sources`).
+  "ledgerParty.meals": dated(
+    `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
+    `t."date"`,
+  ),
+  "ledgerParty.recipesEaten": named(),
 } as const satisfies Record<RelatedViewKey, RelatedViewSqlPresentation>;
 
 /** The view's own restriction as an ANDable clause, or nothing. */

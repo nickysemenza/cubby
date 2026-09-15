@@ -51,12 +51,12 @@ function accountItem(account: FinancialAccountOut): RelationshipEntity {
 }
 
 /**
- * `LedgerParty` has no curated `related-view.ts` registration (household
- * ledger relationships are rendered in the household contribution ledger
- * instead — see `ENTITIES_WITHOUT_RELATED_VIEWS`), so its relations are
- * fed to `RelationshipTree` by hand rather than through the generic
- * `relatedData` preview endpoints, which only resolve
- * curated relation keys.
+ * Accounts and outgoing/incoming transfers are fed to `RelationshipTree` by
+ * hand: the household ledger composition is richer than the generic
+ * `relatedData` previews, which only resolve curated `related-view.ts` keys
+ * (`ledgerParty.meals`, `ledgerParty.recipesEaten`). The graph-driven
+ * "Relationships" section is appended by `DetailSections` independently of
+ * either, so meals and recipes eaten need no section here.
  */
 export function LedgerPartyDetail({ party }: { party: LedgerPartyOut }) {
   const accountsQuery = useQuery(

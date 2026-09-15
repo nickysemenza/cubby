@@ -9,7 +9,9 @@ import {
   financialTransactionShortcode,
   ingredientShortcode,
   inventoryShortcode,
+  ledgerPartyShortcode,
   mealShortcode,
+  plantingShortcode,
   productShortcode,
   projectShortcode,
   purchaseShortcode,
@@ -111,6 +113,38 @@ const relatedViewPresentationRegistry = [
     order: "task",
   },
   {
+    key: "product.meals",
+    source: "product",
+    relationship: "meals",
+    defaultVisible: false,
+    order: "newest",
+    inverseKey: "meal.foodProducts",
+  },
+  {
+    key: "product.eaters",
+    source: "product",
+    relationship: "eaters",
+    defaultVisible: false,
+    order: "alphabetical",
+    filterPrefix: "eater",
+  },
+  {
+    key: "ingredient.meals",
+    source: "ingredient",
+    relationship: "meals",
+    defaultVisible: false,
+    order: "newest",
+    inverseKey: "meal.foodIngredients",
+  },
+  {
+    key: "ingredient.eaters",
+    source: "ingredient",
+    relationship: "eaters",
+    defaultVisible: false,
+    order: "alphabetical",
+    filterPrefix: "eater",
+  },
+  {
     key: "recipe.ingredients",
     source: "recipe",
     relationship: "ingredients",
@@ -134,11 +168,49 @@ const relatedViewPresentationRegistry = [
     inverseKey: "recipe.meals",
   },
   {
+    key: "meal.foodProducts",
+    source: "meal",
+    relationship: "food-products",
+    defaultVisible: false,
+    order: "alphabetical",
+    filterPrefix: "foodProduct",
+    inverseKey: "product.meals",
+  },
+  {
+    key: "meal.foodIngredients",
+    source: "meal",
+    relationship: "food-ingredients",
+    defaultVisible: false,
+    order: "alphabetical",
+    filterPrefix: "foodIngredient",
+    inverseKey: "ingredient.meals",
+  },
+  {
+    // The `eaters` relation's list column reads only the primary (food-entry)
+    // source; the `portions` (served-portion) source is graph-only, because
+    // `relatedViewPath` below compiles `provenance.steps` and never `sources`.
+    key: "meal.eaters",
+    source: "meal",
+    relationship: "eaters",
+    defaultVisible: false,
+    order: "alphabetical",
+    filterPrefix: "eater",
+    inverseKey: "ledgerParty.meals",
+  },
+  {
     key: "location.ingredients",
     source: "location",
     relationship: "ingredients",
     defaultVisible: false,
     order: "alphabetical",
+  },
+  {
+    key: "location.plantingHistory",
+    source: "location",
+    relationship: "planting-history",
+    defaultVisible: false,
+    order: "newest",
+    filterPrefix: "planting",
   },
   {
     key: "inventory.ingredient",
@@ -339,6 +411,24 @@ const relatedViewPresentationRegistry = [
     defaultVisible: true,
     order: "alphabetical",
   },
+  {
+    // The `meals` relation's list column reads only the primary (food-entry)
+    // source; the `portions` (served-portion) source is graph-only, because
+    // `relatedViewPath` below compiles `provenance.steps` and never `sources`.
+    key: "ledgerParty.meals",
+    source: "ledgerParty",
+    relationship: "meals",
+    defaultVisible: false,
+    order: "newest",
+    inverseKey: "meal.eaters",
+  },
+  {
+    key: "ledgerParty.recipesEaten",
+    source: "ledgerParty",
+    relationship: "recipes-eaten",
+    defaultVisible: false,
+    order: "alphabetical",
+  },
 ] as const satisfies readonly RelatedViewPresentationDefinition[];
 
 /**
@@ -358,10 +448,18 @@ const relatedViewRelationshipKeys = {
   "product.inventory": "inventory",
   "product.wishes": "wishes",
   "product.tasks": "tasks",
+  "product.meals": "meals",
+  "product.eaters": "eaters",
+  "ingredient.meals": "meals",
+  "ingredient.eaters": "eaters",
   "recipe.ingredients": "ingredients",
   "recipe.meals": "meals",
   "meal.recipes": "recipes",
+  "meal.foodProducts": "food-products",
+  "meal.foodIngredients": "food-ingredients",
+  "meal.eaters": "eaters",
   "location.ingredients": "ingredients",
+  "location.plantingHistory": "planting-history",
   "inventory.ingredient": "ingredient",
   "project.blockedBy": "blocked-by",
   "project.tasks": "tasks",
@@ -389,6 +487,8 @@ const relatedViewRelationshipKeys = {
   "financialTransaction.expenses": "expenses",
   "financialTransaction.products": "products",
   "wish.candidates": "candidates",
+  "ledgerParty.meals": "meals",
+  "ledgerParty.recipesEaten": "recipes-eaten",
 } as const satisfies Record<
   (typeof relatedViewPresentationRegistry)[number]["key"],
   string
@@ -431,15 +531,13 @@ type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
  * same empty `.filter()` result.
  */
 const ENTITIES_WITHOUT_RELATED_VIEWS = {
-  ingredient: "usages are rendered in full on the detail page, not previewed",
   cookbook: "the cookbook page IS its recipe list",
-  ledgerParty:
-    "ledger party relationships are rendered in the household ledger",
   ledgerTransfer:
     "ledger transfer relationships are rendered in the household ledger",
   // The one entity with no shortcode, no detail route, and no list table.
   image: "no detail route or list table to hang a preview column on",
-  planting: "garden overview supplies its growing context",
+  planting:
+    "garden overview is a bespoke timeline, not a list table; location-history relations surface via the entity graph",
   gardenEntry: "garden timelines render entries directly",
   // Not a local entity — remote USDA search results, no local edges.
   "usda-food": "remote USDA records have no local relationships",
@@ -660,7 +758,7 @@ const trio = <Prefix extends string, IdSchema extends z.ZodType>(
  * across every caller. Recovering the literal would mean an `as const`
  * entityManifest plus a generic `localRelationshipByKey`, or a second
  * hand-maintained key→target table that duplicates the manifest — more drift
- * surface than the 13 blocks below cost.
+ * surface than the 15 blocks below cost.
  */
 export const productRelatedFilterFields = {
   ...trio("vendor", vendorShortcode),
@@ -671,20 +769,35 @@ export const productRelatedFilterFields = {
   ...trio("relatedInventory", inventoryShortcode),
   ...trio("wish", wishShortcode),
   ...trio("task", taskShortcode),
+  ...trio("meal", mealShortcode),
+  ...trio("eater", ledgerPartyShortcode),
 };
 export const recipeRelatedFilterFields = {
   ...trio("ingredient", ingredientShortcode),
   ...trio("meal", mealShortcode),
 };
-export const mealRelatedFilterFields = trio("recipe", recipeShortcode);
-export const locationRelatedFilterFields = trio(
-  "ingredient",
-  ingredientShortcode,
-);
+export const mealRelatedFilterFields = {
+  ...trio("recipe", recipeShortcode),
+  ...trio("foodProduct", productShortcode),
+  ...trio("foodIngredient", ingredientShortcode),
+  ...trio("eater", ledgerPartyShortcode),
+};
+export const locationRelatedFilterFields = {
+  ...trio("ingredient", ingredientShortcode),
+  ...trio("planting", plantingShortcode),
+};
 export const inventoryRelatedFilterFields = trio(
   "ingredient",
   ingredientShortcode,
 );
+export const ingredientRelatedFilterFields = {
+  ...trio("meal", mealShortcode),
+  ...trio("eater", ledgerPartyShortcode),
+};
+export const ledgerPartyRelatedFilterFields = {
+  ...trio("meal", mealShortcode),
+  ...trio("recipe", recipeShortcode),
+};
 export const projectRelatedFilterFields = {
   ...trio("project", projectShortcode),
   ...trio("task", taskShortcode),
