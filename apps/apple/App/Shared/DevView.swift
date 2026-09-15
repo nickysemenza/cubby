@@ -181,6 +181,6 @@ struct DevView: View {
     }
 }
 
-#Preview {
-    NavigationStack { DevView() }.environment(PreviewFixtures.signedInModel())
+#Preview(traits: .modifier(SignedInPreview())) {
+    NavigationStack { DevView() }
 }

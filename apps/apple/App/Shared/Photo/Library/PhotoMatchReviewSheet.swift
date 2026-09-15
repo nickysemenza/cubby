@@ -266,6 +266,6 @@ struct MatchCandidateView: View {
     }
 }
 
-#Preview {
-    PhotoMatchReviewSheet(items: [], onContinue: { _ in }).environment(PreviewFixtures.signedInModel())
+#Preview(traits: .modifier(SignedInPreview())) {
+    PhotoMatchReviewSheet(items: [], onContinue: { _ in })
 }

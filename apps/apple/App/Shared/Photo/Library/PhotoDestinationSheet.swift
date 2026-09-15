@@ -446,7 +446,6 @@ private final class PhotoBatchUploadModel {
     }
 }
 
-#Preview {
+#Preview(traits: .modifier(SignedInPreview())) {
     PhotoDestinationSheet(items: [], onDone: {})
-        .environment(PreviewFixtures.signedInModel())
 }

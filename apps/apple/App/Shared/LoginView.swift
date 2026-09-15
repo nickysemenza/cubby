@@ -135,6 +135,6 @@ private struct FieldBox<Content: View>: View {
     }
 }
 
-#Preview {
-    LoginView().environment(PreviewFixtures.signedOutModel())
+#Preview(traits: .modifier(SignedOutPreview())) {
+    LoginView()
 }

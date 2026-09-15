@@ -18,8 +18,10 @@ struct RootTabsView: View {
                         SectionView(section: section)
                     }
                 }
+                .badge(section == .today ? model.problemsTotal ?? 0 : 0)
             }
         }
+        .tabBarMinimizeBehavior(.onScrollDown)
         // Today's shortcut tiles move the tab selection; without this they would have nothing to
         // move and would render disabled.
         .environment(\.sectionSelection, $navigator.section)

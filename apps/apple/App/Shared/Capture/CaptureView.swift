@@ -288,6 +288,7 @@ private struct CaptureContent: View {
 /// sweep is done at arm's length and color alone is not a readable outcome.
 struct ScanChipRow: View {
     let chip: ScanSession.Chip
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(alignment: .top, spacing: PorcelainTokens.Space.md) {
@@ -295,6 +296,9 @@ struct ScanChipRow: View {
                 .font(.system(size: 15))
                 .foregroundStyle(tint)
                 .frame(width: 20)
+                // Motion is a secondary cue only: the label and chip already spell the outcome out.
+                .symbolEffect(.pulse, isActive: !reduceMotion && isPending)
+                .symbolEffect(.bounce, options: .nonRepeating, isActive: !reduceMotion && isSettled)
             VStack(alignment: .leading, spacing: 2) {
                 Text(chip.label)
                     .font(.porcelainBody)
@@ -312,6 +316,19 @@ struct ScanChipRow: View {
         }
         .padding(.horizontal, PorcelainTokens.Space.md)
         .padding(.vertical, PorcelainTokens.Space.md)
+    }
+
+    private var isPending: Bool {
+        if case .pending = chip.status { return true }
+        return false
+    }
+
+    /// `.added`/`.confirmed` only — the outcomes worth a bounce; warnings and failures hold still.
+    private var isSettled: Bool {
+        switch chip.status {
+        case .added, .confirmed: true
+        default: false
+        }
     }
 
     private var statusLabel: String {
@@ -355,6 +372,6 @@ struct ScanChipRow: View {
     }
 }
 
-#Preview {
-    NavigationStack { CaptureView() }.environment(PreviewFixtures.signedInModel())
+#Preview(traits: .modifier(SignedInPreview())) {
+    NavigationStack { CaptureView() }
 }

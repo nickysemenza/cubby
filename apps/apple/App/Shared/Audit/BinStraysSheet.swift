@@ -133,6 +133,7 @@ struct BinStraysSheet: View {
 }
 
 #Preview("Strays and adoptions") {
-    BinStraysSheet(session: RecountSession(service: PreviewFixtures.signedInModel().client))
-        .environment(PreviewFixtures.signedInModel())
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
+    BinStraysSheet(session: RecountSession(service: appModel.client))
+        .environment(appModel)
 }

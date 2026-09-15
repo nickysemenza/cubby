@@ -73,5 +73,6 @@ struct LocationPickerSheet: View {
 }
 
 #Preview {
-    LocationPickerSheet(capture: CaptureModel(client: PreviewFixtures.signedInModel().client))
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
+    LocationPickerSheet(capture: CaptureModel(client: appModel.client))
 }

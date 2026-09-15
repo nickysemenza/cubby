@@ -80,11 +80,10 @@ private struct AuditFailedPanel: View {
     }
 }
 
-#Preview("Audit root") {
+#Preview("Audit root", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         AuditRootView(locationID: nil)
     }
-    .environment(PreviewFixtures.signedInModel())
 }
 
 #Preview("Audit — failed") {

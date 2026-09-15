@@ -400,4 +400,4 @@ private struct PhotoLibraryPreview: View {
     }
 }
 
-#Preview { NavigationStack { PhotosRootView() }.environment(PreviewFixtures.signedInModel()) }
+#Preview(traits: .modifier(SignedInPreview())) { NavigationStack { PhotosRootView() } }

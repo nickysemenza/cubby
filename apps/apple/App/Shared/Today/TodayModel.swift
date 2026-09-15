@@ -25,6 +25,8 @@ final class TodayModel {
     private(set) var problemsError: String?
 
     private let client: CubbyClient
+    /// Receives each successfully loaded problem total (the tab badge mirror on `AppModel`).
+    var onProblemCount: (@MainActor (Int) -> Void)?
     private var tasksGeneration = 0
     private var mealsGeneration = 0
     private var problemsGeneration = 0
@@ -128,6 +130,7 @@ final class TodayModel {
                 try Task.checkCancellation()
                 guard let self, generation == self.problemsGeneration else { return }
                 self.problems = .loaded(value)
+                self.onProblemCount?(value.total)
                 #if os(macOS)
                     DockBadge.update(total: value.total)
                 #endif

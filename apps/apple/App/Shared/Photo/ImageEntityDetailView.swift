@@ -60,7 +60,6 @@ struct ImageEntityDetailView: View {
     }
 }
 
-#Preview {
+#Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack { ImageEntityDetailView(id: ImageCode("IMG-2345")) }
-        .environment(PreviewFixtures.signedInModel())
 }

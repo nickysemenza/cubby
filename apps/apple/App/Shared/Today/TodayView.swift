@@ -29,6 +29,7 @@ struct TodayView: View {
         .task(id: model.host) {
             guard today == nil else { return }
             let today = TodayModel(client: model.client)
+            today.onProblemCount = { [weak model] total in model?.problemsTotal = total }
             self.today = today
             await today.refresh()
         }
@@ -238,7 +239,7 @@ private func formattedDueDate(_ raw: String) -> String {
     return raw
 }
 
-#Preview("Today") {
+#Preview("Today", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         TodayContent(
             dateText: "Friday, September 11",
@@ -249,10 +250,9 @@ private func formattedDueDate(_ raw: String) -> String {
         )
         .navigationTitle("Today")
     }
-    .environment(PreviewFixtures.signedInModel())
 }
 
-#Preview("Today — empty") {
+#Preview("Today — empty", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         TodayContent(
             dateText: "Friday, September 11",
@@ -263,10 +263,9 @@ private func formattedDueDate(_ raw: String) -> String {
         )
         .navigationTitle("Today")
     }
-    .environment(PreviewFixtures.signedInModel())
 }
 
-#Preview("Today — loading and failed") {
+#Preview("Today — loading and failed", traits: .modifier(SignedInPreview())) {
     NavigationStack {
         TodayContent(
             dateText: "Friday, September 11",
@@ -277,5 +276,4 @@ private func formattedDueDate(_ raw: String) -> String {
         )
         .navigationTitle("Today")
     }
-    .environment(PreviewFixtures.signedInModel())
 }

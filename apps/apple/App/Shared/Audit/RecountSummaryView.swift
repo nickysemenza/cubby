@@ -75,6 +75,7 @@ private func sampleSummary() -> RecountSummary {
 }
 
 #Preview("Recount summary view") {
-    RecountSummaryView(session: RecountSession(service: PreviewFixtures.signedInModel().client))
-        .environment(PreviewFixtures.signedInModel())
+    @Previewable @State var appModel = PreviewFixtures.signedInModel()
+    RecountSummaryView(session: RecountSession(service: appModel.client))
+        .environment(appModel)
 }

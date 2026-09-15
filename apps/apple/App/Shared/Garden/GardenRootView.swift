@@ -332,6 +332,6 @@ private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
-#Preview {
-    NavigationStack { GardenRootView() }.environment(PreviewFixtures.signedInModel())
+#Preview(traits: .modifier(SignedInPreview())) {
+    NavigationStack { GardenRootView() }
 }

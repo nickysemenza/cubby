@@ -198,11 +198,11 @@ struct ScanLookupSheet: View {
     }
 }
 
-#Preview("Manual entry") {
-    ScanLookupSheet().environment(PreviewFixtures.signedInModel())
+#Preview("Manual entry", traits: .modifier(SignedInPreview())) {
+    ScanLookupSheet()
 }
 
-#Preview("Unknown code, catalog hit") {
+#Preview("Unknown code, catalog hit", traits: .modifier(SignedInPreview())) {
     ScanLookupSheet(
         previewOutcome: .unknownCode(
             .barcode("00012345678905"),
@@ -211,12 +211,10 @@ struct ScanLookupSheet: View {
                 priceDollars: nil, imageURL: nil, source: "upcitemdb", cached: false)
         )
     )
-    .environment(PreviewFixtures.signedInModel())
 }
 
-#Preview("Multiple products") {
+#Preview("Multiple products", traits: .modifier(SignedInPreview())) {
     ScanLookupSheet(
         previewOutcome: .products(PreviewFixtures.sampleRows, code: .barcode("012345678905"))
     )
-    .environment(PreviewFixtures.signedInModel())
 }
