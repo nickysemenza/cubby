@@ -5,12 +5,17 @@ import {
   type ProductShortcode,
   type RecipeShortcode,
 } from "@cubby/schemas/identifiers";
+import type { LedgerPartyOptionsOut } from "@cubby/schemas/ledger-party";
 import {
   saveMealFoodInput,
   type MealNutritionFood,
   type MealFoodNutrients,
 } from "@cubby/schemas/meal";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -146,102 +151,38 @@ function FoodEntryForm({
       title={editing ? "Edit food" : "Add food"}
       description={`For ${date}`}
       footer={
-        kind !== "recipe" ? (
-          <Row justify="end" gap="sm">
-            <Button
-              variant="outline"
-              className="min-h-11"
-              disabled={save.isPending}
-              onClick={() => onOpenChange(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              className="min-h-11"
-              disabled={
-                save.isPending ||
-                !selectedEater ||
-                (kind === "product" && !productItem) ||
-                (kind === "ingredient" && !ingredientItem)
-              }
-              onClick={submit}
-            >
-              {save.isPending
-                ? "Saving…"
-                : editing
-                  ? "Save changes"
-                  : "Add food"}
-            </Button>
-          </Row>
-        ) : undefined
+        <FoodEntryFooter
+          kind={kind}
+          editing={Boolean(editing)}
+          isPending={save.isPending}
+          selectedEater={selectedEater}
+          productItem={productItem}
+          ingredientItem={ingredientItem}
+          onCancel={() => onOpenChange(false)}
+          onSubmit={submit}
+        />
       }
     >
       <Stack gap="lg">
         {!editing && (
-          <Row gap="sm" aria-label="Food source">
-            {(["product", "ingredient", "recipe", "manual"] as const)
-              .filter((source) => source !== "recipe" || onRecipe)
-              .map((source) => (
-                <Button
-                  key={source}
-                  className="min-h-11 flex-1"
-                  variant={kind === source ? "default" : "outline"}
-                  aria-pressed={kind === source}
-                  onClick={() => {
-                    setKind(source);
-                    draft.setAmountIsValid(
-                      draft.amount != null || source === "manual",
-                    );
-                    setError(null);
-                  }}
-                >
-                  {source === "product"
-                    ? "Product"
-                    : source === "ingredient"
-                      ? "Ingredient"
-                      : source === "recipe"
-                        ? "Recipe"
-                        : "Manual"}
-                </Button>
-              ))}
-          </Row>
+          <FoodSourceTabs
+            kind={kind}
+            setKind={setKind}
+            draft={draft}
+            onRecipe={onRecipe}
+            setError={setError}
+          />
         )}
-        {kind === "recipe" ? (
-          <WithEntitySearch entity="recipe">
-            {(search) => (
-              <EntityPicker<RecipeShortcode>
-                {...search}
-                entity="recipe"
-                value={null}
-                setValue={(item) => {
-                  if (item) onRecipe?.(item.id);
-                }}
-                label="Recipe"
-                placeholder="Find a recipe"
-              />
-            )}
-          </WithEntitySearch>
-        ) : (
-          <>
-            <EntityPicker<LedgerPartyShortcode>
-              entity="ledgerParty"
-              label="Person"
-              items={options ?? []}
-              value={selectedEater ?? null}
-              setValue={(item) => setEaterId(item?.id ?? null)}
-              isLoading={eaters.isLoading}
-              error={eaters.error ? getErrorMessage(eaters.error) : null}
-              clearable={false}
-            />
-            {kind === "product" ? (
-              <ProductFields draft={draft} calculation={calculation} />
-            ) : kind === "ingredient" ? (
-              <IngredientFields draft={draft} calculation={calculation} />
-            ) : (
-              <ManualFields draft={draft} calculation={calculation} />
-            )}
-          </>
-        )}
+        <FoodSourceFields
+          kind={kind}
+          draft={draft}
+          calculation={calculation}
+          options={options}
+          eaters={eaters}
+          selectedEater={selectedEater}
+          setEaterId={setEaterId}
+          onRecipe={onRecipe}
+        />
         {error && (
           <p role="alert" className="text-sm text-destructive">
             {error}
@@ -252,48 +193,218 @@ function FoodEntryForm({
   );
 }
 
+function FoodEntryFooter({
+  kind,
+  editing,
+  isPending,
+  selectedEater,
+  productItem,
+  ingredientItem,
+  onCancel,
+  onSubmit,
+}: {
+  kind: FoodKind;
+  editing: boolean;
+  isPending: boolean;
+  selectedEater: LedgerPartyOptionsOut[number] | undefined;
+  productItem: ComboboxItem<ProductShortcode> | null;
+  ingredientItem: ComboboxItem<IngredientShortcode> | null;
+  onCancel: () => void;
+  onSubmit: () => void;
+}) {
+  if (kind === "recipe") return undefined;
+  return (
+    <Row justify="end" gap="sm">
+      <Button
+        variant="outline"
+        className="min-h-11"
+        disabled={isPending}
+        onClick={onCancel}
+      >
+        Cancel
+      </Button>
+      <Button
+        className="min-h-11"
+        disabled={
+          isPending ||
+          !selectedEater ||
+          (kind === "product" && !productItem) ||
+          (kind === "ingredient" && !ingredientItem)
+        }
+        onClick={onSubmit}
+      >
+        {isPending ? "Saving…" : editing ? "Save changes" : "Add food"}
+      </Button>
+    </Row>
+  );
+}
+
+function FoodSourceTabs({
+  kind,
+  setKind,
+  draft,
+  onRecipe,
+  setError,
+}: {
+  kind: FoodKind;
+  setKind: (kind: FoodKind) => void;
+  draft: ReturnType<typeof useFoodDraft>;
+  onRecipe?: (recipeId: RecipeShortcode) => void;
+  setError: (error: string | null) => void;
+}) {
+  return (
+    <Row gap="sm" aria-label="Food source">
+      {(["product", "ingredient", "recipe", "manual"] as const)
+        .filter((source) => source !== "recipe" || onRecipe)
+        .map((source) => (
+          <Button
+            key={source}
+            className="min-h-11 flex-1"
+            variant={kind === source ? "default" : "outline"}
+            aria-pressed={kind === source}
+            onClick={() => {
+              setKind(source);
+              draft.setAmountIsValid(
+                draft.amount != null || source === "manual",
+              );
+              setError(null);
+            }}
+          >
+            {source === "product"
+              ? "Product"
+              : source === "ingredient"
+                ? "Ingredient"
+                : source === "recipe"
+                  ? "Recipe"
+                  : "Manual"}
+          </Button>
+        ))}
+    </Row>
+  );
+}
+
+function FoodSourceFields({
+  kind,
+  draft,
+  calculation,
+  options,
+  eaters,
+  selectedEater,
+  setEaterId,
+  onRecipe,
+}: {
+  kind: FoodKind;
+  draft: ReturnType<typeof useFoodDraft>;
+  calculation: ReturnType<typeof useFoodAmount>;
+  options: LedgerPartyOptionsOut | undefined;
+  eaters: UseQueryResult<LedgerPartyOptionsOut>;
+  selectedEater: LedgerPartyOptionsOut[number] | undefined;
+  setEaterId: (id: LedgerPartyShortcode | null) => void;
+  onRecipe?: (recipeId: RecipeShortcode) => void;
+}) {
+  if (kind === "recipe") {
+    return (
+      <WithEntitySearch entity="recipe">
+        {(search) => (
+          <EntityPicker<RecipeShortcode>
+            {...search}
+            entity="recipe"
+            value={null}
+            setValue={(item) => {
+              if (item) onRecipe?.(item.id);
+            }}
+            label="Recipe"
+            placeholder="Find a recipe"
+          />
+        )}
+      </WithEntitySearch>
+    );
+  }
+  return (
+    <>
+      <EntityPicker<LedgerPartyShortcode>
+        entity="ledgerParty"
+        label="Person"
+        items={options ?? []}
+        value={selectedEater ?? null}
+        setValue={(item) => setEaterId(item?.id ?? null)}
+        isLoading={eaters.isLoading}
+        error={eaters.error ? getErrorMessage(eaters.error) : null}
+        clearable={false}
+      />
+      {kind === "product" ? (
+        <ProductFields draft={draft} calculation={calculation} />
+      ) : kind === "ingredient" ? (
+        <IngredientFields draft={draft} calculation={calculation} />
+      ) : (
+        <ManualFields draft={draft} calculation={calculation} />
+      )}
+    </>
+  );
+}
+
+function initialProductItem(
+  original: EditableFood | undefined,
+): ComboboxItem<ProductShortcode> | null {
+  return original?.sourceKind === "product"
+    ? { id: original.productId, name: original.name }
+    : null;
+}
+
+function initialIngredientItem(
+  original: EditableFood | undefined,
+): ComboboxItem<IngredientShortcode> | null {
+  return original?.sourceKind === "ingredient"
+    ? { id: original.ingredientId, name: original.name }
+    : null;
+}
+
+function initialAmount(original: EditableFood | undefined) {
+  return (
+    original?.amount ??
+    (original?.grams == null
+      ? null
+      : { value: original.grams, unit: "g" as const })
+  );
+}
+
+function initialAmountIsValid(original: EditableFood | undefined): boolean {
+  return (
+    original?.amount != null ||
+    original?.grams != null ||
+    original?.sourceKind === "manual"
+  );
+}
+
+function initialNutrients(
+  original: EditableFood | undefined,
+): Partial<Record<(typeof MACRO_FIELDS)[number]["key"], string>> {
+  return Object.fromEntries(
+    MACRO_FIELDS.map(({ key }) => [
+      key,
+      original?.sourceKind === "manual"
+        ? (original.nutrients[key]?.toString() ?? "")
+        : "",
+    ]),
+  );
+}
+
 function useFoodDraft(editing: Parameters<typeof AddFoodDialog>[0]["editing"]) {
   const original = editing?.food;
   const [kind, setKind] = useState<FoodKind>(original?.sourceKind ?? "product");
-  const [productItem, setProductItem] =
-    useState<ComboboxItem<ProductShortcode> | null>(
-      original?.sourceKind === "product"
-        ? { id: original.productId, name: original.name }
-        : null,
-    );
-  const [ingredientItem, setIngredientItem] =
-    useState<ComboboxItem<IngredientShortcode> | null>(
-      original?.sourceKind === "ingredient"
-        ? { id: original.ingredientId, name: original.name }
-        : null,
-    );
+  const [productItem, setProductItem] = useState(initialProductItem(original));
+  const [ingredientItem, setIngredientItem] = useState(
+    initialIngredientItem(original),
+  );
   const [eaterId, setEaterId] = useState<LedgerPartyShortcode | null>(
     editing?.eaterId ?? null,
   );
-  const [amount, setAmount] = useState(
-    original?.amount ??
-      (original?.grams == null
-        ? null
-        : { value: original.grams, unit: "g" as const }),
-  );
+  const [amount, setAmount] = useState(initialAmount(original));
   const [amountIsValid, setAmountIsValid] = useState(
-    original?.amount != null ||
-      original?.grams != null ||
-      original?.sourceKind === "manual",
+    initialAmountIsValid(original),
   );
   const [name, setName] = useState(original?.name ?? "");
-  const [nutrients, setNutrients] = useState<
-    Partial<Record<(typeof MACRO_FIELDS)[number]["key"], string>>
-  >(
-    Object.fromEntries(
-      MACRO_FIELDS.map(({ key }) => [
-        key,
-        original?.sourceKind === "manual"
-          ? (original.nutrients[key]?.toString() ?? "")
-          : "",
-      ]),
-    ),
-  );
+  const [nutrients, setNutrients] = useState(initialNutrients(original));
 
   return {
     original,

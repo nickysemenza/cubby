@@ -67,7 +67,7 @@ export type FoodAmountEstimate = {
   batchShare: MeasureEstimate;
 };
 
-export function FoodAmountEstimateText({
+function FoodAmountEstimateText({
   amount,
   estimate,
 }: {
@@ -230,7 +230,9 @@ export function FoodAmountEditor({
           />
           <datalist id={`${fieldId}-units`}>
             {units.map((option) => (
-              <option key={option} value={option} />
+              <option key={option} value={option}>
+                {option}
+              </option>
             ))}
           </datalist>
         </div>
