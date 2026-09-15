@@ -215,8 +215,8 @@ const hasExplicitCredential = (request: Request) =>
   request.headers.has("x-api-key") ||
   /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
 
-const hasBearerCredential = (request: Request) =>
-  /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
+const clientPrefersBoundedStale = (request: Request) =>
+  request.headers.get("x-cubby-read-consistency") === "bounded-stale";
 
 const sessionDataCookieName =
   /^(?:__Secure-)?better-auth\.session_data(?:\.\d+)?$/u;
@@ -289,14 +289,14 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
 
   const implement = (route: AppRoute) => {
     const metadata = httpMetadataSchema.parse(route.metadata);
-    const bearerList = (request: ApiRequest) =>
+    const boundedStaleList = (request: ApiRequest) =>
       route.method === "GET" &&
       metadata.resource === "list" &&
-      hasBearerCredential(request);
+      clientPrefersBoundedStale(request);
     return {
       middleware: [
         async (request: ApiRequest) =>
-          authenticate(request, bearerList(request)),
+          authenticate(request, boundedStaleList(request)),
       ],
       handler: async (
         args: { body?: unknown; query?: unknown; params?: unknown },

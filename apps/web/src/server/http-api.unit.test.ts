@@ -58,7 +58,7 @@ describe("HTTP boundary", () => {
     );
   });
 
-  it("opts bearer list calls into bounded-stale reads", async () => {
+  it("keeps bearer list calls strong without an explicit client preference", async () => {
     expect(
       (
         await request("recipes", {
@@ -67,15 +67,18 @@ describe("HTTP boundary", () => {
       ).status,
     ).toBe(200);
     expect(ports.context).toHaveBeenCalledWith(
-      expect.objectContaining({ clientAllowsBoundedStale: true }),
+      expect.objectContaining({ clientAllowsBoundedStale: false }),
     );
   });
 
-  it("keeps bearer detail calls and fresh-marked lists strong", async () => {
+  it("honors an explicit bounded-stale preference only for list calls", async () => {
     expect(
       (
         await request("recipes/RCP-ABCD", {
-          headers: { authorization: "Bearer token.signature" },
+          headers: {
+            authorization: "Bearer token.signature",
+            "x-cubby-read-consistency": "bounded-stale",
+          },
         })
       ).status,
     ).toBe(200);
@@ -86,10 +89,43 @@ describe("HTTP boundary", () => {
     await request("recipes", {
       headers: {
         authorization: "Bearer token.signature",
-        "x-cubby-fresh-read": "1",
+        "x-cubby-read-consistency": "bounded-stale",
       },
     });
     expect(ports.context).toHaveBeenLastCalledWith(
+      expect.objectContaining({ clientAllowsBoundedStale: true }),
+    );
+  });
+
+  it("lets API-key clients explicitly opt into bounded-stale lists", async () => {
+    ports.verifyApiKey.mockResolvedValue({
+      valid: true,
+      key: { configId: "http-api", referenceId: "user-fixture" },
+    });
+    expect(
+      (
+        await request("recipes", {
+          headers: {
+            "x-api-key": "key",
+            "x-cubby-read-consistency": "bounded-stale",
+          },
+        })
+      ).status,
+    ).toBe(200);
+    expect(ports.context).toHaveBeenCalledWith(
+      expect.objectContaining({ clientAllowsBoundedStale: true }),
+    );
+  });
+
+  it("passes a fresh marker through an opted-in list context", async () => {
+    await request("recipes", {
+      headers: {
+        authorization: "Bearer token.signature",
+        "x-cubby-read-consistency": "bounded-stale",
+        "x-cubby-fresh-read": "1",
+      },
+    });
+    expect(ports.context).toHaveBeenCalledWith(
       expect.objectContaining({ clientAllowsBoundedStale: true }),
     );
   });

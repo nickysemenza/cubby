@@ -26,6 +26,7 @@ struct MiddlewareTests {
         ) { request, body, _ in
             #expect(request.headerFields[.authorization] == "Bearer tok.sig")
             #expect(request.headerFields[.xAPIKey] == nil)
+            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
             return (HTTPResponse(status: .ok), body)
         }
         #expect(response.status == .ok)
@@ -61,9 +62,9 @@ struct MiddlewareTests {
         }
     }
 
-    @Test func mutationFreshnessForcesSubsequentReadsUntilDeadline() async throws {
+    @Test func mutationFreshnessForcesSubsequentAPIKeyReadsUntilDeadline() async throws {
         let now = Date(timeIntervalSince1970: 1_000)
-        let (credentials, _) = try provider(with: .bearer("tok.sig"))
+        let (credentials, _) = try provider(with: .apiKey("cubby_x"))
         let middleware = CubbyAuthMiddleware(credentials: credentials, now: { now })
         var fields = HTTPFields()
         fields[.xCubbyFreshReadSeconds] = "90"
@@ -84,6 +85,7 @@ struct MiddlewareTests {
             operationID: "resources.product.list"
         ) { request, body, _ in
             #expect(request.headerFields[.xCubbyFreshRead] == "1")
+            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
             return (HTTPResponse(status: .ok), body)
         }
     }
@@ -99,6 +101,7 @@ struct MiddlewareTests {
         ) { request, body, _ in
             #expect(request.headerFields[.xAPIKey] == "cubby_x")
             #expect(request.headerFields[.authorization] == nil)
+            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
             return (HTTPResponse(status: .ok), body)
         }
     }

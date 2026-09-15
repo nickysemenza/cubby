@@ -66,18 +66,22 @@ public struct CubbyAuthMiddleware: ClientMiddleware {
 
     static func apply(_ state: CubbyAuthState?, to fields: inout HTTPFields) {
         apply(state?.credential, to: &fields)
-        guard let state, case .bearer = state.credential else { return }
-        if !state.sessionDataCookies.isEmpty {
-            fields[.cookie] = state.sessionDataCookies
-                .sorted { $0.key < $1.key }
-                .map { "\($0.key)=\($0.value)" }
-                .joined(separator: "; ")
+        guard let state else { return }
+        fields[.xCubbyReadConsistency] = "bounded-stale"
+        if case .bearer = state.credential {
+            if !state.sessionDataCookies.isEmpty {
+                fields[.cookie] = state.sessionDataCookies
+                    .sorted { $0.key < $1.key }
+                    .map { "\($0.key)=\($0.value)" }
+                    .joined(separator: "; ")
+            }
         }
         if state.freshReadUntil != nil { fields[.xCubbyFreshRead] = "1" }
     }
 }
 
 extension HTTPField.Name {
+    static let xCubbyReadConsistency = HTTPField.Name("x-cubby-read-consistency")!
     static let xCubbyFreshRead = HTTPField.Name("x-cubby-fresh-read")!
     static let xCubbyFreshReadSeconds = HTTPField.Name("x-cubby-fresh-read-seconds")!
 }
