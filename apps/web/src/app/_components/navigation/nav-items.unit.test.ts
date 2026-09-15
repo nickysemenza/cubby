@@ -63,6 +63,7 @@ describe("workspace navigation contract", () => {
 
   it("pins the task-first persistent and phone household choices", () => {
     expect(todayNavItems.map((item) => item.label)).toEqual([
+      "Graph",
       "Recount inventory",
       "Build a shopping list",
       "Projects",
