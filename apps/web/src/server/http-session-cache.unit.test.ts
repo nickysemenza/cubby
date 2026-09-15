@@ -16,7 +16,12 @@ function cookieHeader(headers: Headers): string {
 }
 
 function createAuthHarness() {
-  const database: Parameters<typeof memoryAdapter>[0] = {};
+  const database: Parameters<typeof memoryAdapter>[0] = {
+    user: [],
+    session: [],
+    account: [],
+    verification: [],
+  };
   const adapterFactory = memoryAdapter(database);
   const readCounters: Array<() => number> = [];
   const resetReadCounters: Array<() => void> = [];

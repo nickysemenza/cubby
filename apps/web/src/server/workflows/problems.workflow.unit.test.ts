@@ -10,9 +10,6 @@ describe("problems workflow ownership", () => {
         { name: "shortcodes", type: "call" },
         { name: "entityIds", type: "call" },
         { name: "deleted", type: "committedCall" },
-        // The Problems page's own fixes bypass runMutationSideEffects, so the
-        // badge dirty-mark is an explicit post-commit effect here.
-        { name: "badge", type: "committedEffect" },
         { name: "presented", type: "call" },
       ],
     });

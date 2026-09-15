@@ -46,7 +46,10 @@ describe("problem-counts KV snapshot", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-08-20T18:00:00.000Z"));
-    readFreshness.mockResolvedValue(null);
+    readFreshness.mockResolvedValue({
+      lastWriteAt: Date.parse("2026-08-20T17:00:00.000Z"),
+      strongUntil: Date.parse("2026-08-20T17:01:30.000Z"),
+    });
   });
 
   afterEach(() => {
@@ -250,6 +253,7 @@ describe("problem-counts KV snapshot", () => {
     });
 
     it("keeps serving a snapshot and requests a bounded refresh when freshness is unavailable", async () => {
+      readFreshness.mockResolvedValue(null);
       const fresh = counts(11);
       countProblems.mockResolvedValue(fresh);
       const { adapter } = memoryCache(snapshot("2026-08-20T17:55:00.000Z"));
