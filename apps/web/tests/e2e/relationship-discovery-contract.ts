@@ -43,39 +43,62 @@ export function relationshipDiscoveryContract() {
       `/entities?tab=explore&entity=expense&root=${fixture.expense.id}`,
     );
     await waitForAppHydration(page);
-    await page.getByRole("button", { name: "2 hops", exact: true }).click();
+    await expect(page).toHaveURL((url) => url.pathname === "/graph");
+    await page
+      .getByRole("button", { name: "Show record list", exact: true })
+      .click();
+    const records = page.getByLabel("Map records", { exact: true });
+    await records
+      .getByRole("button", { name: new RegExp(`^${name} switch`) })
+      .click();
+    await page
+      .getByRole("button", { name: "Expand connections", exact: true })
+      .click();
+    const inspectorHeading = page.getByRole("heading", {
+      name: "Graph inspector",
+      exact: true,
+    });
+    if (await inspectorHeading.isVisible()) {
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(inspectorHeading).toBeHidden();
+    }
     await expect(
-      page
-        .getByText(/requested 2-hop depth|within 2 hops|within 1 hop/)
-        .first(),
+      page.getByRole("group", {
+        name: `Inspect ${name} supporting expense`,
+        exact: true,
+      }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "3 hops", exact: true }).click();
-    await page.getByRole("button", { name: "Graph view", exact: true }).click();
     await expect(
-      page.locator('svg[aria-label="Entity dependency graph"]'),
+      page.getByLabel("Relationship graph", { exact: true }),
     ).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
+    if (await inspectorHeading.isVisible()) {
+      await page.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(inspectorHeading).toBeHidden();
+    }
     await expectViewportBounded(page);
     await page.screenshot({
       path: testInfo.outputPath("relationship-discovery-phone.png"),
       fullPage: true,
     });
-    await page.getByRole("button", { name: "List view", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Show record list", exact: true })
+      .click();
+    await records
+      .getByRole("button", { name: new RegExp(`^${name} suggested`) })
+      .click();
     await expect(
-      page
-        .getByRole("link", { name: `${name} suggested`, exact: true })
-        .first(),
-    ).toBeVisible();
+      page.getByRole("link", { name: "Open record", exact: true }),
+    ).toHaveAttribute("href", `/projects/${fixture.target.id}`);
   });
   test("full Relationships review applies an expense alternative", async ({
     page,
   }) => {
     const name = `e2e full relationship ${Date.now()}`;
     const fixture = await seedRelationshipReviewPrerequisite(page, name);
-    await page.goto(
-      `/entities?tab=explore&entity=expense&root=${fixture.expense.id}`,
-    );
+    await page.goto(`/expenses/${fixture.expense.id}`);
     await waitForAppHydration(page);
+    await page.getByRole("tab", { name: "Relations", exact: true }).click();
     await page
       .getByRole("button", {
         name: `Review ${name} suggested suggestion`,
@@ -100,10 +123,9 @@ export function relationshipDiscoveryContract() {
   }) => {
     const name = `e2e placement ${Date.now()}`;
     const fixture = await seedPlacementReviewPrerequisite(page, name);
-    await page.goto(
-      `/entities?tab=explore&entity=inventory&root=${fixture.source.id}`,
-    );
+    await page.goto(`/inventory/${fixture.source.id}`);
     await waitForAppHydration(page);
+    await page.getByRole("tab", { name: "Relations", exact: true }).click();
     await page
       .getByRole("button", {
         name: `Review ${name} workshop suggestion`,
