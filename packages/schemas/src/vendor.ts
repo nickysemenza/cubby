@@ -74,7 +74,7 @@ export const vendorCoverageInput = z
   });
 export const vendorCoverageOut = z.object({
   vendor: z.object({ id: vendorShortcode, name: z.string() }),
-  latestPurchaseDate: z.iso.date().nullable(),
+  latestPurchaseDate: generatedVendorFieldSchemas.read.latestPurchaseDate,
   from: z.iso.date(),
   to: z.iso.date(),
   orderIds: z.array(z.string()),
