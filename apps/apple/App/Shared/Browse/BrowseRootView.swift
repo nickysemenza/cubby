@@ -11,6 +11,13 @@ struct BrowseRootView: View {
     var body: some View {
         List {
             Section {
+                Button {
+                    model.navigator.openGraph()
+                } label: {
+                    Label("Graph", systemImage: "point.3.connected.trianglepath.dotted")
+                        .frame(minHeight: PorcelainTokens.touchTarget)
+                }
+                .listRowInsets(browseRowInsets)
                 gardenLink {
                     HStack(spacing: PorcelainTokens.Space.md) {
                         Image(systemName: "leaf")
@@ -25,7 +32,7 @@ struct BrowseRootView: View {
                 .listRowInsets(browseRowInsets)
                 .porcelainListRow()
             } header: {
-                headerTitle("Garden")
+                headerTitle("Explore")
             }
             ForEach(AppDomain.allCases) { domain in
                 let group = descriptors(in: domain)

@@ -27,6 +27,7 @@ import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedDesignRouteImport } from './routes/_authenticated/design'
 import { Route as AuthenticatedEntitiesRouteImport } from './routes/_authenticated/entities'
 import { Route as AuthenticatedGardenRouteImport } from './routes/_authenticated/garden'
+import { Route as AuthenticatedGraphRouteImport } from './routes/_authenticated/graph'
 import { Route as AuthenticatedHouseholdContributionRouteImport } from './routes/_authenticated/household-contribution'
 import { Route as AuthenticatedLabelsRouteImport } from './routes/_authenticated/labels'
 import { Route as AuthenticatedMcpRouteImport } from './routes/_authenticated/mcp'
@@ -217,6 +218,11 @@ const AuthenticatedEntitiesRoute = AuthenticatedEntitiesRouteImport.update({
 const AuthenticatedGardenRoute = AuthenticatedGardenRouteImport.update({
   id: '/garden',
   path: '/garden',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedGraphRoute = AuthenticatedGraphRouteImport.update({
+  id: '/graph',
+  path: '/graph',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedHouseholdContributionRoute =
@@ -789,6 +795,7 @@ export interface FileRoutesByFullPath {
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
   '/garden': typeof AuthenticatedGardenRoute
+  '/graph': typeof AuthenticatedGraphRoute
   '/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
@@ -903,6 +910,7 @@ export interface FileRoutesByTo {
   '/design': typeof AuthenticatedDesignRoute
   '/entities': typeof AuthenticatedEntitiesRoute
   '/garden': typeof AuthenticatedGardenRoute
+  '/graph': typeof AuthenticatedGraphRoute
   '/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/labels': typeof AuthenticatedLabelsRoute
   '/mcp': typeof AuthenticatedMcpRoute
@@ -1020,6 +1028,7 @@ export interface FileRoutesById {
   '/_authenticated/design': typeof AuthenticatedDesignRoute
   '/_authenticated/entities': typeof AuthenticatedEntitiesRoute
   '/_authenticated/garden': typeof AuthenticatedGardenRoute
+  '/_authenticated/graph': typeof AuthenticatedGraphRoute
   '/_authenticated/household-contribution': typeof AuthenticatedHouseholdContributionRoute
   '/_authenticated/labels': typeof AuthenticatedLabelsRoute
   '/_authenticated/mcp': typeof AuthenticatedMcpRoute
@@ -1137,6 +1146,7 @@ export interface FileRouteTypes {
     | '/design'
     | '/entities'
     | '/garden'
+    | '/graph'
     | '/household-contribution'
     | '/labels'
     | '/mcp'
@@ -1251,6 +1261,7 @@ export interface FileRouteTypes {
     | '/design'
     | '/entities'
     | '/garden'
+    | '/graph'
     | '/household-contribution'
     | '/labels'
     | '/mcp'
@@ -1367,6 +1378,7 @@ export interface FileRouteTypes {
     | '/_authenticated/design'
     | '/_authenticated/entities'
     | '/_authenticated/garden'
+    | '/_authenticated/graph'
     | '/_authenticated/household-contribution'
     | '/_authenticated/labels'
     | '/_authenticated/mcp'
@@ -1611,6 +1623,13 @@ declare module '@tanstack/react-router' {
       path: '/garden'
       fullPath: '/garden'
       preLoaderRoute: typeof AuthenticatedGardenRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/graph': {
+      id: '/_authenticated/graph'
+      path: '/graph'
+      fullPath: '/graph'
+      preLoaderRoute: typeof AuthenticatedGraphRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/household-contribution': {
@@ -2300,6 +2319,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDesignRoute: typeof AuthenticatedDesignRoute
   AuthenticatedEntitiesRoute: typeof AuthenticatedEntitiesRoute
   AuthenticatedGardenRoute: typeof AuthenticatedGardenRoute
+  AuthenticatedGraphRoute: typeof AuthenticatedGraphRoute
   AuthenticatedHouseholdContributionRoute: typeof AuthenticatedHouseholdContributionRoute
   AuthenticatedLabelsRoute: typeof AuthenticatedLabelsRoute
   AuthenticatedMcpRoute: typeof AuthenticatedMcpRoute
@@ -2395,6 +2415,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDesignRoute: AuthenticatedDesignRoute,
   AuthenticatedEntitiesRoute: AuthenticatedEntitiesRoute,
   AuthenticatedGardenRoute: AuthenticatedGardenRoute,
+  AuthenticatedGraphRoute: AuthenticatedGraphRoute,
   AuthenticatedHouseholdContributionRoute:
     AuthenticatedHouseholdContributionRoute,
   AuthenticatedLabelsRoute: AuthenticatedLabelsRoute,

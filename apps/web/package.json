@@ -109,6 +109,7 @@
     "@ts-rest/serverless": "3.53.0-rc.1",
     "@viz-js/viz": "^3.30.0",
     "@xmldom/xmldom": "^0.9.12",
+    "@xyflow/react": "^12.11.6",
     "aws4fetch": "^1.0.20",
     "barcode-detector": "^3.2.1",
     "basic-auth": "^3.0.0",

@@ -3,6 +3,7 @@ import SwiftUI
 
 /// The typed navigation spine shared by the iOS tab stacks and the macOS split view.
 enum Route: Hashable {
+    case graph(EntityReference?)
     case garden
     case nutrition(day: String)
     case entityList(EntityKey)
@@ -20,7 +21,7 @@ enum Route: Hashable {
 
 /// Top-level sections. Tabs on iOS, sidebar rows on macOS.
 enum AppSection: String, CaseIterable, Identifiable {
-    case today, capture, photos, browse, search, dev
+    case today, capture, photos, browse, search, graph, dev
 
     var id: String { rawValue }
 
@@ -32,6 +33,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .browse: "Browse"
         case .search: "Search"
         case .dev: "Dev"
+        case .graph: "Graph"
         }
     }
 
@@ -43,6 +45,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .browse: "square.grid.2x2"
         case .search: "magnifyingglass"
         case .dev: "wrench.and.screwdriver"
+        case .graph: "point.3.connected.trianglepath.dotted"
         }
     }
 
@@ -50,7 +53,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     /// keeps it as a sidebar row.
     static var tabs: [AppSection] {
         #if os(iOS)
-            allCases.filter { $0 != .dev }
+            allCases.filter { $0 != .dev && $0 != .graph }
         #else
             allCases
         #endif

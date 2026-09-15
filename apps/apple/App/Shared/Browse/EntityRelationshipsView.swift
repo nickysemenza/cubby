@@ -43,7 +43,7 @@ struct EntityRelationshipsSection: View {
                     case .list:
                         RelationshipBranchList(model: model, onInspect: inspect)
                     case .graph:
-                        EntityRelationshipGraphView(model: model, onInspect: inspect)
+                        if let graph = model.graph { EmbeddedGraphExplorer(graph: graph).id(graph.root) }
                     }
                     completion
                 }
@@ -670,250 +670,6 @@ private struct RelationshipDisplayError: LocalizedError {
     init(_ message: String) { errorDescription = message }
 }
 
-private struct EntityRelationshipGraphView: View {
-    let model: EntityRelationshipsModel
-    let onInspect: (EntityGraphNode) -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var measuredSizes: [String: CGSize] = [:]
-    @State private var scale: CGFloat = 1
-    @State private var pan: CGSize = .zero
-    @State private var viewportSize: CGSize = .zero
-    @GestureState private var drag: CGSize = .zero
-    @GestureState private var magnification: CGFloat = 1
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
-            controls
-            if let graph = model.visibleGraph {
-                GeometryReader { proxy in
-                    graphCanvas(graph, viewport: proxy.size)
-                }
-                .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? 520 : 400)
-                .background(PorcelainTokens.inset)
-                .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
-                .overlay(
-                    RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                        .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
-                )
-                .accessibilityRepresentation {
-                    VStack(alignment: .leading) {
-                        Text("Relationship graph").font(.headline)
-                        ForEach(graph.nodes) { node in RelationshipRecordButton(node: node) }
-                    }
-                }
-                RelationshipBranchList(model: model, onInspect: onInspect)
-            }
-        }
-    }
-
-    private var controls: some View {
-        HStack(spacing: PorcelainTokens.Space.sm) {
-            Button {
-                zoom(by: 0.8)
-            } label: {
-                Label("Zoom out", systemImage: "minus.magnifyingglass")
-                    .frame(
-                        minWidth: PorcelainTokens.touchTarget,
-                        minHeight: PorcelainTokens.touchTarget
-                    )
-            }
-            Button {
-                zoom(by: 1.25)
-            } label: {
-                Label("Zoom in", systemImage: "plus.magnifyingglass")
-                    .frame(
-                        minWidth: PorcelainTokens.touchTarget,
-                        minHeight: PorcelainTokens.touchTarget
-                    )
-            }
-            Button {
-                fit()
-            } label: {
-                Label("Fit", systemImage: "arrow.up.left.and.arrow.down.right")
-                    .frame(
-                        minWidth: PorcelainTokens.touchTarget,
-                        minHeight: PorcelainTokens.touchTarget
-                    )
-            }
-            Button {
-                recenter()
-            } label: {
-                Label("Recenter", systemImage: "scope")
-                    .frame(
-                        minWidth: PorcelainTokens.touchTarget,
-                        minHeight: PorcelainTokens.touchTarget
-                    )
-            }
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.bordered)
-    }
-
-    private func graphCanvas(_ graph: EntityGraph, viewport: CGSize) -> some View {
-        let sizes = measuredSizes.mapValues {
-            EntityGraphNodeSize(width: Double($0.width), height: Double($0.height))
-        }
-        let layout = EntityGraphLayout.arrange(graph: graph, measuredSizes: sizes)
-        let selectedEdges = Set(model.selectedPath?.edgeIDs ?? [])
-        let isHighlighting = model.selectedNode != nil
-        return ZStack {
-            Canvas { context, _ in
-                for edge in graph.edges {
-                    guard let source = layout.centers[edge.source.stableKey],
-                        let target = layout.centers[edge.target.stableKey]
-                    else { continue }
-                    let highlighted = selectedEdges.contains(edge.id)
-                    let rawSourcePoint = CGPoint(x: CGFloat(source.x), y: CGFloat(source.y))
-                    let rawTargetPoint = CGPoint(x: CGFloat(target.x), y: CGFloat(target.y))
-                    let angle = atan2(
-                        rawTargetPoint.y - rawSourcePoint.y,
-                        rawTargetPoint.x - rawSourcePoint.x
-                    )
-                    let sourceSize =
-                        measuredSizes[edge.source.stableKey]
-                        ?? CGSize(width: 180, height: 80)
-                    let targetSize =
-                        measuredSizes[edge.target.stableKey]
-                        ?? CGSize(width: 180, height: 80)
-                    let sourceInset = edgeInset(size: sourceSize, angle: angle)
-                    let targetInset = edgeInset(size: targetSize, angle: angle)
-                    let sourcePoint = CGPoint(
-                        x: rawSourcePoint.x + sourceInset * cos(angle),
-                        y: rawSourcePoint.y + sourceInset * sin(angle)
-                    )
-                    let targetPoint = CGPoint(
-                        x: rawTargetPoint.x - targetInset * cos(angle),
-                        y: rawTargetPoint.y - targetInset * sin(angle)
-                    )
-                    var path = Path()
-                    path.move(to: sourcePoint)
-                    path.addLine(to: targetPoint)
-                    context.opacity = isHighlighting && !highlighted ? 0.18 : 0.7
-                    context.stroke(
-                        path,
-                        with: .color(
-                            highlighted ? PorcelainTokens.cobalt : PorcelainTokens.graphiteSecondary),
-                        style: StrokeStyle(lineWidth: highlighted ? 3 : 1.25, lineCap: .round)
-                    )
-                    let arrowLength: CGFloat = highlighted ? 11 : 8
-                    let arrowSpread: CGFloat = .pi / 7
-                    var arrow = Path()
-                    arrow.move(to: targetPoint)
-                    arrow.addLine(
-                        to: CGPoint(
-                            x: targetPoint.x - arrowLength * cos(angle - arrowSpread),
-                            y: targetPoint.y - arrowLength * sin(angle - arrowSpread)))
-                    arrow.addLine(
-                        to: CGPoint(
-                            x: targetPoint.x - arrowLength * cos(angle + arrowSpread),
-                            y: targetPoint.y - arrowLength * sin(angle + arrowSpread)))
-                    arrow.closeSubpath()
-                    context.fill(
-                        arrow,
-                        with: .color(highlighted ? PorcelainTokens.cobalt : PorcelainTokens.graphiteSecondary)
-                    )
-                    context.opacity = 1
-                }
-            }
-            ForEach(graph.nodes) { node in
-                if let center = layout.centers[node.id] {
-                    RelationshipGraphNode(
-                        node: node,
-                        isRoot: node.reference == graph.root,
-                        isSelected: node.reference == model.selectedNode,
-                        isOnPath: model.selectedPath?.nodeReferences.contains(node.reference) == true,
-                        select: { onInspect(node) }
-                    )
-                    .background {
-                        GeometryReader { geometry in
-                            Color.clear.preference(
-                                key: RelationshipNodeSizePreference.self,
-                                value: [node.id: geometry.size]
-                            )
-                        }
-                    }
-                    .position(x: CGFloat(center.x), y: CGFloat(center.y))
-                }
-            }
-        }
-        .frame(
-            width: max(CGFloat(layout.width), viewport.width),
-            height: max(CGFloat(layout.height), viewport.height)
-        )
-        .scaleEffect(clampedScale(scale * magnification))
-        .offset(x: pan.width + drag.width, y: pan.height + drag.height)
-        .frame(width: viewport.width, height: viewport.height)
-        .contentShape(Rectangle())
-        .clipped()
-        .gesture(
-            DragGesture()
-                .updating($drag) { value, state, _ in state = value.translation }
-                .onEnded {
-                    pan.width += $0.translation.width; pan.height += $0.translation.height
-                }
-        )
-        .simultaneousGesture(
-            MagnifyGesture()
-                .updating($magnification) { value, state, _ in state = value.magnification }
-                .onEnded { scale = clampedScale(scale * $0.magnification) }
-        )
-        .onAppear { viewportSize = viewport }
-        .onChange(of: viewport) { _, value in viewportSize = value }
-        .onPreferenceChange(RelationshipNodeSizePreference.self) { measuredSizes.merge($0) { _, new in new } }
-    }
-
-    private func zoom(by factor: CGFloat) {
-        applyMotion { scale = clampedScale(scale * factor) }
-    }
-
-    private func fit() {
-        applyMotion {
-            guard let graph = model.visibleGraph else { return }
-            let sizes = measuredSizes.mapValues {
-                EntityGraphNodeSize(width: Double($0.width), height: Double($0.height))
-            }
-            let layout = EntityGraphLayout.arrange(graph: graph, measuredSizes: sizes)
-            let horizontal = (viewportSize.width - 32) / max(CGFloat(layout.width), 1)
-            let vertical = (viewportSize.height - 32) / max(CGFloat(layout.height), 1)
-            scale = clampedScale(min(horizontal, vertical, 1))
-            pan = .zero
-        }
-    }
-
-    private func recenter() {
-        applyMotion {
-            guard let graph = model.visibleGraph else { return }
-            let sizes = measuredSizes.mapValues {
-                EntityGraphNodeSize(width: Double($0.width), height: Double($0.height))
-            }
-            let layout = EntityGraphLayout.arrange(graph: graph, measuredSizes: sizes)
-            let reference = model.selectedNode ?? graph.root
-            guard let center = layout.centers[reference.stableKey] else { pan = .zero; return }
-            pan = CGSize(
-                width: (CGFloat(layout.width) / 2 - CGFloat(center.x)) * scale,
-                height: (CGFloat(layout.height) / 2 - CGFloat(center.y)) * scale
-            )
-        }
-    }
-
-    private func clampedScale(_ value: CGFloat) -> CGFloat { min(2.5, max(0.35, value)) }
-
-    private func edgeInset(size: CGSize, angle: CGFloat) -> CGFloat {
-        let horizontal = size.width / (2 * max(abs(cos(angle)), 0.001))
-        let vertical = size.height / (2 * max(abs(sin(angle)), 0.001))
-        return min(horizontal, vertical) + 6
-    }
-
-    private func applyMotion(_ changes: () -> Void) {
-        if reduceMotion {
-            changes()
-        } else {
-            withAnimation(.easeInOut(duration: 0.2), changes)
-        }
-    }
-}
-
 private struct RelationshipNodeDetailsSheet: View {
     let node: EntityGraphNode
     let model: EntityRelationshipsModel
@@ -1024,11 +780,13 @@ private struct RelationshipPathSteps: View {
     }
 }
 
-private struct RelationshipGraphNode: View {
+struct RelationshipGraphNode: View {
     let node: EntityGraphNode
     let isRoot: Bool
     let isSelected: Bool
     let isOnPath: Bool
+    var cardWidth: CGFloat = 196
+    var cardHeight: CGFloat = 112
     let select: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -1050,14 +808,14 @@ private struct RelationshipGraphNode: View {
                 Text(node.label)
                     .font(.porcelainTitle)
                     .foregroundStyle(PorcelainTokens.graphite)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(node.reference.id)
                     .font(.porcelainCode)
                     .foregroundStyle(.secondary)
             }
             .padding(PorcelainTokens.Space.md)
-            .frame(width: dynamicTypeSize.isAccessibilitySize ? 236 : 180, alignment: .leading)
-            .frame(minHeight: PorcelainTokens.touchTarget)
+            .frame(width: cardWidth, height: cardHeight, alignment: .leading)
             .background(PorcelainTokens.surface)
             .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel))
             .overlay(
@@ -1072,13 +830,6 @@ private struct RelationshipGraphNode: View {
         .accessibilityLabel("\(node.label), \(EntityCatalog[node.reference.entity].singular)")
         .accessibilityValue(isRoot ? "Starting record" : isOnPath ? "On selected path" : "")
         .accessibilityHint("Selects this record and highlights its path")
-    }
-}
-
-private struct RelationshipNodeSizePreference: PreferenceKey {
-    static var defaultValue: [String: CGSize] = [:]
-    static func reduce(value: inout [String: CGSize], nextValue: () -> [String: CGSize]) {
-        value.merge(nextValue()) { _, new in new }
     }
 }
 

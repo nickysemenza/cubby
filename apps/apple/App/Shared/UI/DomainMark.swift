@@ -55,7 +55,7 @@ struct SectionDomainMarks: View {
         switch section {
         case .capture:
             DomainMark(.house, size: 7)
-        case .browse, .search:
+        case .browse, .search, .graph:
             HStack(spacing: 3) {
                 ForEach(AppDomain.allCases) { domain in
                     DomainMark(domain, size: 5)

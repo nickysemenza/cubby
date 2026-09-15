@@ -6,21 +6,12 @@ import {
   type EntityGraphExploreOutput,
   type EntityGraphNode,
   type EntityGraphOutput,
-  type EntityGraphPathsOutput,
 } from "@cubby/schemas/entity-graph";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, List, Network, RotateCw } from "lucide-react";
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { useInventoryPlacementAction } from "~/app/_components/inventory/inventory-placement-suggestion";
 import {
@@ -28,11 +19,6 @@ import {
   type EntityRecommendationOperations,
 } from "~/app/_components/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
-import type {
-  GraphData,
-  GraphEdge,
-  GraphFilters,
-} from "~/app/_components/visualizations/dependency-graph-model";
 import { inventory } from "~/app/inventory/inventory.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
@@ -66,24 +52,12 @@ import {
   visibleNeighborhoodKeys,
   visitGraphRecord,
 } from "./entity-graph-state";
+import { GraphExplorer } from "./graph-explorer";
 
-const DependencyGraphViewer = lazy(() =>
-  import("../visualizations/dependency-graph-viewer").then((module) => ({
-    default: module.DependencyGraphViewer,
-  })),
-);
 const VIEW_OPTIONS = [
   { value: "list", label: "List", icon: List },
   { value: "graph", label: "Graph", icon: Network },
 ] as const;
-const GRAPH_FILTERS: GraphFilters = {
-  direction: "all",
-  hideCompleted: false,
-  hideUnconnected: false,
-  reduceEdges: false,
-  grouped: false,
-};
-
 export function supportsEntityGraph(entity: Entity) {
   return (
     entityManifest[entity].dbTable !== null &&
@@ -153,13 +127,45 @@ export function EntityRelations({
   recommendationOperations?: EntityRecommendationOperations;
   recommendationActionOperations?: EntityRecommendationActionOperations;
 }) {
+  const [localView, setLocalView] = useState<"list" | "graph">("list");
+  const router = useRouter();
+  const root = useMemo(
+    () => ({ entityType: entity, entityId: sourceId }),
+    [entity, sourceId],
+  );
   if (!supportsEntityGraph(entity)) return null;
+  if ((state?.view ?? localView) === "graph")
+    return (
+      <GraphExplorer
+        key={`${entity}:${sourceId}`}
+        root={root}
+        initialSelected={state?.selected}
+        initialDestination={state?.destination}
+        operations={operations}
+        onRootChange={(value) =>
+          void router.navigate({
+            to: "/graph",
+            search: { entity: value.entityType, root: value.entityId },
+          })
+        }
+        onNavigationChange={(navigation) =>
+          onStateChange?.({ ...state, view: "graph", ...navigation })
+        }
+        onList={() => {
+          setLocalView("list");
+          onStateChange?.({ ...state, view: "list" });
+        }}
+      />
+    );
   return (
     <EntityRelationsSession
       key={`${entity}:${sourceId}`}
       root={{ entityType: entity, entityId: sourceId }}
       state={state}
-      onStateChange={onStateChange}
+      onStateChange={(next) => {
+        setLocalView(next.view ?? "list");
+        onStateChange?.(next);
+      }}
       operations={operations}
       recommendationOperations={recommendationOperations}
       recommendationActionOperations={recommendationActionOperations}
@@ -357,14 +363,12 @@ function useEntityRelationsModel({
       });
   };
 
-  const { text, neighborhood, exploredGraph } = exploredProjection(
+  const { text, neighborhood } = exploredProjection(
     data,
     current,
     branches,
     visibleCounts,
     collapsed,
-    selectedKey,
-    router,
   );
   const destination = refFromKey(current.destination);
   const paths = useQuery({
@@ -375,9 +379,6 @@ function useEntityRelationsModel({
     enabled: Boolean(destination),
   });
   const [pathIndex, setPathIndex] = useState(0);
-  const pathGraph = destination
-    ? pathProjection(paths.data, pathIndex, router)
-    : undefined;
   const selectedEdge = [...data.edges, ...(paths.data?.edges ?? [])].find(
     (edge) => edge.id === selectedEdgeId,
   );
@@ -410,12 +411,10 @@ function useEntityRelationsModel({
     reload,
     text,
     neighborhood,
-    exploredGraph,
     destination,
     paths,
     pathIndex,
     setPathIndex,
-    pathGraph,
     recommendationOperations,
     recommendationActionOperations,
     selectedRef,
@@ -477,19 +476,16 @@ function EntityRelationsContent(
     visibleCounts,
     busy,
     errors,
-    selectedEdgeId,
     setSelectedEdgeId,
     selectedEdge,
     selectRecord,
     showMore,
     text,
     neighborhood,
-    exploredGraph,
     destination,
     paths,
     pathIndex,
     setPathIndex,
-    pathGraph,
     recommendationOperations,
     recommendationActionOperations,
     selectedRef,
@@ -544,19 +540,6 @@ function EntityRelationsContent(
           value={current.view ?? "list"}
           onValueChange={(view) => change({ view })}
         />
-        {current.view === "graph" && (
-          <ChoiceSwitcher
-            ariaLabel="Relationship layout"
-            options={[
-              { value: "neighborhood", label: "Neighborhood" },
-              { value: "flow", label: "Flow" },
-            ]}
-            value={current.layout ?? "neighborhood"}
-            onValueChange={(layout: "neighborhood" | "flow") =>
-              change({ layout })
-            }
-          />
-        )}
         <ChoiceSwitcher
           ariaLabel="Relationship depth"
           options={[
@@ -677,20 +660,6 @@ function EntityRelationsContent(
           change({ collapsed: [...new Set([...collapsed, key])] });
         }}
       />
-      {current.view === "graph" && (
-        <Suspense fallback={<output>Loading graph layout…</output>}>
-          <DependencyGraphViewer
-            data={pathGraph ?? exploredGraph}
-            filters={GRAPH_FILTERS}
-            neighborhoodRoot={
-              pathGraph || current.layout === "flow" ? undefined : selectedKey
-            }
-            selectedEdgeId={selectedEdgeId}
-            onSelectEdge={(edge) => setSelectedEdgeId(edge?.id)}
-            onSelectNode={(node) => selectRecord(node.id)}
-          />
-        </Suspense>
-      )}
       {neighborhood.size >= GRAPH_NEIGHBOR_LIMIT && (
         <p className="text-xs text-muted-foreground">
           The neighborhood shows {GRAPH_NEIGHBOR_LIMIT} connected records,
@@ -972,30 +941,6 @@ function EdgeInspector({
     </aside>
   );
 }
-function graphNode(node: EntityGraphNode, href?: string) {
-  return {
-    id: graphRefKey(node),
-    kind: node.entityType,
-    kindLabel: entityLabel(node.entityType),
-    name: node.label,
-    imageUrl: node.image?.url,
-    metadata: graphFacts(node),
-    href,
-  };
-}
-function graphEdge(edge: EntityGraphEdge): GraphEdge {
-  return {
-    source: graphRefKey(edge.source),
-    target: graphRefKey(edge.target),
-    kind: "relationship",
-    id: edge.id,
-    relationshipKey: edge.relationshipKey,
-    label: edge.label,
-    sourceKey: edge.sourceKey,
-    provenance: edge.provenance,
-  };
-}
-
 function ExplorationCompletion({
   data,
 }: {
@@ -1130,17 +1075,8 @@ function exploredProjection(
   branches: EntityGraphBranch[],
   visibleCounts: ReadonlyMap<string, number>,
   collapsed: ReadonlySet<string>,
-  selectedKey: string,
-  router: ReturnType<typeof useRouter>,
 ) {
   const text = current.query?.trim().toLocaleLowerCase() ?? "";
-  const relationshipIds = current.relationship
-    ? new Set(
-        data.branches
-          .filter((b) => b.relationshipKey === current.relationship)
-          .flatMap((b) => b.edgeIds),
-      )
-    : null;
   const filteredBranches = branches.filter(
     (branch) =>
       (!current.entityType || branch.target === current.entityType) &&
@@ -1176,89 +1112,7 @@ function exploredProjection(
     })),
     effectiveCounts,
   );
-  const visibleBranches = current.layout === "flow" ? data.branches : branches;
-  const allowedBranchEdges = new Set(
-    visibleBranches.flatMap((branch) => {
-      const key = graphBranchKey(branch.root, branch.relationshipKey);
-      const count = collapsed.has(key) ? 0 : (visibleCounts.get(key) ?? 12);
-      const refs = new Set(branch.items.slice(0, count).map(graphRefKey));
-      return data.edges
-        .filter(
-          (edge) =>
-            branch.edgeIds.includes(edge.id) &&
-            (refs.has(graphRefKey(edge.source)) ||
-              refs.has(graphRefKey(edge.target))),
-        )
-        .map((edge) => edge.id);
-    }),
-  );
-  const flowKeys = new Set(
-    data.edges
-      .filter((edge) => allowedBranchEdges.has(edge.id))
-      .flatMap((edge) => [graphRefKey(edge.source), graphRefKey(edge.target)]),
-  );
-  const nodes = data.nodes.filter(
-    (node) =>
-      (!current.entityType ||
-        node.entityType === current.entityType ||
-        graphRefKey(node) === selectedKey) &&
-      (!text ||
-        `${node.label} ${node.entityId}`.toLocaleLowerCase().includes(text) ||
-        graphRefKey(node) === selectedKey) &&
-      (graphRefKey(node) === selectedKey ||
-        (current.layout === "flow" ? flowKeys : neighborhood).has(
-          graphRefKey(node),
-        )),
-  );
-  const nodeKeys = new Set(nodes.map(graphRefKey));
-  const exploredGraph: GraphData = {
-    nodes: nodes.map((node) => graphNode(node, hrefFor(node, router))),
-    edges: data.edges
-      .filter(
-        (edge) =>
-          nodeKeys.has(graphRefKey(edge.source)) &&
-          nodeKeys.has(graphRefKey(edge.target)) &&
-          (!relationshipIds || relationshipIds.has(edge.id)) &&
-          allowedBranchEdges.has(edge.id),
-      )
-      .map(graphEdge),
-  };
-  return { text, neighborhood, exploredGraph };
-}
-
-function pathProjection(
-  output: EntityGraphPathsOutput | undefined,
-  pathIndex: number,
-  router: ReturnType<typeof useRouter>,
-): GraphData | undefined {
-  const path = output?.paths[pathIndex] ?? output?.paths[0];
-  const pathNodes = new Set(path?.nodeRefs.map(graphRefKey) ?? []);
-  const pathPairs = new Set(
-    (path?.nodeRefs ?? [])
-      .slice(1)
-      .map((ref, index) =>
-        [graphRefKey(path!.nodeRefs[index]!), graphRefKey(ref)]
-          .sort()
-          .join("\u0000"),
-      ),
-  );
-  const pathGraph: GraphData | undefined = path
-    ? {
-        nodes: output!.nodes
-          .filter((node) => pathNodes.has(graphRefKey(node)))
-          .map((node) => graphNode(node, hrefFor(node, router))),
-        edges: output!.edges
-          .filter((edge) =>
-            pathPairs.has(
-              [graphRefKey(edge.source), graphRefKey(edge.target)]
-                .sort()
-                .join("\u0000"),
-            ),
-          )
-          .map(graphEdge),
-      }
-    : undefined;
-  return pathGraph;
+  return { text, neighborhood };
 }
 
 function VisitedRecords({

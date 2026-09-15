@@ -6,7 +6,7 @@ import {
   recipeShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useMemo } from "react";
 import { z } from "zod";
 
@@ -84,6 +84,18 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/_authenticated/entities")({
   validateSearch: searchSchema,
+  beforeLoad: ({ search }) => {
+    if (search.tab === "explore")
+      throw redirect({
+        to: "/graph",
+        search: {
+          entity: search.entity,
+          root: search.root,
+          selected: search.selected,
+          destination: search.destination,
+        },
+      });
+  },
   component: EntitiesRoute,
   head: () => ({ meta: [{ title: pageTitle("Entities") }] }),
 });
