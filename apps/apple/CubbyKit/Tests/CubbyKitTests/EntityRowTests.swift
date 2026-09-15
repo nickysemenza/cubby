@@ -57,7 +57,7 @@ struct EntityRowTests {
         #expect(row?.imageURL == URL(string: "https://images.example/first.jpg"))
     }
 
-    @Test func imageURLFallsBackToCoverImageUrlWhenDisplayImagesAbsent() {
+    @Test func imageURLDoesNotDeriveFromLegacyCoverWhenDisplayImagesAbsent() {
         let object: JSONValue = [
             "id": "PRD-2345",
             "name": "Sample",
@@ -65,10 +65,10 @@ struct EntityRowTests {
             "images": [["status": "UPLOADED", "url": "https://images.example/other.jpg"]],
         ]
         let row = product.row(from: object)
-        #expect(row?.imageURL == URL(string: "https://images.example/cover.jpg"))
+        #expect(row?.imageURL == nil)
     }
 
-    @Test func imageURLFallsBackToCoverImageUrlWhenDisplayImagesEmpty() {
+    @Test func imageURLDoesNotDeriveFromLegacyCoverWhenDisplayImagesEmpty() {
         let object: JSONValue = [
             "id": "PRD-2345",
             "name": "Sample",
@@ -76,7 +76,7 @@ struct EntityRowTests {
             "coverImageUrl": "https://images.example/cover.jpg",
         ]
         let row = product.row(from: object)
-        #expect(row?.imageURL == URL(string: "https://images.example/cover.jpg"))
+        #expect(row?.imageURL == nil)
     }
 
     @Test func imageURLNilWhenDisplayImagesEmptyAndNoCover() {
@@ -90,8 +90,7 @@ struct EntityRowTests {
     }
 
     /// A bare `images` array of `{status,url}` objects — the pre-`displayImages` shape some
-    /// payloads still carry — is never read for `imageURL`; only `displayImages` and
-    /// `coverImageUrl` are.
+    /// payloads still carry — is never read for `imageURL`.
     @Test func imageURLIsNilWithoutACoverRegardlessOfImages() {
         let object: JSONValue = [
             "id": "PRD-2345",

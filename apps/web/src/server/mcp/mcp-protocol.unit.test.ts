@@ -143,7 +143,7 @@ describe("MCP protocol smoke", () => {
     const runEntity: ExecuteEntity = async () => ({
       action: "list",
       entity: "meal",
-      items: [meal],
+      items: [{ ...meal, displayImages: [] }],
       meta: { pageIndex: 0, pageSize: 10, totalCount: 1 },
     });
     const server = new McpServer({ name: "test", version: "1.0.0" });
@@ -225,8 +225,16 @@ describe("MCP protocol smoke", () => {
     });
     const runEntity: ExecuteEntity = async (_context, command) =>
       command.entity === "product"
-        ? { action: "get", entity: "product", item: product }
-        : { action: "get", entity: "ingredient", item: ingredient };
+        ? {
+            action: "get",
+            entity: "product",
+            item: { ...product, displayImages: [], attachments: [] },
+          }
+        : {
+            action: "get",
+            entity: "ingredient",
+            item: { ...ingredient, displayImages: [], attachments: [] },
+          };
     const server = new McpServer({ name: "test", version: "1.0.0" });
     registerEntityTools(server, runEntity);
 

@@ -53,9 +53,7 @@ interface BaseListRow {
   id: string;
   name?: string | null;
   createdAt?: string | Date;
-  /** Only Product and Recipe declare the standard "image" display (see the
-   *  manifest), and both list rows carry the server-resolved `displayImages`
-   *  contract — `createImageColumn` reads it directly, no per-entity rule. */
+  /** Universal server-resolved entity identity imagery. */
   displayImages?: DisplayImageSummary[];
 }
 
@@ -267,9 +265,10 @@ export function useStandardColumns<TData extends BaseListRow>({
         }
 
         // Prepend standard columns
-        if (
-          standardColumns.some((field) => field.display.standard === "image")
-        ) {
+        const hasExplicitImageColumn = customColumns
+          .visit((column) => columnIdentifier(column) === "image")
+          .some(Boolean);
+        if (!hasExplicitImageColumn) {
           add(
             withManifestFilter(
               createImageColumn(columnHelper, {

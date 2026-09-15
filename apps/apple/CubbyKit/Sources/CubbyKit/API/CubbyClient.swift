@@ -475,12 +475,12 @@ public actor CubbyClient {
     }
 
     /// The product's image ids in display order — the order `setImageOrder` rewrites. The detail
-    /// payload's `images` entries carry full `ImageOut` bodies (URLs included); only the id is
+    /// payload's direct `attachments` carry full `ImageOut` bodies (URLs included); only the id is
     /// projected out here because that is all this call is for.
     public func productImageIDs(_ product: ProductCode) async throws -> [ImageCode] {
         try await perform {
             let output = try await api.resources_product_get(path: .init(id: product.rawValue))
-            return try output.ok.body.json.images.map { ImageCode($0.id) }
+            return try output.ok.body.json.attachments.map { ImageCode($0.id) }
         }
     }
 

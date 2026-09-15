@@ -1,5 +1,5 @@
 import type { VendorFilters, VendorOut } from "@cubby/schemas/vendor";
-import { type ReactNode, useMemo } from "react";
+import { useMemo } from "react";
 
 import {
   createCurrencyColumn,
@@ -13,21 +13,10 @@ import {
 import { ExternalLinkText } from "~/app/_components/ExternalLink";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { VendorMark } from "~/components/entity/vendor-cell";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
-
-/**
- * The brand mark leading each vendor's name. Module-level for the same reason as
- * tasklist's `subtaskCountSuffix`: `namePrefix` sits in useStandardColumns'
- * columns-`useMemo` dependency array, so an inline arrow would churn the memo
- * every render.
- */
-const VENDOR_NAME_PREFIX = (row: VendorOut): ReactNode => (
-  <VendorMark vendor={row.name} vendorId={row.id} logo={row.logo} />
-);
 
 export function VendorList() {
   const columnHelper = useMemo(() => createCubbyColumnHelper<VendorOut>(), []);
@@ -131,7 +120,6 @@ export function VendorList() {
       // back to a monogram tile, so every row carries something (roughly half the
       // roster is one-off local trades with no logo). It's a fixed-width
       // `shrink-0` glyph, so the name keeps truncating at `w-64`.
-      namePrefix={VENDOR_NAME_PREFIX}
       ariaLabel="Vendors Table"
     />
   );

@@ -76,7 +76,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false, // or "gallery" (an `<Entity>Image` join table) | "cover" (one `coverImageId`) | "borrowed" (a linked product's photos)
+    images: false, // or "gallery" (an `<Entity>Image` join table) | "cover" (one `coverImageId`) | "logo" (one direct logo FK)
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },
@@ -141,21 +141,18 @@ all read it; none of them keep a per-entity list of their own.
 `capabilities.images` is `false`, `"gallery"` (an ordered `<Entity>Image` join
 table, bound in `apps/web/src/server/repo/database-helpers/crud.ts`
 `imageJoinBindings`, whose keys are checked against `GalleryEntity`),
-`"cover"` (a single `coverImageId` column, cookbook) or `"borrowed"` (no
-storage of its own; ingredient, inventory, expense and wish show a linked
-product's photos). The manifest keeps the storage boolean `hasImages`
-(`gallery`/`cover`) alongside `imageStorage`, and derives `displayImages`
-(`images !== false`): every such entity's list schema carries a
-server-resolved `displayImages: [{ id, url }]` attached by `withDisplayImages`
-in its list function — the one display-image policy
-(`apps/web/src/server/repo/entity-display-image.ts`) that web thumbnails,
-native rows, search hits and hover cards all read. No client derives a cover.
-Meal, task, and planting all own a `"gallery"` (their own ordered
-`MealImage`/`TaskImage`/`PlantingImage` join tables), but two of the three
-also fall back to a borrowed source when their own gallery is empty: task
-falls back to its subject product's photo, and planting falls back to its
-garden entries' photos (newest entry first) — both resolved by the same
-`entity-display-image.ts` priority chain, never by the client.
+`"cover"` (a single `coverImageId` column, cookbook), or `"logo"` (a single
+direct logo FK, vendor). The manifest keeps the storage boolean `hasImages`
+(`gallery`/`cover`) alongside `imageStorage`. Every public entity list and
+detail read carries server-resolved `displayImages: [{ id, url }]`; details
+also carry directly owned `attachments` with their role and position.
+
+Related display images come only from explicit domain relationships and never
+recursively consume another entity's resolved `displayImages`. The centralized
+resolver in `apps/web/src/server/repo/entity-display-image.ts` orders direct
+displayable images before related images, filters unavailable files, and
+deduplicates by image ID. Web and native clients render the first result and do
+not derive their own cover.
 
 `extensions.ports` is the explicit seam map for entity-wide behavior the
 compiler must not infer: the kernel repository binding, entity label and

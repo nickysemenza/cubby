@@ -671,11 +671,8 @@ const declarationDescriptor = (
   descriptor.hasImages =
     declaration.capabilities.images === "gallery" ||
     declaration.capabilities.images === "cover";
-  descriptor.imageStorage =
-    declaration.capabilities.images === "borrowed"
-      ? false
-      : declaration.capabilities.images;
-  descriptor.displayImages = declaration.capabilities.images !== false;
+  descriptor.imageStorage = declaration.capabilities.images;
+  descriptor.displayImages = true;
   descriptor.searchable = declaration.search.enabled;
   descriptor.countable = declaration.capabilities.countable;
   descriptor.relationships = serializedDeclarationRelations(

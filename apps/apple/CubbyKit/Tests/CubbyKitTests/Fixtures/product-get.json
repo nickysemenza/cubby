@@ -52,5 +52,7 @@
     "locationCount": 0
   },
   "onHandUnits": null,
-  "quantityVariance": null
+  "quantityVariance": null,
+  "displayImages": [],
+  "attachments": []
 }

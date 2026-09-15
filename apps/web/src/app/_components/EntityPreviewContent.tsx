@@ -3,8 +3,6 @@ import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
 import type { GardenEntryKind } from "@cubby/schemas/garden-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageAssociation, ImageWithEntity } from "@cubby/schemas/image";
-import { isDisplayableImageFile } from "@cubby/schemas/image";
-import { locationCoverImage } from "@cubby/schemas/location";
 import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import type { CookbookSummary } from "@cubby/schemas/recipe";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
@@ -159,7 +157,7 @@ export function toRecipeCard(
     : data.servings
       ? countLabel(data.servings, "serving")
       : undefined;
-  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
+  const thumbUrl = data.displayImages[0]?.url;
 
   const stats: { label: string; value: ReactNode; caption?: string }[] = [];
   if (data.totals) {
@@ -221,11 +219,7 @@ export function toIngredientCard(
     .filter((value): value is number => value != null);
   const cheapestPrice = prices.length > 0 ? Math.min(...prices) : undefined;
   const multiplePrices = prices.length > 1;
-  // An ingredient has no images of its own — the first product's cover
-  // stands in.
-  const thumbUrl = data.product
-    .flatMap((prod) => prod.images)
-    .find(isDisplayableImageFile)?.url;
+  const thumbUrl = data.displayImages[0]?.url;
   const nutrients = data.product.find((prod) => prod.food?.nutritionInfo)?.food
     ?.nutritionInfo.nutrientsPer100;
   const usdaFdcId = data.product.find((prod) => prod.food)?.food?.fdc_id;
@@ -269,7 +263,7 @@ export function toIngredientCard(
 
 function productCardBody(data: EntityDetailByEntity["product"]): BodyBlock[] {
   const body: BodyBlock[] = [];
-  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
+  const thumbUrl = data.displayImages[0]?.url;
   if (thumbUrl) body.push({ kind: "thumb", url: thumbUrl });
   if (data.food?.nutritionInfo.nutrientsPer100)
     body.push({
@@ -425,7 +419,7 @@ export function toLocationCard(
 ): ManifestCardProps {
   const itemCount = data.totalItemCount ?? data.directItemCount ?? undefined;
   const subCount = data.childCount ?? data.children?.length ?? undefined;
-  const thumbUrl = locationCoverImage(data)?.url;
+  const thumbUrl = data.displayImages[0]?.url;
 
   const stats: { label: string; value: ReactNode }[] = [];
   if (itemCount != null) stats.push({ label: "On hand", value: itemCount });
@@ -471,7 +465,7 @@ export function toInventoryCard(
   const productName = isMiscProduct(data.product.name)
     ? getMiscDisplayName(data.product.name)
     : data.product.name;
-  const thumbUrl = data.product.images.find(isDisplayableImageFile)?.url;
+  const thumbUrl = data.displayImages[0]?.url;
 
   const stats: { label: string; value: ReactNode }[] = [
     { label: "On hand", value: tryFormatAmount(data.amount) },
@@ -1001,7 +995,7 @@ export function toWishCard(
 export function toPlantingCard(
   data: EntityDetailByEntity["planting"],
 ): ManifestCardProps {
-  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
+  const thumbUrl = data.displayImages[0]?.url;
 
   return {
     entity: "planting",
@@ -1046,7 +1040,7 @@ const GARDEN_ENTRY_PREVIEW_KIND_LABELS = {
 export function toGardenEntryCard(
   data: EntityDetailByEntity["gardenEntry"],
 ): ManifestCardProps {
-  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
+  const thumbUrl = data.displayImages[0]?.url;
 
   return {
     entity: "gardenEntry",

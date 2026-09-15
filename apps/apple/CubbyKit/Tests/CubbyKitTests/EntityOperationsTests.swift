@@ -55,7 +55,7 @@ struct EntityOperationsTests {
             """
             {
               "items": [
-                { "id": "LPY-2345", "name": "Household", "kind": "household",
+                { "id": "LPY-2345", "name": "Household", "kind": "household", "displayImages": [],
                   "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z" }
               ],
               "meta": { "pageIndex": 0, "pageSize": 20, "totalCount": 1 }

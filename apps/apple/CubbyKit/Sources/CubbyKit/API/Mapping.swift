@@ -13,13 +13,13 @@ typealias ScanOut = Components.Schemas.ScanAtLocationOut
 typealias ResolveStraysInput = Components.Schemas.ResolveScanStraysInput
 typealias ResolveStraysOut = Components.Schemas.ResolveScanStraysOut
 typealias FindByUPCOut = Components.Schemas.ProductFindOrCreateByUPCOut
-typealias ProductDetailOut = Components.Schemas.ProductWithFoodOut
+typealias ProductDetailOut = Components.Schemas.ProductDetail
 typealias ProductRowOut = Components.Schemas.ProductTopLevelOut
-typealias ProductListItemOut = Components.Schemas.ProductListItemOut
+typealias ProductListItemOut = Components.Schemas.ProductListPage.ItemsPayloadPayload
 typealias AmountInput = Components.Schemas.PositiveAmountInput
 typealias AgentResultOut = Components.Schemas.AgentResult
 typealias LocationNodeOut = Components.Schemas.InfLocation
-typealias LocationListRowOut = Components.Schemas.LocationListItemOut
+typealias LocationListRowOut = Components.Schemas.LocationListPage.ItemsPayloadPayload
 typealias InventoryRowOut = Components.Schemas.InventoryWithLocationAndProductOut
 typealias DuplicateProductOut = Components.Schemas.DuplicateUniqueProduct
 typealias ReconcileInput = Components.Schemas.ReconcileSessionPayload
@@ -28,7 +28,7 @@ typealias TodayBriefingOut = Components.Schemas.TaskTodayBriefingOut
 typealias ProblemCountsOut = Components.Schemas.ProblemsCount
 typealias DashboardCountsOut = Components.Schemas.DashboardCountsOut
 typealias MealRowOut = Components.Schemas.MealOut
-typealias MealListRowOut = Components.Schemas.MealListItemOut
+typealias MealListRowOut = Components.Schemas.MealListPage.ItemsPayloadPayload
 typealias MealNutritionOut = Components.Schemas.MealNutritionOut
 typealias MealNutritionInput = Components.Schemas.MealNutritionInput
 typealias NutritionMealOut = Components.Schemas.NutritionMeal
@@ -49,7 +49,9 @@ typealias GardenSplitInput = Components.Schemas.GardenSplitPlantingInput
 typealias GardenStartInput = Components.Schemas.GardenStartPlantingInput
 typealias GardenEntriesOut = Components.Schemas.GardenEntriesOut
 typealias GardenEntryOut = Components.Schemas.GardenEntryOut
+typealias GardenEntryDetailOut = Components.Schemas.GardenEntryDetail
 typealias PlantingOut = Components.Schemas.PlantingOut
+typealias PlantingDetailOut = Components.Schemas.PlantingDetail
 typealias GardenJournalOut = Components.Schemas.GardenJournalOut
 typealias GardenJournalEntryOut = Components.Schemas.GardenJournalEntryOut
 typealias GardenLocationHistoryOut = Components.Schemas.GardenLocationHistoryOut
@@ -201,6 +203,30 @@ extension GardenPlanting {
             finishedAt: GardenPlainDate.date(out.finishedOn),
             gardenGuideKey: ingredient.gardenGuideKey, displayName: out.displayName)
     }
+
+    init(_ out: PlantingDetailOut, options: GardenOptions) {
+        let ingredient =
+            options.ingredients.first(where: { $0.id == out.ingredientId })
+            ?? GardenOption(id: out.ingredientId, name: out.ingredientId)
+        self.init(
+            id: out.id, ingredient: ingredient,
+            product: out.sourceProductId.map { id in
+                options.products.first(where: { $0.id == id }).map { GardenOption(id: $0.id, name: $0.name) }
+                    ?? GardenOption(id: id, name: id)
+            },
+            location: out.locationId.map { id in
+                options.locations.first(where: { $0.id == id }) ?? GardenOption(id: id, name: id)
+            },
+            intendedLocation: out.intendedLocationId.map { id in
+                options.locations.first(where: { $0.id == id }) ?? GardenOption(id: id, name: id)
+            },
+            parentPlantingID: out.parentPlantingId, status: .init(rawValue: out.status.rawValue)!,
+            variety: out.variety, quantity: out.quantity, notes: out.notes, plannedWindow: out.plannedWindow,
+            plannedDate: GardenPlainDate.date(out.plannedDate), sownAt: GardenPlainDate.date(out.sowedOn),
+            transplantedAt: GardenPlainDate.date(out.transplantedOn),
+            finishedAt: GardenPlainDate.date(out.finishedOn),
+            gardenGuideKey: ingredient.gardenGuideKey, displayName: out.displayName)
+    }
 }
 
 extension GardenOverview {
@@ -228,6 +254,17 @@ extension GardenEntry {
             kind: .init(rawValue: out.kind.rawValue)!, observedAt: GardenPlainDate.date(out.observedOn)!,
             note: out.note, harvestAmount: out.harvestAmount,
             images: out.images.compactMap { image in
+                URL(string: image.url).map { GardenImage(id: image.id, url: $0, filename: image.filename) }
+            }, locationName: out.locationName, plantingName: out.plantingName, displayName: out.displayName,
+            anchorsPeriod: out.anchorsPeriod)
+    }
+
+    init(_ out: GardenEntryDetailOut) {
+        self.init(
+            id: out.id, locationID: out.locationId, plantingID: out.plantingId,
+            kind: .init(rawValue: out.kind.rawValue)!, observedAt: GardenPlainDate.date(out.observedOn)!,
+            note: out.note, harvestAmount: out.harvestAmount,
+            images: out.attachments.compactMap { image in
                 URL(string: image.url).map { GardenImage(id: image.id, url: $0, filename: image.filename) }
             }, locationName: out.locationName, plantingName: out.plantingName, displayName: out.displayName,
             anchorsPeriod: out.anchorsPeriod)

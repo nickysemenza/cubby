@@ -37,6 +37,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { EntityBasicInfo } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
+import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { getErrorMessage } from "~/lib/error-utils";
 import { patchListItem } from "~/lib/optimistic-list";
 
@@ -275,7 +276,7 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       depsById: new Map(
         results
           .map((r) => r.data)
-          .filter((d): d is TaskOut => d != null)
+          .filter((d): d is EntityDetailByEntity["task"] => d != null)
           .map((d) => [d.id, { name: d.name }] as const),
       ),
     }),

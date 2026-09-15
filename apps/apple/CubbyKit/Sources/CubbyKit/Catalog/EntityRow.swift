@@ -37,24 +37,15 @@ extension EntityDescriptor {
             id: id,
             title: title,
             subtitle: subtitle,
-            imageURL: (key == .image
-                ? object["url"]?.stringValue.flatMap(URL.init(string:)) : Self.imageURL(from: object)),
+            imageURL: Self.imageURL(from: object),
             raw: object
         )
     }
 
-    /// The server resolves every image-bearing entity's displayable images, in display order,
-    /// into `displayImages: [{id, url}]` on the list row — the entity's own gallery/cover, or a
-    /// linked product's photos for ingredient/inventory/expense/wish, with a location→identity
-    /// product or cookbook→physical copy fallback. `displayImages[0].url` is the list contract
-    /// for every such entity and wins first; native code derives no cover of its own.
-    /// `coverImageUrl` is a leftover on detail/picker shapes that never grew a `displayImages`
-    /// field, and is checked second.
+    /// The server owns direct-versus-related precedence. Native renders only
+    /// the first universal `displayImages` entry and derives nothing itself.
     private static func imageURL(from object: JSONValue) -> URL? {
-        if let first = object["displayImages"]?[0]?["url"]?.stringValue {
-            return URL(string: first)
-        }
-        guard let cover = object["coverImageUrl"]?.stringValue else { return nil }
-        return URL(string: cover)
+        guard let first = object["displayImages"]?[0]?["url"]?.stringValue else { return nil }
+        return URL(string: first)
     }
 }

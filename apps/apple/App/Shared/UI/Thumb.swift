@@ -15,17 +15,23 @@ struct Thumb: View {
     var symbol: String = "photo"
 
     @Environment(\.displayScale) private var displayScale
+    @State private var useCanonicalURL = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl)
             .fill(PorcelainTokens.inset)
             .overlay {
                 if let url {
-                    LazyImage(request: request(for: url)) { state in
+                    LazyImage(request: request(for: url, transformed: !useCanonicalURL)) { state in
                         if let image = state.image {
                             image.resizable().scaledToFill()
                         } else {
                             glyph
+                        }
+                    }
+                    .onCompletion { result in
+                        if case .failure = result, !useCanonicalURL {
+                            useCanonicalURL = true
                         }
                     }
                 } else {
@@ -39,15 +45,18 @@ struct Thumb: View {
             .clipShape(RoundedRectangle(cornerRadius: PorcelainTokens.radiusControl))
             .frame(width: size, height: size)
             .accessibilityHidden(true)
+            .onChange(of: url) {
+                useCanonicalURL = false
+            }
     }
 
     /// Fetches the Cloudflare-transformed rung for this rendered width (the same URL the web
     /// mints, so both clients share one edge-cache entry), then downsizes that rung to the thumb's
     /// actual pixel size so the decoded bitmap never exceeds what is drawn.
-    private func request(for url: URL) -> ImageRequest {
+    private func request(for url: URL, transformed: Bool) -> ImageRequest {
         let pixels = size * displayScale
         return ImageRequest(
-            url: ImageTransform.transformed(url, renderedWidth: size),
+            url: transformed ? ImageTransform.transformed(url, renderedWidth: size) : url,
             processors: [ImageProcessors.Resize(size: CGSize(width: pixels, height: pixels))])
     }
 

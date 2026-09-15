@@ -33,11 +33,13 @@ export const entityDescriptor = z.object({
   browserRoutes: z.boolean().optional(),
   auditable: z.boolean(),
   hasImages: z.boolean(),
-  /** How images attach: an ordered `<Entity>Image` gallery, one cover FK, or none. */
-  imageStorage: z.union([z.literal(false), z.enum(["gallery", "cover"])]),
+  /** How direct images attach; display imagery is resolved for every entity. */
+  imageStorage: z.union([
+    z.literal(false),
+    z.enum(["gallery", "cover", "logo"]),
+  ]),
   /**
-   * The list row carries a server-resolved `displayImages` array — its own
-   * photos, or a linked product's when `capabilities.images` is `"borrowed"`.
+   * Every list row carries a server-resolved `displayImages` array.
    */
   displayImages: z.boolean(),
   searchable: z.boolean(),
@@ -149,7 +151,7 @@ const entitiesWithTrait = <K extends BooleanTrait>(
 
 export const auditableEntities = entitiesWithTrait("auditable");
 export const imageEntities = entitiesWithTrait("hasImages");
-/** Entities whose list rows carry `displayImages` (own or borrowed photos). */
+/** Entities whose public read rows carry server-resolved `displayImages`. */
 export const displayImageEntities = entitiesWithTrait("displayImages");
 
 type EntityWithImageStorage<S extends "gallery" | "cover"> = {

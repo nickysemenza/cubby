@@ -7,10 +7,12 @@ import {
   gardenEntryImage,
   locationImage,
   productImage,
+  vendor as vendorTable,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/repo/expense/crud";
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { insertWithShortcode } from "~/server/repo/shortcode-utils";
+import { createVendor } from "~/server/repo/vendor";
 import { createWish, updateWish } from "~/server/repo/wish";
 import { getR2PublicUrl } from "~/server/utils/r2-public-url";
 
@@ -151,6 +153,37 @@ describe("entity display image resolver", () => {
       expect(rows[0]?.displayImages).toEqual([
         { id: locationImg.shortcode, url: getR2PublicUrl(locationImg.key) },
         { id: productImg.shortcode, url: getR2PublicUrl(productImg.key) },
+      ]);
+    });
+  });
+
+  describe("vendor", () => {
+    it("uses its direct displayable logo", async () => {
+      const logo = await makeImage();
+      const created = await createVendor(
+        ctx.db,
+        {
+          name: `Logo Vendor ${crypto.randomUUID()}`,
+          website: null,
+          orderUrlTemplate: null,
+          notes: null,
+        },
+        ctx.actor,
+      );
+      await getDb(ctx.db)
+        .update(vendorTable)
+        .set({ logoImageId: logo.id })
+        .where(eq(vendorTable.id, created.entityId));
+
+      const rows = await withDisplayImages(
+        ctx.db,
+        "vendor",
+        [{ id: created.entityId }],
+        (row) => ({ id: row.id }),
+      );
+
+      expect(rows[0]?.displayImages).toEqual([
+        { id: logo.shortcode, url: getR2PublicUrl(logo.key) },
       ]);
     });
   });

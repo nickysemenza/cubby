@@ -528,7 +528,7 @@ export default defineEntity({
   search: { enabled: true },
   capabilities: {
     auditable: true,
-    images: false,
+    images: "logo",
     countable: true,
     softDelete: true,
     delete: { mode: "soft", bulk: true },

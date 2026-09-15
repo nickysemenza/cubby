@@ -323,16 +323,12 @@ const metadataSchemas = () => {
     .object({
       auditable: z.boolean({ error: "must be a boolean" }),
       /**
-       * `gallery`: a `<Entity>Image` join table of ordered photos; `cover`: a
-       * single `coverImageId` on the row; `borrowed`: no storage of its own —
-       * list rows show a linked product's photos; `false`: no images. The
-       * manifest's `hasImages` is the storage question (`gallery`/`cover`),
-       * `displayImages` is `images !== false`: every such entity's list row
-       * carries a server-resolved `displayImages` array.
+       * Direct image storage only. Display imagery is universal and resolved
+       * independently from this storage declaration.
        */
       images: z.union(
-        [z.literal(false), z.enum(["gallery", "cover", "borrowed"])],
-        { error: 'must be false, "gallery", "cover" or "borrowed"' },
+        [z.literal(false), z.enum(["gallery", "cover", "logo"])],
+        { error: 'must be false, "gallery", "cover" or "logo"' },
       ),
       countable: z.boolean({ error: "must be a boolean" }),
       softDelete: z.boolean({ error: "must be a boolean" }),

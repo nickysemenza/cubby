@@ -1176,12 +1176,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/expenses/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.ExpenseOut)
+                    case json(Components.Schemas.ExpenseDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ExpenseOut {
+                    package var json: Components.Schemas.ExpenseDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -1697,12 +1697,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/financial-accounts/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.FinancialAccountOut)
+                    case json(Components.Schemas.FinancialAccountDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.FinancialAccountOut {
+                    package var json: Components.Schemas.FinancialAccountDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -2407,12 +2407,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/financial-transactions/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.FinancialTransactionOut)
+                    case json(Components.Schemas.FinancialTransactionDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.FinancialTransactionOut {
+                    package var json: Components.Schemas.FinancialTransactionDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -2787,12 +2787,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/garden-entries/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.GardenEntryOut)
+                    case json(Components.Schemas.GardenEntryDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.GardenEntryOut {
+                    package var json: Components.Schemas.GardenEntryDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -6452,12 +6452,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/ingredients/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.IngredientWithFoodOut)
+                    case json(Components.Schemas.IngredientDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.IngredientWithFoodOut {
+                    package var json: Components.Schemas.IngredientDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -7483,12 +7483,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/inventory/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.InventoryWithLocationAndProductOut)
+                    case json(Components.Schemas.InventoryDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.InventoryWithLocationAndProductOut {
+                    package var json: Components.Schemas.InventoryDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -8770,12 +8770,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/ledger-parties/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.LedgerPartyOut)
+                    case json(Components.Schemas.LedgerPartyDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.LedgerPartyOut {
+                    package var json: Components.Schemas.LedgerPartyDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -9204,12 +9204,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/ledger-transfers/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.LedgerTransferOut)
+                    case json(Components.Schemas.LedgerTransferDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.LedgerTransferOut {
+                    package var json: Components.Schemas.LedgerTransferDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -10555,12 +10555,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/locations/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.InfLocation)
+                    case json(Components.Schemas.LocationDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.InfLocation {
+                    package var json: Components.Schemas.LocationDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -11402,12 +11402,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/meals/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.MealOut)
+                    case json(Components.Schemas.MealDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.MealOut {
+                    package var json: Components.Schemas.MealDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -11966,12 +11966,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/plantings/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.PlantingOut)
+                    case json(Components.Schemas.PlantingDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.PlantingOut {
+                    package var json: Components.Schemas.PlantingDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -13776,12 +13776,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/products/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/products/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.ProductWithFoodOut)
+                    case json(Components.Schemas.ProductDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ProductWithFoodOut {
+                    package var json: Components.Schemas.ProductDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -14679,12 +14679,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/projects/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/projects/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.ProjectOut)
+                    case json(Components.Schemas.ProjectDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.ProjectOut {
+                    package var json: Components.Schemas.ProjectDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -15433,12 +15433,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/purchases/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/purchases/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.PurchaseOut)
+                    case json(Components.Schemas.PurchaseDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.PurchaseOut {
+                    package var json: Components.Schemas.PurchaseDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -16236,12 +16236,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/recipes/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.RecipeDetailMcpOut)
+                    case json(Components.Schemas.RecipeDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.RecipeDetailMcpOut {
+                    package var json: Components.Schemas.RecipeDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -17597,12 +17597,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/tasks/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.TaskOut)
+                    case json(Components.Schemas.TaskDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.TaskOut {
+                    package var json: Components.Schemas.TaskDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -18527,12 +18527,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/vendors/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.VendorOut)
+                    case json(Components.Schemas.VendorDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.VendorOut {
+                    package var json: Components.Schemas.VendorDetail {
                         get throws {
                             switch self {
                             case let .json(body):
@@ -18973,12 +18973,12 @@ package enum Operations {
                 /// - Remark: Generated from `#/paths/api/v1/wishes/{id}/GET/responses/200/content`.
                 @frozen package enum Body: Sendable, Hashable {
                     /// - Remark: Generated from `#/paths/api/v1/wishes/{id}/GET/responses/200/content/application\/json`.
-                    case json(Components.Schemas.WishOut)
+                    case json(Components.Schemas.WishDetail)
                     /// The associated value of the enum case if `self` is `.json`.
                     ///
                     /// - Throws: An error if `self` is not `.json`.
                     /// - SeeAlso: `.json`.
-                    package var json: Components.Schemas.WishOut {
+                    package var json: Components.Schemas.WishDetail {
                         get throws {
                             switch self {
                             case let .json(body):

@@ -318,7 +318,7 @@ export const renderEntityArtifacts = (
   const detailSchemas = detailEntities
     .map(
       ({ key, contract }) =>
-        `  ${JSON.stringify(key)}: ${contract.detail.export},`,
+        `  ${JSON.stringify(key)}: withEntityDetailMedia(${contract.detail.export}),`,
     )
     .join("\n");
   const detailTypeImports = new Map<string, Set<string>>();
@@ -333,6 +333,11 @@ export const renderEntityArtifacts = (
       module,
       source: `import { ${[...exports].sort().join(", ")} } from ${JSON.stringify(module)};`,
     })),
+    {
+      module: "@cubby/schemas/entity-read-media",
+      source:
+        'import { withEntityDetailMedia } from "@cubby/schemas/entity-read-media";',
+    },
     {
       module: "@cubby/schemas/identifiers",
       source: 'import { shortcodeSchema } from "@cubby/schemas/identifiers";',
@@ -385,7 +390,7 @@ export const renderEntityArtifacts = (
   const listOutputSchemas = browserCrudEntitySpecs
     .map(
       ({ key }) =>
-        `  ${JSON.stringify(key)}: z.object({items:z.array(${key}ListOutputSchema),meta:entityListMetaSchema}),`,
+        `  ${JSON.stringify(key)}: z.object({items:z.array(withEntityListMedia(${key}ListOutputSchema)),meta:entityListMetaSchema}),`,
     )
     .join("\n");
   const mutationOutputImportEntries = new Map<string, Set<string>>();
@@ -486,13 +491,13 @@ export const renderEntityArtifacts = (
   const queryGetResultVariants = schemaEntitySpecs
     .map(
       ({ key, contract }) =>
-        `z.object({action:z.literal("get"),entity:z.literal(${JSON.stringify(key)}),item:${contract.detail.export}.nullable()})`,
+        `z.object({action:z.literal("get"),entity:z.literal(${JSON.stringify(key)}),item:withEntityDetailMedia(${contract.detail.export}).nullable()})`,
     )
     .join(",\n  ");
   const queryListResultVariants = schemaEntitySpecs
     .map(
       ({ key, contract }) =>
-        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(${contract.list.export}),meta:generatedEntityListMetaSchema})`,
+        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.list.export})),meta:generatedEntityListMetaSchema})`,
     )
     .join(",\n  ");
   const mcpQueryGetResultVariants = schemaEntitySpecs
@@ -503,7 +508,7 @@ export const renderEntityArtifacts = (
     )
     .map(
       ({ key, contract }) =>
-        `z.object({action:z.literal("get"),entity:z.literal(${JSON.stringify(key)}),item:${contract.mcpDetail.export}.nullable()})`,
+        `z.object({action:z.literal("get"),entity:z.literal(${JSON.stringify(key)}),item:withEntityDetailMedia(${contract.mcpDetail.export}).nullable()})`,
     )
     .join(",\n  ");
   const mcpQueryListResultVariants = schemaEntitySpecs
@@ -514,7 +519,7 @@ export const renderEntityArtifacts = (
     )
     .map(
       ({ key, contract }) =>
-        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(${contract.mcpList.export}),meta:generatedEntityListMetaSchema})`,
+        `z.object({action:z.literal("list"),entity:z.literal(${JSON.stringify(key)}),items:z.array(withEntityListMedia(${contract.mcpList.export})),meta:generatedEntityListMetaSchema})`,
     )
     .join(",\n  ");
   // A declared field list is compiled into `.pick({...}).strict()` on the
@@ -1089,7 +1094,7 @@ export const renderEntityArtifacts = (
         "  browserRouted: boolean;\n" +
         "  auditable: boolean;\n" +
         "  hasImages: boolean;\n" +
-        '  imageStorage: false | "gallery" | "cover";\n' +
+        '  imageStorage: false | "gallery" | "cover" | "logo";\n' +
         "  displayImages: boolean;\n" +
         "  countable: boolean;\n" +
         '  kernelActions: readonly ("get" | "list" | "search" | "create" | "update" | "bulkUpdate" | "delete" | "merge")[];\n' +
@@ -1162,6 +1167,7 @@ export const renderEntityArtifacts = (
         generatedHeader +
         "// Generated schema aliases retain deterministic import order.\n" +
         `${listRuntimeOutputImports}\n${listFilterFieldImports}\n` +
+        'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
@@ -1259,6 +1265,7 @@ export const renderEntityArtifacts = (
       source:
         generatedHeader +
         'import { mutationSideEffectsSchema } from "@cubby/schemas/background-jobs";\n' +
+        'import { withEntityDetailMedia, withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";\n' +
         'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
         `${schemaImports}\n` +
@@ -1289,7 +1296,17 @@ export const renderEntityArtifacts = (
         "    mcpDetail: SMcpDetail;\n" +
         "    mcpList: SMcpList;\n" +
         "  },\n" +
-        ") => ({ entity, id: shortcodeSchema(entity), ...schemas });\n\n" +
+        ") => ({\n" +
+        "  entity,\n" +
+        "  id: shortcodeSchema(entity),\n" +
+        "  ...schemas,\n" +
+        "  repositoryDetail: schemas.detail,\n" +
+        "  repositoryList: schemas.list,\n" +
+        "  detail: withEntityDetailMedia(schemas.detail),\n" +
+        "  list: withEntityListMedia(schemas.list),\n" +
+        "  mcpDetail: withEntityDetailMedia(schemas.mcpDetail),\n" +
+        "  mcpList: withEntityListMedia(schemas.mcpList),\n" +
+        "});\n\n" +
         "// Generated schema correlations stay one entity per line.\n// oxfmt-ignore\n" +
         `export const ENTITY_SCHEMA_BINDINGS = {\n${schemaBindings}\n} as const;\n` +
         "export type EntitySchemaBindingMap = typeof ENTITY_SCHEMA_BINDINGS;\n" +

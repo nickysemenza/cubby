@@ -111,6 +111,8 @@ export interface EntityBindingSchemas {
   output: ZodSchema;
   detail: ZodSchema;
   list: ZodSchema;
+  repositoryDetail: ZodSchema;
+  repositoryList: ZodSchema;
 }
 
 export type EntityCreateInput<E extends EntitySchemaBindingEntity> =
@@ -240,7 +242,7 @@ export type EntityRepository<
   get(
     ctx: EntityKernelContext,
     id: ZodOutput<S["id"]>,
-  ): Promise<ZodOutput<S["detail"]> | null>;
+  ): Promise<ZodOutput<S["repositoryDetail"]> | null>;
   list(
     ctx: EntityKernelContext,
     filters: ZodOutput<S["filters"]>,
@@ -248,7 +250,7 @@ export type EntityRepository<
     pagination: PaginationParams,
     groupBy?: string,
   ): Promise<{
-    data: ZodOutput<S["list"]>[];
+    data: ZodOutput<S["repositoryList"]>[];
     count: number;
     sums?: Record<string, number>;
   }>;

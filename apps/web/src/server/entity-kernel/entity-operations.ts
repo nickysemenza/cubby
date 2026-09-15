@@ -15,6 +15,7 @@ import { z } from "zod";
 import { deferPublications } from "~/server/background-tasks/publish";
 import { createAppError } from "~/server/errors/app-error";
 import { withTransactionDatabase } from "~/server/repo/database-helpers";
+import { withUniversalEntityMedia } from "~/server/repo/entity-display-image";
 import { deleteStoredObjects } from "~/server/services/image-storage.service";
 import {
   isMutationSideEffectRef,
@@ -212,8 +213,20 @@ export const defineEntityOperations = <
           id,
         ),
       )
-      .output(({ input, item }) => {
-        if (item === null && input.missing !== "null")
+      .call("media", async ({ context }, { item }) =>
+        item === null
+          ? null
+          : (
+              await withUniversalEntityMedia(
+                context.readDb,
+                binding.entity,
+                [item],
+                true,
+              )
+            )[0],
+      )
+      .output(({ input, media }) => {
+        if (media === null && input.missing !== "null")
           throw createAppError(
             ENTITY_NOT_FOUND_REASON[binding.entity],
             `${ENTITY_LABEL[binding.entity]} ${input.id} not found`,
@@ -222,11 +235,11 @@ export const defineEntityOperations = <
           action: "get",
           entity: binding.entity,
           item:
-            item === null
+            media === null
               ? null
-              : parseSchema<S["detail"], typeof item>(
+              : parseSchema<S["detail"], typeof media>(
                   binding.schemas.detail,
-                  item,
+                  media,
                 ),
         });
       }),
@@ -257,15 +270,24 @@ export const defineEntityOperations = <
           validated.groupBy,
         ),
       )
-      .output(({ validated, page }) =>
+      .call("mediaPage", async ({ context }, { page }) => ({
+        ...page,
+        data: await withUniversalEntityMedia(
+          context.readDb,
+          binding.entity,
+          page.data,
+          false,
+        ),
+      }))
+      .output(({ validated, mediaPage }) =>
         entityQueryResultSchema.parse({
           action: "list",
           entity: binding.entity,
           ...buildPaginatedResponse(
             validated.pagination,
-            z.array(binding.schemas.list).parse(page.data),
-            page.count,
-            page.sums,
+            z.array(binding.schemas.list).parse(mediaPage.data),
+            mediaPage.count,
+            mediaPage.sums,
           ),
         }),
       ),

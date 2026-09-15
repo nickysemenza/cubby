@@ -1,4 +1,3 @@
-import type { RecipeOut } from "@cubby/schemas/recipe";
 import { useQueries } from "@tanstack/react-query";
 import {
   createFileRoute,
@@ -26,6 +25,7 @@ import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
 import { pageTitle } from "~/lib/page-title";
 import { computeRecipeCosting } from "~/lib/recipe-costing";
 import { urlStringParam } from "~/lib/search-params";
@@ -68,7 +68,7 @@ function RecipeComparePage() {
     combine: (results) => ({
       recipes: results
         .map((q) => q.data)
-        .filter((d): d is RecipeOut => d != null),
+        .filter((d): d is EntityDetailByEntity["recipe"] => d != null),
       isLoading: results.some((q) => q.isLoading),
     }),
   });

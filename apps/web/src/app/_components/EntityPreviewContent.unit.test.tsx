@@ -24,6 +24,14 @@ import {
 } from "./EntityPreviewContent";
 import { PreviewQuery } from "./preview/preview-query";
 
+const withMedia = <T,>(value: T, url?: string) => ({
+  ...value,
+  displayImages: url
+    ? [{ id: testShortcode("image", "IMG-PREVIEW"), url }]
+    : [],
+  attachments: [],
+});
+
 describe("PreviewQuery", () => {
   it("distinguishes loading, failure, deletion, and success states", () => {
     const refetch = vi.fn();
@@ -135,7 +143,9 @@ describe("toLocationCard", () => {
       },
     });
 
-    expect(toLocationCard(data).body).toEqual([
+    expect(
+      toLocationCard(withMedia(data, "https://example.com/bin.jpg")).body,
+    ).toEqual([
       { kind: "thumb", url: "https://example.com/bin.jpg" },
       { kind: "stats", stats: [{ label: "On hand", value: 2 }] },
     ]);
@@ -153,7 +163,7 @@ describe("toLocationCard", () => {
       },
     });
 
-    expect(toLocationCard(data).body).toEqual([
+    expect(toLocationCard(withMedia(data)).body).toEqual([
       { kind: "stats", stats: [{ label: "On hand", value: 2 }] },
     ]);
   });
@@ -176,7 +186,9 @@ describe("toLocationCard", () => {
       },
     });
 
-    expect(toLocationCard(data).identity).toBe("27 Gal. Tough Storage Tote");
+    expect(toLocationCard(withMedia(data)).identity).toBe(
+      "27 Gal. Tough Storage Tote",
+    );
   });
 });
 
@@ -205,7 +217,9 @@ describe("toIngredientCard", () => {
       },
     });
 
-    const card = toIngredientCard(data);
+    const card = toIngredientCard(
+      withMedia(data, "https://example.com/oil.jpg"),
+    );
 
     expect(card.body?.[0]).toEqual({
       kind: "thumb",
@@ -231,7 +245,7 @@ describe("first-wave compact cards", () => {
       },
     });
 
-    const card = toFinancialAccountCard(account);
+    const card = toFinancialAccountCard(withMedia(account));
 
     expect(card.name).toBe("Household Visa");
     expect(card.identity).toBe("Credit card · Example Bank · •••• 4242");
@@ -259,7 +273,7 @@ describe("first-wave compact cards", () => {
       },
     });
 
-    const card = toFinancialTransactionCard(transaction);
+    const card = toFinancialTransactionCard(withMedia(transaction));
 
     expect(card.name).toBe("Hardware store");
     expect(card.crossLinks).toEqual([
@@ -290,7 +304,7 @@ describe("first-wave compact cards", () => {
       },
     });
 
-    const card = toWishCard(wish);
+    const card = toWishCard(withMedia(wish));
 
     expect(card.identity).toBe("Open");
     expect(card.body).toEqual([
@@ -339,7 +353,7 @@ describe("first-wave compact cards", () => {
       },
     });
 
-    const card = toImageCard(image);
+    const card = toImageCard(withMedia(image, image.url));
 
     expect(card.crossLinks).toEqual([
       expect.objectContaining({
@@ -378,7 +392,7 @@ describe("first-wave compact cards", () => {
       },
     });
 
-    const card = toPlantingCard(growingTomato);
+    const card = toPlantingCard(withMedia(growingTomato));
 
     expect(card.name).toBe("Tomato · Cherokee Purple");
     expect(card.body).toEqual([
@@ -404,7 +418,7 @@ describe("first-wave compact cards", () => {
       },
     });
 
-    const card = toGardenEntryCard(bedOverview);
+    const card = toGardenEntryCard(withMedia(bedOverview));
 
     expect(card.name).toBe("Note · 2026-10-06 · Garden test bed");
     expect(card.body).toEqual([

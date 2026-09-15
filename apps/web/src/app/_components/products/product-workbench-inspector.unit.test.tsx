@@ -188,7 +188,11 @@ function inspectorOperations(): ProductWorkbenchInspectorOperations {
   return {
     productDetail: entityDetail.detail
       .forEntity("product")
-      .withTransport(async () => product),
+      .withTransport(async () => ({
+        ...product,
+        displayImages: [],
+        attachments: [],
+      })),
     graph: entityGraph.graph.withTransport(async () => graph),
   };
 }
