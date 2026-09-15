@@ -32,7 +32,7 @@
     "@cubby/usda-schemas": "workspace:*",
     "@cubby/worker-tracing": "workspace:*",
     "@hono/zod-validator": "^0.9.0",
-    "@scalar/hono-api-reference": "^0.11.11",
+    "@scalar/hono-api-reference": "^0.12.0",
     "@sentry/cloudflare": "^10.66.0",
     "better-sqlite3": "^13.0.0",
     "csv-parse": "^7.0.1",
@@ -53,5 +53,5 @@
     "vitest": "^4.1.10",
     "wrangler": "^4.112.0"
   },
-  "packageManager": "pnpm@12.3.4"
+  "packageManager": "pnpm@12.4.0"
 }

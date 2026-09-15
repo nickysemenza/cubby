@@ -42,7 +42,7 @@ console_error_panic_hook = "0.1.7"
 [dev-dependencies]
 # Native-target tests (cargo test): the costing + food-mapping modules are pure
 # serde/ingredient code, so the parity suite runs without a wasm runtime.
-rstest = "0.26"
+rstest = "0.27"
 
 # Mirror upstream ingredient-parser's gate. A panic at the wasm boundary is a hard
 # browser crash, so forbid the macros that produce one in production code. Tests
