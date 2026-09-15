@@ -6,7 +6,10 @@ import { describe, expect, it } from "vitest";
 import { entityMutation } from "~/entities/entity-mutation.functions";
 import { imageUpload } from "~/lib/image.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import { entityBrowserMutationCommandSchema } from "~/server/entity-kernel/contracts";
+import {
+  entityBrowserMutationCommandSchema,
+  type EntityBrowserMutationCommand,
+} from "~/server/entity-kernel/contracts";
 
 import { EntryForm } from "./entry-form";
 import {
@@ -38,6 +41,18 @@ const loadOptions = garden.options.withTransport(async () => ({
   ],
 }));
 
+/** Narrows a captured mutation command to a `gardenEntry` update and returns
+ * its schema-derived `data`, so callers can assert on the patch shape without
+ * an unsafe cast. */
+function gardenEntryUpdateData(
+  command: EntityBrowserMutationCommand | undefined,
+) {
+  if (command?.action !== "update" || command.entity !== "gardenEntry") {
+    throw new Error("expected a gardenEntry update command");
+  }
+  return command.data;
+}
+
 describe("Garden entry capture", () => {
   it("lets an existing whole-bed observation be assigned to a planting without recreating it", async () => {
     const harness = createBrowserTestHarness();
@@ -52,10 +67,12 @@ describe("Garden entry capture", () => {
       note: "Broad view",
       harvestAmount: null,
       images: [],
+      anchorsPeriod: false,
+      displayName: "Note · 2026-08-15 · Test bed",
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const requests: unknown[] = [];
+    const requests: EntityBrowserMutationCommand[] = [];
     const mutate = entityMutation.mutate.withTransport(async ({ input }) => {
       const command = entityBrowserMutationCommandSchema.parse(input);
       requests.push(command);
@@ -82,11 +99,9 @@ describe("Garden entry capture", () => {
         screen.getByText(/Shared with plantings known to be here/),
       ).toBeVisible();
       await waitFor(() =>
-        expect(
-          screen.getByRole("combobox", {
-            name: "Location where this happened",
-          }),
-        ).toHaveValue("Test bed"),
+        expect(screen.getByRole("combobox", { name: "Location" })).toHaveValue(
+          "Test bed",
+        ),
       );
       const about = screen.getByRole("combobox", { name: "About" });
       about.focus();
@@ -97,17 +112,88 @@ describe("Garden entry capture", () => {
       expect(
         screen.getByText(/This entry stays in this planting/),
       ).toBeVisible();
-      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
       await waitFor(() => expect(requests).toHaveLength(1));
+      // Only `plantingId` changed — location, kind, date, and note are sent
+      // as `undefined` (i.e. omitted) so the server leaves them untouched.
       expect(requests[0]).toMatchObject({
         action: "update",
         id: entry.id,
         data: {
-          locationId: entry.locationId,
           plantingId: "PLT-4K7M",
-          observedOn: entry.observedOn,
+          pendingImageIds: [],
+          removeImageIds: [],
         },
       });
+      const data = gardenEntryUpdateData(requests[0]);
+      expect(data).not.toHaveProperty("locationId");
+      expect(data).not.toHaveProperty("observedOn");
+      expect(data).not.toHaveProperty("kind");
+      expect(data).not.toHaveProperty("note");
+    } finally {
+      harness.dispose();
+    }
+  });
+
+  it("sends only the changed field on update, leaving the rest untouched", async () => {
+    const harness = createBrowserTestHarness();
+    const entry = gardenEntryOut.parse({
+      id: testShortcode("gardenEntry", "GDE-4K7M"),
+      locationId: testShortcode("location", "LOC-4K7M"),
+      locationName: "Test bed",
+      plantingId: null,
+      plantingName: null,
+      kind: "observation",
+      observedOn: "2026-08-15",
+      note: "Broad view",
+      harvestAmount: null,
+      images: [],
+      anchorsPeriod: false,
+      displayName: "Note · 2026-08-15 · Test bed",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const requests: EntityBrowserMutationCommand[] = [];
+    const mutate = entityMutation.mutate.withTransport(async ({ input }) => {
+      const command = entityBrowserMutationCommandSchema.parse(input);
+      requests.push(command);
+      return {
+        action: "update" as const,
+        entity: "gardenEntry" as const,
+        item: entry,
+        sideEffects: { backgroundBatches: [] },
+      };
+    });
+    try {
+      render(
+        <EntryForm
+          entry={entry}
+          locationId={entry.locationId}
+          loadOptions={loadOptions}
+          operations={{ recordEntry: garden.recordEntry, mutate }}
+          onSaved={() => {}}
+          onCancel={() => {}}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      fireEvent.change(await screen.findByLabelText("Notes"), {
+        target: { value: "Broad view, revised" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests[0]).toMatchObject({
+        data: {
+          note: "Broad view, revised",
+          pendingImageIds: [],
+          removeImageIds: [],
+        },
+      });
+      const data = gardenEntryUpdateData(requests[0]);
+      expect(data).not.toHaveProperty("locationId");
+      expect(data).not.toHaveProperty("plantingId");
+      expect(data).not.toHaveProperty("kind");
+      expect(data).not.toHaveProperty("observedOn");
+      expect(data).not.toHaveProperty("harvestAmount");
     } finally {
       harness.dispose();
     }
@@ -130,6 +216,8 @@ describe("Garden entry capture", () => {
         locationName: "Test bed",
         plantingName: null,
         images: [],
+        anchorsPeriod: false,
+        displayName: "Harvest · 2026-08-15 · Test bed",
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -147,29 +235,27 @@ describe("Garden entry capture", () => {
         />,
         { wrapper: harness.wrapper },
       );
+      expect(screen.getByLabelText("Date")).toBeVisible();
       fireEvent.change(screen.getByLabelText("Entry type"), {
         target: { value: "harvest" },
       });
-      fireEvent.change(screen.getByLabelText("Observation date"), {
+      // Selecting Harvest relabels the date field from "Date" to "Harvest date".
+      fireEvent.change(screen.getByLabelText("Harvest date"), {
         target: { value: "2026-08-15" },
       });
-      fireEvent.change(screen.getByLabelText("Harvest amount (optional)"), {
+      fireEvent.change(screen.getByLabelText("Harvest amount"), {
         target: { value: "A handful" },
       });
       fireEvent.change(screen.getByLabelText("Notes"), {
         target: { value: "First ripe fruit" },
       });
-      fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
       expect(await screen.findByRole("alert")).toHaveTextContent(
         "Connection interrupted",
       );
-      expect(screen.getByLabelText("Harvest amount (optional)")).toHaveValue(
-        "A handful",
-      );
-      expect(screen.getByLabelText("Observation date")).toHaveValue(
-        "2026-08-15",
-      );
-      fireEvent.click(screen.getByRole("button", { name: "Save entry" }));
+      expect(screen.getByLabelText("Harvest amount")).toHaveValue("A handful");
+      expect(screen.getByLabelText("Harvest date")).toHaveValue("2026-08-15");
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
       await waitFor(() => expect(saved).toBe(true));
       expect(requests[1]).toEqual(requests[0]);
     } finally {
@@ -231,10 +317,12 @@ describe("Garden entry capture", () => {
       note: "Moved to the sunny bed",
       harvestAmount: null,
       images: [],
+      anchorsPeriod: true,
+      displayName: "Move · 2026-06-01 · Test bed",
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    const requests: unknown[] = [];
+    const requests: EntityBrowserMutationCommand[] = [];
     const mutate = entityMutation.mutate.withTransport(async ({ input }) => {
       const command = entityBrowserMutationCommandSchema.parse(input);
       requests.push(command);
@@ -262,12 +350,12 @@ describe("Garden entry capture", () => {
         />,
         { wrapper: harness.wrapper },
       );
-      expect(screen.getByLabelText("Observation date")).toBeDisabled();
+      expect(screen.getByLabelText("Date")).toBeDisabled();
       expect(screen.getByRole("combobox", { name: "About" })).toBeDisabled();
       fireEvent.change(screen.getByLabelText("Notes"), {
         target: { value: "Moved to the sunny bed after all" },
       });
-      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
       await waitFor(() => expect(saved).toBe(true));
       expect(requests).toEqual([
@@ -276,14 +364,62 @@ describe("Garden entry capture", () => {
           action: "update",
           id: entry.id,
           data: expect.objectContaining({
-            kind: "move",
-            observedOn: "2026-06-01",
             note: "Moved to the sunny bed after all",
             pendingImageIds: [],
             removeImageIds: [],
           }),
         }),
       ]);
+      // The locked kind/date stay fixed by being omitted from the patch
+      // entirely, not by resubmitting their unchanged values.
+      const data = gardenEntryUpdateData(requests[0]);
+      expect(data).not.toHaveProperty("kind");
+      expect(data).not.toHaveProperty("observedOn");
+      expect(data).not.toHaveProperty("locationId");
+      expect(data).not.toHaveProperty("plantingId");
+    } finally {
+      harness.dispose();
+    }
+  });
+
+  it("locks an anchor entry's fields even when its kind is not move", async () => {
+    const harness = createBrowserTestHarness();
+    const locationId = testShortcode("location", "LOC-4K7M");
+    const entry = gardenEntryOut.parse({
+      id: testShortcode("gardenEntry", "GDE-4K7M"),
+      locationId,
+      plantingId: testShortcode("planting", "PLT-4K7M"),
+      locationName: "Test bed",
+      plantingName: "Test tomato",
+      kind: "observation",
+      observedOn: "2026-05-01",
+      note: "Started here",
+      harvestAmount: null,
+      images: [],
+      anchorsPeriod: true,
+      displayName: "Note · 2026-05-01 · Test bed",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    try {
+      render(
+        <EntryForm
+          entry={entry}
+          locationId={locationId}
+          loadOptions={loadOptions}
+          onSaved={() => {}}
+          onCancel={() => {}}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      expect(await screen.findByLabelText("Date")).toBeDisabled();
+      expect(screen.getByLabelText("Entry type")).toBeDisabled();
+      expect(screen.getByRole("combobox", { name: "About" })).toBeDisabled();
+      expect(
+        screen.getByText(
+          /Correct move dates in the planting.s location history/,
+        ),
+      ).toBeVisible();
     } finally {
       harness.dispose();
     }

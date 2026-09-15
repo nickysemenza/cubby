@@ -13,6 +13,7 @@ import type { z } from "zod";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { Stack } from "~/components/layout";
+import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { entityMutation } from "~/entities/entity-mutation.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
@@ -25,6 +26,7 @@ import {
   GardenNotes,
 } from "./garden-fields";
 import { GardenPicker } from "./garden-picker";
+import { gardenStrings } from "./garden-strings";
 
 export type GardenLocation = Pick<
   z.infer<typeof gardenLocationSummaryOut>,
@@ -93,16 +95,24 @@ export function GardenLocationForm({
         {!location && (
           <GardenPicker
             entity="location"
-            label="Use an existing location (optional)"
+            label={gardenStrings.location.existingPickerCaption}
+            placeholder={gardenStrings.location.existingPickerPlaceholder}
             value={existing}
             onChange={setExisting}
           />
         )}
         {!existing && (
-          <GardenField label="Name" value={name} onChange={setName} required />
+          <GardenField
+            label={gardenStrings.location.nameField}
+            value={name}
+            onChange={setName}
+            required
+          />
         )}
         <Stack gap="sm">
-          <label htmlFor="garden-location-kind">Growing area</label>
+          <Label htmlFor="garden-location-kind">
+            {gardenStrings.location.kindField}
+          </Label>
           <NativeSelect
             id="garden-location-kind"
             value={kind}
@@ -110,21 +120,25 @@ export function GardenLocationForm({
               setKind(gardenLocationKind.parse(event.target.value))
             }
           >
-            <option value="bed">Raised bed</option>
-            <option value="tray">Seed tray</option>
-            <option value="other">Other growing area</option>
+            <option value="bed">{gardenStrings.location.kindLabel.bed}</option>
+            <option value="tray">
+              {gardenStrings.location.kindLabel.tray}
+            </option>
+            <option value="other">
+              {gardenStrings.location.kindLabel.other}
+            </option>
           </NativeSelect>
         </Stack>
         {!location && !existing && (
           <GardenPicker
             entity="location"
-            label="Parent location (optional)"
+            label={gardenStrings.location.parentField}
             value={parent}
             onChange={setParent}
           />
         )}
         <GardenNotes
-          label="Growing conditions and preferences"
+          label={gardenStrings.location.conditionsField}
           value={conditions}
           onChange={setConditions}
         />

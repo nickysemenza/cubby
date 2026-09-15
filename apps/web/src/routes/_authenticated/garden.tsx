@@ -12,7 +12,12 @@ export const Route = createFileRoute("/_authenticated/garden")({
 });
 function GardenPage() {
   return (
-    <Page variant="list" title="Garden" eyebrow="House" decoration="none">
+    <Page
+      variant="list"
+      title="Garden"
+      listChrome="workbench"
+      mobileTitleVisible
+    >
       <GardenHome />
     </Page>
   );

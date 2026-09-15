@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { Stack } from "~/components/layout";
+import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { entityMutation } from "~/entities/entity-mutation.functions";
@@ -31,6 +32,7 @@ import {
   type GardenPhotoDraft,
 } from "./garden-photos";
 import { GardenPicker } from "./garden-picker";
+import { gardenStrings } from "./garden-strings";
 import { garden } from "./garden.functions";
 
 const nullable = (text: string) => text.trim() || null;
@@ -153,11 +155,13 @@ export function PlantingForm({
   location,
   onSaved,
   onCancel,
+  loadOptions,
 }: {
   planting?: PlantingOut;
   location?: { id: string; name: string };
   onSaved: () => void;
   onCancel: () => void;
+  loadOptions?: typeof garden.options;
 }) {
   const queryClient = useQueryClient();
   const [inLocationSince, setInLocationSince] = useState("");
@@ -204,6 +208,11 @@ export function PlantingForm({
   // Photo capture only applies to a NEW planting — an existing one manages its
   // gallery from the detail page's Photos section (`EntityPhotosSection`).
   const [photos, setPhotos] = useState<GardenPhotoDraft[]>([]);
+  const isGrowing = status === "growing";
+  // A new planting needs a crop always, and a current location only when it's
+  // already growing (a planned one has no current location yet — just an
+  // intended destination).
+  const missingRequired = !resolvedCrop || (!planting && isGrowing && !place);
   // The form coordinates a source relationship and planting write; failures remain inline.
   const save = useMutation({
     meta: { invalidates: ripple.garden },
@@ -281,7 +290,9 @@ export function PlantingForm({
       <Stack gap="lg">
         <GardenPicker
           entity="ingredient"
-          label="Crop"
+          label={gardenStrings.planting.cropField}
+          required
+          loadOptions={loadOptions}
           value={
             cropDetail.data
               ? item(cropDetail.data.id, cropDetail.data.name)
@@ -299,20 +310,14 @@ export function PlantingForm({
               checked={rememberSource}
               onChange={(event) => setRememberSource(event.target.checked)}
             />
-            Remember that this product grows this crop
+            {gardenStrings.planting.rememberSourceLabel}
           </label>
         )}
         {!planting && (
-          <GardenPicker
-            entity="location"
-            label="Growing location"
-            value={place}
-            onChange={setPlace}
-          />
-        )}
-        {!planting && (
           <Stack gap="sm">
-            <label htmlFor="planting-status">Planting state</label>
+            <Label htmlFor="planting-status">
+              {gardenStrings.planting.stateField}
+            </Label>
             <NativeSelect
               id="planting-status"
               value={status}
@@ -322,34 +327,47 @@ export function PlantingForm({
                 )
               }
             >
-              <option value="growing">Already growing</option>
-              <option value="planned">Plan for later</option>
+              <option value="growing">
+                {gardenStrings.planting.stateGrowing}
+              </option>
+              <option value="planned">
+                {gardenStrings.planting.statePlanned}
+              </option>
             </NativeSelect>
           </Stack>
         )}
+        {!planting && isGrowing && (
+          <GardenPicker
+            entity="location"
+            label={gardenStrings.planting.locationField}
+            required
+            value={place}
+            onChange={setPlace}
+            loadOptions={loadOptions}
+          />
+        )}
         <details>
           <summary className="cursor-pointer text-sm font-medium">
-            Dates and other details (optional)
+            {gardenStrings.planting.datesDetailsSummary}
           </summary>
           <Stack gap="md" className="pt-4">
-            {!planting && status === "growing" && (
+            {!planting && isGrowing && (
               <Stack gap="sm">
                 <GardenField
-                  label="In this location since"
+                  label={gardenStrings.planting.inLocationSinceField}
                   type="date"
                   value={inLocationSince}
                   onChange={setInLocationSince}
                 />
                 <p className="text-sm text-muted-foreground">
-                  Optional. This confirms which older bed photos belong in the
-                  journal. Leave blank to record presence from today without
-                  guessing an earlier date.
+                  {gardenStrings.planting.inLocationSinceHelp}
                 </p>
               </Stack>
             )}
             <GardenPicker
               entity="product"
-              label="Seed packet or plant (optional)"
+              label={gardenStrings.planting.sourceField}
+              loadOptions={loadOptions}
               value={
                 sourceDetail.data
                   ? item(sourceDetail.data.id, sourceDetail.data.name)
@@ -359,7 +377,8 @@ export function PlantingForm({
             />
             <GardenPicker
               entity="location"
-              label="Intended destination"
+              label={gardenStrings.planting.intendedDestinationField}
+              loadOptions={loadOptions}
               value={
                 destinationDetail.data
                   ? item(destinationDetail.data.id, destinationDetail.data.name)
@@ -368,42 +387,42 @@ export function PlantingForm({
               onChange={setDestination}
             />
             <GardenField
-              label="Variety"
+              label={gardenStrings.planting.varietyField}
               value={variety}
               onChange={setVariety}
             />
             <GardenField
-              label="Approximate quantity"
+              label={gardenStrings.planting.quantityField}
               value={quantity}
               onChange={setQuantity}
-              placeholder="A few seedlings"
+              placeholder={gardenStrings.planting.quantityPlaceholder}
             />
             <GardenField
-              label="Planned window"
+              label={gardenStrings.planting.plannedWindowField}
               value={plannedWindow}
               onChange={setPlannedWindow}
-              placeholder="Early autumn"
+              placeholder={gardenStrings.planting.plannedWindowPlaceholder}
             />
             <GardenField
-              label="Planned date"
+              label={gardenStrings.planting.plannedDateField}
               type="date"
               value={plannedDate}
               onChange={setPlannedDate}
             />
             <GardenField
-              label="Sowed on"
+              label={gardenStrings.planting.sowedOnField}
               type="date"
               value={sowedOn}
               onChange={setSowedOn}
             />
             <GardenField
-              label="Transplanted on"
+              label={gardenStrings.planting.transplantedOnField}
               type="date"
               value={transplantedOn}
               onChange={setTransplantedOn}
             />
             <p className="text-sm text-muted-foreground">
-              Leave dates blank when you don’t know them.
+              {gardenStrings.planting.datesHelp}
             </p>
           </Stack>
         </details>
@@ -411,20 +430,22 @@ export function PlantingForm({
         {resolvedCrop && (
           <details>
             <summary className="cursor-pointer text-sm font-medium">
-              Local planting guide
+              {gardenStrings.planting.guideSummary}
             </summary>
             <Stack gap="md" className="pt-4">
               {guides.data && (
                 <Stack gap="sm">
-                  <label htmlFor="garden-guide-key">
-                    Guide for this ingredient
-                  </label>
+                  <Label htmlFor="garden-guide-key">
+                    {gardenStrings.planting.guideFieldLabel}
+                  </Label>
                   <NativeSelect
                     id="garden-guide-key"
                     value={guideKey}
                     onChange={(event) => setGuideSelection(event.target.value)}
                   >
-                    <option value="">No guide linked</option>
+                    <option value="">
+                      {gardenStrings.planting.guideNoneOption}
+                    </option>
                     {guides.data.guides.map((guide) => (
                       <option key={guide.key} value={guide.key}>
                         {guide.name}
@@ -442,13 +463,19 @@ export function PlantingForm({
             photos={photos}
             onChange={setPhotos}
             disabled={save.isPending}
+            description={gardenStrings.photos.plantingHelp}
           />
         )}
         <GardenFormActions
           pending={save.isPending}
           error={error}
           onCancel={onCancel}
-          label={planting ? "Save changes" : "Add planting"}
+          disabled={missingRequired}
+          label={
+            planting
+              ? gardenStrings.common.saveLabel
+              : gardenStrings.planting.submitAdd
+          }
         />
       </Stack>
     </form>

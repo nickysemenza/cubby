@@ -7,14 +7,18 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import type { z } from "zod";
 
+import { formatDate } from "~/app/projects/project-formatting";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button, buttonVariants } from "~/components/ui/button";
+import { Card } from "~/components/ui/card";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { getErrorMessage } from "~/lib/error-utils";
 import { householdLocalDate } from "~/lib/household-date";
+import { countLabel } from "~/lib/pluralize";
+import { cn } from "~/lib/utils";
 
 import { EntryForm } from "./entry-form";
 import {
@@ -22,43 +26,75 @@ import {
   GardenDialogFooterSlot,
   GardenField,
   GardenFormActions,
+  GardenNotes,
 } from "./garden-fields";
+import { gardenStrings } from "./garden-strings";
 import { garden } from "./garden.functions";
 import { GardenLocationForm, type GardenLocation } from "./location-form";
 import { PlantingForm } from "./planting-form";
 
 type OverviewPlanting = z.infer<typeof gardenPlantingOut>;
+const plantingStateLabel = {
+  growing: gardenStrings.planting.stateGrowing,
+  planned: gardenStrings.planting.statePlanned,
+  finished: gardenStrings.planting.stateFinished,
+} as const;
 type HomeDialog =
   | { kind: "location"; location?: GardenLocation }
   | { kind: "planting"; location?: GardenLocation }
   | { kind: "entry"; location: GardenLocation }
   | { kind: "finish"; plantings: OverviewPlanting[] };
 
+const productionHomeOperations = {
+  overview: garden.overview,
+  finishPlanting: garden.finishPlanting,
+};
+
 function FinishSelected({
   plantings,
   onSaved,
   onCancel,
+  finishPlanting = garden.finishPlanting,
 }: {
   plantings: OverviewPlanting[];
   onSaved: () => void;
   onCancel: () => void;
+  finishPlanting?: typeof garden.finishPlanting;
 }) {
   const [date, setDate] = useState(householdLocalDate);
+  const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Persists across a retry so a resubmit only reattempts plantings that
+  // actually failed, rather than re-finishing ones that already succeeded.
   const [completed] = useState(() => new Set<string>());
   const save = useMutation({
     meta: { invalidates: ripple.garden },
     mutationFn: async () => {
+      const failed: string[] = [];
+      // Every planting is attempted — a mid-batch failure no longer aborts
+      // the rest — and the per-item outcomes are aggregated into one report.
       for (const planting of plantings) {
         if (completed.has(planting.id)) continue;
-        await garden.finishPlanting.call(
-          gardenFinishPlantingInput.parse({
-            plantingId: planting.id,
-            finishedOn: date,
-          }),
-        );
-        completed.add(planting.id);
+        try {
+          await finishPlanting.call(
+            gardenFinishPlantingInput.parse({
+              plantingId: planting.id,
+              finishedOn: date,
+              note: note.trim() || null,
+            }),
+          );
+          completed.add(planting.id);
+        } catch {
+          failed.push(planting.ingredientName);
+        }
       }
+      if (failed.length > 0)
+        throw new Error(
+          `${gardenStrings.home.finishPartialReport(
+            countLabel(completed.size, "planting"),
+            countLabel(plantings.length, "planting"),
+          )} Couldn't finish: ${failed.join(", ")}.`,
+        );
     },
     onSuccess: onSaved,
     onError: (error) => setError(getErrorMessage(error)),
@@ -68,27 +104,29 @@ function FinishSelected({
       id={GARDEN_DIALOG_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
+        setError(null);
         save.mutate();
       }}
     >
       <Stack gap="lg">
-        <p>
-          Finish{" "}
-          {plantings.map((planting) => planting.ingredientName).join(", ")}.
-          Other plantings stay active.
-        </p>
         <GardenField
-          label="Finished on"
+          label={gardenStrings.planting.dateField}
           value={date}
           onChange={setDate}
           type="date"
           required
         />
+        <GardenNotes value={note} onChange={setNote} />
+        <p className="text-sm text-muted-foreground">
+          {gardenStrings.planting.finishExplanation}
+        </p>
         <GardenFormActions
           pending={save.isPending}
           error={error}
           onCancel={onCancel}
-          label={`Finish ${plantings.length} plantings`}
+          label={gardenStrings.home.finishSubmit(
+            countLabel(plantings.length, "planting"),
+          )}
         />
       </Stack>
     </form>
@@ -134,12 +172,15 @@ function PlantingRow({
               : planting.sowedOn
                 ? `Sowed ${planting.sowedOn}`
                 : null,
+            planting.transplantedOn
+              ? `Transplanted ${formatDate(planting.transplantedOn)}`
+              : null,
           ]
             .filter(Boolean)
             .join(" · ") || "Dates not recorded"}
         </p>
       </Stack>
-      <Badge variant="secondary">{planting.status}</Badge>
+      <Badge variant="secondary">{plantingStateLabel[planting.status]}</Badge>
     </Row>
   );
 }
@@ -147,20 +188,26 @@ function PlantingRow({
 function homeDialogTitle(dialog: HomeDialog | null) {
   const dialogTitle =
     dialog?.kind === "location"
-      ? "Garden location"
+      ? dialog.location
+        ? gardenStrings.location.editTitle
+        : gardenStrings.location.addTitle
       : dialog?.kind === "planting"
-        ? "Add planting"
+        ? gardenStrings.planting.addTitle
         : dialog?.kind === "entry"
-          ? "Log an entry"
+          ? gardenStrings.home.logEntry
           : dialog?.kind === "finish"
-            ? "Finish selected plantings"
+            ? gardenStrings.home.finishDialogTitle
             : "Location history";
   return dialogTitle;
 }
 
-export function GardenHome() {
+export function GardenHome({
+  operations = productionHomeOperations,
+}: {
+  operations?: typeof productionHomeOperations;
+}) {
   const queryClient = useQueryClient();
-  const overview = useQuery(garden.overview.queryOptions(undefined));
+  const overview = useQuery(operations.overview.queryOptions(undefined));
   const [dialog, setDialog] = useState<HomeDialog | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const onSaved = () => {
@@ -173,9 +220,11 @@ export function GardenHome() {
     return (
       <Stack gap="md">
         <p role="alert">
-          Could not load the garden: {getErrorMessage(overview.error)}
+          {gardenStrings.home.loadFailed}: {getErrorMessage(overview.error)}
         </p>
-        <Button onClick={() => void overview.refetch()}>Retry</Button>
+        <Button onClick={() => void overview.refetch()}>
+          {gardenStrings.common.retry}
+        </Button>
       </Stack>
     );
   const selectedPlantings = overview.data.locations
@@ -186,13 +235,13 @@ export function GardenHome() {
     <Stack gap="lg">
       <Row gap="sm" wrap>
         <Button onClick={() => setDialog({ kind: "planting" })}>
-          Add planting
+          {gardenStrings.home.addPlanting}
         </Button>
         <Button
           variant="outline"
           onClick={() => setDialog({ kind: "location" })}
         >
-          Add bed or tray
+          {gardenStrings.home.addLocation}
         </Button>
         {selectedPlantings.length > 0 && (
           <Button
@@ -201,44 +250,44 @@ export function GardenHome() {
               setDialog({ kind: "finish", plantings: selectedPlantings })
             }
           >
-            Finish selected ({selectedPlantings.length})
+            {gardenStrings.home.finishSelected(selectedPlantings.length)}
           </Button>
         )}
+        <Link
+          to="/garden-entries"
+          className={cn(
+            buttonVariants({ variant: "ghost" }),
+            "max-sm:min-h-11",
+          )}
+        >
+          {gardenStrings.home.allEntries}
+        </Link>
       </Row>
       {overview.data.locations.length === 0 && (
         <Stack gap="md">
           <h2 className="text-lg font-semibold">
-            Start with what’s growing today
+            {gardenStrings.home.emptyTitle}
           </h2>
-          <p>
-            Add a bed, tray, or growing area, then record your crops. Leave
-            unknown dates blank.
-          </p>
+          <p>{gardenStrings.home.emptyBody}</p>
         </Stack>
       )}
-      {overview.data.unassigned.length > 0 && (
-        <section>
-          <h2 className="text-lg font-semibold">Location to choose</h2>
-          {overview.data.unassigned.map((planting) => (
-            <PlantingRow key={planting.id} planting={planting} />
-          ))}
-        </section>
-      )}
       {overview.data.locations.map((location) => (
-        <section key={location.id} className="rounded-lg border bg-card p-4">
+        <Card key={location.id} className="p-4">
           <Stack gap="md">
             <Row gap="sm" justify="between" align="center" wrap>
               <h2 className="text-lg font-semibold">
                 <Link
                   to="/locations/$shortcode"
                   params={{ shortcode: location.id }}
-                  className="hover:underline"
+                  className="flex min-h-11 items-center hover:underline max-sm:min-h-11"
                 >
                   {location.name}
                 </Link>
               </h2>
               <Badge variant="secondary">
-                {location.gardenKind ?? "Growing area"}
+                {location.gardenKind
+                  ? gardenStrings.location.kindLabel[location.gardenKind]
+                  : gardenStrings.location.kindField}
               </Badge>
             </Row>
             {location.gardenConditions && (
@@ -248,7 +297,7 @@ export function GardenHome() {
             )}
             {location.plantings.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No current or planned plantings.
+                {gardenStrings.home.noPlantingsInLocation}
               </p>
             ) : (
               <div>
@@ -273,45 +322,56 @@ export function GardenHome() {
                 variant="outline"
                 onClick={() => setDialog({ kind: "planting", location })}
               >
-                Add planting
+                {gardenStrings.home.addPlanting}
               </Button>
               <Button
                 variant="outline"
                 onClick={() => setDialog({ kind: "entry", location })}
               >
-                Note, photos, or harvest
+                {gardenStrings.home.logEntry}
               </Button>
               <Link
                 to="/garden-entries"
                 search={{ locationId: location.id }}
-                className={buttonVariants({ variant: "ghost" })}
+                className={cn(
+                  buttonVariants({ variant: "ghost" }),
+                  "max-sm:min-h-11",
+                )}
               >
-                Bed journal
+                {gardenStrings.home.bedJournal}
               </Link>
               <Button
                 variant="ghost"
                 onClick={() => setDialog({ kind: "location", location })}
               >
-                Edit conditions
+                {gardenStrings.home.editConditions}
               </Button>
             </Row>
           </Stack>
-        </section>
+        </Card>
       ))}
-      <details>
-        <summary className="cursor-pointer py-3 font-medium">
-          Finished plantings ({overview.data.finished.length})
-        </summary>
-        {overview.data.finished.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Finished plantings will stay here with their history.
-          </p>
-        ) : (
-          overview.data.finished.map((planting) => (
+      {overview.data.unassigned.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold">
+            {gardenStrings.location.noLocationYet}
+          </h2>
+          {overview.data.unassigned.map((planting) => (
             <PlantingRow key={planting.id} planting={planting} />
-          ))
-        )}
-      </details>
+          ))}
+        </section>
+      )}
+      {overview.data.finished.length > 0 && (
+        <details>
+          <summary className="cursor-pointer py-3 font-medium">
+            {gardenStrings.home.finishedPlantingsSummary(
+              overview.data.finished.length,
+            )}
+          </summary>
+          {overview.data.finished.map((planting) => (
+            <PlantingRow key={planting.id} planting={planting} />
+          ))}
+        </details>
+      )}
       {dialog && (
         <ResponsiveDialog
           open
@@ -348,6 +408,7 @@ export function GardenHome() {
               plantings={dialog.plantings}
               onSaved={onSaved}
               onCancel={() => setDialog(null)}
+              finishPlanting={operations.finishPlanting}
             />
           )}
         </ResponsiveDialog>

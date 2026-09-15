@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
 
+import { productGardenSection } from "~/app/garden/garden-seam-sections";
 import { Row, Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -248,6 +249,10 @@ export const ProductDetail: FC<ProductDetailProps> = ({ product }) => {
         />
       ),
     }),
+    // Custom section: Garden (only when this product grows an ingredient via
+    // `growsIngredientId`) — see `garden-seam-sections.tsx`. Every other
+    // product's page never mentions the garden.
+    ...productGardenSection(product),
     {
       id: "relationships",
       title: "Relationships",

@@ -1,9 +1,9 @@
-import { plantingShortcode } from "@cubby/schemas/identifiers";
 import type { PlantingOut } from "@cubby/schemas/planting";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { formatDateWithYear } from "~/app/projects/project-formatting";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -18,14 +18,14 @@ import {
 } from "./garden-fields";
 import { garden } from "./garden.functions";
 
-const historyOperations = {
-  locationHistory: garden.locationHistory,
-  correctLocationDates: garden.correctLocationDates,
-};
-
-type Periods = Awaited<
+/** The shape `PlantingDetail` loads once (via `garden.locationHistory`) and
+ * passes down as `periods` — this component no longer queries on its own, so
+ * a single load also feeds the journal's "confirm location dates" hint and
+ * the top-level Actions menu's "Correct location dates" item. */
+export type PlantingLocationPeriods = Awaited<
   ReturnType<typeof garden.locationHistory.call>
 >["periods"];
+type Periods = PlantingLocationPeriods;
 
 function reviseBoundary(
   periods: Periods,
@@ -84,8 +84,8 @@ function LocationDatesForm({
     >
       <Stack gap="lg">
         <p className="text-sm text-muted-foreground">
-          Record only dates you know. These dates determine which whole-bed
-          photos appear in this planting’s journal. They are separate from when
+          Record only dates you know. These dates determine which whole-area
+          entries appear in this planting’s journal. They are separate from when
           seeds were sown.
         </p>
         {dates.map((period) => (
@@ -144,36 +144,37 @@ function LocationDatesForm({
 export function PlantingLocationHistory({
   planting,
   locationName,
-  operations = historyOperations,
+  periods,
+  correctLocationDates = garden.correctLocationDates,
+  onSaved,
+  open,
+  onOpenChange,
 }: {
   planting: PlantingOut;
   locationName?: string;
-  operations?: typeof historyOperations;
+  /** Loaded by the caller (`PlantingDetail`) — see {@link PlantingLocationPeriods}. */
+  periods: Periods;
+  correctLocationDates?: typeof garden.correctLocationDates;
+  /** Called after dates save, so the owner of the `periods` query can refetch it. */
+  onSaved?: () => void;
+  /**
+   * Controlled dialog-open state, so the planting's top-level Actions menu
+   * ("Correct location dates") can open the exact same dialog this
+   * component's own button opens. Uncontrolled (a local `useState`) when
+   * omitted, e.g. under test in isolation.
+   */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const plantingId = planting.id;
-  const history = useQuery(
-    operations.locationHistory.queryOptions({
-      plantingId: plantingShortcode.parse(plantingId),
-    }),
-  );
-  const [editing, setEditing] = useState(false);
-  if (history.isPending) return <p>Loading location history…</p>;
-  if (history.isError)
-    return (
-      <Stack gap="sm">
-        <p role="alert">
-          Could not load location history: {getErrorMessage(history.error)}
-        </p>
-        <Button variant="outline" onClick={() => void history.refetch()}>
-          Retry
-        </Button>
-      </Stack>
-    );
+  const [internalEditing, setInternalEditing] = useState(false);
+  const editing = open ?? internalEditing;
+  const setEditing = onOpenChange ?? setInternalEditing;
   const canConfirm =
     planting.status !== "planned" && planting.locationId !== null;
   const initialPeriods: Periods =
-    history.data.periods.length > 0
-      ? history.data.periods
+    periods.length > 0
+      ? periods
       : canConfirm && planting.locationId
         ? [
             {
@@ -189,16 +190,18 @@ export function PlantingLocationHistory({
             },
           ]
         : [];
+  const ctaLabel =
+    periods.length > 0 ? "Correct location dates" : "Confirm location dates";
   return (
     <Stack gap="md">
-      {history.data.periods.length === 0 && (
+      {periods.length === 0 && (
         <p className="text-sm text-muted-foreground">
           {canConfirm
-            ? "Earlier presence is unknown. Confirm when this planting was here to include matching bed photos."
+            ? "Earlier presence is unknown. Confirm when this planting was here to include matching whole-area entries."
             : "No confirmed location dates yet. Starting a planting records its first location."}
         </p>
       )}
-      {history.data.periods.map((period) => (
+      {periods.map((period) => (
         <Stack key={period.sequence} gap="xs">
           <Link
             to="/locations/$shortcode"
@@ -209,13 +212,15 @@ export function PlantingLocationHistory({
           </Link>
           <p className="text-sm">
             {period.startKind === "recorded" ? "Recorded here " : "Here since "}
-            {period.inLocationSince}
-            {period.endedOn ? ` · Last day ${period.endedOn}` : " · Still here"}
+            {formatDateWithYear(period.inLocationSince)}
+            {period.endedOn
+              ? ` · Last day ${formatDateWithYear(period.endedOn)}`
+              : " · Still here"}
           </p>
           {period.startKind === "recorded" && (
             <p className="text-sm text-muted-foreground">
               Earlier dates are unknown. Add a confirmed date to include older
-              bed photos.
+              whole-area entries.
             </p>
           )}
         </Stack>
@@ -223,20 +228,14 @@ export function PlantingLocationHistory({
       {initialPeriods.length > 0 && (
         <Row>
           <Button variant="outline" onClick={() => setEditing(true)}>
-            {history.data.periods.length > 0
-              ? "Correct location dates"
-              : "Confirm location dates"}
+            {ctaLabel}
           </Button>
         </Row>
       )}
       {editing && (
         <ResponsiveDialog
           open
-          title={
-            history.data.periods.length > 0
-              ? "Correct location dates"
-              : "Confirm location dates"
-          }
+          title={ctaLabel}
           size="lg"
           onOpenChange={setEditing}
           footer={<GardenDialogFooterSlot />}
@@ -244,11 +243,11 @@ export function PlantingLocationHistory({
           <LocationDatesForm
             plantingId={plantingId}
             periods={initialPeriods}
-            correctLocationDates={operations.correctLocationDates}
+            correctLocationDates={correctLocationDates}
             onCancel={() => setEditing(false)}
             onSaved={() => {
               setEditing(false);
-              void history.refetch();
+              onSaved?.();
             }}
           />
         </ResponsiveDialog>

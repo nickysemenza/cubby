@@ -10,6 +10,7 @@ import { useRef, useState } from "react";
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import EntityImageList from "~/app/_components/EntityImageList";
 import { Stack } from "~/components/layout";
+import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { entityMutation } from "~/entities/entity-mutation.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
@@ -25,9 +26,11 @@ import {
 } from "./garden-fields";
 import {
   GardenPhotos,
+  gardenEntryKindLabel,
   uploadGardenPhotos,
   type GardenPhotoDraft,
 } from "./garden-photos";
+import { gardenStrings } from "./garden-strings";
 import { garden } from "./garden.functions";
 
 const productionOperations = {
@@ -42,6 +45,54 @@ function initialEntryFields(entry?: GardenEntryOut) {
     harvestAmount: entry?.harvestAmount ?? "",
   };
 }
+
+type EntryFieldValues = {
+  locationId: string | undefined;
+  plantingId: string | null;
+  kind: GardenEntryOut["kind"];
+  observedOn: string;
+  note: string | null;
+  harvestAmount: string | null;
+};
+
+/**
+ * A `move` entry, and the anchor entry `startPlanting` writes when a planting
+ * first enters a location, are structural: their location, planting, date,
+ * and kind are corrected only through location history, never through this
+ * form. See `assertGardenEntryStructure` in `server/repo/garden/index.ts`.
+ */
+function isEntryLocked(entry: GardenEntryOut | undefined): boolean {
+  return entry?.kind === "move" || Boolean(entry?.anchorsPeriod);
+}
+
+function entryDateLabel(kind: GardenEntryOut["kind"]): string {
+  return kind === "harvest"
+    ? gardenStrings.entry.harvestDateField
+    : gardenStrings.entry.dateField;
+}
+
+/**
+ * Only fields the user actually changed go in an update patch — the server
+ * treats an omitted (`undefined`) key as untouched, which is what keeps a
+ * locked `move`/anchor entry's location, planting, date, and kind intact even
+ * though this form always recomputes every field's current value.
+ */
+function changedEntryFields(
+  entry: GardenEntryOut,
+  next: EntryFieldValues,
+): Partial<EntryFieldValues> {
+  const patch: Partial<EntryFieldValues> = {};
+  if (next.locationId !== entry.locationId) patch.locationId = next.locationId;
+  if (next.plantingId !== (entry.plantingId ?? null))
+    patch.plantingId = next.plantingId;
+  if (next.kind !== entry.kind) patch.kind = next.kind;
+  if (next.observedOn !== entry.observedOn) patch.observedOn = next.observedOn;
+  if (next.note !== (entry.note ?? null)) patch.note = next.note;
+  if (next.harvestAmount !== (entry.harvestAmount ?? null))
+    patch.harvestAmount = next.harvestAmount;
+  return patch;
+}
+
 export function EntryForm({
   locationId,
   plantingId,
@@ -76,12 +127,14 @@ export function EntryForm({
   const [error, setError] = useState<string | null>(null);
   const [removedImages, setRemovedImages] = useState<string[]>([]);
   const saving = useRef(false);
-  const isMove = entry?.kind === "move";
+  const locked = isEntryLocked(entry);
+  const dateLabel = entryDateLabel(kind);
+  const kindOptionId = "garden-entry-kind";
   // Saving the batch is deliberately sequential: failed uploads leave both the form and completed uploads intact.
   const save = useMutation({
     meta: { invalidates: ripple.garden },
     mutationFn: async () => {
-      const data = {
+      const nextValues: EntryFieldValues = {
         locationId: place?.id,
         plantingId: crop?.id ?? null,
         kind,
@@ -99,14 +152,14 @@ export function EntryForm({
           action: "update",
           id: entry.id,
           data: gardenEntryUpdateData.parse({
-            ...data,
+            ...changedEntryFields(entry, nextValues),
             pendingImageIds,
             removeImageIds: removedImages.map((id) => imageShortcode.parse(id)),
           }),
         });
       } else {
         await operations.recordEntry.call(
-          gardenRecordEntryInput.parse({ ...data, pendingImageIds }),
+          gardenRecordEntryInput.parse({ ...nextValues, pendingImageIds }),
         );
       }
     },
@@ -133,46 +186,49 @@ export function EntryForm({
           planting={crop}
           onLocationChange={setPlace}
           onPlantingChange={setCrop}
-          disabled={save.isPending || isMove}
+          disabled={save.isPending || locked}
           loadOptions={loadOptions}
         />
         <Stack gap="sm">
-          <label htmlFor="garden-entry-kind">Entry type</label>
+          <Label htmlFor={kindOptionId}>{gardenStrings.entry.kindField}</Label>
           <NativeSelect
-            id="garden-entry-kind"
+            id={kindOptionId}
             value={kind}
             onChange={(event) =>
               setKind(
                 event.target.value === "harvest" ? "harvest" : "observation",
               )
             }
-            disabled={save.isPending || isMove}
+            disabled={save.isPending || locked}
           >
-            <option value="observation">Note or photos</option>
-            <option value="harvest">Harvest</option>
-            {isMove && <option value="move">Move</option>}
+            <option value="observation">
+              {gardenEntryKindLabel("observation")}
+            </option>
+            <option value="harvest">{gardenEntryKindLabel("harvest")}</option>
+            {locked && entry?.kind === "move" && (
+              <option value="move">{gardenEntryKindLabel("move")}</option>
+            )}
           </NativeSelect>
         </Stack>
         <GardenField
-          label="Observation date"
+          label={dateLabel}
           type="date"
           value={observedOn}
           onChange={setObservedOn}
           required
-          disabled={save.isPending || isMove}
+          disabled={save.isPending || locked}
         />
-        {isMove && (
+        {locked && (
           <p className="text-sm text-muted-foreground">
-            Correct move dates in the planting’s location history so its journal
-            stays consistent.
+            {gardenStrings.entry.moveLockedHint}
           </p>
         )}
         {kind === "harvest" && (
           <GardenField
-            label="Harvest amount (optional)"
+            label={gardenStrings.entry.harvestAmountField}
             value={harvestAmount}
             onChange={setHarvestAmount}
-            placeholder="A handful, 6 tomatoes, 300 g…"
+            placeholder={gardenStrings.entry.harvestAmountPlaceholder}
             disabled={save.isPending}
           />
         )}
@@ -199,12 +255,13 @@ export function EntryForm({
           photos={photos}
           onChange={setPhotos}
           disabled={save.isPending}
+          description={gardenStrings.photos.entryHelp}
         />
         <GardenFormActions
           pending={save.isPending}
           error={error}
           onCancel={onCancel}
-          label={entry ? "Save changes" : "Save entry"}
+          label={gardenStrings.common.saveLabel}
         />
       </Stack>
     </form>

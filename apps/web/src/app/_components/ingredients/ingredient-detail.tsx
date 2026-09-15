@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { type FC, useCallback, useState } from "react";
 
+import { ingredientGardenSection } from "~/app/garden/garden-seam-sections";
 import { Stack } from "~/components/layout";
 import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
@@ -102,6 +103,10 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         />
       ),
     }),
+    // Custom section: Garden (only when a garden guide key is set) — see
+    // `garden-seam-sections.tsx`. Every other ingredient's page never
+    // mentions the garden.
+    ...ingredientGardenSection(ingredient),
     // Custom section: Nutrition (only if available) — see nutritionProduct
     // above for which product supplies both the nutrients and the price.
     ...(nutritionNutrients && nutritionProduct

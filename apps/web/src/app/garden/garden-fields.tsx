@@ -10,6 +10,8 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 
+import { gardenStrings } from "./garden-strings";
+
 export function GardenField({
   label,
   value,
@@ -47,7 +49,7 @@ export function GardenField({
 export function GardenNotes({
   value,
   onChange,
-  label = "Notes",
+  label = gardenStrings.common.notesField,
   disabled = false,
 }: {
   value: string;
@@ -107,12 +109,15 @@ export function GardenFormActions({
   pending,
   error,
   onCancel,
-  label = "Save",
+  label = gardenStrings.common.saveLabel,
+  disabled = false,
 }: {
   pending: boolean;
   error: string | null;
   onCancel: () => void;
   label?: string;
+  /** Disables the submit button independent of `pending` — e.g. required fields not yet chosen. */
+  disabled?: boolean;
 }) {
   const [target, setTarget] = useState<HTMLElement | null>(null);
   useLayoutEffect(() => {
@@ -123,6 +128,7 @@ export function GardenFormActions({
     error,
     onCancel,
     submitLabel: label,
+    submitDisabled: disabled,
     form: target ? GARDEN_DIALOG_FORM_ID : undefined,
   };
   const actions = <DialogFormActions {...props} />;
