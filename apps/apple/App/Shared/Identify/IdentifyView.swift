@@ -14,7 +14,7 @@ struct IdentifyView: View {
             if let identify {
                 IdentifyContent(identify: identify)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading Identify")
             }
         }
         .porcelainScreen()
@@ -73,7 +73,7 @@ private struct IdentifyContent: View {
                     statusText
                     Spacer(minLength: PorcelainTokens.Space.sm)
                     if case .indexing = identify.phase {
-                        ProgressView().controlSize(.small)
+                        LoadingIndicator(label: "Indexing photos").controlSize(.small)
                     }
                 }
                 .frame(minHeight: PorcelainTokens.touchTarget - 20)

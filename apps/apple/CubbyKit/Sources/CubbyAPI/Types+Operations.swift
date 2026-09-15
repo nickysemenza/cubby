@@ -4471,6 +4471,19 @@ package enum Operations {
     package enum Garden_options {
         package static let id: Swift.String = "garden.options"
         package struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/garden/options/GET/query`.
+            package struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/garden/options/GET/query/search`.
+                package var search: Swift.String?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - search:
+                package init(search: Swift.String? = nil) {
+                    self.search = search
+                }
+            }
+            package var query: Operations.Garden_options.Input.Query
             /// - Remark: Generated from `#/paths/api/v1/garden/options/GET/header`.
             package struct Headers: Sendable, Hashable {
                 package var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.Garden_options.AcceptableContentType>]
@@ -4486,8 +4499,13 @@ package enum Operations {
             /// Creates a new `Input`.
             ///
             /// - Parameters:
+            ///   - query:
             ///   - headers:
-            package init(headers: Operations.Garden_options.Input.Headers = .init()) {
+            package init(
+                query: Operations.Garden_options.Input.Query = .init(),
+                headers: Operations.Garden_options.Input.Headers = .init()
+            ) {
+                self.query = query
                 self.headers = headers
             }
         }
@@ -16387,6 +16405,8 @@ package enum Operations {
                     case financialTransaction = "financialTransaction"
                     case wish = "wish"
                     case expense = "expense"
+                    case planting = "planting"
+                    case gardenEntry = "gardenEntry"
                 }
                 /// - Remark: Generated from `#/paths/api/v1/search/find/GET/query/entityTypes`.
                 package typealias EntityTypesPayload = [Operations.Search_find.Input.Query.EntityTypesPayloadPayload]

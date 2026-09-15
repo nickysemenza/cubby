@@ -9,11 +9,12 @@ struct IntentSurfaceTests {
     static let searchableTypes: Set<String> = [
         "product", "recipe", "ingredient", "cookbook", "location", "inventory", "meal", "project",
         "task", "vendor", "purchase", "financialAccount", "financialTransaction", "wish", "expense",
+        "planting", "gardenEntry",
     ]
 
     @Test func exposedEntitiesAreSearchableFetchableAndPrefixed() {
         let exposed = EntityCatalog.intentExposed
-        #expect(exposed.count == 14)
+        #expect(exposed.count == 16)
         #expect(
             exposed.allSatisfy {
                 $0.shortcodePrefix != nil && $0.actions.contains(.get) && $0.actions.contains(.search)

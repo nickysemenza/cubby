@@ -512,12 +512,14 @@ const entityDefinitions = withEntityNames({
   },
   planting: {
     ...generatedBrowserRoutes.planting,
-    color: INK.positive,
+    // House domain, matching project's ink — plantings and garden entries are
+    // household work like projects/tasks, not a "positive" pantry-stock signal.
+    color: INK.plum,
     detail: { commonSections: ["history"] },
   },
   gardenEntry: {
     ...generatedBrowserRoutes.gardenEntry,
-    color: INK.positive,
+    color: INK.plum,
     detail: { commonSections: ["images", "history"] },
   },
 } as const) satisfies Record<BrowserRoutedEntity, EntityDefinition>;

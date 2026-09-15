@@ -1,19 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { GardenHome } from "~/app/garden/garden-home";
-import { RouteErrorComponent } from "~/components/lazy-route-error";
-import { Page } from "~/components/page/Page";
-import { pageTitle } from "~/lib/page-title";
-
+// The standalone plantings list is gone — Garden Home (`/garden`) is the
+// single landing page for plantings, growing areas, and journal entries.
+// The route stays (existing links, bookmarks, `routes.list` on the `planting`
+// entity definition) and just forwards visitors to the page that replaced it.
 export const Route = createFileRoute("/_authenticated/plantings/")({
-  component: PlantingsPage,
-  errorComponent: RouteErrorComponent,
-  head: () => ({ meta: [{ title: pageTitle("Plantings") }] }),
+  beforeLoad: () => {
+    throw redirect({ to: "/garden", replace: true });
+  },
 });
-function PlantingsPage() {
-  return (
-    <Page variant="list" title="Plantings" eyebrow="Garden" decoration="none">
-      <GardenHome />
-    </Page>
-  );
-}

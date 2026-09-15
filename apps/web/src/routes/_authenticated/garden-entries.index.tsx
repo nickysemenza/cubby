@@ -5,8 +5,10 @@ import { useState } from "react";
 import { z } from "zod";
 
 import { EntryForm } from "~/app/garden/entry-form";
+import { GardenDialogFooterSlot } from "~/app/garden/garden-fields";
+import { gardenStrings } from "~/app/garden/garden-strings";
 import { GardenTimeline } from "~/app/garden/garden-timeline";
-import { Row, Stack } from "~/components/layout";
+import { Stack } from "~/components/layout";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
@@ -28,32 +30,41 @@ function GardenEntriesPage() {
       enabled: Boolean(locationId),
     }),
   );
+  const areaTitle = location.data
+    ? `${location.data.name} journal`
+    : "Garden journal";
   return (
     <Page
       variant="list"
-      title={location.data ? `${location.data.name} journal` : "Garden journal"}
+      title={areaTitle}
       decoration="none"
-    >
-      <Stack gap="lg">
-        <Row gap="md" wrap align="center">
-          <Link to="/garden" className="text-sm underline">
+      // The breadcrumb is the only way back to the garden on a phone.
+      mobileTitleVisible
+      eyebrow={
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span>House</span>
+          <span aria-hidden className="text-border">
+            /
+          </span>
+          <Link
+            to="/garden"
+            className="transition-colors hover:text-foreground"
+          >
             Garden
           </Link>
-          {locationId && (
-            <>
-              <Link
-                to="/locations/$shortcode"
-                params={{ shortcode: locationId }}
-                className="text-sm underline"
-              >
-                {location.data?.name ?? "Location details"}
-              </Link>
-              <Button onClick={() => setAdding(true)}>
-                Add photos / Log entry
-              </Button>
-            </>
-          )}
-        </Row>
+          <span aria-hidden className="text-border">
+            /
+          </span>
+          <span>{areaTitle}</span>
+        </span>
+      }
+    >
+      <Stack gap="lg">
+        {locationId && (
+          <Button onClick={() => setAdding(true)} className="self-start">
+            {gardenStrings.home.logEntry}
+          </Button>
+        )}
         <GardenTimeline locationId={locationId} />
       </Stack>
       {adding && locationId && (
@@ -62,6 +73,7 @@ function GardenEntriesPage() {
           title="Log garden entry"
           size="lg"
           onOpenChange={setAdding}
+          footer={<GardenDialogFooterSlot />}
         >
           <EntryForm
             locationId={locationId}

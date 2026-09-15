@@ -22,8 +22,9 @@ import {
 import { QuickInventoryAdd } from "~/app/_components/inventory/quick-inventory-add";
 import { LocationFieldWithAI } from "~/app/_components/locations/location-field-with-ai";
 import { product as productOperations } from "~/app/products/product.functions";
-import { Stack } from "~/components/layout";
+import { Row, Stack } from "~/components/layout";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
@@ -135,6 +136,17 @@ export const ProductAddToInventoryDialog: FC<
       size="md"
       title="Add to Inventory"
       description={`Stock "${product.name}" at a location.`}
+      footer={
+        <Row justify="end">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => handleOpenChange(false)}
+          >
+            Done
+          </Button>
+        </Row>
+      }
     >
       <Stack gap="md">
         {overAccounted && (

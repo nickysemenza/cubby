@@ -19,6 +19,7 @@ import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
+import { countLabel } from "~/lib/pluralize";
 import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 
@@ -300,7 +301,11 @@ export function RecipeList({
                     config={{ type: "number" }}
                     clipboard={specFromCellData(servingsCellDataDef, recipe)}
                     renderValue={(servings) =>
-                      servings == null ? <NoneValue /> : `${servings} servings`
+                      servings == null ? (
+                        <NoneValue />
+                      ) : (
+                        countLabel(servings, "serving")
+                      )
                     }
                     onSave={(newValue) => saveServings(recipe, newValue)}
                   />

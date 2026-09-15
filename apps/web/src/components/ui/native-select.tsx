@@ -10,7 +10,7 @@ export function NativeSelect({
     <select
       data-slot="native-select"
       className={cn(
-        "h-11 rounded-md border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35 md:h-9 md:text-xs",
+        "h-11 rounded-md border border-input bg-card px-2.5 text-sm max-sm:text-base outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35 md:h-9 md:text-xs",
         className,
       )}
       {...props}

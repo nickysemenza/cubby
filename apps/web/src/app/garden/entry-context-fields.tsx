@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useId } from "react";
+import { useId, useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { EntityPicker } from "~/app/_components/combobox/entity-picker";
@@ -7,11 +7,12 @@ import { Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 
+import { gardenStrings } from "./garden-strings";
 import { garden } from "./garden.functions";
 
 const wholeLocation = {
   id: "whole-location",
-  name: "Whole bed or growing area",
+  name: gardenStrings.location.wholeArea,
 };
 
 export function EntryContextFields({
@@ -29,7 +30,8 @@ export function EntryContextFields({
   disabled: boolean;
   loadOptions?: typeof garden.options;
 }) {
-  const options = useQuery(loadOptions.queryOptions(undefined));
+  const [search, setSearch] = useState("");
+  const options = useQuery(loadOptions.queryOptions(search ? { search } : {}));
   const locationInput = useId();
   const plantingInput = useId();
   const locations = options.data?.locations ?? [];
@@ -41,23 +43,26 @@ export function EntryContextFields({
   return (
     <Stack gap="md">
       <Stack gap="sm">
-        <Label htmlFor={locationInput}>Location where this happened</Label>
+        <Label htmlFor={locationInput}>
+          {gardenStrings.entry.locationField}
+        </Label>
         <EntityPicker
           inputId={locationInput}
           entity="location"
-          label="Location where this happened"
+          label={gardenStrings.entry.locationField}
           items={locations}
           value={resolvedLocation}
           setValue={onLocationChange}
+          onSearchChange={setSearch}
           disabled={disabled}
           isLoading={options.isPending}
         />
       </Stack>
       <Stack gap="sm">
-        <Label htmlFor={plantingInput}>About</Label>
+        <Label htmlFor={plantingInput}>{gardenStrings.entry.aboutField}</Label>
         <EntityPicker
           inputId={plantingInput}
-          label="About"
+          label={gardenStrings.entry.aboutField}
           items={[
             wholeLocation,
             ...plantings.map((item) => ({
@@ -77,19 +82,19 @@ export function EntryContextFields({
         />
         <p className="text-sm text-muted-foreground">
           {planting
-            ? "This entry stays in this planting’s journal, even after it moves."
-            : "Shared with plantings known to be here on the observation date. Unknown earlier dates are not assumed."}
+            ? gardenStrings.entry.aboutHelpWithPlanting
+            : gardenStrings.entry.aboutHelpWithoutPlanting}
         </p>
       </Stack>
       {options.isError && (
         <p className="text-sm text-destructive">
-          Could not load locations and plantings.{" "}
+          {gardenStrings.entry.loadFailed}{" "}
           <Button
             type="button"
             variant="ghost"
             onClick={() => void options.refetch()}
           >
-            Retry
+            {gardenStrings.common.retry}
           </Button>
         </p>
       )}

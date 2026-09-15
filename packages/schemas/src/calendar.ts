@@ -2,6 +2,7 @@ import { z } from "zod";
 import { money, moneyNullable } from "./money";
 import {
   mealShortcode,
+  plantingShortcode,
   projectShortcode,
   expenseShortcode,
   taskShortcode,
@@ -32,7 +33,13 @@ function calendarRangeDays(value: {
   );
 }
 
-export const calendarItemKind = z.enum(["meal", "task", "expense", "project"]);
+export const calendarItemKind = z.enum([
+  "meal",
+  "task",
+  "expense",
+  "project",
+  "planting",
+]);
 export type CalendarItemKind = z.infer<typeof calendarItemKind>;
 
 export const calendarInteraction = z.enum(["move", "read-only"]);
@@ -100,11 +107,45 @@ export const calendarProjectItem = z.object({
   projectKind: projectKindSchema.nullable(),
 });
 
+/** A planting's lifecycle milestones, in the order they occur. Each populated
+ * milestone date becomes its own read-only calendar item — see
+ * `loadCalendarPlantings`/`mapPlantingItems` in repo/calendar-plantings.ts. */
+export const calendarPlantingMilestone = z.enum([
+  "planned",
+  "sowed",
+  "transplanted",
+  "finished",
+]);
+export type CalendarPlantingMilestone = z.infer<
+  typeof calendarPlantingMilestone
+>;
+
+/** Shared between the calendar UI's metadata line and the garden ICS feed's
+ * event summary, so the two never name a milestone differently. */
+export const CALENDAR_PLANTING_MILESTONE_LABELS = {
+  planned: "Planned",
+  sowed: "Sowed",
+  transplanted: "Transplanted",
+  finished: "Finished",
+} satisfies Record<CalendarPlantingMilestone, string>;
+
+export const calendarPlantingItem = z.object({
+  kind: z.literal("planting"),
+  id: plantingShortcode,
+  milestone: calendarPlantingMilestone,
+  title: z.string(),
+  locationName: z.string().nullable(),
+  plannedWindow: z.string().nullable(),
+  ...calendarItemDates,
+  interaction: z.literal("read-only"),
+});
+
 export const calendarItem = z.discriminatedUnion("kind", [
   calendarMealItem,
   calendarTaskItem,
   calendarExpenseItem,
   calendarProjectItem,
+  calendarPlantingItem,
 ]);
 export type CalendarItem = z.infer<typeof calendarItem>;
 

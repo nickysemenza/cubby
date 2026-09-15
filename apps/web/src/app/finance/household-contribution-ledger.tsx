@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { countLabel } from "~/lib/pluralize";
 import { formatCurrency } from "~/lib/utils";
 
 import { householdContribution } from "./household-contribution.functions";
@@ -250,7 +251,7 @@ export function HouseholdContributionLedgerReport({
                     {gap.count === undefined ? (
                       <ContributionGapTargets targetIds={gap.targetIds} />
                     ) : (
-                      `${gap.count} expenses`
+                      countLabel(gap.count, "expense")
                     )}
                   </TableCell>
                 </TableRow>

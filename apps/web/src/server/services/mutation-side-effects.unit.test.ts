@@ -27,6 +27,12 @@ class InMemoryMutationSideEffectPorts {
   readonly refreshed: Array<{ entityType: string; entityId: string }> = [];
   readonly inventoryRefs: Array<{ entityType: "inventory"; entityId: string }> =
     [];
+  readonly plantingRefs: Array<{ entityType: "planting"; entityId: string }> =
+    [];
+  readonly gardenEntryRefs: Array<{
+    entityType: "gardenEntry";
+    entityId: string;
+  }> = [];
   readonly markProblemCountsDirty = vi.fn(async () => {
     if (this.problemCountsError) throw this.problemCountsError;
   });
@@ -43,6 +49,9 @@ class InMemoryMutationSideEffectPorts {
     findTaskEmbeddingRefsForProducts: async () => [],
     findWishEmbeddingRefsForProducts: async () => [],
     findMealEmbeddingRefsForRecipes: async () => [],
+    findPlantingEmbeddingRefsForIngredients: async () => this.plantingRefs,
+    findPlantingEmbeddingRefsForLocations: async () => this.plantingRefs,
+    findGardenEntryEmbeddingRefsForLocations: async () => this.gardenEntryRefs,
     findTrackerEmbeddingRefsForProjects: async () => [],
     findEmbeddingRefsForVendors: async () => [],
     findEmbeddingRefsForPurchases: async () => [],
@@ -124,6 +133,83 @@ describe("runMutationSideEffects", () => {
       expect.arrayContaining([
         { entityType: "product", entityId: productId },
         { entityType: "inventory", entityId: inventoryId },
+      ]),
+    );
+  });
+
+  it("fans out an entity-embedding.refresh task to planting refs on ingredient update", async () => {
+    const ingredientId = testEntityId(
+      "ingredient",
+      "00000000-0000-4000-8000-000000000020",
+    );
+    const plantingId = testEntityId(
+      "planting",
+      "00000000-0000-4000-8000-000000000021",
+    );
+    memory.plantingRefs.push({ entityType: "planting", entityId: plantingId });
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "ingredient", id: ingredientId },
+        source: "ingredient.update",
+      },
+      memory.ports,
+    );
+
+    const refreshedRefs = memory.embeddingRefreshTasks.map((task) =>
+      task.kind === "entity-embedding.refresh"
+        ? { entityType: task.entityType, entityId: task.entityId }
+        : null,
+    );
+    expect(refreshedRefs).toEqual(
+      expect.arrayContaining([
+        { entityType: "ingredient", entityId: ingredientId },
+        { entityType: "planting", entityId: plantingId },
+      ]),
+    );
+  });
+
+  it("fans out entity-embedding.refresh tasks to planting and garden-entry refs on location update", async () => {
+    const locationId = testEntityId(
+      "location",
+      "00000000-0000-4000-8000-000000000022",
+    );
+    const plantingId = testEntityId(
+      "planting",
+      "00000000-0000-4000-8000-000000000023",
+    );
+    const gardenEntryId = testEntityId(
+      "gardenEntry",
+      "00000000-0000-4000-8000-000000000024",
+    );
+    memory.plantingRefs.push({ entityType: "planting", entityId: plantingId });
+    memory.gardenEntryRefs.push({
+      entityType: "gardenEntry",
+      entityId: gardenEntryId,
+    });
+
+    await runMutationSideEffects(
+      db,
+      {
+        action: "updated",
+        entity: { entity: "location", id: locationId },
+        source: "location.update",
+      },
+      memory.ports,
+    );
+
+    const refreshedRefs = memory.embeddingRefreshTasks.map((task) =>
+      task.kind === "entity-embedding.refresh"
+        ? { entityType: task.entityType, entityId: task.entityId }
+        : null,
+    );
+    expect(refreshedRefs).toEqual(
+      expect.arrayContaining([
+        { entityType: "location", entityId: locationId },
+        { entityType: "planting", entityId: plantingId },
+        { entityType: "gardenEntry", entityId: gardenEntryId },
       ]),
     );
   });
@@ -404,11 +490,13 @@ describe("mutation side effects manifest", () => {
       "expense",
       "financialAccount",
       "financialTransaction",
+      "gardenEntry",
       "image",
       "ingredient",
       "inventory",
       "location",
       "meal",
+      "planting",
       "product",
       "project",
       "purchase",

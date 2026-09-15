@@ -27,11 +27,14 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  financialTransaction,
   gardenEntry,
   inventoryEntry,
   location,
+  meal,
   planting,
   product,
+  purchase,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -265,16 +268,32 @@ export const LABEL_COLUMN_OVERRIDES = {
   gardenEntry: {
     column: gardenEntry.kind,
     reason:
-      "titleField (note) is free-text and often blank; kind is a short, always-present label",
+      "titleField (displayName) is a computed value with no single storage column; kind is a short, always-present label",
   },
   planting: {
     column: planting.status,
-    reason: "titleField (variety) is nullable text; status is always present",
+    reason:
+      "titleField (displayName) is a computed value with no single storage column; status is always present",
   },
   inventory: {
     column: null,
     reason:
-      "titleField (amount) is a bare number; inventoryEntryLabels() below builds a relational 'product · location' label instead",
+      "titleField (displayName) is a computed relational value; inventoryEntryLabels() below builds the same 'product · location' label instead",
+  },
+  meal: {
+    column: meal.name,
+    reason:
+      "titleField (displayName) is computed as name || date with no single storage column; name is the best-effort audit-label fallback (blank when the meal was never named)",
+  },
+  financialTransaction: {
+    column: financialTransaction.merchant,
+    reason:
+      "titleField (displayName) is computed as merchant || rawDescription || capitalized kind with no single storage column; merchant is the best-effort audit-label fallback (null for unmatched rows)",
+  },
+  purchase: {
+    column: purchase.displayLabel,
+    reason:
+      "titleField (displayName) is computed via purchaseLabel(...) with no single storage column; displayLabel is the raw nullable label column purchaseLabel is itself built from, so it's the best-effort audit-label fallback",
   },
   ledgerTransfer: {
     column: null,
@@ -333,7 +352,7 @@ export const resolveTitleFieldColumn = (
  * below for audit-log display. Different semantics — don't fold it into the
  * type-label consolidation.
  *
- * `LABEL_COLUMN_OVERRIDES` wins for its 4 entities; every other entity is
+ * `LABEL_COLUMN_OVERRIDES` wins for its 7 entities; every other entity is
  * derived from `titleField`, and a non-override entity whose titleField has
  * no physical storage column is a bug — declare it as an override instead of
  * letting the map silently go null.

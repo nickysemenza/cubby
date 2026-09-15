@@ -21,6 +21,8 @@ import {
   gardenEntryList,
   gardenJournal,
   gardenLocationHistory,
+  gardenOptions,
+  getGardenEntry,
   movePlanting,
   plantingList,
   recordGardenEntry,
@@ -137,6 +139,9 @@ describe("garden workflows", () => {
       },
       TEST_ACTOR,
     );
+    // `displayName` is the entity's non-null titleField: no variety, so it's
+    // just the ingredient name.
+    expect(planned.displayName).toBe("Garden test tomato");
     const started = await startPlanting(ctx.db, {
       plantingId: planned.id,
       locationId: tray.id,
@@ -181,6 +186,9 @@ describe("garden workflows", () => {
       note: "Whole-bed overview",
       pendingImageIds: [],
     });
+    // `displayName` is the entity's non-null titleField: "<Kind> · <date> ·
+    // <location name>", independent of the free-text (and often blank) note.
+    expect(bedOverview.displayName).toBe("Note · 2026-10-06 · Garden test bed");
     const otherPlanting = await createPlanting(
       ctx.db,
       { ingredientId: crop.id, locationId: bed.id, status: "growing" },
@@ -250,6 +258,13 @@ describe("garden workflows", () => {
         { observedOn: "2026-09-19" },
       ),
     ).rejects.toBeDefined();
+    await expect(
+      updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", moveEntryId!),
+        { kind: "observation" },
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
     const bedOverviewId = await resolveLiveShortcode(
       ctx.db,
       bedOverview.id,
@@ -267,6 +282,29 @@ describe("garden workflows", () => {
         },
       ),
     ).toMatchObject({ locationId: tray.id, plantingId: child.id });
+    // Regression: an ordinary observation can be retyped as a harvest; only
+    // `move` is structural.
+    expect(
+      await updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", bedOverviewId!),
+        { kind: "harvest", harvestAmount: "2 heads" },
+      ),
+    ).toMatchObject({ kind: "harvest", harvestAmount: "2 heads" });
+    await expect(
+      updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", bedOverviewId!),
+        { kind: "move" },
+      ),
+    ).rejects.toMatchObject({ cause: { reason: "CONSTRAINT_VIOLATION" } });
+    expect(
+      await updateGardenEntryDetails(
+        ctx.db,
+        parseEntityId("gardenEntry", bedOverviewId!),
+        { kind: "observation", harvestAmount: null },
+      ),
+    ).toMatchObject({ kind: "observation", harvestAmount: null });
     for (const { observedOn, harvestAmount } of [
       { observedOn: "2026-10-05", harvestAmount: "6 tomatoes" },
       { observedOn: "2026-10-12", harvestAmount: "handful" },
@@ -768,6 +806,30 @@ describe("garden workflows", () => {
     });
   });
 
+  /**
+   * `kind: "move"` is a valid `GardenEntry.kind` (planting workflows write
+   * one to record a location change), but the generic entity-kernel `create`
+   * path must not — a caller-created "move" entry wouldn't anchor a location
+   * period. See `MOVE_ENTRY_MESSAGE` / the structural-edit guard for the
+   * matching restriction on retyping an existing entry.
+   */
+  it('rejects a generic create with kind "move" — those are created only by planting workflows', async () => {
+    const bed = await location("Garden move-guard bed", "bed");
+    await expect(
+      gardenEntryEntityAdapter.repository.create(kernelContext(ctx.db), {
+        locationId: bed.id,
+        plantingId: null,
+        kind: "move",
+        observedOn: "2026-09-10",
+        note: null,
+        harvestAmount: null,
+      }),
+    ).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+      cause: { reason: "CONSTRAINT_VIOLATION" },
+    });
+  });
+
   it("plantingList honors a two-column sort, not just sorts[0]", async () => {
     const crop = await createIngredient(
       ctx.db,
@@ -873,5 +935,136 @@ describe("garden workflows", () => {
     // `createdAt desc` — this asc request on the second column would have
     // been ignored and the order reversed.
     expect(firstIndex).toBeLessThan(secondIndex);
+  });
+
+  /**
+   * `startPlanting` writes a bootstrapping `observation` entry and anchors
+   * the planting's first `PlantingLocationPeriod` to it. `anchorsPeriod` on
+   * `gardenEntryOut` surfaces exactly that: true for the anchor entry (via a
+   * direct lookup and via the planting journal), false for an ordinary
+   * observation that doesn't anchor anything.
+   */
+  it("computes anchorsPeriod for the startPlanting anchor entry, and false for an ordinary observation", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Garden anchorsPeriod crop" },
+      TEST_ACTOR,
+    );
+    const bed = await location("Garden anchorsPeriod bed", "bed");
+    const planted = await createPlanting(
+      ctx.db,
+      { ingredientId: crop.id, status: "planned" },
+      TEST_ACTOR,
+    );
+    await startPlanting(ctx.db, {
+      plantingId: planted.id,
+      locationId: bed.id,
+      startedOn: "2026-09-10",
+      startMethod: "sow",
+    });
+    const plantedId = await resolveLiveShortcode(
+      ctx.db,
+      planted.id,
+      "planting",
+    );
+    expect(plantedId).not.toBeNull();
+    const period = await getDb(ctx.db).query.plantingLocationPeriod.findFirst({
+      where: eq(
+        plantingLocationPeriod.plantingId,
+        parseEntityId("planting", plantedId!),
+      ),
+      columns: { sourceGardenEntryId: true },
+    });
+    expect(period?.sourceGardenEntryId).toBeTruthy();
+    const anchorEntryId = parseEntityId(
+      "gardenEntry",
+      period!.sourceGardenEntryId!,
+    );
+    expect(await getGardenEntry(ctx.db, anchorEntryId)).toMatchObject({
+      anchorsPeriod: true,
+    });
+    const anchorEntryRow = await getDb(ctx.db).query.gardenEntry.findFirst({
+      where: eq(gardenEntry.id, anchorEntryId),
+      columns: { shortcode: true },
+    });
+    const anchorShortcode = parseShortcodeFor(
+      "gardenEntry",
+      anchorEntryRow!.shortcode,
+    );
+    expect(
+      (
+        await gardenJournal(ctx.db, {
+          plantingId: planted.id,
+          includeBedContext: false,
+          page: 1,
+        })
+      ).items.find((entry) => entry.id === anchorShortcode),
+    ).toMatchObject({ anchorsPeriod: true });
+
+    const observation = await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      plantingId: planted.id,
+      kind: "observation",
+      observedOn: "2026-09-15",
+      note: "Ordinary check-in",
+      pendingImageIds: [],
+    });
+    expect(observation.anchorsPeriod).toBe(false);
+    expect(
+      (
+        await gardenJournal(ctx.db, {
+          plantingId: planted.id,
+          includeBedContext: false,
+          page: 1,
+        })
+      ).items.find((entry) => entry.id === observation.id),
+    ).toMatchObject({ anchorsPeriod: false });
+  });
+
+  /**
+   * `gardenOptions` scopes down to Locations with a `gardenKind`, Ingredients
+   * referenced by a planting or carrying a `gardenGuideKey`, and Products with
+   * a `growsIngredientId` — everything else in the household is excluded by
+   * default. `search` (2+ chars) widens the set with a name-prefix match.
+   */
+  it("gardenOptions returns only the garden-scoped set by default, and search widens it by name prefix", async () => {
+    const unscopedLocation = await createLocation(
+      ctx.db,
+      makeLocationInput({
+        name: "Garden options unscoped location",
+        type: null,
+        gardenKind: null,
+        gardenConditions: null,
+      }),
+      TEST_ACTOR,
+    );
+    const unreferencedIngredient = await createIngredient(
+      ctx.db,
+      { name: "Garlic scoped-out unreferenced" },
+      TEST_ACTOR,
+    );
+    const unscopedProduct = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Garden options unscoped product" }),
+      TEST_ACTOR,
+    );
+
+    const defaultOptions = await gardenOptions(ctx.db);
+    expect(
+      defaultOptions.locations.some((row) => row.id === unscopedLocation.id),
+    ).toBe(false);
+    expect(
+      defaultOptions.ingredients.some(
+        (row) => row.id === unreferencedIngredient.id,
+      ),
+    ).toBe(false);
+    expect(
+      defaultOptions.products.some((row) => row.id === unscopedProduct.id),
+    ).toBe(false);
+
+    const searched = await gardenOptions(ctx.db, { search: "Gar" });
+    expect(
+      searched.ingredients.some((row) => row.id === unreferencedIngredient.id),
+    ).toBe(true);
   });
 });

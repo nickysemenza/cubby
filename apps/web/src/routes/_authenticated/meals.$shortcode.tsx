@@ -17,7 +17,7 @@ import { shortcodeHead } from "~/lib/page-title";
 const MealDetailRoute = detailPage({
   query: (shortcode) => entityDetailFor("meal").queryOptions(shortcode),
   render: (meal) => <MealDetailPage mealId={meal.id} />,
-  title: (meal) => meal.name,
+  title: (meal) => meal.displayName,
 });
 
 const MealNotFound = notFoundPage(

@@ -19,7 +19,7 @@ struct TodayView: View {
                     onRefresh: { await today.refresh() }
                 )
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading Today")
             }
         }
         .porcelainScreen()
@@ -77,7 +77,7 @@ struct TodayContent: View {
             Eyebrow("Tasks")
             switch tasks {
             case .loading:
-                Panel { loadingRow }
+                Panel { loadingRow("Loading tasks") }
             case .failed(let message):
                 Panel { errorText(message) }
             case .loaded(let tasks) where tasks.isEmpty:
@@ -108,7 +108,7 @@ struct TodayContent: View {
             Eyebrow("Meals today")
             switch meals {
             case .loading:
-                Panel { loadingRow }
+                Panel { loadingRow("Loading meals") }
             case .failed(let message):
                 Panel { errorText(message) }
             case .loaded(let meals) where meals.isEmpty:
@@ -139,7 +139,7 @@ struct TodayContent: View {
             Eyebrow("Problems")
             switch problems {
             case .loading:
-                Panel { loadingRow }
+                Panel { loadingRow("Loading problems") }
             case .failed(let message):
                 Panel { errorText(message) }
             case .loaded(let counts):
@@ -252,9 +252,9 @@ struct TodayContent: View {
 
     // MARK: Shared section chrome
 
-    private var loadingRow: some View {
+    private func loadingRow(_ label: String) -> some View {
         HStack {
-            ProgressView()
+            LoadingIndicator(label: label)
             Spacer()
         }
     }

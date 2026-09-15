@@ -15,7 +15,7 @@ struct AuditRootView: View {
             if let session {
                 AuditPhaseView(session: session)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading walk the shelf")
             }
         }
         .porcelainScreen()
@@ -40,7 +40,7 @@ private struct AuditPhaseView: View {
         Group {
             switch session.phase {
             case .loading:
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading audit tree")
             case .choosingScope:
                 ScopePickerSheet(session: session)
             case .bin:

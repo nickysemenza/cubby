@@ -20,6 +20,10 @@ export const gardenEntryOut = z
   .extend({
     locationName: z.string(),
     plantingName: z.string().nullable(),
+    // Anchor and `move` entries lock their location/planting/date fields —
+    // corrected only through location history, never the entry edit form.
+    // See `assertGardenEntryStructure` in `server/repo/garden/index.ts`.
+    anchorsPeriod: z.boolean(),
   });
 export type GardenEntryOut = z.infer<typeof gardenEntryOut>;
 export const gardenEntryListItemOut = gardenEntryOut.extend({

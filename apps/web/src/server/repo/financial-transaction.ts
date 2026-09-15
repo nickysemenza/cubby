@@ -20,7 +20,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, asc, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
-import { uniq } from "es-toolkit";
+import { capitalize, uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -170,6 +170,13 @@ const toOut = (row: FinancialTransactionRow): FinancialTransactionOut => {
       ? parseShortcodeFor("ledgerTransfer", row.ledgerTransferShortcode)
       : null,
     accountName: row.accountName,
+    // `merchant`/`rawDescription` are both nullable statement fields; `kind`
+    // is the last resort so an imported row with neither still gets a
+    // non-blank identity.
+    displayName:
+      row.merchant?.trim() ||
+      row.rawDescription?.trim() ||
+      capitalize(row.kind.replaceAll("_", " ")),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   });

@@ -2,6 +2,7 @@ import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
 import { Eye, Info, Package } from "lucide-react";
 import type { FC } from "react";
 
+import { locationGardenSections } from "~/app/garden/garden-seam-sections";
 import { Page } from "~/components/page/Page";
 
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
@@ -36,6 +37,11 @@ export const LocationDetail: FC<LocationDetailProps> = ({ location }) => {
   });
 
   const sections: DetailSection[] = [
+    // A bed/tray's Garden section leads the page when present (only when
+    // `gardenKind` is set) — see `garden-seam-sections.tsx`. `DetailSections`
+    // has no collapsible/`defaultOpen` flag, so the inventory-first sections
+    // below are demoted by reordering after Garden rather than collapsing.
+    ...locationGardenSections(location),
     // The page IS this section: sub-locations + items on one surface, with
     // the valuation rollup in the header. Basic info / AI description /
     // history are the metadata row below.

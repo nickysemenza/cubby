@@ -53,6 +53,18 @@ const task = (
   coverImageUrl: null,
 });
 
+const planting = (id: string, startDate: string): CalendarItem => ({
+  kind: "planting",
+  id: testShortcode("planting", id),
+  milestone: "sowed",
+  title: id,
+  locationName: "Raised bed 2",
+  plannedWindow: null,
+  startDate,
+  endDateExclusive: nextDay(startDate),
+  interaction: "read-only",
+});
+
 /** The month grid's own rule, passed in so the agenda can't disagree with it. */
 const includesDay = (item: CalendarItem, day: string) =>
   day >= item.startDate && day < item.endDateExclusive;
@@ -74,6 +86,18 @@ describe("groupItemsByDay", () => {
       includesDay,
     );
     expect(groups).toHaveLength(2);
+  });
+
+  it("groups a read-only planting milestone the same as any other item", () => {
+    const groups = groupItemsByDay(
+      [meal("MEL-1111", "2026-03-01"), planting("PLT-2222", "2026-03-01")],
+      includesDay,
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.items.map((item) => item.id)).toEqual([
+      testShortcode("meal", "MEL-1111"),
+      testShortcode("planting", "PLT-2222"),
+    ]);
   });
 
   it("repeats a multi-day span under each day it covers", () => {

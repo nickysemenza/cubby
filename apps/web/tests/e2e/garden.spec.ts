@@ -39,24 +39,35 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     const bedName = `e2e growing bed ${suffix}`;
     const cropName = `e2e garden crop ${suffix}`;
     await seedIngredientPrerequisite(page, cropName);
-    await page.goto("/garden");
-    await waitForAppHydration(page);
 
-    await page.getByRole("button", { name: "Add bed or tray" }).click();
+    // `/plantings` is a legacy redirect onto `/garden`, the single landing
+    // page for growing areas, plantings, and journal entries.
+    await page.goto("/plantings");
+    await waitForAppHydration(page);
+    await expect(page).toHaveURL(/\/garden$/);
+
+    await page.getByRole("button", { name: "Add growing area" }).click();
     let dialog = page.getByRole("dialog");
     await dialog.getByLabel("Name", { exact: true }).fill(bedName);
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(dialog).not.toBeVisible();
+    // Growing-area cards are `Card` (a `div[data-slot="card"]`), not a
+    // `<section>`.
     const bed = page
-      .locator("section")
+      .locator('[data-slot="card"]')
       .filter({ has: page.getByRole("heading", { name: bedName }) });
     await bed
       .getByRole("button", { name: "Add planting", exact: true })
       .click();
     dialog = page.getByRole("dialog");
-    await dialog
-      .getByRole("combobox", { name: "Crop", exact: true })
-      .fill(cropName);
+    // The picker ignores input while its popup is closed, and its roster
+    // is garden-scoped: a fresh crop only appears via the typed search.
+    const cropPicker = dialog.getByRole("combobox", {
+      name: "Crop",
+      exact: true,
+    });
+    await cropPicker.click();
+    await cropPicker.pressSequentially(cropName);
     await page
       .getByRole("option", { name: new RegExp(cropName) })
       .first()
@@ -68,6 +79,8 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     await expect(dialog).not.toBeVisible();
     await bed.getByRole("link", { name: cropName, exact: true }).click();
     await expect(page).toHaveURL(/\/plantings\/PLT-/);
+    // The detail page's tab title is the record's `displayName`.
+    await expect(page).toHaveTitle(new RegExp(cropName));
     const plantingCode = new URL(page.url()).pathname.split("/").at(-1);
     const apiDetail = await page.request.get(
       `/api/v1/plantings/${plantingCode}`,
@@ -86,11 +99,12 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     );
     expect(corrected.status()).toBe(200);
     await page.reload();
-    await page
-      .getByText("Dates, source, and planting actions", { exact: true })
-      .click();
+    // Facts (crop, dates, notes) render directly now — no collapsed
+    // "Dates, source, and planting actions" details to expand first.
     await expect(
-      page.getByText("Corrected through the shared HTTP API", { exact: true }),
+      page.getByText("Notes: Corrected through the shared HTTP API", {
+        exact: true,
+      }),
     ).toBeVisible();
     const guides = await page.request.get("/api/v1/garden/guides");
     expect(guides.status()).toBe(200);
@@ -106,9 +120,12 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
       .getByRole("button", { name: "Start planting", exact: true })
       .click();
     dialog = page.getByRole("dialog");
-    await dialog
-      .getByRole("combobox", { name: "Starting location", exact: true })
-      .fill(bedName);
+    const locationPicker = dialog.getByRole("combobox", {
+      name: "Location",
+      exact: true,
+    });
+    await locationPicker.click();
+    await locationPicker.pressSequentially(bedName);
     await page
       .getByRole("option", { name: new RegExp(bedName) })
       .first()
@@ -118,34 +135,41 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
       .getByRole("button", { name: "Start planting", exact: true })
       .click();
     await expect(dialog).not.toBeVisible();
+    // Facts render "Sowed: <formatted date>" via `formatDateWithYear`.
     await expect(
-      page.getByText("Sowed: 2026-08-01", { exact: true }),
+      page.getByText("Sowed: Aug 1, 2026", { exact: true }),
     ).toBeVisible();
 
-    await page.getByRole("button", { name: "Add photos / Log entry" }).click();
+    // The detail page's primary action is "Log entry" now that the planting
+    // is growing with a location (was "Add photos / Log entry").
+    await page.getByRole("button", { name: "Log entry", exact: true }).click();
     dialog = page.getByRole("dialog");
     await dialog.getByLabel("Entry type").selectOption("harvest");
-    await dialog.getByLabel("Observation date").fill("2026-08-20");
-    await dialog.getByLabel("Harvest amount (optional)").fill("A handful");
-    await dialog.getByLabel("Notes").fill("First harvest from this planting");
+    // The date field relabels to "Harvest date" once Harvest is selected.
+    await dialog.getByLabel("Harvest date", { exact: true }).fill("2026-08-20");
     await dialog
-      .getByRole("button", { name: "Save entry", exact: true })
-      .click();
+      .getByLabel("Harvest amount", { exact: true })
+      .fill("A handful");
+    await dialog.getByLabel("Notes").fill("First harvest from this planting");
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(
       page.getByText("First harvest from this planting", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("A handful", { exact: true })).toBeVisible();
+    // Harvest amount renders inline as "Harvest: <amount>".
+    await expect(
+      page.getByText("Harvest: A handful", { exact: true }),
+    ).toBeVisible();
     await page.reload();
     await expect(
       page.getByText("First harvest from this planting", { exact: true }),
     ).toBeVisible();
-    await page
-      .getByText("Dates, source, and planting actions", { exact: true })
-      .click();
+    // "Move some seedlings" now lives inside the "Actions" dropdown.
+    await page.getByRole("button", { name: "Open planting actions" }).click();
     await expect(
-      page.getByRole("button", { name: "Move some seedlings" }),
+      page.getByRole("menuitem", { name: "Move some seedlings" }),
     ).toBeVisible();
+    await page.keyboard.press("Escape");
 
     const plantingUrl = page.url();
     const currentPlanting = await page.request.get(
@@ -180,10 +204,17 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     await expect(
       page.getByText("A view of the whole bed", { exact: true }),
     ).toBeVisible();
+    // Photo accessible names are "<Kind> photo, <date>", not the filename —
+    // and the journal photo strip now duplicates every entry's images
+    // alongside the entry's own grid, so scope to the first match.
+    const bedPhotoName = "Note photo, Aug 10, 2026";
     await expect(
-      page.getByRole("img", { name: `${imageName}.png` }),
+      page.getByRole("img", { name: bedPhotoName }).first(),
     ).toBeVisible();
-    await page.getByRole("button", { name: `View ${imageName}.png` }).click();
+    await page
+      .getByRole("button", { name: `View ${bedPhotoName}` })
+      .first()
+      .click();
     await expect(
       page.getByRole("link", { name: "View image details" }),
     ).toHaveAttribute("href", `/images/${image.id}`);
@@ -198,7 +229,7 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     await page.screenshot({ path: "/tmp/cubby-garden-journal-desktop.png" });
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(
-      page.getByRole("img", { name: `${imageName}.png` }),
+      page.getByRole("img", { name: bedPhotoName }).first(),
     ).toBeVisible();
     await page.evaluate(() => {
       window.scrollTo(0, 0);
@@ -206,22 +237,23 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
         document.activeElement.blur();
     });
     await page.screenshot({ path: "/tmp/cubby-garden-journal-phone.png" });
-    await page.getByRole("link", { name: "Bed journal", exact: true }).click();
+    // The bed journal link's text is now `${location name} journal`.
+    await page
+      .getByRole("link", { name: `${bedName} journal`, exact: true })
+      .click();
     await expect(page).toHaveURL(/garden-entries\?locationId=/);
     await expect(
       page.getByRole("link", { name: "Garden", exact: true }),
     ).toBeVisible();
     await expect(page.getByText("Loading history…")).not.toBeVisible();
-    await page.getByRole("button", { name: "Add photos / Log entry" }).click();
+    await page.getByRole("button", { name: "Log entry", exact: true }).click();
     dialog = page.getByRole("dialog");
     await expect(dialog.getByRole("combobox", { name: "About" })).toHaveValue(
-      "Whole bed or growing area",
+      "Whole area",
     );
-    await dialog.getByLabel("Observation date").fill("2026-08-12");
+    await dialog.getByLabel("Date", { exact: true }).fill("2026-08-12");
     await dialog.getByLabel("Notes").fill("Another shared bed observation");
-    await dialog
-      .getByRole("button", { name: "Save entry", exact: true })
-      .click();
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await page.goto(plantingUrl);
     await expect(
@@ -240,12 +272,17 @@ test("a planned garden crop can start and retain a backdated harvest", async ({
     });
     expect(earlierEntry.status()).toBe(200);
     await page.reload();
+    await waitForAppHydration(page);
     await expect(
       page.getByText("Older bed context awaiting a confirmed date", {
         exact: true,
       }),
     ).not.toBeVisible();
-    await page.getByRole("button", { name: "Correct location dates" }).click();
+    // "Correct location dates" now lives inside the "Actions" dropdown.
+    await page.getByRole("button", { name: "Open planting actions" }).click();
+    await page
+      .getByRole("menuitem", { name: "Correct location dates" })
+      .click();
     dialog = page.getByRole("dialog");
     await dialog.getByLabel("In this location since").fill("2026-07-01");
     await dialog.getByRole("button", { name: "Save location dates" }).click();

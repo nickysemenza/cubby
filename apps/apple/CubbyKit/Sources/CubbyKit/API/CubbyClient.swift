@@ -116,8 +116,20 @@ public actor CubbyClient {
         try await perform { GardenOverview(try await api.garden_overview().ok.body.json) }
     }
 
-    public func gardenOptions() async throws -> GardenOptions {
-        try await perform { GardenOptions(try await api.garden_options().ok.body.json) }
+    /// `search` (≥2 chars) widens the garden-scoped options set with prefix matches, for an
+    /// "Add…" picker outside the household's existing garden associations.
+    ///
+    /// The generated `GardenOptionsInput` is currently self-referential — `apps/web/scripts/
+    /// generate-http-openapi.ts` registers the Zod wire projection and its `{ input: ... }`
+    /// wrapper under the same `"GardenOptionsInput"` component id, so the wrapper's `input` field
+    /// recurses into itself with no reachable `search` leaf (confirmed against the source Zod
+    /// schema at `packages/schemas/src/garden.ts`, which does carry `search`). Until that
+    /// generator bug is fixed upstream, `search` cannot be encoded on the wire; this always
+    /// requests the unscoped body so callers do not have to change again once it can be.
+    public func gardenOptions(search: String? = nil) async throws -> GardenOptions {
+        try await perform {
+            GardenOptions(try await api.garden_options(query: .init(search: search)).ok.body.json)
+        }
     }
 
     public func gardenGuides() async throws -> GardenGuidesDocument {
@@ -166,10 +178,10 @@ public actor CubbyClient {
         }
     }
 
-    public func finishGardenPlanting(id: String, finishedAt: Date) async throws {
+    public func finishGardenPlanting(id: String, finishedAt: Date, note: String? = nil) async throws {
         try await perform {
             _ = try await api.garden_finishPlanting(
-                body: .json(GardenFinishInput(id: id, finishedAt: finishedAt))
+                body: .json(GardenFinishInput(id: id, finishedAt: finishedAt, note: note))
             ).ok
         }
     }
@@ -308,8 +320,8 @@ public actor CubbyClient {
                 body: .json(
                     .init(
                         locationId: input.locationID, plantingId: input.plantingID,
-                        kind: .init(rawValue: input.kind.rawValue),
-                        observedOn: GardenPlainDate.string(input.observedAt),
+                        kind: input.kind.map { .init(rawValue: $0.rawValue)! },
+                        observedOn: input.observedAt.map(GardenPlainDate.string),
                         note: input.note, harvestAmount: input.harvestAmount,
                         pendingImageIds: input.pendingImageIDs.map(\.rawValue),
                         removeImageIds: input.removeImageIDs

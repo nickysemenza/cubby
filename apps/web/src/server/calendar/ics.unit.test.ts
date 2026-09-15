@@ -2,6 +2,7 @@ import type { CalendarItem } from "@cubby/schemas/calendar";
 import {
   calendarItemKind,
   calendarMealItem,
+  calendarPlantingItem,
   calendarTaskItem,
 } from "@cubby/schemas/calendar";
 import { buildNutrition } from "@cubby/schemas/nutrition";
@@ -25,6 +26,7 @@ const NOW = new Date("2026-08-14T12:34:56.000Z");
 
 type MealItem = Extract<CalendarItem, { kind: "meal" }>;
 type TaskItem = Extract<CalendarItem, { kind: "task" }>;
+type PlantingItem = Extract<CalendarItem, { kind: "planting" }>;
 
 const meal = (overrides: DeepPartial<MealItem> = {}): MealItem =>
   mock(calendarMealItem, {
@@ -73,6 +75,21 @@ const task = (overrides: DeepPartial<TaskItem> = {}): TaskItem =>
       status: "not_started",
       trade: "building",
       projectName: null,
+      ...overrides,
+    },
+  });
+
+const planting = (overrides: DeepPartial<PlantingItem> = {}): PlantingItem =>
+  mock(calendarPlantingItem, {
+    seed: 1,
+    overrides: {
+      id: testShortcode("planting", "PLT-3B2C"),
+      milestone: "sowed",
+      title: "Tomato · Brandywine",
+      locationName: "Raised bed 2",
+      plannedWindow: "Late spring",
+      startDate: "2026-04-01",
+      endDateExclusive: "2026-04-02",
       ...overrides,
     },
   });
@@ -243,18 +260,58 @@ describe("renderIcs events", () => {
   });
 });
 
+describe("renderIcs planting events (garden feed)", () => {
+  const renderGarden = (items: CalendarItem[]) =>
+    renderIcs(items, { feed: "garden", now: NOW, origin: ORIGIN });
+
+  it("keeps a milestone all-day, summarizes title and milestone", () => {
+    const lines = unfold(renderGarden([planting()]));
+    expect(lines).toContain("DTSTART;VALUE=DATE:20260401");
+    expect(lines).toContain("DTEND;VALUE=DATE:20260402");
+    expect(lines).toContain("SUMMARY:Tomato · Brandywine — Sowed");
+  });
+
+  it("describes location and planned window, and links to the planting", () => {
+    const lines = unfold(renderGarden([planting()]));
+    expect(lines).toContain(
+      "DESCRIPTION:Location: Raised bed 2\\nPlanned window: Late spring",
+    );
+    expect(lines).toContain(`URL:${ORIGIN}/plantings/PLT-3B2C`);
+  });
+
+  it("gives each milestone of the same planting its own UID", () => {
+    const lines = unfold(
+      renderGarden([
+        planting({ milestone: "sowed", startDate: "2026-04-01" }),
+        planting({ milestone: "transplanted", startDate: "2026-05-01" }),
+      ]),
+    );
+    const uids = lines.filter((line) => line.startsWith("UID:"));
+    expect(uids).toEqual([
+      "UID:PLT-3B2C-sowed@cubby.nickysemenza.com",
+      "UID:PLT-3B2C-transplanted@cubby.nickysemenza.com",
+    ]);
+  });
+
+  it("publishes plantings on the garden feed but not on all", () => {
+    expect(renderGarden([planting()])).toContain("BEGIN:VEVENT");
+    expect(render([planting()])).not.toContain("BEGIN:VEVENT");
+  });
+});
+
 describe("kindsForFeed", () => {
   it("narrows each feed to the kinds it publishes", () => {
     expect(kindsForFeed("meals")).toEqual(["meal"]);
     expect(kindsForFeed("tasks")).toEqual(["task"]);
     expect(kindsForFeed("all")).toEqual(["meal", "task"]);
+    expect(kindsForFeed("garden")).toEqual(["planting"]);
   });
 
   it("only ever names kinds the query layer can actually return", () => {
     // A feed asking for a kind outside the union would silently yield nothing:
     // `kinds` is passed straight through to getCalendarRange.
     const known = new Set<string>(calendarItemKind.options);
-    for (const feed of ["meals", "tasks", "all"] as const) {
+    for (const feed of ["meals", "tasks", "all", "garden"] as const) {
       for (const kind of kindsForFeed(feed)) {
         expect(known.has(kind)).toBe(true);
       }

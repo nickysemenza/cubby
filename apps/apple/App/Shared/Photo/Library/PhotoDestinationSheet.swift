@@ -210,7 +210,7 @@ private struct PhotoUploadProgress: View {
                         }
                     }
                 } else {
-                    ProgressView()
+                    LoadingIndicator(label: "Preparing upload")
                 }
             }
         }

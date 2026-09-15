@@ -10,11 +10,13 @@ import {
   expense,
   financialAccount,
   financialTransaction,
+  gardenEntry,
   ingredient,
   inventoryEntry,
   location,
   meal,
   mealRecipe,
+  planting,
   product,
   project,
   purchase,
@@ -36,10 +38,12 @@ import {
   buildExpenseEmbeddingText,
   buildFinancialAccountEmbeddingText,
   buildFinancialTransactionEmbeddingText,
+  buildGardenEntryEmbeddingText,
   buildIngredientEmbeddingText,
   buildInventoryEmbeddingText,
   buildLocationEmbeddingText,
   buildMealEmbeddingText,
+  buildPlantingEmbeddingText,
   buildProductEmbeddingText,
   buildProjectEmbeddingText,
   buildPurchaseEmbeddingText,
@@ -49,6 +53,21 @@ import {
   buildWishEmbeddingText,
   normalizeSearchText,
 } from "~/server/semantic/text";
+
+/** Mirrors `GARDEN_ENTRY_KIND_LABELS` in `repo/garden/index.ts` — that map is
+ * private to the garden module, and `kind` is a plain `text` column here, not
+ * the branded enum, so the label is re-derived rather than imported. */
+const GARDEN_ENTRY_KIND_LABEL = {
+  observation: "Note",
+  harvest: "Harvest",
+  move: "Move",
+} satisfies Record<string, string>;
+
+function isGardenEntryKindLabel(
+  kind: string,
+): kind is keyof typeof GARDEN_ENTRY_KIND_LABEL {
+  return kind in GARDEN_ENTRY_KIND_LABEL;
+}
 
 export interface SearchableEntityText {
   entityType: SearchableEntity;
@@ -903,6 +922,96 @@ async function getFinancialTransactionEmbeddingTexts(
   }));
 }
 
+async function getPlantingEmbeddingTexts(
+  db: Database | DrizzleTransaction,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(planting),
+        options.ids?.length
+          ? inArray(
+              planting.id,
+              options.ids.map((id) => parseEntityId("planting", id)),
+            )
+          : undefined,
+      ),
+      columns: { id: true, variety: true, status: true, notes: true },
+      with: {
+        ingredient: { columns: { name: true } },
+        location: { columns: { name: true } },
+      },
+    },
+    options.limit,
+  );
+  const rows = await unwrapDb(db).query.planting.findMany(queryConfig);
+  return rows.map((row) => ({
+    entityType: "planting",
+    entityId: row.id,
+    embeddingText: buildPlantingEmbeddingText({
+      ingredientName: row.ingredient.name,
+      variety: row.variety,
+      status: row.status,
+      locationName: row.location?.name ?? null,
+      notes: row.notes,
+    }),
+  }));
+}
+
+async function getGardenEntryEmbeddingTexts(
+  db: Database | DrizzleTransaction,
+  options: EmbeddingLoadOptions = {},
+): Promise<SearchableEntityText[]> {
+  const queryConfig = withOptionalLimit(
+    {
+      where: and(
+        notDeleted(gardenEntry),
+        options.ids?.length
+          ? inArray(
+              gardenEntry.id,
+              options.ids.map((id) => parseEntityId("gardenEntry", id)),
+            )
+          : undefined,
+      ),
+      columns: {
+        id: true,
+        kind: true,
+        observedOn: true,
+        note: true,
+        harvestAmount: true,
+      },
+      with: {
+        location: { columns: { name: true } },
+        planting: {
+          columns: { variety: true },
+          with: { ingredient: { columns: { name: true } } },
+        },
+      },
+    },
+    options.limit,
+  );
+  const rows = await unwrapDb(db).query.gardenEntry.findMany(queryConfig);
+  return rows.map((row) => ({
+    entityType: "gardenEntry",
+    entityId: row.id,
+    embeddingText: buildGardenEntryEmbeddingText({
+      kindLabel: isGardenEntryKindLabel(row.kind)
+        ? GARDEN_ENTRY_KIND_LABEL[row.kind]
+        : "Move",
+      observedOn: row.observedOn,
+      locationName: row.location.name,
+      plantingName: row.planting
+        ? row.planting.variety
+          ? `${row.planting.ingredient.name} · ${row.planting.variety}`
+          : row.planting.ingredient.name
+        : null,
+      note: row.note,
+      harvestAmount: row.harvestAmount,
+    }),
+  }));
+}
+
 const embeddingTextLoaders = {
   product: getProductEmbeddingTexts,
   recipe: getRecipeEmbeddingTexts,
@@ -919,6 +1028,8 @@ const embeddingTextLoaders = {
   financialTransaction: getFinancialTransactionEmbeddingTexts,
   expense: getExpenseEmbeddingTexts,
   wish: getWishEmbeddingTexts,
+  planting: getPlantingEmbeddingTexts,
+  gardenEntry: getGardenEntryEmbeddingTexts,
 } satisfies Record<SearchableEntity, EmbeddingTextLoader>;
 
 export async function getEmbeddingTextsForEntityTypes(

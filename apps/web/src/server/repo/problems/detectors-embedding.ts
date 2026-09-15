@@ -32,10 +32,12 @@ import {
   expense,
   financialAccount,
   financialTransaction,
+  gardenEntry,
   ingredient,
   inventoryEntry,
   location,
   meal,
+  planting,
   product,
   project,
   purchase,
@@ -216,6 +218,18 @@ const embeddingSources = {
     idColumn: wish.id,
     shortcodeColumn: wish.shortcode,
     deletedAtColumn: wish.deletedAt,
+  },
+  planting: {
+    table: planting,
+    idColumn: planting.id,
+    shortcodeColumn: planting.shortcode,
+    deletedAtColumn: planting.deletedAt,
+  },
+  gardenEntry: {
+    table: gardenEntry,
+    idColumn: gardenEntry.id,
+    shortcodeColumn: gardenEntry.shortcode,
+    deletedAtColumn: gardenEntry.deletedAt,
   },
 } satisfies Record<SearchableEntity, EmbeddingSource>;
 

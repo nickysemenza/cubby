@@ -492,7 +492,27 @@ export const entityEditRegistry: EntityEditRegistry = {
     fields: f.fieldsFrom(["full"]),
   })),
   planting: buildDefinition("planting", (f) => ({
-    fields: f.fieldsFrom(["capture", "full"]),
+    // `status` and `locationId` are lifecycle/location state — corrected only
+    // through the Start/Move/Split/Finish actions, never a plain field edit,
+    // so an update-surface edit leaves both read-only.
+    fields: f.fieldsFrom(["capture", "full"], {
+      status: {
+        access: ({ operation }) =>
+          operation === "update"
+            ? readOnly(
+                "Use Start, Move, or Finish to change lifecycle or location.",
+              )
+            : editable,
+      },
+      locationId: {
+        access: ({ operation }) =>
+          operation === "update"
+            ? readOnly(
+                "Use Start, Move, or Finish to change lifecycle or location.",
+              )
+            : editable,
+      },
+    }),
     create: {
       capture: {
         defaults: { ingredientId: "", locationId: null, status: "planned" },

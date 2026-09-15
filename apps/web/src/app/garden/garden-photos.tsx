@@ -1,3 +1,4 @@
+import type { GardenEntryOut } from "@cubby/schemas/garden";
 import type { ImageShortcode } from "@cubby/schemas/identifiers";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -9,9 +10,11 @@ import { z } from "zod";
 import { PhotoGrid } from "~/app/_components/photos/photo-grid";
 import { PhotoViewer } from "~/app/_components/photos/photo-viewer";
 import { usePhotoDraftPreviews } from "~/app/_components/photos/use-photo-draft-previews";
+import { formatDateWithYear } from "~/app/projects/project-formatting";
 import { FileDropField } from "~/components/file-upload/FileDropField";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { Image } from "~/components/ui/image";
 import { imageUpload } from "~/lib/image.functions";
 
 const contentTypeSchema = z.enum(ALLOWED_IMAGE_TYPES);
@@ -81,10 +84,13 @@ export function GardenPhotos({
   photos,
   onChange,
   disabled,
+  description,
 }: {
   photos: GardenPhotoDraft[];
   onChange: (photos: GardenPhotoDraft[]) => void;
   disabled: boolean;
+  /** Help copy under the drop field — say what the photos attach to. */
+  description: string;
 }) {
   const camera = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<number | null>(null);
@@ -104,16 +110,27 @@ export function GardenPhotos({
     ]);
   return (
     <Stack gap="md">
-      <FileDropField
-        accept={acceptedTypes}
-        label="Add photos"
-        description="Keep the whole bed or add a close-up. Photos save with this entry."
-        multiple
-        maxSize={MAX_IMAGE_UPLOAD_BYTES}
-        onFilesAdded={add}
-        disabled={disabled}
-        mode="compact"
-      />
+      <Row gap="sm" align="center" wrap>
+        <FileDropField
+          accept={acceptedTypes}
+          label="Add photos"
+          description={description}
+          multiple
+          maxSize={MAX_IMAGE_UPLOAD_BYTES}
+          onFilesAdded={add}
+          disabled={disabled}
+          mode="compact"
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => camera.current?.click()}
+          disabled={disabled}
+        >
+          Take photo
+        </Button>
+      </Row>
       <input
         ref={camera}
         type="file"
@@ -127,14 +144,6 @@ export function GardenPhotos({
           event.target.value = "";
         }}
       />
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => camera.current?.click()}
-        disabled={disabled}
-      >
-        Take photo
-      </Button>
       <PhotoGrid
         images={previews}
         fit="contain"
@@ -178,5 +187,79 @@ export function GardenPhotos({
         }}
       />
     </Stack>
+  );
+}
+
+/**
+ * "Note" / "Harvest" / "Move" — the entry-kind vocabulary shared by the
+ * journal's date · kind line (`garden-timeline.tsx`) and this strip's photo
+ * accessible names. The stored `kind` enum keeps "observation"; that word
+ * never reaches UI copy. Exported here (rather than from `garden-timeline.tsx`)
+ * so this module stays the one-way import — the timeline already reaches into
+ * this file for {@link JournalPhotoStrip}.
+ */
+export function gardenEntryKindLabel(kind: GardenEntryOut["kind"]): string {
+  if (kind === "harvest") return "Harvest";
+  if (kind === "move") return "Move";
+  return "Note";
+}
+
+const JOURNAL_PHOTO_STRIP_CAP = 12;
+
+/**
+ * Compact photo strip for the top of a journal card: every image from the
+ * currently loaded page of entries, newest first (the order the entries
+ * themselves already load in), capped with a "+N" tile so a heavily
+ * photographed page doesn't push the entry list below the fold. Each tile's
+ * accessible name is "<Kind> photo, <date>" rather than the raw filename —
+ * `PhotoGrid`/`PhotoViewer` read that name off `filename`, so the image is
+ * projected with a synthetic one before reaching either.
+ */
+export function JournalPhotoStrip({ entries }: { entries: GardenEntryOut[] }) {
+  const [preview, setPreview] = useState<number | null>(null);
+  const photos = entries.flatMap((entry) =>
+    entry.images.map((image) => ({
+      ...image,
+      filename: `${gardenEntryKindLabel(entry.kind)} photo, ${formatDateWithYear(entry.observedOn)}`,
+    })),
+  );
+  if (photos.length === 0) return null;
+  const shown = photos.slice(0, JOURNAL_PHOTO_STRIP_CAP);
+  const hiddenCount = photos.length - shown.length;
+  return (
+    <>
+      <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
+        {shown.map((image, index) => (
+          <button
+            key={image.id}
+            type="button"
+            className="relative aspect-square overflow-hidden rounded-md border border-border bg-muted/30 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            aria-label={`View ${image.filename}`}
+            onClick={() => setPreview(index)}
+          >
+            <Image
+              src={image.url}
+              alt={image.filename}
+              displayWidth={160}
+              className="h-full w-full object-cover"
+            />
+          </button>
+        ))}
+        {hiddenCount > 0 && (
+          <div className="flex aspect-square items-center justify-center rounded-md border border-border bg-muted text-sm font-medium text-muted-foreground">
+            +{hiddenCount}
+          </div>
+        )}
+      </div>
+      <PhotoViewer
+        images={shown}
+        index={preview}
+        onIndexChange={setPreview}
+        onOpenChange={(open) => {
+          if (!open) setPreview(null);
+        }}
+        detailLink={(image) => ({ shortcode: image.id })}
+      />
+    </>
   );
 }

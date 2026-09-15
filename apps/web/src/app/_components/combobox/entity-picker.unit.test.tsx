@@ -75,6 +75,50 @@ describe("EntityPicker", () => {
     ).toHaveAttribute("aria-selected", "true");
   });
 
+  it("derives the placeholder from the entity noun, not a sentence-length caption", () => {
+    render(
+      <EntityPicker
+        entity="location"
+        label="Use an existing location (optional)"
+        items={[]}
+        value={null}
+        setValue={vi.fn()}
+      />,
+    );
+    const input = screen.getByRole("combobox", {
+      name: "Use an existing location (optional)",
+    });
+    expect(input).toHaveAttribute("placeholder", "Choose a location…");
+  });
+
+  it("falls back to a generic placeholder with no entity key", () => {
+    render(
+      <EntityPicker label="About" items={[]} value={null} setValue={vi.fn()} />,
+    );
+    expect(screen.getByRole("combobox", { name: "About" })).toHaveAttribute(
+      "placeholder",
+      "Choose…",
+    );
+  });
+
+  it("lets an explicit placeholder override the entity-derived default", () => {
+    render(
+      <EntityPicker
+        entity="location"
+        label="Use an existing location (optional)"
+        placeholder="Pick a spot…"
+        items={[]}
+        value={null}
+        setValue={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("combobox", {
+        name: "Use an existing location (optional)",
+      }),
+    ).toHaveAttribute("placeholder", "Pick a spot…");
+  });
+
   it("clears only through the explicit clear control", async () => {
     render(<Harness clearable />);
     fireEvent.click(screen.getByRole("button", { name: "Clear product" }));

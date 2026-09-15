@@ -345,12 +345,12 @@ private struct GardenPhotoImportContent: View {
                 Text(selectionError).foregroundStyle(PorcelainTokens.destructive)
             }
             Section("Where") {
-                Picker("Location", selection: $model.locationID) {
+                Picker(GardenStrings.location, selection: $model.locationID) {
                     Text("Choose a location").tag("")
                     ForEach(model.options.locations) { Text($0.name).tag($0.id) }
                 }
-                Picker("About", selection: $model.plantingID) {
-                    Text("Whole bed").tag("")
+                Picker(GardenStrings.about, selection: $model.plantingID) {
+                    Text(GardenStrings.wholeArea).tag("")
                     ForEach(model.options.plantings) { Text($0.name).tag($0.id) }
                 }
             }

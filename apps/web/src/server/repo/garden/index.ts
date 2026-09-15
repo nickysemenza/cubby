@@ -13,6 +13,7 @@ import {
   gardenRecordEntryInput,
   gardenEntryOut,
   gardenOverviewOut,
+  gardenOptionsInput,
   gardenOptionsOut,
   plantingOut,
 } from "@cubby/schemas/garden";
@@ -24,7 +25,18 @@ import {
   type PlantingId,
 } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, asc, desc, eq, exists, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
@@ -43,6 +55,7 @@ import { logAuditEntry } from "~/server/repo/audit-log";
 import {
   associatePendingImages,
   countWhere,
+  eqAny,
   executeListQueryWithCount,
   imageJoinBindings,
   mapImages,
@@ -90,7 +103,7 @@ const plantingRow = async (db: GardenDb, id: PlantingId) => {
   const row = await unwrapDb(db).query.planting.findFirst({
     where: and(eq(planting.id, id), notDeleted(planting)),
     with: {
-      ingredient: { columns: { shortcode: true } },
+      ingredient: { columns: { shortcode: true, name: true } },
       sourceProduct: { columns: { shortcode: true } },
       location: { columns: { shortcode: true } },
       intendedLocation: { columns: { shortcode: true } },
@@ -125,6 +138,10 @@ const mapPlanting = (row: PlantingWithReferences) =>
     parentPlantingId: row.parentPlanting
       ? parseShortcodeFor("planting", row.parentPlanting.shortcode)
       : null,
+    displayName: plantingDisplayName({
+      ingredientName: row.ingredient.name,
+      variety: row.variety,
+    }),
     images: mapImages(row.images),
   });
 
@@ -136,12 +153,64 @@ type GardenEntryWithReferences = typeof gardenEntry.$inferSelect & {
     ingredient: { name: string };
   } | null;
   images: Array<{ image: MappableImageRecord; deletedAt?: Date | null }>;
+  anchorsPeriod: boolean;
 };
 
-const plantingDisplayName = (
-  row: NonNullable<GardenEntryWithReferences["planting"]>,
-) =>
-  row.variety ? `${row.ingredient.name} (${row.variety})` : row.ingredient.name;
+/**
+ * Bulk `anchorsPeriod` lookup — one `IN` query per caller (never per row) for
+ * which of the given garden entry ids anchor a `PlantingLocationPeriod` (the
+ * `startPlanting`/move bootstrapping entry `assertGardenEntryStructure` locks).
+ */
+const anchorPeriodEntryIds = async (
+  db: GardenDb,
+  entryIds: readonly string[],
+): Promise<ReadonlySet<string>> => {
+  if (entryIds.length === 0) return new Set();
+  const rows = await unwrapDb(db)
+    .select({
+      sourceGardenEntryId: plantingLocationPeriod.sourceGardenEntryId,
+    })
+    .from(plantingLocationPeriod)
+    .where(eqAny(plantingLocationPeriod.sourceGardenEntryId, entryIds));
+  return new Set(
+    rows
+      .map((row) => row.sourceGardenEntryId)
+      .filter((id): id is string => id !== null),
+  );
+};
+
+/** `"<ingredient name>[ · <variety>]"` — the canonical planting identity, shared
+ * by `planting.displayName` and `gardenEntry.plantingName`. */
+const plantingDisplayName = (row: {
+  ingredientName: string;
+  variety: string | null;
+}) =>
+  row.variety ? `${row.ingredientName} · ${row.variety}` : row.ingredientName;
+
+const GARDEN_ENTRY_KIND_LABELS = {
+  observation: "Note",
+  harvest: "Harvest",
+  move: "Move",
+} satisfies Record<string, string>;
+
+function isGardenEntryKindLabel(
+  kind: string,
+): kind is keyof typeof GARDEN_ENTRY_KIND_LABELS {
+  return kind in GARDEN_ENTRY_KIND_LABELS;
+}
+
+/** `"<Kind> · <YYYY-MM-DD> · <location name>"` — gardenEntry has no name
+ * column, so this is the canonical non-null identity for every surface. */
+const gardenEntryDisplayName = (row: {
+  kind: GardenEntryWithReferences["kind"];
+  observedOn: string;
+  locationName: string;
+}) => {
+  const kindLabel = isGardenEntryKindLabel(row.kind)
+    ? GARDEN_ENTRY_KIND_LABELS[row.kind]
+    : row.kind;
+  return `${kindLabel} · ${row.observedOn} · ${row.locationName}`;
+};
 
 const mapEntry = (row: GardenEntryWithReferences) =>
   gardenEntryOut.parse({
@@ -152,7 +221,17 @@ const mapEntry = (row: GardenEntryWithReferences) =>
       ? parseShortcodeFor("planting", row.planting.shortcode)
       : null,
     locationName: row.location.name,
-    plantingName: row.planting ? plantingDisplayName(row.planting) : null,
+    plantingName: row.planting
+      ? plantingDisplayName({
+          ingredientName: row.planting.ingredient.name,
+          variety: row.planting.variety,
+        })
+      : null,
+    displayName: gardenEntryDisplayName({
+      kind: row.kind,
+      observedOn: row.observedOn,
+      locationName: row.location.name,
+    }),
     images: mapImages(row.images),
   });
 
@@ -176,7 +255,8 @@ export const getGardenEntry = async (db: GardenDb, id: GardenEntryId) => {
       "CONSTRAINT_VIOLATION",
       "The garden entry no longer exists.",
     );
-  return mapEntry(row);
+  const anchors = await anchorPeriodEntryIds(db, [id]);
+  return mapEntry({ ...row, anchorsPeriod: anchors.has(id) });
 };
 
 // `gardenCreatePlantingInput` (the dedicated garden-form workflow input)
@@ -698,6 +778,12 @@ type GardenEntryUpdateDetails = {
   imageOrder?: string[];
 };
 
+/** Shared with `entity-adapters.ts`'s generic-create guard: a `move` entry is
+ * a byproduct of a planting workflow (start/move/split), never a direct
+ * create or retype. */
+export const MOVE_ENTRY_MESSAGE =
+  "Move entries are created only by planting workflows.";
+
 const assertGardenEntryStructure = (
   current: { kind: string; anchorsPeriod: boolean },
   data: GardenEntryUpdateDetails,
@@ -717,11 +803,14 @@ const assertGardenEntryStructure = (
       "Use location history to correct a structural move.",
     );
   }
-  if (data.kind !== undefined && data.kind !== current.kind) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Move entries are created only by planting workflows.",
-    );
+  // Only `move` is structural; an observation may be retyped as a harvest
+  // (and back) like any other correction.
+  if (
+    data.kind !== undefined &&
+    data.kind !== current.kind &&
+    (data.kind === "move" || current.kind === "move")
+  ) {
+    throw createAppError("CONSTRAINT_VIOLATION", MOVE_ENTRY_MESSAGE);
   }
 };
 
@@ -817,7 +906,7 @@ export const plantingList = async (
       unwrapDb(db).query.planting.findMany({
         where,
         with: {
-          ingredient: { columns: { shortcode: true } },
+          ingredient: { columns: { shortcode: true, name: true } },
           sourceProduct: { columns: { shortcode: true } },
           location: { columns: { shortcode: true } },
           intendedLocation: { columns: { shortcode: true } },
@@ -869,8 +958,16 @@ export const gardenEntryList = async (
       }),
     count: () => countWhere(db, gardenEntry, where),
   });
+  const anchors = await anchorPeriodEntryIds(
+    db,
+    rows.map((row) => row.id),
+  );
+  const rowsWithAnchor = rows.map((row) => ({
+    ...row,
+    anchorsPeriod: anchors.has(row.id),
+  }));
   return {
-    data: await withDisplayImages(db, "gardenEntry", rows, mapEntry),
+    data: await withDisplayImages(db, "gardenEntry", rowsWithAnchor, mapEntry),
     count,
   };
 };
@@ -939,6 +1036,10 @@ export const gardenOverview = async (db: Database) => {
       sourceProductName: item.sourceProductName,
       locationName: item.locationName,
       intendedLocationName: item.intendedLocationName,
+      displayName: plantingDisplayName({
+        ingredientName: item.ingredientName,
+        variety: item.row.variety,
+      }),
     }),
   ) satisfies GardenPlantingOut[];
   return gardenOverviewOut.parse({
@@ -1013,8 +1114,15 @@ export const gardenEntries = async (
     limit: pageSize + 1,
     offset: (input.page - 1) * pageSize,
   });
+  const pageRows = rows.slice(0, pageSize);
+  const anchors = await anchorPeriodEntryIds(
+    db,
+    pageRows.map((row) => row.id),
+  );
   return {
-    items: rows.slice(0, pageSize).map((row) => mapEntry(row)),
+    items: pageRows.map((row) =>
+      mapEntry({ ...row, anchorsPeriod: anchors.has(row.id) }),
+    ),
     hasMore: rows.length > pageSize,
   };
 };
@@ -1071,9 +1179,14 @@ export const gardenJournal = async (
     limit: pageSize + 1,
     offset: (input.page - 1) * pageSize,
   });
+  const pageRows = rows.slice(0, pageSize);
+  const anchors = await anchorPeriodEntryIds(
+    db,
+    pageRows.map((row) => row.id),
+  );
   return gardenJournalOut.parse({
-    items: rows.slice(0, pageSize).map((row) => ({
-      ...mapEntry(row),
+    items: pageRows.map((row) => ({
+      ...mapEntry({ ...row, anchorsPeriod: anchors.has(row.id) }),
       context: row.plantingId === plantingId ? "direct" : "bed",
     })),
     hasMore: rows.length > pageSize,
@@ -1271,9 +1384,54 @@ export const correctLocationDates = async (
     return mapLocationHistory(tx, plantingId);
   });
 
-export const gardenOptions = async (db: Database) => {
+/** Merge a garden-scoped default set with `search`-widened matches beyond it
+ * (see `docs/garden.md#gardenoptions`), deduped by shortcode and re-sorted by
+ * name so the union reads as one ordered list either way. */
+const mergeOptionRows = <T extends { shortcode: string; name: string }>(
+  scoped: readonly T[],
+  searchMatches: readonly T[],
+): T[] => {
+  const byShortcode = new Map(scoped.map((row) => [row.shortcode, row]));
+  for (const row of searchMatches) {
+    if (!byShortcode.has(row.shortcode)) byShortcode.set(row.shortcode, row);
+  }
+  return [...byShortcode.values()].sort((a, b) => a.name.localeCompare(b.name));
+};
+
+const OPTIONS_SEARCH_LIMIT = 50;
+
+export const gardenOptions = async (
+  db: Database,
+  input?: z.infer<typeof gardenOptionsInput>,
+) => {
   const optionLocation = alias(location, "GardenOptionLocation");
-  const [locations, ingredients, products, plantings] = await Promise.all([
+  const trimmedSearch = input?.search?.trim();
+  // Shorter than 2 characters after trim is ignored, not rejected.
+  const searchPrefix =
+    trimmedSearch && trimmedSearch.length >= 2
+      ? `${trimmedSearch}%`
+      : undefined;
+
+  // Ingredients referenced by at least one non-deleted planting are in scope
+  // even without a `gardenGuideKey`.
+  const referencedByPlanting = exists(
+    unwrapDb(db)
+      .select({ one: sql`1` })
+      .from(planting)
+      .where(
+        and(eq(planting.ingredientId, ingredient.id), notDeleted(planting)),
+      ),
+  );
+
+  const [
+    scopedLocations,
+    searchLocations,
+    scopedIngredients,
+    searchIngredients,
+    scopedProducts,
+    searchProducts,
+    plantings,
+  ] = await Promise.all([
     unwrapDb(db)
       .select({
         shortcode: location.shortcode,
@@ -1282,8 +1440,21 @@ export const gardenOptions = async (db: Database) => {
         gardenConditions: location.gardenConditions,
       })
       .from(location)
-      .where(notDeleted(location))
+      .where(and(notDeleted(location), isNotNull(location.gardenKind)))
       .orderBy(asc(location.name)),
+    searchPrefix
+      ? unwrapDb(db)
+          .select({
+            shortcode: location.shortcode,
+            name: location.name,
+            gardenKind: location.gardenKind,
+            gardenConditions: location.gardenConditions,
+          })
+          .from(location)
+          .where(and(notDeleted(location), ilike(location.name, searchPrefix)))
+          .orderBy(asc(location.name))
+          .limit(OPTIONS_SEARCH_LIMIT)
+      : Promise.resolve([]),
     unwrapDb(db)
       .select({
         shortcode: ingredient.shortcode,
@@ -1291,8 +1462,27 @@ export const gardenOptions = async (db: Database) => {
         gardenGuideKey: ingredient.gardenGuideKey,
       })
       .from(ingredient)
-      .where(notDeleted(ingredient))
+      .where(
+        and(
+          notDeleted(ingredient),
+          or(referencedByPlanting, isNotNull(ingredient.gardenGuideKey)),
+        ),
+      )
       .orderBy(asc(ingredient.name)),
+    searchPrefix
+      ? unwrapDb(db)
+          .select({
+            shortcode: ingredient.shortcode,
+            name: ingredient.name,
+            gardenGuideKey: ingredient.gardenGuideKey,
+          })
+          .from(ingredient)
+          .where(
+            and(notDeleted(ingredient), ilike(ingredient.name, searchPrefix)),
+          )
+          .orderBy(asc(ingredient.name))
+          .limit(OPTIONS_SEARCH_LIMIT)
+      : Promise.resolve([]),
     unwrapDb(db)
       .select({
         shortcode: product.shortcode,
@@ -1301,8 +1491,21 @@ export const gardenOptions = async (db: Database) => {
       })
       .from(product)
       .leftJoin(ingredient, eq(product.growsIngredientId, ingredient.id))
-      .where(notDeleted(product))
+      .where(and(notDeleted(product), isNotNull(product.growsIngredientId)))
       .orderBy(asc(product.name)),
+    searchPrefix
+      ? unwrapDb(db)
+          .select({
+            shortcode: product.shortcode,
+            name: product.name,
+            growsIngredientShortcode: ingredient.shortcode,
+          })
+          .from(product)
+          .leftJoin(ingredient, eq(product.growsIngredientId, ingredient.id))
+          .where(and(notDeleted(product), ilike(product.name, searchPrefix)))
+          .orderBy(asc(product.name))
+          .limit(OPTIONS_SEARCH_LIMIT)
+      : Promise.resolve([]),
     unwrapDb(db)
       .select({
         shortcode: planting.shortcode,
@@ -1318,6 +1521,9 @@ export const gardenOptions = async (db: Database) => {
       .where(notDeleted(planting))
       .orderBy(asc(ingredient.name), asc(planting.createdAt)),
   ]);
+  const locations = mergeOptionRows(scopedLocations, searchLocations);
+  const ingredients = mergeOptionRows(scopedIngredients, searchIngredients);
+  const products = mergeOptionRows(scopedProducts, searchProducts);
   return gardenOptionsOut.parse({
     locations: locations.map((row) => ({
       id: parseShortcodeFor("location", row.shortcode),

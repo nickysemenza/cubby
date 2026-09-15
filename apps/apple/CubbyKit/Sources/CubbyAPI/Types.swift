@@ -503,8 +503,14 @@ extension APIProtocol {
     }
     /// - Remark: HTTP `GET /api/v1/garden/options`.
     /// - Remark: Generated from `#/paths//api/v1/garden/options/get(garden.options)`.
-    package func garden_options(headers: Operations.Garden_options.Input.Headers = .init()) async throws -> Operations.Garden_options.Output {
-        try await garden_options(Operations.Garden_options.Input(headers: headers))
+    package func garden_options(
+        query: Operations.Garden_options.Input.Query = .init(),
+        headers: Operations.Garden_options.Input.Headers = .init()
+    ) async throws -> Operations.Garden_options.Output {
+        try await garden_options(Operations.Garden_options.Input(
+            query: query,
+            headers: headers
+        ))
     }
     /// - Remark: HTTP `GET /api/v1/garden/overview`.
     /// - Remark: Generated from `#/paths//api/v1/garden/overview/get(garden.overview)`.

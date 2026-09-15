@@ -54,7 +54,8 @@ struct ReconcileBodyTests {
                     createdAt: date, updatedAt: date, images: [], externalIds: [], unitMappings: []
                 ),
                 location: .init(
-                    id: "LOC-5678", name: "Bin 1", aliases: [], images: [], createdAt: date, updatedAt: date)
+                    id: "LOC-5678", name: "Bin 1", aliases: [], images: [], createdAt: date, updatedAt: date),
+                displayName: "Sample Product · Bin 1"
             )
             #expect(RecountRow(out).updatedAtRaw == expected)
         }

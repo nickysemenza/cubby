@@ -108,6 +108,9 @@ export const dbMealToAPI = (row: MealRow): MealOut => {
     recipes,
     totals: aggregateTotals(recipes.map((recipe) => recipe.scaledTotals)),
     images: mapImages(row.images),
+    // `name` is a nullable, user-editable label; an unnamed meal falls back to
+    // its date so every surface has a non-blank identity to show.
+    displayName: row.name?.trim() || row.date,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

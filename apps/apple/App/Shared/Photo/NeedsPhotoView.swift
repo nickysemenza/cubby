@@ -14,7 +14,7 @@ struct NeedsPhotoView: View {
             if let needs {
                 content(needs)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading needs-a-photo queue")
             }
         }
         .porcelainScreen()
@@ -34,7 +34,7 @@ struct NeedsPhotoView: View {
     private func content(_ needs: NeedsPhotoModel) -> some View {
         switch needs.phase {
         case .loading:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            LoadingIndicator.screen(label: "Loading needs-a-photo queue")
         case .failed(let message):
             ContentUnavailableView(
                 "Couldn't load the queue", systemImage: "exclamationmark.triangle", description: Text(message)

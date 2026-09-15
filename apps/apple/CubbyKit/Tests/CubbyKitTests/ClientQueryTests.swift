@@ -127,6 +127,42 @@ struct ClientQueryTests {
         #expect(items.contains(URLQueryItem(name: "relatedInventoryPresenceFilter", value: "has")))
     }
 
+    /// `GardenModel.create(_:rememberSource:)` makes exactly these two calls when the "remember
+    /// that this product grows this crop" toggle is on and the product's current association
+    /// differs from the chosen crop: create the planting, then patch the product's association.
+    /// This pins the wire shape of both — a regression a real save would hit.
+    @Test func rememberedSourceWriteBackSendsCreateThenScopedProductPatch() async throws {
+        defer { QueryStub.handler.withLock { $0 = nil } }
+        let seen = Mutex<[(path: String, body: [String: JSONValue])]>([])
+        QueryStub.handler.withLock { handler in
+            handler = { request in
+                let fields =
+                    (try? JSONDecoder().decode([String: JSONValue].self, from: Self.requestBody(request)))
+                    ?? [:]
+                seen.withLock { $0.append((path: request.url?.path ?? "", body: fields)) }
+                // The test only cares about outgoing request shape; reject before response mapping.
+                return (400, Data("{}".utf8))
+            }
+        }
+        let client = try makeClient()
+        await #expect(throws: CubbyAPIError.self) {
+            try await client.createGardenPlanting(
+                .init(
+                    ingredientID: "ING-2345", locationID: "LOC-2345", productID: "PRD-2345", status: .growing)
+            )
+        }
+        await #expect(throws: CubbyAPIError.self) {
+            try await client.setGardenProduct(id: "PRD-2345", growsIngredientID: "ING-2345")
+        }
+        let requests = seen.withLock { $0 }
+        try #require(requests.count == 2)
+        #expect(requests[0].path == "/api/v1/garden/createPlanting")
+        #expect(requests[0].body["ingredientId"] == "ING-2345")
+        #expect(requests[0].body["sourceProductId"] == "PRD-2345")
+        #expect(requests[1].path == "/api/v1/products/PRD-2345")
+        #expect(requests[1].body == ["growsIngredientId": "ING-2345"])
+    }
+
     @Test func searchRepeatsTheArrayKeyForEachEntityType() async throws {
         // An empty result page: only the outgoing request matters here, and `search-find.json`
         // (built for `SearchHitTests`'s lenient decode of an unknown `entityType`) would fail the

@@ -165,6 +165,9 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
     public let transplantedAt: Date?
     public let finishedAt: Date?
     public let gardenGuideKey: String?
+    /// The server's `"<crop name>[ · <variety>]"` display name (`docs/terminology.md` § Garden);
+    /// rows title from this rather than recomputing the format on-device.
+    public let displayName: String
 
     public init(
         id: String,
@@ -182,7 +185,8 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
         sownAt: Date? = nil,
         transplantedAt: Date? = nil,
         finishedAt: Date? = nil,
-        gardenGuideKey: String? = nil
+        gardenGuideKey: String? = nil,
+        displayName: String? = nil
     ) {
         self.id = id
         self.ingredient = ingredient
@@ -200,7 +204,15 @@ public struct GardenPlanting: Identifiable, Codable, Sendable, Hashable {
         self.transplantedAt = transplantedAt
         self.finishedAt = finishedAt
         self.gardenGuideKey = gardenGuideKey
+        self.displayName =
+            displayName
+            ?? [ingredient.name, variety].compactMap { $0?.nilIfEmpty }.joined(
+                separator: " · ")
     }
+}
+
+extension String {
+    fileprivate var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 public struct GardenLocation: Identifiable, Codable, Sendable, Hashable {
@@ -238,16 +250,38 @@ public struct GardenEntry: Identifiable, Codable, Sendable, Hashable {
     /// Retain the server image reference so journals can render the actual photo and link through
     /// to its ordinary Image detail record; ids alone made the correction UI a blind checklist.
     public let images: [GardenImage]
+    /// The server's `"<Note|Harvest|Move> · <date> · <area name>"` display name.
+    public let displayName: String
+    /// `true` for a `move` entry and the anchor entry `startPlanting` writes when a planting first
+    /// enters a location. Both are structural: clients must lock location/planting/date/kind and
+    /// route corrections through location history instead of the entry form.
+    public let anchorsPeriod: Bool
 
     public init(
         id: String, locationID: String, plantingID: String?, kind: GardenEntryKind, observedAt: Date,
         note: String?, harvestAmount: String?, images: [GardenImage], locationName: String? = nil,
-        plantingName: String? = nil
+        plantingName: String? = nil, displayName: String? = nil, anchorsPeriod: Bool = false
     ) {
         self.id = id; self.locationID = locationID; self.plantingID = plantingID; self.kind = kind
         self.observedAt = observedAt; self.note = note; self.harvestAmount = harvestAmount
         self.locationName = locationName; self.plantingName = plantingName; self.images = images
+        self.anchorsPeriod = anchorsPeriod
+        self.displayName =
+            displayName
+            ?? [
+                kind.rawValue.capitalized,
+                DateFormatter.gardenDisplayName.string(from: observedAt),
+                locationName,
+            ].compactMap { $0?.nilIfEmpty }.joined(separator: " · ")
     }
+}
+
+extension DateFormatter {
+    fileprivate static let gardenDisplayName: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter
+    }()
 }
 
 public struct GardenImage: Identifiable, Codable, Sendable, Hashable {
@@ -291,13 +325,20 @@ public struct GardenLocationPeriod: Identifiable, Codable, Sendable, Hashable {
     }
 }
 
+/// `locationID`/`kind`/`observedAt` are optional so a caller can omit an unchanged structural
+/// field entirely (the wire encodes an absent key as "leave alone"): `GardenEntryCorrectionSheet`
+/// locks these on a `move` entry or one with `anchorsPeriod`, and sends `nil` for them there
+/// instead of re-submitting the value it merely displayed. `plantingID` stays meaningful either
+/// way — passing the entry's own current value is always safe even when locked — because
+/// `resources.gardenEntry.update`'s wire encoding forces an *absent* `plantingId` to an explicit
+/// `null` (clearing the association) rather than leaving it alone; only `nil` there is special.
 public struct EditGardenEntry: Sendable, Hashable {
-    public let id: String; public let locationID: String; public let plantingID: String?
-    public let kind: GardenEntryKind; public let observedAt: Date; public let note: String?
+    public let id: String; public let locationID: String?; public let plantingID: String?
+    public let kind: GardenEntryKind?; public let observedAt: Date?; public let note: String?
     public let harvestAmount: String?; public let pendingImageIDs: [ImageCode];
     public let removeImageIDs: [String]
     public init(
-        id: String, locationID: String, plantingID: String?, kind: GardenEntryKind, observedAt: Date,
+        id: String, locationID: String?, plantingID: String?, kind: GardenEntryKind?, observedAt: Date?,
         note: String?, harvestAmount: String?, pendingImageIDs: [ImageCode], removeImageIDs: [String]
     ) {
         self.id = id; self.locationID = locationID; self.plantingID = plantingID; self.kind = kind

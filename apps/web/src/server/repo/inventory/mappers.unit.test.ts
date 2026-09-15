@@ -252,6 +252,7 @@ describe("inventory mappers", () => {
           },
         ],
       },
+      displayName: "Flour · Pantry",
     });
     expect(inventoryWithLocationAndProductOut.parse(result)).toEqual(result);
   });

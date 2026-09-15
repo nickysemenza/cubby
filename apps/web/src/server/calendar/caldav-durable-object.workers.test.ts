@@ -59,6 +59,13 @@ function documents() {
       revision: 1,
       itemCount: 1,
     },
+    garden: {
+      body: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n",
+      etag: '"garden"',
+      generatedAt,
+      revision: 1,
+      itemCount: 0,
+    },
   } as const;
 }
 

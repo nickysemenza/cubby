@@ -2,6 +2,7 @@ import type { ProductCookbookRefOut } from "@cubby/schemas/product";
 
 import { Row, Stack } from "~/components/layout";
 import { EntityFilterLink } from "~/components/ui/entity-filter-link";
+import { countLabel } from "~/lib/pluralize";
 
 import { EntityInlineLink } from "../EntityInlineLink";
 
@@ -36,9 +37,9 @@ export function ProductCookbook({
             variant="value"
             to="/recipes"
             search={{ source: cookbook.id }}
-            label={`Show all ${cookbook.recipeCount} recipes from ${cookbook.name}`}
+            label={`Show all ${countLabel(cookbook.recipeCount, "recipe")} from ${cookbook.name}`}
           >
-            {cookbook.recipeCount} recipes
+            {countLabel(cookbook.recipeCount, "recipe")}
           </EntityFilterLink>
         </Row>
       ))}

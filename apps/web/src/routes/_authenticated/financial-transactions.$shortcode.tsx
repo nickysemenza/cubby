@@ -20,7 +20,7 @@ const FinancialTransactionDetailPage = detailPage({
   render: (transaction) => (
     <FinancialTransactionDetail transaction={transaction} />
   ),
-  title: (transaction) => transaction.merchant || transaction.rawDescription,
+  title: (transaction) => transaction.displayName,
 });
 
 const FinancialTransactionNotFound = notFoundPage(

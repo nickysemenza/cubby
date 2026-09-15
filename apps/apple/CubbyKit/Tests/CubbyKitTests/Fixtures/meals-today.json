@@ -21,7 +21,10 @@
           "estimatedYieldGrams": null,
           "actualYieldGrams": null,
           "scaledTotals": {
-            "cost": { "status": "unavailable", "reason": "no_data" },
+            "cost": {
+              "status": "unavailable",
+              "reason": "no_data"
+            },
             "nutrition": {}
           },
           "createdAt": "2026-03-05T00:00:00.000Z",
@@ -29,13 +32,17 @@
         }
       ],
       "totals": {
-        "cost": { "status": "unavailable", "reason": "no_data" },
+        "cost": {
+          "status": "unavailable",
+          "reason": "no_data"
+        },
         "nutrition": {}
       },
       "images": [],
       "displayImages": [],
       "createdAt": "2026-03-05T00:00:00.000Z",
-      "updatedAt": "2026-03-05T00:00:00.000Z"
+      "updatedAt": "2026-03-05T00:00:00.000Z",
+      "displayName": "2026-03-05"
     }
   ],
   "meta": {

@@ -20,10 +20,10 @@ struct GardenPlantingRouteView: View {
                 } description: {
                     Text(error)
                 } actions: {
-                    Button("Retry") { Task { await load() } }
+                    Button(GardenStrings.retry) { Task { await load() } }
                 }
             } else {
-                ProgressView()
+                LoadingIndicator.screen()
             }
         }
         .porcelainScreen()
@@ -31,9 +31,9 @@ struct GardenPlantingRouteView: View {
     }
     private func load() async {
         error = nil
-        let model = GardenModel(service: appModel.client)
+        let model = GardenModel.SharedStore.model(for: appModel.client)
         garden = model
-        await model.load()
+        await model.loadIfNeeded()
         do { planting = try await appModel.client.gardenPlanting(id: id) } catch {
             self.error = error.localizedDescription
             Diagnostics.report(error, context: "garden.planting.load")
@@ -57,7 +57,11 @@ struct GardenEntryRouteView: View {
                     if let error { Text(error).foregroundStyle(PorcelainTokens.destructive) }
                 }
                 .toolbar {
-                    ToolbarItem(placement: .primaryAction) { Button("Edit entry") { correcting = true } }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(entry.anchorsPeriod ? GardenStrings.editNote : GardenStrings.editEntry) {
+                            correcting = true
+                        }
+                    }
                 }
                 .sheet(isPresented: $correcting, onDismiss: { Task { await refreshEntry() } }) {
                     GardenEntryCorrectionSheet(
@@ -69,18 +73,18 @@ struct GardenEntryRouteView: View {
                 } description: {
                     Text(error)
                 } actions: {
-                    Button("Retry") { Task { await refreshEntry() } }
+                    Button(GardenStrings.retry) { Task { await refreshEntry() } }
                 }
             } else {
-                ProgressView()
+                LoadingIndicator.screen()
             }
         }
         .porcelainScreen()
         .navigationTitle("Garden entry")
         .task(id: id) {
-            let model = GardenModel(service: appModel.client)
+            let model = GardenModel.SharedStore.model(for: appModel.client)
             garden = model
-            await model.load()
+            await model.loadIfNeeded()
             await refreshEntry()
         }
         .refreshable { await refreshEntry() }
@@ -98,13 +102,21 @@ struct GardenEntryRouteView: View {
 struct GardenEntrySummary: View {
     let entry: GardenEntry
     var linksToEntry = true
-    private var title: String {
-        let kind = entry.kind.rawValue.capitalized
-        return entry.plantingID == nil ? "Whole-bed \(kind.lowercased())" : kind
-    }
     private var heading: some View {
         VStack(alignment: .leading) {
-            Text(title).font(.porcelainBody.weight(.semibold))
+            HStack(spacing: PorcelainTokens.Space.sm) {
+                Text(entry.displayName).font(.porcelainBody.weight(.semibold))
+                if entry.anchorsPeriod {
+                    Text(GardenStrings.startedHere)
+                        .font(.porcelainLabel.weight(.semibold))
+                        .foregroundStyle(PorcelainTokens.cobalt)
+                        .padding(.horizontal, PorcelainTokens.Space.xs)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule().fill(PorcelainTokens.cobalt.opacity(0.12))
+                        )
+                }
+            }
             Text(entry.observedAt.formatted(date: .abbreviated, time: .omitted)).font(.porcelainLabel)
         }
     }
@@ -124,7 +136,7 @@ struct GardenEntrySummary: View {
                 }
             }
             if let amount = entry.harvestAmount {
-                Text(entry.plantingID == nil ? "Bed harvest: \(amount)" : amount)
+                Text(entry.plantingID == nil ? GardenStrings.harvestSummary(amount) : amount)
             }
             if let note = entry.note { Text(note) }
             GardenImageStrip(images: entry.images)
@@ -136,9 +148,15 @@ struct GardenEntrySummary: View {
 struct GardenBedJournalView: View {
     @Environment(AppModel.self) private var appModel
     let locationID: String?
+    private enum LoadPhase: Equatable { case idle, loading, loaded }
+    @State private var phase: LoadPhase = .idle
     @State private var entries: [GardenEntry] = []
     @State private var page = 1
     @State private var hasMore = false
+    /// The concurrency guard, separate from `phase`: `phase` only ever advances `.idle` →
+    /// `.loading` → `.loaded` (once) so the empty state cannot flash before the first page
+    /// answers, while `isLoading` gates every individual request including a later refresh or
+    /// "Load more".
     @State private var isLoading = false
     @State private var message: String?
     @State private var adding = false
@@ -156,29 +174,36 @@ struct GardenBedJournalView: View {
                     NavigationLink(value: Route.entityDetail(.location, id: locationID)) {
                         Text(locationName)
                     }
-                    Button("Add photos / Log entry") { adding = true }
+                    Button(GardenStrings.addPhotosOrLogEntry) { adding = true }
                 }
             }
             ForEach(entries) { GardenEntrySummary(entry: $0) }
             if let message {
                 Section {
                     Text(message).foregroundStyle(PorcelainTokens.destructive)
-                    Button("Retry") { Task { await load(reset: failedReset) } }
+                    Button(GardenStrings.retry) { Task { await load(reset: failedReset) } }
                 }
             }
-            if entries.isEmpty && !isLoading && message == nil {
-                Text("No entries yet.").foregroundStyle(.secondary)
+            // Tri-state like `EntityListView`: `.idle`/`.loading` never render the empty state, so
+            // "No entries yet." cannot flash before the first page has actually come back.
+            if phase == .loaded, entries.isEmpty, message == nil {
+                Text(GardenStrings.noEntriesYet).foregroundStyle(.secondary)
             }
             if hasMore {
-                Button(isLoading ? "Loading…" : "Load more") { Task { await load() } }.disabled(isLoading)
+                Button(isLoading ? GardenStrings.loading : GardenStrings.loadMore) {
+                    Task { await load() }
+                }
+                .disabled(isLoading)
             }
         }
-        .overlay { if isLoading && entries.isEmpty { ProgressView() } }
-        .navigationTitle(locationID == nil ? "Garden journal" : "\(locationName) journal")
+        .overlay { if phase != .loaded { LoadingIndicator.screen() } }
+        .navigationTitle(
+            locationID == nil ? GardenStrings.gardenJournal : GardenStrings.areaJournal(locationName)
+        )
         .task {
-            let model = GardenModel(service: appModel.client)
+            let model = GardenModel.SharedStore.model(for: appModel.client)
             garden = model
-            await model.load()
+            await model.loadIfNeeded()
             await load(reset: true)
         }
         .refreshable { await load(reset: true) }
@@ -196,10 +221,12 @@ struct GardenBedJournalView: View {
             if reset { pendingReset = true }
             return
         }
+        if phase == .idle { phase = .loading }
         isLoading = true
         message = nil
         defer {
             isLoading = false
+            phase = .loaded
             if pendingReset {
                 pendingReset = false
                 Task { await load(reset: true) }

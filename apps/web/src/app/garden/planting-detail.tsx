@@ -1,26 +1,40 @@
 import type { PlantingOut } from "@cubby/schemas/garden";
-import type {
-  LocationShortcode,
-  ProductShortcode,
+import {
+  plantingShortcode,
+  type LocationShortcode,
+  type ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { BookOpen, History, ImageIcon, Sprout } from "lucide-react";
+import { BookOpen, History, MoreHorizontal, Sprout } from "lucide-react";
 import { useState } from "react";
 
 import { DetailSections } from "~/app/_components/data-table/detail-page";
-import { EntityPhotosSection } from "~/app/_components/photos/entity-photos-section";
+import { formatDateWithYear } from "~/app/projects/project-formatting";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
+import { getErrorMessage } from "~/lib/error-utils";
 
 import { EntryForm } from "./entry-form";
+import { GardenDialogFooterSlot } from "./garden-fields";
 import { GardenGuide } from "./garden-guide";
 import { GardenTimeline } from "./garden-timeline";
+import { garden } from "./garden.functions";
 import type { GardenLocation } from "./location-form";
-import { PlantingLocationHistory } from "./location-history";
+import {
+  PlantingLocationHistory,
+  type PlantingLocationPeriods,
+} from "./location-history";
 import {
   PlantingActionForm,
   plantingActionLabels,
@@ -29,19 +43,17 @@ import {
 import { PlantingForm } from "./planting-form";
 
 type PlantingDialog = PlantingAction | "edit" | "entry";
-type LocationLink = { id: LocationShortcode; name: string };
 type ProductLink = { id: ProductShortcode; name: string };
+type LocationLink = { id: LocationShortcode; name: string };
 
 function PlantingFacts({
   planting,
   cropName,
-  location,
   source,
   intended,
 }: {
   planting: PlantingOut;
   cropName: string;
-  location?: LocationLink;
   source?: ProductLink;
   intended?: LocationLink;
 }) {
@@ -58,20 +70,9 @@ function PlantingFacts({
         </Link>
         {planting.variety ? ` · ${planting.variety}` : ""}
       </p>
-      <p className="text-sm">
-        {location ? (
-          <Link
-            to="/locations/$shortcode"
-            params={{ shortcode: location.id }}
-            className="underline"
-          >
-            {location.name}
-          </Link>
-        ) : (
-          "Location not yet chosen"
-        )}
-        {planting.quantity ? ` · ${planting.quantity}` : ""}
-      </p>
+      {planting.quantity && (
+        <p className="text-sm">Quantity: {planting.quantity}</p>
+      )}
       {source && (
         <p className="text-sm">
           Source:{" "}
@@ -100,14 +101,20 @@ function PlantingFacts({
         {planting.plannedWindow && (
           <p>Planned window: {planting.plannedWindow}</p>
         )}
-        {planting.plannedDate && <p>Planned date: {planting.plannedDate}</p>}
-        {planting.sowedOn && <p>Sowed: {planting.sowedOn}</p>}
-        {planting.transplantedOn && (
-          <p>Transplanted: {planting.transplantedOn}</p>
+        {planting.plannedDate && (
+          <p>Planned date: {formatDateWithYear(planting.plannedDate)}</p>
         )}
-        {planting.finishedOn && <p>Finished: {planting.finishedOn}</p>}
+        {planting.sowedOn && (
+          <p>Sowed: {formatDateWithYear(planting.sowedOn)}</p>
+        )}
+        {planting.transplantedOn && (
+          <p>Transplanted: {formatDateWithYear(planting.transplantedOn)}</p>
+        )}
+        {planting.finishedOn && (
+          <p>Finished: {formatDateWithYear(planting.finishedOn)}</p>
+        )}
         {planting.notes && (
-          <p className="whitespace-pre-wrap">{planting.notes}</p>
+          <p className="whitespace-pre-wrap">Notes: {planting.notes}</p>
         )}
       </Stack>
       {planting.parentPlantingId && (
@@ -123,32 +130,23 @@ function PlantingFacts({
   );
 }
 
-function PlantingActions({
-  planting,
-  onOpen,
-}: {
-  planting: PlantingOut;
-  onOpen: (dialog: PlantingDialog) => void;
-}) {
-  return (
-    <Row gap="sm" wrap>
-      {planting.status === "growing" && (
-        <>
-          <Button variant="outline" onClick={() => onOpen("move")}>
-            Move everything
-          </Button>
-          <Button variant="outline" onClick={() => onOpen("split")}>
-            Move some seedlings
-          </Button>
-        </>
-      )}
-      {planting.status !== "finished" && (
-        <Button variant="outline" onClick={() => onOpen("finish")}>
-          Finish planting
-        </Button>
-      )}
-    </Row>
-  );
+/**
+ * Mirrors `PlantingLocationHistory`'s own gating: offer the "confirm/correct
+ * location dates" action once a period already exists, or the planting could
+ * confirm its first one.
+ */
+function plantingLocationDatesState(
+  hasConfirmedLocationPeriod: boolean,
+  planting: PlantingOut,
+) {
+  return {
+    canOfferLocationDates:
+      hasConfirmedLocationPeriod ||
+      (planting.status !== "planned" && planting.locationId !== null),
+    locationDatesLabel: hasConfirmedLocationPeriod
+      ? "Correct location dates"
+      : "Confirm location dates",
+  };
 }
 
 function plantingDialogTitle(dialog: PlantingDialog) {
@@ -198,6 +196,162 @@ function PlantingDialogContent({
   );
 }
 
+/**
+ * The planting's top action row. `Page`'s `heroActions` prop is how every
+ * other detail page gets a primary + collapsing-secondary action cluster
+ * (`page-hero.tsx`'s `DetailPlateActions`), but `PlantingDetail` is a body
+ * component nested inside `plantings.$shortcode.tsx`'s own `<Page>` call —
+ * that route (already rewritten onto `detailPage`) has no seam for a child
+ * to contribute `heroActions` up to it. So this renders its own row using the
+ * same visual contract instead: one primary `Button`, one outline `Button`,
+ * and one `DropdownMenu` labeled "Actions" for the rest.
+ */
+function PlantingActionRow({
+  planting,
+  locationDatesLabel,
+  canOfferLocationDates,
+  onOpenDialog,
+  onCorrectLocationDates,
+}: {
+  planting: PlantingOut;
+  locationDatesLabel: string;
+  canOfferLocationDates: boolean;
+  onOpenDialog: (dialog: PlantingDialog) => void;
+  onCorrectLocationDates: () => void;
+}) {
+  const primary =
+    planting.status === "planned"
+      ? { label: "Start planting", onClick: () => onOpenDialog("start") }
+      : planting.locationId
+        ? { label: "Log entry", onClick: () => onOpenDialog("entry") }
+        : null;
+  const moveItems =
+    planting.status === "growing"
+      ? [
+          {
+            id: "move",
+            label: "Move everything",
+            onClick: () => onOpenDialog("move"),
+          },
+          {
+            id: "split",
+            label: "Move some seedlings",
+            onClick: () => onOpenDialog("split"),
+          },
+        ]
+      : [];
+  const dateItems = canOfferLocationDates
+    ? [
+        {
+          id: "dates",
+          label: locationDatesLabel,
+          onClick: onCorrectLocationDates,
+        },
+      ]
+    : [];
+  const finishItems =
+    planting.status !== "finished"
+      ? [
+          {
+            id: "finish",
+            label: "Finish planting",
+            onClick: () => onOpenDialog("finish"),
+          },
+        ]
+      : [];
+  const leadingItems = [...moveItems, ...dateItems];
+  return (
+    <Row gap="sm" align="center" wrap>
+      {primary && <Button onClick={primary.onClick}>{primary.label}</Button>}
+      <Button variant="outline" onClick={() => onOpenDialog("edit")}>
+        Edit
+      </Button>
+      {(leadingItems.length > 0 || finishItems.length > 0) && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button variant="outline" aria-label="Open planting actions" />
+            }
+          >
+            <MoreHorizontal />
+            Actions
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {leadingItems.map((item) => (
+              <DropdownMenuItem key={item.id} onClick={item.onClick}>
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+            {finishItems.length > 0 && (
+              <>
+                {leadingItems.length > 0 && <DropdownMenuSeparator />}
+                {finishItems.map((item) => (
+                  <DropdownMenuItem key={item.id} onClick={item.onClick}>
+                    {item.label}
+                  </DropdownMenuItem>
+                ))}
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </Row>
+  );
+}
+
+/**
+ * The "Location history" section's content: loading / error / loaded states
+ * for the `history` query, pulled out of `PlantingDetail` so its branches
+ * don't count against that component's complexity.
+ */
+function PlantingLocationHistorySection({
+  isPending,
+  isError,
+  error,
+  onRetry,
+  planting,
+  locationName,
+  periods,
+  correctingDates,
+  onOpenChange,
+  onSaved,
+}: {
+  isPending: boolean;
+  isError: boolean;
+  error: unknown;
+  onRetry: () => void;
+  planting: PlantingOut;
+  locationName?: string;
+  periods: PlantingLocationPeriods;
+  correctingDates: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+}) {
+  if (isPending) return <p>Loading location history…</p>;
+  if (isError) {
+    return (
+      <Stack gap="sm">
+        <p role="alert">
+          Could not load location history: {getErrorMessage(error)}
+        </p>
+        <Button variant="outline" onClick={onRetry}>
+          Retry
+        </Button>
+      </Stack>
+    );
+  }
+  return (
+    <PlantingLocationHistory
+      planting={planting}
+      locationName={locationName}
+      periods={periods}
+      open={correctingDates}
+      onOpenChange={onOpenChange}
+      onSaved={onSaved}
+    />
+  );
+}
+
 export function PlantingDetail({
   planting,
   refresh,
@@ -206,6 +360,7 @@ export function PlantingDetail({
   refresh: () => void;
 }) {
   const [dialog, setDialog] = useState<PlantingDialog | null>(null);
+  const [correctingDates, setCorrectingDates] = useState(false);
   const crop = useQuery(
     entityDetailFor("ingredient").queryOptions(planting.ingredientId),
   );
@@ -225,63 +380,56 @@ export function PlantingDetail({
       { enabled: Boolean(planting.intendedLocationId) },
     ),
   );
+  // Loaded once here so it can feed three surfaces: the Actions menu's
+  // "Confirm/Correct location dates" item, the Location history section's own
+  // display, and the journal's "confirm this planting's location dates" hint.
+  const history = useQuery(
+    garden.locationHistory.queryOptions({
+      plantingId: plantingShortcode.parse(planting.id),
+    }),
+  );
+  const periods = history.data?.periods ?? [];
+  const hasConfirmedLocationPeriod = periods.length > 0;
+  const { canOfferLocationDates, locationDatesLabel } =
+    plantingLocationDatesState(hasConfirmedLocationPeriod, planting);
+  const cropName = crop.data?.name ?? "Planting";
   const onSaved = () => {
     setDialog(null);
     refresh();
   };
-  const overview = (
-    <Stack gap="md">
-      <PlantingFacts
-        planting={planting}
-        cropName={crop.data?.name ?? "Planting"}
-        location={location.data ?? undefined}
-        source={source.data ?? undefined}
-        intended={intended.data ?? undefined}
-      />
-      <PlantingActions planting={planting} onOpen={setDialog} />
-    </Stack>
-  );
   return (
     <>
       <Stack gap="md" className="mb-6">
+        {/* The page hero already carries the display name; this row is the
+            status and the current growing area. */}
         <Row gap="sm" align="center" wrap>
-          <h2 className="text-lg font-semibold">
-            {crop.data?.name ?? "Planting"}
-            {planting.variety ? ` · ${planting.variety}` : ""}
-          </h2>
           <Badge variant="secondary">{planting.status}</Badge>
-        </Row>
-        {location.data && (
-          <Link
-            to="/locations/$shortcode"
-            params={{ shortcode: location.data.id }}
-            className="text-sm underline"
-          >
-            {location.data.name}
-          </Link>
-        )}
-        <Row gap="sm" wrap>
-          {planting.locationId && (
-            <Button onClick={() => setDialog("entry")}>
-              Add photos / Log entry
-            </Button>
-          )}
-          {planting.status === "planned" && (
-            <Button onClick={() => setDialog("start")}>Start planting</Button>
-          )}
-          <Button variant="outline" onClick={() => setDialog("edit")}>
-            Edit planting
-          </Button>
-          {planting.locationId && (
+          {location.data && (
             <Link
-              to="/garden-entries"
-              search={{ locationId: planting.locationId }}
-              className="content-center text-sm underline"
+              to="/locations/$shortcode"
+              params={{ shortcode: location.data.id }}
+              className="text-sm underline"
             >
-              Bed journal
+              {location.data.name}
             </Link>
           )}
         </Row>
+        <PlantingActionRow
+          planting={planting}
+          locationDatesLabel={locationDatesLabel}
+          canOfferLocationDates={canOfferLocationDates}
+          onOpenDialog={setDialog}
+          onCorrectLocationDates={() => setCorrectingDates(true)}
+        />
+        {planting.locationId && (
+          <Link
+            to="/garden-entries"
+            search={{ locationId: planting.locationId }}
+            className="content-center text-sm underline"
+          >
+            {location.data ? `${location.data.name} journal` : "Area journal"}
+          </Link>
+        )}
       </Stack>
       <DetailSections
         showEntityActions={false}
@@ -289,24 +437,16 @@ export function PlantingDetail({
         heroImages={planting.images}
         sections={[
           {
-            id: "photos",
-            title: "Photos",
-            icon: ImageIcon,
-            placement: "supporting",
-            content: (
-              <EntityPhotosSection
-                entity="planting"
-                id={planting.id}
-                images={planting.images}
-              />
-            ),
-          },
-          {
             id: "garden-history",
             title: "Journal",
             icon: History,
             placement: "primary",
-            content: <GardenTimeline plantingId={planting.id} />,
+            content: (
+              <GardenTimeline
+                plantingId={planting.id}
+                hasConfirmedLocationPeriod={hasConfirmedLocationPeriod}
+              />
+            ),
           },
           {
             id: "overview",
@@ -314,14 +454,12 @@ export function PlantingDetail({
             icon: Sprout,
             placement: "supporting",
             content: (
-              <details>
-                <summary className="cursor-pointer py-2 text-sm font-medium">
-                  Dates, source, and planting actions
-                </summary>
-                <Stack gap="md" className="pt-3">
-                  {overview}
-                </Stack>
-              </details>
+              <PlantingFacts
+                planting={planting}
+                cropName={cropName}
+                source={source.data ?? undefined}
+                intended={intended.data ?? undefined}
+              />
             ),
           },
           {
@@ -330,9 +468,17 @@ export function PlantingDetail({
             icon: History,
             placement: "supporting",
             content: (
-              <PlantingLocationHistory
+              <PlantingLocationHistorySection
+                isPending={history.isPending}
+                isError={history.isError}
+                error={history.error}
+                onRetry={() => void history.refetch()}
                 planting={planting}
                 locationName={location.data?.name}
+                periods={periods}
+                correctingDates={correctingDates}
+                onOpenChange={setCorrectingDates}
+                onSaved={() => void history.refetch()}
               />
             ),
           },
@@ -362,6 +508,7 @@ export function PlantingDetail({
           }}
           title={plantingDialogTitle(dialog)}
           size="lg"
+          footer={<GardenDialogFooterSlot />}
         >
           <PlantingDialogContent
             dialog={dialog}

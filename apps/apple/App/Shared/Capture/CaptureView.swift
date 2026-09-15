@@ -15,7 +15,7 @@ struct CaptureView: View {
                 CaptureContent(
                     capture: capture, pickingLocation: $pickingLocation, showingStrays: $showingStrays)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading Capture")
             }
         }
         .porcelainScreen()

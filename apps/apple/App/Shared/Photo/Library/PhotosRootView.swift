@@ -169,7 +169,7 @@ private struct PhotoLibraryBrowser: View {
             HStack(spacing: 6) {
                 if library.isLoadingLibrary || library.isScanning || matches.isLoading || matches.isRepairing
                 {
-                    ProgressView().controlSize(.mini)
+                    LoadingIndicator(label: "Loading photo library").controlSize(.mini)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     if library.hasFullAccess && (library.count > 0 || library.isLoadingLibrary) {

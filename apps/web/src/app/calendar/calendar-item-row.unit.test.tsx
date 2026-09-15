@@ -28,6 +28,18 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   },
 };
 
+const plantingMilestone: Extract<CalendarItem, { kind: "planting" }> = {
+  kind: "planting",
+  id: testShortcode("planting", "PLT-3B2C"),
+  milestone: "sowed",
+  title: "Tomato · Brandywine",
+  locationName: "Raised bed 2",
+  plannedWindow: "Late spring",
+  startDate: "2026-08-18",
+  endDateExclusive: "2026-08-19",
+  interaction: "read-only",
+};
+
 const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {
   kind: "expense",
   id: testShortcode("expense", "EXP-1111"),
@@ -119,5 +131,15 @@ describe("CalendarItemPresentation", () => {
     expect(
       screen.getByText("Household · KitchenAid mixer · Appliances & Furniture"),
     ).toBeInTheDocument();
+  });
+
+  it("names a planting's milestone, planned window, and location", () => {
+    render(
+      <CalendarItemPresentation item={plantingMilestone} variant="rich" />,
+    );
+    expect(
+      screen.getByText("Sowed · Late spring · Raised bed 2"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Tomato · Brandywine")).toBeInTheDocument();
   });
 });

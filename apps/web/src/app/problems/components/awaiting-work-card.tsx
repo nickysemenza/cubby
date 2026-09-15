@@ -1,6 +1,5 @@
 import type { AwaitingWork } from "@cubby/schemas/maintenance";
 import { useQuery } from "@tanstack/react-query";
-import pluralize from "pluralize";
 import type { ReactNode } from "react";
 
 import { useActionMutation } from "~/app/_components/hooks/useActionMutation";
@@ -15,6 +14,7 @@ import {
 } from "~/components/ui/card";
 import { Description } from "~/components/ui/description";
 import { maintenance } from "~/lib/maintenance.functions";
+import { pluralWord } from "~/lib/pluralize";
 
 import { ProblemActionButton } from "./problem-action-button";
 
@@ -83,13 +83,13 @@ export function AwaitingWorkCard({
     success: (result) => {
       const parts = [
         result.publishedRecipeTasks > 0
-          ? `${result.publishedRecipeTasks} recipe ${pluralize("recompute", result.publishedRecipeTasks)}`
+          ? `${result.publishedRecipeTasks} recipe ${pluralWord("recompute", result.publishedRecipeTasks)}`
           : null,
         result.publishedEmbeddingTasks > 0
-          ? `${result.publishedEmbeddingTasks} embedding ${pluralize("refresh", result.publishedEmbeddingTasks)}`
+          ? `${result.publishedEmbeddingTasks} embedding ${pluralWord("refresh", result.publishedEmbeddingTasks)}`
           : null,
         result.culledUploads > 0
-          ? `${result.culledUploads} abandoned ${pluralize("upload", result.culledUploads)} removed`
+          ? `${result.culledUploads} abandoned ${pluralWord("upload", result.culledUploads)} removed`
           : null,
       ].filter((part): part is string => part !== null);
       if (parts.length === 0) return "Nothing was waiting.";
@@ -128,7 +128,7 @@ export function AwaitingWorkCard({
         {LINES.filter((line) => data[line.key] > 0).map((line) => (
           <span key={line.key} className="text-sm">
             <span className="font-mono tabular-nums">{data[line.key]}</span>{" "}
-            {pluralize(line.noun, data[line.key])} {line.detail}
+            {pluralWord(line.noun, data[line.key])} {line.detail}
           </span>
         ))}
       </Stack>

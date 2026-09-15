@@ -1,5 +1,6 @@
 import type { CalendarFeedState } from "./contracts";
 import { parseCalendarFeedRequest } from "./contracts";
+import type { IcsFeed } from "./ics";
 
 const notFound = () =>
   new Response("Not found", {
@@ -8,7 +9,7 @@ const notFound = () =>
   });
 
 const responseHeaders = (
-  feed: "meals" | "tasks" | "all",
+  feed: IcsFeed,
   result: {
     etag: string;
     generatedAt: string;

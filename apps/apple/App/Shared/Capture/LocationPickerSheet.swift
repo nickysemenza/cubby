@@ -55,7 +55,9 @@ struct LocationPickerSheet: View {
             .listStyle(.plain)
             .porcelainScreen()
             .overlay {
-                if capture.loadingLocations && capture.locations.isEmpty { ProgressView() }
+                if capture.loadingLocations && capture.locations.isEmpty {
+                    LoadingIndicator(label: "Loading locations")
+                }
             }
             .searchable(text: $query, prompt: "Filter locations")
             .navigationTitle("Sweep location")

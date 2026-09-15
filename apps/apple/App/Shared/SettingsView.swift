@@ -89,7 +89,7 @@ struct SettingsView: View {
                 }
             #endif
         }
-        .formStyle(.grouped)
+        .porcelainForm(size: .host)
         .font(.porcelainBody)
         .porcelainScreen()
         .navigationTitle("Settings")

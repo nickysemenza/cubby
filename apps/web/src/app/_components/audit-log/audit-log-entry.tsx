@@ -21,6 +21,7 @@ import {
 import { Description } from "~/components/ui/description";
 import { EntityIcon, entityLabel } from "~/entities/entities";
 import type { AuditLogEntry } from "~/lib/audit-log.functions";
+import { countLabel } from "~/lib/pluralize";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn } from "~/lib/utils";
 
@@ -139,7 +140,7 @@ function formatLedgerValue(
     };
   }
   if (Array.isArray(value)) {
-    return { text: `${value.length} items`, mono: true };
+    return { text: countLabel(value.length, "item"), mono: true };
   }
   if (!isAuditObject(value)) return null;
   // `Amount` is by far the most common object diff on the home feed — an

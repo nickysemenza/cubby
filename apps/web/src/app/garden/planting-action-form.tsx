@@ -10,22 +10,25 @@ import { useState } from "react";
 
 import type { ComboboxItem } from "~/app/_components/combobox/combobox-types";
 import { Stack } from "~/components/layout";
+import { Label } from "~/components/ui/label";
 import { NativeSelect } from "~/components/ui/native-select";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { getErrorMessage } from "~/lib/error-utils";
 import { householdLocalDate } from "~/lib/household-date";
 
-import { GardenField, GardenFormActions, GardenNotes } from "./garden-fields";
+import {
+  GARDEN_DIALOG_FORM_ID,
+  GardenField,
+  GardenFormActions,
+  GardenNotes,
+} from "./garden-fields";
 import { GardenPicker } from "./garden-picker";
+import { gardenStrings } from "./garden-strings";
 import { garden } from "./garden.functions";
 
 export type PlantingAction = "start" | "move" | "split" | "finish";
-export const plantingActionLabels = {
-  start: "Start planting",
-  move: "Move everything",
-  split: "Move some seedlings",
-  finish: "Finish planting",
-};
+/** Each verb is simultaneously the triggering action, the dialog title, and the submit label. */
+export const plantingActionLabels = gardenStrings.planting.verbs;
 
 export function PlantingActionForm({
   planting,
@@ -84,6 +87,7 @@ export function PlantingActionForm({
   });
   return (
     <form
+      id={GARDEN_DIALOG_FORM_ID}
       onSubmit={(event) => {
         event.preventDefault();
         setError(null);
@@ -94,13 +98,17 @@ export function PlantingActionForm({
         {action !== "finish" && (
           <GardenPicker
             entity="location"
-            label={action === "start" ? "Starting location" : "Destination"}
+            label={
+              action === "start"
+                ? gardenStrings.planting.startingLocationField
+                : gardenStrings.planting.destinationField
+            }
             value={location}
             onChange={setLocation}
           />
         )}
         <GardenField
-          label="Date"
+          label={gardenStrings.planting.dateField}
           type="date"
           value={date}
           onChange={setDate}
@@ -108,39 +116,45 @@ export function PlantingActionForm({
         />
         {action === "start" && (
           <Stack gap="sm">
-            <label htmlFor="garden-start-method">How are you starting?</label>
+            <Label htmlFor="garden-start-method">
+              {gardenStrings.planting.startMethodField}
+            </Label>
             <NativeSelect
               id="garden-start-method"
               value={startMethod}
               onChange={(event) => setStartMethod(event.target.value)}
             >
-              <option value="sow">Sowing seeds</option>
-              <option value="transplant">Planting a seedling or plant</option>
-              <option value="existing">Already growing; date unknown</option>
+              <option value="sow">
+                {gardenStrings.planting.startMethodSow}
+              </option>
+              <option value="transplant">
+                {gardenStrings.planting.startMethodTransplant}
+              </option>
+              <option value="existing">
+                {gardenStrings.planting.startMethodExisting}
+              </option>
             </NativeSelect>
           </Stack>
         )}
         {action === "split" && (
           <>
             <GardenField
-              label="Quantity being moved (optional)"
+              label={gardenStrings.planting.splitQuantityField}
               value={quantity}
               onChange={setQuantity}
-              placeholder="A few seedlings"
+              placeholder={gardenStrings.planting.quantityPlaceholder}
             />
             <p className="text-sm text-muted-foreground">
-              Remaining seedlings stay in the original location. The new
-              planting keeps the seed source and sowing history.
+              {gardenStrings.planting.splitExplanation}
             </p>
           </>
         )}
         {action === "finish" && (
           <p className="text-sm text-muted-foreground">
-            This finishes only this planting. Its photos and harvest history
-            stay available.
+            {gardenStrings.planting.finishExplanation}
           </p>
         )}
-        {action !== "start" && <GardenNotes value={note} onChange={setNote} />}
+        <GardenNotes value={note} onChange={setNote} />
         <GardenFormActions
           pending={save.isPending}
           error={error}

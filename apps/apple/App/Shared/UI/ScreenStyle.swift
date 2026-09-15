@@ -23,6 +23,82 @@ extension View {
         listRowBackground(PorcelainTokens.surface)
             .listRowSeparatorTint(PorcelainTokens.hairline)
     }
+
+    /// The one shared shape for a `Form`-based sheet or screen: `.formStyle(.grouped)` on every
+    /// platform (without it, macOS renders section headers as plain text and floats the
+    /// navigation title mid-sheet), plus a macOS-only sizing frame sized for the sheet's content.
+    /// iOS/iPadOS ignore `size` — the sheet or push already sizes itself there.
+    func porcelainForm(size: PorcelainFormSize = .regular) -> some View {
+        modifier(PorcelainFormModifier(size: size))
+    }
+}
+
+/// The two sheet shapes in use: a couple of fields (`AdjustCountSheet`) versus a full editor
+/// (the Garden forms). Add a case here rather than hand-rolling another `#if os(macOS) .frame(...)`.
+enum PorcelainFormSize {
+    case compact
+    case regular
+    /// The host already owns the window size (the Settings scene is a fixed 420pt window);
+    /// only the grouped style applies. A sizing frame here pushes the form off-screen.
+    case host
+
+    fileprivate var frame: (minWidth: CGFloat, idealWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat)?
+    {
+        switch self {
+        case .compact: (320, 380, 220, 300)
+        case .regular: (520, 620, 560, 720)
+        case .host: nil
+        }
+    }
+}
+
+private struct PorcelainFormModifier: ViewModifier {
+    let size: PorcelainFormSize
+
+    func body(content: Content) -> some View {
+        #if os(macOS)
+            if let frame = size.frame {
+                content
+                    .formStyle(.grouped)
+                    .frame(
+                        minWidth: frame.minWidth, idealWidth: frame.idealWidth,
+                        minHeight: frame.minHeight, idealHeight: frame.idealHeight
+                    )
+            } else {
+                content.formStyle(.grouped)
+            }
+        #else
+            content
+                .formStyle(.grouped)
+        #endif
+    }
+}
+
+/// A `ProgressView` with an accessibility label — a bare `ProgressView()` reads nothing to
+/// VoiceOver. Use the plain initializer inline (a button spinner, a row); use `.screen(label:)`
+/// when it is the entire body of a loading screen, centered and filling the available space.
+struct LoadingIndicator: View {
+    var label: String = "Loading"
+
+    var body: some View {
+        ProgressView()
+            .accessibilityLabel(label)
+    }
+
+    static func screen(label: String = "Loading") -> some View {
+        LoadingIndicator(label: label)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+#Preview("Loading indicator") {
+    VStack(spacing: PorcelainTokens.Space.lg) {
+        LoadingIndicator(label: "Loading products")
+        LoadingIndicator.screen(label: "Loading products")
+            .frame(height: 120)
+    }
+    .padding(PorcelainTokens.Space.lg)
+    .background(PorcelainTokens.canvas)
 }
 
 /// A square-ish shortcut: a cobalt glyph over a sentence-case label, sized for a two-column grid.

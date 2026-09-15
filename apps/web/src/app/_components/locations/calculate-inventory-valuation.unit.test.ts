@@ -22,6 +22,7 @@ function makeInventoryItem(params: {
   const now = new Date();
   return {
     id: testShortcode("inventory", params.id),
+    displayName: "Example product · Example location",
     displayImages: [],
     createdAt: now,
     updatedAt: now,

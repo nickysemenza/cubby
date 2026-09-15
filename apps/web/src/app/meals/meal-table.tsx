@@ -116,9 +116,10 @@ export function MealTable({
           createNameColumn(columnHelper, "meal", "name", {
             editable: nameEditable,
             className: "w-56",
-            // Same fallback the meal detail page's title uses for an unnamed
-            // meal — an unnamed meal is identified by its date.
-            emptyLabel: mealDateLabel,
+            // The canonical computed title (name || date); keeps this column's
+            // empty state in step with the detail page's title and every other
+            // meal-naming surface.
+            emptyLabel: (row) => row.displayName,
           }),
         );
         add(

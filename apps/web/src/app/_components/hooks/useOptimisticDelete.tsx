@@ -1,6 +1,5 @@
 import type { QueryKey, UseMutationOptions } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import pluralize from "pluralize";
 import type { ReactNode } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -20,6 +19,7 @@ import {
 } from "~/integrations/tanstack-query/operation-cache";
 import type { OperationCacheTag } from "~/integrations/tanstack-query/operation-meta";
 import { removeCachedListItems } from "~/lib/optimistic-list";
+import { pluralWord } from "~/lib/pluralize";
 
 import { VerbMenuItem, verbBulkAction } from "../actions/action-verb-ui";
 import { defineEntityAction } from "../actions/entity-action-definition";
@@ -327,7 +327,7 @@ export function useOptimisticDelete<
           action="Delete"
           variant="destructive"
           pendingLabel="Deleting..."
-          description={`This will permanently remove ${pluralize(
+          description={`This will permanently remove ${pluralWord(
             deletable.entityLabel.toLowerCase(),
             targetCount || 1,
           )} from your workspace. This action cannot be undone.`}

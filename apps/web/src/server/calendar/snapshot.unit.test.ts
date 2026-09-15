@@ -62,6 +62,18 @@ const task = (): CalendarItem => ({
   coverImageUrl: null,
 });
 
+const planting = (): CalendarItem => ({
+  kind: "planting",
+  id: testShortcode("planting", "PLT-3B2C"),
+  milestone: "sowed",
+  title: "Tomato · Brandywine",
+  locationName: "Raised bed 2",
+  plannedWindow: "Late spring",
+  startDate: "2026-09-05",
+  endDateExclusive: "2026-09-06",
+  interaction: "read-only",
+});
+
 describe("calendar snapshot", () => {
   it("renders all feed variants from one range read and one timestamp", async () => {
     const getRange = vi.fn<typeof getCalendarRange>(async () => ({
@@ -75,7 +87,7 @@ describe("calendar snapshot", () => {
     );
 
     expect(getRange).toHaveBeenCalledOnce();
-    expect(snapshot.counts).toEqual({ meals: 1, tasks: 1, all: 2 });
+    expect(snapshot.counts).toEqual({ meals: 1, tasks: 1, all: 2, garden: 0 });
     expect(snapshot.documents.meals.body).toContain("MEL-4K7M");
     expect(snapshot.documents.meals.body).not.toContain("TSK-9H64");
     expect(snapshot.documents.tasks.body).toContain("TSK-9H64");
@@ -84,6 +96,26 @@ describe("calendar snapshot", () => {
     expect(
       new Set(Object.values(snapshot.documents).map((d) => d.generatedAt)),
     ).toEqual(new Set([now.toISOString()]));
+  });
+
+  it("renders the garden feed from the same range read", async () => {
+    const getRange = vi.fn<typeof getCalendarRange>(async () => ({
+      items: [meal(), task(), planting()],
+      days: {},
+    }));
+    const snapshot = await buildCalendarSnapshot(
+      database,
+      { origin: "https://cubby.example", now, revision: 7 },
+      getRange,
+    );
+
+    // One range read still covers every feed, garden included.
+    expect(getRange).toHaveBeenCalledOnce();
+    expect(snapshot.counts).toEqual({ meals: 1, tasks: 1, all: 2, garden: 1 });
+    expect(snapshot.documents.garden.body).toContain("PLT-3B2C");
+    // `all` is the long-subscribed meals+tasks feed and must not silently
+    // start publishing plantings too.
+    expect(snapshot.documents.all.body).not.toContain("PLT-3B2C");
   });
 
   it("produces stable ETags for unchanged rendered bytes", async () => {

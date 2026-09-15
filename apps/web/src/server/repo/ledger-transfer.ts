@@ -76,8 +76,13 @@ const columns = {
   shortcode: ledgerTransfer.shortcode,
   fromPartyId: ledgerTransfer.fromPartyId,
   toPartyId: ledgerTransfer.toPartyId,
-  fromPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId" AND "deletedAt" IS NULL)`,
-  toPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId" AND "deletedAt" IS NULL)`,
+  // includes-deleted: `fromPartyName` is the entity's non-null titleField and
+  // `toPartyName` mirrors it; the `deletedAt IS NULL` filter these used to
+  // carry made a soft-deleted party's name read as SQL NULL into a
+  // `z.string()` read schema. `fromPartyShortcode`/`toPartyShortcode` below
+  // already resolve across a soft-deleted party for the same reason.
+  fromPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
+  toPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
   fromPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
   toPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
   fromPartyKind: sql<

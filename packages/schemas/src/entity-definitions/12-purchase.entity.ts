@@ -21,7 +21,7 @@ export default defineEntity({
   table: "Purchase",
   identifiers: { brand: "PurchaseId", shortcode: "PUR-", legacy: null },
   presentation: {
-    titleField: "displayLabel",
+    titleField: "displayName",
     domain: "finance",
     description: "Orders and their itemized expense lines.",
     emptyState: {
@@ -281,6 +281,14 @@ export default defineEntity({
         },
       },
       {
+        // `purchaseLabel({...})` — order id, else vendor + date, else vendor,
+        // with a nonblank `displayLabel` appended. `displayLabel` alone is
+        // nullable and user-editable, so it cannot serve as the title field.
+        key: "displayName",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         validation: {
@@ -414,6 +422,7 @@ export default defineEntity({
       "documentCount",
       "images",
       "dataQuality",
+      "displayName",
       "createdAt",
       "updatedAt",
     ],

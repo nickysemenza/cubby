@@ -73,7 +73,7 @@ struct DevView: View {
                         Task { await check() }
                     } label: {
                         HStack(spacing: PorcelainTokens.Space.sm) {
-                            if checking { ProgressView().controlSize(.small) }
+                            if checking { LoadingIndicator(label: "Fetching product").controlSize(.small) }
                             Text(checking ? "Checking…" : "Fetch first product")
                                 .font(.porcelainTitle)
                         }

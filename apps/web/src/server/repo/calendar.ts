@@ -22,6 +22,7 @@ import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
 import { expense, project, purchase, task } from "~/server/db/schema";
 
+import { loadCalendarPlantings, mapPlantingItems } from "./calendar-plantings";
 import { getDb, notDeleted, relations } from "./database-helpers";
 import { eqAny, presenceCondition } from "./database-helpers/query";
 import { dbExpenseToAPI } from "./expense/helpers";
@@ -53,8 +54,9 @@ const shiftPlainDate = (value: string, amount: number) =>
 const itemOrder = {
   project: 0,
   task: 1,
-  meal: 2,
-  expense: 3,
+  planting: 2,
+  meal: 3,
+  expense: 4,
 } as const satisfies Record<CalendarItem["kind"], number>;
 
 /** How an unnamed meal names itself: its slot, or the generic fallback. */
@@ -393,7 +395,9 @@ const summarizeCalendarDays = (
         summary.expenseCount += 1;
         if (item.future) summary.plannedSpend += item.cost ?? 0;
         else summary.actualSpend += item.cost ?? 0;
-      } else summary.projectCount += 1;
+      } else if (item.kind === "project") summary.projectCount += 1;
+      // Plantings are a read-only calendar decoration, not a planning-load
+      // signal — the day summary intentionally has no plantingCount.
     }
   }
   for (const [day, totals] of Object.entries(mealTotalsByDay)) {
@@ -412,10 +416,11 @@ export async function getCalendarRange(
   input: CalendarRangeInput,
 ): Promise<CalendarRangeOut> {
   const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
-  // Omitted `kinds` means all four, so the in-app calendar is unchanged. A
+  // Omitted `kinds` means all five, so the in-app calendar is unchanged. A
   // narrowed request skips whole reads rather than filtering after the fact —
-  // the ICS feed asks for meals + tasks, and the project branch it drops is a
-  // whole-tree date fold it would otherwise pay for on every poll.
+  // the ICS feed asks for meals + tasks (or, for the garden feed, plantings),
+  // and the project branch it drops is a whole-tree date fold it would
+  // otherwise pay for on every poll.
   const wants = (kind: CalendarItemKind) =>
     !input.kinds || input.kinds.includes(kind);
 
@@ -425,22 +430,29 @@ export async function getCalendarRange(
   const vendorIds = input.expenseVendorId
     ? await resolveAllPresent(db, "vendor", [input.expenseVendorId].flat())
     : [];
-  const [meals, taskRows, expenseRows, projectRows, projectDates] =
-    await Promise.all([
-      loadCalendarMeals(db, input, endInclusive),
-      loadCalendarTasks(db, input, endInclusive, scope),
-      loadCalendarExpenses(db, input, endInclusive, scope, vendorIds),
-      loadCalendarProjects(db, input, scope),
-      // The date fold stays WHOLE-TREE on purpose. `aggregateSubtreeDates`
-      // folds a parent's window up from its descendants, so scoping the fold to
-      // the filtered set would make a filtered-in parent lose the window its
-      // filtered-out children contribute. Only the emitted rows narrow.
-      //
-      // `loadProjectDateWindows`, not `loadProjectSubtreeRollups`: the calendar
-      // reads `.dateWindows` and nothing else, and the rollup variant
-      // additionally runs two spend/task aggregates whose results are discarded.
-      wants("project") ? loadProjectDateWindows(db, scope.tree) : null,
-    ]);
+  const [
+    meals,
+    taskRows,
+    expenseRows,
+    projectRows,
+    plantingRows,
+    projectDates,
+  ] = await Promise.all([
+    loadCalendarMeals(db, input, endInclusive),
+    loadCalendarTasks(db, input, endInclusive, scope),
+    loadCalendarExpenses(db, input, endInclusive, scope, vendorIds),
+    loadCalendarProjects(db, input, scope),
+    loadCalendarPlantings(db, input, endInclusive),
+    // The date fold stays WHOLE-TREE on purpose. `aggregateSubtreeDates`
+    // folds a parent's window up from its descendants, so scoping the fold to
+    // the filtered set would make a filtered-in parent lose the window its
+    // filtered-out children contribute. Only the emitted rows narrow.
+    //
+    // `loadProjectDateWindows`, not `loadProjectSubtreeRollups`: the calendar
+    // reads `.dateWindows` and nothing else, and the rollup variant
+    // additionally runs two spend/task aggregates whose results are discarded.
+    wants("project") ? loadProjectDateWindows(db, scope.tree) : null,
+  ]);
 
   const recipeIds = uniq(
     meals.flatMap((meal) => meal.recipes.map((value) => value.recipeId)),
@@ -461,6 +473,7 @@ export async function getCalendarRange(
     ...mapTaskItems(taskRows, productCoverImageUrls),
     ...mapExpenseItems(expenseRows, productCoverImageUrls),
     ...mapProjectItems(projectRows, projectDates, input),
+    ...mapPlantingItems(plantingRows, input),
   ]);
   return { items, days: summarizeCalendarDays(input, items) };
 }

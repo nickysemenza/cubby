@@ -19,7 +19,7 @@ const InventoryDetailPage = detailPage({
   render: (inventory, shortcode) => (
     <InventoryDetail key={shortcode} inventoryitem={inventory} />
   ),
-  title: (inventory) => inventory.product?.name,
+  title: (inventory) => inventory.displayName,
 });
 
 const InventoryNotFound = notFoundPage(

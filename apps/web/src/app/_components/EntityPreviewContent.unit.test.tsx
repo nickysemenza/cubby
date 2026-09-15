@@ -1,5 +1,6 @@
 import { financialAccountOut } from "@cubby/schemas/financial-account";
 import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
+import { gardenEntryOut, plantingOut } from "@cubby/schemas/garden";
 import { imageOut, imageWithEntitySchema } from "@cubby/schemas/image";
 import { ingredientWithFoodOut } from "@cubby/schemas/ingredient";
 import { infLocation } from "@cubby/schemas/location";
@@ -14,9 +15,11 @@ import { mock } from "~/lib/test/mock-schema";
 import {
   toFinancialAccountCard,
   toFinancialTransactionCard,
+  toGardenEntryCard,
   toImageCard,
   toIngredientCard,
   toLocationCard,
+  toPlantingCard,
   toWishCard,
 } from "./EntityPreviewContent";
 import { PreviewQuery } from "./preview/preview-query";
@@ -251,6 +254,7 @@ describe("first-wave compact cards", () => {
         accountName: "Household Visa",
         merchant: "Hardware store",
         rawDescription: null,
+        displayName: "Hardware store",
         allocations: [],
       },
     });
@@ -361,5 +365,57 @@ describe("first-wave compact cards", () => {
         },
       ]),
     );
+  });
+
+  it("titles a planting card from displayName and reports its status", () => {
+    const growingTomato = mock(plantingOut, {
+      seed: 8,
+      overrides: {
+        locationId: testShortcode("location", "LOC-4K7M"),
+        status: "growing",
+        displayName: "Tomato · Cherokee Purple",
+        images: [],
+      },
+    });
+
+    const card = toPlantingCard(growingTomato);
+
+    expect(card.name).toBe("Tomato · Cherokee Purple");
+    expect(card.body).toEqual([
+      {
+        kind: "stats",
+        stats: [
+          { label: "Status", value: "Growing" },
+          { label: "Location", value: expect.anything() },
+        ],
+      },
+    ]);
+  });
+
+  it("titles a gardenEntry card from displayName and maps observation to Note", () => {
+    const bedOverview = mock(gardenEntryOut, {
+      seed: 9,
+      overrides: {
+        kind: "observation",
+        observedOn: "2026-10-06",
+        locationName: "Garden test bed",
+        displayName: "Note · 2026-10-06 · Garden test bed",
+        images: [],
+      },
+    });
+
+    const card = toGardenEntryCard(bedOverview);
+
+    expect(card.name).toBe("Note · 2026-10-06 · Garden test bed");
+    expect(card.body).toEqual([
+      {
+        kind: "stats",
+        stats: [
+          { label: "Kind", value: "Note" },
+          { label: "Date", value: expect.any(String) },
+          { label: "Location", value: expect.anything() },
+        ],
+      },
+    ]);
   });
 });

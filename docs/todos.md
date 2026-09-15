@@ -295,6 +295,47 @@ history is the archive. Permanent product constraints live in the
 
 ## Triggered
 
+### Garden audit follow-ups (2026-09-14)
+
+- (P3) **Bulk "Finish selected" on Apple.** Web has no equivalent gap; the
+  native client lacks a multi-select finish action for plantings, so
+  finishing several plantings at once still means one Finish per planting.
+- (P3) **Ingredient merge drops `gardenGuideKey`.** Merging two Ingredients
+  silently discards the losing Ingredient's `gardenGuideKey` rather than
+  carrying or surfacing it. Separately, Product merge can leave a Planting
+  pointed at the tombstoned source Product without surfacing that planting in
+  the merge preview.
+- (P3) **Planting/entry delete is API/MCP-only.** No web or Apple UI
+  affordance calls delete for `planting` or `gardenEntry` today; decide
+  whether one is wanted before adding it.
+- (P3) **Apple day-grouped photo import is reachable only from Photos › Add
+  to….** The generic "attach to Plantings / Garden Entries" chooser bypasses
+  journal semantics (anchor locking, area journal placement) since it doesn't
+  route through the garden entry form.
+- (P3) **`/locations/arrange` and `/locations/photo-pass` ignore growing
+  areas.** Neither existing bulk-location tool is garden-aware.
+- (lead) **React #418 hydration error on `/garden` and `/garden-entries`.**
+  Logged in production on both route loads; reproduce in dev before deciding
+  on a fix.
+- (idea) **Guide planting windows as a calendar overlay.** Render the
+  Planting guide's reference windows on top of the garden calendar lane
+  instead of as a separate lookup.
+- (P3) **`EntityInlineLink` lacks cases for `financialAccount`,
+  `financialTransaction`, `wish`, and `image`.** Unrelated to garden directly,
+  but found auditing generic entity-link rendering during this pass.
+- (P3) **`usda-food` uses the status-green `INK.positive` entity color.**
+  Same audit pass; the color reads as a status signal rather than an entity
+  identity color.
+- (P3) **Apple `MappingTests` meal-name fallback is now a separate
+  client-side rule.** Since `meal` carries a server-computed `displayName`,
+  the Apple-side fallback name logic in `MappingTests` duplicates the
+  contract rather than reading the server value.
+- (P3) **`FormWrapper` renders its action bar in the dialog body.**
+  `apps/web/src/app/_components/form-utils.tsx`'s `FormWrapper` has no footer
+  mode, so `settle-expense` and `create-project-from-tasks` can't render
+  their actions in `ResponsiveDialog`'s footer the way every other dialog
+  does. Add a footer mode so those two forms can adopt it.
+
 - **Push change feed for post-mutation refresh** — Promote only when a derived
   value users actually wait on (an AI location description, a recipe total
   cascade) reliably lands after the client's fixed +5 s / +30 s deferred

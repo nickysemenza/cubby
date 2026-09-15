@@ -1,7 +1,6 @@
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import type { AllProblems, MaintenanceCounts } from "@cubby/schemas/problems";
 import { sumBy } from "es-toolkit";
-import pluralize from "pluralize";
 
 import { openRecipeRecomputeStaleStream } from "~/app/recipes/recipe.functions";
 import {
@@ -12,6 +11,7 @@ import { backfillLocationDescriptionsStream } from "~/lib/ai.functions";
 import { collectBulkStream } from "~/lib/bulk-progress";
 import { imageUpload } from "~/lib/image.functions";
 import { maintenance } from "~/lib/maintenance.functions";
+import { countLabel } from "~/lib/pluralize";
 
 /** What one task did, for the run's summary toast. */
 type AutoFixOutcome = {
@@ -105,7 +105,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
       });
       return {
         summary: r.count
-          ? `culled ${pluralize("pending image", r.count, true)}`
+          ? `culled ${countLabel(r.count, "pending image")}`
           : null,
       };
     },
@@ -124,7 +124,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
       );
       return {
         summary: r.enqueued
-          ? `queued ${pluralize("location", r.enqueued, true)} for analysis`
+          ? `queued ${countLabel(r.enqueued, "location")} for analysis`
           : null,
       };
     },
@@ -148,7 +148,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
       const r = await maintenance.settleAwaitingWork.call();
       return {
         summary: r.publishedEmbeddingTasks
-          ? `published ${pluralize("embedding refresh", r.publishedEmbeddingTasks, true)}`
+          ? `published ${countLabel(r.publishedEmbeddingTasks, "embedding refresh")}`
           : null,
       };
     },
@@ -166,7 +166,7 @@ const AUTO_FIX_TASKS: AutoFixTask[] = [
       const r = await collectBulkStream(await openRecipeRecomputeStaleStream());
       return {
         summary: r.enqueued
-          ? `queued ${pluralize("recipe", r.enqueued, true)} for recompute`
+          ? `queued ${countLabel(r.enqueued, "recipe")} for recompute`
           : null,
       };
     },

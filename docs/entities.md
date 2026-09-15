@@ -120,7 +120,15 @@ detail read carries enriched relations or computed fields.
 
 `presentation` is everything a generic surface needs to *present* the entity
 and nothing a surface computes: `titleField` (a read-projection key — the
-compiler rejects one that is not), `domain` (a `WAYFINDING_DOMAINS` line or
+compiler rejects one that is not) must resolve to a **non-nullable** text read
+field; the compiler rejects a nullable title. An entity whose natural title
+can be empty (no name column, or a name that may be blank) instead declares a
+storage-less read-only `displayName` field — `validation: { read: z.string(),
+create: null, update: null }`, absent from both `storage` and every
+`intents.fields` roster — computed in the repo mapper from other columns, and
+points `titleField` at that field. `planting`, `gardenEntry`, `meal`,
+`financialTransaction`, `purchase`, and `inventory` all use this pattern
+today. `domain` (a `WAYFINDING_DOMAINS` line or
 `null` for an entity on no line), `description`, `emptyState` copy, and icon
 names (`lucide` is checked against the browser registry's icon map at compile
 time; `sfSymbol` reaches the native catalog verbatim). The generator emits it
@@ -435,6 +443,10 @@ irreducible transaction and collision rules.
 
 1. Add one typed `.entity.ts` declaration with field validation, storage, mutation
    policies, presentation, capabilities, and logical relationships.
+   `presentation.titleField` must resolve to a non-nullable text read field;
+   if the entity's natural title can be empty, declare a storage-less
+   read-only `displayName` field instead (see above) and point `titleField`
+   at it rather than at a nullable name column.
 2. Add its branded id and compose its table and canonical input/output schemas
    from the generated factories. Keep indexes, constraints, domain refinements,
    and relationship projections explicit. A physical change still requires a

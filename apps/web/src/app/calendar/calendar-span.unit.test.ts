@@ -18,9 +18,27 @@ const projectSpan = (
   projectKind: null,
 });
 
+const plantingMilestone: CalendarItem = {
+  kind: "planting",
+  id: testShortcode("planting", "PLT-3B2C"),
+  milestone: "sowed",
+  title: "Tomato · Brandywine",
+  locationName: "Raised bed 2",
+  plannedWindow: "Late spring",
+  startDate: "2026-10-03",
+  endDateExclusive: "2026-10-04",
+  interaction: "read-only",
+};
+
 describe("itemSpanLabel", () => {
   it("returns null for a single-day item", () => {
     expect(itemSpanLabel(projectSpan("2026-10-03", "2026-10-04"))).toBeNull();
+  });
+
+  it("returns null for a single-day planting milestone", () => {
+    // Every planting item is a one-day point event (see mapPlantingItems), so
+    // it never earns a span label — same rule as a meal or a 1-day task.
+    expect(itemSpanLabel(plantingMilestone)).toBeNull();
   });
 
   it("renders the INCLUSIVE end, one day back from endDateExclusive", () => {

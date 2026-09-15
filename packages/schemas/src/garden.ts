@@ -119,6 +119,15 @@ export const gardenJournalOut = z.object({
   hasMore: z.boolean(),
 });
 
+// `search` is name-prefix matched (2+ chars after trim; shorter is ignored)
+// against Locations/Ingredients/Products beyond the default garden-scoped
+// set — see `garden.options` in docs/garden.md.
+// Stays a flat GET query (`?search=`): an optional *object* would force a POST
+// body and drop the operation out of the native client's GET/list filter.
+export const gardenOptionsInput = z.object({
+  search: z.string().optional(),
+});
+
 export const gardenLocationHistoryInput = z.object({
   plantingId: plantingShortcode,
 });

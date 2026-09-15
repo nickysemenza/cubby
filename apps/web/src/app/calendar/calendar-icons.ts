@@ -5,6 +5,7 @@ import {
   CircleDollarSign,
   CookingPot,
   type LucideIcon,
+  Sprout,
 } from "lucide-react";
 
 /**
@@ -20,4 +21,5 @@ export const KIND_ICONS = {
   task: CheckSquare,
   expense: CircleDollarSign,
   project: CalendarRange,
+  planting: Sprout,
 } satisfies Record<CalendarItemKind, LucideIcon>;

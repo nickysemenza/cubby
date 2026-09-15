@@ -232,14 +232,57 @@ const labelSql = (entity: Entity, alias: string) => {
     case "vendor":
     case "wish":
     case "expense":
-    case "meal":
       return sql`COALESCE(${column("name")}::text, ${column("shortcode")})`;
     case "image":
       return sql`COALESCE(${column("filename")}::text, ${column("shortcode")})`;
+    // `name || date` — mirrors `displayName` in
+    // `server/repo/meal/helpers.ts` (an unnamed meal is identified by its
+    // date, not by falling through to the shortcode).
+    case "meal":
+      return sql`COALESCE(NULLIF(TRIM(${column("name")}), ''), ${column("date")}::text, ${column("shortcode")})`;
+    // `purchaseLabel(...)`'s ladder (`apps/web/src/lib/purchase-label.ts`):
+    // orderId, else vendor name + date, else vendor name; a nonblank
+    // `displayLabel` is appended parenthetically without replacing the
+    // identity. `vendorId` has no local column to read the name from, so it's
+    // a correlated subquery against `Vendor`, same technique as the
+    // planting/gardenEntry cases below.
     case "purchase":
-      return sql`COALESCE(${column("displayLabel")}::text, ${column("orderId")}::text, ${column("shortcode")})`;
+      return sql`COALESCE(
+        (CASE
+          WHEN NULLIF(TRIM(${column("orderId")}), '') IS NOT NULL THEN ${column("orderId")}
+          WHEN ${column("date")} IS NOT NULL THEN
+            COALESCE((SELECT v."name" FROM "Vendor" v WHERE v."id" = ${column("vendorId")}), 'Unknown vendor')
+              || ' · ' || to_char(${column("date")}::date, 'FMMon FMDD, YYYY')
+          ELSE COALESCE((SELECT v."name" FROM "Vendor" v WHERE v."id" = ${column("vendorId")}), 'Unknown vendor')
+        END)
+          || COALESCE(' (' || NULLIF(TRIM(${column("displayLabel")}), '') || ')', ''),
+        ${column("shortcode")}
+      )`;
+    // `merchant || rawDescription || capitalized kind` — mirrors
+    // `displayName` in `server/repo/financial-transaction.ts`.
     case "financialTransaction":
-      return sql`COALESCE(${column("merchant")}::text, ${column("rawDescription")}::text, ${column("shortcode")})`;
+      return sql`COALESCE(${column("merchant")}::text, ${column("rawDescription")}::text, initcap(${column("kind")}::text), ${column("shortcode")})`;
+    // `"<ingredient name>[ · <variety>]"` — mirrors `displayName` in
+    // `server/repo/garden/index.ts`. `ingredientId` has no local name column,
+    // so the ingredient's name is a correlated subquery against `Ingredient`;
+    // `variety` is a plain column on `planting` itself.
+    case "planting":
+      return sql`COALESCE(
+        (SELECT i."name" FROM "Ingredient" i WHERE i."id" = ${column("ingredientId")})
+          || COALESCE(' · ' || NULLIF(${column("variety")}, ''), ''),
+        ${column("shortcode")}
+      )`;
+    // `"<Note|Harvest|Move> · <YYYY-MM-DD> · <area name>"` — mirrors
+    // `displayName` in `server/repo/garden/index.ts`, where the `observation`
+    // kind renders as "Note". `locationId` has no local name column, so the
+    // location's name is a correlated subquery against `Location`.
+    case "gardenEntry":
+      return sql`COALESCE(
+        (CASE WHEN ${column("kind")} = 'observation' THEN 'Note' ELSE initcap(${column("kind")}::text) END)
+          || ' · ' || to_char(${column("observedOn")}, 'YYYY-MM-DD')
+          || ' · ' || (SELECT l."name" FROM "Location" l WHERE l."id" = ${column("locationId")}),
+        ${column("shortcode")}
+      )`;
     default:
       return column("shortcode");
   }

@@ -42,9 +42,7 @@ struct AdjustCountSheet: View {
                 }
             }
         }
-        #if os(macOS)
-            .frame(minWidth: 320, minHeight: 220)
-        #endif
+        .porcelainForm(size: .compact)
     }
 
     private func save() {

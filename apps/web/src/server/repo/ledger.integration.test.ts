@@ -34,6 +34,7 @@ import {
 import {
   createLedgerTransfer,
   deleteLedgerTransfers,
+  getLedgerTransferByShortcode,
   updateLedgerTransfer,
 } from "~/server/repo/ledger-transfer";
 import { makeExpenseInput } from "~/server/repo/repo.fixtures";
@@ -845,5 +846,40 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     );
     expect(cleared.output).toMatchObject({ amount: 12, sourceClaims: [] });
+  });
+
+  it("keeps a non-null fromPartyName after the from-party is soft-deleted", async () => {
+    const from = await party("Soft-deleted transfer party", "guest");
+    const to = await party("Soft-deleted transfer counterpart", "guest");
+    const created = await createLedgerTransfer(
+      ctx.db,
+      {
+        fromPartyId: from.output.id,
+        toPartyId: to.output.id,
+        amount: 5,
+        date: "2026-08-20",
+        notes: null,
+        sourceClaims: [],
+        evidenceTransactionIds: [],
+      },
+      ctx.actor,
+    );
+    if (!created.output) throw new Error("expected transfer output");
+
+    // Bypasses `deleteLedgerParties`'s live-transfer guard on purpose: this
+    // simulates a party soft-deleted through some other path while its
+    // transfer stays live — exactly the latent-NULL case `fromPartyName`'s
+    // read query used to be exposed to (see `includes-deleted` comment on
+    // its subquery in ledger-transfer.ts).
+    await unwrapDb(ctx.db)
+      .update(ledgerParty)
+      .set({ deletedAt: new Date() })
+      .where(eq(ledgerParty.id, from.entityId));
+
+    const reread = await getLedgerTransferByShortcode(
+      ctx.db,
+      created.output.id,
+    );
+    expect(reread?.fromPartyName).toBe(from.output.name);
   });
 });

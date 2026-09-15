@@ -19,7 +19,7 @@ import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
-import { DialogFooter } from "~/components/ui/dialog";
+import { DialogFormActions } from "~/components/ui/dialog-form-actions";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
@@ -219,6 +219,17 @@ export function AddToMeal({
         size="md"
         title="Add to meal"
         description="Choose a day and an existing meal, or create a separate meal for this recipe."
+        footer={
+          <DialogFormActions
+            onCancel={() => setOpen(false)}
+            submitLabel={
+              target === NEW_MEAL ? "Create meal" : "Add to selected meal"
+            }
+            pending={isPending}
+            submitDisabled={existingMeals.isLoading}
+            onSubmit={() => void submit()}
+          />
+        }
       >
         <Stack gap="sm">
           <Stack gap="xs">
@@ -301,19 +312,6 @@ export function AddToMeal({
             </Stack>
           )}
         </Stack>
-        <DialogFooter>
-          <Row gap="sm">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              disabled={isPending || existingMeals.isLoading}
-              onClick={() => void submit()}
-            >
-              {target === NEW_MEAL ? "Create meal" : "Add to selected meal"}
-            </Button>
-          </Row>
-        </DialogFooter>
       </ResponsiveDialog>
     </>
   );

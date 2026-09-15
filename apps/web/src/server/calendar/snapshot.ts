@@ -1,4 +1,5 @@
 import { addDays } from "date-fns";
+import { uniq } from "es-toolkit";
 
 import { formatPlainDate } from "~/lib/plain-date";
 import type { Database } from "~/server/db";
@@ -42,10 +43,13 @@ export async function buildCalendarSnapshot(
 ): Promise<CalendarSnapshot> {
   const startDate = formatPlainDate(addDays(options.now, -PAST_DAYS));
   const endDateExclusive = formatPlainDate(addDays(options.now, FUTURE_DAYS));
+  // One read covers every published feed: the union of what "all" and
+  // "garden" each publish, so a feed-specific render below never needs a
+  // kind this range read didn't fetch.
   const { items } = await getRange(db, {
     startDate,
     endDateExclusive,
-    kinds: [...kindsForFeed("all")],
+    kinds: uniq([...kindsForFeed("all"), ...kindsForFeed("garden")]),
   });
   const generatedAt = options.now.toISOString();
   const renderDocument = async (
@@ -70,16 +74,18 @@ export async function buildCalendarSnapshot(
       itemCount: calendarItemCount(items, feed),
     };
   };
-  const [meals, tasks, all] = await Promise.all([
+  const [meals, tasks, all, garden] = await Promise.all([
     renderDocument("meals"),
     renderDocument("tasks"),
     renderDocument("all"),
+    renderDocument("garden"),
   ]);
-  const documents = { meals, tasks, all };
+  const documents = { meals, tasks, all, garden };
   const counts = {
     meals: meals.itemCount,
     tasks: tasks.itemCount,
     all: all.itemCount,
+    garden: garden.itemCount,
   };
 
   return {

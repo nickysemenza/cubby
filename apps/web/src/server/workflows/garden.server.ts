@@ -7,6 +7,7 @@ import {
   gardenMovePlantingInput,
   gardenJournalInput,
   gardenLocationHistoryInput,
+  gardenOptionsInput,
   gardenRecordEntryInput,
   gardenSplitPlantingInput,
   gardenStartPlantingInput,
@@ -27,7 +28,8 @@ export const gardenOverviewWorkflow = defineWorkflowOperation(
 );
 export const gardenOptionsWorkflow = defineWorkflowOperation(
   "garden.options",
-  (ctx: Context) => repo.gardenOptions(ctx.db),
+  (ctx: Context, input: unknown) =>
+    repo.gardenOptions(ctx.db, gardenOptionsInput.parse(input)),
 );
 export const gardenGuidesWorkflow = defineWorkflowOperation(
   "garden.guides",

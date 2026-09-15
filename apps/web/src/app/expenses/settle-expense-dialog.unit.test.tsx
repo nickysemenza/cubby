@@ -1,0 +1,63 @@
+import { type ExpenseOut, expenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
+import { render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
+import { SettleExpenseDialog } from "./settle-expense-dialog";
+
+const expense: ExpenseOut = expenseOut.parse({
+  id: testShortcode("expense", "EXP-4K7M"),
+  name: "Copper pipe",
+  cost: 42,
+  date: "2026-08-18",
+  lineKind: "principal",
+  costType: "materials",
+  lineBasis: "item_line",
+  trade: "plumbing",
+  future: true,
+  vendor: null,
+  vendorId: null,
+  vendorLogo: null,
+  projectId: null,
+  projectName: null,
+  productId: null,
+  productName: null,
+  productQuantity: null,
+  purchaseId: null,
+  orderId: null,
+  orderUrl: null,
+  notes: null,
+  url: null,
+  purchaseDate: null,
+  purchaseDisplayLabel: null,
+  sourceClaims: [],
+  beneficiaries: [],
+  funders: [],
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+});
+
+let harness: ReturnType<typeof createBrowserTestHarness>;
+
+beforeEach(() => {
+  harness = createBrowserTestHarness();
+});
+
+afterEach(() => {
+  harness.dispose();
+});
+
+describe("SettleExpenseDialog", () => {
+  it("renders", () => {
+    render(
+      <SettleExpenseDialog open onOpenChange={() => {}} expense={expense} />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Mark purchased" }),
+    ).toBeVisible();
+  });
+});
