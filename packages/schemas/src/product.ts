@@ -693,9 +693,20 @@ export type ProductWithMappingsAndFoodOut = z.infer<
 >;
 
 const productExternalIdMcpEntityOut = externalIdOut.omit({ id: true });
-const productUnitMappingMcpEntityOut = unitMappingOut.omit({ id: true });
+/**
+ * Declared exception: a unit-mapping row's `id` is the ONLY handle
+ * `syncProductUnitMappings` (repo/product/update-helpers.ts) accepts to update
+ * an existing row in place — a mapping resent without it is hard-deleted and
+ * reinserted, losing `createdAt`/`updatedAt` and its audit trail. External-id
+ * rows have their own slot-addressed patch tool (`patch_product_external_ids`)
+ * and stay id-less, but a unit mapping has no such tool, so this child row
+ * keeps its raw uuid across the MCP boundary — the same "id is the follow-up
+ * write handle" carve-out as mealRecipe `id` and recipe section `lineId` (see
+ * MCP_SERVER_INSTRUCTIONS in apps/web/src/server/mcp/server.ts).
+ */
+const productUnitMappingMcpEntityOut = unitMappingOut;
 
-/** Product references embedded in MCP entity results never expose child-row ids. */
+/** Product references embedded in MCP entity results never expose child-row ids, except unit mappings — see `productUnitMappingMcpEntityOut`. */
 export const productWithMappingsMcpEntityOut = productWithMappingsOut.extend({
   externalIds: z.array(productExternalIdMcpEntityOut),
   unitMappings: z.array(productUnitMappingMcpEntityOut),
