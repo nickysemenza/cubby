@@ -6,6 +6,8 @@
     ".": {
       "entry": [
         "scripts/apple.ts!",
+        "scripts/test-services.ts!",
+        "scripts/test-services.test.ts!",
         "scripts/check-soft-delete-filters.ts!",
         "scripts/check-unsafe-identifiers.unit.test.ts!",
         "scripts/check-security-audit.ts!",
@@ -16,12 +18,14 @@
         "scripts/entity-generator/main.ts!"
       ],
       "project": ["scripts/**/*.ts!"],
-      "ignoreDependencies": ["vitest", "vite"],
+      // Invoked as the child command of test-services.ts, beyond Knip's script parser.
+      "ignoreDependencies": ["vitest", "vite", "concurrently"],
       // xcode-select: ci-scope.ts's `apple` push check uses it to detect a
       // machine without Xcode (so it can skip, not fail). pkill: apple.ts
       // quits the running Mac app before relaunching. du: cache-gc.ts reports
-      // cache directory sizes. All are system tools, never npm dependencies.
-      "ignoreBinaries": ["xcode-select", "pkill", "du"]
+      // cache directory sizes. container: the Apple test-service runtime.
+      // All are system tools, never npm dependencies.
+      "ignoreBinaries": ["xcode-select", "pkill", "du", "container"]
     },
     "apps/web": {
       "entry": [

@@ -71,7 +71,13 @@ export function relationshipDiscoveryContract() {
     await expect(
       page.getByLabel("Relationship graph", { exact: true }),
     ).toBeVisible();
+    const hadDesktopInspector = await page
+      .getByRole("complementary", { name: "Graph inspector", exact: true })
+      .isVisible();
     await page.setViewportSize({ width: 390, height: 844 });
+    // The media-query update mounts the selected record's mobile sheet after
+    // setViewportSize resolves. Wait for it before deciding whether to close it.
+    if (hadDesktopInspector) await expect(inspectorHeading).toBeVisible();
     if (await inspectorHeading.isVisible()) {
       await page.getByRole("button", { name: "Close", exact: true }).click();
       await expect(inspectorHeading).toBeHidden();

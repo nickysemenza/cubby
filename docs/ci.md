@@ -35,7 +35,7 @@ selects both). High-risk paths do not escalate the push gate. Unknown
 (unclassified) paths run the JavaScript gates and print a warning to run
 `pnpm verify:local` before merging.
 
-Node 24, pnpm 12.3.4, Rust/wasm-pack, local PostgreSQL/IntegreSQL and Playwright
+Node 24, pnpm 12.3.4, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
 PostgreSQL remains the authoritative integration tier; Playwright retains a
 single worker and no retries. Both tiers reject an empty selection or an
@@ -124,6 +124,58 @@ The rewritten local-suite budgets are 15 seconds for fast tests, 40 seconds for
 PostgreSQL, 35 seconds for Playwright, and 60 seconds end to end (55-second
 median target). Re-benchmark five warm `pnpm test:all` runs after changing test
 selection, worker counts, database provisioning, or browser harness startup.
+
+### Apple container worker measurements (2026-09-15)
+
+On the 8-core, 24 GiB Mac running macOS 27, `container` 1.4.1 and Node
+26.8.2, each PostgreSQL run created a fresh PostgreSQL/IntegreSQL pair from
+cached images and passed all 407 contracts. Wall times include startup and
+cleanup; three samples per worker count were interleaved:
+
+| PostgreSQL workers | Wall times (seconds) | Median |
+|---|---|---|
+| 2 | 51.30, 78.96, 62.20 | 62.20s |
+| 4 | 40.37, 67.18, 41.98 | 41.98s |
+| 6 | 31.62, 36.90, 44.91 | 36.90s |
+
+The local default is **6 workers**; `VITEST_MAX_WORKERS` still overrides it.
+Sampled memory availability stayed at or above 44%; swap usage at run
+boundaries decreased across the comparison. These are measurements on a busy development machine,
+not a runtime-independent speed guarantee. Each completed run left zero
+containers and zero volumes; downloaded images remained cached.
+
+Seven warm `NX_SKIP_NX_CACHE=true pnpm test:all` samples executed the tests
+(no replayed Nx results). Each PostgreSQL tier passed all 407 contracts. The
+browser tier discovered 65 tests, with no skips or retries:
+
+| Sample | Total wall time | Browser result |
+|---|---|---|
+| 1 | 242.48s | 65 passed |
+| 2 | 250.21s | 65 passed |
+| 3 | 259.69s | 64 passed; calendar hydration timeout |
+| 4 | 215.70s | 65 passed |
+| 5 | 248.93s | 65 passed |
+| 6 | 378.90s | 63 passed; placement navigation and mobile hydration timeouts |
+| 7 | 396.65s | 64 passed; relationship page hydration timeout |
+
+The median across all samples was **250.21s**; four samples passed completely.
+This exceeds the local-suite target above and does not establish a speedup over
+Docker. Host load reached 76 on eight cores during investigation, with Spotlight
+using over two cores; contention is a possible cause, not a proven explanation.
+The failing scenarios subsequently passed 10 nutrition repetitions and 12 traced
+readiness repetitions. A standalone traced browser run passed all 65 tests in
+265.87s. The intermittent readiness failures remain unresolved; no retries or
+larger timeouts were added to hide them.
+
+A warm targeted PostgreSQL family passed 24 tests in 12.38s including service
+startup and cleanup. An earlier Docker sample took 18.07s, but was not a matched
+warm comparison, so it is not evidence of a runtime speedup. Two independent
+worktrees passed that family concurrently with distinct endpoints; stopping one
+pair left the other working. Repeated runs and cancellation left no Apple
+containers or volumes, while images remained cached. After validation, the
+macOS Docker application login item was confirmed disabled and Docker Desktop
+was quit. Its data and privileged helper remain installed for rollback; the
+Docker VM and application processes are not running.
 
 The full/high-risk GitHub target is a three-minute median and four-minute p95,
 without exceeding the prior full-run total of 16m54s raw runner time or its

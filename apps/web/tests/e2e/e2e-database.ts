@@ -1,3 +1,4 @@
+import { testServiceConfig } from "../../tooling/test-service-config";
 import { schemaTemplateInputs } from "../../tooling/schema-template-inputs";
 import {
   IntegreSQLClient,
@@ -76,16 +77,13 @@ async function seedHome(db: SchemaDatabase): Promise<void> {
 function remapIntegreSQLConfig(
   databaseConfig: IntegreSQLDatabaseConfig,
 ): IntegreSQLDatabaseConfig {
-  return {
-    ...databaseConfig,
-    host: process.env.INTEGRESQL_DATABASE_HOST ?? "localhost",
-    port: 5432,
-  };
+  const { host, port } = testServiceConfig();
+  return { ...databaseConfig, host, port };
 }
 
 async function createPostgresE2EDatabase(): Promise<E2EDatabase> {
   const integreSQL = new IntegreSQLClient({
-    url: process.env.INTEGRESQL_URL ?? "http://localhost:5000",
+    url: testServiceConfig().url,
   });
 
   console.log("[E2E Setup] Getting fresh database from IntegreSQL...");

@@ -1,3 +1,4 @@
+import { testServiceConfig } from "./test-service-config";
 import { schemaTemplateInputs } from "./schema-template-inputs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
@@ -34,7 +35,9 @@ import { ensureDbExtensions } from "./db-extensions";
 import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 import { z } from "zod";
 
-const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
+let client: IntegreSQLClient | undefined;
+const getIntegreSQL = () =>
+  (client ??= new IntegreSQLClient({ url: testServiceConfig().url }));
 
 const toTestDatabase = (
   value: DatabaseClient | Database,
@@ -132,7 +135,7 @@ export const TEST_ACTOR: ActorContext = {
 };
 
 async function getTemplateHash(): Promise<string> {
-  return integreSQL.hashFiles(schemaTemplateInputs);
+  return getIntegreSQL().hashFiles(schemaTemplateInputs);
 }
 
 export async function setup() {
@@ -140,8 +143,8 @@ export async function setup() {
   hash = await getTemplateHash();
 
   // Initialize the template database
-  await integreSQL.initializeTemplate(hash, async (databaseConfig) => {
-    const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
+  await getIntegreSQL().initializeTemplate(hash, async (databaseConfig) => {
+    const connectionUrl = getIntegreSQL().databaseConfigToConnectionUrl(
       remapDBConfig(databaseConfig),
     );
 
@@ -249,7 +252,7 @@ let truncateTargets = "";
  */
 async function releaseTestDb(testId: number) {
   const hash = await getTemplateHash();
-  const url = `http://localhost:5000/api/v1/templates/${hash}/tests/${testId}/recreate`;
+  const url = `${testServiceConfig().url}/api/v1/templates/${hash}/tests/${testId}/recreate`;
   const response = await fetch(url, { method: "POST" });
   if (!response.ok) {
     throw new Error(
@@ -263,7 +266,7 @@ async function releaseTestDb(testId: number) {
 async function getFileDb() {
   if (fileDb) return fileDb;
 
-  const databaseConfig = await integreSQL.getTestDatabase(
+  const databaseConfig = await getIntegreSQL().getTestDatabase(
     await getTemplateHash(),
   );
   // The high-level client drops the numeric pool id, so recover it from the
@@ -274,7 +277,7 @@ async function getFileDb() {
       `test-setup: could not parse an IntegreSQL pool id from "${databaseConfig.database}"`,
     );
   }
-  const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
+  const connectionUrl = getIntegreSQL().databaseConfigToConnectionUrl(
     remapDBConfig(databaseConfig),
   );
   const pool = countPoolQueries(new Pool({ connectionString: connectionUrl }));
@@ -442,8 +445,9 @@ export function withTestDb(source: AuditSource = "ui"): TestDbContext {
 const remapDBConfig = (
   databaseConfig: IntegreSQLDatabaseConfig,
 ): IntegreSQLDatabaseConfig => {
-  databaseConfig.host = "localhost";
-  databaseConfig.port = 5432;
+  const { host, port } = testServiceConfig();
+  databaseConfig.host = host;
+  databaseConfig.port = port;
   return databaseConfig;
 };
 

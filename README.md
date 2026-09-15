@@ -235,7 +235,7 @@ uses the same generated manifest for its bounded core view; see
 
 ## 🛠️ Development Setup
 
-Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [package.json](package.json) — the `packageManager` field), and **wrangler** (for CF Workers work). Docker is optional for the normal test loop; use it for the local app database and explicit PostgreSQL-parity tests.
+Prereqs: **Node** (see [.nvmrc](.nvmrc), currently `v24`), **pnpm** (pinned in [package.json](package.json) — the `packageManager` field), and **wrangler** (for CF Workers work). On macOS, install Apple `container` and run `container system start` once. PostgreSQL and browser test commands manage disposable services automatically. Fast tests need no container runtime; Linux and CI use external PostgreSQL/IntegreSQL services.
 
 ```sh
 # 1. Install
@@ -245,21 +245,18 @@ pnpm install
 cp apps/web/.env.example apps/web/.env
 # Edit apps/web/.env — see "Environment Variables" below
 
-# 3. Local services for app development, PostgreSQL tests, and default Playwright
-#    (not needed for default Vitest or service-free `pnpm test:e2e:pglite`)
-docker compose -p cubby up -d
-# Starts Postgres + IntegreSQL. Add Jaeger when you want traces (CUBBY_OTEL=1):
-#   docker compose -p cubby --profile tracing up -d
-
-# 4. Web DB schema
-pnpm --filter @cubby/web run db:push
-
-# 5. Build the WASM shim (one-time, or whenever recipebridge/ changes)
+# 3. Build the WASM shim (one-time, or whenever recipebridge/ changes)
 pnpm run wasm
 
-# 6. Dev server
+# 4. Dev server (uses your configured DATABASE_URL)
 pnpm run dev
 ```
+
+Database-backed tests start and stop their own services on macOS. For example,
+`pnpm test:file:postgres src/server/integration-families/project.integration.test.ts`
+uses disposable databases, independently of your application's `DATABASE_URL`.
+For optional traces, run `pnpm trace` in another terminal and enable
+`CUBBY_OTEL=1` for the app. Ctrl-C stops Jaeger.
 
 App: <http://localhost:3000> · Jaeger: <http://localhost:16686>
 
@@ -270,12 +267,12 @@ Required keys (see [apps/web/.env.example](apps/web/.env.example) for the full f
 | Key | Purpose |
 |---|---|
 | `BETTER_AUTH_SECRET` | Auth signing secret |
-| `DATABASE_URL` | PostgreSQL connection (defaults to local docker-compose) |
+| `DATABASE_URL` | Application PostgreSQL connection; separate from disposable test databases |
 | `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_ENDPOINT` / `R2_BUCKET_NAME` / `R2_PUBLIC_URL` | Image storage |
 | `USDA_API_URL` | USDA service URL (defaults to `http://localhost:8787/` for local Wrangler dev) |
 | `UPC_LOOKUP_API_URL` / `UPC_LOOKUP_API_KEY` | UPC lookup worker |
 | `NOTION_API_KEY` | *(optional)* Notion recipes import |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger (`docker compose -p cubby --profile tracing up -d`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | *(optional)* OTLP traces → Jaeger (`pnpm trace`; defaults to localhost:4318) |
 
 ### Worktrees (parallel sessions)
 
@@ -332,21 +329,29 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   the `Web` or `Dev stack` action from the local environment. Any linked worktree
   without an injected `PORT` auto-picks a free port; the main checkout remains
   strict on `:3000`.
-- **Shared services:** docker-compose (Postgres/IntegreSQL, plus Jaeger behind
-  the `tracing` profile) binds fixed host ports — `docker-compose up -d` once
-  from any checkout and all worktrees reuse them for app development and the
-  authoritative PostgreSQL and Playwright
-  commands. Fast Vitest needs no Docker; PGlite is available only through the
-  explicit experimental commands below.
-- **⚠ Always pass `-p cubby` to compose from a worktree.** Compose derives its
-  project name from the *directory* name, so `docker compose up -d` inside
-  `.claude/worktrees/<branch>/` creates a **second, parallel stack**
-  (`<branch>-db-1`, …) instead of managing the real `cubby-*` containers. It
-  then fails to start on `Bind for 0.0.0.0:5432 failed: port is already
-  allocated`, because the real stack still holds the port — and a
-  `docker compose down` from that worktree silently no-ops on the containers you
-  meant to stop. Use `docker compose -p cubby up -d` / `-p cubby down` from
-  anywhere outside the main checkout.
+- **Test services:** on macOS each independent PostgreSQL/browser command owns
+  one Apple PostgreSQL/IntegreSQL pair. `pnpm test:all` runs fast tests first, then
+  shares one pair across its concurrent database tiers. Container IPs avoid host
+  port conflicts, so overlapping worktrees need no coordination. Tests retain
+  their separate IntegreSQL databases and template hashes.
+- **Lifecycle:** images are cached; containers and test data are removed on
+  success, failure, Ctrl-C and SIGTERM. No volumes or per-run networks are created.
+  The native container management service may stay running with no workload VMs.
+  SIGKILL or a host crash can leave a container: use `container list --all` and
+  `container stop <name>` for the unique names printed by the command. Stopped
+  leftovers can be removed with `container delete <name>`. No automatic global
+  prune runs, so other worktrees are never cleaned up by this wrapper.
+- **External services / Docker fallback:** start `docker compose -p cubby up -d`,
+  then set `CUBBY_TEST_SERVICES=external` for test commands. Linux and CI already
+  use external mode. Endpoints default to localhost:5000 and localhost:5432;
+  override `INTEGRESQL_URL`, `INTEGRESQL_DATABASE_HOST`, and
+  `INTEGRESQL_DATABASE_PORT` together for another service. Always use `-p cubby`
+  with Compose across worktrees. Keep Docker quit with automatic startup disabled
+  when using Apple containers; its existing data can remain for rollback.
+- **Parallelism:** the Apple pair starts with PostgreSQL at 4 CPUs/2 GiB and
+  IntegreSQL at 1 CPU/256 MiB, with a 4/16 database pool and 4 provisioning tasks.
+  `VITEST_MAX_WORKERS` overrides the measured local default of 6; Playwright retains
+  one worker. Multiple pairs share the host's finite CPU and memory.
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
   instance (dev DB *is* prod). `db:push` and data changes from one worktree are
   visible everywhere and hit prod — coordinate schema changes across parallel work.
