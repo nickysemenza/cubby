@@ -140,13 +140,23 @@ export const EntityInlineLinkList: React.FC<EntityInlineLinkListProps> = (
     return index;
   };
 
+  // Dispatch on the DECLARED entity, with the shape check only as a guard.
+  // Inferring the entity from shape is wrong here: a product row carries an
+  // `fdc_id` key whenever it is USDA-linked, so shape-first dispatch rendered
+  // every linked product on a USDA food page through the usda-food branch
+  // (which reads `foodInfo`) and crashed the page.
   const renderItem = (item: (typeof items)[number], index: number) => {
     let link: React.ReactElement;
-    if ("fdc_id" in item) link = renderInlineLink("usda-food", item, compact);
-    else if ("type" in item) link = renderInlineLink("location", item, compact);
-    else if ("manufacturer" in item)
+    if (props.entity === "usda-food" && "fdc_id" in item)
+      link = renderInlineLink("usda-food", item, compact);
+    else if (props.entity === "location" && "type" in item)
+      link = renderInlineLink("location", item, compact);
+    else if (props.entity === "product" && "manufacturer" in item)
       link = renderInlineLink("product", item, compact);
-    else if (props.entity === "ingredient" || props.entity === "recipe")
+    else if (
+      (props.entity === "ingredient" || props.entity === "recipe") &&
+      "name" in item
+    )
       link = renderInlineLink(props.entity, item, compact);
     else throw new Error(`Unexpected ${props.entity} inline-link item shape`);
     return React.cloneElement(link, { key: getKey(item, index) });

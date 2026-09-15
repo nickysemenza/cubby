@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import {
   type MealRecipeId,
   parseShortcodeFor,
+  type RecipeId,
 } from "@cubby/schemas/identifiers";
 import {
   type GetMealPreparationsInput,
@@ -151,7 +152,7 @@ export const portionTotalsFor = (
 const resolveYieldBasisAndValidateShares = async (
   tx: DrizzleTransaction,
   occurrence: {
-    recipeId: string;
+    recipeId: RecipeId;
     scale: number;
     estimatedYieldGrams: number | null;
     actualYieldGrams: number | null;
