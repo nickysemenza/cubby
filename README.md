@@ -516,20 +516,24 @@ full access, support optional expiration, and use the `http-api` configuration.
 They are stored hashed, have no per-key quota or rate limit, and do not create
 browser sessions. Revocation takes effect on the next request.
 
-A signed-in browser can open `/api/v1/recipes` directly. The API verifies the
-Better Auth session against the database on every request, bypassing the cookie
-cache. An explicit `x-api-key` takes precedence, including when invalid. Cookie
-writes require the same request Origin; key-authenticated scripts need no Origin.
-All responses use authoritative reads and `Cache-Control: no-store`.
+A signed-in browser can open `/api/v1/recipes` directly. Browser and native
+session authentication reuse Better Auth's signed session-data cookie for up to
+five minutes, then revalidate against the authoritative database. An explicit
+`x-api-key` takes precedence, including when invalid. Cookie writes require the
+same request Origin; explicit key and bearer credentials need no Origin on
+`/api/v1`. Responses retain `Cache-Control: no-store`; database queries follow
+the shared household freshness policy independently of authentication caching.
 
-Native clients that cannot hold cookies sign in once at
-`/api/auth/sign-in/email`, identifying themselves with `Origin: cubby-mobile://`
-(the app's URL scheme, a trusted origin), read the signed session token from the
-`set-auth-token` response header, and send it back as
-`Authorization: Bearer <token>`. Bearer requests resolve to the same session a
-cookie would, are verified against the database on every request, need no
-Origin on `/api/v1` routes, and stop working the moment the session is signed
-out.
+Native clients sign in at `/api/auth/sign-in/email` with
+`Origin: cubby-mobile://`, store the signed `set-auth-token` in Keychain, and send
+`Authorization: Bearer <token>` with the server-issued session-data cookies.
+The API binds cached sessions to the bearer credential and falls back to a
+strong authentication lookup on a cache mismatch. Swift keeps automatic cookie
+storage disabled and handles only the allowlisted session cache explicitly.
+Late responses cannot replace or invalidate a different current credential.
+Local sign-out clears native credentials immediately; other cached clients may
+continue authenticating until their five-minute cache expires. API keys retain
+their existing verification path.
 
 Entity declarations generate capability-dependent resource methods: GET collection,
 GET `/{id}`, POST collection, PATCH `/{id}`, and DELETE `/{id}`. POST and PATCH

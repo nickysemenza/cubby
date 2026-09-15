@@ -63,6 +63,137 @@ struct MiddlewareTests {
         }
     }
 
+    @Test func appliesTokenRotationAndCookiesFromTypedResponses() async throws {
+        let (credentials, _) = try provider(with: .bearer("before"))
+        let middleware = CubbyAuthMiddleware(credentials: credentials)
+        var fields = HTTPFields()
+        fields[HTTPField.Name("set-auth-token")!] = "after"
+        fields[values: .setCookie] = [
+            "better-auth.session_data=cache; Max-Age=300; Path=/"
+        ]
+
+        _ = try await middleware.intercept(
+            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
+            body: nil,
+            baseURL: URL(string: "https://cubby.example")!,
+            operationID: "resources.product.list"
+        ) { _, body, _ in
+            (HTTPResponse(status: .ok, headerFields: fields), body)
+        }
+
+        #expect(await credentials.current() == .bearer("after"))
+        #expect(
+            await credentials.currentState()?.sessionDataCookies == [
+                "better-auth.session_data": "cache"
+            ])
+    }
+
+    @Test func lateTypedUnauthorizedResponseCannotClearANewerLogin() async throws {
+        let (credentials, _) = try provider(with: .bearer("old"))
+        let middleware = CubbyAuthMiddleware(credentials: credentials)
+        let body = try Fixtures.data(named: "error-unauthorized.json")
+
+        await #expect(throws: CubbyAPIError.self) {
+            _ = try await middleware.intercept(
+                HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
+                body: nil,
+                baseURL: URL(string: "https://cubby.example")!,
+                operationID: "resources.product.list"
+            ) { _, _, _ in
+                try await credentials.set(.bearer("new"))
+                return (HTTPResponse(status: .unauthorized), HTTPBody(body))
+            }
+        }
+
+        #expect(await credentials.current() == .bearer("new"))
+    }
+
+    @Test func responseCookiesPreserveSignedChunksAndApplyDeletion() async throws {
+        let (credentials, _) = try provider(with: .bearer("tok.sig"))
+        let request = await credentials.requestState()
+        let url = URL(string: "https://cubby.example")!
+
+        await credentials.processResponse(
+            for: request,
+            status: 200,
+            setAuthToken: nil,
+            setCookieHeaders: [
+                "better-auth.session_data.0=chunk-a; Max-Age=300; Path=/",
+                "better-auth.session_data.1=chunk-b; Max-Age=300; Path=/",
+                "better-auth.session_token=never-copy; Max-Age=300; Path=/",
+            ],
+            responseURL: url
+        )
+        let afterWrite = await credentials.requestState()
+        #expect(
+            afterWrite.sessionDataCookies == [
+                "better-auth.session_data.0": "chunk-a",
+                "better-auth.session_data.1": "chunk-b",
+            ])
+
+        await credentials.processResponse(
+            for: afterWrite,
+            status: 200,
+            setAuthToken: nil,
+            setCookieHeaders: [
+                "better-auth.session_data.0=; Max-Age=0; Path=/"
+            ],
+            responseURL: url
+        )
+        #expect(
+            await credentials.requestState().sessionDataCookies == [
+                "better-auth.session_data.1": "chunk-b"
+            ])
+    }
+
+    @Test func staleResponsesCannotRotateOrInvalidateNewerCredentials() async throws {
+        let (credentials, _) = try provider(with: .bearer("old"))
+        let request = await credentials.requestState()
+        try await credentials.set(.bearer("new"))
+
+        await credentials.processResponse(
+            for: request,
+            status: 200,
+            setAuthToken: "rotated-old",
+            setCookieHeaders: [
+                "better-auth.session_data=old-cache; Max-Age=300; Path=/"
+            ],
+            responseURL: URL(string: "https://cubby.example")!
+        )
+        await credentials.processResponse(
+            for: request,
+            status: 401,
+            setAuthToken: nil,
+            setCookieHeaders: [],
+            responseURL: URL(string: "https://cubby.example")!
+        )
+
+        #expect(await credentials.current() == .bearer("new"))
+        #expect(await credentials.currentState()?.sessionDataCookies == [:])
+    }
+
+    @Test func staleSignInAndSignOutSnapshotsCannotOverwriteNewerAuthentication() async throws {
+        let (credentials, _) = try provider(with: nil)
+        let signInRequest = await credentials.requestState()
+        await credentials.invalidate()
+
+        let accepted = try await credentials.completeSignIn(
+            .bearer("late"),
+            for: signInRequest,
+            setCookieHeaders: [],
+            responseURL: URL(string: "https://cubby.example")!
+        )
+        #expect(!accepted)
+        #expect(await credentials.current() == nil)
+
+        try await credentials.set(.bearer("current"))
+        let signOutRequest = await credentials.requestState()
+        try await credentials.set(.bearer("new-login"))
+        await credentials.invalidate(for: signOutRequest)
+
+        #expect(await credentials.current() == .bearer("new-login"))
+    }
+
     @Test func injectsAPIKeyHeader() async throws {
         let (credentials, _) = try provider(with: .apiKey("cubby_x"))
         let middleware = CubbyAuthMiddleware(credentials: credentials)
