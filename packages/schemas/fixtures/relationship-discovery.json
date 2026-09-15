@@ -1,0 +1,237 @@
+{
+  "exploration": {
+    "nodes": [
+      {
+        "entityType": "expense",
+        "entityId": "EXP-4K7M",
+        "label": "Reviewed switch",
+        "metadata": {}
+      },
+      {
+        "entityType": "product",
+        "entityId": "PRD-4K7M",
+        "label": "Fixture switch",
+        "metadata": {}
+      },
+      {
+        "entityType": "expense",
+        "entityId": "EXP-7M4K",
+        "label": "Earlier switch",
+        "metadata": {}
+      },
+      {
+        "entityType": "project",
+        "entityId": "PRJ-7M4K",
+        "label": "Workshop electrical",
+        "metadata": {}
+      }
+    ],
+    "edges": [
+      {
+        "id": "fixture-edge-0",
+        "source": {
+          "entityType": "expense",
+          "entityId": "EXP-4K7M"
+        },
+        "target": {
+          "entityType": "product",
+          "entityId": "PRD-4K7M"
+        },
+        "relationshipKey": "product",
+        "label": "Product",
+        "sourceKey": "direct",
+        "provenance": []
+      },
+      {
+        "id": "fixture-edge-1",
+        "source": {
+          "entityType": "product",
+          "entityId": "PRD-4K7M"
+        },
+        "target": {
+          "entityType": "expense",
+          "entityId": "EXP-7M4K"
+        },
+        "relationshipKey": "expenses",
+        "label": "Expenses",
+        "sourceKey": "direct",
+        "provenance": []
+      },
+      {
+        "id": "fixture-edge-2",
+        "source": {
+          "entityType": "expense",
+          "entityId": "EXP-7M4K"
+        },
+        "target": {
+          "entityType": "project",
+          "entityId": "PRJ-7M4K"
+        },
+        "relationshipKey": "project",
+        "label": "Project",
+        "sourceKey": "direct",
+        "provenance": []
+      }
+    ],
+    "branches": [],
+    "truncated": true,
+    "paths": [
+      {
+        "nodeRefs": [
+          {
+            "entityType": "expense",
+            "entityId": "EXP-4K7M"
+          },
+          {
+            "entityType": "product",
+            "entityId": "PRD-4K7M"
+          }
+        ],
+        "edgeIds": ["fixture-edge-0"]
+      },
+      {
+        "nodeRefs": [
+          {
+            "entityType": "expense",
+            "entityId": "EXP-4K7M"
+          },
+          {
+            "entityType": "product",
+            "entityId": "PRD-4K7M"
+          },
+          {
+            "entityType": "expense",
+            "entityId": "EXP-7M4K"
+          }
+        ],
+        "edgeIds": ["fixture-edge-0", "fixture-edge-1"]
+      },
+      {
+        "nodeRefs": [
+          {
+            "entityType": "expense",
+            "entityId": "EXP-4K7M"
+          },
+          {
+            "entityType": "product",
+            "entityId": "PRD-4K7M"
+          },
+          {
+            "entityType": "expense",
+            "entityId": "EXP-7M4K"
+          },
+          {
+            "entityType": "project",
+            "entityId": "PRJ-7M4K"
+          }
+        ],
+        "edgeIds": ["fixture-edge-0", "fixture-edge-1", "fixture-edge-2"]
+      }
+    ],
+    "completion": {
+      "status": "depth-limit",
+      "requestedDepth": 3,
+      "reachedDepth": 3
+    }
+  },
+  "recommendations": {
+    "source": {
+      "entityType": "expense",
+      "entityId": "EXP-4K7M"
+    },
+    "basisKey": "fixture-source-v1",
+    "groups": [
+      {
+        "kind": "expense-project",
+        "status": "ready",
+        "currentTarget": {
+          "id": "PRJ-4K7M",
+          "name": "Current project"
+        },
+        "proposals": [
+          {
+            "kind": "expense-project",
+            "expenseId": "EXP-4K7M",
+            "target": {
+              "id": "PRJ-7M4K",
+              "name": "Workshop electrical"
+            },
+            "effectiveStart": "2039-05-01",
+            "effectiveEnd": "2039-05-31",
+            "sameTradeCount": 2,
+            "exactProductCount": 1,
+            "supportingExpenses": [
+              {
+                "id": "EXP-7M4K",
+                "name": "Earlier switch"
+              }
+            ],
+            "reasons": [
+              "Active on 2039-05-10: 2039-05-01 to 2039-05-31",
+              "2 other electrical expenses",
+              "1 other expenses for this exact product"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "inventoryRecommendations": {
+    "source": {
+      "entityType": "inventory",
+      "entityId": "INV-4K7M"
+    },
+    "basisKey": "inventory-fixture-v1",
+    "groups": [
+      {
+        "kind": "inventory-placement",
+        "status": "ready",
+        "currentTarget": {
+          "id": "LOC-4K7M",
+          "name": "Unknown"
+        },
+        "proposals": [
+          {
+            "kind": "inventory-placement",
+            "inventoryId": "INV-4K7M",
+            "target": {
+              "id": "LOC-7M4K",
+              "name": "Workshop"
+            },
+            "reasons": ["Other stock for this exact product is in Workshop."]
+          }
+        ]
+      }
+    ]
+  },
+  "productRecommendations": {
+    "source": {
+      "entityType": "product",
+      "entityId": "PRD-4K7M"
+    },
+    "basisKey": "product-fixture-v1",
+    "groups": [
+      {
+        "kind": "product-related",
+        "status": "unavailable",
+        "proposals": [
+          {
+            "kind": "product-related",
+            "target": {
+              "id": "PRD-7M4K",
+              "name": "Related drill"
+            },
+            "score": 0.4,
+            "evidence": [
+              {
+                "signal": "Shared tags",
+                "detail": "Power tools",
+                "weight": 0.4
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

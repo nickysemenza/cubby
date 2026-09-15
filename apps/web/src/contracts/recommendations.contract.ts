@@ -1,3 +1,7 @@
+import {
+  entityRecommendationsInput,
+  entityRecommendationsOut,
+} from "@cubby/schemas/entity-recommendations";
 import { productShortcode } from "@cubby/schemas/identifiers";
 import {
   dismissDuplicateProductRecommendationInput,
@@ -25,6 +29,10 @@ export const relatednessContract = defineContract("relatedness", {
 });
 
 export const recommendationsContract = defineContract("recommendations", {
+  forEntity: query({
+    input: entityRecommendationsInput,
+    output: entityRecommendationsOut,
+  }),
   placement: query({
     input: placementRecommendationInput,
     output: placementRecommendationOut,

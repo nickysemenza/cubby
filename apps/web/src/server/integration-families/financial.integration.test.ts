@@ -1,5 +1,6 @@
 import "../mcp/purchase-split-delta.integration.test";
 import "../repo/expense.integration.test";
+import "../repo/expense/project-recommendations.integration.test";
 import "../repo/financial-transaction-allocations.integration.test";
 import "../repo/financial.integration.test";
 import "../repo/household-contribution/allocation.integration.test";

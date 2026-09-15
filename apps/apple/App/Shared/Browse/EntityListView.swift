@@ -50,6 +50,13 @@ struct EntityListView: View {
             }
             await model?.loadInitial()
         }
+        .task(id: appModel.relationshipMutationRevision) {
+            guard appModel.relationshipMutationRevision > 0,
+                appModel.relationshipMutationEntities.contains(key),
+                model?.phase == .loaded
+            else { return }
+            await model?.refresh()
+        }
         .refreshControl { await model?.refresh() }
     }
 

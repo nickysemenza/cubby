@@ -39,6 +39,16 @@ const rowSchema = z.object({
 const MAX_GRAPH_NODES = 500;
 const MAX_GRAPH_EDGES = 1_000;
 
+const unparsedEntityGraphReadErrorSchema = z.unknown();
+type EntityGraphReadError = z.input<typeof unparsedEntityGraphReadErrorSchema>;
+
+type EntityGraphReadOptions = {
+  includeImages: boolean;
+  beforeQuery?: () => Promise<void>;
+  /** Image hydration is optional only when the caller identifies a deadline. */
+  isImageHydrationDeadline?: (error: EntityGraphReadError) => boolean;
+};
+
 type LocalSource = {
   key: string;
   label: string;
@@ -314,7 +324,7 @@ const metadataFor = (entity: Entity, alias = "t") => {
 export async function readEntityGraph(
   db: Database | DrizzleTransaction,
   input: EntityGraphInput,
-  options: { includeImages: boolean; beforeQuery?: () => Promise<void> },
+  options: EntityGraphReadOptions,
 ): Promise<EntityGraphOutput> {
   const offset = input.offset ?? 0;
   const limit = input.limit ?? 25;
@@ -595,14 +605,20 @@ export async function readEntityGraph(
   let images: Awaited<ReturnType<typeof resolveEntityDisplayImages>> =
     new Map();
   if (options.includeImages) {
-    await options.beforeQuery?.();
-    images = await resolveEntityDisplayImages(
-      db,
-      outputNodes.flatMap((node) => {
-        const ref = imageRefs.get(entityRefKey(node.entityType, node.entityId));
-        return ref ? [ref] : [];
-      }),
-    );
+    try {
+      await options.beforeQuery?.();
+      images = await resolveEntityDisplayImages(
+        db,
+        outputNodes.flatMap((node) => {
+          const ref = imageRefs.get(
+            entityRefKey(node.entityType, node.entityId),
+          );
+          return ref ? [ref] : [];
+        }),
+      );
+    } catch (error) {
+      if (!options.isImageHydrationDeadline?.(error)) throw error;
+    }
   }
   return {
     nodes: outputNodes.map((node) => {

@@ -10,13 +10,13 @@ struct EntityDetailView: View {
     @Environment(AppModel.self) private var appModel
     @State private var model: GenericEntityDetailModel?
     @State private var nutrition: MealNutritionModel?
+    @State private var relationshipsModel: EntityRelationshipsModel?
     @State private var photoCapture: PhotoCaptureModel?
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
     var body: some View {
         let model = model
-        let nutrition = nutrition
         content
             .porcelainScreen()
             .navigationTitle(model?.row?.title ?? descriptor.singular)
@@ -24,15 +24,16 @@ struct EntityDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
             .task(id: id) { await setup() }
-            .refreshControl {
-                if let model, let nutrition {
-                    async let detailRefresh: Void = model.refresh(id: id)
-                    async let nutritionRefresh: Void = nutrition.refresh()
-                    _ = await (detailRefresh, nutritionRefresh)
-                } else {
-                    await model?.refresh(id: id)
-                }
+            .task(id: appModel.relationshipMutationRevision) {
+                guard appModel.relationshipMutationRevision > 0,
+                    appModel.relationshipMutationEntities.contains(key),
+                    appModel.relationshipMutationReplacement?.recommendation.subject
+                        != EntityReference(entity: key, id: id),
+                    model?.phase == .loaded
+                else { return }
+                await refresh()
             }
+            .refreshControl { await refresh() }
             .userActivity(NSUserActivityTypeBrowsingWeb, isActive: model?.row != nil) { activity in
                 guard let row = model?.row else { return }
                 activity.webpageURL = appModel.webURL(for: row.id)
@@ -105,7 +106,10 @@ struct EntityDetailView: View {
                     mealNutrition: nutrition?.state,
                     nutritionIsLoading: nutrition?.isLoading ?? false,
                     nutritionError: nutrition?.refreshError,
-                    onRetryNutrition: { await nutrition?.refresh() })
+                    onRetryNutrition: { await nutrition?.refresh() },
+                    relationshipsModel: relationshipsModel,
+                    onRelationshipAccepted: appModel.recordRelationshipMutation
+                )
             }
         } else if let model {
             switch model.phase {
@@ -138,14 +142,25 @@ struct EntityDetailView: View {
         } else {
             nutrition = nil
         }
-        guard let model else { return }
-        if let nutrition {
-            async let detailLoad: Void = model.loadInitial(id: id)
-            async let nutritionLoad: Void = nutrition.refresh()
-            _ = await (detailLoad, nutritionLoad)
-        } else {
-            await model.loadInitial(id: id)
+        if relationshipsModel == nil {
+            relationshipsModel = EntityRelationshipsModel(client: appModel.client)
         }
+        guard let model, let relationshipsModel else { return }
+        async let detailLoad: Void = model.loadInitial(id: id)
+        async let relationshipLoad: Void = relationshipsModel.loadInitial(
+            source: EntityReference(entity: key, id: id))
+        let nutrition = nutrition
+        async let nutritionLoad: Void? = nutrition?.refresh()
+        _ = await (detailLoad, relationshipLoad, nutritionLoad)
+    }
+
+    private func refresh() async {
+        guard let model, let relationshipsModel else { return }
+        async let detailRefresh: Void = model.refresh(id: id)
+        async let relationshipRefresh: Void = relationshipsModel.refresh()
+        let nutrition = nutrition
+        async let nutritionRefresh: Void? = nutrition?.refresh()
+        _ = await (detailRefresh, relationshipRefresh, nutritionRefresh)
     }
 
 }
@@ -160,9 +175,12 @@ struct EntityDetailContent: View {
     var nutritionIsLoading = false
     var nutritionError: String? = nil
     var onRetryNutrition: (@Sendable () async -> Void)? = nil
+    var relationshipsModel: EntityRelationshipsModel? = nil
+    var onRelationshipAccepted: (RelationshipAcceptance) -> Void = { _ in }
 
     @State private var showingRaw = false
     @State private var showingPhoto = false
+    @State private var reviewedRelationship: RelationshipRecommendationReview?
 
     #if os(macOS)
         private let heroMaxHeight: CGFloat = 360
@@ -248,12 +266,32 @@ struct EntityDetailContent: View {
                     Section("Sub-locations") { LocationSubLocationsSection(children: locationChildren) }
                 }
             }
-            if !detailRows.isEmpty {
+            if !detailRows.isEmpty || inlineRelationshipFieldKey != nil {
                 Section("Details") {
                     ForEach(detailRows, id: \.field.key) { entry in
                         LabeledContent(entry.field.label, value: entry.value)
                             .textSelection(.enabled)
+                        if entry.field.key == inlineRelationshipFieldKey {
+                            inlineRelationshipAlternatives
+                        }
                     }
+                    if let fieldKey = inlineRelationshipFieldKey,
+                        !detailRows.contains(where: { $0.field.key == fieldKey })
+                    {
+                        LabeledContent(
+                            inlineRelationshipFieldLabel,
+                            value: inlineRelationshipCurrentTarget?.name ?? "Unassigned"
+                        )
+                        inlineRelationshipAlternatives
+                    }
+                }
+            }
+            if let relationshipsModel {
+                Section("Relationships") {
+                    EntityRelationshipsSection(
+                        model: relationshipsModel,
+                        onAccepted: onRelationshipAccepted
+                    )
                 }
             }
             Section { rawDisclosure }
@@ -262,6 +300,88 @@ struct EntityDetailContent: View {
         .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
         .photoPreviewPresentation(isPresented: $showingPhoto) {
             if let photo = heroPhoto { PhotoPreview(photos: [photo], selectedID: photo.id) }
+        }
+        .sheet(item: $reviewedRelationship) { review in
+            if let relationshipsModel {
+                #if os(iOS)
+                    RelationshipRecommendationReviewSheet(
+                        review: review,
+                        model: relationshipsModel,
+                        onAccepted: onRelationshipAccepted
+                    )
+                    .presentationDetents([.medium, .large])
+                #else
+                    RelationshipRecommendationReviewSheet(
+                        review: review,
+                        model: relationshipsModel,
+                        onAccepted: onRelationshipAccepted
+                    )
+                    .frame(minWidth: 440, minHeight: 420)
+                #endif
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var inlineRelationshipAlternatives: some View {
+        if let basisKey = relationshipsModel?.recommendationDocument?.basisKey {
+            ForEach(inlineRelationshipProposals) { proposal in
+                InlineRelationshipAlternativeView(
+                    proposal: proposal,
+                    hasCurrentTarget: inlineRelationshipCurrentTarget != nil,
+                    review: {
+                        reviewedRelationship = .init(
+                            proposal: proposal,
+                            basisKey: basisKey,
+                            source: relationshipsModel?.source
+                                ?? EntityReference(entity: descriptor.key, id: row.id),
+                            currentTarget: inlineRelationshipCurrentTarget
+                        )
+                    }
+                )
+            }
+        }
+    }
+
+    private var inlineRelationshipFieldKey: String? {
+        guard !inlineRelationshipProposals.isEmpty else { return nil }
+        switch descriptor.key {
+        case .expense: return "projectId"
+        case .inventory: return "locationId"
+        default: return nil
+        }
+    }
+
+    private var inlineRelationshipFieldLabel: String {
+        descriptor.key == .expense ? "Project" : "Location"
+    }
+
+    private var inlineRelationshipCurrentTarget: RelationshipTarget? {
+        guard let groups = relationshipsModel?.recommendationDocument?.groups else { return nil }
+        for group in groups {
+            switch (descriptor.key, group) {
+            case (.expense, .expenseProject(_, let current, _)):
+                return current
+            case (.inventory, .inventoryPlacement(_, let current, _)):
+                return current
+            default:
+                continue
+            }
+        }
+        return nil
+    }
+
+    private var inlineRelationshipProposals: [ActionableRelationshipRecommendation] {
+        guard let groups = relationshipsModel?.recommendationDocument?.groups else { return [] }
+        return groups.flatMap { group in
+            switch (descriptor.key, group) {
+            case (.expense, .expenseProject(_, _, let proposals)):
+                return proposals.map(ActionableRelationshipRecommendation.expenseProject)
+            case (.inventory, .inventoryPlacement(_, _, let proposals)):
+                return proposals.map(ActionableRelationshipRecommendation.inventoryPlacement)
+            default:
+                return []
+            }
         }
     }
 
@@ -452,6 +572,66 @@ struct EntityDetailContent: View {
     }
 }
 
+private struct InlineRelationshipAlternativeView: View {
+    let proposal: ActionableRelationshipRecommendation
+    let hasCurrentTarget: Bool
+    let review: () -> Void
+
+    var body: some View {
+        Button(action: review) {
+            HStack(alignment: .top, spacing: PorcelainTokens.Space.sm) {
+                Image(systemName: "sparkles")
+                    .foregroundStyle(PorcelainTokens.cobalt)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xs) {
+                    Text("\(hasCurrentTarget ? "Alternative" : "Suggested") \(field): \(target.name)")
+                        .font(.porcelainLabel)
+                        .foregroundStyle(PorcelainTokens.graphite)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let reason {
+                        Text(reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: PorcelainTokens.Space.sm)
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: PorcelainTokens.touchTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens supporting evidence and the accept action")
+    }
+
+    private var field: String {
+        switch proposal {
+        case .expenseProject: "project"
+        case .inventoryPlacement: "location"
+        }
+    }
+
+    private var target: RelationshipTarget {
+        switch proposal {
+        case .expenseProject(let proposal): proposal.target
+        case .inventoryPlacement(let proposal): proposal.target
+        }
+    }
+
+    private var reason: String? {
+        switch proposal {
+        case .expenseProject(let proposal):
+            proposal.reasons.first
+                ?? "\(proposal.sameTradeCount) same-trade and \(proposal.exactProductCount) exact-product matches"
+        case .inventoryPlacement(let proposal):
+            proposal.reasons.first
+        }
+    }
+}
+
 #Preview {
     NavigationStack {
         EntityDetailContent(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow)
@@ -476,6 +656,61 @@ struct EntityDetailContent: View {
         )
         .navigationTitle("Garden lunch")
     }
+}
+
+#Preview("Expense project alternative") {
+    let appModel = PreviewFixtures.signedInModel()
+    let source = EntityReference(entity: .expense, id: "EXP-2345")
+    let row = EntityRow(
+        id: source.id,
+        title: "Hardware store receipt",
+        subtitle: "$84.20",
+        imageURL: nil,
+        raw: .object([
+            "id": .string(source.id),
+            "name": .string("Hardware store receipt"),
+            "cost": .number(84.20),
+            "date": .string("2026-09-12"),
+            "projectId": .string("PRJ-1001"),
+            "projectName": .string("General maintenance"),
+        ])
+    )
+    let relationships = EntityRelationshipsModel(
+        client: appModel.client,
+        initialRecommendations: .init(
+            source: source,
+            basisKey: "expense-preview",
+            groups: [
+                .expenseProject(
+                    status: .ready,
+                    currentTarget: .init(id: "PRJ-1001", name: "General maintenance"),
+                    proposals: [
+                        .init(
+                            expenseID: source.id,
+                            target: .init(id: "PRJ-2001", name: "Workshop shelves"),
+                            effectiveStart: "2026-09-01",
+                            effectiveEnd: "2026-09-30",
+                            sameTradeCount: 2,
+                            exactProductCount: 1,
+                            supportingExpenses: [
+                                .init(id: "EXP-3456", name: "Shelf brackets")
+                            ],
+                            reasons: ["Matches recent carpentry expenses"]
+                        )
+                    ]
+                )
+            ]
+        )
+    )
+    return NavigationStack {
+        EntityDetailContent(
+            descriptor: EntityCatalog[.expense],
+            row: row,
+            relationshipsModel: relationships
+        )
+        .navigationTitle(row.title)
+    }
+    .environment(appModel)
 }
 
 /// A product with multiple `inventoryEntry` rows, so the "Stocked at" panel renders. `images`

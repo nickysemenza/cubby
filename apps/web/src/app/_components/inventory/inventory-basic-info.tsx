@@ -10,6 +10,7 @@ import { EntityBasicInfo } from "~/entities/entity-display";
 import { EntityInlineLink } from "../EntityInlineLink";
 import { UnitMappingGraph } from "../units/unit-mapping-graph";
 import { showAmountAndPrice } from "./format-amount";
+import { InventoryPlacementSuggestion } from "./inventory-placement-suggestion";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -32,11 +33,14 @@ export const InventoryBasicInfo: FC<InventoryBasicInfoProps> = ({
         }),
         locationId: (record) => ({
           value: (
-            <EntityInlineLink
-              displayImage={undefined}
-              entity="location"
-              data={record.location}
-            />
+            <div className="min-w-0 space-y-2">
+              <EntityInlineLink
+                displayImage={undefined}
+                entity="location"
+                data={record.location}
+              />
+              <InventoryPlacementSuggestion inventoryitem={record} />
+            </div>
           ),
           filterAction: (
             <EntityFilterLink

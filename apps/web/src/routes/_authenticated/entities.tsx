@@ -76,6 +76,10 @@ const searchSchema = z.object({
   cursor: z.number().int().nonnegative().optional().catch(undefined),
   collapsed: z.array(z.string()).optional().catch(undefined),
   destination: graphRefSearchSchema.optional().catch(undefined),
+  depth: z
+    .union([z.literal(1), z.literal(2), z.literal(3)])
+    .optional()
+    .catch(undefined),
 });
 
 export const Route = createFileRoute("/_authenticated/entities")({
@@ -303,6 +307,7 @@ function CrossEntityTab() {
             cursor: search.cursor,
             collapsed: search.collapsed,
             destination: search.destination,
+            depth: search.depth,
           }}
           onStateChange={(state) =>
             void navigate({
@@ -320,6 +325,7 @@ function CrossEntityTab() {
                 cursor: state.cursor,
                 collapsed: state.collapsed,
                 destination: state.destination,
+                depth: state.depth,
               }),
             })
           }

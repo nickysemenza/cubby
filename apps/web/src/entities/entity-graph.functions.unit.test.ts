@@ -9,7 +9,7 @@ import { matchesTags } from "~/integrations/tanstack-query/operation-cache";
 import { entityGraph } from "./entity-graph.functions";
 
 describe("entity.graph cache coverage", () => {
-  it.each([entityGraph.graph, entityGraph.graphPaths])(
+  it.each([entityGraph.explore, entityGraph.graph, entityGraph.graphPaths])(
     "invalidates every entity for each graph query",
     (operation) => {
       const graphQuery = fromPartial<Query>({

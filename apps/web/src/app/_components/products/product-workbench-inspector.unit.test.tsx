@@ -194,6 +194,15 @@ function inspectorOperations(): ProductWorkbenchInspectorOperations {
         attachments: [],
       })),
     graph: entityGraph.graph.withTransport(async () => graph),
+    explore: entityGraph.explore.withTransport(async ({ input }) => ({
+      ...graph,
+      paths: [],
+      completion: {
+        status: "depth-limit",
+        requestedDepth: input.depth,
+        reachedDepth: 1,
+      },
+    })),
   };
 }
 

@@ -10,6 +10,18 @@ export const relatedness = defineOperationDomain(relatednessContract, {
 });
 
 export const recommendations = defineOperationDomain(recommendationsContract, {
+  forEntity: {
+    tags: [
+      ["recommendations", "forEntity"],
+      ["expense"],
+      ["project"],
+      ["inventory"],
+      ["location"],
+      ["product"],
+      ["task"],
+      ["relatedness"],
+    ],
+  },
   placement: { tags: [["recommendations", "placement"]] },
   product: { tags: [["recommendations", "product"]] },
   duplicateProduct: { tags: [["recommendations", "duplicateProduct"]] },

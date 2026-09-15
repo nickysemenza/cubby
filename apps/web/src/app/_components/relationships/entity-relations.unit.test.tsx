@@ -1,4 +1,10 @@
-import type { EntityGraphOutput } from "@cubby/schemas/entity-graph";
+import type {
+  EntityGraphExploreOutput,
+  EntityGraphOutput,
+} from "@cubby/schemas/entity-graph";
+import { entityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
+import { expenseOut } from "@cubby/schemas/project";
+import { testShortcode } from "@cubby/schemas/testing";
 import {
   act,
   fireEvent,
@@ -7,17 +13,20 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { inventory } from "~/app/inventory/inventory.functions";
 import { entityGraph } from "~/entities/entity-graph.functions";
+import { recommendations } from "~/lib/recommendations.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { mock } from "~/lib/test/mock-schema";
 
 import { EntityRelations, type EntityRelationsState } from "./entity-relations";
 
 const root = { entityType: "cookbook", entityId: "CKB-4K7M" } as const;
 const recipe = { entityType: "recipe", entityId: "RCP-4K7M" } as const;
 const ingredient = { entityType: "ingredient", entityId: "ING-4K7M" } as const;
-const initial: EntityGraphOutput = {
+const initial: EntityGraphExploreOutput = {
   nodes: [
     { ...root, label: "Weeknight cookbook", metadata: {} },
     { ...recipe, label: "Roast vegetables", metadata: {} },
@@ -56,16 +65,238 @@ const initial: EntityGraphOutput = {
     },
   ],
   truncated: false,
+  paths: [{ nodeRefs: [root, recipe], edgeIds: ["test-edge"] }],
+  completion: {
+    status: "depth-limit",
+    requestedDepth: 1,
+    reachedDepth: 1,
+  },
 };
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
   harness = createBrowserTestHarness();
+  const recommendationOptions = recommendations.forEntity.queryOptions(root);
+  harness.queryClient.setQueryDefaults(recommendationOptions.queryKey, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  harness.queryClient.setQueryData(recommendationOptions.queryKey, {
+    source: root,
+    basisKey: "no-suggestions",
+    groups: [],
+  });
 });
 afterEach(() => {
   harness.dispose();
 });
 
 describe("shared entity Relations", () => {
+  it("keeps a full-page project proposal read-only until its reviewed change is applied", async () => {
+    const expenseId = testShortcode("expense", "EXP-PROJ");
+    const projectId = testShortcode("project", "PRJ-KTCN");
+    const expenseRoot = { entityType: "expense", entityId: expenseId } as const;
+    const graph: EntityGraphExploreOutput = {
+      nodes: [{ ...expenseRoot, label: "Fixture purchase", metadata: {} }],
+      edges: [],
+      branches: [],
+      truncated: false,
+      paths: [],
+      completion: {
+        status: "exhausted",
+        requestedDepth: 1,
+        reachedDepth: 0,
+      },
+    };
+    const update = vi.fn(async () => ({
+      ...mock(expenseOut, {
+        seed: 12,
+        overrides: { id: expenseId, projectId },
+      }),
+      sideEffects: { backgroundBatches: [] },
+    }));
+
+    render(
+      <EntityRelations
+        entity="expense"
+        sourceId={expenseId}
+        operations={{
+          ...entityGraph,
+          explore: entityGraph.explore.withTransport(async () => graph),
+          graph: entityGraph.graph.withTransport(async () => graph),
+        }}
+        recommendationOperations={{
+          forEntity: recommendations.forEntity.withTransport(async () =>
+            entityRecommendationsOut.parse({
+              source: expenseRoot,
+              basisKey: "expense-project:fixture",
+              groups: [
+                {
+                  kind: "expense-project",
+                  status: "ready",
+                  currentTarget: null,
+                  proposals: [
+                    {
+                      kind: "expense-project",
+                      expenseId,
+                      target: { id: projectId, name: "Kitchen refresh" },
+                      effectiveStart: "2026-08-01",
+                      effectiveEnd: "2026-10-31",
+                      sameTradeCount: 2,
+                      exactProductCount: 1,
+                      supportingExpenses: [],
+                      reasons: ["The purchase date falls within this project."],
+                    },
+                  ],
+                },
+              ],
+            }),
+          ),
+        }}
+        recommendationActionOperations={{
+          expenseUpdate: () => ({ mutationFn: update }),
+          inventoryMove: inventory.moveEntries,
+        }}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Review Kitchen refresh suggestion",
+      }),
+    );
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByText("Current:").parentElement).toHaveTextContent(
+      "Unassigned",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Apply change" }));
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        {
+          id: expenseId,
+          data: { projectId },
+        },
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("keeps relationship data usable when suggestions fail and retries them independently", async () => {
+    harness.queryClient.removeQueries({
+      queryKey: recommendations.forEntity.queryOptions(root).queryKey,
+    });
+    let failSuggestions = true;
+    const recommendationOperations = {
+      forEntity: recommendations.forEntity.withTransport(async () => {
+        if (failSuggestions) throw new Error("recommendations unavailable");
+        return {
+          source: root,
+          basisKey: "retry-basis",
+          groups: [],
+        };
+      }),
+    };
+    const operations = {
+      ...entityGraph,
+      explore: entityGraph.explore.withTransport(async () => initial),
+      graph: entityGraph.graph.withTransport(async () => initial),
+    };
+    render(
+      <EntityRelations
+        entity="cookbook"
+        sourceId={root.entityId}
+        operations={operations}
+        recommendationOperations={recommendationOperations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Recipes" }),
+    ).toBeVisible();
+    expect(
+      await screen.findByText("Suggestions could not be loaded."),
+    ).toBeVisible();
+    failSuggestions = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry suggestions" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByText("Suggestions could not be loaded."),
+      ).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("heading", { name: "Recipes" })).toBeVisible();
+  });
+
+  it("explicitly explores two or three hops and reports bounded completion", async () => {
+    const requests: Array<{ id: string; depth: number }> = [];
+    const operations = {
+      ...entityGraph,
+      explore: entityGraph.explore.withTransport(async ({ input }) => {
+        requests.push({ id: input.root.entityId, depth: input.depth });
+        const focused =
+          input.root.entityType === "recipe"
+            ? {
+                ...initial,
+                nodes: [
+                  { ...recipe, label: "Roast vegetables", metadata: {} },
+                  { ...ingredient, label: "Carrots", metadata: {} },
+                ],
+                branches: [
+                  {
+                    root: recipe,
+                    relationshipKey: "ingredients",
+                    label: "Ingredients",
+                    target: "ingredient" as const,
+                    items: [ingredient],
+                    totalCount: 1,
+                    edgeIds: [],
+                    nextOffset: null,
+                  },
+                ],
+                paths: [],
+              }
+            : initial;
+        return {
+          ...focused,
+          completion: {
+            status:
+              input.depth === 3
+                ? ("budget-limit" as const)
+                : ("depth-limit" as const),
+            requestedDepth: input.depth,
+            reachedDepth: input.depth,
+          },
+        };
+      }),
+      graph: entityGraph.graph.withTransport(async () => initial),
+    };
+    render(
+      <EntityRelations
+        entity="cookbook"
+        sourceId={root.entityId}
+        operations={operations}
+      />,
+      { wrapper: harness.wrapper },
+    );
+
+    await screen.findByRole("button", { name: "1 hop" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Explore Roast vegetables" }),
+    );
+    await waitFor(() =>
+      expect(requests).toContainEqual({ id: recipe.entityId, depth: 1 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "3 hops" }));
+
+    await waitFor(() =>
+      expect(requests).toContainEqual({ id: recipe.entityId, depth: 3 }),
+    );
+    expect(
+      await screen.findByText(
+        /Exploration capacity was reached before every route could be checked/,
+      ),
+    ).toBeVisible();
+  });
+
   it("loads each selected neighborhood and keeps visit history", async () => {
     const product = { entityType: "product", entityId: "PRD-4K7M" } as const;
     const inventory = {
@@ -74,8 +305,56 @@ describe("shared entity Relations", () => {
     } as const;
     const chain = [root, recipe, ingredient, product, inventory];
     const requests: string[][] = [];
+    const exploreRequests: string[] = [];
     const operations = {
       ...entityGraph,
+      explore: entityGraph.explore.withTransport(async ({ input }) => {
+        exploreRequests.push(input.root.entityId);
+        const source = input.root;
+        const index = chain.findIndex(
+          (ref) => ref.entityId === source.entityId,
+        );
+        const target = chain[index + 1];
+        return {
+          nodes: [source, ...(target ? [target] : [])].map((ref) => ({
+            ...ref,
+            label: ref.entityType,
+            metadata: {},
+          })),
+          edges: target
+            ? [
+                {
+                  id: source.entityId,
+                  source,
+                  target,
+                  relationshipKey: "next",
+                  sourceKey: "direct",
+                  label: "Next",
+                  provenance: [],
+                },
+              ]
+            : [],
+          branches: [
+            {
+              root: source,
+              relationshipKey: "next",
+              label: "Next",
+              target: target?.entityType ?? "inventory",
+              items: target ? [target] : [],
+              edgeIds: target ? [source.entityId] : [],
+              totalCount: target ? 1 : 0,
+              nextOffset: null,
+            },
+          ],
+          truncated: false,
+          paths: [],
+          completion: {
+            status: "depth-limit" as const,
+            requestedDepth: input.depth,
+            reachedDepth: 1,
+          },
+        };
+      }),
       graph: entityGraph.graph.withTransport(async ({ input }) => {
         requests.push(input.roots.map((ref) => ref.entityId));
         const source = input.roots[0]!;
@@ -131,23 +410,26 @@ describe("shared entity Relations", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Explore ingredient" }),
     );
-    await waitFor(() => expect(requests).toHaveLength(3));
+    await waitFor(() => expect(exploreRequests).toContain(ingredient.entityId));
     fireEvent.click(
       screen.getByRole("button", { name: "Previous visited record" }),
     );
     expect(
       screen.getByRole("button", { name: "Next visited record" }),
     ).toBeEnabled();
-    expect(requests).toEqual([
-      [root.entityId],
-      [recipe.entityId],
-      [ingredient.entityId],
+    expect(requests).toEqual([[recipe.entityId], [ingredient.entityId]]);
+    expect(exploreRequests.slice(0, 3)).toEqual([
+      root.entityId,
+      recipe.entityId,
+      ingredient.entityId,
     ]);
+    expect(exploreRequests.at(-1)).toBe(recipe.entityId);
   });
 
   it("shows populated groups first and preserves the selected record while exploring", async () => {
     const operations = {
       ...entityGraph,
+      explore: entityGraph.explore.withTransport(async () => initial),
       graph: entityGraph.graph.withTransport(async ({ input }) =>
         input.roots[0]?.entityType === "recipe"
           ? {
@@ -221,6 +503,37 @@ describe("shared entity Relations", () => {
     const requests: string[] = [];
     const operations = {
       ...entityGraph,
+      explore: entityGraph.explore.withTransport(async ({ input }) => {
+        requests.push(input.root.entityId);
+        return input.root.entityType === "recipe"
+          ? {
+              nodes: [
+                { ...recipe, label: "Roast vegetables", metadata: {} },
+                { ...ingredient, label: "Carrots", metadata: {} },
+              ],
+              edges: [],
+              branches: [
+                {
+                  root: recipe,
+                  relationshipKey: "ingredients",
+                  label: "Ingredients",
+                  target: "ingredient" as const,
+                  items: [ingredient],
+                  totalCount: 1,
+                  edgeIds: [],
+                  nextOffset: null,
+                },
+              ],
+              truncated: false,
+              paths: [],
+              completion: {
+                status: "depth-limit" as const,
+                requestedDepth: input.depth,
+                reachedDepth: 1,
+              },
+            }
+          : initial;
+      }),
       graph: entityGraph.graph.withTransport(async ({ input }) => {
         requests.push(input.roots[0]!.entityId);
         return input.roots[0]!.entityType === "recipe"
@@ -282,6 +595,7 @@ describe("shared entity Relations", () => {
     );
     const operations = {
       ...entityGraph,
+      explore: entityGraph.explore.withTransport(async () => initial),
       graph: entityGraph.graph.withTransport(async () => initial),
       graphPaths: entityGraph.graphPaths.withTransport(async () => pathRequest),
     };
@@ -326,6 +640,15 @@ describe("shared entity Relations", () => {
     });
     const operations = {
       ...entityGraph,
+      explore: entityGraph.explore.withTransport(async ({ input }) => ({
+        ...initial,
+        branches: [{ ...initial.branches[0]!, totalCount: 13, nextOffset: 1 }],
+        completion: {
+          status: "pagination-limit" as const,
+          requestedDepth: input.depth,
+          reachedDepth: 1,
+        },
+      })),
       graph: entityGraph.graph.withTransport(async ({ input }) => {
         if (input.relationshipKeys) return branchRequest;
         if (input.roots[0]!.entityType === "recipe")
@@ -378,6 +701,10 @@ describe("shared entity Relations", () => {
     let failed = true;
     const operations = {
       ...entityGraph,
+      explore: entityGraph.explore.withTransport(async () => {
+        if (failed) throw new Error("unavailable");
+        return initial;
+      }),
       graph: entityGraph.graph.withTransport(async () => {
         if (failed) throw new Error("unavailable");
         return initial;
@@ -391,11 +718,13 @@ describe("shared entity Relations", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Relationships could not be loaded",
-    );
+    expect(
+      await screen.findByText("Relationships could not be loaded."),
+    ).toHaveTextContent("Relationships could not be loaded");
     failed = false;
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Retry relationships" }),
+    );
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Recipes" })).toBeVisible(),
     );

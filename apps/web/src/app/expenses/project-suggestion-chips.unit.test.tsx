@@ -1,38 +1,18 @@
-import {
-  expenseOut,
-  expenseTradeAffinityOut,
-  projectOptionsOut,
-} from "@cubby/schemas/project";
+import { entityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
+import { expenseOut } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { project } from "~/app/projects/project.functions";
+import { recommendations } from "~/lib/recommendations.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { expense as expenseOperations } from "./expense.functions";
 import { ProjectSuggestionChips } from "./project-suggestion-chips";
 
 const PROJECT_ID = testShortcode("project", "PRJ-2ABC");
-const PROJECTS = [
-  projectOptionsOut.parse({
-    id: PROJECT_ID,
-    name: "Workshop refresh",
-    icon: null,
-    effectiveStart: "2026-08-01",
-    effectiveEnd: "2026-08-31",
-  }),
-];
-const AFFINITY = [
-  expenseTradeAffinityOut.parse({
-    projectId: PROJECT_ID,
-    trade: "electrical",
-    count: 2,
-  }),
-];
-
+const EXPENSE_ID = testShortcode("expense", "EXP-PLAN");
 const expense = expenseOut.parse({
-  id: testShortcode("expense", "EXP-PLAN"),
+  id: EXPENSE_ID,
   name: "Planned expense",
   cost: 0,
   projectId: null,
@@ -63,46 +43,129 @@ const expense = expenseOut.parse({
   updatedAt: new Date("2026-01-01"),
 });
 
+const recommendationData = (basisKey: string, assigned = false) =>
+  entityRecommendationsOut.parse({
+    source: { entityType: "expense", entityId: EXPENSE_ID },
+    basisKey,
+    groups: [
+      {
+        kind: "expense-project",
+        status: "ready",
+        currentTarget: assigned
+          ? { id: testShortcode("project", "PRJ-OLD1"), name: "Old project" }
+          : null,
+        proposals: [
+          {
+            kind: "expense-project",
+            expenseId: EXPENSE_ID,
+            target: { id: PROJECT_ID, name: "Workshop refresh" },
+            effectiveStart: "2026-08-01",
+            effectiveEnd: "2026-08-31",
+            sameTradeCount: 2,
+            exactProductCount: 0,
+            supportingExpenses: [],
+            reasons: ["2 electrical expenses already use this project."],
+          },
+        ],
+      },
+    ],
+  });
+
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
   harness = createBrowserTestHarness();
-  const projectOptions = project.options.queryOptions();
-  harness.queryClient.setQueryDefaults(projectOptions.queryKey, {
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-  harness.queryClient.setQueryData(projectOptions.queryKey, PROJECTS);
-
-  const affinityOptions = expenseOperations.tradeAffinity.queryOptions();
-  harness.queryClient.setQueryDefaults(affinityOptions.queryKey, {
-    staleTime: Number.POSITIVE_INFINITY,
-  });
-  harness.queryClient.setQueryData(affinityOptions.queryKey, AFFINITY);
 });
+afterEach(() => harness.dispose());
 
-afterEach(() => {
-  harness.dispose();
-});
+function renderSuggestions(
+  onAssign = vi.fn().mockResolvedValue(undefined),
+  assigned = false,
+) {
+  const operations = {
+    forEntity: recommendations.forEntity.withTransport(async () =>
+      recommendationData("basis-1", assigned),
+    ),
+  };
+  render(
+    <ProjectSuggestionChips
+      expense={expense}
+      isPending={false}
+      onAssign={onAssign}
+      operations={operations}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  return { onAssign, operations };
+}
 
 describe("ProjectSuggestionChips", () => {
-  it("does not assign until the selected proposal is accepted", () => {
-    const onAssign = vi.fn().mockResolvedValue(undefined);
-    render(
-      <ProjectSuggestionChips
-        expense={expense}
-        isPending={false}
-        onAssign={onAssign}
-      />,
-      { wrapper: harness.wrapper },
+  it("reviews an assigned or unassigned alternative without writing on selection", async () => {
+    const { onAssign } = renderSuggestions(undefined, true);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Workshop refresh" }),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Workshop refresh" }));
-
     expect(onAssign).not.toHaveBeenCalled();
-    expect(screen.getByText(/Assign to Workshop refresh/)).toBeInTheDocument();
+    expect(screen.getByText("Old project")).toBeVisible();
+    expect(
+      screen.getByText("Workshop refresh", { selector: "span" }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "View evidence" }));
+    expect(
+      screen.getByText("2 electrical expenses already use this project."),
+    ).toBeVisible();
+  });
 
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+  it("writes only after Apply change and closes after success", async () => {
+    const { onAssign } = renderSuggestions();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Workshop refresh" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Apply change" }));
 
-    expect(onAssign).toHaveBeenCalledWith(PROJECT_ID);
+    await waitFor(() => expect(onAssign).toHaveBeenCalledWith(PROJECT_ID));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Apply change" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("retains the review after a failed update so it can be retried", async () => {
+    const onAssign = vi.fn().mockRejectedValue(new Error("offline"));
+    renderSuggestions(onAssign);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Workshop refresh" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Apply change" }));
+
+    await waitFor(() => expect(onAssign).toHaveBeenCalledOnce());
+    expect(screen.getByRole("alert")).toHaveTextContent("offline");
+    expect(screen.getByRole("button", { name: "Apply change" })).toBeVisible();
+  });
+
+  it("clears a selected review when the recommendation basis changes", async () => {
+    const { operations } = renderSuggestions();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Workshop refresh" }),
+    );
+    expect(screen.getByRole("button", { name: "Apply change" })).toBeVisible();
+
+    const options = operations.forEntity.queryOptions({
+      entityType: "expense",
+      entityId: EXPENSE_ID,
+    });
+    harness.queryClient.setQueryData(
+      options.queryKey,
+      recommendationData("basis-2"),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Apply change" }),
+      ).not.toBeInTheDocument(),
+    );
   });
 });

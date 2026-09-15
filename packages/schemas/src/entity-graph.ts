@@ -65,13 +65,39 @@ export const entityGraphBranchSchema = z.object({
 });
 export type EntityGraphBranch = z.infer<typeof entityGraphBranchSchema>;
 
+export const entityGraphNodesSchema = z.array(entityGraphNodeSchema);
+export const entityGraphEdgesSchema = z.array(entityGraphEdgeSchema);
+export const entityGraphBranchesSchema = z.array(entityGraphBranchSchema);
+
 export const entityGraphOutputSchema = z.object({
-  nodes: z.array(entityGraphNodeSchema),
-  edges: z.array(entityGraphEdgeSchema),
-  branches: z.array(entityGraphBranchSchema),
+  nodes: entityGraphNodesSchema,
+  edges: entityGraphEdgesSchema,
+  branches: entityGraphBranchesSchema,
   truncated: z.boolean(),
 });
 export type EntityGraphOutput = z.infer<typeof entityGraphOutputSchema>;
+
+export const entityGraphExploreInputSchema = z.object({
+  root: entityGraphRootSchema,
+  depth: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
+});
+export type EntityGraphExploreInput = z.input<
+  typeof entityGraphExploreInputSchema
+>;
+
+export const entityGraphExploreCompletionSchema = z.object({
+  status: z.enum([
+    "exhausted",
+    "depth-limit",
+    "pagination-limit",
+    "budget-limit",
+  ]),
+  requestedDepth: z.number().int().min(1).max(3),
+  reachedDepth: z.number().int().min(0).max(3),
+});
+export type EntityGraphExploreCompletion = z.infer<
+  typeof entityGraphExploreCompletionSchema
+>;
 
 export const entityGraphPathsInputSchema = z.object({
   start: entityGraphRootSchema,
@@ -86,6 +112,15 @@ export const entityGraphPathSchema = z.object({
   edgeIds: z.array(z.string()).max(8),
 });
 export type EntityGraphPath = z.infer<typeof entityGraphPathSchema>;
+
+export const entityGraphExploreOutputSchema = entityGraphOutputSchema.extend({
+  /** Distinct shortest explanatory routes from the requested root. */
+  paths: z.array(entityGraphPathSchema),
+  completion: entityGraphExploreCompletionSchema,
+});
+export type EntityGraphExploreOutput = z.infer<
+  typeof entityGraphExploreOutputSchema
+>;
 
 export const entityGraphPathsOutputSchema = z.object({
   /** Only nodes used by one of the returned paths. */

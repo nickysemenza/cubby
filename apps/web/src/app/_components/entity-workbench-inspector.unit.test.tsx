@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { entityGraph } from "~/entities/entity-graph.functions";
 import { entityPreviewQueryOptions } from "~/entities/entity-query";
 import { image } from "~/entities/image.functions";
+import { recommendations } from "~/lib/recommendations.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { EntityWorkbenchInspector } from "./entity-workbench-inspector";
@@ -105,6 +106,34 @@ function seedVendorInspector() {
     relationshipOptions.queryKey,
     vendorRelationships,
   );
+
+  const explorationOptions = entityGraph.explore.queryOptions({
+    root: vendorRoot,
+    depth: 1,
+  });
+  harness.queryClient.setQueryDefaults(explorationOptions.queryKey, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  harness.queryClient.setQueryData(explorationOptions.queryKey, {
+    ...vendorRelationships,
+    paths: [],
+    completion: {
+      status: "depth-limit",
+      requestedDepth: 1,
+      reachedDepth: 1,
+    },
+  });
+
+  const recommendationOptions =
+    recommendations.forEntity.queryOptions(vendorRoot);
+  harness.queryClient.setQueryDefaults(recommendationOptions.queryKey, {
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  harness.queryClient.setQueryData(recommendationOptions.queryKey, {
+    source: vendorRoot,
+    basisKey: "fixture-vendor",
+    groups: [],
+  });
 }
 
 function seedImageInspector() {

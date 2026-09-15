@@ -51,6 +51,68 @@ const affinity: TradeAffinityCell[] = KITCHEN_SUBPROJECTS.flatMap((trade) => [
 ]);
 
 describe("rankProjectSuggestions", () => {
+  it("excludes the current assignment before applying the result limit", () => {
+    const suggestions = rankProjectSuggestions(
+      { date: "2024-06-15", trade: "drywall", projectId: "kitchen-drywall" },
+      projects,
+      affinity,
+      TODAY,
+    );
+    expect(suggestions).toHaveLength(3);
+    expect(suggestions.map((item) => item.id)).not.toContain("kitchen-drywall");
+  });
+
+  it("uses exact-product evidence after trade affinity and before window size", () => {
+    const suggestions = rankProjectSuggestions(
+      { date: "2024-06-15", trade: "drywall" },
+      projects,
+      [
+        {
+          projectId: "kitchen-drywall",
+          trade: "drywall",
+          count: 3,
+          exactProductCount: 0,
+        },
+        {
+          projectId: "kitchen-remodel",
+          trade: "drywall",
+          count: 2,
+          exactProductCount: 4,
+        },
+        {
+          projectId: "kitchen-building",
+          trade: "drywall",
+          count: 2,
+          exactProductCount: 1,
+        },
+      ],
+      TODAY,
+    );
+    expect(suggestions.map((item) => item.id)).toEqual([
+      "kitchen-drywall",
+      "kitchen-remodel",
+      "kitchen-building",
+    ]);
+    expect(suggestions[1]?.exactProductCount).toBe(4);
+  });
+
+  it("breaks identical names and windows by identifier", () => {
+    const duplicateNames = ["b", "a"].map((id) => ({
+      id,
+      name: "Same",
+      effectiveStart: "2024-01-01",
+      effectiveEnd: "2024-12-31",
+    }));
+    expect(
+      rankProjectSuggestions(
+        { date: "2024-06-15", trade: "other" },
+        duplicateNames,
+        [],
+        TODAY,
+      ).map((item) => item.id),
+    ).toEqual(["a", "b"]);
+  });
+
   it("picks the trade-matched sub-project out of many concurrent candidates", () => {
     const overlapping = projects.filter(
       (p) =>

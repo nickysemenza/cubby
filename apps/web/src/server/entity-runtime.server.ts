@@ -25,6 +25,7 @@ import {
 import { implementOperationDomain } from "~/server/operation-domain.server";
 import { getEntityCounts } from "~/server/repo/dashboard";
 import { getEntityGraph } from "~/server/repo/entity-graph";
+import { getEntityGraphExplore } from "~/server/repo/entity-graph-explore";
 import { getEntityGraphPaths } from "~/server/repo/entity-graph-paths";
 import { getFilterOptions } from "~/server/repo/filter-options";
 import { executeSearchDocumentSql } from "~/server/repo/search-document";
@@ -98,6 +99,7 @@ export const entityFilterOptionsHandlers = implementOperationDomain(
 export const entityGraphHandlers = implementOperationDomain(
   entityGraphContract,
   {
+    explore: (context, input) => getEntityGraphExplore(context.readDb, input),
     graph: (context, input) => getEntityGraph(context.readDb, input),
     graphPaths: (context, input) => getEntityGraphPaths(context.readDb, input),
   },

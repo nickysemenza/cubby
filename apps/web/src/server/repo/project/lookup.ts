@@ -1,4 +1,8 @@
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type ExpenseId,
+  parseEntityId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type {
   ProjectFilters,
@@ -60,6 +64,7 @@ const projectScaffold = listScaffold("project", project);
  */
 export const projectNameOptions = async (
   db: Database,
+  excludeExpenseId?: ExpenseId,
 ): Promise<ProjectOptionsOut[]> => {
   const [rows, contentDates] = await Promise.all([
     getDb(db)
@@ -75,7 +80,7 @@ export const projectNameOptions = async (
       .from(project)
       .where(notDeleted(project))
       .orderBy(asc(project.name)),
-    projectContentDates(db),
+    projectContentDates(db, undefined, excludeExpenseId),
   ]);
 
   const windows = aggregateSubtreeDates(rows, contentDates);

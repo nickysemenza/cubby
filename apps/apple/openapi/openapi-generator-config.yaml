@@ -14,6 +14,9 @@ filter:
   operations:
     - agent.ask
     - dashboard.counts
+    - entity.explore
+    - entity.graph
+    - entity.graphPaths
     - garden.correctLocationDates
     - garden.createPlanting
     - garden.entries
@@ -34,6 +37,7 @@ filter:
     - image.uploadImage
     - inventory.findDuplicates
     - inventory.getByLocationIds
+    - inventory.moveEntries
     - inventory.reconcileSession
     - inventory.resolveScanStrays
     - inventory.scanAtLocation
@@ -44,8 +48,10 @@ filter:
     - problems.getCounts
     - product.findOrCreateByCode
     - product.findOrCreateByUPC
+    - recommendations.forEntity
     - resources.expense.get
     - resources.expense.list
+    - resources.expense.update
     - resources.financialAccount.get
     - resources.financialAccount.list
     - resources.financialTransaction.get

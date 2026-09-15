@@ -326,6 +326,198 @@ extension GardenGuidesDocument {
     }
 }
 
+// MARK: - Entity relationships
+
+extension EntityReference {
+    var graphRootInput: Components.Schemas.EntityGraphRootInput {
+        .init(entityType: entity.apiValue, entityId: id)
+    }
+}
+
+extension EntityKey {
+    var apiValue: Components.Schemas.Entity {
+        Components.Schemas.Entity(rawValue: rawValue)!
+    }
+}
+
+extension EntityReference {
+    init(_ output: Components.Schemas.EntityRef) {
+        self.init(entity: EntityKey(rawValue: output.entityType.rawValue)!, id: output.entityId)
+    }
+
+    init(_ output: Components.Schemas.EntityGraphRoot) {
+        self.init(entity: EntityKey(rawValue: output.entityType.rawValue)!, id: output.entityId)
+    }
+}
+
+extension EntityGraphNode {
+    init(_ output: Components.Schemas.EntityGraphNode) {
+        self.init(
+            reference: .init(
+                entity: EntityKey(rawValue: output.entityType.rawValue)!,
+                id: output.entityId
+            ),
+            label: output.label,
+            metadata: output.metadata.additionalProperties,
+            imageURL: output.image.flatMap { URL(string: $0.url) }
+        )
+    }
+}
+
+extension EntityGraphEdge {
+    init(_ output: Components.Schemas.EntityGraphEdge) {
+        self.init(
+            id: output.id,
+            source: .init(output.source),
+            target: .init(output.target),
+            relationshipKey: output.relationshipKey,
+            label: output.label,
+            sourceKey: output.sourceKey,
+            provenance: output.provenance
+        )
+    }
+}
+
+extension EntityGraphBranch {
+    init(_ output: Components.Schemas.EntityGraphBranch) {
+        self.init(
+            root: .init(output.root),
+            relationshipKey: output.relationshipKey,
+            label: output.label,
+            target: EntityKey(rawValue: output.target.rawValue)!,
+            totalCount: output.totalCount,
+            nextOffset: output.nextOffset,
+            items: output.items.map(EntityReference.init),
+            edgeIDs: output.edgeIds
+        )
+    }
+}
+
+extension EntityGraphPath {
+    init(_ output: Components.Schemas.EntityGraphPath) {
+        self.init(
+            nodeReferences: output.nodeRefs.map(EntityReference.init),
+            edgeIDs: output.edgeIds
+        )
+    }
+}
+
+extension EntityGraphCompletion {
+    init(_ output: Components.Schemas.EntityGraphExploreCompletion) {
+        self.init(
+            status: EntityGraphCompletionStatus(rawValue: output.status.rawValue)!,
+            requestedDepth: output.requestedDepth,
+            reachedDepth: output.reachedDepth
+        )
+    }
+}
+
+extension EntityGraphPage {
+    init(_ output: Components.Schemas.EntityGraphOutput) {
+        self.init(
+            nodes: output.nodes.map(EntityGraphNode.init),
+            edges: output.edges.map(EntityGraphEdge.init),
+            branches: output.branches.map(EntityGraphBranch.init),
+            truncated: output.truncated
+        )
+    }
+}
+
+extension EntityGraph {
+    init(root: EntityReference, output: Components.Schemas.EntityGraphExploreOutput) {
+        self.init(
+            root: root,
+            nodes: output.nodes.map(EntityGraphNode.init),
+            edges: output.edges.map(EntityGraphEdge.init),
+            branches: output.branches.map(EntityGraphBranch.init),
+            paths: output.paths.map(EntityGraphPath.init),
+            completion: .init(output.completion),
+            truncated: output.truncated
+        )
+    }
+}
+
+extension EmbeddingReadiness {
+    init(_ output: Components.Schemas.EmbeddingReadiness) {
+        self.init(rawValue: output.rawValue)!
+    }
+}
+
+extension RelationshipEvidence {
+    init(_ output: Components.Schemas.RelatednessEvidence) {
+        self.init(signal: output.signal, detail: output.detail, weight: output.weight)
+    }
+}
+
+extension ExpenseProjectRecommendation {
+    init(_ output: Components.Schemas.ExpenseProjectProposal) {
+        self.init(
+            expenseID: output.expenseId,
+            target: .init(id: output.target.id, name: output.target.name),
+            effectiveStart: output.effectiveStart,
+            effectiveEnd: output.effectiveEnd,
+            sameTradeCount: output.sameTradeCount,
+            exactProductCount: output.exactProductCount,
+            supportingExpenses: output.supportingExpenses.map { .init(id: $0.id, name: $0.name) },
+            reasons: output.reasons
+        )
+    }
+}
+
+extension InventoryPlacementRecommendation {
+    init(_ output: Components.Schemas.InventoryPlacementProposal) {
+        self.init(
+            inventoryID: output.inventoryId,
+            target: .init(id: output.target.id, name: output.target.name),
+            reasons: output.reasons
+        )
+    }
+}
+
+extension ProductRelationshipRecommendation {
+    init(_ output: Components.Schemas.ProductRelatedProposal) {
+        self.init(
+            target: .init(id: output.target.id, name: output.target.name),
+            score: output.score,
+            evidence: output.evidence.map(RelationshipEvidence.init)
+        )
+    }
+}
+
+extension EntityRecommendationGroup {
+    init(_ output: Components.Schemas.EntityRecommendationGroup) {
+        switch output {
+        case .expenseProject(let group):
+            self = .expenseProject(
+                status: .init(group.status),
+                currentTarget: group.currentTarget.map { .init(id: $0.id, name: $0.name) },
+                proposals: group.proposals.map(ExpenseProjectRecommendation.init)
+            )
+        case .inventoryPlacement(let group):
+            self = .inventoryPlacement(
+                status: .init(group.status),
+                currentTarget: group.currentTarget.map { .init(id: $0.id, name: $0.name) },
+                proposals: group.proposals.map(InventoryPlacementRecommendation.init)
+            )
+        case .productRelated(let group):
+            self = .productRelated(
+                status: .init(group.status),
+                proposals: group.proposals.map(ProductRelationshipRecommendation.init)
+            )
+        }
+    }
+}
+
+extension EntityRecommendations {
+    init(_ output: Components.Schemas.EntityRecommendationsOut) {
+        self.init(
+            source: .init(output.source),
+            basisKey: output.basisKey,
+            groups: output.groups.map(EntityRecommendationGroup.init)
+        )
+    }
+}
+
 extension GardenCreateInput {
     init(_ input: CreateGardenPlanting) {
         self.init(

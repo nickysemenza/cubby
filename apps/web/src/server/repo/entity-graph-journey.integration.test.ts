@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { upsertCookbook } from "./cookbook";
 import { getDb } from "./database-helpers";
 import { getEntityGraph } from "./entity-graph";
+import { getEntityGraphExplore } from "./entity-graph-explore";
 import { createExpense } from "./expense";
 import { createPurchase } from "./purchase";
 import { upsertCookbookRecipe } from "./recipe";
@@ -197,6 +198,30 @@ describe("entity graph cross-entity journey", () => {
       "expenses",
       { entityType: "expense", entityId: expense.output.id },
     );
+
+    const explored = await getEntityGraphExplore(ctx.db, {
+      root: { entityType: "product", entityId: product.id },
+      depth: 2,
+    });
+    expect(explored.nodes).toContainEqual(
+      expect.objectContaining({
+        entityType: "location",
+        entityId: location.id,
+      }),
+    );
+    expect(explored.paths).toContainEqual({
+      nodeRefs: [
+        { entityType: "product", entityId: product.id },
+        { entityType: "inventory", entityId: inventory.id },
+        { entityType: "location", entityId: location.id },
+      ],
+      edgeIds: expect.arrayContaining([expect.any(String), expect.any(String)]),
+    });
+    expect(explored.completion).toMatchObject({
+      status: "depth-limit",
+      requestedDepth: 2,
+      reachedDepth: 2,
+    });
   });
 
   it("keeps opposite self-referential edges distinct while inverse expansion preserves their identity", async () => {

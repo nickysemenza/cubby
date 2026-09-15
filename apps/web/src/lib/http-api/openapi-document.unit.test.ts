@@ -222,7 +222,7 @@ describe("generated HTTP OpenAPI document", () => {
         "ApiError",
       );
     }
-    expect(operations).toHaveLength(327);
+    expect(operations).toHaveLength(329);
   });
 
   it("carries query parameters as plain form values", () => {
@@ -280,7 +280,7 @@ describe("generated HTTP OpenAPI document", () => {
     for (const entry of operations)
       methods[z.enum(["get", "post", "patch", "delete"]).parse(entry.method)] +=
         1;
-    expect(methods).toEqual({ get: 155, post: 134, patch: 19, delete: 19 });
+    expect(methods).toEqual({ get: 156, post: 135, patch: 19, delete: 19 });
     for (const path of POST_QUERIES) {
       const posted = paths[path]?.post;
       expect(posted).toBeDefined();

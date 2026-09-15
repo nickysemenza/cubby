@@ -1,10 +1,10 @@
+import type { EntityRecommendationsOut } from "@cubby/schemas/entity-recommendations";
 import { imageOut, type ImageOut } from "@cubby/schemas/image";
-import type { RelatednessOut } from "@cubby/schemas/relatedness";
 import { testShortcode } from "@cubby/schemas/testing";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { relatedness } from "~/lib/recommendations.functions";
+import { recommendations } from "~/lib/recommendations.functions";
 import { search } from "~/lib/search.functions";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -35,14 +35,14 @@ interface RelatednessRailTestAdapter {
  * changing once the transport has nothing further to report.
  */
 function createTestOperations(
-  relatednessResults: readonly RelatednessOut[],
+  relatednessResults: readonly EntityRecommendationsOut[],
 ): RelatednessRailTestAdapter {
   let requestCount = 0;
   return {
     // These stay actual operation descriptors: only their remote transport is
     // in-memory, so input/output parsing and cache metadata are exercised.
     operations: {
-      relatedness: relatedness.product.withTransport(async () => {
+      recommendations: recommendations.forEntity.withTransport(async () => {
         const index = Math.min(requestCount, relatednessResults.length - 1);
         const result = relatednessResults[index]!;
         requestCount += 1;
@@ -53,6 +53,23 @@ function createTestOperations(
       ),
     },
     relatednessRequestCount: () => requestCount,
+  };
+}
+
+function result(
+  status: "ready" | "stale" | "uncomputed" | "unavailable",
+  proposals: Extract<
+    EntityRecommendationsOut["groups"][number],
+    { kind: "product-related" }
+  >["proposals"] = [],
+): EntityRecommendationsOut {
+  return {
+    source: {
+      entityType: "product",
+      entityId: testShortcode("product", "PRD-SOURCE"),
+    },
+    basisKey: `basis-${status}`,
+    groups: [{ kind: "product-related", status, proposals }],
   };
 }
 
@@ -93,10 +110,7 @@ function renderRail(
 describe("RelatednessRail", () => {
   it("polls readiness after Index now and stops on ready", async () => {
     harness = createBrowserTestHarness({ clock: { now: 0 } });
-    const adapter = createTestOperations([
-      { status: "stale", items: [] },
-      { status: "ready", items: [] },
-    ]);
+    const adapter = createTestOperations([result("stale"), result("ready")]);
     renderRail(adapter, harness.wrapper);
 
     await act(async () => {
@@ -131,7 +145,7 @@ describe("RelatednessRail", () => {
 
   it("shows a check-again affordance once the poll times out", async () => {
     harness = createBrowserTestHarness({ clock: { now: 0 } });
-    const adapter = createTestOperations([{ status: "stale", items: [] }]);
+    const adapter = createTestOperations([result("stale")]);
     renderRail(adapter, harness.wrapper);
 
     await act(async () => {
@@ -170,25 +184,20 @@ describe("RelatednessRail", () => {
     harness = createBrowserTestHarness();
     const pictured = testShortcode("product", "PRD-PICTURED");
     const unpictured = testShortcode("product", "PRD-UNPICTURED");
-    const relatednessResult: RelatednessOut = {
-      status: "ready",
-      items: [
-        {
-          entity: "product",
-          shortcode: pictured,
-          title: "Pictured related product",
-          score: 0.92,
-          evidence: [{ signal: "Semantic match", detail: null, weight: 1 }],
-        },
-        {
-          entity: "product",
-          shortcode: unpictured,
-          title: "Unpictured related product",
-          score: 0,
-          evidence: [{ signal: "Shared tag", detail: null, weight: 0 }],
-        },
-      ],
-    };
+    const relatednessResult = result("ready", [
+      {
+        kind: "product-related",
+        target: { id: pictured, name: "Pictured related product" },
+        score: 0.92,
+        evidence: [{ signal: "Semantic match", detail: null, weight: 1 }],
+      },
+      {
+        kind: "product-related",
+        target: { id: unpictured, name: "Unpictured related product" },
+        score: 0,
+        evidence: [{ signal: "Shared tag", detail: null, weight: 0 }],
+      },
+    ]);
     const adapter = createTestOperations([relatednessResult]);
     render(
       <RelatednessRail
@@ -223,5 +232,31 @@ describe("RelatednessRail", () => {
     expect(unpicturedLink.querySelector("svg")).toBeInTheDocument();
     expect(screen.getByText("92% similar")).toBeVisible();
     expect(screen.getByText("Shared tag")).toBeVisible();
+  });
+
+  it("keeps factual tag proposals visible when semantic similarity is unavailable", async () => {
+    harness = createBrowserTestHarness();
+    const tagged = testShortcode("product", "PRD-TAGGED");
+    const adapter = createTestOperations([
+      result("unavailable", [
+        {
+          kind: "product-related",
+          target: { id: tagged, name: "Same fitting" },
+          score: 0,
+          evidence: [{ signal: "Shared tag", detail: "m18", weight: 1 }],
+        },
+      ]),
+    ]);
+    renderRail(adapter, harness.wrapper);
+
+    expect(
+      await screen.findByRole("link", { name: "Same fitting" }),
+    ).toBeVisible();
+    expect(screen.getByText("Shared tag")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Similarity is unavailable until embeddings are configured.",
+      ),
+    ).toBeVisible();
   });
 });

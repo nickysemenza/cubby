@@ -3,6 +3,7 @@ import {
   relatednessContract,
 } from "~/contracts/recommendations.contract";
 import { implementOperationDomain } from "~/server/operation-domain.server";
+import { getEntityRecommendations } from "~/server/services/entity-recommendations.service";
 import {
   dismissDuplicateProductRecommendationWorkflow,
   dismissProductRecommendationWorkflow,
@@ -26,6 +27,9 @@ export const relatednessHandlers = implementOperationDomain(
 export const recommendationsHandlers = implementOperationDomain(
   recommendationsContract,
   {
+    forEntity: {
+      run: (context, input) => getEntityRecommendations(context.db, input),
+    },
     placement: {
       run: (context, input) =>
         getPlacementRecommendationWorkflow(context.db, input),

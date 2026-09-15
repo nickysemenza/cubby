@@ -534,54 +534,63 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
     }),
     projectId: () => ({
       value: (
-        <EditableEntityCell
-          value={
-            expense.projectId && expense.projectName
-              ? { id: expense.projectId, name: expense.projectName }
-              : null
-          }
-          label="project"
-          clearable
-          trigger="pencil"
-          onSave={async (newProjectId) => {
-            await updateMutation.mutateAsync({
-              id: expense.id,
-              data: { projectId: newProjectId },
-            });
-          }}
-          clipboard={entityCellClipboard(
-            "project",
-            expense.projectId && expense.projectName
-              ? { id: expense.projectId, name: expense.projectName }
-              : null,
-            async (newProjectId) => {
+        <div className="min-w-0 space-y-2">
+          <EditableEntityCell
+            value={
+              expense.projectId && expense.projectName
+                ? { id: expense.projectId, name: expense.projectName }
+                : null
+            }
+            label="project"
+            clearable
+            trigger="pencil"
+            onSave={async (newProjectId) => {
               await updateMutation.mutateAsync({
                 id: expense.id,
                 data: { projectId: newProjectId },
               });
-            },
-          )}
-          SearchProvider={(props) => (
-            <WithEntitySearch entity="project" {...props} />
-          )}
-          renderValue={(v) =>
-            // `expense.projectId` is the project's shortcode (per the
-            // project shortcode cutover), the same value the combobox
-            // carries — so both EntityInlineLink id slots read from it.
-            v && expense.projectId ? (
-              <EntityInlineLink
-                displayImage={undefined}
-                entity="project"
-                data={{
-                  id: expense.projectId,
-                  name: v.name,
-                }}
-              />
-            ) : (
-              <NoneValue />
-            )
-          }
-        />
+            }}
+            clipboard={entityCellClipboard(
+              "project",
+              expense.projectId && expense.projectName
+                ? { id: expense.projectId, name: expense.projectName }
+                : null,
+              async (newProjectId) => {
+                await updateMutation.mutateAsync({
+                  id: expense.id,
+                  data: { projectId: newProjectId },
+                });
+              },
+            )}
+            SearchProvider={(props) => (
+              <WithEntitySearch entity="project" {...props} />
+            )}
+            renderValue={(v) =>
+              v && expense.projectId ? (
+                <EntityInlineLink
+                  displayImage={undefined}
+                  entity="project"
+                  data={{
+                    id: expense.projectId,
+                    name: v.name,
+                  }}
+                />
+              ) : (
+                <NoneValue />
+              )
+            }
+          />
+          <ProjectSuggestionChips
+            expense={expense}
+            isPending={updateMutation.isPending}
+            onAssign={async (projectId) => {
+              await updateMutation.mutateAsync({
+                id: expense.id,
+                data: { projectId },
+              });
+            }}
+          />
+        </div>
       ),
       filterAction: expense.projectId ? (
         <EntityFilterLink
@@ -607,20 +616,6 @@ export const ExpenseDetail: FC<ExpenseDetailProps> = ({ expense }) => {
           entity="expense"
           record={expense}
           overrides={overrides}
-          // In the footer, not beside the Project row: InfoRow's value span is
-          // right-aligned and capped at 65%, which would crush the chips.
-          footer={
-            <ProjectSuggestionChips
-              expense={expense}
-              isPending={updateMutation.isPending}
-              onAssign={async (projectId) => {
-                await updateMutation.mutateAsync({
-                  id: expense.id,
-                  data: { projectId },
-                });
-              }}
-            />
-          }
         />
       ),
       // Receiving is deliberately a separate, explicit act — linking a product

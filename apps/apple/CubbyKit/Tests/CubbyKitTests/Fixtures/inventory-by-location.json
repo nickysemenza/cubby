@@ -7,6 +7,7 @@
     "placement": "stock",
     "createdAt": "2026-03-01T10:00:00.000Z",
     "updatedAt": "2026-03-02T10:00:00.000Z",
+    "displayName": "Sample Product at Bin 1",
     "product": {
       "id": "PRD-2345",
       "name": "Sample Product",
@@ -22,12 +23,12 @@
       "createdAt": "2026-01-01T00:00:00.000Z",
       "updatedAt": "2026-01-01T00:00:00.000Z",
       "images": [
-        { "id": "IMG-2345", "url": "https://images.example/pending.jpg", "key": "k1", "filename": "a.jpg", "size": 10, "contentType": "image/jpeg", "status": "PENDING", "width": null, "height": null, "detectedContentType": null, "sha256": null },
-        { "id": "IMG-3456", "url": "https://images.example/cover.jpg", "key": "k2", "filename": "b.jpg", "size": 10, "contentType": "image/jpeg", "status": "UPLOADED", "width": 800, "height": 600, "detectedContentType": "image/jpeg", "sha256": null }
+        { "id": "IMG-2345", "url": "https://images.example/pending.jpg", "key": "k1", "filename": "a.jpg", "size": 10, "contentType": "image/jpeg", "status": "PENDING", "width": null, "height": null, "detectedContentType": null, "sha256": null, "verifiedAt": null, "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z" },
+        { "id": "IMG-3456", "url": "https://images.example/cover.jpg", "key": "k2", "filename": "b.jpg", "size": 10, "contentType": "image/jpeg", "status": "UPLOADED", "width": 800, "height": 600, "detectedContentType": "image/jpeg", "sha256": null, "verifiedAt": null, "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z" }
       ],
       "externalIds": [
-        { "id": "00000000-0000-0000-0000-000000000001", "source": "amazon", "kind": "asin", "externalId": "B000000000", "url": null },
-        { "id": "00000000-0000-0000-0000-000000000002", "source": "legacy", "kind": "gtin_14", "externalId": "04006381333931", "url": null }
+        { "id": "00000000-0000-0000-0000-000000000001", "source": "amazon", "kind": "asin", "externalId": "B000000000", "url": null, "isPrimary": true, "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z" },
+        { "id": "00000000-0000-0000-0000-000000000002", "source": "legacy", "kind": "gtin_14", "externalId": "04006381333931", "url": null, "isPrimary": false, "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z" }
       ],
       "unitMappings": []
     },
@@ -37,6 +38,7 @@
       "aliases": [],
       "tags": [],
       "type": "box",
+      "gardenConditions": null,
       "product": null,
       "lastBulkInventory": null,
       "aiDescription": null,
@@ -54,12 +56,13 @@
     "placement": "stock",
     "createdAt": "2026-03-01T10:00:00.000Z",
     "updatedAt": "2026-03-03T10:00:00.000Z",
+    "displayName": "Other Product at Bin 1",
     "product": {
       "id": "PRD-3456",
       "name": "Other Product",
       "primaryGtin": null,
       "fdc_id": null,
-      "manufacturer": null,
+      "manufacturer": "Other Manufacturer",
       "model": null,
       "notes": null,
       "expectedQuantity": null,
@@ -78,6 +81,7 @@
       "aliases": [],
       "tags": [],
       "type": "box",
+      "gardenConditions": null,
       "product": null,
       "lastBulkInventory": null,
       "aiDescription": null,

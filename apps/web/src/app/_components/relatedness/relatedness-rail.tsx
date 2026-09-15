@@ -1,5 +1,5 @@
+import type { EntityRecommendationGroup } from "@cubby/schemas/entity-recommendations";
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
-import type { RelatednessOut } from "@cubby/schemas/relatedness";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
@@ -8,7 +8,7 @@ import { useEffect, useMemo } from "react";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
-import { relatedness } from "~/lib/recommendations.functions";
+import { recommendations } from "~/lib/recommendations.functions";
 import { search } from "~/lib/search.functions";
 
 import {
@@ -18,17 +18,21 @@ import {
 } from "../products/product-image-summaries";
 import { useEmbeddingReadinessPoll } from "./use-embedding-readiness-poll";
 
-const EMPTY_RELATED_PRODUCTS: RelatednessOut["items"] = [];
+type ProductRecommendationGroup = Extract<
+  EntityRecommendationGroup,
+  { kind: "product-related" }
+>;
+const EMPTY_RELATED_PRODUCTS: ProductRecommendationGroup["proposals"] = [];
 
 /** The rail's only remote dependencies, grouped so browser tests can use the
  * same parsed operation descriptors with an in-memory transport. */
 export interface RelatednessRailOperations {
-  relatedness: typeof relatedness.product;
+  recommendations: typeof recommendations.forEntity;
   requestEmbeddingRefresh: typeof search.requestEmbeddingRefresh;
 }
 
 const productionOperations: RelatednessRailOperations = {
-  relatedness: relatedness.product,
+  recommendations: recommendations.forEntity,
   requestEmbeddingRefresh: search.requestEmbeddingRefresh,
 };
 
@@ -38,7 +42,7 @@ function RelatednessIndexPrompt({
   refreshing,
   onRefresh,
 }: {
-  status: RelatednessOut["status"] | undefined;
+  status: ProductRecommendationGroup["status"] | undefined;
   indexing: boolean;
   refreshing: boolean;
   onRefresh: () => void;
@@ -128,7 +132,10 @@ export function RelatednessRail({
   const { refetchInterval, notifyStatus } = poll;
 
   const relatednessQuery = useQuery({
-    ...operations.relatedness.queryOptions(product.id),
+    ...operations.recommendations.queryOptions({
+      entityType: "product",
+      entityId: product.id,
+    }),
     refetchInterval,
   });
   const refresh = useMutation(
@@ -137,7 +144,11 @@ export function RelatednessRail({
     }),
   );
 
-  const status = relatednessQuery.data?.status;
+  const group = relatednessQuery.data?.groups.find(
+    (candidate): candidate is ProductRecommendationGroup =>
+      candidate.kind === "product-related",
+  );
+  const status = group?.status;
   // Terminal readiness updates the visible "Indexing…" state the instant this
   // render sees it, rather than waiting a render behind for the effect below
   // to flip the poll's own phase — that effect governs the interval/timeout,
@@ -149,9 +160,9 @@ export function RelatednessRail({
     notifyStatus(status);
   }, [status, notifyStatus]);
 
-  const items = relatednessQuery.data?.items ?? EMPTY_RELATED_PRODUCTS;
+  const items = group?.proposals ?? EMPTY_RELATED_PRODUCTS;
   const relatedProductIds = useMemo(
-    () => items.map((item) => item.shortcode),
+    () => items.map((item) => item.target.id),
     [items],
   );
 
@@ -183,11 +194,11 @@ export function RelatednessRail({
         summaries={imageSummaries}
       >
         {items.map((item) => (
-          <RelatedProductRow key={item.shortcode} item={item} />
+          <RelatedProductRow key={item.target.id} item={item} />
         ))}
       </ProductImageSummariesProvider>
 
-      {status === "ready" && relatednessQuery.data?.items.length === 0 && (
+      {status === "ready" && items.length === 0 && (
         <p className="text-xs text-muted-foreground">
           No related products yet.
         </p>
@@ -201,9 +212,9 @@ export function RelatednessRail({
 function RelatedProductRow({
   item,
 }: {
-  item: RelatednessOut["items"][number];
+  item: ProductRecommendationGroup["proposals"][number];
 }) {
-  const images = useHydratedProductImages(item.shortcode);
+  const images = useHydratedProductImages(item.target.id);
 
   return (
     <Row
@@ -214,7 +225,7 @@ function RelatedProductRow({
     >
       <EntityInlineLink
         entity="product"
-        data={{ id: item.shortcode, name: item.title }}
+        data={item.target}
         displayImage={images[0] ?? null}
         truncate
       />

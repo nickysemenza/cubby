@@ -1,20 +1,8 @@
 /**
- * Ranking for "which project does this expense belong to?".
- *
- * Date overlap alone is nowhere near enough: the household runs many
- * sub-projects concurrently, so the median unassigned expense falls inside
- * roughly nine live project windows — barely narrower than the full list. What
- * actually discriminates is the ledger's own history: a `drywall` expense
- * overwhelmingly lands on the drywall sub-project, an `electrical` one on
- * electrical. So candidates are gathered by date overlap and then ordered by
- * how many same-trade expenses each project has already absorbed.
- *
- * Backtested over every already-assigned expense (scoring each against the
- * matrix with its own contribution removed, so a row can't vote for itself):
- * top-1 77.1%, top-3 89.0% — which is why the UI offers three and not one.
- *
- * Pure and dependency-free, in a plain `.ts`: the unit-test project can't
- * import `~/`-aliased `.tsx`.
+ * Date overlap narrows candidates; same-trade and exact-product history
+ * distinguish concurrent projects. History and derived dates must already
+ * exclude the reviewed expense so its assignment cannot vote for itself.
+ * This pure module also excludes the current project before taking the limit.
  */
 
 /**
@@ -44,6 +32,7 @@ export interface TradeAffinityCell {
   projectId: string;
   trade: string;
   count: number;
+  exactProductCount?: number;
 }
 
 export interface ProjectSuggestion {
@@ -51,6 +40,7 @@ export interface ProjectSuggestion {
   name: string;
   /** Same-trade expenses already on this project — the ranking weight. */
   affinity: number;
+  exactProductCount: number;
 }
 
 /** Whole days between two `YYYY-MM-DD` strings, or null if either is absent. */
@@ -60,7 +50,7 @@ function spanInDays(start: string | null, end: string | null): number | null {
   return Number.isNaN(ms) ? null : ms / 86_400_000;
 }
 
-/** Three, because top-3 is where the backtest hits 89% (top-1 is 77%). */
+/** Keep inline alternatives small enough to review beside the current link. */
 const MAX_PROJECT_SUGGESTIONS = 3;
 
 /**
@@ -71,7 +61,7 @@ const MAX_PROJECT_SUGGESTIONS = 3;
  * household's local day, not UTC.
  */
 export function rankProjectSuggestions(
-  expense: { date: string | null; trade: string },
+  expense: { date: string | null; trade: string; projectId?: string | null },
   projects: readonly SuggestableProject[],
   affinity: readonly TradeAffinityCell[],
   today: string,
@@ -81,9 +71,11 @@ export function rankProjectSuggestions(
   if (!expense.date) return [];
 
   const sameTradeCounts = new Map<string, number>();
+  const exactProductCounts = new Map<string, number>();
   for (const cell of affinity) {
     if (cell.trade === expense.trade) {
       sameTradeCounts.set(cell.projectId, cell.count);
+      exactProductCounts.set(cell.projectId, cell.exactProductCount ?? 0);
     }
   }
 
@@ -91,7 +83,8 @@ export function rankProjectSuggestions(
     .filter((project) => {
       // A project with no effective start has no window to fall inside — no
       // override, no dated tasks or expenses, no dated sub-projects either.
-      if (!project.effectiveStart) return false;
+      if (project.id === expense.projectId || !project.effectiveStart)
+        return false;
       const end = project.effectiveEnd ?? today;
       return expense.date! >= project.effectiveStart && expense.date! <= end;
     })
@@ -99,11 +92,14 @@ export function rankProjectSuggestions(
       id: project.id,
       name: project.name,
       affinity: sameTradeCounts.get(project.id) ?? 0,
+      exactProductCount: exactProductCounts.get(project.id) ?? 0,
       span: spanInDays(project.effectiveStart, project.effectiveEnd),
     }))
     .sort((a, b) => {
       // Strongest same-trade history first.
       if (a.affinity !== b.affinity) return b.affinity - a.affinity;
+      if (a.exactProductCount !== b.exactProductCount)
+        return b.exactProductCount - a.exactProductCount;
       // Then the tighter window: an expense inside a two-week sub-project is
       // better explained by it than by the year-long parent that contains it.
       // Open-ended projects (null span) sort last — they contain everything.
@@ -112,8 +108,13 @@ export function rankProjectSuggestions(
         if (b.span === null) return -1;
         return a.span - b.span;
       }
-      return a.name.localeCompare(b.name);
+      return a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
     })
     .slice(0, limit)
-    .map(({ id, name, affinity: score }) => ({ id, name, affinity: score }));
+    .map(({ id, name, affinity: score, exactProductCount }) => ({
+      id,
+      name,
+      affinity: score,
+      exactProductCount,
+    }));
 }

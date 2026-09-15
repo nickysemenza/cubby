@@ -17,6 +17,15 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/dashboard/counts`.
     /// - Remark: Generated from `#/paths//api/v1/dashboard/counts/get(dashboard.counts)`.
     func dashboard_counts(_ input: Operations.Dashboard_counts.Input) async throws -> Operations.Dashboard_counts.Output
+    /// - Remark: HTTP `POST /api/v1/entity/explore`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/explore/post(entity.explore)`.
+    func entity_explore(_ input: Operations.Entity_explore.Input) async throws -> Operations.Entity_explore.Output
+    /// - Remark: HTTP `POST /api/v1/entity/graph`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/graph/post(entity.graph)`.
+    func entity_graph(_ input: Operations.Entity_graph.Input) async throws -> Operations.Entity_graph.Output
+    /// - Remark: HTTP `POST /api/v1/entity/graphPaths`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/graphPaths/post(entity.graphPaths)`.
+    func entity_graphPaths(_ input: Operations.Entity_graphPaths.Input) async throws -> Operations.Entity_graphPaths.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/expenses`.
@@ -25,6 +34,9 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/expenses/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/get(resources.expense.get)`.
     func resources_expense_get(_ input: Operations.Resources_expense_get.Input) async throws -> Operations.Resources_expense_get.Output
+    /// - Remark: HTTP `PATCH /api/v1/expenses/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/patch(resources.expense.update)`.
+    func resources_expense_update(_ input: Operations.Resources_expense_update.Input) async throws -> Operations.Resources_expense_update.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/financial-accounts`.
@@ -134,6 +146,9 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /api/v1/inventory/getByLocationIds`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/getByLocationIds/get(inventory.getByLocationIds)`.
     func inventory_getByLocationIds(_ input: Operations.Inventory_getByLocationIds.Input) async throws -> Operations.Inventory_getByLocationIds.Output
+    /// - Remark: HTTP `POST /api/v1/inventory/moveEntries`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/moveEntries/post(inventory.moveEntries)`.
+    func inventory_moveEntries(_ input: Operations.Inventory_moveEntries.Input) async throws -> Operations.Inventory_moveEntries.Output
     /// - Remark: HTTP `POST /api/v1/inventory/reconcileSession`.
     /// - Remark: Generated from `#/paths//api/v1/inventory/reconcileSession/post(inventory.reconcileSession)`.
     func inventory_reconcileSession(_ input: Operations.Inventory_reconcileSession.Input) async throws -> Operations.Inventory_reconcileSession.Output
@@ -257,6 +272,9 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/recipes/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/recipes/{id}/patch(resources.recipe.update)`.
     func resources_recipe_update(_ input: Operations.Resources_recipe_update.Input) async throws -> Operations.Resources_recipe_update.Output
+    /// - Remark: HTTP `GET /api/v1/recommendations/forEntity`.
+    /// - Remark: Generated from `#/paths//api/v1/recommendations/forEntity/get(recommendations.forEntity)`.
+    func recommendations_forEntity(_ input: Operations.Recommendations_forEntity.Input) async throws -> Operations.Recommendations_forEntity.Output
     /// - Remark: HTTP `GET /api/v1/search/find`.
     /// - Remark: Generated from `#/paths//api/v1/search/find/get(search.find)`.
     func search_find(_ input: Operations.Search_find.Input) async throws -> Operations.Search_find.Output
@@ -313,6 +331,39 @@ extension APIProtocol {
     package func dashboard_counts(headers: Operations.Dashboard_counts.Input.Headers = .init()) async throws -> Operations.Dashboard_counts.Output {
         try await dashboard_counts(Operations.Dashboard_counts.Input(headers: headers))
     }
+    /// - Remark: HTTP `POST /api/v1/entity/explore`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/explore/post(entity.explore)`.
+    package func entity_explore(
+        headers: Operations.Entity_explore.Input.Headers = .init(),
+        body: Operations.Entity_explore.Input.Body? = nil
+    ) async throws -> Operations.Entity_explore.Output {
+        try await entity_explore(Operations.Entity_explore.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/entity/graph`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/graph/post(entity.graph)`.
+    package func entity_graph(
+        headers: Operations.Entity_graph.Input.Headers = .init(),
+        body: Operations.Entity_graph.Input.Body? = nil
+    ) async throws -> Operations.Entity_graph.Output {
+        try await entity_graph(Operations.Entity_graph.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/entity/graphPaths`.
+    /// - Remark: Generated from `#/paths//api/v1/entity/graphPaths/post(entity.graphPaths)`.
+    package func entity_graphPaths(
+        headers: Operations.Entity_graphPaths.Input.Headers = .init(),
+        body: Operations.Entity_graphPaths.Input.Body? = nil
+    ) async throws -> Operations.Entity_graphPaths.Output {
+        try await entity_graphPaths(Operations.Entity_graphPaths.Input(
+            headers: headers,
+            body: body
+        ))
+    }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/expenses`.
@@ -335,6 +386,19 @@ extension APIProtocol {
         try await resources_expense_get(Operations.Resources_expense_get.Input(
             path: path,
             headers: headers
+        ))
+    }
+    /// - Remark: HTTP `PATCH /api/v1/expenses/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/expenses/{id}/patch(resources.expense.update)`.
+    package func resources_expense_update(
+        path: Operations.Resources_expense_update.Input.Path,
+        headers: Operations.Resources_expense_update.Input.Headers = .init(),
+        body: Operations.Resources_expense_update.Input.Body? = nil
+    ) async throws -> Operations.Resources_expense_update.Output {
+        try await resources_expense_update(Operations.Resources_expense_update.Input(
+            path: path,
+            headers: headers,
+            body: body
         ))
     }
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
@@ -694,6 +758,17 @@ extension APIProtocol {
         try await inventory_getByLocationIds(Operations.Inventory_getByLocationIds.Input(
             query: query,
             headers: headers
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/inventory/moveEntries`.
+    /// - Remark: Generated from `#/paths//api/v1/inventory/moveEntries/post(inventory.moveEntries)`.
+    package func inventory_moveEntries(
+        headers: Operations.Inventory_moveEntries.Input.Headers = .init(),
+        body: Operations.Inventory_moveEntries.Input.Body? = nil
+    ) async throws -> Operations.Inventory_moveEntries.Output {
+        try await inventory_moveEntries(Operations.Inventory_moveEntries.Input(
+            headers: headers,
+            body: body
         ))
     }
     /// - Remark: HTTP `POST /api/v1/inventory/reconcileSession`.
@@ -1097,6 +1172,17 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// - Remark: HTTP `GET /api/v1/recommendations/forEntity`.
+    /// - Remark: Generated from `#/paths//api/v1/recommendations/forEntity/get(recommendations.forEntity)`.
+    package func recommendations_forEntity(
+        query: Operations.Recommendations_forEntity.Input.Query,
+        headers: Operations.Recommendations_forEntity.Input.Headers = .init()
+    ) async throws -> Operations.Recommendations_forEntity.Output {
+        try await recommendations_forEntity(Operations.Recommendations_forEntity.Input(
+            query: query,
+            headers: headers
         ))
     }
     /// - Remark: HTTP `GET /api/v1/search/find`.

@@ -116,6 +116,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "entity.detail": async () =>
     (await import("~/server/entity-runtime.server")).entityDetailHandlers
       .operations.detail,
+  "entity.explore": async () =>
+    (await import("~/server/entity-runtime.server")).entityGraphHandlers
+      .operations.explore,
   "entity.filterOptions": async () =>
     (await import("~/server/entity-runtime.server")).entityFilterOptionsHandlers
       .operations.filterOptions,
@@ -641,6 +644,9 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "recommendations.duplicateProduct": async () =>
     (await import("~/server/recommendations-browser.server"))
       .recommendationsHandlers.operations.duplicateProduct,
+  "recommendations.forEntity": async () =>
+    (await import("~/server/recommendations-browser.server"))
+      .recommendationsHandlers.operations.forEntity,
   "recommendations.placement": async () =>
     (await import("~/server/recommendations-browser.server"))
       .recommendationsHandlers.operations.placement,

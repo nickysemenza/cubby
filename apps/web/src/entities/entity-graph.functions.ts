@@ -5,6 +5,9 @@ import { defineOperationDomain } from "~/integrations/tanstack-query/operation-c
 
 /** Read-only, bounded graph expansion for entity relationship exploration. */
 export const entityGraph = defineOperationDomain(entityGraphContract, {
+  explore: {
+    tags: [["relatedData"], ...allEntities.map((entity) => [entity] as const)],
+  },
   graph: {
     // Every manifest path can cross entity kinds; relationship mutations
     // already invalidate this shared relationship surface.

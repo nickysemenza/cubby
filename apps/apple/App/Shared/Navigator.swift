@@ -67,6 +67,26 @@ final class Navigator {
             paths[section, default: []].append(.entityDetail(record.key, id: record.id))
         #endif
     }
+
+    /// Replaces a detail whose mutation coalesced it into another record, so Back never exposes
+    /// the deleted source. macOS can host the current detail in the split selection or a push.
+    func replaceCurrentRecord(with record: RecordSelection) {
+        #if os(macOS)
+            if ((section == .browse && !browsingGarden) || section == .search),
+                (paths[section] ?? []).isEmpty
+            {
+                selectedRecords[section] = record
+                return
+            }
+        #endif
+        var path = paths[section] ?? []
+        if path.last != nil {
+            path[path.index(before: path.endIndex)] = .entityDetail(record.key, id: record.id)
+        } else {
+            path.append(.entityDetail(record.key, id: record.id))
+        }
+        paths[section] = path
+    }
     /// Set by a `capture?location=` link; `CaptureView` takes it once its locations have loaded.
     var pendingCaptureLocation: LocationCode?
     /// A code found while looking something up elsewhere (Search's scan sheet), destined for

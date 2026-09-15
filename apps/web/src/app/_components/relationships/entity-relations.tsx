@@ -3,12 +3,13 @@ import {
   entityGraphRootSchema,
   type EntityGraphBranch,
   type EntityGraphEdge,
+  type EntityGraphExploreOutput,
   type EntityGraphNode,
   type EntityGraphOutput,
   type EntityGraphPathsOutput,
 } from "@cubby/schemas/entity-graph";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useRouter } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, List, Network, RotateCw } from "lucide-react";
 import {
@@ -21,12 +22,18 @@ import {
   useState,
 } from "react";
 
+import { useInventoryPlacementAction } from "~/app/_components/inventory/inventory-placement-suggestion";
+import {
+  EntityRecommendations,
+  type EntityRecommendationOperations,
+} from "~/app/_components/relatedness/entity-recommendations";
 import { EntityGraphPicker } from "~/app/_components/relationships/entity-graph-picker";
 import type {
   GraphData,
   GraphEdge,
   GraphFilters,
 } from "~/app/_components/visualizations/dependency-graph-model";
+import { inventory } from "~/app/inventory/inventory.functions";
 import { Row, Stack } from "~/components/layout";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -39,6 +46,10 @@ import {
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entities/entities";
+import {
+  entityMutationOptionsFactory,
+  type EntityMutationOptionsFactory,
+} from "~/entities/entity-contracts";
 import { entityGraph } from "~/entities/entity-graph.functions";
 import { useHydratedLoading } from "~/hooks/useHydrated";
 import { formatCurrency } from "~/lib/utils";
@@ -91,6 +102,7 @@ export interface EntityRelationsState {
   cursor?: number;
   collapsed?: string[];
   destination?: string;
+  depth?: 1 | 2 | 3;
 }
 
 const refFromKey = (key?: string): EntityRef | undefined => {
@@ -108,9 +120,21 @@ const atCapacity = (data: EntityGraphOutput) =>
   data.edges.length >= GRAPH_EDGE_LIMIT;
 
 type EntityGraphOperations = {
+  explore: typeof entityGraph.explore;
   graph: typeof entityGraph.graph;
   graphPaths?: typeof entityGraph.graphPaths;
 };
+
+export interface EntityRecommendationActionOperations {
+  expenseUpdate: EntityMutationOptionsFactory<"expense", "update">;
+  inventoryMove: typeof inventory.moveEntries;
+}
+
+const productionRecommendationActionOperations: EntityRecommendationActionOperations =
+  {
+    expenseUpdate: entityMutationOptionsFactory("expense", "update"),
+    inventoryMove: inventory.moveEntries,
+  };
 
 export function EntityRelations({
   entity,
@@ -118,12 +142,16 @@ export function EntityRelations({
   state,
   onStateChange,
   operations = entityGraph,
+  recommendationOperations,
+  recommendationActionOperations = productionRecommendationActionOperations,
 }: {
   entity: Entity;
   sourceId: string;
   state?: EntityRelationsState;
   onStateChange?: (state: EntityRelationsState) => void;
   operations?: EntityGraphOperations;
+  recommendationOperations?: EntityRecommendationOperations;
+  recommendationActionOperations?: EntityRecommendationActionOperations;
 }) {
   if (!supportsEntityGraph(entity)) return null;
   return (
@@ -133,6 +161,8 @@ export function EntityRelations({
       state={state}
       onStateChange={onStateChange}
       operations={operations}
+      recommendationOperations={recommendationOperations}
+      recommendationActionOperations={recommendationActionOperations}
     />
   );
 }
@@ -142,11 +172,15 @@ function useEntityRelationsModel({
   state,
   onStateChange,
   operations,
+  recommendationOperations,
+  recommendationActionOperations,
 }: {
   root: EntityRef;
   state?: EntityRelationsState;
   onStateChange?: (state: EntityRelationsState) => void;
   operations: EntityGraphOperations;
+  recommendationOperations?: EntityRecommendationOperations;
+  recommendationActionOperations: EntityRecommendationActionOperations;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -171,11 +205,11 @@ function useEntityRelationsModel({
     setLocal(next);
     onStateChange?.(next);
   };
-  const [initialRef] = useState(() => refFromKey(state?.selected) ?? root);
+  const selectedRef = refFromKey(selectedKey) ?? root;
   const initial = useQuery(
-    operations.graph.queryOptions({
-      roots: [initialRef],
-      limit: GRAPH_BRANCH_PAGE_SIZE,
+    operations.explore.queryOptions({
+      root: selectedRef,
+      depth: current.depth ?? 1,
     }),
   );
   const loading = useHydratedLoading(initial.isPending);
@@ -189,13 +223,10 @@ function useEntityRelationsModel({
   const data = useMemo(
     () =>
       mergeGraphPages([
-        ...(initial.data &&
-        !pages.has(`neighborhood:${graphRefKey(initialRef)}`)
-          ? [initial.data]
-          : []),
+        ...(initial.data ? [initial.data] : []),
         ...pages.values(),
       ]),
-    [initial.data, initialRef, pages],
+    [initial.data, pages],
   );
   const selected =
     data.nodes.find((node) => graphRefKey(node) === selectedKey) ??
@@ -246,7 +277,7 @@ function useEntityRelationsModel({
     const refKey = graphRefKey(ref);
     const key = `neighborhood:${refKey}`;
     if (
-      (refKey === graphRefKey(initialRef) && initial.isPending) ||
+      (refKey === selectedKey && initial.isPending) ||
       data.branches.some((branch) => graphRefKey(branch.root) === refKey) ||
       pages.has(key)
     )
@@ -336,7 +367,6 @@ function useEntityRelationsModel({
     router,
   );
   const destination = refFromKey(current.destination);
-  const selectedRef = refFromKey(selectedKey) ?? root;
   const paths = useQuery({
     ...(operations.graphPaths ?? entityGraph.graphPaths).queryOptions({
       start: selectedRef,
@@ -386,6 +416,9 @@ function useEntityRelationsModel({
     pathIndex,
     setPathIndex,
     pathGraph,
+    recommendationOperations,
+    recommendationActionOperations,
+    selectedRef,
   };
 }
 
@@ -393,6 +426,36 @@ function EntityRelationsSession(
   props: Parameters<typeof useEntityRelationsModel>[0],
 ) {
   return <EntityRelationsContent {...useEntityRelationsModel(props)} />;
+}
+
+function RelationshipRecommendations({
+  source,
+  operations,
+  actionOperations,
+}: {
+  source: EntityRef;
+  operations?: EntityRecommendationOperations;
+  actionOperations: EntityRecommendationActionOperations;
+}) {
+  const expenseUpdate = useMutation(actionOperations.expenseUpdate());
+  const inventoryPlacement = useInventoryPlacementAction({
+    moveOperation: actionOperations.inventoryMove,
+  });
+
+  return (
+    <EntityRecommendations
+      source={source}
+      operations={operations}
+      pending={expenseUpdate.isPending || inventoryPlacement.isPending}
+      onAcceptExpenseProject={async (proposal) => {
+        await expenseUpdate.mutateAsync({
+          id: proposal.expenseId,
+          data: { projectId: proposal.target.id },
+        });
+      }}
+      onAcceptInventoryPlacement={inventoryPlacement.accept}
+    />
+  );
 }
 
 function EntityRelationsContent(
@@ -427,23 +490,48 @@ function EntityRelationsContent(
     pathIndex,
     setPathIndex,
     pathGraph,
+    recommendationOperations,
+    recommendationActionOperations,
+    selectedRef,
   } = model;
-  if (loading) return <output>Loading relationships…</output>;
+  if (loading)
+    return (
+      <Stack gap="md">
+        <RelationshipRecommendations
+          source={selectedRef}
+          operations={recommendationOperations}
+          actionOperations={recommendationActionOperations}
+        />
+        <output>Loading relationships…</output>
+      </Stack>
+    );
   if (initial.isError)
     return (
-      <Stack gap="sm">
-        <p role="alert">Relationships could not be loaded.</p>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void initial.refetch()}
-        >
-          Retry
-        </Button>
+      <Stack gap="md">
+        <RelationshipRecommendations
+          source={selectedRef}
+          operations={recommendationOperations}
+          actionOperations={recommendationActionOperations}
+        />
+        <Stack gap="sm">
+          <p role="alert">Relationships could not be loaded.</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void initial.refetch()}
+          >
+            Retry relationships
+          </Button>
+        </Stack>
       </Stack>
     );
   return (
     <Stack gap="md">
+      <RelationshipRecommendations
+        source={selectedRef}
+        operations={recommendationOperations}
+        actionOperations={recommendationActionOperations}
+      />
       {data.nodes.length === 0 && (
         <p role="alert">
           This record is unavailable or has been deleted. Choose another
@@ -469,6 +557,21 @@ function EntityRelationsContent(
             }
           />
         )}
+        <ChoiceSwitcher
+          ariaLabel="Relationship depth"
+          options={[
+            { value: "1", label: "1 hop" },
+            { value: "2", label: "2 hops" },
+            { value: "3", label: "3 hops" },
+          ]}
+          value={String(current.depth ?? 1)}
+          onValueChange={(value: string) => {
+            const depth = ([1, 2, 3] as const).find(
+              (candidate) => String(candidate) === value,
+            );
+            if (depth) change({ depth });
+          }}
+        />
         <Link
           to="/entities"
           search={{
@@ -482,6 +585,7 @@ function EntityRelationsContent(
             cursor,
             collapsed: current.collapsed,
             destination: current.destination,
+            depth: current.depth,
           }}
           className="text-sm text-primary hover:underline"
         >
@@ -541,6 +645,7 @@ function EntityRelationsContent(
         setPathIndex={setPathIndex}
         change={change}
       />
+      <ExplorationCompletion data={initial.data} />
       {(data.truncated || atCapacity(data)) && (
         <output className="text-sm text-muted-foreground">
           Exploration capacity reached. Open a connected record as a new
@@ -889,6 +994,40 @@ function graphEdge(edge: EntityGraphEdge): GraphEdge {
     sourceKey: edge.sourceKey,
     provenance: edge.provenance,
   };
+}
+
+function ExplorationCompletion({
+  data,
+}: {
+  data: EntityGraphExploreOutput | undefined;
+}) {
+  if (!data) return null;
+  const { status, requestedDepth, reachedDepth } = data.completion;
+  const routeCount = data.paths.length;
+  const suffix =
+    routeCount > 0
+      ? ` ${routeCount} explanatory route${routeCount === 1 ? "" : "s"} retained.`
+      : "";
+  if (status === "exhausted") {
+    return (
+      <p className="text-xs text-muted-foreground">
+        Explored every reachable relationship within {reachedDepth} hop
+        {reachedDepth === 1 ? "" : "s"}.{suffix}
+      </p>
+    );
+  }
+  const reason =
+    status === "depth-limit"
+      ? `Stopped at the requested ${requestedDepth}-hop depth.`
+      : status === "pagination-limit"
+        ? "Some relationship branches have more records; use their Show more controls to inspect them."
+        : "Exploration capacity was reached before every route could be checked.";
+  return (
+    <p className="text-xs text-muted-foreground">
+      {reason}
+      {suffix}
+    </p>
+  );
 }
 
 function GraphPathPanel({

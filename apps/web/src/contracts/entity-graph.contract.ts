@@ -1,4 +1,6 @@
 import {
+  entityGraphExploreInputSchema,
+  entityGraphExploreOutputSchema,
   entityGraphInputSchema,
   entityGraphOutputSchema,
   entityGraphPathsInputSchema,
@@ -8,6 +10,10 @@ import {
 import { defineContract, query } from "~/contracts/define";
 
 export const entityGraphContract = defineContract("entity", {
+  explore: query({
+    input: entityGraphExploreInputSchema,
+    output: entityGraphExploreOutputSchema,
+  }),
   graph: query({
     input: entityGraphInputSchema,
     output: entityGraphOutputSchema,

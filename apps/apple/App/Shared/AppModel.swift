@@ -36,6 +36,9 @@ final class AppModel {
     let photoMatches = PhotoMatchStore()
     let photoLibrary = PhotoLibraryStore()
     var lastError: String?
+    private(set) var relationshipMutationRevision = 0
+    private(set) var relationshipMutationEntities: Set<EntityKey> = []
+    private(set) var relationshipMutationReplacement: RelationshipAcceptance?
 
     /// The app's model, for App Intents (which run in-process). Set once in `CubbyApp.init`.
     static weak var active: AppModel?
@@ -145,6 +148,24 @@ final class AppModel {
             }
         } else {
             lastError = String(describing: error)
+        }
+    }
+
+    func recordRelationshipMutation(_ acceptance: RelationshipAcceptance) {
+        switch acceptance.recommendation {
+        case .expenseProject:
+            relationshipMutationEntities = [.expense, .project]
+        case .inventoryPlacement:
+            relationshipMutationEntities = [.inventory, .location, .product]
+        }
+        relationshipMutationReplacement = acceptance.replacedSubject ? acceptance : nil
+        relationshipMutationRevision += 1
+        if acceptance.replacedSubject {
+            navigator.replaceCurrentRecord(
+                with: RecordSelection(
+                    key: acceptance.destination.entity,
+                    id: acceptance.destination.id
+                ))
         }
     }
 

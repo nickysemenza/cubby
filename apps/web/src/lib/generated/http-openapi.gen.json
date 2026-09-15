@@ -1503,6 +1503,45 @@
         }
       }
     },
+    "/api/v1/entity/explore": {
+      "post": {
+        "tags": ["entity"],
+        "parameters": [],
+        "operationId": "entity.explore",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityGraphExploreInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityGraphExploreOutput"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/entity/filterOptions": {
       "get": {
         "tags": ["entity"],
@@ -16602,6 +16641,79 @@
         }
       }
     },
+    "/api/v1/recommendations/forEntity": {
+      "get": {
+        "tags": ["recommendations"],
+        "parameters": [
+          {
+            "name": "entityType",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "product",
+                "recipe",
+                "ingredient",
+                "cookbook",
+                "location",
+                "inventory",
+                "meal",
+                "ledgerParty",
+                "ledgerTransfer",
+                "project",
+                "task",
+                "vendor",
+                "purchase",
+                "financialAccount",
+                "financialTransaction",
+                "wish",
+                "expense",
+                "usda-food",
+                "image",
+                "planting",
+                "gardenEntry"
+              ]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "entityId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "operationId": "recommendations.forEntity",
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityRecommendationsOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/recommendations/placement": {
       "get": {
         "tags": ["recommendations"],
@@ -20004,10 +20116,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema268"
+            "$ref": "#/components/schemas/output_schema269"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema268"
+            "$ref": "#/components/schemas/output_schema269"
           },
           "subtaskCount": {
             "type": "integer",
@@ -24933,7 +25045,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema137"
+            "$ref": "#/components/schemas/output_schema138"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -25328,6 +25440,12 @@
         ],
         "additionalProperties": false
       },
+      "EntityGraphBranches": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/EntityGraphBranch"
+        }
+      },
       "EntityGraphEdge": {
         "type": "object",
         "properties": {
@@ -25367,6 +25485,99 @@
         ],
         "additionalProperties": false
       },
+      "EntityGraphEdges": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/EntityGraphEdge"
+        }
+      },
+      "EntityGraphExploreCompletion": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "exhausted",
+              "depth-limit",
+              "pagination-limit",
+              "budget-limit"
+            ]
+          },
+          "requestedDepth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3
+          },
+          "reachedDepth": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3
+          }
+        },
+        "required": ["status", "requestedDepth", "reachedDepth"],
+        "additionalProperties": false
+      },
+      "EntityGraphExploreInput": {
+        "type": "object",
+        "properties": {
+          "root": {
+            "$ref": "#/components/schemas/EntityGraphRootInput"
+          },
+          "depth": {
+            "default": 1,
+            "anyOf": [
+              {
+                "type": "number",
+                "const": 1
+              },
+              {
+                "type": "number",
+                "const": 2
+              },
+              {
+                "type": "number",
+                "const": 3
+              }
+            ]
+          }
+        },
+        "required": ["root"]
+      },
+      "EntityGraphExploreOutput": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "$ref": "#/components/schemas/EntityGraphNodes"
+          },
+          "edges": {
+            "$ref": "#/components/schemas/EntityGraphEdges"
+          },
+          "branches": {
+            "$ref": "#/components/schemas/EntityGraphBranches"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityGraphPath"
+            }
+          },
+          "completion": {
+            "$ref": "#/components/schemas/EntityGraphExploreCompletion"
+          }
+        },
+        "required": [
+          "nodes",
+          "edges",
+          "branches",
+          "truncated",
+          "paths",
+          "completion"
+        ],
+        "additionalProperties": false
+      },
       "EntityGraphInput": {
         "type": "object",
         "properties": {
@@ -25375,7 +25586,7 @@
             "maxItems": 25,
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EntityGraphRoot"
+              "$ref": "#/components/schemas/EntityGraphRootInput"
             }
           },
           "relationshipKeys": {
@@ -25436,26 +25647,23 @@
         "required": ["entityType", "entityId", "label", "metadata"],
         "additionalProperties": false
       },
+      "EntityGraphNodes": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/EntityGraphNode"
+        }
+      },
       "EntityGraphOutput": {
         "type": "object",
         "properties": {
           "nodes": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EntityGraphNode"
-            }
+            "$ref": "#/components/schemas/EntityGraphNodes"
           },
           "edges": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EntityGraphEdge"
-            }
+            "$ref": "#/components/schemas/EntityGraphEdges"
           },
           "branches": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/EntityGraphBranch"
-            }
+            "$ref": "#/components/schemas/EntityGraphBranches"
           },
           "truncated": {
             "type": "boolean"
@@ -25490,10 +25698,10 @@
         "type": "object",
         "properties": {
           "start": {
-            "$ref": "#/components/schemas/EntityGraphRoot"
+            "$ref": "#/components/schemas/EntityGraphRootInput"
           },
           "destination": {
-            "$ref": "#/components/schemas/EntityGraphRoot"
+            "$ref": "#/components/schemas/EntityGraphRootInput"
           }
         },
         "required": ["start", "destination"]
@@ -25538,6 +25746,19 @@
         "additionalProperties": false
       },
       "EntityGraphRoot": {
+        "type": "object",
+        "properties": {
+          "entityType": {
+            "$ref": "#/components/schemas/Entity"
+          },
+          "entityId": {
+            "type": "string"
+          }
+        },
+        "required": ["entityType", "entityId"],
+        "additionalProperties": false
+      },
+      "EntityGraphRootInput": {
         "type": "object",
         "properties": {
           "entityType": {
@@ -25643,6 +25864,114 @@
         "required": ["entityType", "entityId"],
         "additionalProperties": false
       },
+      "EntityRecommendationGroup": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/EntityRecommendationGroupExpenseProject"
+          },
+          {
+            "$ref": "#/components/schemas/EntityRecommendationGroupInventoryPlacement"
+          },
+          {
+            "$ref": "#/components/schemas/EntityRecommendationGroupProductRelated"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "expense-project": "#/components/schemas/EntityRecommendationGroupExpenseProject",
+            "inventory-placement": "#/components/schemas/EntityRecommendationGroupInventoryPlacement",
+            "product-related": "#/components/schemas/EntityRecommendationGroupProductRelated"
+          }
+        }
+      },
+      "EntityRecommendationGroupExpenseProject": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "expense-project"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EmbeddingReadiness"
+          },
+          "currentTarget": {
+            "$ref": "#/components/schemas/RecommendationProjectTarget"
+          },
+          "proposals": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExpenseProjectProposal"
+            }
+          }
+        },
+        "required": ["kind", "status", "proposals"],
+        "additionalProperties": false
+      },
+      "EntityRecommendationGroupInventoryPlacement": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "inventory-placement"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EmbeddingReadiness"
+          },
+          "currentTarget": {
+            "$ref": "#/components/schemas/RecommendationLocationTarget"
+          },
+          "proposals": {
+            "maxItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InventoryPlacementProposal"
+            }
+          }
+        },
+        "required": ["kind", "status", "proposals"],
+        "additionalProperties": false
+      },
+      "EntityRecommendationGroupProductRelated": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "product-related"
+          },
+          "status": {
+            "$ref": "#/components/schemas/EmbeddingReadiness"
+          },
+          "proposals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductRelatedProposal"
+            }
+          }
+        },
+        "required": ["kind", "status", "proposals"],
+        "additionalProperties": false
+      },
+      "EntityRecommendationsOut": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "$ref": "#/components/schemas/EntityGraphRoot"
+          },
+          "basisKey": {
+            "type": "string"
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityRecommendationGroup"
+            }
+          }
+        },
+        "required": ["source", "basisKey", "groups"],
+        "additionalProperties": false
+      },
       "EntityRef": {
         "type": "object",
         "properties": {
@@ -25738,10 +26067,10 @@
                 "minLength": 1
               },
               "itemSchema": {
-                "$ref": "#/components/schemas/output_schema81"
+                "$ref": "#/components/schemas/output_schema82"
               },
               "adapter": {
-                "$ref": "#/components/schemas/output_schema81"
+                "$ref": "#/components/schemas/output_schema82"
               },
               "audiences": {
                 "minItems": 1,
@@ -26104,10 +26433,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema294"
+                "$ref": "#/components/schemas/output_schema295"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema294"
+                "$ref": "#/components/schemas/output_schema295"
               }
             },
             "required": ["scope", "grid"],
@@ -26117,19 +26446,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema294"
+                "$ref": "#/components/schemas/output_schema295"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema294"
+                    "$ref": "#/components/schemas/output_schema295"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema294"
+                    "$ref": "#/components/schemas/output_schema295"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema294"
+                    "$ref": "#/components/schemas/output_schema295"
                   }
                 },
                 "required": [
@@ -26393,10 +26722,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema297"
+            "$ref": "#/components/schemas/output_schema298"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema298"
+            "$ref": "#/components/schemas/output_schema299"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -26477,7 +26806,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -26855,10 +27184,10 @@
                   "$ref": "#/components/schemas/PlainDate"
                 },
                 "lineKind": {
-                  "$ref": "#/components/schemas/output_schema297"
+                  "$ref": "#/components/schemas/output_schema298"
                 },
                 "lineBasis": {
-                  "$ref": "#/components/schemas/output_schema298"
+                  "$ref": "#/components/schemas/output_schema299"
                 },
                 "costType": {
                   "$ref": "#/components/schemas/CostType"
@@ -27025,10 +27354,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema297"
+            "$ref": "#/components/schemas/output_schema298"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema298"
+            "$ref": "#/components/schemas/output_schema299"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -27166,6 +27495,62 @@
           "credits",
           "net",
           "count"
+        ],
+        "additionalProperties": false
+      },
+      "ExpenseProjectProposal": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "expense-project"
+          },
+          "expenseId": {
+            "$ref": "#/components/schemas/ExpenseShortcode"
+          },
+          "target": {
+            "$ref": "#/components/schemas/RecommendationProjectTarget"
+          },
+          "effectiveStart": {
+            "type": ["string", "null"]
+          },
+          "effectiveEnd": {
+            "type": ["string", "null"]
+          },
+          "sameTradeCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "exactProductCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "supportingExpenses": {
+            "maxItems": 3,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecommendationSupportingExpense"
+            }
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "kind",
+          "expenseId",
+          "target",
+          "effectiveStart",
+          "effectiveEnd",
+          "sameTradeCount",
+          "exactProductCount",
+          "supportingExpenses",
+          "reasons"
         ],
         "additionalProperties": false
       },
@@ -27634,7 +28019,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -28422,7 +28807,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -29104,7 +29489,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -30895,10 +31280,10 @@
             "type": "object",
             "properties": {
               "confirmed": {
-                "$ref": "#/components/schemas/output_schema216"
+                "$ref": "#/components/schemas/output_schema217"
               },
               "projected": {
-                "$ref": "#/components/schemas/output_schema216"
+                "$ref": "#/components/schemas/output_schema217"
               }
             },
             "required": ["confirmed", "projected"],
@@ -31812,7 +32197,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema167"
+            "$ref": "#/components/schemas/output_schema168"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -31851,10 +32236,10 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
           "children": {
-            "$ref": "#/components/schemas/output_schema193"
+            "$ref": "#/components/schemas/output_schema194"
           },
           "parent": {
-            "$ref": "#/components/schemas/output_schema194"
+            "$ref": "#/components/schemas/output_schema195"
           },
           "childCount": {
             "type": "integer",
@@ -31872,7 +32257,7 @@
             "maximum": 9007199254740991
           },
           "inventoryItems": {
-            "$ref": "#/components/schemas/output_schema198"
+            "$ref": "#/components/schemas/output_schema199"
           }
         },
         "required": [
@@ -32069,7 +32454,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema137"
+            "$ref": "#/components/schemas/output_schema138"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -32091,19 +32476,19 @@
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
           "recipeUsages": {
-            "$ref": "#/components/schemas/output_schema154"
-          },
-          "appearsInRecipes": {
             "$ref": "#/components/schemas/output_schema155"
           },
-          "product": {
+          "appearsInRecipes": {
             "$ref": "#/components/schemas/output_schema156"
+          },
+          "product": {
+            "$ref": "#/components/schemas/output_schema157"
           },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -32172,7 +32557,7 @@
                   "$ref": "#/components/schemas/input_schema45"
                 },
                 "naKinds": {
-                  "$ref": "#/components/schemas/output_schema137"
+                  "$ref": "#/components/schemas/output_schema138"
                 },
                 "usuallyOnHand": {
                   "type": "boolean"
@@ -32376,7 +32761,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema137"
+            "$ref": "#/components/schemas/output_schema138"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -32549,7 +32934,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema137"
+            "$ref": "#/components/schemas/output_schema138"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -32601,7 +32986,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema137"
+            "$ref": "#/components/schemas/output_schema138"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -32623,13 +33008,13 @@
             "$ref": "#/components/schemas/RecipeTopLevel"
           },
           "recipeUsages": {
-            "$ref": "#/components/schemas/output_schema154"
-          },
-          "appearsInRecipes": {
             "$ref": "#/components/schemas/output_schema155"
           },
-          "product": {
+          "appearsInRecipes": {
             "$ref": "#/components/schemas/output_schema156"
+          },
+          "product": {
+            "$ref": "#/components/schemas/output_schema157"
           }
         },
         "required": [
@@ -32679,10 +33064,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema137"
+                "$ref": "#/components/schemas/output_schema138"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema137"
+                "$ref": "#/components/schemas/output_schema138"
               }
             },
             "required": ["covered", "applicable"],
@@ -33462,7 +33847,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema158"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -33474,7 +33859,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema161"
+            "$ref": "#/components/schemas/output_schema162"
           },
           "createdAt": {
             "type": "string",
@@ -33499,7 +33884,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -33613,7 +33998,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema158"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -33625,7 +34010,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema161"
+            "$ref": "#/components/schemas/output_schema162"
           },
           "createdAt": {
             "type": "string",
@@ -33684,7 +34069,7 @@
                   "$ref": "#/components/schemas/InventoryShortcode"
                 },
                 "amount": {
-                  "$ref": "#/components/schemas/output_schema157"
+                  "$ref": "#/components/schemas/output_schema158"
                 },
                 "valuation": {
                   "$ref": "#/components/schemas/Money",
@@ -33696,7 +34081,7 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "placement": {
-                  "$ref": "#/components/schemas/output_schema161"
+                  "$ref": "#/components/schemas/output_schema162"
                 },
                 "createdAt": {
                   "type": "string",
@@ -33811,6 +34196,29 @@
       "InventoryPlacementFilter": {
         "type": "string",
         "enum": ["stock", "installed", "all"]
+      },
+      "InventoryPlacementProposal": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "inventory-placement"
+          },
+          "inventoryId": {
+            "$ref": "#/components/schemas/InventoryShortcode"
+          },
+          "target": {
+            "$ref": "#/components/schemas/RecommendationLocationTarget"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": ["kind", "inventoryId", "target", "reasons"],
+        "additionalProperties": false
       },
       "InventorySessionResolution": {
         "oneOf": [
@@ -33944,7 +34352,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema157"
+            "$ref": "#/components/schemas/output_schema158"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -33956,7 +34364,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema161"
+            "$ref": "#/components/schemas/output_schema162"
           },
           "createdAt": {
             "type": "string",
@@ -34317,7 +34725,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -34773,7 +35181,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema190"
+            "$ref": "#/components/schemas/output_schema191"
           },
           "createdAt": {
             "type": "string",
@@ -34789,7 +35197,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -34857,7 +35265,7 @@
                   "$ref": "#/components/schemas/LedgerSourceClaimsOut"
                 },
                 "evidenceTransactionIds": {
-                  "$ref": "#/components/schemas/output_schema190"
+                  "$ref": "#/components/schemas/output_schema191"
                 },
                 "createdAt": {
                   "type": "string",
@@ -34933,7 +35341,7 @@
             "$ref": "#/components/schemas/LedgerSourceClaimsOut"
           },
           "evidenceTransactionIds": {
-            "$ref": "#/components/schemas/output_schema190"
+            "$ref": "#/components/schemas/output_schema191"
           },
           "createdAt": {
             "type": "string",
@@ -35234,7 +35642,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema167"
+            "$ref": "#/components/schemas/output_schema168"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -35273,10 +35681,10 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
           "children": {
-            "$ref": "#/components/schemas/output_schema193"
+            "$ref": "#/components/schemas/output_schema194"
           },
           "parent": {
-            "$ref": "#/components/schemas/output_schema194"
+            "$ref": "#/components/schemas/output_schema195"
           },
           "childCount": {
             "type": "integer",
@@ -35294,13 +35702,13 @@
             "maximum": 9007199254740991
           },
           "inventoryItems": {
-            "$ref": "#/components/schemas/output_schema198"
+            "$ref": "#/components/schemas/output_schema199"
           },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -35552,7 +35960,7 @@
                   "$ref": "#/components/schemas/input_schema45"
                 },
                 "tags": {
-                  "$ref": "#/components/schemas/output_schema167"
+                  "$ref": "#/components/schemas/output_schema168"
                 },
                 "type": {
                   "$ref": "#/components/schemas/LocationType"
@@ -35768,7 +36176,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema167"
+            "$ref": "#/components/schemas/output_schema168"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -36098,10 +36506,10 @@
             "maximum": 9007199254740991
           },
           "direct": {
-            "$ref": "#/components/schemas/output_schema177"
+            "$ref": "#/components/schemas/output_schema178"
           },
           "total": {
-            "$ref": "#/components/schemas/output_schema177"
+            "$ref": "#/components/schemas/output_schema178"
           },
           "installed": {
             "type": "object",
@@ -36232,7 +36640,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema167"
+            "$ref": "#/components/schemas/output_schema168"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -36390,13 +36798,13 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema345"
+                  "$ref": "#/components/schemas/output_schema346"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema345"
+                  "$ref": "#/components/schemas/output_schema346"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema347"
+                  "$ref": "#/components/schemas/output_schema348"
                 }
               },
               "required": ["name", "inputSchema"],
@@ -36500,10 +36908,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema348"
+                  "$ref": "#/components/schemas/output_schema349"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema349"
+                  "$ref": "#/components/schemas/output_schema350"
                 }
               },
               "required": [
@@ -36595,7 +37003,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema350"
+              "$ref": "#/components/schemas/output_schema351"
             }
           },
           "tools": {
@@ -36613,13 +37021,13 @@
                   "type": ["string", "null"]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema345"
+                  "$ref": "#/components/schemas/output_schema346"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema345"
+                  "$ref": "#/components/schemas/output_schema346"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema347"
+                  "$ref": "#/components/schemas/output_schema348"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -36663,19 +37071,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema350"
+                    "$ref": "#/components/schemas/output_schema351"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema348"
+                    "$ref": "#/components/schemas/output_schema349"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema349"
+                    "$ref": "#/components/schemas/output_schema350"
                   }
                 }
               },
@@ -36702,25 +37110,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema351"
+              "$ref": "#/components/schemas/output_schema352"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema351"
+              "$ref": "#/components/schemas/output_schema352"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema351"
+              "$ref": "#/components/schemas/output_schema352"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema351"
+              "$ref": "#/components/schemas/output_schema352"
             }
           }
         },
@@ -36893,7 +37301,7 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema221"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
@@ -36918,7 +37326,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -37015,7 +37423,7 @@
                   "$ref": "#/components/schemas/MealKind"
                 },
                 "recipes": {
-                  "$ref": "#/components/schemas/output_schema220"
+                  "$ref": "#/components/schemas/output_schema221"
                 },
                 "totals": {
                   "$ref": "#/components/schemas/MealTotals"
@@ -37315,7 +37723,7 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema221"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
@@ -38590,31 +38998,31 @@
         "required": ["id", "name", "manufacturer", "createdAt"],
         "additionalProperties": false
       },
-      "output_schema137": {
+      "output_schema138": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/BaseKind"
         }
       },
-      "output_schema154": {
+      "output_schema155": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/RecipeUsageOut"
         }
       },
-      "output_schema155": {
+      "output_schema156": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/RecipeTopLevel"
         }
       },
-      "output_schema156": {
+      "output_schema157": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProductWithMappingsAndFoodOut"
         }
       },
-      "output_schema157": {
+      "output_schema158": {
         "type": "object",
         "properties": {
           "value": {
@@ -38633,11 +39041,11 @@
         "additionalProperties": false,
         "description": "Quantity on hand"
       },
-      "output_schema161": {
+      "output_schema162": {
         "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
         "$ref": "#/components/schemas/InventoryPlacement"
       },
-      "output_schema167": {
+      "output_schema168": {
         "description": "Namespaced Collection tags assigned directly to this location",
         "$ref": "#/components/schemas/input_schema45"
       },
@@ -38662,7 +39070,7 @@
           }
         }
       },
-      "output_schema177": {
+      "output_schema178": {
         "type": "object",
         "properties": {
           "priced": {
@@ -38684,22 +39092,22 @@
         "required": ["priced", "missingPricing", "miscNoPrice"],
         "additionalProperties": false
       },
-      "output_schema190": {
+      "output_schema191": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/FinancialTransactionShortcode"
         }
       },
-      "output_schema193": {
+      "output_schema194": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/InfLocation"
         }
       },
-      "output_schema194": {
+      "output_schema195": {
         "$ref": "#/components/schemas/InfLocation"
       },
-      "output_schema198": {
+      "output_schema199": {
         "type": "array",
         "items": {
           "type": "object",
@@ -38721,13 +39129,13 @@
           "additionalProperties": false
         }
       },
-      "output_schema208": {
+      "output_schema209": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Amount"
         }
       },
-      "output_schema216": {
+      "output_schema217": {
         "type": "object",
         "properties": {
           "portionCount": {
@@ -38742,19 +39150,19 @@
         "required": ["portionCount", "totals"],
         "additionalProperties": false
       },
-      "output_schema220": {
+      "output_schema221": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/MealRecipeOut"
         }
       },
-      "output_schema244": {
+      "output_schema245": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/UnitMappingOut"
         }
       },
-      "output_schema246": {
+      "output_schema247": {
         "type": "object",
         "properties": {
           "id": {
@@ -38796,13 +39204,13 @@
         ],
         "additionalProperties": false
       },
-      "output_schema247": {
+      "output_schema248": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProductListInventoryEntryOut"
         }
       },
-      "output_schema253": {
+      "output_schema254": {
         "type": "object",
         "properties": {
           "id": {
@@ -38815,7 +39223,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema254": {
+      "output_schema255": {
         "type": "object",
         "properties": {
           "id": {
@@ -38860,7 +39268,7 @@
                 "$ref": "#/components/schemas/input_schema45"
               },
               "tags": {
-                "$ref": "#/components/schemas/output_schema167"
+                "$ref": "#/components/schemas/output_schema168"
               },
               "type": {
                 "$ref": "#/components/schemas/LocationType"
@@ -38904,7 +39312,7 @@
               "ancestors": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/output_schema255"
+                  "$ref": "#/components/schemas/output_schema256"
                 }
               }
             },
@@ -38934,7 +39342,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema255": {
+      "output_schema256": {
         "type": "object",
         "properties": {
           "id": {
@@ -38953,7 +39361,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema256": {
+      "output_schema257": {
         "type": "object",
         "properties": {
           "id": {
@@ -38971,20 +39379,20 @@
           "ancestors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema255"
+              "$ref": "#/components/schemas/output_schema256"
             }
           }
         },
         "required": ["id", "name", "ancestors"],
         "additionalProperties": false
       },
-      "output_schema268": {
+      "output_schema269": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema288": {
+      "output_schema289": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectShortcode"
@@ -38996,7 +39404,7 @@
           "$ref": "#/components/schemas/ImageOut"
         }
       },
-      "output_schema294": {
+      "output_schema295": {
         "type": "object",
         "properties": {
           "current": {
@@ -39009,15 +39417,15 @@
         "required": ["current"],
         "additionalProperties": false
       },
-      "output_schema297": {
+      "output_schema298": {
         "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
         "$ref": "#/components/schemas/ExpenseLineKind"
       },
-      "output_schema298": {
+      "output_schema299": {
         "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
         "$ref": "#/components/schemas/ExpenseLineBasis"
       },
-      "output_schema334": {
+      "output_schema335": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -39046,7 +39454,7 @@
           }
         }
       },
-      "output_schema335": {
+      "output_schema336": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -39056,7 +39464,7 @@
           }
         ]
       },
-      "output_schema345": {
+      "output_schema346": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -39065,7 +39473,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema347": {
+      "output_schema348": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -39083,7 +39491,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema348": {
+      "output_schema349": {
         "type": "object",
         "properties": {
           "id": {
@@ -39099,7 +39507,7 @@
         "required": ["id", "name", "email"],
         "additionalProperties": false
       },
-      "output_schema349": {
+      "output_schema350": {
         "type": "object",
         "properties": {
           "id": {
@@ -39112,7 +39520,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema350": {
+      "output_schema351": {
         "type": "object",
         "properties": {
           "day": {
@@ -39137,7 +39545,7 @@
         "required": ["day", "success", "error", "total"],
         "additionalProperties": false
       },
-      "output_schema351": {
+      "output_schema352": {
         "type": "object",
         "properties": {
           "key": {
@@ -39155,13 +39563,13 @@
         "required": ["key", "label", "count"],
         "additionalProperties": false
       },
-      "output_schema364": {
+      "output_schema365": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WishCandidateOut"
         }
       },
-      "output_schema368": {
+      "output_schema369": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/EntityAttachmentRead"
@@ -39239,7 +39647,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema81": {
+      "output_schema82": {
         "type": "object",
         "properties": {
           "module": {
@@ -39494,7 +39902,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -40854,7 +41262,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema246"
+            "$ref": "#/components/schemas/output_schema247"
           },
           "unitMappings": {
             "type": "array",
@@ -40865,13 +41273,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema254"
+              "$ref": "#/components/schemas/output_schema255"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema256"
+              "$ref": "#/components/schemas/output_schema257"
             }
           },
           "componentCount": {
@@ -40907,7 +41315,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -41791,13 +42199,13 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "unitMappings": {
-            "$ref": "#/components/schemas/output_schema244"
+            "$ref": "#/components/schemas/output_schema245"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema246"
+            "$ref": "#/components/schemas/output_schema247"
           },
           "inventoryEntry": {
-            "$ref": "#/components/schemas/output_schema247"
+            "$ref": "#/components/schemas/output_schema248"
           },
           "expenseCount": {
             "type": "integer",
@@ -41938,13 +42346,13 @@
                   "$ref": "#/components/schemas/DisplayImagesField"
                 },
                 "unitMappings": {
-                  "$ref": "#/components/schemas/output_schema244"
+                  "$ref": "#/components/schemas/output_schema245"
                 },
                 "ingredient": {
-                  "$ref": "#/components/schemas/output_schema246"
+                  "$ref": "#/components/schemas/output_schema247"
                 },
                 "inventoryEntry": {
-                  "$ref": "#/components/schemas/output_schema247"
+                  "$ref": "#/components/schemas/output_schema248"
                 },
                 "expenseCount": {
                   "type": "integer",
@@ -42250,7 +42658,7 @@
                 "usedOnProjects": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema253"
+                    "$ref": "#/components/schemas/output_schema254"
                   }
                 },
                 "ownershipIntervals": {
@@ -42357,7 +42765,7 @@
                         "$ref": "#/components/schemas/PlainDate"
                       },
                       "chargedTo": {
-                        "$ref": "#/components/schemas/output_schema253"
+                        "$ref": "#/components/schemas/output_schema254"
                       },
                       "provenanceOnly": {
                         "type": "boolean"
@@ -42873,6 +43281,39 @@
           }
         },
         "required": ["name"]
+      },
+      "ProductRelatedProposal": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "product-related"
+          },
+          "target": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/ProductShortcode"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "name"],
+            "additionalProperties": false
+          },
+          "score": {
+            "type": "number"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelatednessEvidence"
+            }
+          }
+        },
+        "required": ["kind", "target", "score", "evidence"],
+        "additionalProperties": false
       },
       "ProductResolveCandidateOut": {
         "type": "object",
@@ -43416,7 +43857,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema246"
+            "$ref": "#/components/schemas/output_schema247"
           },
           "unitMappings": {
             "type": "array",
@@ -43427,13 +43868,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema254"
+              "$ref": "#/components/schemas/output_schema255"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema256"
+              "$ref": "#/components/schemas/output_schema257"
             }
           },
           "food": {
@@ -43525,10 +43966,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema137"
+                "$ref": "#/components/schemas/output_schema138"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema137"
+                "$ref": "#/components/schemas/output_schema138"
               }
             },
             "required": ["covered", "applicable"],
@@ -44859,13 +45300,13 @@
             "type": ["string", "null"]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "createdAt": {
             "type": "string",
@@ -44887,7 +45328,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -45298,13 +45739,13 @@
             "type": ["string", "null"]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "createdAt": {
             "type": "string",
@@ -45404,13 +45845,13 @@
                   "type": ["string", "null"]
                 },
                 "childProjectIds": {
-                  "$ref": "#/components/schemas/output_schema288"
+                  "$ref": "#/components/schemas/output_schema289"
                 },
                 "blockedByIds": {
-                  "$ref": "#/components/schemas/output_schema288"
+                  "$ref": "#/components/schemas/output_schema289"
                 },
                 "blockingIds": {
-                  "$ref": "#/components/schemas/output_schema288"
+                  "$ref": "#/components/schemas/output_schema289"
                 },
                 "createdAt": {
                   "type": "string",
@@ -45541,13 +45982,13 @@
             "type": ["string", "null"]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema288"
+            "$ref": "#/components/schemas/output_schema289"
           },
           "createdAt": {
             "type": "string",
@@ -46770,7 +47211,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -47691,7 +48132,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -48791,7 +49232,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema208"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -48863,7 +49304,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema208"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -49461,6 +49902,19 @@
         ],
         "additionalProperties": false
       },
+      "RecommendationLocationTarget": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/LocationShortcode"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": false
+      },
       "RecommendationOk": {
         "type": "object",
         "properties": {
@@ -49470,6 +49924,19 @@
           }
         },
         "required": ["ok"],
+        "additionalProperties": false
+      },
+      "RecommendationProjectTarget": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ProjectShortcode"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
         "additionalProperties": false
       },
       "RecommendationsPlacementOutput": {
@@ -49514,6 +49981,19 @@
           "sourceLocation",
           "destination"
         ],
+        "additionalProperties": false
+      },
+      "RecommendationSupportingExpense": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/ExpenseShortcode"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": ["id", "name"],
         "additionalProperties": false
       },
       "RecommendationWorkbenchInput": {
@@ -50435,13 +50915,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema334"
+                "$ref": "#/components/schemas/output_schema335"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema334"
+                "$ref": "#/components/schemas/output_schema335"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema334"
+                "$ref": "#/components/schemas/output_schema335"
               }
             },
             "required": ["cost", "weight", "nutrients"],
@@ -50451,10 +50931,10 @@
             "type": ["number", "null"]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema335"
+            "$ref": "#/components/schemas/output_schema336"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema335"
+            "$ref": "#/components/schemas/output_schema336"
           },
           "nutrient": {
             "oneOf": [
@@ -51216,7 +51696,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema208"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -51288,7 +51768,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema208"
+            "$ref": "#/components/schemas/output_schema209"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -52625,10 +53105,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema268"
+            "$ref": "#/components/schemas/output_schema269"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema268"
+            "$ref": "#/components/schemas/output_schema269"
           },
           "subtaskCount": {
             "type": "integer",
@@ -52657,7 +53137,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -52884,10 +53364,10 @@
                   "type": ["string", "null"]
                 },
                 "blockedByIds": {
-                  "$ref": "#/components/schemas/output_schema268"
+                  "$ref": "#/components/schemas/output_schema269"
                 },
                 "blockingIds": {
-                  "$ref": "#/components/schemas/output_schema268"
+                  "$ref": "#/components/schemas/output_schema269"
                 },
                 "subtaskCount": {
                   "type": "integer",
@@ -52989,10 +53469,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema268"
+            "$ref": "#/components/schemas/output_schema269"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema268"
+            "$ref": "#/components/schemas/output_schema269"
           },
           "subtaskCount": {
             "type": "integer",
@@ -54421,7 +54901,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -54807,7 +55287,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema364"
+            "$ref": "#/components/schemas/output_schema365"
           },
           "createdAt": {
             "type": "string",
@@ -54823,7 +55303,7 @@
             "$ref": "#/components/schemas/DisplayImagesField"
           },
           "attachments": {
-            "$ref": "#/components/schemas/output_schema368"
+            "$ref": "#/components/schemas/output_schema369"
           }
         },
         "required": [
@@ -54864,7 +55344,7 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "candidates": {
-                  "$ref": "#/components/schemas/output_schema364"
+                  "$ref": "#/components/schemas/output_schema365"
                 },
                 "createdAt": {
                   "type": "string",
@@ -54920,7 +55400,7 @@
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema364"
+            "$ref": "#/components/schemas/output_schema365"
           },
           "createdAt": {
             "type": "string",

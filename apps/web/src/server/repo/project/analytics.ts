@@ -8,8 +8,8 @@
  * always batch the ids of the page/row they're mapping, so a list of 50
  * projects costs 4 queries total, not 200.
  */
-import type { ProjectId } from "@cubby/schemas/identifiers";
-import { and, inArray, isNotNull, sql } from "drizzle-orm";
+import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
+import { and, inArray, isNotNull, ne, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { expense, projectDependency, task } from "~/server/db/schema";
@@ -123,6 +123,7 @@ export async function projectRollups(
 export async function projectContentDates(
   db: Database,
   projectIds?: ProjectId[],
+  excludeExpenseId?: ExpenseId,
 ): Promise<Map<ProjectId, ProjectContentDates>> {
   const out = new Map<ProjectId, ProjectContentDates>();
   if (projectIds?.length === 0) return out;
@@ -147,7 +148,13 @@ export async function projectContentDates(
         contentEnd: sql<string | null>`max(${expense.date})`,
       })
       .from(expense)
-      .where(and(scope(expense.projectId), notDeleted(expense)))
+      .where(
+        and(
+          scope(expense.projectId),
+          notDeleted(expense),
+          excludeExpenseId ? ne(expense.id, excludeExpenseId) : undefined,
+        ),
+      )
       .groupBy(expense.projectId),
   ]);
 

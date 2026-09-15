@@ -6,6 +6,77 @@ import Testing
 
 @Suite("Generated ↔ domain mapping")
 struct MappingTests {
+    private struct RelationshipDiscoveryFixture: Decodable {
+        let exploration: Components.Schemas.EntityGraphExploreOutput
+        let recommendations: Components.Schemas.EntityRecommendationsOut
+        let inventoryRecommendations: Components.Schemas.EntityRecommendationsOut
+        let productRecommendations: Components.Schemas.EntityRecommendationsOut
+    }
+
+    @Test func sharedRelationshipDiscoveryFixtureMapsAcrossGeneratedAndDomainModels() throws {
+        let testFile = URL(fileURLWithPath: #filePath)
+        let repoRoot =
+            testFile
+            .deletingLastPathComponent()  // CubbyKitTests
+            .deletingLastPathComponent()  // Tests
+            .deletingLastPathComponent()  // CubbyKit
+            .deletingLastPathComponent()  // apple
+            .deletingLastPathComponent()  // apps
+            .deletingLastPathComponent()  // repository root
+        let fixtureURL =
+            repoRoot
+            .appending(path: "packages/schemas/fixtures/relationship-discovery.json")
+        let fixture = try JSONDecoder.cubby().decode(
+            RelationshipDiscoveryFixture.self,
+            from: Data(contentsOf: fixtureURL)
+        )
+        let root = EntityReference(entity: .expense, id: "EXP-4K7M")
+        let graph = EntityGraph(root: root, output: fixture.exploration)
+        let recommendations = EntityRecommendations(fixture.recommendations)
+        let inventoryRecommendations = EntityRecommendations(fixture.inventoryRecommendations)
+        let productRecommendations = EntityRecommendations(fixture.productRecommendations)
+
+        let projectPath = try #require(
+            graph.paths.first { $0.destination == EntityReference(entity: .project, id: "PRJ-7M4K") })
+        #expect(projectPath.nodeReferences.count == 4)
+        #expect(projectPath.edgeIDs.count == 3)
+        #expect(graph.completion.requestedDepth == 3)
+        #expect(graph.completion.reachedDepth == 3)
+
+        guard case .expenseProject(_, _, let proposals) = try #require(recommendations.groups.first)
+        else {
+            Issue.record("Expected the shared fixture's expense-project recommendation")
+            return
+        }
+        let proposal = try #require(proposals.first)
+        #expect(proposal.target.id == "PRJ-7M4K")
+        #expect(proposal.sameTradeCount == 2)
+        #expect(proposal.exactProductCount == 1)
+        #expect(proposal.supportingExpenses.map(\.id) == ["EXP-7M4K"])
+
+        guard
+            case .inventoryPlacement(let inventoryStatus, let currentLocation, let inventoryProposals) =
+                try #require(inventoryRecommendations.groups.first)
+        else {
+            Issue.record("Expected the shared fixture's inventory-placement recommendation")
+            return
+        }
+        #expect(inventoryStatus == .ready)
+        #expect(currentLocation?.id == "LOC-4K7M")
+        #expect(inventoryProposals.first?.target.id == "LOC-7M4K")
+
+        guard
+            case .productRelated(let productStatus, let productProposals) =
+                try #require(productRecommendations.groups.first)
+        else {
+            Issue.record("Expected the shared fixture's product-related recommendation")
+            return
+        }
+        #expect(productStatus == .unavailable)
+        #expect(productProposals.first?.target.id == "PRD-7M4K")
+        #expect(productProposals.first?.evidence.first?.signal == "Shared tags")
+    }
+
     @Test func scanResponseMapsToScanResult() throws {
         let response = try Fixtures.decode(ScanOut.self, from: "scan-added.json")
         let result = ScanResult(response)

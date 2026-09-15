@@ -357,6 +357,77 @@ public actor CubbyClient {
         }
     }
 
+    // MARK: - Entity relationships
+
+    public func exploreRelationships(root: EntityReference, depth: Int) async throws -> EntityGraph {
+        let depth = min(3, max(1, depth))
+        return try await perform {
+            let output = try await api.entity_explore(
+                body: .json(
+                    .init(
+                        root: root.graphRootInput,
+                        depth: .init(value1: Double(depth))
+                    )
+                )
+            ).ok.body.json
+            return EntityGraph(root: root, output: output)
+        }
+    }
+
+    public func relationshipPage(
+        root: EntityReference,
+        relationshipKey: String,
+        offset: Int,
+        limit: Int
+    ) async throws -> EntityGraphPage {
+        try await perform {
+            let output = try await api.entity_graph(
+                body: .json(
+                    .init(
+                        roots: [root.graphRootInput],
+                        relationshipKeys: [relationshipKey],
+                        offset: offset,
+                        limit: min(25, max(1, limit))
+                    )
+                )
+            ).ok.body.json
+            return EntityGraphPage(output)
+        }
+    }
+
+    public func recommendations(for source: EntityReference) async throws -> EntityRecommendations {
+        try await perform {
+            let entity = Operations.Recommendations_forEntity.Input.Query.EntityTypePayload(
+                rawValue: source.entity.rawValue)!
+            let output = try await api.recommendations_forEntity(
+                query: .init(entityType: entity, entityId: source.id)
+            ).ok.body.json
+            return EntityRecommendations(output)
+        }
+    }
+
+    public func assignExpense(_ expenseID: String, toProject projectID: String) async throws {
+        try await perform {
+            _ = try await api.resources_expense_update(
+                path: .init(id: expenseID),
+                body: .json(.init(projectId: projectID))
+            ).ok
+        }
+    }
+
+    public func moveInventory(_ inventoryID: String, to locationID: String) async throws -> EntityReference {
+        try await perform {
+            let result = try await api.inventory_moveEntries(
+                body: .json(
+                    .init(items: [
+                        .init(inventoryEntryId: inventoryID, targetLocationId: locationID)
+                    ]))
+            ).ok.body.json
+            guard let survivor = result.items.first else { throw URLError(.cannotParseResponse) }
+            return EntityReference(entity: .inventory, id: survivor.id)
+        }
+    }
+
     // MARK: - Images
 
     /// Attaches already-uploaded images to any entity whose update body takes `pendingImageIds`.
@@ -689,5 +760,7 @@ public actor CubbyClient {
     }
 
 }
+
+extension CubbyClient: EntityRelationshipsClient {}
 
 extension CubbyClient: GardenService {}

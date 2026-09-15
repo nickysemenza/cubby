@@ -29,12 +29,14 @@ import { heroPresence } from "./product-hero-presence";
 
 /** Remote reads that make the inspector useful after its local frame mounts. */
 export interface ProductWorkbenchInspectorOperations {
+  explore: typeof entityGraph.explore;
   graph: typeof entityGraph.graph;
   productDetail: typeof entityDetail.detail;
 }
 
 const productionOperations: ProductWorkbenchInspectorOperations = {
   productDetail: entityDetail.detail.forEntity("product"),
+  explore: entityGraph.explore,
   graph: entityGraph.graph,
 };
 

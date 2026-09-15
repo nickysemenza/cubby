@@ -206,7 +206,7 @@ enum EntityFacts {
     }
 
     /// ISO-8601 with or without fractional seconds, plus bare `yyyy-MM-dd` for date-only columns.
-    static func formattedDate(_ string: String) -> String? {
+    static func formattedDate(_ string: String, locale: Locale = .current) -> String? {
         let withFraction = ISO8601DateFormatter()
         withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = withFraction.date(from: string) {
@@ -217,10 +217,23 @@ enum EntityFacts {
         if let date = plain.date(from: string) {
             return date.formatted(date: .abbreviated, time: .shortened)
         }
-        let dayOnly = Date.ISO8601FormatStyle(dateSeparator: .dash, dateTimeSeparator: .standard)
-            .year().month().day()
-        if let date = try? dayOnly.parse(string) {
-            return date.formatted(date: .abbreviated, time: .omitted)
+        if string.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+            let utc = TimeZone(secondsFromGMT: 0)!
+            let input = DateFormatter()
+            input.calendar = Calendar(identifier: .gregorian)
+            input.locale = Locale(identifier: "en_US_POSIX")
+            input.timeZone = utc
+            input.dateFormat = "yyyy-MM-dd"
+            input.isLenient = false
+            guard let date = input.date(from: string) else { return nil }
+
+            let output = DateFormatter()
+            output.calendar = Calendar(identifier: .gregorian)
+            output.locale = locale
+            output.timeZone = utc
+            output.dateStyle = .medium
+            output.timeStyle = .none
+            return output.string(from: date)
         }
         return nil
     }

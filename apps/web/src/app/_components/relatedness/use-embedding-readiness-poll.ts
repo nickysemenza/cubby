@@ -35,7 +35,7 @@ function isTerminalReadiness(status: string | undefined): boolean {
  * `search.requestEmbeddingRefresh` only reports `{ accepted: true }` — the
  * refresh runs on the queue, and there is no batch left to watch for
  * completion. This is what actually observes it landing: the EXISTING
- * `relatedness.product` query, re-checked on a fixed interval instead of a
+ * entity recommendation query, re-checked on a fixed interval instead of a
  * background-job poll.
  *
  * `status` is read via `notifyStatus` rather than as a hook argument so the

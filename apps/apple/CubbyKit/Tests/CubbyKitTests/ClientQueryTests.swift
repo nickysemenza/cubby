@@ -60,7 +60,9 @@ struct ClientQueryTests {
         defer { stream.close() }
         var data = Data()
         var buffer = [UInt8](repeating: 0, count: 4096)
-        while stream.hasBytesAvailable {
+        // OpenAPI's Darwin transport writes this bound stream asynchronously. Read blocks until
+        // bytes or EOF; `hasBytesAvailable` can still be false before the writer's first chunk.
+        while true {
             let count = stream.read(&buffer, maxLength: buffer.count)
             if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeRawData) }
             if count == 0 { break }
@@ -161,6 +163,46 @@ struct ClientQueryTests {
         #expect(requests[0].body["sourceProductId"] == "PRD-2345")
         #expect(requests[1].path == "/api/v1/products/PRD-2345")
         #expect(requests[1].body == ["growsIngredientId": "ING-2345"])
+    }
+
+    @Test func inventoryMoveReturnsTheSurvivingMergedEntry() async throws {
+        defer { QueryStub.handler.withLock { $0 = nil } }
+        let fixture = try JSONSerialization.jsonObject(
+            with: Fixtures.data(named: "inventory-by-location.json"))
+        var survivor = try #require((fixture as? [[String: Any]])?.first)
+        survivor["id"] = "INV-2002"
+        survivor["displayName"] = "Sample Product at Workshop"
+        let response = try JSONSerialization.data(withJSONObject: [
+            "items": [survivor],
+            "sideEffects": ["backgroundBatches": []],
+        ])
+        let seen = Mutex<(path: String, body: [String: JSONValue])?>(nil)
+        QueryStub.handler.withLock { handler in
+            handler = { request in
+                let fields = try? JSONDecoder().decode(
+                    [String: JSONValue].self,
+                    from: Self.requestBody(request)
+                )
+                if let fields {
+                    seen.withLock { $0 = (request.url?.path ?? "", fields) }
+                }
+                return (200, response)
+            }
+        }
+
+        let destination = try await makeClient().moveInventory("INV-1001", to: "LOC-1001")
+
+        #expect(destination == EntityReference(entity: .inventory, id: "INV-2002"))
+        let request = try #require(seen.withLock { $0 })
+        #expect(request.path == "/api/v1/inventory/moveEntries")
+        #expect(
+            request.body["items"]
+                == .array([
+                    .object([
+                        "inventoryEntryId": .string("INV-1001"),
+                        "targetLocationId": .string("LOC-1001"),
+                    ])
+                ]))
     }
 
     @Test func searchRepeatsTheArrayKeyForEachEntityType() async throws {

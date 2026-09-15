@@ -15,7 +15,8 @@ import {
 } from "~/server/db/schema";
 
 import { getDb } from "./database-helpers";
-import { getEntityGraph } from "./entity-graph";
+import { getEntityGraph, readEntityGraph } from "./entity-graph";
+import { getEntityGraphExplore } from "./entity-graph-explore";
 import { createExpense } from "./expense";
 import { createPlanting, recordGardenEntry } from "./garden";
 import { createIngredient } from "./ingredient";
@@ -94,6 +95,59 @@ describe("entity graph repository", () => {
       relationshipKeys: [],
     });
     expect(imageGraph.nodes[0]?.image?.url).toBe(cover.url);
+    const explored = await getEntityGraphExplore(ctx.db, {
+      root: { entityType: "product", entityId: product.id },
+      depth: 1,
+    });
+    expect(explored.nodes.every((node) => node.image?.url === cover.url)).toBe(
+      true,
+    );
+
+    class ImageHydrationDeadline extends Error {}
+    let queryCount = 0;
+    const relationshipOnly = await readEntityGraph(
+      ctx.db,
+      {
+        roots: [{ entityType: "product", entityId: product.id }],
+        relationshipKeys: ["inventory"],
+        limit: 1,
+      },
+      {
+        includeImages: true,
+        beforeQuery: async () => {
+          queryCount += 1;
+          if (queryCount === 3) throw new ImageHydrationDeadline();
+        },
+        isImageHydrationDeadline: (error) =>
+          error instanceof ImageHydrationDeadline,
+      },
+    );
+    expect(relationshipOnly.edges).toHaveLength(1);
+    expect(
+      relationshipOnly.nodes.every((node) => node.image === undefined),
+    ).toBe(true);
+
+    let unexpectedQueryCount = 0;
+    await expect(
+      readEntityGraph(
+        ctx.db,
+        {
+          roots: [{ entityType: "product", entityId: product.id }],
+          relationshipKeys: ["inventory"],
+          limit: 1,
+        },
+        {
+          includeImages: true,
+          beforeQuery: async () => {
+            unexpectedQueryCount += 1;
+            if (unexpectedQueryCount === 3) {
+              throw new Error("unexpected image failure");
+            }
+          },
+          isImageHydrationDeadline: () => false,
+        },
+      ),
+    ).rejects.toThrow("unexpected image failure");
     await getDb(ctx.db)
       .update(image)
       .set({ deletedAt: new Date() })

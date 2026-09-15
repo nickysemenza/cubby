@@ -13,7 +13,7 @@ import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
 import type { Page } from "@playwright/test";
-import { eq, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { z } from "zod";
@@ -550,4 +550,83 @@ export async function seedRecordListDisplayPrerequisite(
     notes: `${name} expense notes`,
   });
   return { vendor, product, location, child, purchase, expense, orderId };
+}
+
+export async function seedRelationshipReviewPrerequisite(
+  page: Page,
+  name: string,
+) {
+  // Separate date windows keep earlier browser cases out of the top-three candidates.
+  const [projectCount] = await getDb(getFixtureDb())
+    .select({ value: count() })
+    .from(schema.project);
+  const year = 2100 + (projectCount?.value ?? 0);
+  const current = await createFixture(page, "project", {
+    name: `${name} current`,
+    startDate: `${year}-05-01`,
+    endDate: `${year}-05-31`,
+  });
+  const target = await createFixture(page, "project", {
+    name: `${name} suggested`,
+    startDate: `${year}-05-01`,
+    endDate: `${year}-05-31`,
+  });
+  const product = await seedProductPrerequisite(page, {
+    name: `${name} switch`,
+  });
+  await createFixture(page, "expense", {
+    name: `${name} supporting expense`,
+    projectId: target.id,
+    productId: product.id,
+    date: `${year}-05-02`,
+    cost: 10,
+    trade: "electrical",
+    costType: "materials",
+  });
+  const expense = await createFixture(page, "expense", {
+    name: `${name} reviewed expense`,
+    projectId: current.id,
+    productId: product.id,
+    date: `${year}-05-10`,
+    cost: 20,
+    trade: "electrical",
+    costType: "materials",
+  });
+  return { current, target, product, expense };
+}
+
+export async function seedPlacementReviewPrerequisite(
+  page: Page,
+  name: string,
+) {
+  const existingUnknown = await getDb(getFixtureDb()).query.location.findFirst({
+    where: and(
+      eq(schema.location.name, "Unknown"),
+      isNull(schema.location.deletedAt),
+    ),
+  });
+  const unknown = existingUnknown
+    ? { id: existingUnknown.shortcode }
+    : await seedLocationPrerequisite(page, "Unknown");
+  const target = await seedLocationPrerequisite(page, `${name} workshop`);
+  const product = await seedProductPrerequisite(page, { name });
+  const destination = await createFixture(
+    page,
+    "inventory",
+    inventoryCreatePayloadData.parse({
+      productId: product.id,
+      locationId: target.id,
+      amount: { value: 1, unit: "each" },
+    }),
+  );
+  const source = await createFixture(
+    page,
+    "inventory",
+    inventoryCreatePayloadData.parse({
+      productId: product.id,
+      locationId: unknown.id,
+      amount: { value: 1, unit: "each" },
+    }),
+  );
+  return { source, destination, target };
 }

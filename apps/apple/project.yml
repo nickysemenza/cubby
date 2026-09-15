@@ -210,6 +210,7 @@ targets:
     platform: macOS
     sources:
       - path: App/Tests/Navigation
+      - path: App/Tests/Browse
     dependencies:
       - target: Cubby-macOS
     settings:

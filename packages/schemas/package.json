@@ -22,6 +22,7 @@
     "./entity-field-schema-maps": "./src/generated/entity-field-schema-maps.gen.ts",
     "./entity-integrity": "./src/entity-integrity.ts",
     "./entity-graph": "./src/entity-graph.ts",
+    "./entity-recommendations": "./src/entity-recommendations.ts",
     "./related-view": "./src/related-view.ts",
     "./relatedness": "./src/relatedness.ts",
     "./recommendations": "./src/recommendations.ts",

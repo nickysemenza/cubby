@@ -185,6 +185,11 @@ export const httpContract = httpContractBuilder.router(
       ),
     },
     entity: {
+      explore: rpcQueryPost(
+        "entity",
+        "explore",
+        contracts.entityGraphContract.ops["explore"],
+      ),
       filterOptions: rpcQuery(
         "entity",
         "filterOptions",
@@ -1087,6 +1092,11 @@ export const httpContract = httpContractBuilder.router(
         "recommendations",
         "duplicateProduct",
         contracts.recommendationsContract.ops["duplicateProduct"],
+      ),
+      forEntity: rpcQuery(
+        "recommendations",
+        "forEntity",
+        contracts.recommendationsContract.ops["forEntity"],
       ),
       placement: rpcQuery(
         "recommendations",
