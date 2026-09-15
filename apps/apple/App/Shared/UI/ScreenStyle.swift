@@ -38,32 +38,16 @@ extension View {
 enum PorcelainFormSize {
     case compact
     case regular
+    /// The host already owns the window size (the Settings scene is a fixed 420pt window);
+    /// only the grouped style applies. A sizing frame here pushes the form off-screen.
+    case host
 
-    fileprivate var minWidth: CGFloat {
+    fileprivate var frame: (minWidth: CGFloat, idealWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat)?
+    {
         switch self {
-        case .compact: 320
-        case .regular: 520
-        }
-    }
-
-    fileprivate var idealWidth: CGFloat {
-        switch self {
-        case .compact: 380
-        case .regular: 620
-        }
-    }
-
-    fileprivate var minHeight: CGFloat {
-        switch self {
-        case .compact: 220
-        case .regular: 560
-        }
-    }
-
-    fileprivate var idealHeight: CGFloat {
-        switch self {
-        case .compact: 300
-        case .regular: 720
+        case .compact: (320, 380, 220, 300)
+        case .regular: (520, 620, 560, 720)
+        case .host: nil
         }
     }
 }
@@ -73,12 +57,16 @@ private struct PorcelainFormModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         #if os(macOS)
-            content
-                .formStyle(.grouped)
-                .frame(
-                    minWidth: size.minWidth, idealWidth: size.idealWidth,
-                    minHeight: size.minHeight, idealHeight: size.idealHeight
-                )
+            if let frame = size.frame {
+                content
+                    .formStyle(.grouped)
+                    .frame(
+                        minWidth: frame.minWidth, idealWidth: frame.idealWidth,
+                        minHeight: frame.minHeight, idealHeight: frame.idealHeight
+                    )
+            } else {
+                content.formStyle(.grouped)
+            }
         #else
             content
                 .formStyle(.grouped)
