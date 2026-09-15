@@ -62,6 +62,24 @@ export type VendorOut = z.infer<typeof vendorOut>;
 export const vendorListResponse = createPaginatedResponseSchema(vendorOut);
 export type VendorListResponse = z.infer<typeof vendorListResponse>;
 
+export const vendorCoverageInput = z
+  .object({
+    vendorId: vendorShortcode,
+    from: z.iso.date(),
+    to: z.iso.date(),
+  })
+  .refine((value) => value.from <= value.to, {
+    message: "from must be on or before to",
+    path: ["to"],
+  });
+export const vendorCoverageOut = z.object({
+  vendor: z.object({ id: vendorShortcode, name: z.string() }),
+  latestPurchaseDate: z.iso.date().nullable(),
+  from: z.iso.date(),
+  to: z.iso.date(),
+  orderIds: z.array(z.string()),
+});
+
 export const vendorOptionsOut = z.array(
   z.object({
     id: vendorShortcode,

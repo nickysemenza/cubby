@@ -183,6 +183,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   submitButtonVariant = "default",
   children,
   stickyFooter = false,
+  footerMode = "inline",
   footerStart,
   successMessage,
 }: {
@@ -196,6 +197,8 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
   children: ReactNode;
   /** Float the actions in a chunky bar that stays in reach on long forms. */
   stickyFooter?: boolean;
+  /** Dialog layout: fields scroll while actions remain fixed in the dialog shell. */
+  footerMode?: "inline" | "dialog";
   /** Left slot of the sticky bar (e.g. a live tally). Sticky mode only. */
   footerStart?: ReactNode;
   /**
@@ -218,7 +221,8 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
       ) : null}
       <Stack
         as="form"
-        gap="sm"
+        gap={footerMode === "dialog" ? null : "sm"}
+        className={cn(footerMode === "dialog" && "min-h-0 flex-1")}
         onSubmit={(e: React.FormEvent<HTMLElement>) => {
           // https://github.com/orgs/react-hook-form/discussions/7038#discussioncomment-11376398
           e.stopPropagation();
@@ -237,19 +241,35 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
           })(e);
         }}
       >
-        {children}
-
-        <FormStatusBanner error={error} />
+        {footerMode === "dialog" ? (
+          <div
+            data-slot="dialog-form-body"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4"
+          >
+            {children}
+            <FormStatusBanner error={error} />
+          </div>
+        ) : (
+          <>
+            {children}
+            <FormStatusBanner error={error} />
+          </>
+        )}
 
         {/* flex-col-reverse: primary submit sits at the bottom (thumb reach)
             on mobile, full-width; reverts to submit-left/cancel-right on sm+.
             Sticky mode floats the actions in a chunky ledger bar that stays in
             reach on long forms (offset above the mobile bottom nav). */}
         <div
+          data-slot={
+            footerMode === "dialog" ? "dialog-form-footer" : "form-footer"
+          }
           className={cn(
             stickyFooter
               ? "sticky bottom-[calc(var(--app-chrome-bottom)+0.5rem)] z-20 flex items-center gap-2 border border-[var(--border)] bg-card px-2 py-2 md:bottom-4"
-              : "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+              : footerMode === "dialog"
+                ? "flex shrink-0 flex-col-reverse gap-2 border-t bg-popover p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end sm:pb-4"
+                : "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
           )}
         >
           {stickyFooter && footerStart && (

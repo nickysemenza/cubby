@@ -145,6 +145,16 @@ type EntityInlineLinkProps = {
       entity: "vendor";
       data: MinimalEntityData;
     }
+  | { entity: "financialAccount"; data: MinimalEntityData }
+  | {
+      entity: "financialTransaction";
+      data: { id: string; displayName: string };
+    }
+  | { entity: "wish"; data: MinimalEntityData }
+  | {
+      entity: "image";
+      data: InlineImageProjection & { id: string; filename: string };
+    }
 );
 
 // Crisp entity link: a colored wayfinding icon + the name as a
@@ -501,6 +511,66 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="vendor" size={12} colored />}
         name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "financialAccount" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="financialAccount"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
+        fallbackMark={
+          <EntityIcon entity="financialAccount" size={12} colored />
+        }
+        name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "financialTransaction" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="financialTransaction"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
+        fallbackMark={
+          <EntityIcon entity="financialTransaction" size={12} colored />
+        }
+        name={data.displayName}
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "wish" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="wish"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
+        fallbackMark={<EntityIcon entity="wish" size={12} colored />}
+        name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "image" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="image"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
+        fallbackMark={<EntityIcon entity="image" size={12} colored />}
+        name={data.filename}
         compact={compact}
         truncate={truncate}
       />

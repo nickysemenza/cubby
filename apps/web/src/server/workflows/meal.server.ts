@@ -4,7 +4,6 @@ import type {
 } from "@cubby/schemas/availability";
 import type { MealId } from "@cubby/schemas/identifiers";
 import type {
-  GetMealPreparationsInput,
   SaveMealRecipePreparationInput,
   mealAddRecipeInput,
   shoppingListInput,
@@ -61,8 +60,7 @@ export const getUpcomingMealSummaryWorkflow = defineWorkflowOperation(
 );
 export const getMealPreparationsWorkflow = defineWorkflowOperation(
   "meal.getPreparations",
-  (db: Database, input: GetMealPreparationsInput) =>
-    getMealPreparations(db, input),
+  getMealPreparations,
 );
 
 type MealMutationContext = {

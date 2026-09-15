@@ -71,6 +71,7 @@ export function CreateProjectFromTasksDialog({
       onOpenChange={onOpenChange}
       title="New Project From Tasks"
       description={`Create a project and move ${count} selected task${count !== 1 ? "s" : ""} onto it.`}
+      bodyMode="form"
     >
       <FormWrapper
         form={form}
@@ -89,6 +90,7 @@ export function CreateProjectFromTasksDialog({
         error={mutation.error ? getErrorMessage(mutation.error) : undefined}
         onCancel={() => onOpenChange(false)}
         submitButtonText="Create"
+        footerMode="dialog"
       >
         <UnifiedTextField
           form={form}

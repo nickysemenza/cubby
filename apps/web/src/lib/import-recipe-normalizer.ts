@@ -1,3 +1,4 @@
+import type { WIngredient } from "@cubby/recipebridge";
 import { amount, sanitizeSectionName } from "@cubby/schemas/codec";
 import {
   composeNotesMarkdown,
@@ -11,6 +12,7 @@ import { wasm } from "~/lib/wasm";
 type NormalizedImportSection = {
   name: string | null;
   ingredients: string[];
+  parsedIngredients?: WIngredient[];
   instructions: { instruction: string }[];
 };
 
@@ -100,6 +102,7 @@ export const normalizeImportRecipe = (
     sections: recipe.sections.map((section) => ({
       name: sanitizeSectionName(section.name),
       ingredients: section.ingredients,
+      parsedIngredients: section.parsedIngredients,
       instructions: section.instructions.map((instruction) => ({
         instruction,
       })),

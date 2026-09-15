@@ -22774,43 +22774,7 @@
             "maximum": 9007199254740991
           },
           "parsed": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "amounts": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "unit": {
-                      "type": "string"
-                    },
-                    "value": {
-                      "type": "number"
-                    },
-                    "upper_value": {
-                      "type": ["number", "null"]
-                    }
-                  },
-                  "required": ["unit", "value"],
-                  "additionalProperties": {
-                    "$ref": "#/components/schemas/JsonValue"
-                  }
-                }
-              },
-              "modifier": {
-                "type": ["string", "null"]
-              },
-              "optional": {
-                "type": "boolean"
-              }
-            },
-            "required": ["name", "amounts"],
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            }
+            "$ref": "#/components/schemas/ParsedIngredient"
           },
           "confidence": {
             "type": "string"
@@ -22836,43 +22800,7 @@
             "maximum": 9007199254740991
           },
           "parsed": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "amounts": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "unit": {
-                      "type": "string"
-                    },
-                    "value": {
-                      "type": "number"
-                    },
-                    "upper_value": {
-                      "type": ["number", "null"]
-                    }
-                  },
-                  "required": ["unit", "value"],
-                  "additionalProperties": {
-                    "$ref": "#/components/schemas/JsonValue"
-                  }
-                }
-              },
-              "modifier": {
-                "type": ["string", "null"]
-              },
-              "optional": {
-                "type": "boolean"
-              }
-            },
-            "required": ["name", "amounts"],
-            "additionalProperties": {
-              "$ref": "#/components/schemas/JsonValue"
-            }
+            "$ref": "#/components/schemas/ParsedIngredientInput"
           },
           "confidence": {
             "type": "string"
@@ -32124,6 +32052,77 @@
                     "type": "string"
                   }
                 },
+                "parsedIngredients": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "amounts": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "unit": {
+                              "type": "string"
+                            },
+                            "value": {
+                              "type": "number"
+                            },
+                            "upper_value": {
+                              "type": "number"
+                            }
+                          },
+                          "required": ["unit", "value"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "modifier": {
+                        "type": "string"
+                      },
+                      "optional": {
+                        "type": "boolean"
+                      },
+                      "usage": {
+                        "type": "string",
+                        "enum": [
+                          "normal",
+                          "frying_medium",
+                          "pan_grease",
+                          "seasoning",
+                          "dredging",
+                          "garnish",
+                          "marinade"
+                        ]
+                      },
+                      "parse_notes": {
+                        "type": "object",
+                        "properties": {
+                          "confidence": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"]
+                          },
+                          "fell_back": {
+                            "type": "boolean"
+                          },
+                          "unparsed_digit": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "confidence",
+                          "fell_back",
+                          "unparsed_digit"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["name", "amounts", "usage", "parse_notes"],
+                    "additionalProperties": false
+                  }
+                },
                 "instructions": {
                   "type": "array",
                   "items": {
@@ -38590,6 +38589,15 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 9007199254740991
+          },
+          "gardenGuideKeyCarried": {
+            "type": ["string", "null"]
+          },
+          "gardenGuideKeyConflicts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -38597,7 +38605,9 @@
           "recipesMoved",
           "productsMoved",
           "deletedIds",
-          "merged"
+          "merged",
+          "gardenGuideKeyCarried",
+          "gardenGuideKeyConflicts"
         ],
         "additionalProperties": false
       },
@@ -39661,6 +39671,90 @@
         },
         "required": ["module", "export"],
         "additionalProperties": false
+      },
+      "ParsedAmount": {
+        "type": "object",
+        "properties": {
+          "unit": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "upper_value": {
+            "type": ["number", "null"]
+          }
+        },
+        "required": ["unit", "value"],
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        }
+      },
+      "ParsedAmountInput": {
+        "type": "object",
+        "properties": {
+          "unit": {
+            "type": "string"
+          },
+          "value": {
+            "type": "number"
+          },
+          "upper_value": {
+            "type": ["number", "null"]
+          }
+        },
+        "required": ["unit", "value"],
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        }
+      },
+      "ParsedIngredient": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "amounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParsedAmount"
+            }
+          },
+          "modifier": {
+            "type": ["string", "null"]
+          },
+          "optional": {
+            "type": "boolean"
+          }
+        },
+        "required": ["name", "amounts"],
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        }
+      },
+      "ParsedIngredientInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "amounts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ParsedAmountInput"
+            }
+          },
+          "modifier": {
+            "type": ["string", "null"]
+          },
+          "optional": {
+            "type": "boolean"
+          }
+        },
+        "required": ["name", "amounts"],
+        "additionalProperties": {
+          "$ref": "#/components/schemas/JsonValue"
+        }
       },
       "ParseRecipeHtmlInput": {
         "type": "object",

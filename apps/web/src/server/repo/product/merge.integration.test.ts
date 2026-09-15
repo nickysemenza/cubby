@@ -8,11 +8,14 @@ import { describe, expect, it } from "vitest";
 
 import {
   inventoryEntry,
+  planting,
   product,
   productExternalId,
   productUnitMappings,
 } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/repo/database-helpers";
+import { createPlanting } from "~/server/repo/garden";
+import { createIngredient } from "~/server/repo/ingredient";
 import { createInventoryEntry } from "~/server/repo/inventory";
 import { createLocation } from "~/server/repo/location";
 import {
@@ -126,6 +129,49 @@ describe("mergeProducts", () => {
         TEST_ACTOR,
       ),
     ).rejects.toThrow(/different ISBN editions/);
+  });
+
+  it("surfaces plantings that retain a merged source-product tombstone", async () => {
+    const crop = await createIngredient(
+      ctx.db,
+      { name: "Preview crop" },
+      TEST_ACTOR,
+    );
+    const keeper = await seedProduct("Keeper seed packet");
+    const loser = await seedProduct("Original seed packet");
+    const planted = await createPlanting(
+      ctx.db,
+      {
+        ingredientId: crop.id,
+        sourceProductId: loser.shortcode,
+        status: "planned",
+      },
+      TEST_ACTOR,
+    );
+
+    const preview = await previewMergeProducts(ctx.db, {
+      keepId: keeper.id,
+      mergeIds: [loser.id],
+    });
+    expect(preview.sideEffects).toContainEqual(
+      expect.objectContaining({
+        code: "preserve-planting-source-product",
+        total: 1,
+        byTargetId: { [loser.id]: 1 },
+      }),
+    );
+
+    await mergeProducts(
+      ctx.db,
+      { keepId: keeper.shortcode, mergeIds: [loser.shortcode] },
+      TEST_ACTOR,
+    );
+    expect(
+      await getDb(ctx.db).query.planting.findFirst({
+        where: eq(planting.shortcode, planted.id),
+        columns: { sourceProductId: true },
+      }),
+    ).toEqual({ sourceProductId: loser.id });
   });
 
   const liveUnitMappings = (productId: ProductId) =>

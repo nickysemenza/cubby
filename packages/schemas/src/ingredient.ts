@@ -90,6 +90,8 @@ export const mergeSummary = z.object({
    * itself (`finalizeMerge`) rather than assumed from `mergeIds.length`.
    */
   merged: z.number().int().nonnegative(),
+  gardenGuideKeyCarried: z.string().nullable(),
+  gardenGuideKeyConflicts: z.array(z.string()),
 });
 export type MergeSummaryOut = z.infer<typeof mergeSummary>;
 

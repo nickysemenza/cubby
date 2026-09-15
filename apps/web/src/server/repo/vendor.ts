@@ -23,7 +23,17 @@ import type {
   VendorOut,
   VendorUpdateData,
 } from "@cubby/schemas/vendor";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  lte,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -132,6 +142,40 @@ const vendorLatestPurchaseDate = correlated<string | null>(
   `(SELECT max(p."date") FROM "Purchase" p
      WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
 );
+
+export async function getVendorCoverage(
+  db: Database,
+  input: { vendorId: VendorShortcode; from: string; to: string },
+) {
+  const vendorId = await resolveOrThrow(db, "vendor", input.vendorId);
+  const vendorRow = await getVendorByShortcode(db, input.vendorId);
+  if (!vendorRow) {
+    throw createAppError(
+      "VENDOR_NOT_FOUND",
+      `Vendor ${input.vendorId} not found`,
+    );
+  }
+  const rows = await getDb(db)
+    .selectDistinct({ orderId: purchase.orderId })
+    .from(purchase)
+    .where(
+      and(
+        eq(purchase.vendorId, vendorId),
+        notDeleted(purchase),
+        gte(purchase.date, input.from),
+        lte(purchase.date, input.to),
+        isNotNull(purchase.orderId),
+      ),
+    )
+    .orderBy(asc(purchase.orderId));
+  return {
+    vendor: { id: vendorRow.id, name: vendorRow.name },
+    latestPurchaseDate: vendorRow.latestPurchaseDate,
+    from: input.from,
+    to: input.to,
+    orderIds: rows.flatMap((row) => (row.orderId == null ? [] : [row.orderId])),
+  };
+}
 
 const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
   SELECT 1 FROM "Image" logo

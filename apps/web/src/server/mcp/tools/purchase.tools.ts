@@ -29,13 +29,21 @@ import {
   splitExpenseDelta,
   splitExpenseInput,
 } from "@cubby/schemas/purchase";
+import { vendorCoverageInput, vendorCoverageOut } from "@cubby/schemas/vendor";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { executeEntity } from "~/server/entity-kernel";
+import { getVendorCoverage } from "~/server/repo/vendor";
 
-import { READ_ONLY_CLOSED, registerRouterTool, WRITE_CLOSED } from "./_shared";
+import { getEntityKernelContext } from "../kernel-context";
+import {
+  READ_ONLY_CLOSED,
+  registerMcpTool,
+  registerRouterTool,
+  WRITE_CLOSED,
+} from "./_shared";
 import { fromContract, mcpItemsEnvelope } from "./contract-envelope";
 
 /**
@@ -81,6 +89,17 @@ const purchaseProductsMcpOut = mcpItemsEnvelope(
 );
 
 export function registerPurchaseTools(server: McpServer) {
+  registerMcpTool(server, {
+    name: "get_vendor_coverage",
+    description:
+      "Return vendor identity, its latest live purchase date overall, and sorted unique non-null order IDs from an inclusive date range.",
+    inputSchema: vendorCoverageInput,
+    outputSchema: vendorCoverageOut,
+    annotations: READ_ONLY_CLOSED,
+    handler: (params, extra) =>
+      getVendorCoverage(getEntityKernelContext(extra).readDb, params),
+  });
+
   registerRouterTool(server, {
     name: "reclassify_purchase_document",
     description:

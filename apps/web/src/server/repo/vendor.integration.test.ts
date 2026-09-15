@@ -34,6 +34,7 @@ import {
   deleteVendors,
   findOrCreateVendor,
   getVendorByID,
+  getVendorCoverage,
   mergeVendors,
   vendorList,
   updateVendor,
@@ -178,6 +179,42 @@ describe("vendor repository — spend rollup", () => {
     expect(row.spend).toBe(75);
     expect(row.spend).not.toBe(charge.statedTotal);
     expect(row.purchaseCount).toBe(1);
+  });
+});
+
+describe("vendor coverage", () => {
+  const ctx = withTestDb();
+
+  it("uses inclusive boundaries, unique sorted order ids, and latest overall", async () => {
+    const vendorId = await findOrCreateVendor(ctx.db, "Coverage Vendor");
+    const vendorRow = await getVendorByID(ctx.db, vendorId);
+    for (const [date, orderId] of [
+      ["2026-09-01", "OUTSIDE-EARLY"],
+      ["2026-09-10", "ORDER-B"],
+      ["2026-09-20", "ORDER-A"],
+      ["2026-09-30", null],
+      ["2026-10-01", "OUTSIDE-LATEST"],
+    ] as const) {
+      await createPurchase(
+        ctx.db,
+        purchaseCreateInput.parse({ date, vendorId: vendorRow.id, orderId }),
+        ctx.actor,
+      );
+    }
+
+    await expect(
+      getVendorCoverage(ctx.db, {
+        vendorId: vendorRow.id,
+        from: "2026-09-10",
+        to: "2026-09-30",
+      }),
+    ).resolves.toEqual({
+      vendor: { id: vendorRow.id, name: "Coverage Vendor" },
+      latestPurchaseDate: "2026-10-01",
+      from: "2026-09-10",
+      to: "2026-09-30",
+      orderIds: ["ORDER-A", "ORDER-B"],
+    });
   });
 });
 

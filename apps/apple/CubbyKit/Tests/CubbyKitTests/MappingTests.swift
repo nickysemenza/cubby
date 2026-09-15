@@ -188,12 +188,11 @@ struct MappingTests {
         #expect(tasks[1].projectId == nil)
     }
 
-    /// `MealOut.name` is optional; a nameless meal falls back to the capitalised meal type.
-    @Test func todayMealFallsBackToTheCapitalisedMealTypeWhenNameless() throws {
+    @Test func todayMealUsesTheServersDisplayName() throws {
         let page = try Fixtures.decode(Components.Schemas.MealListPage.self, from: "meals-today.json")
         let meal = try #require(page.items.first)
         let today = TodayMeal(meal)
-        #expect(today.name == "Dinner")
+        #expect(today.name == "Server meal label")
         #expect(today.mealKind == "cooked")
         #expect(today.recipeNames == ["Sample Recipe"])
     }

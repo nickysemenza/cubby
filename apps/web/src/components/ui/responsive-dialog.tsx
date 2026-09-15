@@ -38,6 +38,7 @@ export function ResponsiveDialog({
   description,
   size = "sm",
   footer,
+  bodyMode = "scroll",
   children,
 }: {
   open: boolean;
@@ -50,6 +51,8 @@ export function ResponsiveDialog({
   children: ReactNode;
   /** Optional actions kept outside the scroll region. */
   footer?: ReactNode;
+  /** Let a child form own the scroll region and fixed action footer. */
+  bodyMode?: "scroll" | "form";
 }) {
   const isMobile = useIsMobile();
 
@@ -66,8 +69,11 @@ export function ResponsiveDialog({
           </SheetHeader>
           <div
             className={cn(
-              "min-h-0 flex-1 overflow-y-auto overscroll-contain p-4",
+              "min-h-0 flex-1",
+              bodyMode === "scroll" &&
+                "overflow-y-auto overscroll-contain p-4",
               !footer &&
+                bodyMode === "scroll" &&
                 "pb-[calc(1rem+env(safe-area-inset-bottom))]",
             )}
           >
@@ -90,7 +96,12 @@ export function ResponsiveDialog({
           <DialogTitle>{title}</DialogTitle>
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+        <div
+          className={cn(
+            "min-h-0 flex-1",
+            bodyMode === "scroll" && "overflow-y-auto overscroll-contain p-4",
+          )}
+        >
           {children}
         </div>
         {footer && (

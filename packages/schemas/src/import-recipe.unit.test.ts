@@ -4,7 +4,46 @@ import {
   cookbookReprocessEventSchema,
   gatewayForwardInput,
   gatewayForwardOut,
+  importRecipeSchema,
 } from "./import-recipe";
+
+describe("importRecipeSchema", () => {
+  it("requires supplied parsed ingredients to align with raw lines", () => {
+    const parsed = (name: string) => ({
+      name,
+      amounts: [],
+      usage: "normal" as const,
+      parse_notes: {
+        confidence: "high" as const,
+        fell_back: false,
+        unparsed_digit: false,
+      },
+    });
+    const recipe = {
+      meta: { title: "Soup" },
+      sections: [
+        {
+          ingredients: ["1 onion", "2 carrots"],
+          parsedIngredients: [parsed("onion")],
+          instructions: [],
+        },
+      ],
+    };
+
+    expect(importRecipeSchema.safeParse(recipe).success).toBe(false);
+    expect(
+      importRecipeSchema.safeParse({
+        ...recipe,
+        sections: [
+          {
+            ...recipe.sections[0],
+            parsedIngredients: [parsed("onion"), parsed("carrot")],
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+});
 
 describe("gatewayForwardInput", () => {
   const request = {

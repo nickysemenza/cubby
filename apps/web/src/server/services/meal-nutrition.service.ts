@@ -21,15 +21,35 @@ import {
   foodLookupParamFromProduct,
   getProductsByShortcodes,
 } from "~/server/repo/product";
+import { resolveAllOrThrow } from "~/server/repo/shortcode-resolver";
 
+import type { RecipeCostingService } from "./recipe-costing.service";
+import { repairStaleRecipesForRead } from "./repair-stale-recipes-for-read";
 import { batchEnrichWithFood, type UsdaFoodBatchPort } from "./usda-helpers";
 
 export async function getMealNutrition(
   db: Database,
   input: MealNutritionInput,
   usdaClient: UsdaFoodBatchPort,
+  recipeCosting?: RecipeCostingService,
 ) {
-  const rows = await getMealNutritionRows(db, input);
+  let rows = await getMealNutritionRows(db, input);
+  if (recipeCosting) {
+    const recipeIds = await resolveAllOrThrow(
+      recipeCosting.database,
+      "recipe",
+      [...new Set(rows.portions.map((row) => row.recipeId))],
+    );
+    const repaired = await repairStaleRecipesForRead(
+      recipeCosting,
+      recipeIds,
+      "meal.getNutrition",
+    );
+    if (repaired) {
+      rows = await getMealNutritionRows(recipeCosting.database, input);
+      db = recipeCosting.database;
+    }
+  }
   const meals = new Map(
     rows.meals.map((m) => [
       m.id,

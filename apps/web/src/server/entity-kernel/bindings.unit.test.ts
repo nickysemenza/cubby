@@ -21,6 +21,7 @@ import {
   type EntityQueryCommand,
   entityDeleteResultSchema,
   entityMcpCommandSchema,
+  entityMcpReadCommandSchema,
   type EntityResultFor,
   entityMutationResultSchema,
 } from "./contracts";
@@ -320,6 +321,34 @@ describe("entity kernel bindings", () => {
         expect(parsed.success).toBe(includesAction(exposed, action));
       }
     }
+  });
+
+  it("uses strict entity-specific MCP list filters with common shortcode ids", () => {
+    const parsed = entityMcpReadCommandSchema.parse({
+      action: "list",
+      entity: "product",
+      filters: { ids: ["PRD-ABCD"] },
+    });
+    expect(parsed).toMatchObject({
+      action: "list",
+      entity: "product",
+      filters: { ids: ["PRD-ABCD"] },
+      resultDetail: "summary",
+    });
+    expect(
+      entityMcpReadCommandSchema.safeParse({
+        action: "list",
+        entity: "product",
+        filters: { definitelyNotAProductFilter: true },
+      }).success,
+    ).toBe(false);
+    expect(
+      entityMcpReadCommandSchema.safeParse({
+        action: "list",
+        entity: "meal",
+        filters: { ids: ["PRD-ABCD"] },
+      }).success,
+    ).toBe(false);
   });
 
   it("uses one public relation command shape with relation-specific items", () => {

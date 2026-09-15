@@ -36,6 +36,7 @@ import {
   findOrCreateIngredient,
   getIngredientByID,
   mergeIngredients,
+  previewMergeIngredientCandidates,
   ingredientList,
   updateIngredient,
   updateIngredientsUsuallyOnHand,
@@ -243,6 +244,57 @@ describe("ingredient", () => {
         columns: { growsIngredientId: true },
       }),
     ).toEqual({ growsIngredientId: keeperId });
+  });
+
+  it("carries one agreed garden guide key and surfaces keeper-winning conflicts", async () => {
+    const keeper = await createIngredient(
+      ctx.db,
+      { name: "Guide keeper" },
+      ctx.actor,
+    );
+    const agreeing = await createIngredient(
+      ctx.db,
+      { name: "Guide alias", gardenGuideKey: "tomato" },
+      ctx.actor,
+    );
+    const preview = await previewMergeIngredientCandidates(ctx.db, [
+      parseEntityId(
+        "ingredient",
+        (await resolveLiveShortcode(ctx.db, agreeing.id, "ingredient"))!,
+      ),
+    ]);
+    expect(preview[0]?.detail).toContainEqual({
+      label: "garden guide: tomato",
+      count: 1,
+    });
+    const carried = await mergeIngredients(
+      ctx.db,
+      { keepId: keeper.id, mergeIds: [agreeing.id] },
+      ctx.actor,
+    );
+    expect(carried.gardenGuideKeyCarried).toBe("tomato");
+    expect(carried.gardenGuideKeyConflicts).toEqual([]);
+
+    const conflicting = await createIngredient(
+      ctx.db,
+      { name: "Other guide", gardenGuideKey: "pepper" },
+      ctx.actor,
+    );
+    const conflict = await mergeIngredients(
+      ctx.db,
+      { keepId: keeper.id, mergeIds: [conflicting.id] },
+      ctx.actor,
+    );
+    expect(conflict.gardenGuideKeyCarried).toBeNull();
+    expect(conflict.gardenGuideKeyConflicts).toEqual(["pepper"]);
+    const keeperId = await resolveLiveShortcode(
+      ctx.db,
+      keeper.id,
+      "ingredient",
+    );
+    expect((await getIngredientByID(ctx.db, keeperId!))?.gardenGuideKey).toBe(
+      "tomato",
+    );
   });
 
   it("streams declared enrichment windows with public ids and skips unresolved subjects", async () => {

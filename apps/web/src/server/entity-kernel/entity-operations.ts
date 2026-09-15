@@ -46,6 +46,55 @@ type EntityListInput<TFilters = unknown> = {
   groupBy?: string;
 };
 
+const LIST_ID_SCAN_PAGE_SIZE = 100;
+
+/**
+ * `filters.ids` is an MCP-wide shortcode intersection, not a domain filter.
+ * Keep repositories unaware of transport-only syntax while preserving their
+ * own filtering and sort order. The bounded scan runs only when ids are
+ * supplied and pages the repository rather than requesting an unbounded read.
+ */
+const listRestrictedToIds = async <
+  E extends EntityKernelEntity,
+  S extends EntityBindingSchemas,
+>(
+  binding: EntityKernelCoreBinding<E, S>,
+  context: EntityKernelContext,
+  filters: z.output<S["filters"]>,
+  sorts: ReturnType<typeof parseSorts<E, S>>,
+  groupBy: string | undefined,
+  requested: PaginationParams,
+  ids: readonly string[],
+) => {
+  const wanted = new Set(ids);
+  const matching: z.output<S["repositoryList"]>[] = [];
+  let pageIndex = 0;
+  let totalCount = 0;
+  do {
+    const page = await binding.repository.list(
+      context,
+      filters,
+      sorts,
+      { pageIndex, pageSize: LIST_ID_SCAN_PAGE_SIZE },
+      groupBy,
+    );
+    totalCount = page.count;
+    matching.push(
+      ...page.data.filter((item) => {
+        const { id } = z.object({ id: z.string() }).parse(item);
+        return wanted.has(id);
+      }),
+    );
+    pageIndex += 1;
+  } while (pageIndex * LIST_ID_SCAN_PAGE_SIZE < totalCount);
+
+  const start = requested.pageIndex * requested.pageSize;
+  return {
+    data: matching.slice(start, start + requested.pageSize),
+    count: matching.length,
+  };
+};
+
 const DEFAULT_PAGINATION: PaginationParams = { pageIndex: 0, pageSize: 10 };
 
 const parseSchema = <S extends z.ZodType, TInput>(
@@ -250,26 +299,48 @@ export const defineEntityOperations = <
   ),
   list: bindWorkflow(
     workflow<EntityKernelContext, EntityListInput>(`${binding.entity}.list`)
-      .call("validated", async (_, { input }) => ({
-        filters: parseSchema<S["filters"], unknown>(
-          binding.schemas.filters,
-          input.filters,
-        ),
-        pagination: input.pagination ?? DEFAULT_PAGINATION,
-        sorts: parseSorts(binding, input.sort),
-        groupBy: parseGroupBy(binding, input.groupBy),
-      }))
-      .call("page", async ({ context }, { validated }) =>
-        binding.repository.list(
+      .call("validated", async (_, { input }) => {
+        const { ids, ...repositoryFilters } = z
+          .object({
+            ids: z.array(z.string()).max(500).optional(),
+          })
+          .passthrough()
+          .parse(input.filters);
+        for (const id of ids ?? []) binding.schemas.id.parse(id);
+        return {
+          filters: parseSchema<S["filters"], unknown>(
+            binding.schemas.filters,
+            repositoryFilters,
+          ),
+          ids,
+          pagination: input.pagination ?? DEFAULT_PAGINATION,
+          sorts: parseSorts(binding, input.sort),
+          groupBy: parseGroupBy(binding, input.groupBy),
+        };
+      })
+      .call("page", async ({ context }, { validated }) => {
+        const readContext =
           context.readDb === context.db
             ? context
-            : { ...context, db: context.readDb },
-          validated.filters,
-          validated.sorts,
-          validated.pagination,
-          validated.groupBy,
-        ),
-      )
+            : { ...context, db: context.readDb };
+        return validated.ids
+          ? listRestrictedToIds(
+              binding,
+              readContext,
+              validated.filters,
+              validated.sorts,
+              validated.groupBy,
+              validated.pagination,
+              validated.ids,
+            )
+          : binding.repository.list(
+              readContext,
+              validated.filters,
+              validated.sorts,
+              validated.pagination,
+              validated.groupBy,
+            );
+      })
       .call("mediaPage", async ({ context }, { page }) => ({
         ...page,
         data: await withUniversalEntityMedia(
@@ -287,7 +358,12 @@ export const defineEntityOperations = <
             validated.pagination,
             z.array(binding.schemas.list).parse(mediaPage.data),
             mediaPage.count,
-            mediaPage.sums,
+            "sums" in mediaPage
+              ? z
+                  .record(z.string(), z.number())
+                  .optional()
+                  .parse(mediaPage.sums)
+              : undefined,
           ),
         }),
       ),

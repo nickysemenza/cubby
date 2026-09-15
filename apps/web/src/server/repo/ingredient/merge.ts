@@ -46,6 +46,12 @@ type MergeCandidate = {
   detail: Array<{ label: string; count: number }>;
 };
 
+type IngredientSurvivorChanges = {
+  mergedFrom: { from: null; to: string[] };
+  gardenGuideKey?: { from: null; to: string };
+  gardenGuideKeyConflicts?: { from: null; to: string[] };
+};
+
 export const INGREDIENT_MERGE_EDGE_POLICY = {
   "RecipeSectionIngredient.ingredientId": {
     code: "repoint-to-survivor",
@@ -216,6 +222,8 @@ export const mergeIngredients = async (
      */
     affectedRecipeIds: RecipeId[];
     productsMoved: number;
+    gardenGuideKeyCarried: string | null;
+    gardenGuideKeyConflicts: string[];
   }> => {
     const targetRec = await conn.query.ingredient.findFirst({
       // notDeleted: a soft-deleted target would otherwise pass validation and
@@ -263,6 +271,20 @@ export const mergeIngredients = async (
       .select({ id: product.id })
       .from(product)
       .where(inArray(product.ingredientId, uniqueAliases));
+    const loserGuideKeys = uniq(
+      aliasRecs
+        .map((alias) => alias.gardenGuideKey)
+        .filter((key): key is string => key != null && key !== ""),
+    );
+    const gardenGuideKeyCarried =
+      targetRec.gardenGuideKey == null && loserGuideKeys.length === 1
+        ? loserGuideKeys[0]!
+        : null;
+    const gardenGuideKeyConflicts = targetRec.gardenGuideKey
+      ? loserGuideKeys.filter((key) => key !== targetRec.gardenGuideKey)
+      : loserGuideKeys.length > 1
+        ? loserGuideKeys
+        : [];
 
     return {
       newAliases,
@@ -274,6 +296,8 @@ export const mergeIngredients = async (
       movedRecipeIds,
       affectedRecipeIds,
       productsMoved: movedProducts.length,
+      gardenGuideKeyCarried,
+      gardenGuideKeyConflicts,
     };
   };
 
@@ -283,7 +307,10 @@ export const mergeIngredients = async (
     // fold the absorbed names/aliases into the survivor
     await tx
       .update(ingredient)
-      .set({ aliases: r.newAliases })
+      .set({
+        aliases: r.newAliases,
+        gardenGuideKey: r.gardenGuideKeyCarried ?? undefined,
+      })
       .where(eq(ingredient.id, target));
 
     // Re-point every recipe line, and every product linked to an alias
@@ -328,6 +355,21 @@ export const mergeIngredients = async (
     // one call — see `finalizeMerge`'s doc for why those can't be separated.
     // This is the repo's one HARD-delete merge; the hard-deleted rows still get
     // SOFT-deleted embeddings, same as a collapsed inventory source row.
+    const survivorChanges: IngredientSurvivorChanges = {
+      mergedFrom: { from: null, to: uniqueAliases },
+    };
+    if (r.gardenGuideKeyCarried) {
+      survivorChanges.gardenGuideKey = {
+        from: null,
+        to: r.gardenGuideKeyCarried,
+      };
+    }
+    if (r.gardenGuideKeyConflicts.length > 0) {
+      survivorChanges.gardenGuideKeyConflicts = {
+        from: null,
+        to: r.gardenGuideKeyConflicts,
+      };
+    }
     const { removed } = await finalizeMerge(tx, {
       entity: "ingredient",
       table: ingredient,
@@ -335,9 +377,7 @@ export const mergeIngredients = async (
       loserIds: uniqueAliases,
       removal: "hard",
       actor,
-      survivorChanges: {
-        mergedFrom: { from: null, to: uniqueAliases },
-      },
+      survivorChanges,
     });
 
     // Correctness floor: flag the absorbed recipes stale atomically with the
@@ -359,6 +399,8 @@ export const mergeIngredients = async (
       deletedIds: r.deletedIds,
       deletedEntityIds: r.deletedEntityIds,
       affectedRecipeIds: r.affectedRecipeIds,
+      gardenGuideKeyCarried: r.gardenGuideKeyCarried,
+      gardenGuideKeyConflicts: r.gardenGuideKeyConflicts,
     };
   });
 };
@@ -392,6 +434,13 @@ export const previewMergeIngredientCandidates = async (
   ids: IngredientId[],
 ): Promise<MergeCandidate[]> => {
   const impacts = await mergeImpactForIngredients(db, ids);
+  const guideRows = await getDb(db)
+    .select({ shortcode: ingredient.shortcode, key: ingredient.gardenGuideKey })
+    .from(ingredient)
+    .where(and(inArray(ingredient.id, ids), notDeleted(ingredient)));
+  const guideKeyByShortcode = new Map(
+    guideRows.map((row) => [row.shortcode, row.key]),
+  );
   return impacts.map((i) => ({
     id: i.id,
     name: i.name,
@@ -405,6 +454,14 @@ export const previewMergeIngredientCandidates = async (
       { label: "products", count: i.productCount },
       { label: "recipe usages", count: i.recipeUsageCount },
       { label: "aliases", count: i.aliasCount },
+      ...(guideKeyByShortcode.get(i.id)
+        ? [
+            {
+              label: `garden guide: ${guideKeyByShortcode.get(i.id)}`,
+              count: 1,
+            },
+          ]
+        : []),
     ],
   }));
 };

@@ -43,14 +43,14 @@ export type CookbookRecipeRef = z.infer<typeof cookbookRecipeRefSchema>;
 
 // The `ingredient` parser's structured reading, as `WIngredient` already
 // crosses the wasm boundary today (snake_case `upper_value`).
-const parsedAmount = passthrough({
+export const parsedAmountSchema = passthrough({
   unit: z.string(),
   value: z.number(),
   upper_value: z.number().nullable().optional(),
 });
-const parsedIngredient = passthrough({
+export const parsedIngredientSchema = passthrough({
   name: z.string(),
-  amounts: z.array(parsedAmount),
+  amounts: z.array(parsedAmountSchema),
   modifier: z.string().nullable().optional(),
   optional: z.boolean().optional(),
 });
@@ -58,7 +58,7 @@ const parsedIngredient = passthrough({
 export const cookbookIngredientLineSchema = passthrough({
   raw: z.string(),
   line: z.number().int().nonnegative(),
-  parsed: parsedIngredient,
+  parsed: parsedIngredientSchema,
   confidence: z.string(),
   ref: cookbookRecipeRefSchema.nullable().optional(),
 });
