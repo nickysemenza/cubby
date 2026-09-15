@@ -1,3 +1,4 @@
+import { plainDate } from "@cubby/schemas/base-entity";
 import {
   ledgerPartyShortcode,
   mealShortcode,
@@ -65,13 +66,13 @@ const addRecipeToMealOut = z.object({
   nutrition: compactNutrition.optional(),
 });
 const dailyIntakeInput = z.object({
-  date: z.iso.date(),
+  date: plainDate,
   partyId: ledgerPartyShortcode,
   nutrition: z.enum(["macros", "full"]).default("macros"),
   includeFoods: z.boolean().default(false),
 });
 const dailyIntakeOut = z.object({
-  date: z.iso.date(),
+  date: plainDate,
   partyId: ledgerPartyShortcode,
   status: z.enum(["planned", "logged"]),
   nutrition: compactNutrition.nullable(),

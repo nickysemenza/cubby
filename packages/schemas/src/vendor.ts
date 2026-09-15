@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { imageUrlSummary } from "./image-summary";
 import { vendorRelatedFilterFields } from "./related-view";
-import { auditDateFilterFields } from "./base-entity";
+import { auditDateFilterFields, plainDate } from "./base-entity";
 import {
   generatedVendorFieldSchemas,
   generatedVendorFilterFields,
@@ -65,8 +65,8 @@ export type VendorListResponse = z.infer<typeof vendorListResponse>;
 export const vendorCoverageInput = z
   .object({
     vendorId: vendorShortcode,
-    from: z.iso.date(),
-    to: z.iso.date(),
+    from: plainDate,
+    to: plainDate,
   })
   .refine((value) => value.from <= value.to, {
     message: "from must be on or before to",
@@ -75,8 +75,8 @@ export const vendorCoverageInput = z
 export const vendorCoverageOut = z.object({
   vendor: z.object({ id: vendorShortcode, name: z.string() }),
   latestPurchaseDate: generatedVendorFieldSchemas.read.latestPurchaseDate,
-  from: z.iso.date(),
-  to: z.iso.date(),
+  from: plainDate,
+  to: plainDate,
   orderIds: z.array(z.string()),
 });
 

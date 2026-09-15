@@ -99,7 +99,8 @@ describe("LinkedTransactions", () => {
     expect(transactionLink).toHaveAttribute("title", "Neighborhood Market");
     const row = transactionLink.closest("tr");
     expect(row).not.toBeNull();
-    const statusCell = within(row!).getAllByRole("cell")[1];
+    const statusCell = within(row!).getByText("Posted").closest("td");
+    expect(statusCell).not.toBeNull();
     expect(statusCell).toHaveTextContent("Posted");
     expect(statusCell).not.toHaveTextContent(/^posted$/);
     expect(list).toHaveBeenCalledWith(

@@ -23,7 +23,6 @@ interface UuidFinding {
 /** Exact permanent UUID exceptions. A newly exposed UUID must be named here
  * deliberately; field-name heuristics are intentionally not accepted. */
 const DECLARED_UUID_OUTPUT_PATHS = new Set([
-  "add_recipe_to_meal.recipes[].id",
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
   "get_meal_preparations.preparations[].mealRecipeId",
   "remove_meal_recipe.recipes[].id",
