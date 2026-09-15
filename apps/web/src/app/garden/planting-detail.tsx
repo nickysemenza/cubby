@@ -400,22 +400,20 @@ export function PlantingDetail({
   return (
     <>
       <Stack gap="md" className="mb-6">
+        {/* The page hero already carries the display name; this row is the
+            status and the current growing area. */}
         <Row gap="sm" align="center" wrap>
-          <h2 className="text-lg font-semibold">
-            {cropName}
-            {planting.variety ? ` · ${planting.variety}` : ""}
-          </h2>
           <Badge variant="secondary">{planting.status}</Badge>
+          {location.data && (
+            <Link
+              to="/locations/$shortcode"
+              params={{ shortcode: location.data.id }}
+              className="text-sm underline"
+            >
+              {location.data.name}
+            </Link>
+          )}
         </Row>
-        {location.data && (
-          <Link
-            to="/locations/$shortcode"
-            params={{ shortcode: location.data.id }}
-            className="text-sm underline"
-          >
-            {location.data.name}
-          </Link>
-        )}
         <PlantingActionRow
           planting={planting}
           locationDatesLabel={locationDatesLabel}

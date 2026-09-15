@@ -10,6 +10,7 @@ import { useState } from "react";
 
 import { type DetailSection } from "~/app/_components/data-table/detail-page";
 import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
+import { formatDateWithYear } from "~/app/projects/project-formatting";
 import { Row, Stack } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -19,6 +20,7 @@ import { householdDateTime } from "~/lib/household-date";
 
 import { EntryForm } from "./entry-form";
 import { GardenDialogFooterSlot } from "./garden-fields";
+import { gardenEntryKindLabel } from "./garden-photos";
 import { garden } from "./garden.functions";
 
 /**
@@ -59,16 +61,12 @@ function allOverviewPlantings(
  * `garden-home.tsx`'s `PlantingRow` uses for a planting's most relevant date,
  * read here as "how long this planting has been in this bed." */
 function plantingHereSince(planting: GardenPlantingOut): string | null {
-  if (planting.transplantedOn) return `Transplanted ${planting.transplantedOn}`;
-  if (planting.sowedOn) return `Sowed ${planting.sowedOn}`;
-  if (planting.plannedDate) return `Planned ${planting.plannedDate}`;
+  if (planting.transplantedOn)
+    return `Transplanted ${formatDateWithYear(planting.transplantedOn)}`;
+  if (planting.sowedOn) return `Sowed ${formatDateWithYear(planting.sowedOn)}`;
+  if (planting.plannedDate)
+    return `Planned ${formatDateWithYear(planting.plannedDate)}`;
   return null;
-}
-
-function entryKindLabel(kind: GardenEntryOut["kind"]): string {
-  if (kind === "harvest") return "Harvest";
-  if (kind === "move") return "Move";
-  return "Observation";
 }
 
 /** First line of the note, falling back to the harvest amount — enough to
@@ -131,7 +129,7 @@ function GardenRecentEntries({
         const line = entryFirstLine(entry);
         return (
           <p key={entry.id} className="text-sm">
-            {date} · {entryKindLabel(entry.kind)}
+            {date} · {gardenEntryKindLabel(entry.kind)}
             {line ? ` · ${line}` : ""}
           </p>
         );

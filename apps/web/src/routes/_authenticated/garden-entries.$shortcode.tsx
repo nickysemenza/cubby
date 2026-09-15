@@ -11,6 +11,7 @@ import {
 } from "~/app/_components/routing/entity-routes";
 import { EntryForm } from "~/app/garden/entry-form";
 import { GardenDialogFooterSlot } from "~/app/garden/garden-fields";
+import { gardenEntryKindLabel } from "~/app/garden/garden-photos";
 import { GardenEntryContent } from "~/app/garden/garden-timeline";
 import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { Page } from "~/components/page/Page";
@@ -53,8 +54,8 @@ function GardenEntryDetailRoute({
         showEntityActions={false}
         sections={[
           {
-            id: "observation",
-            title: "Observation",
+            id: "entry",
+            title: gardenEntryKindLabel(entry.kind),
             icon: CalendarDays,
             placement: "primary",
             content: <GardenEntryContent entry={entry} />,
