@@ -81,7 +81,7 @@ public actor AuthFlow {
     }
 
     private static func setCookieHeaders(from response: HTTPURLResponse) -> [String] {
-        response.allHeaderFields.compactMap { key, value in
+        response.allHeaderFields.compactMap { key, value -> [String]? in
             guard String(describing: key).caseInsensitiveCompare("Set-Cookie") == .orderedSame
             else { return nil }
             if let values = value as? [String] { return values }

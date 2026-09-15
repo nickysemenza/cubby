@@ -74,7 +74,7 @@ public actor CubbyDebugClient {
 
     private static func setCookieHeaders(from response: HTTPURLResponse?) -> [String] {
         guard let response else { return [] }
-        return response.allHeaderFields.compactMap { key, value in
+        return response.allHeaderFields.compactMap { key, value -> [String]? in
             guard String(describing: key).caseInsensitiveCompare("Set-Cookie") == .orderedSame
             else { return nil }
             if let values = value as? [String] { return values }
