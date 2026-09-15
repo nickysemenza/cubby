@@ -1608,7 +1608,23 @@ export const updateProduct = async (
       // cannot silently reclassify a live candidate out of Tools.
       await assertWishlistCategory(tx, updateData);
 
-      const updated = await updateLiveAndReturn(tx, product, updateData, id);
+      // A caller that only touches a child table — unitMappings, externalIds,
+      // pendingImageIds/removeImageIds/imageOrder — leaves no `product` column
+      // to set (they're all destructured out of `productData` above). Drizzle's
+      // own `.set()` filters out `undefined`-valued entries (mapUpdateSet)
+      // before checking for emptiness, so a caller-layer spread that always
+      // stamps `growsIngredientId: undefined` onto every update (see
+      // `updateProductWithFood`) still counts as "nothing to set" here — match
+      // that same filter, or `.update(product).set({})` throws "No values to
+      // set" rather than no-op-ing. Skip the column update entirely and reuse
+      // the row this same transaction already read; nothing else can have
+      // changed it since.
+      const hasScalarChanges = Object.values(updateData).some(
+        (value) => value !== undefined,
+      );
+      const updated = hasScalarChanges
+        ? await updateLiveAndReturn(tx, product, updateData, id)
+        : beforeProduct;
 
       // Conversion coverage and inventory valuation are invalidated only after
       // mappings land; both are projections of the resulting conversion graph.

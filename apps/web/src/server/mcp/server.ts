@@ -57,7 +57,7 @@ Entity ids are public shortcodes, not uuids. Every top-level entity id you recei
 - IMG- image
 A code with the wrong prefix for the field it's passed to (a LOC- code where a tool wants a product) is rejected by input validation before the tool runs, so a mismatched or unresolvable code never reaches a write.
 
-Public outputs omit storage-only child-row and diagnostic ids when no shortcode exists. Two narrow workflow outputs retain a raw sub-entity id because it is the follow-up write handle: dedicated meal-recipe mutations return their mealRecipe \`id\`, and find_recipes_using_ingredient returns a section \`lineId\`. Entity write inputs may accept those raw sub-entity ids when editing an existing section, line, mapping, or meal-recipe row. USDA \`fdc_id\` is an external USDA identifier rather than a Cubby id.
+Public outputs omit storage-only child-row and diagnostic ids when no shortcode exists. Three narrow exceptions retain a raw sub-entity id because it is the follow-up write handle: dedicated meal-recipe mutations return their mealRecipe \`id\`, find_recipes_using_ingredient returns a section \`lineId\`, and a product's \`unitMappings[]\` rows (from find/get/list on product) keep their row \`id\` so resending it updates that mapping in place instead of deleting and recreating it. Entity write inputs may accept those raw sub-entity ids when editing an existing section, line, mapping, or meal-recipe row. USDA \`fdc_id\` is an external USDA identifier rather than a Cubby id.
 
 Workflow tips:
 - Read entities://catalog, then call entity with a command object such as {action:"list", entity:"product"} or {action:"get", entity:"product", id:"PRD-…"}. Workflow tools remain for multi-entity work; global_search searches every indexed entity at once.
