@@ -190,12 +190,20 @@ const graphRelationshipsFor = (
         })),
       ].flatMap((named) => {
         const inverse = named.inverse;
+        // Check every local source of the declared relation, not just its
+        // primary provenance: a two-source relation declared on both sides
+        // (e.g. meal.eaters / ledgerParty.meals) only dedupes against its
+        // primary path here, so the secondary (named) source's inverse would
+        // otherwise leak through as a stray `inverse:*` branch.
         return inverse &&
           !entityManifest[source].relationships.some(
             (declared) =>
               declared.target === candidate &&
-              declared.provenance.kind === "local-path" &&
-              samePath(declared.provenance.steps, inverse.steps),
+              localSources(declared).some(
+                (local) =>
+                  local.provenance.kind === "local-path" &&
+                  samePath(local.provenance.steps, inverse.steps),
+              ),
           )
           ? [
               {

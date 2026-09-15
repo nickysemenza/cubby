@@ -1,3 +1,4 @@
+import "../repo/entity-graph-meal-food.integration.test";
 import "../repo/ingredient.integration.test";
 import "../repo/meal-nutrition.integration.test";
 import "../repo/meal.integration.test";

@@ -56,6 +56,7 @@ import {
   finalizeMerge,
   resolveMergeTargets,
 } from "~/server/repo/merge/core";
+import { relatedWhereConditions } from "~/server/repo/related-view";
 import { removeEntity } from "~/server/repo/removal/entity";
 import {
   resolveAllOrThrow,
@@ -196,6 +197,7 @@ export const buildLedgerPartyWhere = (filters: LedgerPartyFilters) =>
     ...auditDateWhereConditions(ledgerParty, filters),
     // `search` (trimmed, over name) and `kind` are declared stored filters.
     ...declaredFilterPredicates("ledgerParty", ledgerParty, filters),
+    ...relatedWhereConditions("ledgerParty", filters, ledgerParty.id),
   );
 
 export async function listLedgerParties(

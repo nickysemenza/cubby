@@ -5849,6 +5849,72 @@
             "explode": true
           },
           {
+            "name": "mealId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^MEL-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "meal shortcode, e.g. MEL-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "mealPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "mealSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -7073,6 +7139,72 @@
             "explode": true
           },
           {
+            "name": "mealId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^MEL-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "meal shortcode, e.g. MEL-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "mealPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "mealSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "recipeId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^RCP-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "recipe shortcode, e.g. RCP-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "recipePresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "recipeSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
             "name": "page",
             "in": "query",
             "description": "Page number, starting at 1 (default 1)",
@@ -8090,6 +8222,39 @@
           },
           {
             "name": "ingredientSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "plantingId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^PLT-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "planting shortcode, e.g. PLT-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "plantingPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "plantingSearch",
             "in": "query",
             "schema": {
               "type": "string"
@@ -9558,6 +9723,105 @@
           },
           {
             "name": "recipeSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "foodProductId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^PRD-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "product shortcode, e.g. PRD-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "foodProductPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "foodProductSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "foodIngredientId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ingredient shortcode, e.g. ING-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "foodIngredientPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "foodIngredientSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterSearch",
             "in": "query",
             "schema": {
               "type": "string"
@@ -11910,6 +12174,72 @@
           },
           {
             "name": "taskSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "mealId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^MEL-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "meal shortcode, e.g. MEL-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "mealPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "mealSearch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterId",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^LPY-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
+                "description": "ledgerParty shortcode, e.g. LPY-4K7M"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterPresenceFilter",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["has", "none"]
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "eaterSearch",
             "in": "query",
             "schema": {
               "type": "string"
@@ -16855,10 +17185,18 @@
                 "product.inventory",
                 "product.wishes",
                 "product.tasks",
+                "product.meals",
+                "product.eaters",
+                "ingredient.meals",
+                "ingredient.eaters",
                 "recipe.ingredients",
                 "recipe.meals",
                 "meal.recipes",
+                "meal.foodProducts",
+                "meal.foodIngredients",
+                "meal.eaters",
                 "location.ingredients",
+                "location.plantingHistory",
                 "inventory.ingredient",
                 "project.blockedBy",
                 "project.tasks",
@@ -16885,7 +17223,9 @@
                 "financialTransaction.vendor",
                 "financialTransaction.expenses",
                 "financialTransaction.products",
-                "wish.candidates"
+                "wish.candidates",
+                "ledgerParty.meals",
+                "ledgerParty.recipesEaten"
               ]
             },
             "style": "form",
@@ -16969,10 +17309,18 @@
                 "product.inventory",
                 "product.wishes",
                 "product.tasks",
+                "product.meals",
+                "product.eaters",
+                "ingredient.meals",
+                "ingredient.eaters",
                 "recipe.ingredients",
                 "recipe.meals",
                 "meal.recipes",
+                "meal.foodProducts",
+                "meal.foodIngredients",
+                "meal.eaters",
                 "location.ingredients",
+                "location.plantingHistory",
                 "inventory.ingredient",
                 "project.blockedBy",
                 "project.tasks",
@@ -16999,7 +17347,9 @@
                 "financialTransaction.vendor",
                 "financialTransaction.expenses",
                 "financialTransaction.products",
-                "wish.candidates"
+                "wish.candidates",
+                "ledgerParty.meals",
+                "ledgerParty.recipesEaten"
               ]
             },
             "style": "form",
@@ -17119,10 +17469,18 @@
                   "product.inventory",
                   "product.wishes",
                   "product.tasks",
+                  "product.meals",
+                  "product.eaters",
+                  "ingredient.meals",
+                  "ingredient.eaters",
                   "recipe.ingredients",
                   "recipe.meals",
                   "meal.recipes",
+                  "meal.foodProducts",
+                  "meal.foodIngredients",
+                  "meal.eaters",
                   "location.ingredients",
+                  "location.plantingHistory",
                   "inventory.ingredient",
                   "project.blockedBy",
                   "project.tasks",
@@ -17149,7 +17507,9 @@
                   "financialTransaction.vendor",
                   "financialTransaction.expenses",
                   "financialTransaction.products",
-                  "wish.candidates"
+                  "wish.candidates",
+                  "ledgerParty.meals",
+                  "ledgerParty.recipesEaten"
                 ]
               }
             },
@@ -35760,6 +36120,26 @@
           "ingredientSearch": {
             "type": "string"
           },
+          "plantingId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlantingShortcode"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PlantingShortcode"
+                }
+              }
+            ]
+          },
+          "plantingPresenceFilter": {
+            "type": "string",
+            "enum": ["has", "none"]
+          },
+          "plantingSearch": {
+            "type": "string"
+          },
           "aiDescriptionPresenceFilter": {
             "type": "string",
             "enum": ["has", "none"],
@@ -41851,6 +42231,46 @@
             "enum": ["has", "none"]
           },
           "taskSearch": {
+            "type": "string"
+          },
+          "mealId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MealShortcode"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MealShortcode"
+                }
+              }
+            ]
+          },
+          "mealPresenceFilter": {
+            "type": "string",
+            "enum": ["has", "none"]
+          },
+          "mealSearch": {
+            "type": "string"
+          },
+          "eaterId": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LedgerPartyShortcode"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LedgerPartyShortcode"
+                }
+              }
+            ]
+          },
+          "eaterPresenceFilter": {
+            "type": "string",
+            "enum": ["has", "none"]
+          },
+          "eaterSearch": {
             "type": "string"
           },
           "nameFilter": {
@@ -50807,10 +51227,18 @@
           "product.inventory",
           "product.wishes",
           "product.tasks",
+          "product.meals",
+          "product.eaters",
+          "ingredient.meals",
+          "ingredient.eaters",
           "recipe.ingredients",
           "recipe.meals",
           "meal.recipes",
+          "meal.foodProducts",
+          "meal.foodIngredients",
+          "meal.eaters",
           "location.ingredients",
+          "location.plantingHistory",
           "inventory.ingredient",
           "project.blockedBy",
           "project.tasks",
@@ -50837,7 +51265,9 @@
           "financialTransaction.vendor",
           "financialTransaction.expenses",
           "financialTransaction.products",
-          "wish.candidates"
+          "wish.candidates",
+          "ledgerParty.meals",
+          "ledgerParty.recipesEaten"
         ]
       },
       "RelationMutationOut": {

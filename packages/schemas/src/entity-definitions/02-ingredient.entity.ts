@@ -283,6 +283,44 @@ export default defineEntity({
           { value: "none", label: "(none)", meta: true },
         ],
       },
+      {
+        columnId: "related:ingredient.meals",
+        field: "mealSearch",
+        urlKey: "related-meal",
+        kind: "text",
+        placeholder: "Search related meals...",
+      },
+      {
+        columnId: "mealId",
+        kind: "idMulti",
+        placeholder: "Filter by related meals id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "mealPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related meals presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:ingredient.eaters",
+        field: "eaterSearch",
+        urlKey: "related-eater",
+        kind: "text",
+        placeholder: "Search related eaters...",
+      },
+      {
+        columnId: "eaterId",
+        kind: "idMulti",
+        placeholder: "Filter by related eaters id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "eaterPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related eaters presence...",
+        urlOnly: true,
+      },
     ],
   },
   relations: [
@@ -297,6 +335,44 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "Ingredient.recipeId", direction: "incoming" }],
+      },
+    },
+    {
+      key: "meals",
+      label: "Eaten at meals",
+      target: "meal",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
+          { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "MealFoodEntry.mealId", direction: "incoming" },
+          { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
+        ],
+      },
+    },
+    {
+      key: "eaters",
+      label: "Eaten by",
+      target: "ledgerParty",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "MealFoodEntry.ingredientId", direction: "incoming" },
+          { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
+          { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
+        ],
       },
     },
   ],

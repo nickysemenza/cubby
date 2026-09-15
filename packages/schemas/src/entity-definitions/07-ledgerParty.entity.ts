@@ -165,6 +165,44 @@ export default defineEntity({
           { value: "household", label: "Household" },
         ],
       },
+      {
+        columnId: "related:ledgerParty.meals",
+        field: "mealSearch",
+        urlKey: "related-meal",
+        kind: "text",
+        placeholder: "Search related meals...",
+      },
+      {
+        columnId: "mealId",
+        kind: "idMulti",
+        placeholder: "Filter by related meals id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "mealPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related meals presence...",
+        urlOnly: true,
+      },
+      {
+        columnId: "related:ledgerParty.recipesEaten",
+        field: "recipeSearch",
+        urlKey: "related-recipe",
+        kind: "text",
+        placeholder: "Search related recipes...",
+      },
+      {
+        columnId: "recipeId",
+        kind: "idMulti",
+        placeholder: "Filter by related recipes id...",
+        urlOnly: true,
+      },
+      {
+        columnId: "recipePresenceFilter",
+        kind: "presence",
+        placeholder: "Filter related recipes presence...",
+        urlOnly: true,
+      },
     ],
   },
   relations: [
@@ -228,6 +266,72 @@ export default defineEntity({
       },
       inverse: {
         steps: [{ edge: "LedgerTransfer.toPartyId", direction: "outgoing" }],
+      },
+    },
+    {
+      key: "meals",
+      label: "Meals eaten",
+      target: "meal",
+      cardinality: "many",
+      sourceKey: "food-entries",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "MealFoodEntry.ledgerPartyId", direction: "incoming" },
+          { edge: "MealFoodEntry.mealId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "MealFoodEntry.mealId", direction: "incoming" },
+          { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+        ],
+      },
+      sources: [
+        {
+          key: "portions",
+          label: "Served portions",
+          provenance: {
+            kind: "local-path",
+            steps: [
+              {
+                edge: "MealRecipePortion.ledgerPartyId",
+                direction: "incoming",
+              },
+              { edge: "MealRecipePortion.mealId", direction: "outgoing" },
+            ],
+          },
+          inverse: {
+            steps: [
+              { edge: "MealRecipePortion.mealId", direction: "incoming" },
+              {
+                edge: "MealRecipePortion.ledgerPartyId",
+                direction: "outgoing",
+              },
+            ],
+          },
+        },
+      ],
+    },
+    {
+      key: "recipes-eaten",
+      label: "Recipes eaten",
+      target: "recipe",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "MealRecipePortion.ledgerPartyId", direction: "incoming" },
+          { edge: "MealRecipePortion.mealRecipeId", direction: "outgoing" },
+          { edge: "MealRecipe.recipeId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "MealRecipe.recipeId", direction: "incoming" },
+          { edge: "MealRecipePortion.mealRecipeId", direction: "incoming" },
+          { edge: "MealRecipePortion.ledgerPartyId", direction: "outgoing" },
+        ],
       },
     },
   ],

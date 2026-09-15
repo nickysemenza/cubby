@@ -1,14 +1,20 @@
-import type { LedgerPartyFilters } from "@cubby/schemas/ledger-party";
+import {
+  type LedgerPartyFilters,
+  ledgerPartyFiltersSchema,
+} from "@cubby/schemas/ledger-party";
 import { describe, expect, it } from "vitest";
 
 import { renderWhereSql } from "~/server/repo/database-helpers/mock-db";
 
 import { buildLedgerPartyWhere } from "./ledger-party";
 
-// SAFETY: test-only partial filter set; buildLedgerPartyWhere only reads the
-// keys under test, so a partial object is safe to pass here.
+// Parsed rather than asserted: the related-view filter trios carry branded
+// shortcodes, and every filter field is optional, so the schema accepts the
+// partial set under test.
 const where = (filters: Partial<LedgerPartyFilters> = {}) =>
-  renderWhereSql(buildLedgerPartyWhere(filters as LedgerPartyFilters));
+  renderWhereSql(
+    buildLedgerPartyWhere(ledgerPartyFiltersSchema.parse(filters)),
+  );
 
 describe("buildLedgerPartyWhere", () => {
   it("still resolves to a defined base predicate with no filters applied", () => {
