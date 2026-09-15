@@ -266,26 +266,54 @@ const statementRowUpdateFields = {
   notes: z.string().nullable().optional(),
 };
 
-export const statementRowUpdateData = z.discriminatedUnion("disposition", [
-  z.strictObject({
+export const statementRowUpdateData = z
+  .strictObject({
     ...statementRowUpdateFields,
-    disposition: z.undefined().optional(),
-    dispositionReason: z.undefined().optional(),
-    dispositionNote: z.undefined().optional(),
-  }),
-  z.strictObject({
-    ...statementRowUpdateFields,
-    disposition: z.literal("open"),
-    dispositionReason: z.null(),
-    dispositionNote: z.null(),
-  }),
-  z.strictObject({
-    ...statementRowUpdateFields,
-    disposition: z.literal("ignored"),
-    dispositionReason: statementRowDispositionReason,
-    dispositionNote: z.string().trim().min(1),
-  }),
-]);
+    disposition: statementRowDisposition.optional(),
+    dispositionReason: statementRowDispositionReason.nullable().optional(),
+    dispositionNote: z.string().nullable().optional(),
+  })
+  .superRefine((data, context) => {
+    if (data.disposition === undefined) {
+      if (
+        data.dispositionReason !== undefined ||
+        data.dispositionNote !== undefined
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["disposition"],
+          message: "disposition details require a disposition decision",
+        });
+      }
+      return;
+    }
+
+    if (
+      data.disposition === "open" &&
+      (data.dispositionReason !== null || data.dispositionNote !== null)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["disposition"],
+        message: "open rows must clear disposition reason and note",
+      });
+    }
+
+    if (
+      data.disposition === "ignored" &&
+      (data.dispositionReason === undefined ||
+        data.dispositionReason === null ||
+        data.dispositionNote === undefined ||
+        data.dispositionNote === null ||
+        data.dispositionNote.trim() === "")
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["disposition"],
+        message: "ignored rows require a reason and note",
+      });
+    }
+  });
 export type StatementRowUpdateData = z.infer<typeof statementRowUpdateData>;
 
 export const updateStatementRowsInput = z.strictObject({
