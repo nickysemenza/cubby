@@ -94,6 +94,10 @@ type EntityInlineLinkProps = {
       };
     }
   | { entity: "inventory"; data: MinimalEntityData }
+  // Neither has a `name` column — callers pass the computed `displayName`
+  // ("<ingredient> · <variety>" / "<Kind> · <date> · <location>") as `name`.
+  | { entity: "planting"; data: MinimalEntityData }
+  | { entity: "gardenEntry"; data: MinimalEntityData }
   | {
       entity: "usda-food";
       data: {
@@ -341,6 +345,34 @@ export const EntityInlineLink: React.FC<EntityInlineLinkProps> = (props) => {
         displayImage={displayImage}
         showIdentityMark={showIdentityMark}
         fallbackMark={<EntityIcon entity="inventory" size={12} colored />}
+        name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "planting" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="planting"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
+        fallbackMark={<EntityIcon entity="planting" size={12} colored />}
+        name={data.name}
+        compact={compact}
+        truncate={truncate}
+      />
+    ))
+    .with({ entity: "gardenEntry" }, ({ data }) => (
+      <PreviewEntityLink
+        entity="gardenEntry"
+        id={data.id}
+        openInNewTab={openInNewTab}
+        className={wrapperClass}
+        displayImage={displayImage}
+        showIdentityMark={showIdentityMark}
+        fallbackMark={<EntityIcon entity="gardenEntry" size={12} colored />}
         name={data.name}
         compact={compact}
         truncate={truncate}

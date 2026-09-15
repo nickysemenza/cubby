@@ -21,9 +21,11 @@ import {
   expense,
   financialTransaction,
   financialTransactionAllocation,
+  gardenEntry,
   inventoryEntry,
   meal,
   mealRecipe,
+  planting,
   purchase,
   recipe,
   recipeSection,
@@ -220,6 +222,54 @@ export async function findRecipeEmbeddingRefsForIngredients(
       ),
     );
   return rows.map((row) => ({ entityType: "recipe", entityId: row.recipeId }));
+}
+
+/** Plantings embed their ingredient's NAME, so a rename must refresh every
+ * live planting sown for it. */
+export async function findPlantingEmbeddingRefsForIngredients(
+  db: Database | DrizzleTransaction,
+  ingredientIds: IngredientId[],
+): Promise<SearchableEntityRef[]> {
+  if (ingredientIds.length === 0) return [];
+  const rows = await unwrapDb(db).query.planting.findMany({
+    where: and(
+      inArray(planting.ingredientId, ingredientIds),
+      notDeleted(planting),
+    ),
+    columns: { id: true },
+  });
+  return rows.map((row) => ({ entityType: "planting", entityId: row.id }));
+}
+
+/** Plantings embed their CURRENT location's name (title's subtitle), so a
+ * location rename must refresh every live planting sitting there. */
+export async function findPlantingEmbeddingRefsForLocations(
+  db: Database | DrizzleTransaction,
+  locationIds: LocationId[],
+): Promise<SearchableEntityRef[]> {
+  if (locationIds.length === 0) return [];
+  const rows = await unwrapDb(db).query.planting.findMany({
+    where: and(inArray(planting.locationId, locationIds), notDeleted(planting)),
+    columns: { id: true },
+  });
+  return rows.map((row) => ({ entityType: "planting", entityId: row.id }));
+}
+
+/** Garden entries embed their location's NAME in the title, so a location
+ * rename must refresh every live entry recorded there. */
+export async function findGardenEntryEmbeddingRefsForLocations(
+  db: Database | DrizzleTransaction,
+  locationIds: LocationId[],
+): Promise<SearchableEntityRef[]> {
+  if (locationIds.length === 0) return [];
+  const rows = await unwrapDb(db).query.gardenEntry.findMany({
+    where: and(
+      inArray(gardenEntry.locationId, locationIds),
+      notDeleted(gardenEntry),
+    ),
+    columns: { id: true },
+  });
+  return rows.map((row) => ({ entityType: "gardenEntry", entityId: row.id }));
 }
 
 /**

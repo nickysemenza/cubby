@@ -51,12 +51,19 @@ describe("DISPLAY_NAME_COLUMN", () => {
     expect(DISPLAY_NAME_COLUMN[entity]).not.toBeNull();
   });
 
-  it("the 4 documented overrides resolve to their documented columns", () => {
+  it("the 7 documented overrides resolve to their documented columns", () => {
     expect(DISPLAY_NAME_COLUMN.gardenEntry).toBe(
       LABEL_COLUMN_OVERRIDES.gardenEntry.column,
     );
     expect(DISPLAY_NAME_COLUMN.planting).toBe(
       LABEL_COLUMN_OVERRIDES.planting.column,
+    );
+    expect(DISPLAY_NAME_COLUMN.meal).toBe(LABEL_COLUMN_OVERRIDES.meal.column);
+    expect(DISPLAY_NAME_COLUMN.financialTransaction).toBe(
+      LABEL_COLUMN_OVERRIDES.financialTransaction.column,
+    );
+    expect(DISPLAY_NAME_COLUMN.purchase).toBe(
+      LABEL_COLUMN_OVERRIDES.purchase.column,
     );
     expect(DISPLAY_NAME_COLUMN.inventory).toBeNull();
     expect(DISPLAY_NAME_COLUMN.ledgerTransfer).toBeNull();

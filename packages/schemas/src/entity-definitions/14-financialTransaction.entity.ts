@@ -40,10 +40,11 @@ export default defineEntity({
     shortcode: "FTX-",
     legacy: null,
   },
-  // Financial transactions have no name field; `merchant` is the
-  // human-identifying label for a transaction row.
+  // Financial transactions have no name field and `merchant` is nullable;
+  // `displayName` falls back through `rawDescription` and `kind` for a
+  // human-identifying label that is never blank.
   presentation: {
-    titleField: "merchant",
+    titleField: "displayName",
     domain: "finance",
     description: "Imported and matched settlement activity.",
     emptyState: {
@@ -343,6 +344,14 @@ export default defineEntity({
         },
       },
       {
+        // `merchant?.trim() || rawDescription?.trim() || capitalize(kind)` —
+        // the canonical non-null title for a row whose name-shaped fields are
+        // all nullable.
+        key: "displayName",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
         key: "createdAt",
         kind: "timestamp",
         validation: {
@@ -509,6 +518,7 @@ export default defineEntity({
       "ledgerTransferId",
       "accountName",
       "vendorInference",
+      "displayName",
       "createdAt",
       "updatedAt",
     ],

@@ -10,7 +10,6 @@ import { RouteErrorComponent } from "~/components/lazy-route-error";
 import { DetailPagePending } from "~/components/route-pending";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { shortcodeHead } from "~/lib/page-title";
-import { purchaseLabel } from "~/lib/purchase-label";
 
 // Bound to consts, not inlined into the options object: the router plugin's
 // splitter re-parses an inlined call expression with a JSX-less babel config,
@@ -20,7 +19,7 @@ const PurchaseDetailPage = detailPage({
   render: (purchase, shortcode) => (
     <PurchaseDetail key={shortcode} purchase={purchase} />
   ),
-  title: (purchase) => purchaseLabel(purchase),
+  title: (purchase) => purchase.displayName,
 });
 
 const PurchaseNotFound = notFoundPage(

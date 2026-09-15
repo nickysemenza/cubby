@@ -52,6 +52,7 @@ import {
 } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { purchaseLabel } from "~/lib/purchase-label";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -347,6 +348,12 @@ const dbPurchaseToAPI = (
   }),
   dataQuality,
   images,
+  displayName: purchaseLabel({
+    orderId: row.orderId,
+    displayLabel: row.displayLabel,
+    vendorName: row.vendorName,
+    date: row.date,
+  }),
   createdAt: row.createdAt,
   updatedAt: row.updatedAt,
 });

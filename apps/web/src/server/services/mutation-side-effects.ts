@@ -16,9 +16,12 @@ import {
   findCommercialEmbeddingRefsForExpenses,
   findEmbeddingRefsForPurchases,
   findEmbeddingRefsForVendors,
+  findGardenEntryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForLocations,
   findInventoryEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
+  findPlantingEmbeddingRefsForIngredients,
+  findPlantingEmbeddingRefsForLocations,
   findRecipeEmbeddingRefsForIngredients,
   findTaskEmbeddingRefsForProducts,
   findTrackerEmbeddingRefsForProjects,
@@ -45,6 +48,8 @@ const mutationSideEffectEntities = [
   "financialTransaction",
   "expense",
   "wish",
+  "planting",
+  "gardenEntry",
   "image",
 ] as const;
 
@@ -87,6 +92,9 @@ export interface MutationSideEffectPorts {
   readonly findTaskEmbeddingRefsForProducts: typeof findTaskEmbeddingRefsForProducts;
   readonly findWishEmbeddingRefsForProducts: typeof findWishEmbeddingRefsForProducts;
   readonly findMealEmbeddingRefsForRecipes: typeof findMealEmbeddingRefsForRecipes;
+  readonly findPlantingEmbeddingRefsForIngredients: typeof findPlantingEmbeddingRefsForIngredients;
+  readonly findPlantingEmbeddingRefsForLocations: typeof findPlantingEmbeddingRefsForLocations;
+  readonly findGardenEntryEmbeddingRefsForLocations: typeof findGardenEntryEmbeddingRefsForLocations;
   readonly findTrackerEmbeddingRefsForProjects: typeof findTrackerEmbeddingRefsForProjects;
   readonly findEmbeddingRefsForVendors: typeof findEmbeddingRefsForVendors;
   readonly findEmbeddingRefsForPurchases: typeof findEmbeddingRefsForPurchases;
@@ -110,6 +118,9 @@ const productionMutationSideEffectPorts: MutationSideEffectPorts = {
   findTaskEmbeddingRefsForProducts,
   findWishEmbeddingRefsForProducts,
   findMealEmbeddingRefsForRecipes,
+  findPlantingEmbeddingRefsForIngredients,
+  findPlantingEmbeddingRefsForLocations,
+  findGardenEntryEmbeddingRefsForLocations,
   findTrackerEmbeddingRefsForProjects,
   findEmbeddingRefsForVendors,
   findEmbeddingRefsForPurchases,
@@ -283,6 +294,32 @@ const collectMealEmbeddingRefsForRecipe: EmbeddingRefCollector = async (
   ]);
 };
 
+const collectPlantingEmbeddingRefsForIngredient: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entity !== "ingredient") return [];
+  return await ctx.ports.findPlantingEmbeddingRefsForIngredients(ctx.db, [
+    ctx.event.entity.id,
+  ]);
+};
+
+const collectPlantingEmbeddingRefsForLocation: EmbeddingRefCollector = async (
+  ctx,
+) => {
+  if (ctx.event.entity.entity !== "location") return [];
+  return await ctx.ports.findPlantingEmbeddingRefsForLocations(ctx.db, [
+    ctx.event.entity.id,
+  ]);
+};
+
+const collectGardenEntryEmbeddingRefsForLocation: EmbeddingRefCollector =
+  async (ctx) => {
+    if (ctx.event.entity.entity !== "location") return [];
+    return await ctx.ports.findGardenEntryEmbeddingRefsForLocations(ctx.db, [
+      ctx.event.entity.id,
+    ]);
+  };
+
 const collectTrackerEmbeddingRefsForProject: EmbeddingRefCollector = async (
   ctx,
 ) => {
@@ -375,6 +412,31 @@ async function refreshMealEmbeddingsForRecipe(
   return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
 }
 
+// Plantings embed their ingredient's name, so an ingredient rename fans out.
+async function refreshPlantingEmbeddingsForIngredient(
+  ctx: HandlerContext,
+): Promise<void> {
+  const refs = await collectPlantingEmbeddingRefsForIngredient(ctx);
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
+}
+
+// Plantings embed their current location's name (the title's subtitle), and
+// garden entries embed their location's name IN the title, so a location
+// rename fans out to both.
+async function refreshPlantingEmbeddingsForLocation(
+  ctx: HandlerContext,
+): Promise<void> {
+  const refs = await collectPlantingEmbeddingRefsForLocation(ctx);
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
+}
+
+async function refreshGardenEntryEmbeddingsForLocation(
+  ctx: HandlerContext,
+): Promise<void> {
+  const refs = await collectGardenEntryEmbeddingRefsForLocation(ctx);
+  return await publishEmbeddingRefreshes(ctx.db, refs, ctx.event, ctx.ports);
+}
+
 // Tasks/expenses embed their project's name, so a project update fans out.
 async function refreshTrackerEmbeddingsForProject(
   ctx: HandlerContext,
@@ -432,6 +494,18 @@ const embeddingRefCollectorByHandler = new Map<
     collectRecipeEmbeddingRefsForIngredient,
   ],
   [refreshMealEmbeddingsForRecipe, collectMealEmbeddingRefsForRecipe],
+  [
+    refreshPlantingEmbeddingsForIngredient,
+    collectPlantingEmbeddingRefsForIngredient,
+  ],
+  [
+    refreshPlantingEmbeddingsForLocation,
+    collectPlantingEmbeddingRefsForLocation,
+  ],
+  [
+    refreshGardenEntryEmbeddingsForLocation,
+    collectGardenEntryEmbeddingRefsForLocation,
+  ],
   [refreshTrackerEmbeddingsForProject, collectTrackerEmbeddingRefsForProject],
   [refreshEmbeddingsForVendor, collectEmbeddingRefsForVendor],
   [refreshEmbeddingsForPurchase, collectEmbeddingRefsForPurchase],
@@ -489,13 +563,23 @@ export const mutationSideEffectManifest = {
     onUpdate: [
       refreshOwnEmbedding,
       refreshInventoryEmbeddingsForLocation,
+      // Rename fan-out: planting subtitles and garden-entry titles embed the
+      // current location's name.
+      refreshPlantingEmbeddingsForLocation,
+      refreshGardenEntryEmbeddingsForLocation,
       enqueueLocationAiRefresh,
     ],
     onDelete: [],
   },
   ingredient: {
     onCreate: [refreshOwnEmbedding],
-    onUpdate: [refreshOwnEmbedding, refreshRecipeEmbeddingsForIngredient],
+    // Rename fan-out: recipe embeddings and planting titles embed the
+    // ingredient's name.
+    onUpdate: [
+      refreshOwnEmbedding,
+      refreshRecipeEmbeddingsForIngredient,
+      refreshPlantingEmbeddingsForIngredient,
+    ],
     onDelete: [],
   },
   recipe: {
@@ -556,6 +640,16 @@ export const mutationSideEffectManifest = {
     onDelete: [],
   },
   wish: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding],
+    onDelete: [],
+  },
+  planting: {
+    onCreate: [refreshOwnEmbedding],
+    onUpdate: [refreshOwnEmbedding],
+    onDelete: [],
+  },
+  gardenEntry: {
     onCreate: [refreshOwnEmbedding],
     onUpdate: [refreshOwnEmbedding],
     onDelete: [],
@@ -707,6 +801,8 @@ const ENTITY_REF_BUILDER: EntityRefBuilderMap = {
   financialTransaction: (id) => ({ entity: "financialTransaction", id }),
   expense: (id) => ({ entity: "expense", id }),
   wish: (id) => ({ entity: "wish", id }),
+  planting: (id) => ({ entity: "planting", id }),
+  gardenEntry: (id) => ({ entity: "gardenEntry", id }),
   image: (id) => ({ entity: "image", id }),
 };
 

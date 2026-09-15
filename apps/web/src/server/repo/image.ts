@@ -327,10 +327,11 @@ type ImageWithRelations = typeof image.$inferSelect & {
   gardenEntryImages: Array<{
     gardenEntryId: string;
     gardenEntry: {
-      note: string | null;
       kind: string;
+      observedOn: string;
       shortcode: string;
       deletedAt: Date | null;
+      location: { name: string };
     };
   }>;
   mealImages: Array<{
@@ -366,6 +367,20 @@ type ImageWithRelations = typeof image.$inferSelect & {
     deletedAt: Date | null;
   }>;
 };
+
+// Mirrors `GARDEN_ENTRY_KIND_LABELS` in `~/server/repo/garden` (private
+// there): the "observation" kind reads as "Note" everywhere it's shown.
+const GARDEN_ENTRY_ASSOCIATION_KIND_LABELS = {
+  observation: "Note",
+  harvest: "Harvest",
+  move: "Move",
+} satisfies Record<string, string>;
+
+function isGardenEntryAssociationKindLabel(
+  kind: string,
+): kind is keyof typeof GARDEN_ENTRY_ASSOCIATION_KIND_LABELS {
+  return kind in GARDEN_ENTRY_ASSOCIATION_KIND_LABELS;
+}
 
 /**
  * Transform image with pre-loaded relations to API format.
@@ -413,6 +428,12 @@ const imageWithRelationsToAPI = (
       .map(({ purchase }) => ({
         entityType: "purchase" as const,
         entityId: purchase.shortcode,
+        // Best-effort echo of `displayName` (`purchaseLabel(...)` in
+        // `~/lib/purchase-label`): this join carries no vendor name or date,
+        // so the "vendor + date" / "vendor alone" rungs of that ladder aren't
+        // reproducible here. What IS reproducible — orderId, optionally
+        // suffixed with a nonblank displayLabel, else displayLabel alone —
+        // is kept as-is.
         entityName:
           (purchase.orderId
             ? purchase.displayLabel?.trim()
@@ -426,7 +447,10 @@ const imageWithRelationsToAPI = (
       .map(({ gardenEntry }) => ({
         entityType: "gardenEntry" as const,
         entityId: gardenEntry.shortcode,
-        entityName: gardenEntry.note?.trim() || gardenEntry.kind,
+        // `displayName`'s rule ("<Kind> · <date> · <location>"), computed
+        // inline rather than imported: `gardenEntryDisplayName` in
+        // `~/server/repo/garden` is private to that module.
+        entityName: `${isGardenEntryAssociationKindLabel(gardenEntry.kind) ? GARDEN_ENTRY_ASSOCIATION_KIND_LABELS[gardenEntry.kind] : gardenEntry.kind} · ${gardenEntry.observedOn} · ${gardenEntry.location.name}`,
         role: "attachment" as const,
       })),
     ...imageData.mealImages
@@ -434,6 +458,8 @@ const imageWithRelationsToAPI = (
       .map(({ meal }) => ({
         entityType: "meal" as const,
         entityId: meal.shortcode,
+        // Matches `displayName` exactly (`name?.trim() || date`); both
+        // columns are already local to this row, no join needed.
         entityName: meal.name?.trim() || meal.date,
         role: "attachment" as const,
       })),
@@ -450,7 +476,12 @@ const imageWithRelationsToAPI = (
       .map(({ planting }) => ({
         entityType: "planting" as const,
         entityId: planting.shortcode,
-        entityName: planting.variety?.trim() || planting.ingredient.name,
+        // `displayName`'s rule ("<ingredient> · <variety>"): ingredient name
+        // first, variety appended only when present — NOT variety alone,
+        // which silently dropped the ingredient name whenever one was set.
+        entityName: planting.variety?.trim()
+          ? `${planting.ingredient.name} · ${planting.variety.trim()}`
+          : planting.ingredient.name,
         role: "attachment" as const,
       })),
     ...imageData.cookbookCovers.filter(isNotDeleted).map((book) => ({
@@ -566,7 +597,15 @@ const imageEntityRelations = {
     where: notDeleted(gardenEntryImage),
     with: {
       gardenEntry: {
-        columns: { note: true, kind: true, shortcode: true, deletedAt: true },
+        columns: {
+          kind: true,
+          observedOn: true,
+          shortcode: true,
+          deletedAt: true,
+        },
+        with: {
+          location: { columns: { name: true } },
+        },
       },
     },
     columns: { gardenEntryId: true },

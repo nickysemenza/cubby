@@ -19,7 +19,7 @@ export default defineEntity({
   table: "Planting",
   identifiers: { brand: "PlantingId", shortcode: "PLT-", legacy: null },
   presentation: {
-    titleField: "variety",
+    titleField: "displayName",
     domain: "house",
     description: "Crops growing now and planned for later.",
     emptyState: {
@@ -213,6 +213,13 @@ export default defineEntity({
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {
+        // `"<ingredient name>[ · <variety>]"` — the canonical non-null title;
+        // `variety` alone is nullable and cannot serve as the title field.
+        key: "displayName",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: { read: plantingShortcode, create: null, update: null },
@@ -336,6 +343,7 @@ export default defineEntity({
       "transplantedOn",
       "finishedOn",
       "images",
+      "displayName",
       "createdAt",
       "updatedAt",
     ],
@@ -435,7 +443,9 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: false },
+  // `displayName` is a non-null projected title (ingredient + variety), so
+  // Cmd-K / `/search` can index plantings like every other named entity.
+  search: { enabled: true },
   capabilities: {
     auditable: true,
     images: "gallery",

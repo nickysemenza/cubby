@@ -28,6 +28,7 @@ const transaction = financialTransactionOut.parse({
   ledgerTransferId: null,
   accountName: "Fixture checking",
   vendorInference: null,
+  displayName: "Fixture Market",
   createdAt: new Date("2026-01-03"),
   updatedAt: new Date("2026-01-03"),
 });

@@ -19,6 +19,8 @@ export const hoverPreviewEntities = [
   "financialTransaction",
   "wish",
   "image",
+  "planting",
+  "gardenEntry",
 ] as const satisfies readonly BrowserRoutedEntity[];
 
 export type HoverPreviewEntity = (typeof hoverPreviewEntities)[number];

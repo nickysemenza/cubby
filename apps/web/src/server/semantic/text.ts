@@ -354,6 +354,49 @@ export function buildFinancialTransactionEmbeddingText(
   ]);
 }
 
+const plantingSearchTextInputSchema = z.object({
+  ingredientName: z.string(),
+  variety: nullableText,
+  status: nullableText,
+  locationName: nullableText,
+  notes: nullableText,
+});
+
+export function buildPlantingEmbeddingText(
+  planting: z.infer<typeof plantingSearchTextInputSchema>,
+) {
+  const parsed = plantingSearchTextInputSchema.parse(planting);
+  return joinFields([
+    field("planting", parsed.ingredientName),
+    field("variety", parsed.variety),
+    field("status", parsed.status),
+    field("location", parsed.locationName),
+    field("notes", parsed.notes),
+  ]);
+}
+
+const gardenEntrySearchTextInputSchema = z.object({
+  kindLabel: z.string(),
+  observedOn: z.string(),
+  locationName: z.string(),
+  plantingName: nullableText,
+  note: nullableText,
+  harvestAmount: nullableText,
+});
+
+export function buildGardenEntryEmbeddingText(
+  entry: z.infer<typeof gardenEntrySearchTextInputSchema>,
+) {
+  const parsed = gardenEntrySearchTextInputSchema.parse(entry);
+  return joinFields([
+    field("garden entry", `${parsed.kindLabel} · ${parsed.observedOn}`),
+    field("location", parsed.locationName),
+    field("planting", parsed.plantingName),
+    field("harvest amount", parsed.harvestAmount),
+    field("notes", parsed.note),
+  ]);
+}
+
 export function normalizeSearchText(text: string): string {
   return text.trim().replace(/\s+/g, " ").toLowerCase();
 }

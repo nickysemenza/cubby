@@ -1,5 +1,6 @@
 import { displayGtin } from "@cubby/schemas/external-id";
 import type { FinancialAccountOut } from "@cubby/schemas/financial-account";
+import type { GardenEntryKind } from "@cubby/schemas/garden-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageAssociation, ImageWithEntity } from "@cubby/schemas/image";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
@@ -592,9 +593,7 @@ export function toMealCard(
     entity: "meal",
     routeParam: data.id,
     icon: <EntityIcon entity="meal" size={14} colored />,
-    // An unnamed meal is identified by its date — the same fallback the
-    // calendar uses.
-    name: data.name || formatDate(data.date),
+    name: data.displayName,
     tag: "meal",
     identity: data.name ? formatDate(data.date) : undefined,
     body: [
@@ -924,7 +923,7 @@ export function toFinancialTransactionCard(
     entity: "financialTransaction",
     routeParam: data.id,
     icon: <EntityIcon entity="financialTransaction" size={14} colored />,
-    name: data.merchant ?? data.rawDescription ?? data.id,
+    name: data.displayName,
     tag: "transaction",
     identity: [
       capitalize(data.kind.replaceAll("_", " ")),
@@ -993,6 +992,89 @@ export function toWishCard(
             },
           ]
         : []),
+    ],
+  };
+}
+
+// ── Planting ────────────────────────────────────────────────────────────────
+
+export function toPlantingCard(
+  data: EntityDetailByEntity["planting"],
+): ManifestCardProps {
+  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
+
+  return {
+    entity: "planting",
+    routeParam: data.id,
+    icon: <EntityIcon entity="planting" size={14} colored />,
+    name: data.displayName,
+    tag: "planting",
+    body: [
+      ...(thumbUrl ? [{ kind: "thumb" as const, url: thumbUrl }] : []),
+      {
+        kind: "stats",
+        stats: [
+          { label: "Status", value: capitalize(data.status) },
+          {
+            label: "Location",
+            // `plantingOut` carries no location name (only the id) — this
+            // falls back to the shortcode, the same last-resort the entity
+            // graph and image-association labels use elsewhere.
+            value: data.locationId ? (
+              <Row align="center" gap="xs">
+                <EntityIcon entity="location" size={12} colored />
+                {data.locationId}
+              </Row>
+            ) : (
+              "—"
+            ),
+          },
+        ],
+      },
+    ],
+  };
+}
+
+// ── Garden entry ────────────────────────────────────────────────────────────
+
+const GARDEN_ENTRY_PREVIEW_KIND_LABELS = {
+  observation: "Note",
+  harvest: "Harvest",
+  move: "Move",
+} satisfies Record<GardenEntryKind, string>;
+
+export function toGardenEntryCard(
+  data: EntityDetailByEntity["gardenEntry"],
+): ManifestCardProps {
+  const thumbUrl = data.images.find(isDisplayableImageFile)?.url;
+
+  return {
+    entity: "gardenEntry",
+    routeParam: data.id,
+    icon: <EntityIcon entity="gardenEntry" size={14} colored />,
+    name: data.displayName,
+    tag: "gardenEntry",
+    body: [
+      ...(thumbUrl ? [{ kind: "thumb" as const, url: thumbUrl }] : []),
+      {
+        kind: "stats",
+        stats: [
+          {
+            label: "Kind",
+            value: GARDEN_ENTRY_PREVIEW_KIND_LABELS[data.kind] ?? data.kind,
+          },
+          { label: "Date", value: formatDate(data.observedOn) },
+          {
+            label: "Location",
+            value: (
+              <Row align="center" gap="xs">
+                <EntityIcon entity="location" size={12} colored />
+                {data.locationName}
+              </Row>
+            ),
+          },
+        ],
+      },
     ],
   };
 }
@@ -1140,6 +1222,14 @@ const PREVIEW_CONTENT = {
   wish: createPreviewContent("wish", {
     label: "Wish",
     toCard: toWishCard,
+  }),
+  planting: createPreviewContent("planting", {
+    label: "Planting",
+    toCard: toPlantingCard,
+  }),
+  gardenEntry: createPreviewContent("gardenEntry", {
+    label: "Garden entry",
+    toCard: toGardenEntryCard,
   }),
 } satisfies Record<StandardPreviewEntity, ComponentType<StandardPreviewProps>>;
 

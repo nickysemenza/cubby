@@ -18,7 +18,7 @@ export default defineEntity({
   table: "GardenEntry",
   identifiers: { brand: "GardenEntryId", shortcode: "GDE-", legacy: null },
   presentation: {
-    titleField: "note",
+    titleField: "displayName",
     domain: "house",
     description: "Dated garden photos, observations, and harvests.",
     emptyState: {
@@ -127,6 +127,14 @@ export default defineEntity({
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {
+        // `"<Kind> · <YYYY-MM-DD> · <location name>"` — gardenEntry has no
+        // name column and `note` is nullable, so this is the canonical
+        // non-null title.
+        key: "displayName",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: { read: gardenEntryShortcode, create: null, update: null },
@@ -221,6 +229,7 @@ export default defineEntity({
       "note",
       "harvestAmount",
       "images",
+      "displayName",
       "createdAt",
       "updatedAt",
     ],
@@ -286,7 +295,9 @@ export default defineEntity({
       },
     },
   ],
-  search: { enabled: false },
+  // `displayName` is a non-null projected title (kind · date · location), so
+  // Cmd-K / `/search` can index garden entries like every other named entity.
+  search: { enabled: true },
   capabilities: {
     auditable: true,
     images: "gallery",

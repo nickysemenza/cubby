@@ -29,6 +29,7 @@ function transactionResponse({
         transactionDate: "2026-08-16",
         postedDate: "2026-08-16",
         merchant: "Neighborhood Market",
+        displayName: "Neighborhood Market",
         rawDescription: null,
         sourceCategory: null,
         sourceRefs: [],

@@ -16,10 +16,13 @@ export default defineEntity({
   route: { basePath: "inventory" },
   table: "InventoryEntry",
   identifiers: { brand: "InventoryId", shortcode: "INV-", legacy: null },
-  // Inventory has no name field; `amount` (the quantity on hand) is the
-  // lead value shown for a row — the closest thing to a title it has.
+  // Inventory has no name field; `displayName` ("<product> · <location>")
+  // is declared here for the titleField compiler check, but the joins it
+  // needs (product/location names) aren't loaded on the bare entity output —
+  // only `inventoryListItemOut`/`inventoryWithLocationAndProductOut` (see
+  // `inventoryDisplayName` in packages/schemas/src/inventory.ts) carry it.
   presentation: {
-    titleField: "amount",
+    titleField: "displayName",
     domain: "pantry",
     description: "Approximate quantities at physical locations.",
     emptyState: {
@@ -113,6 +116,15 @@ export default defineEntity({
           create: null,
           update: null,
         },
+      },
+      {
+        // Storage-less and deliberately absent from `output`: the bare
+        // entity read has no product/location join to compute it from. See
+        // `inventoryDisplayName` in `@cubby/schemas/inventory`, used directly
+        // by the list/detail output schemas instead.
+        key: "displayName",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
       },
       {
         key: "verifiedAt",

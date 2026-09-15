@@ -830,7 +830,7 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "enum": ["meal", "task", "expense", "project"]
+                "enum": ["meal", "task", "expense", "project", "planting"]
               }
             },
             "style": "form",
@@ -4594,7 +4594,17 @@
     "/api/v1/garden/options": {
       "get": {
         "tags": ["garden"],
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
         "operationId": "garden.options",
         "responses": {
           "200": {
@@ -17067,7 +17077,9 @@
                   "financialAccount",
                   "financialTransaction",
                   "wish",
-                  "expense"
+                  "expense",
+                  "planting",
+                  "gardenEntry"
                 ]
               }
             },
@@ -17150,7 +17162,9 @@
                   "financialAccount",
                   "financialTransaction",
                   "wish",
-                  "expense"
+                  "expense",
+                  "planting",
+                  "gardenEntry"
                 ]
               }
             },
@@ -17233,7 +17247,9 @@
                   "financialAccount",
                   "financialTransaction",
                   "wish",
-                  "expense"
+                  "expense",
+                  "planting",
+                  "gardenEntry"
                 ]
               }
             },
@@ -17316,7 +17332,9 @@
                   "financialAccount",
                   "financialTransaction",
                   "wish",
-                  "expense"
+                  "expense",
+                  "planting",
+                  "gardenEntry"
                 ]
               }
             },
@@ -17399,7 +17417,9 @@
                   "financialAccount",
                   "financialTransaction",
                   "wish",
-                  "expense"
+                  "expense",
+                  "planting",
+                  "gardenEntry"
                 ]
               }
             },
@@ -19867,10 +19887,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema200"
+            "$ref": "#/components/schemas/output_schema204"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema200"
+            "$ref": "#/components/schemas/output_schema204"
           },
           "subtaskCount": {
             "type": "integer",
@@ -21212,6 +21232,9 @@
           },
           {
             "$ref": "#/components/schemas/CalendarProjectItem"
+          },
+          {
+            "$ref": "#/components/schemas/CalendarPlantingItem"
           }
         ],
         "discriminator": {
@@ -21220,13 +21243,14 @@
             "meal": "#/components/schemas/CalendarMealItem",
             "task": "#/components/schemas/CalendarTaskItem",
             "expense": "#/components/schemas/CalendarExpenseItem",
-            "project": "#/components/schemas/CalendarProjectItem"
+            "project": "#/components/schemas/CalendarProjectItem",
+            "planting": "#/components/schemas/CalendarPlantingItem"
           }
         }
       },
       "CalendarItemKind": {
         "type": "string",
-        "enum": ["meal", "task", "expense", "project"]
+        "enum": ["meal", "task", "expense", "project", "planting"]
       },
       "CalendarMealItem": {
         "type": "object",
@@ -21294,6 +21318,56 @@
           "mealTotals"
         ],
         "additionalProperties": false
+      },
+      "CalendarPlantingItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "planting"
+          },
+          "id": {
+            "$ref": "#/components/schemas/PlantingShortcode"
+          },
+          "milestone": {
+            "$ref": "#/components/schemas/CalendarPlantingMilestone"
+          },
+          "title": {
+            "type": "string"
+          },
+          "locationName": {
+            "type": ["string", "null"]
+          },
+          "plannedWindow": {
+            "type": ["string", "null"]
+          },
+          "startDate": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "endDateExclusive": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "interaction": {
+            "type": "string",
+            "const": "read-only"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "milestone",
+          "title",
+          "locationName",
+          "plannedWindow",
+          "startDate",
+          "endDateExclusive",
+          "interaction"
+        ],
+        "additionalProperties": false
+      },
+      "CalendarPlantingMilestone": {
+        "type": "string",
+        "enum": ["planned", "sowed", "transplanted", "finished"]
       },
       "CalendarProjectItem": {
         "type": "object",
@@ -24742,7 +24816,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema99"
+            "$ref": "#/components/schemas/output_schema102"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -25816,10 +25890,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema226"
+                "$ref": "#/components/schemas/output_schema230"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema226"
+                "$ref": "#/components/schemas/output_schema230"
               }
             },
             "required": ["scope", "grid"],
@@ -25829,19 +25903,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema226"
+                "$ref": "#/components/schemas/output_schema230"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema226"
+                    "$ref": "#/components/schemas/output_schema230"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema226"
+                    "$ref": "#/components/schemas/output_schema230"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema226"
+                    "$ref": "#/components/schemas/output_schema230"
                   }
                 },
                 "required": [
@@ -26430,10 +26504,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema229"
+            "$ref": "#/components/schemas/output_schema233"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema230"
+            "$ref": "#/components/schemas/output_schema234"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -26608,10 +26682,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema229"
+            "$ref": "#/components/schemas/output_schema233"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema230"
+            "$ref": "#/components/schemas/output_schema234"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -27882,6 +27956,9 @@
             "$ref": "#/components/schemas/MerchantVendorInference",
             "description": "Advisory Vendor evidence from prior settled transactions with the same Merchant label. Null when suppressed. It neither matches nor links anything; Allocations remain the only confirmed relationship."
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -27906,6 +27983,7 @@
           "notes",
           "allocations",
           "accountName",
+          "displayName",
           "createdAt",
           "updatedAt"
         ],
@@ -28327,6 +28405,9 @@
           "images": {
             "$ref": "#/components/schemas/output_schema29"
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -28343,6 +28424,9 @@
           "plantingName": {
             "type": ["string", "null"]
           },
+          "anchorsPeriod": {
+            "type": "boolean"
+          },
           "displayImages": {
             "$ref": "#/components/schemas/DisplayImagesField"
           }
@@ -28355,10 +28439,12 @@
           "note",
           "harvestAmount",
           "images",
+          "displayName",
           "createdAt",
           "updatedAt",
           "locationName",
           "plantingName",
+          "anchorsPeriod",
           "displayImages"
         ],
         "additionalProperties": false
@@ -28408,6 +28494,9 @@
           "images": {
             "$ref": "#/components/schemas/output_schema29"
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -28423,6 +28512,9 @@
           },
           "plantingName": {
             "type": ["string", "null"]
+          },
+          "anchorsPeriod": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -28433,10 +28525,12 @@
           "note",
           "harvestAmount",
           "images",
+          "displayName",
           "createdAt",
           "updatedAt",
           "locationName",
-          "plantingName"
+          "plantingName",
+          "anchorsPeriod"
         ],
         "additionalProperties": false
       },
@@ -28693,6 +28787,9 @@
           "images": {
             "$ref": "#/components/schemas/output_schema29"
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -28709,6 +28806,9 @@
           "plantingName": {
             "type": ["string", "null"]
           },
+          "anchorsPeriod": {
+            "type": "boolean"
+          },
           "context": {
             "type": "string",
             "enum": ["direct", "bed"]
@@ -28722,10 +28822,12 @@
           "note",
           "harvestAmount",
           "images",
+          "displayName",
           "createdAt",
           "updatedAt",
           "locationName",
           "plantingName",
+          "anchorsPeriod",
           "context"
         ],
         "additionalProperties": false
@@ -28867,6 +28969,14 @@
           }
         },
         "required": ["plantingId", "locationId", "movedOn"]
+      },
+      "GardenOptionsInput": {
+        "type": "object",
+        "properties": {
+          "search": {
+            "type": "string"
+          }
+        }
       },
       "GardenOptionsOut": {
         "type": "object",
@@ -29037,6 +29147,9 @@
           "finishedOn": {
             "$ref": "#/components/schemas/PlainDate"
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -29071,6 +29184,7 @@
           "quantity",
           "notes",
           "plannedWindow",
+          "displayName",
           "createdAt",
           "updatedAt",
           "ingredientName",
@@ -30030,10 +30144,10 @@
             "type": "object",
             "properties": {
               "confirmed": {
-                "$ref": "#/components/schemas/output_schema157"
+                "$ref": "#/components/schemas/output_schema160"
               },
               "projected": {
-                "$ref": "#/components/schemas/output_schema157"
+                "$ref": "#/components/schemas/output_schema160"
               }
             },
             "required": ["confirmed", "projected"],
@@ -30947,7 +31061,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema125"
+            "$ref": "#/components/schemas/output_schema128"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -31257,7 +31371,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema99"
+            "$ref": "#/components/schemas/output_schema102"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -31469,7 +31583,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema99"
+            "$ref": "#/components/schemas/output_schema102"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -31642,7 +31756,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema99"
+            "$ref": "#/components/schemas/output_schema102"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -31694,7 +31808,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "naKinds": {
-            "$ref": "#/components/schemas/output_schema99"
+            "$ref": "#/components/schemas/output_schema102"
           },
           "usuallyOnHand": {
             "type": "boolean"
@@ -31781,10 +31895,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema99"
+                "$ref": "#/components/schemas/output_schema102"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema99"
+                "$ref": "#/components/schemas/output_schema102"
               }
             },
             "required": ["covered", "applicable"],
@@ -32043,7 +32157,7 @@
       },
       "input_schema147": {
         "minItems": 1,
-        "maxItems": 15,
+        "maxItems": 17,
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/SearchableEntity"
@@ -32650,7 +32764,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema115"
+            "$ref": "#/components/schemas/output_schema118"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -32663,7 +32777,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema119"
+            "$ref": "#/components/schemas/output_schema122"
           },
           "createdAt": {
             "type": "string",
@@ -32701,7 +32815,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema115"
+            "$ref": "#/components/schemas/output_schema118"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -32714,7 +32828,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema119"
+            "$ref": "#/components/schemas/output_schema122"
           },
           "createdAt": {
             "type": "string",
@@ -32734,6 +32848,9 @@
           },
           "location": {
             "$ref": "#/components/schemas/InventoryListLocationOut"
+          },
+          "displayName": {
+            "type": "string"
           }
         },
         "required": [
@@ -32745,7 +32862,8 @@
           "updatedAt",
           "displayImages",
           "product",
-          "location"
+          "location",
+          "displayName"
         ],
         "additionalProperties": false
       },
@@ -32982,7 +33100,7 @@
             "$ref": "#/components/schemas/InventoryShortcode"
           },
           "amount": {
-            "$ref": "#/components/schemas/output_schema115"
+            "$ref": "#/components/schemas/output_schema118"
           },
           "valuation": {
             "$ref": "#/components/schemas/Money",
@@ -32995,7 +33113,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "placement": {
-            "$ref": "#/components/schemas/output_schema119"
+            "$ref": "#/components/schemas/output_schema122"
           },
           "createdAt": {
             "type": "string",
@@ -33012,6 +33130,9 @@
           },
           "location": {
             "$ref": "#/components/schemas/LocationOut"
+          },
+          "displayName": {
+            "type": "string"
           }
         },
         "required": [
@@ -33022,7 +33143,8 @@
           "createdAt",
           "updatedAt",
           "product",
-          "location"
+          "location",
+          "displayName"
         ],
         "additionalProperties": false
       },
@@ -34269,7 +34391,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema125"
+            "$ref": "#/components/schemas/output_schema128"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -34488,7 +34610,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema125"
+            "$ref": "#/components/schemas/output_schema128"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -34819,10 +34941,10 @@
             "maximum": 9007199254740991
           },
           "direct": {
-            "$ref": "#/components/schemas/output_schema135"
+            "$ref": "#/components/schemas/output_schema138"
           },
           "total": {
-            "$ref": "#/components/schemas/output_schema135"
+            "$ref": "#/components/schemas/output_schema138"
           },
           "installed": {
             "type": "object",
@@ -34953,7 +35075,7 @@
             "$ref": "#/components/schemas/input_schema45"
           },
           "tags": {
-            "$ref": "#/components/schemas/output_schema125"
+            "$ref": "#/components/schemas/output_schema128"
           },
           "type": {
             "$ref": "#/components/schemas/LocationType"
@@ -35112,13 +35234,13 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema276"
+                  "$ref": "#/components/schemas/output_schema281"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema276"
+                  "$ref": "#/components/schemas/output_schema281"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema278"
+                  "$ref": "#/components/schemas/output_schema283"
                 }
               },
               "required": ["name", "inputSchema"],
@@ -35222,10 +35344,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema279"
+                  "$ref": "#/components/schemas/output_schema284"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema280"
+                  "$ref": "#/components/schemas/output_schema285"
                 }
               },
               "required": [
@@ -35317,7 +35439,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema281"
+              "$ref": "#/components/schemas/output_schema286"
             }
           },
           "tools": {
@@ -35335,13 +35457,13 @@
                   "type": ["string", "null"]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema276"
+                  "$ref": "#/components/schemas/output_schema281"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema276"
+                  "$ref": "#/components/schemas/output_schema281"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema278"
+                  "$ref": "#/components/schemas/output_schema283"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -35385,19 +35507,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema281"
+                    "$ref": "#/components/schemas/output_schema286"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema279"
+                    "$ref": "#/components/schemas/output_schema284"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema280"
+                    "$ref": "#/components/schemas/output_schema285"
                   }
                 }
               },
@@ -35424,25 +35546,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema282"
+              "$ref": "#/components/schemas/output_schema287"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema282"
+              "$ref": "#/components/schemas/output_schema287"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema282"
+              "$ref": "#/components/schemas/output_schema287"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema282"
+              "$ref": "#/components/schemas/output_schema287"
             }
           }
         },
@@ -35619,13 +35741,16 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema161"
+            "$ref": "#/components/schemas/output_schema164"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema29"
+          },
+          "displayName": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string",
@@ -35650,6 +35775,7 @@
           "recipes",
           "totals",
           "images",
+          "displayName",
           "createdAt",
           "updatedAt",
           "displayImages"
@@ -35702,13 +35828,16 @@
             "$ref": "#/components/schemas/MealKind"
           },
           "recipes": {
-            "$ref": "#/components/schemas/output_schema161"
+            "$ref": "#/components/schemas/output_schema164"
           },
           "totals": {
             "$ref": "#/components/schemas/MealTotals"
           },
           "images": {
             "$ref": "#/components/schemas/output_schema29"
+          },
+          "displayName": {
+            "type": "string"
           },
           "createdAt": {
             "type": "string",
@@ -35730,6 +35859,7 @@
           "recipes",
           "totals",
           "images",
+          "displayName",
           "createdAt",
           "updatedAt"
         ],
@@ -36954,7 +37084,13 @@
         "required": ["id", "name", "manufacturer", "createdAt"],
         "additionalProperties": false
       },
-      "output_schema115": {
+      "output_schema102": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/BaseKind"
+        }
+      },
+      "output_schema118": {
         "type": "object",
         "properties": {
           "value": {
@@ -36973,15 +37109,15 @@
         "additionalProperties": false,
         "description": "Quantity on hand"
       },
-      "output_schema119": {
+      "output_schema122": {
         "description": "'stock' = movable stock; 'installed' = a fixed installation, kept as a record but excluded from browsing, counting and audits",
         "$ref": "#/components/schemas/InventoryPlacement"
       },
-      "output_schema125": {
+      "output_schema128": {
         "description": "Namespaced Collection tags assigned directly to this location",
         "$ref": "#/components/schemas/input_schema45"
       },
-      "output_schema135": {
+      "output_schema138": {
         "type": "object",
         "properties": {
           "priced": {
@@ -37003,13 +37139,13 @@
         "required": ["priced", "missingPricing", "miscNoPrice"],
         "additionalProperties": false
       },
-      "output_schema149": {
+      "output_schema152": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/Amount"
         }
       },
-      "output_schema157": {
+      "output_schema160": {
         "type": "object",
         "properties": {
           "portionCount": {
@@ -37024,7 +37160,7 @@
         "required": ["portionCount", "totals"],
         "additionalProperties": false
       },
-      "output_schema161": {
+      "output_schema164": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/MealRecipeOut"
@@ -37051,7 +37187,7 @@
           }
         }
       },
-      "output_schema182": {
+      "output_schema186": {
         "type": "object",
         "properties": {
           "id": {
@@ -37093,7 +37229,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema185": {
+      "output_schema189": {
         "type": "object",
         "properties": {
           "id": {
@@ -37106,7 +37242,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema186": {
+      "output_schema190": {
         "type": "object",
         "properties": {
           "id": {
@@ -37152,7 +37288,7 @@
                 "$ref": "#/components/schemas/input_schema45"
               },
               "tags": {
-                "$ref": "#/components/schemas/output_schema125"
+                "$ref": "#/components/schemas/output_schema128"
               },
               "type": {
                 "$ref": "#/components/schemas/LocationType"
@@ -37197,7 +37333,7 @@
               "ancestors": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/output_schema187"
+                  "$ref": "#/components/schemas/output_schema191"
                 }
               }
             },
@@ -37227,7 +37363,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema187": {
+      "output_schema191": {
         "type": "object",
         "properties": {
           "id": {
@@ -37246,7 +37382,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema188": {
+      "output_schema192": {
         "type": "object",
         "properties": {
           "id": {
@@ -37264,26 +37400,26 @@
           "ancestors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema187"
+              "$ref": "#/components/schemas/output_schema191"
             }
           }
         },
         "required": ["id", "name", "ancestors"],
         "additionalProperties": false
       },
-      "output_schema200": {
+      "output_schema204": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema220": {
+      "output_schema224": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectShortcode"
         }
       },
-      "output_schema226": {
+      "output_schema230": {
         "type": "object",
         "properties": {
           "current": {
@@ -37296,15 +37432,15 @@
         "required": ["current"],
         "additionalProperties": false
       },
-      "output_schema229": {
+      "output_schema233": {
         "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
         "$ref": "#/components/schemas/ExpenseLineKind"
       },
-      "output_schema230": {
+      "output_schema234": {
         "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
         "$ref": "#/components/schemas/ExpenseLineBasis"
       },
-      "output_schema265": {
+      "output_schema270": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -37333,7 +37469,7 @@
           }
         }
       },
-      "output_schema266": {
+      "output_schema271": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -37343,7 +37479,7 @@
           }
         ]
       },
-      "output_schema276": {
+      "output_schema281": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -37352,7 +37488,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema278": {
+      "output_schema283": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -37370,7 +37506,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema279": {
+      "output_schema284": {
         "type": "object",
         "properties": {
           "id": {
@@ -37386,7 +37522,7 @@
         "required": ["id", "name", "email"],
         "additionalProperties": false
       },
-      "output_schema280": {
+      "output_schema285": {
         "type": "object",
         "properties": {
           "id": {
@@ -37399,7 +37535,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema281": {
+      "output_schema286": {
         "type": "object",
         "properties": {
           "day": {
@@ -37424,7 +37560,7 @@
         "required": ["day", "success", "error", "total"],
         "additionalProperties": false
       },
-      "output_schema282": {
+      "output_schema287": {
         "type": "object",
         "properties": {
           "key": {
@@ -37442,16 +37578,16 @@
         "required": ["key", "label", "count"],
         "additionalProperties": false
       },
-      "output_schema286": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/WishCandidateOut"
-        }
-      },
       "output_schema29": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ImageOut"
+        }
+      },
+      "output_schema291": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/WishCandidateOut"
         }
       },
       "output_schema32": {
@@ -37540,12 +37676,6 @@
         },
         "required": ["module", "export"],
         "additionalProperties": false
-      },
-      "output_schema99": {
-        "type": "array",
-        "items": {
-          "$ref": "#/components/schemas/BaseKind"
-        }
       },
       "ParseRecipeHtmlInput": {
         "type": "object",
@@ -37770,6 +37900,9 @@
           "images": {
             "$ref": "#/components/schemas/output_schema29"
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -37793,6 +37926,7 @@
           "notes",
           "plannedWindow",
           "images",
+          "displayName",
           "createdAt",
           "updatedAt",
           "displayImages"
@@ -37874,6 +38008,9 @@
           "images": {
             "$ref": "#/components/schemas/output_schema29"
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -37894,6 +38031,7 @@
           "notes",
           "plannedWindow",
           "images",
+          "displayName",
           "createdAt",
           "updatedAt"
         ],
@@ -39826,7 +39964,7 @@
             }
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema182"
+            "$ref": "#/components/schemas/output_schema186"
           },
           "inventoryEntry": {
             "type": "array",
@@ -40146,7 +40284,7 @@
                 "usedOnProjects": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema185"
+                    "$ref": "#/components/schemas/output_schema189"
                   }
                 },
                 "ownershipIntervals": {
@@ -40253,7 +40391,7 @@
                         "$ref": "#/components/schemas/PlainDate"
                       },
                       "chargedTo": {
-                        "$ref": "#/components/schemas/output_schema185"
+                        "$ref": "#/components/schemas/output_schema189"
                       },
                       "provenanceOnly": {
                         "type": "boolean"
@@ -41313,7 +41451,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema182"
+            "$ref": "#/components/schemas/output_schema186"
           },
           "unitMappings": {
             "type": "array",
@@ -41324,13 +41462,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema186"
+              "$ref": "#/components/schemas/output_schema190"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema188"
+              "$ref": "#/components/schemas/output_schema192"
             }
           },
           "food": {
@@ -41464,7 +41602,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema182"
+            "$ref": "#/components/schemas/output_schema186"
           },
           "unitMappings": {
             "type": "array",
@@ -41475,13 +41613,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema186"
+              "$ref": "#/components/schemas/output_schema190"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema188"
+              "$ref": "#/components/schemas/output_schema192"
             }
           },
           "componentCount": {
@@ -41582,10 +41720,10 @@
             "type": "object",
             "properties": {
               "covered": {
-                "$ref": "#/components/schemas/output_schema99"
+                "$ref": "#/components/schemas/output_schema102"
               },
               "applicable": {
-                "$ref": "#/components/schemas/output_schema99"
+                "$ref": "#/components/schemas/output_schema102"
               }
             },
             "required": ["covered", "applicable"],
@@ -43250,13 +43388,13 @@
             "type": ["string", "null"]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema224"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema224"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema224"
           },
           "createdAt": {
             "type": "string",
@@ -43395,13 +43533,13 @@
             "type": ["string", "null"]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema224"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema224"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema220"
+            "$ref": "#/components/schemas/output_schema224"
           },
           "createdAt": {
             "type": "string",
@@ -44755,6 +44893,9 @@
           "dataQuality": {
             "$ref": "#/components/schemas/DataQuality"
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -44786,6 +44927,7 @@
           "documentCount",
           "images",
           "dataQuality",
+          "displayName",
           "createdAt",
           "updatedAt",
           "displayImages"
@@ -44924,6 +45066,9 @@
           "dataQuality": {
             "$ref": "#/components/schemas/DataQuality"
           },
+          "displayName": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time",
@@ -44952,6 +45097,7 @@
           "documentCount",
           "images",
           "dataQuality",
+          "displayName",
           "createdAt",
           "updatedAt"
         ],
@@ -46442,7 +46588,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema149"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -46514,7 +46660,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema149"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -48074,13 +48220,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema265"
+                "$ref": "#/components/schemas/output_schema270"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema265"
+                "$ref": "#/components/schemas/output_schema270"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema265"
+                "$ref": "#/components/schemas/output_schema270"
               }
             },
             "required": ["cost", "weight", "nutrients"],
@@ -48090,10 +48236,10 @@
             "type": ["number", "null"]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema266"
+            "$ref": "#/components/schemas/output_schema271"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema266"
+            "$ref": "#/components/schemas/output_schema271"
           },
           "nutrient": {
             "oneOf": [
@@ -48457,12 +48603,14 @@
           "financialAccount",
           "financialTransaction",
           "wish",
-          "expense"
+          "expense",
+          "planting",
+          "gardenEntry"
         ]
       },
       "SearchableEntityId": {
         "type": "string",
-        "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
+        "pattern": "^(?:PRD-|RCP-|ING-|CKB-|LOC-|INV-|MEL-|PRJ-|TSK-|VEN-|PUR-|FAC-|FTX-|WSH-|EXP-|PLT-|GDE-)[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$"
       },
       "SearchComponentPlacement": {
         "type": "object",
@@ -48766,7 +48914,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema149"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -48838,7 +48986,7 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
           },
           "amounts": {
-            "$ref": "#/components/schemas/output_schema149"
+            "$ref": "#/components/schemas/output_schema152"
           },
           "rawLine": {
             "type": ["string", "null"]
@@ -50328,10 +50476,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema200"
+            "$ref": "#/components/schemas/output_schema204"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema200"
+            "$ref": "#/components/schemas/output_schema204"
           },
           "subtaskCount": {
             "type": "integer",
@@ -50441,10 +50589,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema200"
+            "$ref": "#/components/schemas/output_schema204"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema200"
+            "$ref": "#/components/schemas/output_schema204"
           },
           "subtaskCount": {
             "type": "integer",
@@ -52135,7 +52283,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema286"
+            "$ref": "#/components/schemas/output_schema291"
           },
           "createdAt": {
             "type": "string",
@@ -52200,7 +52348,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema286"
+            "$ref": "#/components/schemas/output_schema291"
           },
           "createdAt": {
             "type": "string",

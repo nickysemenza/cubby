@@ -127,6 +127,21 @@ export const inventoryEntryFields = {
 
 export const inventoryEntryOut = z.object(inventoryEntryFields);
 
+/**
+ * `"<product name> · <location name>"`, or just the product name when the
+ * entry carries no location. Inventory has no name column of its own, so this
+ * is the canonical non-null title wherever a row's product/location join is
+ * loaded (list and detail reads); the bare entity output has neither join and
+ * is not given a display name.
+ */
+export const inventoryDisplayName = ({
+  productName,
+  locationName,
+}: {
+  productName: string;
+  locationName?: string | null;
+}): string => (locationName ? `${productName} · ${locationName}` : productName);
+
 const productInventoryEmbedFields = {
   id: productShortcode,
   name: z.string(),
@@ -181,6 +196,7 @@ const inventoryListItemFields = {
   displayImages: displayImagesField,
   product: inventoryListProductOut,
   location: inventoryListLocationOut,
+  displayName: z.string(),
 };
 
 export const inventoryListItemOut = z.object(inventoryListItemFields);
@@ -197,6 +213,7 @@ const inventoryWithLocationAndProductFields = {
   ...inventoryEntryFields,
   product: inventoryDetailProductOut,
   location: locationOut,
+  displayName: z.string(),
 };
 
 export const inventoryWithLocationAndProductOut = z.object(

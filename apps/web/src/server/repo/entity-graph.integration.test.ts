@@ -17,6 +17,8 @@ import {
 import { getDb } from "./database-helpers";
 import { getEntityGraph } from "./entity-graph";
 import { createExpense } from "./expense";
+import { createPlanting, recordGardenEntry } from "./garden";
+import { createIngredient } from "./ingredient";
 import { createPurchase } from "./purchase";
 import { attachPurchaseProducts } from "./purchase-products";
 import {
@@ -446,5 +448,82 @@ describe("entity graph repository", () => {
     // Keeps the payload measurement explicit for the audit without turning a
     // fixture-dependent byte count into a brittle contract threshold.
     expect(responseBytes).toBeGreaterThan(0);
+  });
+
+  it("labels a planting root as '<ingredient> · <variety>', falling back to the bare name", async () => {
+    const ingredient = await createIngredient(
+      ctx.db,
+      { name: "Graph label tomato" },
+      ctx.actor,
+    );
+    const bed = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Graph label bed" }),
+      ctx.actor,
+    );
+    const withVariety = await createPlanting(
+      ctx.db,
+      {
+        ingredientId: ingredient.id,
+        locationId: bed.id,
+        status: "growing",
+        variety: "Cherokee Purple",
+      },
+      ctx.actor,
+    );
+    const withoutVariety = await createPlanting(
+      ctx.db,
+      { ingredientId: ingredient.id, locationId: bed.id, status: "growing" },
+      ctx.actor,
+    );
+    const graph = await getEntityGraph(ctx.db, {
+      roots: [
+        { entityType: "planting", entityId: withVariety.id },
+        { entityType: "planting", entityId: withoutVariety.id },
+      ],
+      relationshipKeys: [],
+    });
+    expect(
+      graph.nodes.find((node) => node.entityId === withVariety.id)?.label,
+    ).toBe("Graph label tomato · Cherokee Purple");
+    expect(
+      graph.nodes.find((node) => node.entityId === withoutVariety.id)?.label,
+    ).toBe("Graph label tomato");
+  });
+
+  it("labels a gardenEntry root as '<Kind> · <date> · <location>', mapping observation to Note", async () => {
+    const bed = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Graph label garden entry bed" }),
+      ctx.actor,
+    );
+    const observation = await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      kind: "observation",
+      observedOn: "2026-10-06",
+      note: "Whole-bed overview",
+      pendingImageIds: [],
+    });
+    const harvest = await recordGardenEntry(ctx.db, {
+      locationId: bed.id,
+      kind: "harvest",
+      observedOn: "2026-10-07",
+      note: "First pick",
+      harvestAmount: "A handful",
+      pendingImageIds: [],
+    });
+    const graph = await getEntityGraph(ctx.db, {
+      roots: [
+        { entityType: "gardenEntry", entityId: observation.id },
+        { entityType: "gardenEntry", entityId: harvest.id },
+      ],
+      relationshipKeys: [],
+    });
+    expect(
+      graph.nodes.find((node) => node.entityId === observation.id)?.label,
+    ).toBe("Note · 2026-10-06 · Graph label garden entry bed");
+    expect(
+      graph.nodes.find((node) => node.entityId === harvest.id)?.label,
+    ).toBe("Harvest · 2026-10-07 · Graph label garden entry bed");
   });
 });

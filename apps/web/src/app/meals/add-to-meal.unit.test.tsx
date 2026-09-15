@@ -42,6 +42,7 @@ const tuesdayDinner = mealOut.parse({
   recipes: [],
   images: [],
   totals: emptyTotals,
+  displayName: "Tuesday dinner",
   createdAt: new Date("2026-06-16T12:00:00Z"),
   updatedAt: new Date("2026-06-16T12:00:00Z"),
 });
@@ -56,6 +57,7 @@ const cornerDeli = mealOut.parse({
   recipes: [],
   images: [],
   totals: emptyTotals,
+  displayName: "Corner Deli",
   createdAt: new Date("2026-06-16T12:00:00Z"),
   updatedAt: new Date("2026-06-16T12:00:00Z"),
 });

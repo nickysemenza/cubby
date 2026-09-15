@@ -1,7 +1,9 @@
 import { LEGACY_SHORTCODE_PREFIX, SHORTCODE_PREFIX } from "@cubby/shared";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import { auditEntitySchema } from "./audit";
 import { type Entity, entityImage, entitySchema } from "./entity";
+import { entityFieldModels } from "./entity-fields";
 import {
   allEntities,
   auditableEntities,
@@ -16,6 +18,7 @@ import {
   searchableEntities,
   shortcodeEntities,
 } from "./entity-manifest";
+import { entitySummary } from "./generated/entity-summary.gen";
 
 const sorted = (xs: readonly string[]) => [...xs].sort();
 
@@ -195,6 +198,8 @@ describe("entity manifest", () => {
       "financialTransaction",
       "wish",
       "expense",
+      "planting",
+      "gardenEntry",
     ]);
   });
 
@@ -254,8 +259,8 @@ describe("entity manifest", () => {
       );
       expect(metadata.references).toEqual(entityReferences(entity));
     }
-    expect(entityInspectorMetadata.purchase.titleField).toBe("displayLabel");
-    expect(entityInspectorMetadata.inventory.titleField).toBe("amount");
+    expect(entityInspectorMetadata.purchase.titleField).toBe("displayName");
+    expect(entityInspectorMetadata.inventory.titleField).toBe("displayName");
     expect(entityInspectorMetadata.product).toMatchObject({
       auditable: true,
       hasImages: true,
@@ -295,5 +300,82 @@ describe("entity manifest", () => {
     expect(entityInspectorMetadata.product.filterUrlKeys).toContain(
       "related-vendor",
     );
+  });
+
+  // `inventory` is the one documented exception: `displayName` is on the
+  // entity for the titleField compiler check, but deliberately absent from
+  // the bare entity's generated `output` roster — the join it needs
+  // (product/location names) isn't loaded there. Its real, non-null schema
+  // lives on the list/detail projections in `./inventory` instead (see
+  // `inventoryDisplayName` and the comment on the `displayName` field in
+  // `05-inventory.entity.ts`). Asserting in its own function (rather than
+  // inline in an `if` branch) keeps every `expect` call unconditional from
+  // the linter's point of view.
+  async function expectInventoryTitleSchemaRejectsNull(titleField: string) {
+    const { inventoryWithLocationAndProductOut } = await import("./inventory");
+    // SAFETY: `titleField` is dynamic per entity (looped from
+    // `entitySummary` across every entity), so it can't be a literal key of
+    // this one entity's own shape type; index a `Record`-typed view instead.
+    const inventoryReadSchemas: Record<string, z.ZodTypeAny> =
+      inventoryWithLocationAndProductOut.shape;
+    const titleSchema = inventoryReadSchemas[titleField];
+    expect(titleSchema).toBeDefined();
+    expect(titleSchema!.safeParse(null).success).toBe(false);
+  }
+
+  it("no entity has a nullable title: every titleField resolves to a non-null text field", async () => {
+    for (const entity of allEntities) {
+      const titleField = entitySummary[entity].titleField;
+      const field = entityFieldModels[entity].fields.find(
+        (f) => f.readKey === titleField,
+      );
+      expect(
+        field,
+        `${entity}'s titleField "${titleField}" has no matching field in entityFieldModels`,
+      ).toBeDefined();
+      expect(
+        field!.kind,
+        `${entity}'s titleField "${titleField}" is kind "${field!.kind}", not "text"`,
+      ).toBe("text");
+
+      if (entity === "inventory") {
+        await expectInventoryTitleSchemaRejectsNull(titleField);
+        continue;
+      }
+
+      // Same dynamic-import technique as `field-map-drift.unit.test.ts`:
+      // every entity has a `generated/entity-field-schemas.<entity>.gen.ts`
+      // exporting exactly one `generated*FieldSchemas` map, whose `.read` is
+      // keyed by readKey (external field name) — see `readFieldSchemas` in
+      // `entity-definitions/definition.ts`.
+      const genModuleNamespace: unknown = await import(
+        /* @vite-ignore */ `./generated/entity-field-schemas.${entity}.gen`
+      );
+      // SAFETY: the dynamically imported namespace's shape is unknown ahead
+      // of time; it is only enumerated via `Object.keys` below, never
+      // trusted as any concrete shape.
+      // oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- dynamic import target is computed, so its namespace shape is unknown ahead of time; only enumerated via Object.keys below, never trusted as any concrete shape.
+      const genModule = genModuleNamespace as Record<string, unknown>;
+      const [fieldSchemasExportName] = Object.keys(genModule).filter((key) =>
+        /^generated.*FieldSchemas$/.test(key),
+      );
+      expect(
+        fieldSchemasExportName,
+        `entity "${entity}" -> no generated*FieldSchemas export found in entity-field-schemas.${entity}.gen.ts`,
+      ).toBeDefined();
+      // SAFETY: `fieldSchemasExportName` was just asserted defined above,
+      // and every `generated*FieldSchemas` export follows this `{ read:
+      // Record<string, ZodTypeAny> }` shape by construction (see the
+      // generator referenced above).
+      const generatedFieldSchemas = genModule[fieldSchemasExportName!] as {
+        read: Record<string, z.ZodTypeAny>;
+      };
+      const titleSchema = generatedFieldSchemas.read[titleField];
+      expect(
+        titleSchema,
+        `entity "${entity}" -> no read schema for titleField "${titleField}"`,
+      ).toBeDefined();
+      expect(titleSchema!.safeParse(null).success).toBe(false);
+    }
   });
 });

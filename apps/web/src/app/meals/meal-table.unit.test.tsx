@@ -30,6 +30,7 @@ const meal = mealOut.parse({
       reason: "no_data",
     })),
   },
+  displayName: "Weeknight Supper",
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 });

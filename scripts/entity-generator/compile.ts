@@ -739,11 +739,27 @@ const validateTitleField = (
       .map((field) => field.readKey)
       .filter((readKey): readKey is string => readKey !== null),
   );
-  if (readProjectionKeys.size === 0 || readProjectionKeys.has(titleField))
-    return;
-  throw new EntityDeclarationError(
-    `${context}.presentation.titleField "${titleField}" for entity "${key}" must be a read-projection key (a field's readKey, or its key when readKey is unset) of a declared, readable field.`,
+  if (readProjectionKeys.size === 0) return;
+  if (!readProjectionKeys.has(titleField))
+    throw new EntityDeclarationError(
+      `${context}.presentation.titleField "${titleField}" for entity "${key}" must be a read-projection key (a field's readKey, or its key when readKey is unset) of a declared, readable field.`,
+    );
+  // A title that can read out empty leaves every generic surface (page
+  // title, list row, relations graph, native row) showing a bare shortcode.
+  // Entities whose natural title is optional declare a storage-less
+  // `displayName` (read-only, computed in the repo mapper) and point here.
+  const titleModel = fieldModel.fields.find(
+    (field) => field.readKey === titleField,
   );
+  const readSchema = titleModel?.validation.read;
+  const readsNull =
+    readSchema != null &&
+    "safeParse" in readSchema &&
+    readSchema.safeParse(null).success;
+  if (titleModel?.kind !== "text" || titleModel.nullable || readsNull)
+    throw new EntityDeclarationError(
+      `${context}.presentation.titleField "${titleField}" for entity "${key}" must be a non-nullable text field; declare a read-only computed \`displayName\` when the natural title can be empty.`,
+    );
 };
 
 // One compiler pass keeps cross-field capability errors attached to the exact

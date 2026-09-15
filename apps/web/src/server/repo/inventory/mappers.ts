@@ -1,8 +1,9 @@
 import { gardenLocationKind } from "@cubby/schemas/garden-fields";
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type {
-  inventoryListItemOut,
-  inventoryWithLocationAndProductOut,
+import {
+  inventoryDisplayName,
+  type inventoryListItemOut,
+  type inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
 import type { z } from "zod";
 
@@ -107,6 +108,10 @@ export const dbInventoryEntryToAPI: (
         product.unitMappings,
       ),
     },
+    displayName: inventoryDisplayName({
+      productName: product.name,
+      locationName: location.name,
+    }),
   };
 };
 
@@ -137,6 +142,10 @@ export const dbInventoryEntryToListAPI: (
       ...product,
       pricing,
       primaryGtin: primaryGtinOf(product.externalIds),
+    }),
+    displayName: inventoryDisplayName({
+      productName: product.name,
+      locationName: location.name,
     }),
   };
 };

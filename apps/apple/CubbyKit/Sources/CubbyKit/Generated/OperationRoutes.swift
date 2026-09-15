@@ -66,7 +66,7 @@ extension OperationRoute {
         OperationRoute(operationID: "garden.journal", method: .get, path: "/api/v1/garden/journal", pathParameters: [], queryParameters: ["includeBedContext", "page", "plantingId"], hasBody: false),
         OperationRoute(operationID: "garden.locationHistory", method: .get, path: "/api/v1/garden/locationHistory", pathParameters: [], queryParameters: ["plantingId"], hasBody: false),
         OperationRoute(operationID: "garden.movePlanting", method: .post, path: "/api/v1/garden/movePlanting", pathParameters: [], queryParameters: [], hasBody: true),
-        OperationRoute(operationID: "garden.options", method: .get, path: "/api/v1/garden/options", pathParameters: [], queryParameters: [], hasBody: false),
+        OperationRoute(operationID: "garden.options", method: .get, path: "/api/v1/garden/options", pathParameters: [], queryParameters: ["search"], hasBody: false),
         OperationRoute(operationID: "garden.overview", method: .get, path: "/api/v1/garden/overview", pathParameters: [], queryParameters: [], hasBody: false),
         OperationRoute(operationID: "garden.recordEntry", method: .post, path: "/api/v1/garden/recordEntry", pathParameters: [], queryParameters: [], hasBody: true),
         OperationRoute(operationID: "garden.splitPlanting", method: .post, path: "/api/v1/garden/splitPlanting", pathParameters: [], queryParameters: [], hasBody: true),

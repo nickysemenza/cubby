@@ -19,7 +19,7 @@ export default defineEntity({
   table: "Meal",
   identifiers: { brand: "MealId", shortcode: "MEL-", legacy: null },
   presentation: {
-    titleField: "name",
+    titleField: "displayName",
     domain: "plan",
     description: "Dated meal plans and preparation records.",
     emptyState: {
@@ -158,6 +158,13 @@ export default defineEntity({
         validation: { read: z.array(imageOut), create: null, update: null },
       },
       {
+        // `name?.trim() || date` — `name` is nullable, so this is the
+        // canonical non-null title.
+        key: "displayName",
+        kind: "text",
+        validation: { read: z.string(), create: null, update: null },
+      },
+      {
         key: "id",
         kind: "identifier",
         validation: {
@@ -267,6 +274,7 @@ export default defineEntity({
       "recipes",
       "totals",
       "images",
+      "displayName",
       "createdAt",
       "updatedAt",
     ],

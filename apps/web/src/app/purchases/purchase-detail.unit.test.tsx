@@ -42,6 +42,7 @@ const purchase = purchaseOut.parse({
     relatedGaps: [],
     relatedExceptions: [],
   },
+  displayName: "Fixture purchase",
   createdAt: new Date("2026-01-02"),
   updatedAt: new Date("2026-01-02"),
 });
