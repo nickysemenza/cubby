@@ -5,6 +5,28 @@ The Apple app follows platform conventions. This is the native design authority;
 
 ## Appearance
 
+### App icon
+
+`App/AppIcon.icon` is the shared iPhone, iPad, and Mac icon. It carries the web
+favicon's six colors and two rows of objects into a softly sculpted porcelain
+shelf. Keep the front-facing arrangement, generous spacing, and simple circles
+and rounded rectangles; the mark must read at small Home Screen and Dock sizes.
+
+The seven SVG layers use a 1024 × 1024 canvas: one shelf layer and six separate
+objects. Keep their artwork flat and unmasked. Icon Composer owns the material,
+highlights, shadows, and platform mask. Default uses porcelain `#f7f9fc`; dark
+uses charcoal `#171a21` with gray `#9aa7b8` shelves. A shared 85% gray annotation
+keeps objects legible in system clear and tinted appearances. Review both design
+generations 26 and 27 when changing the composition.
+
+Regenerate `App/Assets.xcassets/AppIcon.appiconset` fallbacks from the same Icon
+Composer document. Export the iOS default at 1024 pixels and flatten transparency
+over the porcelain background so iOS can apply its own mask. Export macOS at
+512 and 1024 pixels with native padding and transparency preserved; do not reuse
+the iOS bitmap for the Mac 2× slot. The web favicon and PWA assets are independent.
+
+### Interface
+
 Use system surfaces, primary/secondary text, standard text styles, and native
 List, Form, Section, LabeledContent, toolbar, and sheet presentations. Respect
 system light/dark appearance. Cubby's adaptive cobalt accent denotes interaction;

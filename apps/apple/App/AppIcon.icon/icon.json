@@ -1,51 +1,224 @@
 {
-  "fill": {
-    "linear-gradient": [
-      "extended-srgb:0.14510,0.38824,0.92157,1.00000",
-      "extended-srgb:0.11373,0.30588,0.84706,1.00000"
-    ],
-    "orientation": {
-      "start": { "x": 0.5, "y": 0 },
-      "stop": { "x": 0.5, "y": 1 }
-    }
-  },
-  "groups": [
+  "fill-specializations" : [
     {
-      "name": "Cube",
-      "layers": [
-        {
-          "name": "cube-right",
-          "image-name": "cube-right.svg",
-          "blend-mode": "normal",
-          "fill": "automatic",
-          "glass": true,
-          "position": { "scale": 1, "translation-in-points": [0, 0] }
-        },
-        {
-          "name": "cube-left",
-          "image-name": "cube-left.svg",
-          "blend-mode": "normal",
-          "fill": "automatic",
-          "glass": true,
-          "position": { "scale": 1, "translation-in-points": [0, 0] }
-        },
-        {
-          "name": "cube-top",
-          "image-name": "cube-top.svg",
-          "blend-mode": "normal",
-          "fill": "automatic",
-          "glass": true,
-          "position": { "scale": 1, "translation-in-points": [0, 0] }
-        }
-      ],
-      "lighting": "individual",
-      "specular": true,
-      "shadow": { "kind": "neutral", "opacity": 0.5 },
-      "translucency": { "enabled": true, "value": 0.5 }
+      "value" : {
+        "solid" : "extended-srgb:0.96863,0.97647,0.98824,1.00000"
+      }
+    },
+    {
+      "appearance" : "dark",
+      "value" : {
+        "solid" : "extended-srgb:0.09020,0.10196,0.12941,1.00000"
+      }
     }
   ],
-  "supported-platforms": {
-    "circles": ["watchOS"],
-    "squares": "shared"
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "extended-srgb:0.60392,0.65490,0.72157,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:0.85000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "01-shelves.svg",
+          "name" : "01-shelves",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "name" : "Porcelain shelves",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.2
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0
+      }
+    },
+    {
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:0.85000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "02-cobalt.svg",
+          "name" : "02-cobalt",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:0.85000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "03-green.svg",
+          "name" : "03-green",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:0.85000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "04-violet.svg",
+          "name" : "04-violet",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:0.85000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "05-cyan.svg",
+          "name" : "05-cyan",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:0.85000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "06-saffron.svg",
+          "name" : "06-saffron",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "extended-gray:0.85000,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "07-magenta.svg",
+          "name" : "07-magenta",
+          "position" : {
+            "scale" : 1,
+            "translation-in-points" : [
+              0,
+              0
+            ]
+          }
+        }
+      ],
+      "lighting" : "individual",
+      "name" : "Colorful objects",
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.25
+      },
+      "specular" : true,
+      "translucency" : {
+        "enabled" : false,
+        "value" : 0
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "squares" : "shared"
   }
 }
