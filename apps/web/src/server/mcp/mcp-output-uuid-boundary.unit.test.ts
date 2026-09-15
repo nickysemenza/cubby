@@ -23,7 +23,20 @@ interface UuidFinding {
 /** Exact permanent UUID exceptions. A newly exposed UUID must be named here
  * deliberately; field-name heuristics are intentionally not accepted. */
 const DECLARED_UUID_OUTPUT_PATHS = new Set([
+  // Product unit-mapping rows keep their uuid: it is the only handle
+  // `syncProductUnitMappings` accepts to update a row in place (a mapping
+  // resent without it is deleted and reinserted). Declared on product get/list
+  // and on the products embedded in ingredient get/list — same row, same
+  // write handle. See `productUnitMappingMcpEntityOut` in @cubby/schemas.
+  "entity.item.product[].unitMappings[].id",
+  "entity.item.unitMappings[].id",
+  "entity.items[].product[].unitMappings[].id",
+  "entity.items[].unitMappings[].id",
   "find_recipes_using_ingredient.recipes[].usages[].lineId",
+  "get_entities.item.product[].unitMappings[].id",
+  "get_entities.item.unitMappings[].id",
+  "get_entities.items[].product[].unitMappings[].id",
+  "get_entities.items[].unitMappings[].id",
   "get_meal_preparations.preparations[].mealRecipeId",
   "remove_meal_recipe.recipes[].id",
   "save_meal_recipe_preparation.mealRecipeId",
