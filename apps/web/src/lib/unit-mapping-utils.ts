@@ -75,6 +75,31 @@ export const unitMappingsFromFood = (food: FoodSummary): UnitMapping[] =>
   wasm.unit_mappings_from_food(toWFoodInput(food)).map(toUnitMapping);
 
 /**
+ * The unit USDA's per-100 nutrient figures are stated in for this food ("g",
+ * or "ml" for mL-serving branded foods). Derived from the synthesized
+ * mappings so the Rust normalizer (`nutrient_basis_unit` in
+ * `food_mappings.rs`) stays the single source of truth.
+ */
+export const usdaNutrientBasis = (mappings: UnitMapping[]): "g" | "ml" =>
+  mappings.find((m) => m.source === "USDA nutrition")?.a.unit === "ml"
+    ? "ml"
+    : "g";
+
+/**
+ * The unit USDA's per-100 nutrient figures are stated in for this food's
+ * serving metadata, when only the food (not its synthesized mappings) is
+ * available. Mirrors `normalize_serving_size_unit` in `food_mappings.rs`:
+ * `MLT`/`MC`/`ml` mean the label's serving is stated in mL, anything else
+ * (including no serving at all) defaults to `g`.
+ */
+export const servingBasisUnit = (
+  food: Pick<FoodSummary, "brandedFoodInfo"> | null | undefined,
+): "g" | "ml" => {
+  const unit = food?.brandedFoodInfo?.serving?.serving_size_unit;
+  return unit === "MLT" || unit === "MC" || unit === "ml" ? "ml" : "g";
+};
+
+/**
  * The shared `{unit_mappings, food}` half of a WASM product-mapping input —
  * used by both `toWProductInput` (recipe-costing's batch WASM call) and
  * `getAllUnitMappingsFromProduct` (the product/ingredient detail pages' mapping

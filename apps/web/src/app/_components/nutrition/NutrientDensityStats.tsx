@@ -8,26 +8,33 @@ import { Row } from "~/components/layout";
 import { Description } from "~/components/ui/description";
 import { costPerNutrient, proteinPer100Kcal } from "~/lib/nutrition-intel";
 import { safeConvertAmount } from "~/lib/recipe-costing";
+import { usdaNutrientBasis } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
 
 import { EntityInlineLink } from "../EntityInlineLink";
 
 /**
- * Grams-per-each — the basis a per-each `price` needs to become a per-gram
- * figure. Resolved via the WASM unit-mapping graph (a stored "1 each = X g"
- * product mapping, same as `ProductNutritionLabel`'s `resolveServingBasis`)
- * rather than assumed, because a package's weight is never derivable from the
- * USDA nutrient record alone. Null when no such edge exists in `mappings`.
+ * Basis-units-per-each — the amount a per-each `price` needs to become a
+ * per-basis-unit figure, where "basis" matches whatever unit the USDA
+ * per-100 nutrient record is stated in ("g", or "ml" for mL-serving branded
+ * foods — see `usdaNutrientBasis`). Resolved via the WASM unit-mapping graph
+ * (a stored "1 each = X g/ml" product mapping, same as
+ * `ProductNutritionLabel`'s `resolveServingBasis`) rather than assumed,
+ * because a package's weight/volume is never derivable from the USDA
+ * nutrient record alone. Null when no such edge exists in `mappings`.
  */
-export function resolveGramsPerEach(mappings: UnitMapping[]): number | null {
+export function resolveBasisAmountPerEach(
+  mappings: UnitMapping[],
+  basis: "g" | "ml",
+): number | null {
   const result = safeConvertAmount(
     { value: 1, unit: "each" },
     mappings,
-    "weight",
+    basis === "ml" ? "volume" : "weight",
   );
   if (
     result.isOk() &&
-    result.value.unit === "g" &&
+    result.value.unit === basis &&
     Number.isFinite(result.value.value) &&
     result.value.value > 0
   ) {
@@ -39,8 +46,10 @@ export function resolveGramsPerEach(mappings: UnitMapping[]): number | null {
 export interface NutrientDensityFigures {
   proteinDensity: number | null;
   costPerGramProtein: number | null;
-  /** Price exists but the unit-mapping graph has no "1 each = X g" edge yet. */
+  /** Price exists but the unit-mapping graph has no "1 each = X <basis>" edge yet. */
   needsWeightMapping: boolean;
+  /** Which per-each edge is missing: matches the USDA per-100 basis. */
+  missingMappingKind: "weight" | "volume";
 }
 
 /**
@@ -59,16 +68,23 @@ export function computeNutrientDensityFigures(
   const proteinDensity =
     protein != null && kcal != null ? proteinPer100Kcal(protein, kcal) : null;
 
-  const gramsPerEach = resolveGramsPerEach(mappings);
+  const basis = usdaNutrientBasis(mappings);
+  const basisAmountPerEach = resolveBasisAmountPerEach(mappings, basis);
   const proteinGramsPerEach =
-    gramsPerEach != null && protein != null
-      ? (protein * gramsPerEach) / 100
+    basisAmountPerEach != null && protein != null
+      ? (protein * basisAmountPerEach) / 100
       : null;
   const costPerGramProtein =
     price != null ? costPerNutrient(price, proteinGramsPerEach) : null;
-  const needsWeightMapping = price != null && gramsPerEach == null;
+  const needsWeightMapping = price != null && basisAmountPerEach == null;
+  const missingMappingKind = basis === "ml" ? "volume" : "weight";
 
-  return { proteinDensity, costPerGramProtein, needsWeightMapping };
+  return {
+    proteinDensity,
+    costPerGramProtein,
+    needsWeightMapping,
+    missingMappingKind,
+  };
 }
 
 /**
@@ -106,8 +122,12 @@ export function NutrientDensityStats({
    */
   canSeeStoredMappings?: boolean;
 }) {
-  const { proteinDensity, costPerGramProtein, needsWeightMapping } =
-    computeNutrientDensityFigures(nutrients, mappings, price);
+  const {
+    proteinDensity,
+    costPerGramProtein,
+    needsWeightMapping,
+    missingMappingKind,
+  } = computeNutrientDensityFigures(nutrients, mappings, price);
 
   if (proteinDensity == null && price == null) return null;
 
@@ -124,7 +144,7 @@ export function NutrientDensityStats({
         </Description>
       ) : needsWeightMapping && canSeeStoredMappings ? (
         <Description>
-          Needs a weight mapping on{" "}
+          Needs a {missingMappingKind} mapping on{" "}
           <EntityInlineLink
             displayImage={undefined}
             entity="product"

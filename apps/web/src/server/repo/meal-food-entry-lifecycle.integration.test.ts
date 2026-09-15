@@ -124,7 +124,9 @@ describe("meal food entry lifecycle", () => {
           amount: { value: 1, unit: "cup" },
           grams: 1,
         }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: { constraint: "MealFoodEntry_amount_compatibility_check" },
+    });
     await expect(
       getDb(ctx.db)
         .insert(mealFoodEntry)
@@ -133,7 +135,9 @@ describe("meal food entry lifecycle", () => {
           amount: { value: 0, unit: "g" },
           grams: null,
         }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: { constraint: "MealFoodEntry_amount_check" },
+    });
     await expect(
       getDb(ctx.db)
         .insert(mealFoodEntry)
@@ -142,7 +146,9 @@ describe("meal food entry lifecycle", () => {
           amount: sql`'{"value": 1}'::jsonb`,
           grams: null,
         }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: { constraint: "MealFoodEntry_amount_check" },
+    });
     await expect(
       getDb(ctx.db)
         .insert(mealFoodEntry)
@@ -151,7 +157,9 @@ describe("meal food entry lifecycle", () => {
           amount: sql`'{"unit": "g"}'::jsonb`,
           grams: null,
         }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: { constraint: "MealFoodEntry_amount_check" },
+    });
     await expect(
       getDb(ctx.db)
         .insert(mealFoodEntry)
@@ -161,7 +169,9 @@ describe("meal food entry lifecycle", () => {
           amount: { value: 1, unit: "g" },
           grams: null,
         }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: { constraint: "MealFoodEntry_source_check" },
+    });
     await expect(
       insertAndReturn(ctx.db, mealFoodEntry, {
         mealId: meal.id,
@@ -493,7 +503,9 @@ describe("meal food entry lifecycle", () => {
           amount: { value: 1, unit: "slice" },
           grams: 50,
         }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: { constraint: "MealRecipePortion_amount_source_check" },
+    });
     await expect(
       getDb(ctx.db)
         .insert(mealRecipePortion)
@@ -502,7 +514,9 @@ describe("meal food entry lifecycle", () => {
           amount: null,
           grams: null,
         }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      cause: { constraint: "MealRecipePortion_amount_source_check" },
+    });
   });
 
   it("refuses to fold colliding recipe portions with different entered units", async () => {

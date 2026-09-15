@@ -141,6 +141,82 @@ export const portionTotalsFor = (
     },
   ).totals;
 
+/**
+ * Resolve the yield basis for a preparation's changes and confirm the
+ * definite shares they assign do not exceed the actual cooked yield (or the
+ * whole batch, when yield is only estimated or missing). Estimated cooked
+ * weight is advisory, not evidence of over-allocation, so weight-only amounts
+ * are excluded from the check while yield is unknown.
+ */
+const resolveYieldBasisAndValidateShares = async (
+  tx: DrizzleTransaction,
+  occurrence: {
+    recipeId: string;
+    scale: number;
+    estimatedYieldGrams: number | null;
+    actualYieldGrams: number | null;
+  },
+  input: SaveMealRecipePreparationInput,
+  finalAmounts: Map<string, MealFoodAmount | null>,
+): Promise<{
+  basis: MealPreparationYieldBasis;
+  nextActualYield: number | null;
+}> => {
+  const nextActualYield =
+    input.actualYieldGrams === undefined
+      ? occurrence.actualYieldGrams
+      : input.actualYieldGrams;
+  const [sourceRecipe] = await tx
+    .select({
+      servings: recipe.servings,
+      yield: recipe.yield,
+      totals: recipe.totals,
+      totalsComputedAt: recipe.totalsComputedAt,
+    })
+    .from(recipe)
+    .where(and(eq(recipe.id, occurrence.recipeId), notDeleted(recipe)));
+  if (!sourceRecipe)
+    throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
+  const basis = yieldBasisFor(
+    nextActualYield,
+    input.estimatedYieldGrams === undefined
+      ? occurrence.estimatedYieldGrams
+      : input.estimatedYieldGrams,
+    sourceRecipe.yield,
+    occurrence.scale,
+  );
+  const definiteShares = [...finalAmounts.values()].map((amount) => {
+    // Estimated cooked weight is advisory, not evidence of over-allocation.
+    if (
+      !amount ||
+      (nextActualYield == null &&
+        safeConvertAmount(amount, [], "weight").isOk())
+    )
+      return 0;
+    const share = calculateFoodAmount(amount, {
+      kind: "recipe",
+      batch: batchTotalsFor(
+        sourceRecipe.totals,
+        sourceRecipe.totalsComputedAt,
+        occurrence.scale,
+      ),
+      yieldBasis: basis,
+      recipeYield: sourceRecipe.yield,
+      servings: sourceRecipe.servings,
+      scale: occurrence.scale,
+    }).batchShare;
+    return share.status === "complete" || share.status === "partial"
+      ? share.lower
+      : 0;
+  });
+  if (definiteShares.reduce((sum, share) => sum + share, 0) > 1 + 1e-9)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Assigned portions exceed the actual cooked yield or the whole batch.",
+    );
+  return { basis, nextActualYield };
+};
+
 const updatePreparationYields = async (
   tx: DrizzleTransaction,
   mealRecipeId: MealRecipeId,
@@ -276,58 +352,12 @@ export const saveMealRecipePreparation = async (
       if (change.action === "remove") finalAmounts.delete(key);
       else finalAmounts.set(key, mealFoodAmountFromStored(change));
     }
-    const nextActualYield =
-      input.actualYieldGrams === undefined
-        ? occurrence.actualYieldGrams
-        : input.actualYieldGrams;
-    const [sourceRecipe] = await tx
-      .select({
-        servings: recipe.servings,
-        yield: recipe.yield,
-        totals: recipe.totals,
-        totalsComputedAt: recipe.totalsComputedAt,
-      })
-      .from(recipe)
-      .where(and(eq(recipe.id, occurrence.recipeId), notDeleted(recipe)));
-    if (!sourceRecipe)
-      throw createAppError("RECIPE_NOT_FOUND", "Recipe not found");
-    const basis = yieldBasisFor(
-      nextActualYield,
-      input.estimatedYieldGrams === undefined
-        ? occurrence.estimatedYieldGrams
-        : input.estimatedYieldGrams,
-      sourceRecipe.yield,
-      occurrence.scale,
+    const { nextActualYield } = await resolveYieldBasisAndValidateShares(
+      tx,
+      occurrence,
+      input,
+      finalAmounts,
     );
-    const definiteShares = [...finalAmounts.values()].map((amount) => {
-      // Estimated cooked weight is advisory, not evidence of over-allocation.
-      if (
-        !amount ||
-        (nextActualYield == null &&
-          safeConvertAmount(amount, [], "weight").isOk())
-      )
-        return 0;
-      const share = calculateFoodAmount(amount, {
-        kind: "recipe",
-        batch: batchTotalsFor(
-          sourceRecipe.totals,
-          sourceRecipe.totalsComputedAt,
-          occurrence.scale,
-        ),
-        yieldBasis: basis,
-        recipeYield: sourceRecipe.yield,
-        servings: sourceRecipe.servings,
-        scale: occurrence.scale,
-      }).batchShare;
-      return share.status === "complete" || share.status === "partial"
-        ? share.lower
-        : 0;
-    });
-    if (definiteShares.reduce((sum, share) => sum + share, 0) > 1 + 1e-9)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Assigned portions exceed the actual cooked yield or the whole batch.",
-      );
 
     const now = new Date();
     for (const [index, change] of input.changes.entries()) {

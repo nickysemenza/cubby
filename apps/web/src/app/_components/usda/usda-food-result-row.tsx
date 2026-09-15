@@ -4,6 +4,7 @@ import { Copy, Link2 } from "lucide-react";
 
 import { Row } from "~/components/layout";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { servingBasisUnit } from "~/lib/unit-mapping-utils";
 import { UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
 
@@ -71,6 +72,7 @@ export function UsdaFoodResultRow({
   const hasNutrition = KEY_NUTRIENTS.some(
     (n) => (nutritionInfo.nutrientsPer100[n.code] ?? 0) > 0,
   );
+  const nutrientBasis = servingBasisUnit(food);
 
   return (
     <div className="flex w-full flex-col gap-1">
@@ -126,7 +128,7 @@ export function UsdaFoodResultRow({
           className="text-2xs text-muted-foreground"
         >
           <NutrientsSummary nutrients={nutritionInfo.nutrientsPer100} dense />
-          <span>/100g</span>
+          <span>/100{nutrientBasis === "ml" ? "mL" : "g"}</span>
         </Row>
       )}
     </div>

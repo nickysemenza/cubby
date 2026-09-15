@@ -36,7 +36,7 @@ describe("food logging amounts", () => {
           brand_owner: null,
           brand_name: null,
           branded_food_category: null,
-          gtin_upc: null,
+          gtin_upc: "000000000000",
           ingredients: null,
           serving: {
             serving_size: 40,

@@ -1,4 +1,5 @@
 import { testShortcode } from "@cubby/schemas/testing";
+import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import type { FoodSummary } from "@cubby/usda-schemas";
 import { describe, expect, it } from "vitest";
 
@@ -6,7 +7,10 @@ import { convertAmountToPrice, safeConvertAmount } from "~/lib/recipe-costing";
 
 import {
   getAllUnitMappingsFromProduct,
+  servingBasisUnit,
   toWFoodInput,
+  unitMappingsFromFood,
+  usdaNutrientBasis,
 } from "./unit-mapping-utils";
 
 // Note: unit-mapping STRING parsing (the "4 lb = $5" formats) lives upstream in
@@ -114,5 +118,75 @@ describe("nutrition mapping inputs", () => {
     expect(toWFoodInput(food).nutrients_per_100).toEqual([
       { unit: "g protein", amount: 0 },
     ]);
+  });
+});
+
+// A mL-serving branded food (the Fairlife 2% milk shape, fdc 2670155: 13 g
+// protein / 240 mL -> 5.42 per 100, exactly the stored value). USDA reports
+// nutrients per 100 mL for these, not per 100 g — see `nutrient_basis_unit`
+// in food_mappings.rs.
+const mlServingFood = (serving_size_unit: string | null): FoodSummary => ({
+  fdc_id: 2670155,
+  legacyFoodInfo: null,
+  foodInfo: { data_type: "branded_food", description: "2% MILK" },
+  nutritionInfo: {
+    nutrientSummary: [],
+    nutrientsPer100: { "203": 5.42 },
+  },
+  portionInfoRaw: [],
+  brandedFoodInfo: {
+    brand_owner: null,
+    brand_name: null,
+    branded_food_category: null,
+    gtin_upc: "811620021448",
+    ingredients: null,
+    serving: {
+      serving_size: 240,
+      serving_size_unit,
+      household_serving_fulltext: "1 cup",
+    },
+  },
+});
+
+describe("usdaNutrientBasis", () => {
+  it("reads 'ml' off the synthesized mappings for an mL-serving branded food", () => {
+    const mappings = unitMappingsFromFood(mlServingFood("MLT"));
+    expect(usdaNutrientBasis(mappings)).toBe("ml");
+  });
+
+  it("defaults to 'g' for an ordinary gram-serving food", () => {
+    const mappings = unitMappingsFromFood(mlServingFood("GM"));
+    expect(usdaNutrientBasis(mappings)).toBe("g");
+  });
+
+  it("defaults to 'g' when no USDA nutrition edge is present", () => {
+    const mappings: UnitMapping[] = [
+      {
+        a: { value: 1, unit: "each" },
+        b: { value: 5, unit: "dollar" },
+        source: "manual",
+        sourceMetadata: { type: "manual" },
+      },
+    ];
+    expect(usdaNutrientBasis(mappings)).toBe("g");
+  });
+});
+
+describe("servingBasisUnit", () => {
+  it.each([
+    ["MLT", "ml"],
+    ["MC", "ml"],
+    ["ml", "ml"],
+    ["GM", "g"],
+    ["GRM", "g"],
+    ["g", "g"],
+    [null, "g"],
+  ] as const)("serving_size_unit %s -> %s", (unit, expected) => {
+    expect(servingBasisUnit(mlServingFood(unit))).toBe(expected);
+  });
+
+  it("defaults to 'g' when there is no branded food info at all", () => {
+    expect(servingBasisUnit(null)).toBe("g");
+    expect(servingBasisUnit(undefined)).toBe("g");
   });
 });

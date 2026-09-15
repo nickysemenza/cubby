@@ -45,9 +45,10 @@ pub struct WFoodServing {
     pub household_serving_fulltext: Option<String>,
 }
 
-/// One nutrient amount per 100 g. Pre-filtered (tier-1 only) and pre-labeled by
-/// TS — `unit` is the conversion target string ("g protein", "mg sodium",
-/// "kcal"), keeping `TIER1_NUTRIENTS` TS-owned.
+/// One nutrient amount per 100 g, or per 100 mL for mL-serving branded foods —
+/// USDA reports in the label's unit. Pre-filtered (tier-1 only) and
+/// pre-labeled by TS — `unit` is the conversion target string ("g protein",
+/// "mg sodium", "kcal"), keeping `TIER1_NUTRIENTS` TS-owned.
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(from_wasm_abi)]
 pub struct WNutrientPer100 {
@@ -185,13 +186,36 @@ fn portion_mapping(p: &WFoodPortion, fdc_id: u32) -> WUnitMapping {
     }
 }
 
-/// Per-nutrient `100 g = X <target>` edges (e.g. `100 g = 15 g protein`).
+/// The unit USDA's per-100 nutrient figures are stated in for this food.
+///
+/// CONSTRAINT: USDA branded foods report nutrients per 100 **mL** when the
+/// label's serving unit is mL (e.g. Fairlife 2% milk fdc 2670155: 13 g
+/// protein / 240 mL -> 5.42 per 100, exactly the stored value) — not always
+/// per 100 g. Anchoring every nutrient edge on a `g` node regardless of basis
+/// silently assumed density 1.0 for those foods, and isolated the `g` node
+/// from the rest of the graph (`cup -> ml -> fl oz -> each -> $` stays
+/// connected; nothing volume-based could reach `g`). Reuses
+/// `normalize_serving_size_unit` so the serving-unit -> graph-unit mapping has
+/// exactly one implementation.
+fn nutrient_basis_unit(food: &WFoodInput) -> &'static str {
+    let is_ml = food
+        .serving
+        .as_ref()
+        .and_then(|s| s.serving_size_unit.as_deref())
+        .and_then(normalize_serving_size_unit)
+        == Some("ml");
+    if is_ml { "ml" } else { "g" }
+}
+
+/// Per-nutrient `100 <basis> = X <target>` edges (e.g. `100 g = 15 g
+/// protein`, or `100 ml = 5.42 g protein` for an mL-serving branded food).
 fn nutrition_mappings(food: &WFoodInput) -> impl Iterator<Item = WUnitMapping> + '_ {
+    let basis = nutrient_basis_unit(food);
     food.nutrients_per_100
         .iter()
         .filter(|n| n.amount.is_finite() && n.amount >= 0.0)
-        .map(|n| WUnitMapping {
-            a: amount(100.0, "g"),
+        .map(move |n| WUnitMapping {
+            a: amount(100.0, basis),
             b: amount(n.amount, n.unit.clone()),
             source: Some("USDA nutrition".to_string()),
             source_metadata: Some(WSourceMetadata::Food {
@@ -454,6 +478,44 @@ mod tests {
         assert_eq!(normalize_serving_size_unit(input), expected);
     }
 
+    fn food_with_serving_unit(serving_size_unit: Option<&str>) -> WFoodInput {
+        WFoodInput {
+            fdc_id: 2670155,
+            portions: vec![],
+            serving: serving_size_unit.map(|unit| WFoodServing {
+                serving_size: Some(240.0),
+                serving_size_unit: Some(unit.to_string()),
+                household_serving_fulltext: None,
+            }),
+            nutrients_per_100: vec![WNutrientPer100 {
+                unit: "g protein".to_string(),
+                amount: 5.42,
+            }],
+        }
+    }
+
+    #[rstest]
+    #[case(Some("MLT"), "ml")]
+    #[case(Some("MC"), "ml")]
+    #[case(Some("GM"), "g")]
+    #[case(None, "g")]
+    fn nutrition_mappings_use_the_serving_basis_unit(
+        #[case] serving_size_unit: Option<&str>,
+        #[case] expected_unit: &str,
+    ) {
+        let food = food_with_serving_unit(serving_size_unit);
+        let mappings = mappings_from_food(&food);
+        let nutrition = mappings
+            .iter()
+            .filter(|m| m.source.as_deref() == Some("USDA nutrition"))
+            .collect::<Vec<_>>();
+        assert!(!nutrition.is_empty());
+        for m in nutrition {
+            assert_eq!(m.a.unit, expected_unit);
+            assert_eq!(m.a.value, 100.0);
+        }
+    }
+
     #[test]
     fn unknown_serving_unit_skips_the_mapping() {
         let mut product = promix_product("2 SCOOPS");
@@ -509,7 +571,9 @@ mod tests {
             mappings[0].source_metadata,
             Some(WSourceMetadata::Food { fdc_id: 1234 })
         );
-        // nutrition: 100 g = 15 g protein
+        // nutrition: 100 g = 15 g protein (no serving -> basis defaults to g)
+        assert_eq!(mappings[1].a.value, 100.0);
+        assert_eq!(mappings[1].a.unit, "g");
         assert_eq!(mappings[1].b.unit, "g protein");
         // nutrition: explicit zero sodium stays a known conversion
         assert_eq!(mappings[2].b.unit, "mg sodium");
