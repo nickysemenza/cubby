@@ -4,7 +4,7 @@ import Foundation
 /// entries. `CubbyClient` gains this conformance at the generated OpenAPI boundary.
 public protocol GardenService: Sendable {
     func gardenOverview() async throws -> GardenOverview
-    func gardenOptions() async throws -> GardenOptions
+    func gardenOptions(search: String?) async throws -> GardenOptions
     func gardenGuides() async throws -> GardenGuidesDocument
     func createGardenPlanting(_ input: CreateGardenPlanting) async throws
     func recordGardenEntry(_ input: RecordGardenEntry) async throws
@@ -16,7 +16,7 @@ public protocol GardenService: Sendable {
     ) async throws
     func moveGardenPlanting(_ input: MoveGardenPlanting) async throws
     func splitGardenPlanting(_ input: SplitGardenPlanting) async throws
-    func finishGardenPlanting(id: String, finishedAt: Date) async throws
+    func finishGardenPlanting(id: String, finishedAt: Date, note: String?) async throws
     func createGardenLocation(name: String, kind: GardenLocationKind, conditions: String?) async throws
     func updateGardenLocation(
         id: String, name: String?, kind: GardenLocationKind?, conditions: String?

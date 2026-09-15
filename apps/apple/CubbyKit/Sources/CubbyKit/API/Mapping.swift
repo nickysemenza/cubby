@@ -166,7 +166,8 @@ extension GardenPlanting {
             sownAt: GardenPlainDate.date(out.sowedOn),
             transplantedAt: GardenPlainDate.date(out.transplantedOn),
             finishedAt: GardenPlainDate.date(out.finishedOn),
-            gardenGuideKey: out.gardenGuideKey
+            gardenGuideKey: out.gardenGuideKey,
+            displayName: out.displayName
         )
     }
 }
@@ -193,7 +194,7 @@ extension GardenPlanting {
             plannedDate: GardenPlainDate.date(out.plannedDate), sownAt: GardenPlainDate.date(out.sowedOn),
             transplantedAt: GardenPlainDate.date(out.transplantedOn),
             finishedAt: GardenPlainDate.date(out.finishedOn),
-            gardenGuideKey: ingredient.gardenGuideKey)
+            gardenGuideKey: ingredient.gardenGuideKey, displayName: out.displayName)
     }
 }
 
@@ -223,7 +224,8 @@ extension GardenEntry {
             note: out.note, harvestAmount: out.harvestAmount,
             images: out.images.compactMap { image in
                 URL(string: image.url).map { GardenImage(id: image.id, url: $0, filename: image.filename) }
-            }, locationName: out.locationName, plantingName: out.plantingName)
+            }, locationName: out.locationName, plantingName: out.plantingName, displayName: out.displayName,
+            anchorsPeriod: out.anchorsPeriod)
     }
 }
 
@@ -311,7 +313,8 @@ extension GardenJournalEntry {
             note: out.note, harvestAmount: out.harvestAmount,
             images: out.images.compactMap { image in
                 URL(string: image.url).map { GardenImage(id: image.id, url: $0, filename: image.filename) }
-            }, locationName: out.locationName, plantingName: out.plantingName)
+            }, locationName: out.locationName, plantingName: out.plantingName, displayName: out.displayName,
+            anchorsPeriod: out.anchorsPeriod)
         self.init(
             entry: entry, context: .init(rawValue: out.context.rawValue) ?? .direct,
             locationName: out.locationName, plantingName: out.plantingName)
@@ -389,8 +392,8 @@ extension GardenStartInput {
 }
 
 extension GardenFinishInput {
-    init(id: String, finishedAt: Date) {
-        self.init(plantingId: id, finishedOn: GardenPlainDate.string(finishedAt))
+    init(id: String, finishedAt: Date, note: String? = nil) {
+        self.init(plantingId: id, finishedOn: GardenPlainDate.string(finishedAt), note: note)
     }
 }
 

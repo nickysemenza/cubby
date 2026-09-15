@@ -30,11 +30,40 @@ final class GardenModel {
         self.service = service
     }
 
+    /// One `GardenModel` per garden service instance, shared by `GardenRootView` and the routes it
+    /// can push to (`GardenPlantingRouteView`, `GardenEntryRouteView`, `GardenBedJournalView` in
+    /// `GardenRouteViews.swift`) instead of each screen constructing its own and re-fetching the
+    /// overview, options, and guides. `SectionView`'s `.navigationDestination(for: Route.self)`
+    /// sits as a *sibling* of the section root, not an ancestor of it (see that file's doc
+    /// comment), so an `.environment(_:)` value set inside `GardenRootView` cannot reach a pushed
+    /// `Route` destination — this keyed cache is the substitute for that one path.
+    @MainActor
+    enum SharedStore {
+        private static var models: [ObjectIdentifier: GardenModel] = [:]
+
+        static func model(for service: any GardenService & AnyObject) -> GardenModel {
+            let key = ObjectIdentifier(service)
+            if let existing = models[key] { return existing }
+            let created = GardenModel(service: service)
+            models[key] = created
+            return created
+        }
+    }
+
+    /// Loads only when nothing has been loaded yet (`.idle`); callers sharing an instance via
+    /// `SharedStore` call this instead of `load()` so the second and later screens reuse the
+    /// first's fetch. A prior failure retries, since `.failed` means the data never actually
+    /// landed.
+    func loadIfNeeded() async {
+        guard phase == .idle else { return }
+        await load()
+    }
+
     func load() async {
         phase = .loading
         do {
             async let overview = service.gardenOverview()
-            async let options = service.gardenOptions()
+            async let options = service.gardenOptions(search: nil)
             self.overview = try await overview
             self.options = try await options
             phase = .loaded
@@ -76,10 +105,28 @@ final class GardenModel {
         await load()
     }
 
-    func create(_ input: CreateGardenPlanting) async -> Bool {
-        await save {
+    /// Widens the garden-scoped `options` with prefix matches for an "Add…" picker (`term` must
+    /// be at least two characters). Falls back to the already-loaded scoped set on failure or a
+    /// too-short term, so a flaky search never blanks the picker.
+    func searchOptions(_ term: String) async -> GardenOptions {
+        guard term.count >= 2 else { return options }
+        return (try? await service.gardenOptions(search: term)) ?? options
+    }
+
+    /// `rememberSource` writes the source product's `growsIngredientID` back only when the caller
+    /// opted in *and* the product's current association actually differs from this planting's
+    /// crop — an unchanged association is not worth an extra write.
+    func create(_ input: CreateGardenPlanting, rememberSource: Bool = false) async -> Bool {
+        let saved = await save {
             _ = try await self.service.createGardenPlanting(input)
         }
+        guard saved, rememberSource, let productID = input.productID else { return saved }
+        let currentAssociation = options.products.first(where: { $0.id == productID })?.growsIngredientID
+        guard currentAssociation != input.ingredientID else { return saved }
+        _ = await save {
+            try await self.service.setGardenProduct(id: productID, growsIngredientID: input.ingredientID)
+        }
+        return saved
     }
 
     func record(_ input: RecordGardenEntry) async -> Bool {
@@ -105,8 +152,8 @@ final class GardenModel {
         await save { _ = try await self.service.splitGardenPlanting(input) }
     }
 
-    func finish(id: String, on date: Date) async -> Bool {
-        await save { try await self.service.finishGardenPlanting(id: id, finishedAt: date) }
+    func finish(id: String, on date: Date, note: String? = nil) async -> Bool {
+        await save { try await self.service.finishGardenPlanting(id: id, finishedAt: date, note: note) }
     }
 
     func createLocation(name: String, kind: GardenLocationKind, conditions: String?) async -> Bool {

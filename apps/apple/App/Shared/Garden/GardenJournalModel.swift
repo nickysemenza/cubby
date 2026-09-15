@@ -16,7 +16,6 @@ final class GardenJournalModel {
     private var pendingRefresh = false
     private var failedPage = 1
     private var failedReplacing = true
-    var includeBedContext = true { didSet { Task { await refresh() } } }
 
     init(service: any GardenService, planting: GardenPlanting) {
         self.service = service; self.planting = planting
@@ -42,8 +41,10 @@ final class GardenJournalModel {
             if pendingRefresh { pendingRefresh = false; Task { await refresh() } }
         }
         do {
+            // Whole-bed context is always included: inclusion is a rule of the journal, not a
+            // per-viewing preference (`docs/terminology.md` § Garden).
             let result = try await service.gardenJournal(
-                plantingID: planting.id, includeBedContext: includeBedContext, page: page)
+                plantingID: planting.id, includeBedContext: true, page: page)
             let existingIDs = replacing ? Set<String>() : Set(entries.map { $0.entry.id })
             entries = (replacing ? [] : entries) + result.items.filter { !existingIDs.contains($0.entry.id) }
             hasMore = result.hasMore

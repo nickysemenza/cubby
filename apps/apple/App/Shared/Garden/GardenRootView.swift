@@ -18,14 +18,14 @@ struct GardenRootView: View {
             if let garden {
                 content(garden)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading garden")
             }
         }
         .porcelainScreen()
         .navigationTitle("Garden")
         .task(id: appModel.host) { await setup() }
         .sheet(isPresented: $showingCreate) {
-            if let garden { GardenPlantingSheet(model: garden).gardenEditorSize() }
+            if let garden { GardenPlantingSheet(model: garden) }
         }
         .sheet(item: $entryTarget) { target in
             if let garden {
@@ -37,7 +37,7 @@ struct GardenRootView: View {
             }
         }
         .sheet(item: $action) { action in
-            if let garden { GardenPlantingActionSheet(model: garden, action: action).gardenEditorSize() }
+            if let garden { GardenPlantingActionSheet(model: garden, action: action) }
         }
         .navigationDestination(item: $detailPlanting) { planting in
             if let garden {
@@ -47,26 +47,24 @@ struct GardenRootView: View {
             }
         }
         .sheet(isPresented: $showingFinished) {
-            if let garden {
-                FinishedPlantingsSheet(plantings: garden.overview.finishedPlantings).gardenEditorSize()
-            }
+            if let garden { FinishedPlantingsSheet(plantings: garden.overview.finishedPlantings) }
         }
         .sheet(isPresented: $showingSetup) {
-            if let garden { GardenSetupSheet(model: garden).gardenEditorSize() }
+            if let garden { GardenSetupSheet(model: garden) }
         }
         .toolbar {
             ToolbarItem(placement: .secondaryAction) {
                 Button {
                     showingSetup = true
                 } label: {
-                    Label("Garden setup", systemImage: "slider.horizontal.3")
+                    Label(GardenStrings.gardenSetup, systemImage: "slider.horizontal.3")
                 }
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingCreate = true
                 } label: {
-                    Label("Add planting", systemImage: "plus")
+                    Label(GardenStrings.addPlanting, systemImage: "plus")
                 }
             }
         }
@@ -76,14 +74,14 @@ struct GardenRootView: View {
     private func content(_ garden: GardenModel) -> some View {
         switch garden.phase {
         case .idle, .loading:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            LoadingIndicator.screen(label: "Loading garden")
         case .failed(let message):
             ContentUnavailableView {
-                Label("Couldn't load the garden", systemImage: "exclamationmark.triangle")
+                Label(GardenStrings.couldNotLoadGarden, systemImage: "exclamationmark.triangle")
             } description: {
                 Text(message)
             } actions: {
-                Button("Retry") { Task { await garden.load() } }
+                Button(GardenStrings.retry) { Task { await garden.load() } }
             }
         case .loaded:
             ScrollView {
@@ -99,11 +97,13 @@ struct GardenRootView: View {
                             .foregroundStyle(PorcelainTokens.graphiteSecondary)
                     }
                     if garden.overview.locations.isEmpty {
-                        ContentUnavailableView(
-                            "No garden locations yet",
-                            systemImage: "leaf",
-                            description: Text("Create a bed or tray in Locations, then add what is growing.")
-                        )
+                        ContentUnavailableView {
+                            Label(GardenStrings.noGardenLocationsYet, systemImage: "leaf")
+                        } description: {
+                            Text(GardenStrings.noGardenLocationsDescription)
+                        } actions: {
+                            Button(GardenStrings.gardenSetup) { showingSetup = true }
+                        }
                         .frame(maxWidth: .infinity)
                     }
                     ForEach(garden.overview.locations) { location in
@@ -124,7 +124,7 @@ struct GardenRootView: View {
                         GardenLocationSection(
                             location: GardenLocation(
                                 id: "unassigned",
-                                name: "Planning without a location",
+                                name: GardenStrings.noLocationYet,
                                 plantings: garden.overview.unassignedPlantings
                             ),
                             onEntry: {},
@@ -154,7 +154,7 @@ struct GardenRootView: View {
                         GardenHistoryView(
                             model: garden, uploader: GardenImageUploader(service: appModel.client))
                     } label: {
-                        Label("Garden history", systemImage: "clock.arrow.circlepath")
+                        Label(GardenStrings.gardenJournal, systemImage: "clock.arrow.circlepath")
                             .font(.porcelainBody)
                     }
                     .accessibilityHint("Browse past garden notes, harvests, moves, and photos")
@@ -168,9 +168,9 @@ struct GardenRootView: View {
     }
 
     private func setup() async {
-        let garden = GardenModel(service: appModel.client)
+        let garden = GardenModel.SharedStore.model(for: appModel.client)
         self.garden = garden
-        await garden.load()
+        await garden.loadIfNeeded()
     }
 }
 
@@ -196,8 +196,10 @@ private struct GardenLocationSection: View {
                     }
                 }
                 Spacer()
-                Button(action: onEntry) { Image(systemName: "camera") }
-                    .accessibilityLabel("Log garden entry at \(location.name)")
+                if location.id != "unassigned" {
+                    Button(action: onEntry) { Image(systemName: "camera") }
+                        .accessibilityLabel("\(GardenStrings.logEntry) at \(location.name)")
+                }
             }
             Panel(padding: 0, spacing: 0) {
                 if location.plantings.isEmpty {
@@ -226,58 +228,67 @@ private struct GardenPlantingRow: View {
     let onDetail: (GardenPlanting) -> Void
 
     var body: some View {
-        HStack(spacing: PorcelainTokens.Space.md) {
-            Image(systemName: planting.status == .planned ? "calendar" : "leaf")
-                .foregroundStyle(PorcelainTokens.cobalt)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(planting.ingredient.name).font(.porcelainBody.weight(.semibold))
-                Text(subtitle).font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphiteSecondary)
-            }
-            Spacer(minLength: PorcelainTokens.Space.sm)
-            Menu {
-                Button {
-                    onDetail(planting)
+        Button {
+            onDetail(planting)
+        } label: {
+            HStack(spacing: PorcelainTokens.Space.md) {
+                Image(systemName: planting.status == .planned ? "calendar" : "leaf")
+                    .foregroundStyle(PorcelainTokens.cobalt)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(planting.displayName).font(.porcelainBody.weight(.semibold))
+                    Text(subtitle).font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphiteSecondary)
+                }
+                Spacer(minLength: PorcelainTokens.Space.sm)
+                Menu {
+                    Button {
+                        onDetail(planting)
+                    } label: {
+                        Label(GardenStrings.viewPlanting, systemImage: "info.circle")
+                    }
+                    Button {
+                        onAction(.entry(planting))
+                    } label: {
+                        Label(GardenStrings.logEntry, systemImage: "square.and.pencil")
+                    }
+                    if planting.status == .planned {
+                        Button {
+                            onAction(.start(planting))
+                        } label: {
+                            Label(GardenStrings.startPlanting, systemImage: "play")
+                        }
+                    }
+                    if planting.status != .finished {
+                        if planting.status == .growing {
+                            Button {
+                                onAction(.move(planting))
+                            } label: {
+                                Label(GardenStrings.moveEverything, systemImage: "arrow.right")
+                            }
+                            Button {
+                                onAction(.split(planting))
+                            } label: {
+                                Label(GardenStrings.moveSomeSeedlings, systemImage: "arrow.triangle.branch")
+                            }
+                        }
+                        Button {
+                            onAction(.finish(planting))
+                        } label: {
+                            Label(GardenStrings.finishPlanting, systemImage: "checkmark.circle")
+                        }
+                    }
                 } label: {
-                    Label("View planting", systemImage: "info.circle")
+                    Image(systemName: "ellipsis.circle")
+                        .frame(minWidth: PorcelainTokens.touchTarget, minHeight: PorcelainTokens.touchTarget)
                 }
-                Button {
-                    onAction(.entry(planting))
-                } label: {
-                    Label("Log note, photo, or harvest", systemImage: "square.and.pencil")
-                }
-                if planting.status == .planned {
-                    Button {
-                        onAction(.start(planting))
-                    } label: {
-                        Label("Start planting", systemImage: "play")
-                    }
-                }
-                if planting.status == .growing {
-                    Button {
-                        onAction(.move(planting))
-                    } label: {
-                        Label("Move all", systemImage: "arrow.right")
-                    }
-                    Button {
-                        onAction(.split(planting))
-                    } label: {
-                        Label("Move some seedlings", systemImage: "arrow.triangle.branch")
-                    }
-                    Button(role: .destructive) {
-                        onAction(.finish(planting))
-                    } label: {
-                        Label("Finish planting", systemImage: "checkmark.circle")
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .frame(minWidth: PorcelainTokens.touchTarget, minHeight: PorcelainTokens.touchTarget)
+                .accessibilityLabel("More actions for \(planting.displayName)")
             }
+            .padding(PorcelainTokens.Space.md)
+            .contentShape(Rectangle())
         }
-        .padding(PorcelainTokens.Space.md)
-        .contentShape(Rectangle())
-        .onTapGesture { onDetail(planting) }
+        .buttonStyle(.plain)
+        .accessibilityLabel(planting.displayName)
+        .accessibilityHint(subtitle)
     }
 
     private var subtitle: String {

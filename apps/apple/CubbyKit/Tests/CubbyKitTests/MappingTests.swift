@@ -148,4 +148,37 @@ struct MappingTests {
         let input = UploadInput(filename: "photo.jpg", size: 10, format: .jpeg, entity: .vendor)
         #expect(input.entityType == nil)
     }
+
+    /// The server's `"<crop name>[ · <variety>]"` display name (`docs/terminology.md` § Garden)
+    /// maps straight through rather than being recomputed on-device.
+    @Test func gardenPlantingMapsDisplayName() throws {
+        let out = GardenPlantingOut(
+            id: "PLT-2345", ingredientId: "ING-2345", status: .growing, displayName: "Tomato · San Marzano",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000), ingredientName: "Tomato")
+        #expect(GardenPlanting(out).displayName == "Tomato · San Marzano")
+    }
+
+    /// A `move` entry, and the anchor entry `startPlanting` writes when a planting first enters a
+    /// location, carry `anchorsPeriod: true` so clients lock their structural fields
+    /// (`docs/terminology.md` § Garden); the display name maps straight through too.
+    @Test func gardenEntryMapsAnchorsPeriodAndDisplayName() throws {
+        let anchor = GardenEntryOut(
+            id: "GDE-2345", locationId: "LOC-2345", kind: .observation, observedOn: "2026-01-15",
+            images: [], displayName: "Note · Jan 15 · Raised bed A",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000), locationName: "Raised bed A",
+            anchorsPeriod: true)
+        let mappedAnchor = GardenEntry(anchor)
+        #expect(mappedAnchor.anchorsPeriod)
+        #expect(mappedAnchor.displayName == "Note · Jan 15 · Raised bed A")
+
+        let ordinary = GardenEntryOut(
+            id: "GDE-3456", locationId: "LOC-2345", kind: .harvest, observedOn: "2026-01-16",
+            images: [], displayName: "Harvest · Jan 16 · Raised bed A",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000), locationName: "Raised bed A",
+            anchorsPeriod: false)
+        #expect(!GardenEntry(ordinary).anchorsPeriod)
+    }
 }
