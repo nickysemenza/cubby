@@ -1,5 +1,4 @@
 import { execSync } from "node:child_process";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import react from "@vitejs/plugin-react";
 import type { HookHandler, Plugin } from "vite";
@@ -75,13 +74,6 @@ function explicitlySelectsProject(name: string): boolean {
   );
 }
 
-function wantsPgliteTier(): boolean {
-  return (
-    explicitlySelectsProject("pglite") ||
-    explicitlySelectsProject("pglite-integration")
-  );
-}
-
 const pureUnitTests = [
   "src/entities/entity-contracts.unit.test.ts",
   "src/entities/entities.unit.test.ts",
@@ -94,12 +86,6 @@ const mcpContractTests = [
   "src/server/mcp/mcp-workflow-tools.unit.test.ts",
   "src/server/mcp/worker-validation.unit.test.ts",
 ];
-const pgliteIntegrationTests = [
-  "src/server/background-queue-embedding-gate.integration.test.ts",
-];
-const pgliteTemplatePath =
-  process.env.CUBBY_PGLITE_TEMPLATE_PATH ??
-  join(tmpdir(), `cubby-pglite-vitest-${process.pid}.tar.gz`);
 const sharedIsolationSeed = Number.parseInt(
   process.env.CUBBY_TEST_SHUFFLE_SEED ?? "20260831",
   10,
@@ -107,11 +93,6 @@ const sharedIsolationSeed = Number.parseInt(
 if (!Number.isSafeInteger(sharedIsolationSeed)) {
   throw new Error("CUBBY_TEST_SHUFFLE_SEED must be an integer");
 }
-// Vitest applies project `env` only in workers, while global setup runs in the
-// controller process. The path is harmless outside the PGlite project; only
-// that project's worker env selects the PGlite database provider.
-process.env.CUBBY_PGLITE_TEMPLATE_PATH = pgliteTemplatePath;
-
 export default defineConfig({
   define: {
     __GIT_COMMIT__: JSON.stringify(gitCommit),
@@ -174,27 +155,6 @@ export default defineConfig({
               groupOrder: 0,
               shuffle: { files: true, tests: false },
               seed: sharedIsolationSeed,
-            },
-          },
-        },
-        {
-          // A deliberately portable subset. Concurrency, locking, pool, and
-          // node-postgres-specific integration contracts remain in the real
-          // PostgreSQL project below and continue to run in CI.
-          extends: true,
-          test: {
-            globalSetup: ["./tooling/pglite-global-setup.ts"],
-            setupFiles: ["./tooling/integration-teardown.ts"],
-            name: "pglite-integration",
-            include: pgliteIntegrationTests.map((file) => `**/${file}`),
-            pool: "forks",
-            maxWorkers: 2,
-            testTimeout: 30000,
-            hookTimeout: 60000,
-            sequence: { groupOrder: 2 },
-            env: {
-              CUBBY_TEST_DB_PROVIDER: "pglite",
-              CUBBY_PGLITE_TEMPLATE_PATH: pgliteTemplatePath,
             },
           },
         },
@@ -268,9 +228,6 @@ export default defineConfig({
             // Integration stays on isolated forks: database clients and module
             // singletons are file-scoped, while shared registries must not cross
             // test-file boundaries. Larger IntegreSQL pools do not reduce CREATE latency.
-            // A changed-test run can select both portable PGlite and real
-            // PostgreSQL projects. Their worker caps differ, so Vitest requires
-            // distinct sequence groups even though CI runs them in separate jobs.
             sequence: {
               groupOrder: 3,
               shuffle: { files: true, tests: false },
@@ -278,29 +235,9 @@ export default defineConfig({
             },
           },
         },
-        {
-          // PGlite is an embedded real Postgres: this project is deliberately
-          // tiny and proves schema/extensions plus one production SQL path
-          // without provisioning an IntegreSQL database.
-          extends: true,
-          test: {
-            name: "pglite",
-            include: ["**/*.pglite.test.ts"],
-            pool: "forks",
-            fileParallelism: false,
-            testTimeout: 30000,
-            sequence: { groupOrder: 1 },
-          },
-        },
       ] satisfies TestProjectConfiguration[]
     ).filter((project) => {
       if (project.test.name === "integration") return wantsIntegrationTier();
-      if (
-        project.test.name === "pglite" ||
-        project.test.name === "pglite-integration"
-      ) {
-        return wantsPgliteTier();
-      }
       return true;
     }),
 

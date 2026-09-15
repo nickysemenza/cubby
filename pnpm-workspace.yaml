@@ -414,12 +414,6 @@ packageExtensions:
 # fatal. Still present on workers-sdk main as of 4.123.0, so a bump won't drop
 # this — re-check `handleErrorEvent` when the pin moves.
 patchedDependencies:
-  # The socket queues individual PostgreSQL frontend frames, so concurrent
-  # Parse/Bind/Execute/Sync cycles can overwrite each other's unnamed portal
-  # and prepared statement. Keep one handler affine through Sync and reset the
-  # queue after failures until https://github.com/electric-sql/pglite/issues/1046
-  # ships upstream.
-  '@electric-sql/pglite-socket@0.2.10': patches/@electric-sql__pglite-socket@0.2.10.patch
   wrangler@4.120.0: patches/wrangler@4.120.0.patch
 
 # Upstream peer ranges lag the versions Cubby validates in both TypeScript

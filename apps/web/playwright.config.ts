@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import dotenv from "dotenv";
+import { resolveE2EWorkers } from "./tooling/e2e-workers";
 
 /**
  * Read environment variables from file.
@@ -23,9 +24,8 @@ export default defineConfig({
      CI scenarios the wall-clock room they had on public four-CPU runners. */
   timeout: isCI ? 120_000 : 30_000,
 
-  /* Global setup/teardown starts the Worker harness with a fresh database. */
+  /* Global setup prepares the immutable Worker config and database template. */
   globalSetup: "./tests/e2e/e2e-global-setup.ts",
-  globalTeardown: "./tests/e2e/e2e-global-teardown.ts",
 
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -33,14 +33,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Browser canaries are deterministic contracts; retries hide flakes. */
   retries: 0,
-  /* The browser, Worker, and database share the host. Benchmarks showed that
-     additional workers increase contention rather than reducing wall time. */
-  workers: 1,
-  /* Backstop for a dead dev server, which fails every remaining test
-     identically (see the exit handler in e2e-global-setup.ts): uncapped, that
-     is ~20 tests x 3 attempts of ECONNREFUSED burying the one line that
-     explains the run. Kept loose enough that a genuine multi-test regression
-     still reports most of its failures in one go. */
+  /* Each local worker owns an isolated database and harness. CI runners have
+     two CPUs and retain one worker; local macOS may override the measured cap. */
+  workers: resolveE2EWorkers(),
+  /* Backstop for a dead worker harness, which fails every remaining test
+     identically. Kept loose enough that a genuine multi-test regression still
+     reports most of its failures in one go. */
   maxFailures: isCI ? 6 : 0,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: isCI
@@ -64,6 +62,7 @@ export default defineConfig({
     {
       name: "Unauthenticated tests",
       testMatch: /unauth\..*\.spec\.ts/,
+      metadata: { authenticated: false },
       use: {
         ...devices["Desktop Chrome"],
       },
@@ -72,24 +71,23 @@ export default defineConfig({
       name: "Authenticated tests",
       testMatch: /\.spec\.ts$/,
       testIgnore: /(?:unauth|mobile)\./,
+      metadata: { authenticated: true },
       use: {
         ...devices["Desktop Chrome"],
-        // Use prepared better-auth state (saved by globalSetup)
-        storageState: "playwright/.auth/user.json",
       },
     },
     {
       name: "iPhone WebKit smoke",
       testMatch: /mobile\..*\.spec\.ts/,
+      metadata: { authenticated: true },
       use: {
         ...devices["iPhone 13"],
         viewport: { width: 402, height: 874 },
         contextOptions: { screen: { width: 402, height: 874 } },
         deviceScaleFactor: 3,
-        storageState: "playwright/.auth/user-webkit.json",
       },
     },
   ],
 
-  /* The Cloudflare harness and selected database are handled by globalSetup. */
+  /* Each Playwright worker owns its database, object storage, and harness. */
 });

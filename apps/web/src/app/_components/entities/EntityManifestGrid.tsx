@@ -827,10 +827,7 @@ export function EntityInspector({
             ["MCP names", mcpNamesLabel(entity)],
             ["Routes / pages", routeCoverageLabel(entity)],
             ["Saved views", <SavedViewChips key="views" entity={entity} />],
-            [
-              "Contract tiers",
-              "generated · unit · PGlite · PostgreSQL · UI · E2E",
-            ],
+            ["Contract tiers", "generated · unit · PostgreSQL · UI · E2E"],
             [
               "Live health",
               `rows ${count ?? "unavailable"} · documents ${health?.documents ?? "—"} · embeddings ${health?.embeddings ?? "—"}`,

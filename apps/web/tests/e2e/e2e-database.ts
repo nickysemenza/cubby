@@ -4,51 +4,22 @@ import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
-import { PGlite } from "@electric-sql/pglite";
-import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
-import { vector } from "@electric-sql/pglite-pgvector";
-import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import { type SQL, sql } from "drizzle-orm";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
-import { drizzle as drizzlePGlite } from "drizzle-orm/pglite";
 import { Pool } from "pg";
 import * as schema from "../../src/server/db/schema";
 import { ensureDbExtensions } from "../../tooling/db-extensions";
 import { toPushSchemaDatabase } from "../../tooling/drizzle-kit-interop";
 
-export type E2EDatabaseKind = "pglite" | "postgres";
-
 export interface E2EDatabase {
-  kind: E2EDatabaseKind;
   databaseUrl: string;
+  name: string;
   close(): Promise<void>;
 }
 
 interface SchemaDatabase {
   readonly _: unknown;
   execute(query: SQL): Promise<object>;
-}
-
-const PGLITE_HOST = "127.0.0.1";
-// The patched socket server preserves complete extended-protocol query cycles,
-// while concurrent request pools can still acquire several idle clients before
-// their SQL reaches that gate. This ceiling prevents those waiting clients from
-// being rejected; client-side pools retain responsibility for idle retirement.
-const PGLITE_MAX_CONNECTIONS = 512;
-
-function resolveE2EDatabaseKind(
-  env: NodeJS.ProcessEnv = process.env,
-): E2EDatabaseKind {
-  const configured = env.CUBBY_E2E_DATABASE;
-  if (configured === "pglite" || configured === "postgres") {
-    return configured;
-  }
-  if (configured) {
-    throw new Error(
-      `Unsupported CUBBY_E2E_DATABASE=${configured}; expected pglite or postgres`,
-    );
-  }
-  return env.CI ? "postgres" : "pglite";
 }
 
 async function pushE2ESchema(db: SchemaDatabase): Promise<void> {
@@ -66,8 +37,7 @@ async function pushE2ESchema(db: SchemaDatabase): Promise<void> {
 async function seedHome(db: SchemaDatabase): Promise<void> {
   // The application requires exactly one real hierarchy root. Keep this in the
   // checked-out database rather than the IntegreSQL template so a cached older
-  // template is repaired and both providers start from the same application
-  // state.
+  // template is repaired before a worker starts.
   await db.execute(sql`
     INSERT INTO "Location" (shortcode, name, aliases, tags, type, "parentId")
     VALUES ('LOC-HM3E', 'Home', ARRAY[]::text[], ARRAY[]::text[], 'house', NULL)
@@ -81,12 +51,10 @@ function remapIntegreSQLConfig(
   return { ...databaseConfig, host, port };
 }
 
-async function createPostgresE2EDatabase(): Promise<E2EDatabase> {
+async function templateContext() {
   const integreSQL = new IntegreSQLClient({
     url: testServiceConfig().url,
   });
-
-  console.log("[E2E Setup] Getting fresh database from IntegreSQL...");
   const hash = await integreSQL.hashFiles([
     ...schemaTemplateInputs,
     // Browser acceptance and Vitest run concurrently in `test:all`. A distinct
@@ -94,6 +62,13 @@ async function createPostgresE2EDatabase(): Promise<E2EDatabase> {
     // from invalidating the other's checked-out databases mid-run.
     "./tests/e2e/e2e-database.ts",
   ]);
+
+  return { hash, integreSQL };
+}
+
+/** Prepare the one schema template all browser workers clone. */
+export async function prepareE2EDatabaseTemplate(): Promise<void> {
+  const { hash, integreSQL } = await templateContext();
 
   await integreSQL.initializeTemplate(hash, async (databaseConfig) => {
     const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
@@ -108,6 +83,12 @@ async function createPostgresE2EDatabase(): Promise<E2EDatabase> {
       await pool.end();
     }
   });
+}
+
+/** Check out one isolated database after global setup has finalized the template. */
+export async function createE2EDatabase(): Promise<E2EDatabase> {
+  const { hash, integreSQL } = await templateContext();
+  console.log("[E2E Worker] Getting fresh database from IntegreSQL...");
 
   const databaseConfig = await integreSQL.getTestDatabase(hash);
   const databaseUrl = integreSQL.databaseConfigToConnectionUrl(
@@ -121,68 +102,22 @@ async function createPostgresE2EDatabase(): Promise<E2EDatabase> {
   }
 
   console.log(
-    `[E2E Setup] Using PostgreSQL database: ${databaseConfig.database}`,
+    `[E2E Worker] Using PostgreSQL database: ${databaseConfig.database}`,
   );
-  return {
-    kind: "postgres",
-    databaseUrl,
-    // IntegreSQL owns the cloned database lifecycle and recreates its test pool
-    // between runs; there is no client kept open by this provider.
-    async close() {},
-  };
-}
-
-async function createPGliteE2EDatabase(): Promise<E2EDatabase> {
-  console.log("[E2E Setup] Creating in-memory PGlite database...");
-  const pg = await PGlite.create({ extensions: { pg_trgm, vector } });
-  let socketServer: PGLiteSocketServer | undefined;
-
-  try {
-    const db = drizzlePGlite(pg, { schema });
-    await pushE2ESchema(db);
-    await seedHome(db);
-
-    socketServer = new PGLiteSocketServer({
-      db: pg,
-      host: PGLITE_HOST,
-      port: 0,
-      maxConnections: PGLITE_MAX_CONNECTIONS,
-    });
-    await socketServer.start();
-
-    const databaseUrl = `postgresql://postgres:postgres@${socketServer.getServerConn()}/postgres`;
-    console.log(
-      `[E2E Setup] PGlite socket database is ready at ${socketServer.getServerConn()}`,
+  const testId = Number(/_(\d+)$/u.exec(databaseConfig.database)?.[1]);
+  if (!Number.isInteger(testId)) {
+    throw new Error(
+      `Could not parse IntegreSQL pool id from ${databaseConfig.database}`,
     );
-
-    let closed = false;
-    return {
-      kind: "pglite",
-      databaseUrl,
-      async close() {
-        if (closed) return;
-        closed = true;
-        try {
-          await socketServer?.stop();
-        } finally {
-          await pg.close();
-        }
-      },
-    };
-  } catch (error) {
-    try {
-      await socketServer?.stop();
-    } finally {
-      await pg.close();
-    }
-    throw error;
   }
-}
-
-export function createE2EDatabase(
-  kind = resolveE2EDatabaseKind(),
-): Promise<E2EDatabase> {
-  return kind === "pglite"
-    ? createPGliteE2EDatabase()
-    : createPostgresE2EDatabase();
+  let closed = false;
+  return {
+    databaseUrl,
+    name: databaseConfig.database,
+    async close() {
+      if (closed) return;
+      closed = true;
+      await integreSQL.api.recreateTestDatabase(hash, testId);
+    },
+  };
 }

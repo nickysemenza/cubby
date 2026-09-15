@@ -1,42 +1,16 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { request, type FullConfig } from "@playwright/test";
-import { createTestHarness, type TestHarness } from "wrangler";
 import { z } from "zod";
 
-import { createE2EDatabase } from "./e2e-database";
-import { createE2EObjectStorage } from "./e2e-object-storage";
-import "./e2e-runtime-state";
+import { prepareE2EDatabaseTemplate } from "./e2e-database";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const authFile = path.join(__dirname, "../../playwright/.auth/user.json");
-const webkitAuthFile = path.join(
-  __dirname,
-  "../../playwright/.auth/user-webkit.json",
-);
 
-async function globalSetup(_config: FullConfig): Promise<void> {
-  const database = await createE2EDatabase();
-  const { databaseUrl } = database;
-  console.log(`[E2E Setup] Database provider: ${database.kind}`);
-
-  // Install the provider before starting the harness so global teardown can
-  // always close the PGlite socket and WASM database after Worker shutdown.
-  globalThis.__E2E_DATABASE__ = database;
-  const objectStorage = await createE2EObjectStorage();
-  globalThis.__E2E_OBJECT_STORAGE__ = objectStorage;
-
-  // 2. Start the Cloudflare test harness against the production build.
+/** Prepare immutable inputs before Playwright starts isolated worker runtimes. */
+async function globalSetup(): Promise<void> {
   const webRoot = path.join(__dirname, "../..");
-
-  // Strip the `ai` binding for E2E. A Workers AI binding forces `wrangler dev`
-  // to establish a remote Cloudflare session at boot (AI has no local runtime),
-  // which needs CF credentials the E2E job doesn't have — without them the
-  // server never becomes ready. E2E is hermetic and never invokes AI, so we run
-  // against a copy of the build config with the binding removed. This also keeps
-  // AI features reported unavailable, matching pre-binding E2E behavior.
   const e2eConfig = z
     .object({
       compatibility_date: z.string(),
@@ -52,193 +26,18 @@ async function globalSetup(_config: FullConfig): Promise<void> {
         readFileSync(path.join(webRoot, "dist/server/wrangler.json"), "utf8"),
       ),
     );
-  const compatibilityDate = e2eConfig.compatibility_date;
+
+  // AI has no local binding, and browser acceptance does not own queue delivery.
   delete e2eConfig.ai;
-  // Browser acceptance owns request/response behavior, not queue delivery.
-  // Preserve the production producer bindings so mutations take their real
-  // dispatch path, but do not burn the one browser worker draining embedding
-  // and telemetry work that has dedicated PostgreSQL contract coverage.
   if (e2eConfig.queues) e2eConfig.queues.consumers = [];
   writeFileSync(
     path.join(webRoot, "dist/server/wrangler.e2e.json"),
     JSON.stringify(e2eConfig),
   );
 
-  process.env.WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE =
-    databaseUrl;
-  process.env.WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE_CACHED =
-    databaseUrl;
-  let harness: TestHarness | undefined;
-  harness = createTestHarness({
-    root: webRoot,
-    workers: [
-      {
-        configPath: "dist/server/wrangler.e2e.json",
-        vars: {
-          // Signup is disabled by default; global setup creates the test user.
-          ALLOW_SIGNUP: "true",
-          // Linux WebKit rejects __Secure- cookies over plain localhost.
-          INSECURE_AUTH_COOKIES: "true",
-          // The production artifact enables Better Auth rate limiting. The
-          // harness deliberately shares one local Worker identity across all
-          // browser contexts, so disable it only for this isolated test host.
-          E2E_AUTH_TEST_MODE: "true",
-          DATABASE_URL: databaseUrl,
-          R2_ENDPOINT: objectStorage.url,
-          R2_PUBLIC_URL: objectStorage.url,
-          R2_BUCKET_NAME: "e2e-bucket",
-          R2_KEY_PREFIX: "e2e",
-          R2_ACCESS_KEY_ID: "dummy",
-          R2_SECRET_ACCESS_KEY: "dummy",
-          // USDA enrichment must fail locally and immediately in E2E.
-          USDA_API_URL: "http://127.0.0.1:9/",
-        },
-        secrets: {
-          BETTER_AUTH_SECRET:
-            process.env.BETTER_AUTH_SECRET || "e2e-test-secret",
-        },
-        // Keep the production service-binding path in the built Worker while
-        // routing it to deterministic, schema-valid harness Workers. The
-        // auxiliary production Workers and their datasets are intentionally
-        // outside this browser suite's artifact.
-        bindingOverrides: {
-          USDA_API: "e2e-usda-empty",
-          UPC_LOOKUP: "e2e-upc-empty",
-        },
-      },
-      {
-        config: {
-          name: "e2e-usda-empty",
-          main: "tests/e2e/harness-services/usda-empty.ts",
-          compatibility_date: compatibilityDate,
-        },
-      },
-      {
-        config: {
-          name: "e2e-upc-empty",
-          main: "tests/e2e/harness-services/upc-empty.ts",
-          compatibility_date: compatibilityDate,
-        },
-      },
-      {
-        config: {
-          name: "e2e-queue-sink",
-          main: "tests/e2e/harness-services/queue-sink.ts",
-          compatibility_date: compatibilityDate,
-          queues: {
-            consumers: [
-              { queue: "cubby-background", max_batch_timeout: 0 },
-              { queue: "cubby-telemetry", max_batch_timeout: 0 },
-            ],
-          },
-        },
-      },
-    ],
-  });
-
-  let baseURL: string;
-  try {
-    console.log("[E2E Setup] Starting Cloudflare test harness...");
-    const { url } = await harness.listen();
-    baseURL = url.origin;
-  } catch (error) {
-    harness.debug();
-    await harness.close();
-    await database.close();
-    await objectStorage.close();
-    globalThis.__E2E_OBJECT_STORAGE__ = undefined;
-    globalThis.__E2E_DATABASE__ = undefined;
-    throw error;
-  }
-
-  // Store the live harness for the reporter and global teardown.
-  globalThis.__E2E_HARNESS__ = harness;
-  process.env.E2E_DATABASE_URL = databaseUrl;
-  // Playwright resolves project.use before global setup. Its documented global
-  // setup environment handoff lets the shared test fixture supply the harness's
-  // intentionally dynamic URL to worker processes.
-  process.env.E2E_BASE_URL = baseURL;
-  console.log(`[E2E Setup] Test harness is ready at ${baseURL}`);
-
-  // 4. Authenticate test user
-  const testEmail = process.env.E2E_TEST_USER_EMAIL;
-  const testPassword = process.env.E2E_TEST_USER_PASSWORD;
-
-  if (!testEmail || !testPassword) {
-    console.warn(
-      "[E2E Setup] No test credentials found. Set E2E_TEST_USER_EMAIL and E2E_TEST_USER_PASSWORD.",
-    );
-    return;
-  }
-
-  console.log("[E2E Setup] Setting up test user authentication...");
-
-  // Authenticate through Playwright's real HTTP context. Browser contexts are
-  // intentionally per-test, and the WebKit lane should not install Chromium
-  // merely to mint the shared fixture user's durable session cookie.
-  const authRequest = await request.newContext({
-    baseURL,
-    extraHTTPHeaders: { Origin: baseURL },
-  });
-
-  try {
-    // Try to sign up first
-    const signUpResponse = await authRequest.post("/api/auth/sign-up/email", {
-      data: {
-        email: testEmail,
-        password: testPassword,
-        name: "E2E Test User",
-      },
-    });
-    let authenticationResponse = signUpResponse;
-    if (signUpResponse.ok()) {
-      console.log("[E2E Setup] Test user created and authenticated");
-    } else {
-      console.log("[E2E Setup] User already exists, signing in instead...");
-      authenticationResponse = await authRequest.post(
-        "/api/auth/sign-in/email",
-        {
-          data: {
-            email: testEmail,
-            password: testPassword,
-          },
-        },
-      );
-    }
-
-    if (!authenticationResponse.ok()) {
-      const errorText = await authenticationResponse.text();
-      throw new Error(
-        `Failed to authenticate test user: ${authenticationResponse.status()} - ${errorText}`,
-      );
-    }
-
-    const authState = await authRequest.storageState();
-    // `session_data` is Better Auth's five-minute cookie cache. Persisting it in
-    // a suite-wide storage-state file creates a fixed expiry cliff: a test whose
-    // context starts just before that point authenticates initially, then lands
-    // on Sign In after a reload. Keep only the durable session token so every
-    // browser context obtains its own fresh cache cookie.
-    authState.cookies = authState.cookies.filter(
-      (cookie) => !cookie.name.endsWith("session_data"),
-    );
-    mkdirSync(path.dirname(authFile), { recursive: true });
-    writeFileSync(authFile, JSON.stringify(authState, null, 2));
-    // The server runs with INSECURE_AUTH_COOKIES=true (see the wrangler --var
-    // above), so the session cookies are already plain (no Secure attribute, no
-    // `__Secure-` prefix) and WebKit — including the strict Linux port in CI —
-    // stores and replays them over http. The WebKit state is a straight copy;
-    // it exists only because playwright.config.ts points the WebKit project at
-    // its own file. (The old secure:false rewrite of `__Secure-` cookies was
-    // rejected by Linux WebKit's cookie-prefix enforcement.)
-    writeFileSync(webkitAuthFile, readFileSync(authFile, "utf8"));
-  } finally {
-    await authRequest.dispose();
-  }
-
-  console.log("[E2E Setup] Authentication complete");
-  console.log(`  - User: ${testEmail}`);
-  console.log(`  - Auth state saved to: ${authFile}`);
+  console.log("[E2E Setup] Preparing shared PostgreSQL template...");
+  await prepareE2EDatabaseTemplate();
+  console.log("[E2E Setup] Shared PostgreSQL template is ready");
 }
 
 export default globalSetup;

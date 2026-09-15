@@ -1,4 +1,3 @@
-// Resolve only in PostgreSQL paths: PGlite also imports the shared teardown.
 export function testServiceConfig(env: NodeJS.ProcessEnv = process.env) {
   const port = Number(env.INTEGRESQL_DATABASE_PORT ?? "5432");
   if (!Number.isInteger(port) || port < 1 || port > 65535) {

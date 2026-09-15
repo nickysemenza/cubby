@@ -126,7 +126,7 @@ Standing decisions that keep scope honest. A backlog item that contradicts one o
 - **WASM:** `@cubby/recipebridge` wraps Rust [ingredient-parser](https://github.com/nickysemenza/ingredient-parser)
 - **Storage:** Cloudflare R2 (S3-compatible) for images
 - **Charts:** Nivo (bar, pie, treemap, sunburst, calendar, line) + d3-force, d3-hierarchy
-- **Tooling:** Oxlint + Oxfmt (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PostgreSQL + IntegreSQL (authoritative contracts) · PGlite (explicit developer experiments)
+- **Tooling:** Oxlint + Oxfmt (lint + format) · Vitest (unit/integration) · Playwright (E2E) · PostgreSQL + IntegreSQL (authoritative contracts)
 - **Observability:** OpenTelemetry → Jaeger (dev only) · Sentry (the Apple app reports to its own `cubby-apple` project)
 
 ## 📦 Monorepo Layout
@@ -350,8 +350,10 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   when using Apple containers; its existing data can remain for rollback.
 - **Parallelism:** the Apple pair starts with PostgreSQL at 4 CPUs/2 GiB and
   IntegreSQL at 1 CPU/256 MiB, with a 4/16 database pool and 4 provisioning tasks.
-  `VITEST_MAX_WORKERS` overrides the measured local default of 6; Playwright retains
-  one worker. Multiple pairs share the host's finite CPU and memory.
+  `VITEST_MAX_WORKERS` overrides the measured PostgreSQL default of 6. Playwright
+  gives each worker its own database, object storage, and Worker harness;
+  `CUBBY_E2E_WORKERS=1|2|3` overrides its local macOS default of 3. CI and Linux
+  default to one browser worker. Multiple pairs share the host's finite CPU and memory.
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
   instance (dev DB *is* prod). `db:push` and data changes from one worktree are
   visible everywhere and hit prod — coordinate schema changes across parallel work.
@@ -375,10 +377,8 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
 | `pnpm run format:check` | Full-tree Oxfmt check |
 | `pnpm run format` | Full-tree Oxfmt write |
 | `pnpm run test` | All fast unit, UI, contract, and auxiliary-package tests |
-| `pnpm run test:postgres` | The 260 authoritative PostgreSQL contracts (requires Docker) |
-| `pnpm run test:e2e` | The 22 authoritative PostgreSQL-backed Playwright tests (requires Docker) |
-| `pnpm run test:pglite` | Explicit Docker-free PGlite developer experiment |
-| `pnpm run test:e2e:pglite -- tests/e2e/<file>.spec.ts` | Explicit targeted browser experiment on PGlite |
+| `pnpm run test:postgres` | Authoritative PostgreSQL contracts (disposable Apple containers on macOS) |
+| `pnpm run test:e2e` | PostgreSQL-backed Playwright tests (disposable Apple containers on macOS) |
 | `pnpm run test:all` | Fast tests, then PostgreSQL and Playwright concurrently |
 | `pnpm run test:local` | Alias of `test:all` |
 | `pnpm --filter @cubby/web run db:push` | Push the web Drizzle schema to the configured Postgres DB |
@@ -410,8 +410,7 @@ In dev, `await __jsProfile(5000)` in the browser console captures a CPU flame su
 | `*.integration.test.ts` | Authoritative PostgreSQL contracts | Vitest |
 | `*.spec.ts` | E2E tests | Playwright |
 
-Local and CI E2E use an isolated IntegreSQL PostgreSQL clone. A targeted PGlite
-browser run is available only through `test:e2e:pglite`. See `e2e-helpers.ts`
+Local and CI E2E use isolated IntegreSQL PostgreSQL clones. See `e2e-helpers.ts`
 for the shared browser fixtures.
 
 ### File Naming Conventions

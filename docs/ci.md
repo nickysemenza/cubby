@@ -167,6 +167,17 @@ readiness repetitions. A standalone traced browser run passed all 65 tests in
 265.87s. The intermittent readiness failures remain unresolved; no retries or
 larger timeouts were added to hide them.
 
+The worker-scoped browser harness that followed gives every Playwright worker a
+separate IntegreSQL clone, object store, and Wrangler runtime. A fresh-build
+three-worker run passed all 65 tests without retries or skips in **141.59s** and
+left zero containers and volumes. One uncached one-worker `test:all` sample also
+passed all 407 PostgreSQL contracts and the browser lane in 397s. The planned
+five-sample 1/2/3 comparison stopped when the host became actively used; a
+concurrent two-worker sample timed out one PostgreSQL contract, so those
+`test:all` timings are not a valid worker-count comparison. The local default
+remains three from the earlier browser-only measurements; repeat the full matrix
+on an idle host before treating its wall times as a new baseline.
+
 A warm targeted PostgreSQL family passed 24 tests in 12.38s including service
 startup and cleanup. An earlier Docker sample took 18.07s, but was not a matched
 warm comparison, so it is not evidence of a runtime speedup. Two independent
