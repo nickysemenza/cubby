@@ -24,19 +24,22 @@ const request = (path: string, init?: RequestInit) =>
 beforeEach(() => {
   vi.resetAllMocks();
   ports.getSession.mockResolvedValue({
-    user: { id: "user-fixture" },
-    session: { id: "session-fixture" },
+    response: {
+      user: { id: "user-fixture" },
+      session: { id: "session-fixture" },
+    },
+    headers: new Headers(),
   });
   ports.context.mockResolvedValue({});
   ports.dispatch.mockResolvedValue({ ok: true, data: {} });
 });
 
 describe("HTTP boundary", () => {
-  it("verifies sessions authoritatively and retains actor session identity", async () => {
+  it("uses the session cache and bounded-stale database for bearer lists", async () => {
     expect((await request("recipes")).status).toBe(200);
     expect(ports.getSession).toHaveBeenCalledWith({
       headers: expect.any(Headers),
-      query: { disableCookieCache: true },
+      returnHeaders: true,
     });
     expect(ports.context).toHaveBeenCalledWith({
       headers: expect.any(Headers),
@@ -45,6 +48,7 @@ describe("HTTP boundary", () => {
         sessionId: "session-fixture",
         source: "api",
       },
+      clientAllowsBoundedStale: false,
     });
     expect(ports.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -52,6 +56,105 @@ describe("HTTP boundary", () => {
         input: { entity: "recipe", filters: {} },
       }),
     );
+  });
+
+  it("keeps bearer list calls strong without an explicit client preference", async () => {
+    expect(
+      (
+        await request("recipes", {
+          headers: { authorization: "Bearer token.signature" },
+        })
+      ).status,
+    ).toBe(200);
+    expect(ports.context).toHaveBeenCalledWith(
+      expect.objectContaining({ clientAllowsBoundedStale: false }),
+    );
+  });
+
+  it("honors an explicit bounded-stale preference only for list calls", async () => {
+    expect(
+      (
+        await request("recipes/RCP-ABCD", {
+          headers: {
+            authorization: "Bearer token.signature",
+            "x-cubby-read-consistency": "bounded-stale",
+          },
+        })
+      ).status,
+    ).toBe(200);
+    expect(ports.context).toHaveBeenLastCalledWith(
+      expect.objectContaining({ clientAllowsBoundedStale: false }),
+    );
+
+    await request("recipes", {
+      headers: {
+        authorization: "Bearer token.signature",
+        "x-cubby-read-consistency": "bounded-stale",
+      },
+    });
+    expect(ports.context).toHaveBeenLastCalledWith(
+      expect.objectContaining({ clientAllowsBoundedStale: true }),
+    );
+  });
+
+  it("lets API-key clients explicitly opt into bounded-stale lists", async () => {
+    ports.verifyApiKey.mockResolvedValue({
+      valid: true,
+      key: { configId: "http-api", referenceId: "user-fixture" },
+    });
+    expect(
+      (
+        await request("recipes", {
+          headers: {
+            "x-api-key": "key",
+            "x-cubby-read-consistency": "bounded-stale",
+          },
+        })
+      ).status,
+    ).toBe(200);
+    expect(ports.context).toHaveBeenCalledWith(
+      expect.objectContaining({ clientAllowsBoundedStale: true }),
+    );
+  });
+
+  it("passes a fresh marker through an opted-in list context", async () => {
+    await request("recipes", {
+      headers: {
+        authorization: "Bearer token.signature",
+        "x-cubby-read-consistency": "bounded-stale",
+        "x-cubby-fresh-read": "1",
+      },
+    });
+    expect(ports.context).toHaveBeenCalledWith(
+      expect.objectContaining({ clientAllowsBoundedStale: true }),
+    );
+  });
+
+  it("forwards only Better Auth session-data cookies", async () => {
+    const headers = new Headers();
+    headers.append(
+      "set-cookie",
+      "better-auth.session_data.0=cache-a; Path=/; HttpOnly",
+    );
+    headers.append(
+      "set-cookie",
+      "better-auth.session_token=secret; Path=/; HttpOnly",
+    );
+    ports.getSession.mockResolvedValue({
+      response: {
+        user: { id: "user-fixture" },
+        session: { id: "session-fixture" },
+      },
+      headers,
+    });
+
+    const response = await request("recipes", {
+      headers: { authorization: "Bearer token.signature" },
+    });
+    expect(response.headers.get("set-cookie")).toContain(
+      "better-auth.session_data.0=cache-a",
+    );
+    expect(response.headers.get("set-cookie")).not.toContain("session_token");
   });
   it.each(["", "invalid"])(
     "never falls back from an explicit rejected key (%s)",
@@ -126,7 +229,7 @@ describe("HTTP boundary", () => {
     // runs, so the boundary still reads the session authoritatively.
     expect(ports.getSession).toHaveBeenCalledWith({
       headers: expect.any(Headers),
-      query: { disableCookieCache: true },
+      returnHeaders: true,
     });
     expect(ports.verifyApiKey).not.toHaveBeenCalled();
     expect(ports.context).toHaveBeenCalledWith({
@@ -136,10 +239,26 @@ describe("HTTP boundary", () => {
         sessionId: "session-fixture",
         source: "api",
       },
+      clientAllowsBoundedStale: false,
     });
+    expect(
+      (
+        await request("recipes/RCP-ABCD", {
+          method: "PATCH",
+          headers: {
+            authorization: "Bearer token.signature",
+            "content-type": "application/json",
+          },
+          body: '{"notes":"Changed"}',
+        })
+      ).headers.get("x-cubby-fresh-read-seconds"),
+    ).toBe("90");
   });
   it("rejects a bearer token the auth layer does not recognise", async () => {
-    ports.getSession.mockResolvedValue(null);
+    ports.getSession.mockResolvedValue({
+      response: null,
+      headers: new Headers(),
+    });
     expect(
       (
         await request("recipes", {

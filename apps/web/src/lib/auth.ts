@@ -126,7 +126,7 @@ export const auth = betterAuth({
     // provider does `new URL("")` during init and every auth request 500s.
     // Pinning it here also makes the `iss` claim deterministic — which is what
     // server/mcp/auth.ts verifies against.
-    jwt({ jwt: { issuer: OAUTH_ISSUER } }),
+    jwt({ disableSettingJwtHeader: true, jwt: { issuer: OAUTH_ISSUER } }),
     // OAuth 2.1 authorization server. This is how Claude connects to the MCP
     // endpoint — claude.ai custom connectors and Claude Code both do RFC 7591
     // dynamic client registration + PKCE against it. Unauthenticated

@@ -4,6 +4,7 @@ export type ReadConsistencyDecision = {
   consistency: "strong" | "bounded-stale";
   reason:
     | "cached-policy"
+    | "client-policy"
     | "fresh-after-write"
     | "non-browser-origin"
     | "single-database";
@@ -20,15 +21,17 @@ export function isBrowserUiRequest(headers: Pick<Headers, "get">): boolean {
 
 /**
  * Decide which read adapter a request may use before any query is executed.
- * Strong is the conservative default; only an ordinary browser request with a
- * distinct bounded-stale adapter and no post-mutation marker may use caching.
+ * Strong is the conservative default. Browser UI reads and explicitly
+ * route-vetted clients may use the bounded-stale adapter, while a post-mutation
+ * freshness marker always wins.
  */
 export function decideReadConsistency(options: {
   browserRequest: boolean;
+  clientAllowsBoundedStale?: boolean;
   boundedStaleAvailable: boolean;
   headers: Pick<Headers, "get">;
 }): ReadConsistencyDecision {
-  if (!options.browserRequest) {
+  if (!options.browserRequest && !options.clientAllowsBoundedStale) {
     return { consistency: "strong", reason: "non-browser-origin" };
   }
   if (hasFreshReadMarker(options.headers)) {
@@ -37,5 +40,8 @@ export function decideReadConsistency(options: {
   if (!options.boundedStaleAvailable) {
     return { consistency: "strong", reason: "single-database" };
   }
-  return { consistency: "bounded-stale", reason: "cached-policy" };
+  return {
+    consistency: "bounded-stale",
+    reason: options.browserRequest ? "cached-policy" : "client-policy",
+  };
 }

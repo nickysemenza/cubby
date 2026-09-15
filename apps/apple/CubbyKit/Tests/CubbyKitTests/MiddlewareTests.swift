@@ -26,9 +26,68 @@ struct MiddlewareTests {
         ) { request, body, _ in
             #expect(request.headerFields[.authorization] == "Bearer tok.sig")
             #expect(request.headerFields[.xAPIKey] == nil)
+            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
             return (HTTPResponse(status: .ok), body)
         }
         #expect(response.status == .ok)
+    }
+
+    @Test func persistsAndSendsOnlySignedSessionDataCookies() async throws {
+        let (credentials, _) = try provider(with: .bearer("tok.sig"))
+        let middleware = CubbyAuthMiddleware(credentials: credentials)
+        var fields = HTTPFields()
+        fields[values: .setCookie] = [
+            "better-auth.session_data.0=cache-a; Path=/; HttpOnly",
+            "better-auth.session_token=do-not-store; Path=/; HttpOnly",
+        ]
+        let responseHeaders = fields
+        _ = try await middleware.intercept(
+            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
+            body: nil,
+            baseURL: URL(string: "http://localhost:3000")!,
+            operationID: "resources.product.list"
+        ) { _, body, _ in
+            (HTTPResponse(status: .ok, headerFields: responseHeaders), body)
+        }
+
+        _ = try await middleware.intercept(
+            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/vendors"),
+            body: nil,
+            baseURL: URL(string: "http://localhost:3000")!,
+            operationID: "resources.vendor.list"
+        ) { request, body, _ in
+            #expect(request.headerFields[.cookie] == "better-auth.session_data.0=cache-a")
+            #expect(request.headerFields[.cookie]?.contains("session_token") == false)
+            return (HTTPResponse(status: .ok), body)
+        }
+    }
+
+    @Test func mutationFreshnessForcesSubsequentAPIKeyReadsUntilDeadline() async throws {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let (credentials, _) = try provider(with: .apiKey("cubby_x"))
+        let middleware = CubbyAuthMiddleware(credentials: credentials, now: { now })
+        var fields = HTTPFields()
+        fields[.xCubbyFreshReadSeconds] = "90"
+        let responseHeaders = fields
+        _ = try await middleware.intercept(
+            HTTPRequest(method: .patch, scheme: nil, authority: nil, path: "/api/v1/products/PRD-A"),
+            body: nil,
+            baseURL: URL(string: "http://localhost:3000")!,
+            operationID: "resources.product.update"
+        ) { _, body, _ in
+            (HTTPResponse(status: .ok, headerFields: responseHeaders), body)
+        }
+
+        _ = try await middleware.intercept(
+            HTTPRequest(method: .get, scheme: nil, authority: nil, path: "/api/v1/products"),
+            body: nil,
+            baseURL: URL(string: "http://localhost:3000")!,
+            operationID: "resources.product.list"
+        ) { request, body, _ in
+            #expect(request.headerFields[.xCubbyFreshRead] == "1")
+            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
+            return (HTTPResponse(status: .ok), body)
+        }
     }
 
     @Test func injectsAPIKeyHeader() async throws {
@@ -42,6 +101,7 @@ struct MiddlewareTests {
         ) { request, body, _ in
             #expect(request.headerFields[.xAPIKey] == "cubby_x")
             #expect(request.headerFields[.authorization] == nil)
+            #expect(request.headerFields[.xCubbyReadConsistency] == "bounded-stale")
             return (HTTPResponse(status: .ok), body)
         }
     }

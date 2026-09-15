@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 
 @testable import CubbyKit
@@ -58,5 +59,20 @@ struct TokenStoreTests {
 
         #expect(try store.load(for: "localhost:3000") == nil)
         #expect(try store.load(for: "cubby.example") == .apiKey("prod-key"))
+    }
+
+    @Test("round-trips cached session data and a fresh-read deadline")
+    func authStateRoundTrip() throws {
+        let store = InMemorySessionTokenStore()
+        let deadline = Date(timeIntervalSince1970: 1_000)
+        let state = CubbyAuthState(
+            credential: .bearer("token-abc"),
+            sessionDataCookies: ["better-auth.session_data": "signed-cache"],
+            freshReadUntil: deadline
+        )
+
+        try store.saveState(state, for: "localhost:3000")
+
+        #expect(try store.loadState(for: "localhost:3000") == state)
     }
 }

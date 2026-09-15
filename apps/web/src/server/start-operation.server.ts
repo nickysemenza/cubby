@@ -35,6 +35,8 @@ export type StartOperationRequest = {
   signal: AbortSignal;
   /** Supplied only by the authenticated HTTP adapter, never request JSON. */
   apiContext?: AuthenticatedStartOperationContext;
+  /** Read policy chosen by the authenticated HTTP adapter from route semantics. */
+  apiReadPolicy?: BrowserReadPolicy;
 };
 
 export type AuthenticatedStartOperationContext = ReturnType<
@@ -252,7 +254,9 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
             (await runtime.authenticate(options.request.headers, span));
           span.setAttribute("cubby.authenticated", true);
           const readPolicy =
-            (options.request.apiContext ? "strong" : options.readPolicy) ??
+            (options.request.apiContext
+              ? (options.request.apiReadPolicy ?? "strong")
+              : options.readPolicy) ??
             (options.type === "mutation" ? "strong" : "context");
           const context = applyBrowserReadPolicy(authenticated, readPolicy);
           span.setAttributes({

@@ -19,6 +19,7 @@ import {
 } from "~/lib/http-api/resource-query";
 import { type HttpMetadata, httpMetadataSchema } from "~/lib/http-api/router";
 import { httpRoutes } from "~/lib/http-api/routes";
+import { HYPERDRIVE_CACHE_POLICY } from "~/lib/hyperdrive-cache-policy";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import type { RequestActor, requireActor } from "~/server/request-context";
 import type { dispatchStartOperation } from "~/server/start-operation-dispatch.server";
@@ -30,10 +31,10 @@ import {
 
 interface HttpApiPorts {
   auth: {
-    getSession(options: {
+    getSession(options: { headers: Headers; returnHeaders: true }): Promise<{
+      response: { user: { id: string }; session: { id: string } } | null;
       headers: Headers;
-      query: { disableCookieCache: true };
-    }): Promise<{ user: { id: string }; session: { id: string } } | null>;
+    }>;
     verifyApiKey(options: {
       body: { key: string; configId: "http-api" };
     }): Promise<{
@@ -44,12 +45,15 @@ interface HttpApiPorts {
   context: (options: {
     headers: Headers;
     actor: RequestActor;
+    clientAllowsBoundedStale: boolean;
   }) => Promise<ReturnType<typeof requireActor>>;
   dispatch: typeof dispatchStartOperation;
 }
 
 type ApiRequest = TsRestRequest & {
   apiContext?: ReturnType<typeof requireActor>;
+  apiReadPolicy?: "strong" | "context";
+  sessionDataCookies?: string[];
 };
 
 const statuses = new Map(Object.entries(StatusCodes));
@@ -211,10 +215,28 @@ const hasExplicitCredential = (request: Request) =>
   request.headers.has("x-api-key") ||
   /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
 
+const clientPrefersBoundedStale = (request: Request) =>
+  request.headers.get("x-cubby-read-consistency") === "bounded-stale";
+
+const sessionDataCookieName =
+  /^(?:__Secure-)?better-auth\.session_data(?:\.\d+)?$/u;
+
+const sessionDataCookiesFrom = (headers: Headers): string[] =>
+  headers.getSetCookie().filter((cookie) => {
+    const separator = cookie.indexOf("=");
+    return (
+      separator > 0 &&
+      sessionDataCookieName.test(cookie.slice(0, separator).trim())
+    );
+  });
+
 export function createHttpApiHandler(ports: HttpApiPorts) {
   const methods = methodTable(httpContract);
 
-  const authenticate = async (request: ApiRequest) => {
+  const authenticate = async (
+    request: ApiRequest,
+    clientAllowsBoundedStale: boolean,
+  ) => {
     const url = new URL(request.url);
     let actor: RequestActor | null = null;
     if (request.headers.has("x-api-key")) {
@@ -229,10 +251,14 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
           source: "api",
         };
     } else {
-      const session = await ports.auth.getSession({
+      const sessionResult = await ports.auth.getSession({
         headers: request.headers,
-        query: { disableCookieCache: true },
+        returnHeaders: true,
       });
+      const session = sessionResult.response;
+      request.sessionDataCookies = sessionDataCookiesFrom(
+        sessionResult.headers,
+      );
       if (session)
         actor = {
           userId: userId.parse(session.user.id),
@@ -253,53 +279,84 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
       throw failure("FORBIDDEN", "Same-origin request required");
     const headers = new Headers(request.headers);
     headers.set("origin", url.origin);
-    request.apiContext = await ports.context({ headers, actor });
+    request.apiContext = await ports.context({
+      headers,
+      actor,
+      clientAllowsBoundedStale,
+    });
+    request.apiReadPolicy = clientAllowsBoundedStale ? "context" : "strong";
   };
 
-  const implement = (route: AppRoute) => ({
-    middleware: [authenticate],
-    handler: async (
-      args: { body?: unknown; query?: unknown; params?: unknown },
-      context: { request: ApiRequest; responseHeaders: Headers },
-    ) => {
-      const metadata = httpMetadataSchema.parse(route.metadata);
-      const operation = metadata.operation;
-      if (!isOrdinaryOperation(operation))
-        throw failure("NOT_FOUND", "Unknown operation");
-      const { request, responseHeaders } = context;
-      const apiContext = request.apiContext;
-      if (!apiContext) throw failure("UNAUTHORIZED", "Authentication missing");
-      const url = new URL(request.url);
-      const headers = new Headers(request.headers);
-      headers.set("origin", url.origin);
-      const result = await ports.dispatch({
-        operation,
-        input: requestInput(metadata, route, args),
-        request: { headers, signal: request.signal, apiContext },
-      });
-      if (!result.ok)
-        return {
-          status: errorStatus.parse(statuses.get(result.error.code)),
-          body: result.error,
-        };
-      if (
-        (metadata.resource === "get" || metadata.nullableOutput === true) &&
-        result.data === null
-      )
-        return {
-          status: StatusCodes.NOT_FOUND,
-          body: errorBody("NOT_FOUND", "Resource not found"),
-        };
-      if (metadata.resource === "create") {
-        responseHeaders.set(
-          "Location",
-          `${url.pathname}/${encodeURIComponent(createdSchema.parse(result.data).item.id)}`,
-        );
-        return { status: StatusCodes.CREATED, body: result.data };
-      }
-      return { status: StatusCodes.OK, body: result.data };
-    },
-  });
+  const implement = (route: AppRoute) => {
+    const metadata = httpMetadataSchema.parse(route.metadata);
+    const boundedStaleList = (request: ApiRequest) =>
+      route.method === "GET" &&
+      metadata.resource === "list" &&
+      clientPrefersBoundedStale(request);
+    return {
+      middleware: [
+        async (request: ApiRequest) =>
+          authenticate(request, boundedStaleList(request)),
+      ],
+      handler: async (
+        args: { body?: unknown; query?: unknown; params?: unknown },
+        context: { request: ApiRequest; responseHeaders: Headers },
+      ) => {
+        const operation = metadata.operation;
+        if (!isOrdinaryOperation(operation))
+          throw failure("NOT_FOUND", "Unknown operation");
+        const { request, responseHeaders } = context;
+        for (const cookie of request.sessionDataCookies ?? [])
+          responseHeaders.append("Set-Cookie", cookie);
+        const apiContext = request.apiContext;
+        if (!apiContext)
+          throw failure("UNAUTHORIZED", "Authentication missing");
+        const url = new URL(request.url);
+        const headers = new Headers(request.headers);
+        headers.set("origin", url.origin);
+        const result = await ports.dispatch({
+          operation,
+          input: requestInput(metadata, route, args),
+          request: {
+            headers,
+            signal: request.signal,
+            apiContext,
+            apiReadPolicy: request.apiReadPolicy,
+          },
+        });
+        if (!result.ok)
+          return {
+            status: errorStatus.parse(statuses.get(result.error.code)),
+            body: result.error,
+          };
+        if (
+          (metadata.resource === "get" || metadata.nullableOutput === true) &&
+          result.data === null
+        )
+          return {
+            status: StatusCodes.NOT_FOUND,
+            body: errorBody("NOT_FOUND", "Resource not found"),
+          };
+        if (metadata.resource === "create") {
+          responseHeaders.set(
+            "x-cubby-fresh-read-seconds",
+            String(HYPERDRIVE_CACHE_POLICY.freshReadSeconds),
+          );
+          responseHeaders.set(
+            "Location",
+            `${url.pathname}/${encodeURIComponent(createdSchema.parse(result.data).item.id)}`,
+          );
+          return { status: StatusCodes.CREATED, body: result.data };
+        }
+        if (startOperationDefinitionFor(operation)?.kind === "mutation")
+          responseHeaders.set(
+            "x-cubby-fresh-read-seconds",
+            String(HYPERDRIVE_CACHE_POLICY.freshReadSeconds),
+          );
+        return { status: StatusCodes.OK, body: result.data };
+      },
+    };
+  };
 
   type Implemented = {
     [key: string]: Implemented | ReturnType<typeof implement>;
