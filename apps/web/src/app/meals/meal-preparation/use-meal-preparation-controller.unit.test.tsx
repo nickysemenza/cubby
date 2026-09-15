@@ -1,4 +1,8 @@
-import { getMealPreparationsOut, mealOut } from "@cubby/schemas/meal";
+import {
+  getMealPreparationsOut,
+  mealOut,
+  mealRecipeOut,
+} from "@cubby/schemas/meal";
 import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -12,7 +16,7 @@ import { ledgerParty } from "../../finance/finance.functions";
 import { meal } from "../meal.functions";
 import { useMealPreparationController } from "./use-meal-preparation-controller";
 
-it("waits for meal detail when preparations resolve first, then uses the meal's date range", async () => {
+it("loads allocation choices only after an editor opens", async () => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -78,6 +82,12 @@ it("waits for meal detail when preparations resolve first, then uses the meal's 
     expect(hook.result.current.targetMeals).toEqual([]);
     expect(requests).toEqual([]);
     hook.rerender({ date: "2026-03-15" });
+    expect(requests).toEqual([]);
+    act(() => {
+      hook.result.current.openCurrentPreparation(
+        "00000000-0000-4000-8000-000000000001",
+      );
+    });
     expect(hook.result.current.targetMeals.map((row) => row.id)).toEqual([
       mealId,
     ]);
@@ -85,6 +95,97 @@ it("waits for meal detail when preparations resolve first, then uses the meal's 
   } finally {
     hook.unmount();
     unsubscribe();
+    client.clear();
+  }
+});
+
+it("offers another meal from the same day as a leftovers source", () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+  });
+  const mealId = testShortcode("meal", "MEA-2222");
+  const otherMealId = testShortcode("meal", "MEA-3333");
+  const totals: NutritionTotals = {
+    cost: { status: "unavailable", reason: "empty" },
+    nutrition: buildNutrition(() => ({
+      status: "unavailable",
+      reason: "empty",
+    })),
+  };
+  client.setQueryData(
+    meal.getPreparations.queryKey({ mealId }),
+    mock(getMealPreparationsOut, {
+      overrides: {
+        mealId,
+        preparations: [],
+        totals: {
+          confirmed: { portionCount: 0, totals },
+          projected: { portionCount: 0, totals },
+        },
+      },
+    }),
+  );
+  const currentMeal = mock(mealOut, {
+    overrides: { id: mealId, date: "2026-03-15", recipes: [], totals },
+  });
+  const sourceRecipe = mealRecipeOut.parse({
+    id: "00000000-0000-4000-8000-000000000003",
+    mealId: otherMealId,
+    recipeId: testShortcode("recipe", "RCP-3333"),
+    recipe: {
+      id: testShortcode("recipe", "RCP-3333"),
+      name: "Soup",
+      servings: null,
+      yield: null,
+      totals: null,
+    },
+    scale: 1,
+    sortOrder: null,
+    estimatedYieldGrams: null,
+    actualYieldGrams: null,
+    scaledTotals: totals,
+    createdAt: new Date("2026-03-15T12:00:00Z"),
+    updatedAt: new Date("2026-03-15T12:00:00Z"),
+  });
+  const sameDayMeal = mock(mealOut, {
+    overrides: {
+      id: otherMealId,
+      date: "2026-03-15",
+      name: "Lunch",
+      recipes: [sourceRecipe],
+      totals,
+    },
+  });
+  client.setQueryData(
+    meal.getByDateRange.queryKey({ from: "2026-02-13", to: "2026-03-15" }),
+    [currentMeal, sameDayMeal],
+  );
+  function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+  }
+
+  const hook = renderHook(
+    () =>
+      useMealPreparationController({
+        mealId,
+        mealDate: "2026-03-15",
+        invalidate: () => {},
+      }),
+    { wrapper: Wrapper },
+  );
+  try {
+    expect(hook.result.current.sourcePickerOpen).toBe(false);
+    act(() => hook.result.current.beginAddPreparedPortion());
+    expect(hook.result.current.sourcePickerOpen).toBe(true);
+    expect(hook.result.current.sourceChoices).toHaveLength(1);
+    expect(hook.result.current.sourceChoices[0]).toMatchObject({
+      mealId: otherMealId,
+      mealRecipeId: sourceRecipe.id,
+    });
+  } finally {
+    hook.unmount();
     client.clear();
   }
 });

@@ -29,6 +29,7 @@
     { "id": "location.bulkUpdateParent", "why": "Audit adopt" },
     { "id": "location.ensureGlobalUnknown", "why": "Audit relocate target" },
     { "id": "location.makeTree", "why": "Audit scope picker" },
+    { "id": "meal.getNutrition", "why": "Meal and daily macro summaries" },
     { "id": "problems.getCounts", "why": "Today problems tile" },
     { "id": "product.findOrCreateByCode", "why": "Search tab create from a barcode or ISBN" },
     { "id": "product.findOrCreateByUPC", "why": "Capture unknown barcode" },

@@ -28,6 +28,7 @@ import {
   ledgerParty,
   ledgerTransfer,
   meal,
+  mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
 } from "~/server/db/schema";
@@ -84,6 +85,11 @@ export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
     effect: "block",
     description: "Live meal portions retain their eater.",
   },
+  "MealFoodEntry.ledgerPartyId": {
+    code: "block-meal-food-entries",
+    effect: "block",
+    description: "Live meal food entries retain their eater.",
+  },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
@@ -112,6 +118,12 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "Colliding portions for one preparation and target meal are summed; confirmation survives only when every folded portion was confirmed.",
+  },
+  "MealFoodEntry.ledgerPartyId": {
+    code: "repoint-meal-food-entries",
+    effect: "repoint",
+    description:
+      "Meal food entries move to the surviving party without changing their recorded amounts.",
   },
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
@@ -381,6 +393,15 @@ export async function deleteLedgerParties(
           notDeleted(mealRecipePortion),
         ),
       );
+    const [foodEntries] = await tx
+      .select({ n: sql<number>`count(*)::int` })
+      .from(mealFoodEntry)
+      .where(
+        and(
+          inArray(mealFoodEntry.ledgerPartyId, ids),
+          notDeleted(mealFoodEntry),
+        ),
+      );
     const [accounts] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(financialAccount)
@@ -406,12 +427,13 @@ export async function deleteLedgerParties(
       (refs?.n ?? 0) +
         (accounts?.n ?? 0) +
         (transfers?.n ?? 0) +
-        (portions?.n ?? 0) >
+        (portions?.n ?? 0) +
+        (foodEntries?.n ?? 0) >
       0
     )
       throw createAppError(
         "LEDGER_PARTY_HAS_EDGES",
-        "A ledger party with live attributions, accounts, transfers, or meal portions cannot be deleted.",
+        "A ledger party with live attributions, accounts, transfers, meal portions, or meal food entries cannot be deleted.",
       );
     const { deleted } = await removeEntity(tx, {
       entity: "ledgerParty",
@@ -430,43 +452,56 @@ export async function previewMergeLedgerParties(
   assertDistinctMergeTargets("ledgerParty", input.keepId, input.mergeIds);
   const mergeIds = uniq(input.mergeIds);
   const allIds = [input.keepId, ...mergeIds];
-  const [parties, attributions, accounts, outgoing, incoming, portions] =
-    await Promise.all([
-      unwrapDb(db)
-        .select(columns)
-        .from(ledgerParty)
-        .where(and(inArray(ledgerParty.id, allIds), notDeleted(ledgerParty))),
-      countByTarget(
-        getDb(db),
-        expenseAttribution,
-        expenseAttribution.ledgerPartyId,
-        allIds,
-      ),
-      countByTarget(
-        getDb(db),
-        financialAccount,
-        financialAccount.ledgerPartyId,
-        mergeIds,
-      ),
-      countByTarget(
-        getDb(db),
-        ledgerTransfer,
-        ledgerTransfer.fromPartyId,
-        mergeIds,
-      ),
-      countByTarget(
-        getDb(db),
-        ledgerTransfer,
-        ledgerTransfer.toPartyId,
-        mergeIds,
-      ),
-      countByTarget(
-        getDb(db),
-        mealRecipePortion,
-        mealRecipePortion.ledgerPartyId,
-        mergeIds,
-      ),
-    ]);
+  const [
+    parties,
+    attributions,
+    accounts,
+    outgoing,
+    incoming,
+    portions,
+    foodEntries,
+  ] = await Promise.all([
+    unwrapDb(db)
+      .select(columns)
+      .from(ledgerParty)
+      .where(and(inArray(ledgerParty.id, allIds), notDeleted(ledgerParty))),
+    countByTarget(
+      getDb(db),
+      expenseAttribution,
+      expenseAttribution.ledgerPartyId,
+      allIds,
+    ),
+    countByTarget(
+      getDb(db),
+      financialAccount,
+      financialAccount.ledgerPartyId,
+      mergeIds,
+    ),
+    countByTarget(
+      getDb(db),
+      ledgerTransfer,
+      ledgerTransfer.fromPartyId,
+      mergeIds,
+    ),
+    countByTarget(
+      getDb(db),
+      ledgerTransfer,
+      ledgerTransfer.toPartyId,
+      mergeIds,
+    ),
+    countByTarget(
+      getDb(db),
+      mealRecipePortion,
+      mealRecipePortion.ledgerPartyId,
+      mergeIds,
+    ),
+    countByTarget(
+      getDb(db),
+      mealFoodEntry,
+      mealFoodEntry.ledgerPartyId,
+      mergeIds,
+    ),
+  ]);
   const invalid =
     parties.length !== mergeIds.length + 1 ||
     parties.some((party) => party.kind === "household") ||
@@ -519,6 +554,13 @@ export async function previewMergeLedgerParties(
         edgeKey: "MealRecipePortion.ledgerPartyId",
         label: "meal portions",
         byTargetId: portions,
+      }),
+      impact({
+        disposition:
+          LEDGER_PARTY_MERGE_EDGE_POLICY["MealFoodEntry.ledgerPartyId"],
+        edgeKey: "MealFoodEntry.ledgerPartyId",
+        label: "meal food entries",
+        byTargetId: foodEntries,
       }),
     ]),
     sideEffects: [],
@@ -648,6 +690,7 @@ export async function mergeLedgerParties(
   let accountEdgesRepointed = 0;
   let transferEdgesRepointed = 0;
   let portionEdgesRepointed = 0;
+  let foodEntryEdgesRepointed = 0;
   await withTransaction(db, async (tx) => {
     const parties = await tx
       .select(columns)
@@ -723,6 +766,18 @@ export async function mergeLedgerParties(
     const partyIds = [keepId, ...loserIds];
     await lockMealRecipePortionReferences(tx, partyIds);
     portionEdgesRepointed = await foldMealRecipePortions(tx, keepId, loserIds);
+    foodEntryEdgesRepointed = (
+      await tx
+        .update(mealFoodEntry)
+        .set({ ledgerPartyId: keepId })
+        .where(
+          and(
+            inArray(mealFoodEntry.ledgerPartyId, loserIds),
+            notDeleted(mealFoodEntry),
+          ),
+        )
+        .returning({ id: mealFoodEntry.id })
+    ).length;
     const [accountCount] = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(financialAccount)
@@ -793,6 +848,7 @@ export async function mergeLedgerParties(
       accountEdgesRepointed,
       transferEdgesRepointed,
       portionEdgesRepointed,
+      foodEntryEdgesRepointed,
       carriedFields: [],
     },
   };

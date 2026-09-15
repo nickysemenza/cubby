@@ -127,6 +127,24 @@ struct MappingTests {
         #expect(today.recipeNames == ["Sample Recipe"])
     }
 
+    @Test func mealNutritionPreservesMacroEstimateStatesAndFoodSources() throws {
+        let out = try Fixtures.decode(MealNutritionOut.self, from: "meal-nutrition.json")
+        let summary = MealNutritionSummary(out)
+        let person = try #require(summary.people.first)
+        let food = try #require(person.foods.first)
+
+        #expect(summary.meals.first?.displayName == "Sample lunch")
+        #expect(person.totals.calories == .partial(lower: 642, upper: nil))
+        #expect(person.totals.protein == .complete(lower: 31.4, upper: nil))
+        #expect(person.totals.carbs == .unavailable)
+        #expect(person.totals.fat == .pending)
+        #expect(person.meals.first?.meal.id == "MEL-2345")
+        #expect(person.meals.first?.totals.calories == .partial(lower: 642, upper: nil))
+        #expect(food.grams == 170)
+        #expect(food.source == .product(id: "meal-food-preview-1", productID: "PRD-2345"))
+        #expect(food.totals.fat == .unavailable)
+    }
+
     /// `UploadInput.init(entity:)` derives `entityType` from `EntityKey.rawValue.uppercased()`
     /// instead of hand-listing cases, so every case of the generated `EntityImage` enum must be
     /// reachable from some `EntityKey`. Regression for a hand-listed switch that silently

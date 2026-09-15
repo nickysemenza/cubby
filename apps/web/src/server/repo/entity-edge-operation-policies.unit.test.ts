@@ -55,6 +55,7 @@ describe("product retaining edges", () => {
     "Expense.productId",
     "InventoryEntry.productId",
     "Location.productId",
+    "MealFoodEntry.productId",
     "Planting.sourceProductId",
     "ProductComponent.componentProductId",
     "ProjectToolUsage.productId",
@@ -98,6 +99,7 @@ describe("product retaining edges", () => {
       | "Expense.productId"
       | "InventoryEntry.productId"
       | "Location.productId"
+      | "MealFoodEntry.productId"
       | "Planting.sourceProductId"
       | "ProductComponent.componentProductId"
       | "ProjectToolUsage.productId"

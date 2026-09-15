@@ -94,6 +94,67 @@ enum PreviewFixtures {
 
     /// `problems/getCounts`, for `TodayView`'s preview.
     static let sampleTodayProblems = TodayProblemCounts(total: 14, coverageTotal: 3)
+
+    static let sampleMealNutrition: MealNutritionSummary = {
+        let lunch = MealNutritionMeal(
+            id: "MEL-2001", date: "2026-09-14", name: "Garden lunch", mealType: "lunch")
+        let complete: (Double) -> NutritionAmount = { .complete(lower: $0, upper: nil) }
+        let subtotal: (Double) -> NutritionAmount = { .partial(lower: $0, upper: nil) }
+        return MealNutritionSummary(
+            meals: [lunch],
+            people: [
+                MealNutritionPerson(
+                    id: "LDP-1001", name: "Alex",
+                    totals: MacroSummary(
+                        calories: subtotal(642), protein: subtotal(31.4), carbs: subtotal(78.2),
+                        fat: subtotal(22.7)),
+                    foods: [
+                        MealNutritionFood(
+                            source: .recipe(
+                                mealRecipeID: "meal-recipe-preview-1", recipeID: "RCP-1001",
+                                sourceMealID: lunch.id),
+                            meal: lunch, name: "Tomato tart", grams: 245,
+                            totals: MacroSummary(
+                                calories: complete(512), protein: complete(18.4), carbs: complete(62.2),
+                                fat: complete(21.1))),
+                        MealNutritionFood(
+                            source: .product(id: "meal-food-preview-1", productID: "PRD-1001"),
+                            meal: lunch, name: "Greek yogurt", grams: 170,
+                            totals: MacroSummary(
+                                calories: complete(130), protein: complete(13), carbs: complete(16),
+                                fat: .unavailable)),
+                    ],
+                    meals: [
+                        MealNutritionMealSubtotal(
+                            meal: lunch,
+                            totals: MacroSummary(
+                                calories: subtotal(642), protein: subtotal(31.4),
+                                carbs: subtotal(78.2), fat: subtotal(22.7)))
+                    ]),
+                MealNutritionPerson(
+                    id: "LDP-1002", name: "Sam",
+                    totals: MacroSummary(
+                        calories: complete(488), protein: complete(21.8), carbs: complete(59.5),
+                        fat: complete(18.6)),
+                    foods: [
+                        MealNutritionFood(
+                            source: .recipe(
+                                mealRecipeID: "meal-recipe-preview-2", recipeID: "RCP-1001",
+                                sourceMealID: lunch.id),
+                            meal: lunch, name: "Tomato tart", grams: 220,
+                            totals: MacroSummary(
+                                calories: complete(488), protein: complete(21.8), carbs: complete(59.5),
+                                fat: complete(18.6)))
+                    ],
+                    meals: [
+                        MealNutritionMealSubtotal(
+                            meal: lunch,
+                            totals: MacroSummary(
+                                calories: complete(488), protein: complete(21.8),
+                                carbs: complete(59.5), fat: complete(18.6)))
+                    ]),
+            ])
+    }()
 }
 
 struct SignedInPreview: PreviewModifier {

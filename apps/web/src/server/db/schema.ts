@@ -12,6 +12,7 @@ import type {
   LedgerTransferId,
   LocationId,
   MealId,
+  MealFoodEntryId,
   MealRecipeId,
   MealRecipePortionId,
   PlantingId,
@@ -25,6 +26,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import type { ContributionRole } from "@cubby/schemas/ledger-party";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
+import type { MealFoodNutrients } from "@cubby/schemas/meal";
 import {
   type PurchaseDocumentKind,
   purchaseDocumentKindValues,
@@ -416,6 +418,43 @@ export const mealRecipePortion = pgTable(
     index("MealRecipePortion_mealId_idx").on(table.mealId),
     index("MealRecipePortion_ledgerPartyId_idx").on(table.ledgerPartyId),
     check("MealRecipePortion_grams_check", sql`${table.grams} > 0`),
+  ],
+);
+
+export const mealFoodEntry = pgTable(
+  "MealFoodEntry",
+  {
+    id: pkUuid<MealFoodEntryId>(),
+    mealId: uuid("mealId")
+      .notNull()
+      .$type<MealId>()
+      .references((): AnyPgColumn => meal.id),
+    ledgerPartyId: uuid("ledgerPartyId")
+      .notNull()
+      .$type<LedgerPartyId>()
+      .references((): AnyPgColumn => ledgerParty.id),
+    sourceKind: text("sourceKind").notNull().$type<"product" | "manual">(),
+    productId: uuid("productId")
+      .$type<ProductId>()
+      .references((): AnyPgColumn => product.id),
+    grams: doublePrecision("grams"),
+    name: text("name"),
+    nutrients: jsonb("nutrients").$type<MealFoodNutrients>(),
+    ...baseTimestamps(),
+    ...softDeletedAt(),
+  },
+  (table) => [
+    index("MealFoodEntry_mealId_idx").on(table.mealId),
+    index("MealFoodEntry_ledgerPartyId_idx").on(table.ledgerPartyId),
+    index("MealFoodEntry_productId_idx").on(table.productId),
+    check(
+      "MealFoodEntry_grams_check",
+      sql`${table.grams} IS NULL OR (${table.grams} > 0 AND ${table.grams} < 'Infinity'::float8)`,
+    ),
+    check(
+      "MealFoodEntry_source_check",
+      sql`(${table.sourceKind} = 'product' AND ${table.productId} IS NOT NULL AND ${table.grams} IS NOT NULL AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'manual' AND ${table.productId} IS NULL AND length(trim(${table.name})) > 0 AND ${table.name} IS NOT NULL AND ${table.nutrients} IS NOT NULL AND jsonb_typeof(${table.nutrients}) = 'object' AND ${table.nutrients} <> '{}'::jsonb)`,
+    ),
   ],
 );
 

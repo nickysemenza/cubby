@@ -40,6 +40,7 @@ struct RouteDestinationView: View {
     var body: some View {
         switch route {
         case .garden: GardenRootView()
+        case .nutrition(let day): DailyNutritionView(day: day)
         case .entityDetail(.planting, let id): GardenPlantingRouteView(id: id)
         case .entityDetail(.gardenEntry, let id): GardenEntryRouteView(id: id)
         case .entityDetail(.image, let id): ImageEntityDetailView(id: ImageCode(id))

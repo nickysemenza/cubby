@@ -1,4 +1,5 @@
 import "../repo/ingredient.integration.test";
+import "../repo/meal-nutrition.integration.test";
 import "../repo/meal.integration.test";
 import "../repo/recipe-cookbook-upsert.integration.test";
 import "../repo/recipe-upsert.integration.test";

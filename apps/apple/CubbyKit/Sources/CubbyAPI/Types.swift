@@ -182,6 +182,9 @@ package protocol APIProtocol: Sendable {
     /// - Remark: HTTP `PATCH /api/v1/locations/{id}`.
     /// - Remark: Generated from `#/paths//api/v1/locations/{id}/patch(resources.location.update)`.
     func resources_location_update(_ input: Operations.Resources_location_update.Input) async throws -> Operations.Resources_location_update.Output
+    /// - Remark: HTTP `POST /api/v1/meal/getNutrition`.
+    /// - Remark: Generated from `#/paths//api/v1/meal/getNutrition/post(meal.getNutrition)`.
+    func meal_getNutrition(_ input: Operations.Meal_getNutrition.Input) async throws -> Operations.Meal_getNutrition.Output
     /// Use page=1&pageSize=20&sort=name,-createdAt. Filters are individual query parameters: text is literal, numbers and booleans are plain, and a list repeats its key (tag=a&tag=b). Response pagination metadata remains zero-based. Resource methods depend on entity capabilities.
     ///
     /// - Remark: HTTP `GET /api/v1/meals`.
@@ -845,6 +848,17 @@ extension APIProtocol {
     ) async throws -> Operations.Resources_location_update.Output {
         try await resources_location_update(Operations.Resources_location_update.Input(
             path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// - Remark: HTTP `POST /api/v1/meal/getNutrition`.
+    /// - Remark: Generated from `#/paths//api/v1/meal/getNutrition/post(meal.getNutrition)`.
+    package func meal_getNutrition(
+        headers: Operations.Meal_getNutrition.Input.Headers = .init(),
+        body: Operations.Meal_getNutrition.Input.Body? = nil
+    ) async throws -> Operations.Meal_getNutrition.Output {
+        try await meal_getNutrition(Operations.Meal_getNutrition.Input(
             headers: headers,
             body: body
         ))

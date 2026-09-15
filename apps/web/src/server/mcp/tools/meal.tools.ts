@@ -1,4 +1,8 @@
 import {
+  ledgerPartyShortcode,
+  mealShortcode,
+} from "@cubby/schemas/identifiers";
+import {
   mealAddRecipeInput,
   getMealPreparationsMcpInput,
   getMealPreparationsMcpOut,
@@ -12,12 +16,16 @@ import {
   saveMealRecipePreparationInput,
   saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
+import { nutrientKey } from "@cubby/schemas/nutrition";
 import type {
+  MeasureEstimate,
   NutritionTotals,
   NutritionTotalsPartial,
 } from "@cubby/schemas/nutrition";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+
+import { householdLocalDate } from "~/lib/household-date";
 
 import {
   getCaller,
@@ -29,11 +37,82 @@ import {
   WRITE_CLOSED,
 } from "./_shared";
 
-/** Keep cost; keep all, only `kcal`, or none of the nutrient estimates. */
+const macroKeys = ["kcal", "protein", "carbs", "fat", "fiber"] as const;
+const compactEstimate = z.union([
+  z.number(),
+  z.null(),
+  z.literal("pending"),
+  z.object({
+    lower: z.number(),
+    upper: z.number().nullable(),
+    partial: z.boolean(),
+  }),
+]);
+const compactNutrition = z.partialRecord(nutrientKey, compactEstimate);
+const dailyIntakeInput = z.object({
+  date: z.iso.date(),
+  partyId: ledgerPartyShortcode,
+  nutrition: z.enum(["macros", "full"]).default("macros"),
+  includeFoods: z.boolean().default(false),
+});
+const dailyIntakeOut = z.object({
+  date: z.iso.date(),
+  partyId: ledgerPartyShortcode,
+  status: z.enum(["planned", "logged"]),
+  nutrition: compactNutrition.nullable(),
+  meals: z.array(
+    z.object({
+      mealId: mealShortcode,
+      name: z.string().nullable(),
+      nutrition: compactNutrition,
+      foods: z
+        .array(
+          z.object({
+            name: z.string(),
+            grams: z.number().nullable(),
+            sourceKind: z.enum(["recipe", "product", "manual"]),
+            nutrition: compactNutrition,
+          }),
+        )
+        .optional(),
+    }),
+  ),
+});
+
+function compactValue(value: MeasureEstimate): z.infer<typeof compactEstimate> {
+  if (value.status === "unavailable") return null;
+  if (value.status === "pending") return "pending";
+  if (
+    value.status === "complete" &&
+    (value.upper === null || value.upper === value.lower)
+  )
+    return value.lower;
+  return {
+    lower: value.lower,
+    upper: value.upper,
+    partial: value.status === "partial",
+  };
+}
+
+function compactTotals(totals: NutritionTotals, detail: "macros" | "full") {
+  const keys = detail === "macros" ? macroKeys : nutrientKey.options;
+  return Object.fromEntries(
+    keys.map((key) => [key, compactValue(totals.nutrition[key])]),
+  );
+}
+
+/** Keep cost and the requested nutrient estimates for the legacy preparation read. */
 const trimNutrition =
   (detail: MealPreparationNutritionDetail) =>
   (totals: NutritionTotals): NutritionTotalsPartial => {
     if (detail === "full") return totals;
+    if (detail === "macros")
+      return {
+        cost: totals.cost,
+        nutrition: Object.fromEntries(
+          macroKeys.map((key) => [key, totals.nutrition[key]]),
+        ),
+      };
     if (detail === "kcal")
       return { cost: totals.cost, nutrition: { kcal: totals.nutrition.kcal } };
     return { cost: totals.cost, nutrition: {} };
@@ -41,9 +120,49 @@ const trimNutrition =
 
 export function registerMealTools(server: McpServer) {
   registerMcpTool(server, {
+    name: "get_daily_intake",
+    description:
+      "Read one person's daily nutrition with one line per meal and a daily total. Defaults to macros: kcal plus protein/carbs/fat/fiber in grams. Set includeFoods for food breakdowns, or nutrition=full for all nutrients. Uses the target meal's household date, including leftovers and unconfirmed entered portions. Future dates are planned; today/past are logged. No assigned intake returns nutrition=null and meals=[]. Nutrient null means unavailable, pending means not calculated, and partial bounds describe only known contributions (not bounds on missing food). Exact values are numbers; ranges retain lower/upper. No cost or preparation detail is included.",
+    inputSchema: dailyIntakeInput,
+    outputSchema: dailyIntakeOut,
+    annotations: READ_ONLY_CLOSED,
+    handler: async (params, extra): Promise<z.infer<typeof dailyIntakeOut>> => {
+      const summary = await getCaller(extra).meal.getNutrition({
+        date: params.date,
+      });
+      const person = summary.people.find(
+        (person) => person.eater.id === params.partyId,
+      );
+      return {
+        date: params.date,
+        partyId: params.partyId,
+        status: params.date > householdLocalDate() ? "planned" : "logged",
+        nutrition: person
+          ? compactTotals(person.totals, params.nutrition)
+          : null,
+        meals:
+          person?.meals.map(({ meal, totals }) => ({
+            mealId: meal.id,
+            name: meal.name,
+            nutrition: compactTotals(totals, params.nutrition),
+            foods: params.includeFoods
+              ? person.foods
+                  .filter((food) => food.meal.id === meal.id)
+                  .map((food) => ({
+                    name: food.name,
+                    grams: food.grams,
+                    sourceKind: food.sourceKind,
+                    nutrition: compactTotals(food.totals, params.nutrition),
+                  }))
+              : undefined,
+          })) ?? [],
+      };
+    },
+  });
+  registerMcpTool(server, {
     name: "get_meal_preparations",
     description:
-      "Read recipe preparations made by or served at a meal, including projected and confirmed nutrition. `nutrition` trims every totals block: `full` (default) carries all 22 nutrients, `kcal` keeps only calories, `none` keeps cost alone — pick `kcal`/`none` when you are reading portions or yields rather than nutrition.",
+      "Read recipe preparations made by or served at a meal, including projected and confirmed nutrition. `nutrition` trims every totals block: `full` (default) carries all 22 nutrients, `macros` keeps kcal/protein/carbs/fat/fiber, `kcal` keeps only calories for compatibility, and `none` keeps cost alone. For per-person daily intake use get_daily_intake.",
     inputSchema: getMealPreparationsMcpInput,
     outputSchema: getMealPreparationsMcpOut,
     annotations: READ_ONLY_CLOSED,
@@ -114,7 +233,7 @@ export function registerMealTools(server: McpServer) {
   registerMcpTool(server, {
     name: "save_meal_recipe_preparation",
     description:
-      "Record measured yield and portions served from one planned recipe occurrence. Confirmed portions count as consumed; unconfirmed portions remain projected.",
+      "Record measured yield and portions served from one planned recipe occurrence. Assigned portions count in daily intake by the target meal date: future is planned, today/past is logged. Confirmation fields remain for legacy compatibility and do not gate daily intake.",
     inputSchema: saveMealRecipePreparationInput,
     outputSchema: saveMealRecipePreparationOut,
     annotations: WRITE_CLOSED,

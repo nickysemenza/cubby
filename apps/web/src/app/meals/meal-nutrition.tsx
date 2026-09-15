@@ -1,7 +1,4 @@
-import type {
-  MeasureEstimate,
-  NutritionTotals,
-} from "@cubby/schemas/nutrition";
+import type { NutritionTotals } from "@cubby/schemas/nutrition";
 import {
   KEY_NUTRIENT_KEYS,
   type NutrientKey,
@@ -14,19 +11,10 @@ import { formatCurrency } from "~/lib/utils";
 
 const DEFAULT_NUTRIENTS = new Set<NutrientKey>(KEY_NUTRIENT_KEYS);
 
-export const estimateTone = (
-  estimate: MeasureEstimate,
-): "outline" | "warning" | "positive" =>
-  estimate.status === "complete"
-    ? "positive"
-    : estimate.status === "partial"
-      ? "warning"
-      : "outline";
-
 export const formatCostEstimate = (totals: NutritionTotals): string =>
   formatEstimate(totals.cost, (value) => formatCurrency(value));
 
-export const formatNutrientEstimate = (
+const formatNutrientEstimate = (
   totals: NutritionTotals,
   key: NutrientKey,
 ): string => {

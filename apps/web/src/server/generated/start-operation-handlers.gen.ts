@@ -353,15 +353,24 @@ export const START_OPERATION_HANDLER_LOADERS = {
   "meal.getByDateRange": async () =>
     (await import("~/server/meal-browser.server")).mealHandlers.operations
       .getByDateRange,
+  "meal.getNutrition": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .getNutrition,
   "meal.getPreparations": async () =>
     (await import("~/server/meal-browser.server")).mealHandlers.operations
       .getPreparations,
   "meal.getShoppingList": async () =>
     (await import("~/server/meal-browser.server")).mealHandlers.operations
       .getShoppingList,
+  "meal.removeFood": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .removeFood,
   "meal.removeRecipe": async () =>
     (await import("~/server/meal-browser.server")).mealHandlers.operations
       .removeRecipe,
+  "meal.saveFood": async () =>
+    (await import("~/server/meal-browser.server")).mealHandlers.operations
+      .saveFood,
   "meal.savePreparation": async () =>
     (await import("~/server/meal-browser.server")).mealHandlers.operations
       .savePreparation,

@@ -115,19 +115,15 @@ describe("MealPortionsSection", () => {
 
     expect(screen.getByText("Pasta")).toBeVisible();
     expect(screen.getByText("Salad")).toBeVisible();
-    expect(screen.getByText("200 g")).toBeVisible();
-    expect(screen.getByText("150 g")).toBeVisible();
+    expect(screen.getByText("Member A 200 g")).toBeVisible();
+    expect(screen.getByText("Member B 150 g")).toBeVisible();
     expect(screen.queryByText("350 g")).not.toBeInTheDocument();
-    expect(screen.getByText("Member A")).toBeVisible();
-    expect(screen.getByText("Member B")).toBeVisible();
-    expect(screen.getByText("Planned")).toBeVisible();
-    expect(screen.getAllByText("Confirmed")).not.toHaveLength(0);
-    expect(screen.getAllByText(/Cost \$600\.00/)).not.toHaveLength(0);
-    expect(screen.getAllByText(/Calories 600 kcal/)).not.toHaveLength(0);
-    expect(screen.getAllByText(/Protein 600 g/)).not.toHaveLength(0);
+    expect(screen.queryByText("Planned")).not.toBeInTheDocument();
+    expect(screen.queryByText("Confirmed")).not.toBeInTheDocument();
+    expect(screen.getByText("500 g made")).toBeVisible();
   });
 
-  it("offers the prepared-portion flow in the no-portion state", () => {
+  it("keeps an unassigned preparation visible and offers leftovers", () => {
     const onAdd = vi.fn();
     const view = viewWithPortions();
     view.preparations = view.preparations.map((preparation) => ({
@@ -136,10 +132,8 @@ describe("MealPortionsSection", () => {
     }));
     render(<MealPortionsSection view={view} onAddPreparedPortion={onAdd} />);
 
-    expect(screen.getByText("No portions logged yet")).toBeVisible();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Add prepared portion" }),
-    );
+    expect(screen.getAllByText("No one assigned yet")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Add leftovers" }));
     expect(onAdd).toHaveBeenCalledOnce();
   });
 
@@ -177,7 +171,9 @@ describe("MealPortionsSection", () => {
       />,
     );
 
-    expect(screen.getByText("No prepared portions yet")).toBeVisible();
-    expect(screen.getByText(/record a cooked yield/i)).toBeVisible();
+    expect(screen.getByText("No recipe portions yet")).toBeVisible();
+    expect(
+      screen.getByText(/add a recipe or bring in leftovers/i),
+    ).toBeVisible();
   });
 });

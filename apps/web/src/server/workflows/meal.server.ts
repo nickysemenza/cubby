@@ -25,11 +25,13 @@ import {
   saveMealRecipePreparation,
   updateMealRecipeWithEntityId,
 } from "~/server/repo/meal";
+import { saveMealFood, removeMealFood } from "~/server/repo/meal/food";
 import { bindShortcodeResolver } from "~/server/repo/shortcode-resolver";
 import type {
   AvailabilityService,
   PlannedLine,
 } from "~/server/services/availability.service";
+import { getMealNutrition } from "~/server/services/meal-nutrition.service";
 import { runMutationSideEffects } from "~/server/services/mutation-side-effects";
 import {
   defineWorkflowOperation,
@@ -341,4 +343,17 @@ export const getShoppingListWorkflow = bindWorkflow(
     input: ShoppingInput,
     availability: ShoppingContext["availability"],
   ) => ({ context: { db, availability }, input }),
+);
+
+export const getMealNutritionWorkflow = defineWorkflowOperation(
+  "meal.getNutrition",
+  getMealNutrition,
+);
+export const saveMealFoodWorkflow = defineWorkflowOperation(
+  "meal.saveFood",
+  saveMealFood,
+);
+export const removeMealFoodWorkflow = defineWorkflowOperation(
+  "meal.removeFood",
+  removeMealFood,
 );

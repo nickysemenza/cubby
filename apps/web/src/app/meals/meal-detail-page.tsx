@@ -1,4 +1,7 @@
-import type { MealShortcode } from "@cubby/schemas/identifiers";
+import type {
+  MealShortcode,
+  RecipeShortcode,
+} from "@cubby/schemas/identifiers";
 import type { MealRecipeOut } from "@cubby/schemas/meal";
 import {
   MEAL_KIND_LABELS,
@@ -10,20 +13,24 @@ import type { QueryKey } from "@tanstack/react-query";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
-import { ClipboardList, ImageIcon, Trash2 } from "lucide-react";
+import {
+  ChartNoAxesColumnIncreasing,
+  ClipboardList,
+  ImageIcon,
+  Plus,
+  Settings2,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { EntityPicker } from "~/app/_components/combobox/entity-picker";
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
-import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
 import { DetailSections } from "~/app/_components/data-table/detail-page";
 import { DatePickerInput } from "~/app/_components/date-picker-input";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
 import { EntityPhotosSection } from "~/app/_components/photos/entity-photos-section";
 import { SimpleLoading } from "~/components/feedback/loading-skeletons";
 import { Row, Stack } from "~/components/layout";
-import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -38,14 +45,13 @@ import { entityDetailLink } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import type { EntityDetailByEntity } from "~/entities/generated/entity-details.gen";
+import { useHouseholdToday } from "~/hooks/use-household-today";
 import { getErrorMessage } from "~/lib/error-utils";
 
 import { EditableCell } from "../_components/data-table/editable-cell";
-import {
-  formatCostEstimate,
-  formatNutrientEstimate,
-  MealNutritionEstimates,
-} from "./meal-nutrition";
+import { AddFoodDialog } from "./add-food-dialog";
+import { formatCostEstimate } from "./meal-nutrition";
+import { MealNutritionSummary } from "./meal-nutrition-summary";
 import {
   mealKindBadgeVariant,
   mealKindOptions,
@@ -53,53 +59,18 @@ import {
 } from "./meal-options";
 import { MealPortionsSection } from "./meal-preparation/meal-portions-section";
 import { PortionSheet } from "./meal-preparation/portion-sheet";
-import type { MealPreparationsView } from "./meal-preparation/types";
+import { RecipeFoodDialog } from "./meal-preparation/recipe-food-dialog";
 import { useMealPreparationController } from "./meal-preparation/use-meal-preparation-controller";
 import { meal as mealOperations } from "./meal.functions";
 import { useInvalidateMeals } from "./use-meal-mutations";
 
 type MealDetail = EntityDetailByEntity["meal"];
 
-function mealDisplayName(meal: MealDetail): string {
+export function mealDisplayName(meal: {
+  name: string | null;
+  date: string;
+}): string {
   return meal.name ? meal.name : format(parseISO(meal.date), "EEE, MMM d");
-}
-
-export function buildMealHeroStats(
-  meal: {
-    totals: MealDetail["totals"];
-    recipes: readonly unknown[];
-  },
-  preparation: MealPreparationsView | undefined,
-): DetailHeroStat[] {
-  const confirmed = preparation?.totals.confirmed;
-  if (confirmed && confirmed.portionCount > 0)
-    return [
-      {
-        label: "Consumed cost",
-        value: formatCostEstimate(confirmed.totals),
-      },
-      {
-        label: "Consumed calories",
-        value: formatNutrientEstimate(confirmed.totals, "kcal"),
-      },
-      {
-        label: "Consumed protein",
-        value: formatNutrientEstimate(confirmed.totals, "protein"),
-      },
-      { label: "Recipes", value: meal.recipes.length },
-    ];
-
-  return [
-    {
-      label: "Cost",
-      value: formatCostEstimate(meal.totals),
-    },
-    {
-      label: "Calories",
-      value: formatNutrientEstimate(meal.totals, "kcal"),
-    },
-    { label: "Recipes", value: meal.recipes.length },
-  ];
 }
 
 function recipeOrdinal(
@@ -116,12 +87,13 @@ function recipeOrdinal(
 }
 
 export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
-  const queryClient = useQueryClient();
   const invalidate = useInvalidateMeals();
   const mealKey = entityDetailFor("meal").queryKey(mealId);
-  const [pendingRecipeName, setPendingRecipeName] = useState<string | null>(
+  const [addFoodOpen, setAddFoodOpen] = useState(false);
+  const [recipeFoodId, setRecipeFoodId] = useState<RecipeShortcode | null>(
     null,
   );
+  const householdToday = useHouseholdToday();
   const {
     data: meal,
     isLoading,
@@ -139,28 +111,6 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
   const updateMeal = useUpdateMutation({
     mutationFn: entityMutationOptionsFactory("meal", "update"),
     entity: "meal",
-  });
-  const addRecipeBase = mealOperations.addRecipe.mutationOptions();
-  const addRecipe = useMutation({
-    ...addRecipeBase,
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({ queryKey: mealKey });
-      const previous = queryClient.getQueryData<MealDetail | null>(mealKey);
-      setPendingRecipeName(variables.recipeId);
-      return { previous };
-    },
-    onSuccess: (updated) => {
-      queryClient.setQueryData(mealKey, updated);
-    },
-    onError: (error, _variables, context) => {
-      if (context?.previous)
-        queryClient.setQueryData(mealKey, context.previous);
-      toast.error(getErrorMessage(error));
-    },
-    onSettled: () => {
-      setPendingRecipeName(null);
-      invalidate();
-    },
   });
 
   const mealName = meal ? mealDisplayName(meal) : "";
@@ -211,8 +161,6 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
 
   const nameValue = name ?? meal.name ?? "";
 
-  const heroStats = buildMealHeroStats(meal, effectivePreparationView);
-
   return (
     <Page
       variant="detail"
@@ -220,9 +168,8 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
       title={mealName}
       rawData={meal}
       heroImages={meal.images}
-      heroStats={heroStats}
       heroStamp={{
-        label: format(parseISO(meal.date), "EEE, MMM d"),
+        label: `${format(parseISO(meal.date), "EEE, MMM d")}${householdToday && meal.date > householdToday ? " · Planned" : ""}`,
         tone: "ink",
       }}
     >
@@ -231,14 +178,81 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
         heroImages={meal.images}
         sections={[
           {
-            id: "meal-plan",
-            title: "Meal plan",
-            icon: ClipboardList,
+            id: "nutrition-summary",
+            title: "Nutrition by person",
+            icon: ChartNoAxesColumnIncreasing,
             placement: "full",
             surface: "plain",
             content: (
-              <Stack>
-                <Row align="end" wrap gap="md">
+              <Stack gap="md">
+                <Row align="center" justify="between" gap="sm" wrap>
+                  <h2 className="text-lg font-semibold tracking-tight">
+                    Nutrition by person
+                  </h2>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setAddFoodOpen(true)}
+                  >
+                    <Plus className="size-4" />
+                    Add food
+                  </Button>
+                </Row>
+                <MealNutritionSummary
+                  mealId={mealId}
+                  onEditRecipe={(mealRecipeId) =>
+                    preparation.openCurrentPreparation(mealRecipeId)
+                  }
+                />
+              </Stack>
+            ),
+          },
+          {
+            id: "meal-plan",
+            title: "Recipes",
+            icon: ClipboardList,
+            placement: "primary",
+            content: (
+              <Stack gap="sm">
+                {meal.recipes.length === 0 ? (
+                  <Description>
+                    {meal.mealKind === "cooked"
+                      ? "No recipes yet. Add food when you're ready to plan or log this meal."
+                      : meal.mealKind === "leftovers"
+                        ? "No new recipes. Add leftovers from another meal below."
+                        : `${MEAL_KIND_LABELS[meal.mealKind]} — no recipe required.`}
+                  </Description>
+                ) : (
+                  meal.recipes.map((mr, index) => (
+                    <RecipeRow
+                      key={mr.id}
+                      mr={mr}
+                      ordinal={recipeOrdinal(meal.recipes, mr.recipeId, index)}
+                      onOpenPreparation={
+                        effectivePreparationView
+                          ? (mealRecipeId) =>
+                              preparation.openCurrentPreparation(mealRecipeId)
+                          : undefined
+                      }
+                      mealKey={mealKey}
+                      onChanged={invalidate}
+                    />
+                  ))
+                )}
+              </Stack>
+            ),
+          },
+          {
+            id: "meal-details",
+            title: "Meal details",
+            icon: Settings2,
+            placement: "supporting",
+            content: (
+              <Stack gap="md">
+                <Stack gap="sm">
+                  <Description as="span" size="xs">
+                    Name and date
+                  </Description>
                   <Stack gap="sm" className="w-full md:w-auto">
                     <Input
                       value={nameValue}
@@ -269,6 +283,11 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                       }}
                     />
                   </Stack>
+                </Stack>
+                <Stack gap="sm">
+                  <Description as="span" size="xs">
+                    Meal type
+                  </Description>
                   <Stack gap="sm">
                     <Row align="center" gap="tight">
                       <EditableCell
@@ -343,88 +362,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                       />
                     </Row>
                   </Stack>
-                </Row>
-
-                <Stack gap="sm">
-                  {meal.recipes.length === 0 ? (
-                    // A meal you aren't cooking is COMPLETE with no recipes — telling
-                    // someone to add one would be wrong, and it's also why this meal
-                    // contributes nothing to the shopping list.
-                    <Description>
-                      {meal.mealKind === "cooked"
-                        ? "No recipes yet — add one below."
-                        : meal.mealKind === "leftovers"
-                          ? "Leftovers only — add a prepared portion from an earlier meal."
-                          : `${MEAL_KIND_LABELS[meal.mealKind]} — no recipes needed.`}
-                    </Description>
-                  ) : (
-                    meal.recipes.map((mr, index) => (
-                      <RecipeRow
-                        key={mr.id}
-                        mr={mr}
-                        ordinal={recipeOrdinal(
-                          meal.recipes,
-                          mr.recipeId,
-                          index,
-                        )}
-                        onOpenPreparation={
-                          effectivePreparationView
-                            ? (mealRecipeId) => {
-                                preparation.openCurrentPreparation(
-                                  mealRecipeId,
-                                );
-                              }
-                            : undefined
-                        }
-                        mealKey={mealKey}
-                        onChanged={invalidate}
-                      />
-                    ))
-                  )}
-                  <div className="border-t pt-3">
-                    <MealNutritionEstimates totals={meal.totals} />
-                  </div>
-                  {pendingRecipeName && (
-                    <Row
-                      align="center"
-                      gap="sm"
-                      className="border border-[var(--border)] p-2 opacity-60"
-                    >
-                      <span className="flex-1 truncate text-sm font-medium">
-                        Adding recipe…
-                      </span>
-                    </Row>
-                  )}
                 </Stack>
-
-                <div className="max-w-sm">
-                  <Description as="span" size="xs" className="mb-1 block">
-                    Add a recipe
-                  </Description>
-                  <WithEntitySearch entity="recipe">
-                    {({ items, onSearchChange, isLoading, onOpenChange }) => (
-                      <EntityPicker
-                        entity="recipe"
-                        label="recipe"
-                        items={items}
-                        value={null}
-                        placeholder="Search recipes…"
-                        disabled={addRecipe.isPending}
-                        onSearchChange={onSearchChange}
-                        onOpenChange={onOpenChange}
-                        isLoading={isLoading}
-                        setValue={(recipe) => {
-                          if (!recipe) return;
-                          addRecipe.mutate({
-                            mealId,
-                            recipeId: recipe.id,
-                            scale: 1,
-                          });
-                        }}
-                      />
-                    )}
-                  </WithEntitySearch>
-                </div>
               </Stack>
             ),
           },
@@ -432,20 +370,33 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
             id: "photos",
             title: "Photos",
             icon: ImageIcon,
-            placement: "primary",
-            content: (
+            placement: "supporting",
+            content: meal.images.length ? (
               <EntityPhotosSection
                 entity="meal"
                 id={meal.id}
                 images={meal.images}
               />
+            ) : (
+              <details className="text-sm">
+                <summary className="min-h-10 cursor-pointer content-center text-muted-foreground hover:text-foreground">
+                  No photos · Add one
+                </summary>
+                <div className="border-t pt-2">
+                  <EntityPhotosSection
+                    entity="meal"
+                    id={meal.id}
+                    images={meal.images}
+                  />
+                </div>
+              </details>
             ),
           },
           ...(effectivePreparationView
             ? [
                 {
                   id: "meal-portions",
-                  title: "Portions",
+                  title: "Recipe preparation",
                   icon: ClipboardList,
                   placement: "full" as const,
                   surface: "plain" as const,
@@ -453,6 +404,7 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
                     <MealPortionsSection
                       view={effectivePreparationView}
                       onAddPreparedPortion={preparation.beginAddPreparedPortion}
+                      onEditPreparation={preparation.openCurrentPreparation}
                     />
                   ),
                 },
@@ -460,23 +412,47 @@ export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
             : []),
         ]}
       />
-      <MealPreparationOverlays preparation={preparation} />
+      <MealPreparationOverlays
+        preparation={preparation}
+        recipes={meal.recipes}
+        currentMealId={mealId}
+      />
+      <AddFoodDialog
+        mealId={mealId}
+        date={meal.date}
+        open={addFoodOpen}
+        onOpenChange={setAddFoodOpen}
+        onRecipe={(recipeId) => {
+          setAddFoodOpen(false);
+          setRecipeFoodId(recipeId);
+        }}
+      />
+      <RecipeFoodDialog
+        mealId={mealId}
+        date={meal.date}
+        recipeId={recipeFoodId}
+        onClose={() => setRecipeFoodId(null)}
+      />
     </Page>
   );
 }
 
 function MealPreparationOverlays({
   preparation,
+  recipes,
+  currentMealId,
 }: {
   preparation: ReturnType<typeof useMealPreparationController>;
+  recipes: MealRecipeOut[];
+  currentMealId: MealShortcode;
 }) {
   return (
     <>
       <ResponsiveDialog
         open={preparation.sourcePickerOpen}
         onOpenChange={preparation.setSourcePickerOpen}
-        title="Add a prepared portion"
-        description="Choose a recipe occurrence from an earlier meal. Its measured yield and live recipe cost, calories, and protein stay with that source."
+        title="Add leftovers"
+        description="Choose a recipe prepared in another recent meal, including another meal from the same day."
         footer={
           <DialogFooter className="gap-2 sm:justify-end">
             <Button
@@ -499,7 +475,9 @@ function MealPreparationOverlays({
           </DialogFooter>
         }
       >
-        {preparation.sourceChoices.length ? (
+        {preparation.isLoadingSourceChoices ? (
+          <SimpleLoading text="Loading prepared recipes…" />
+        ) : preparation.sourceChoices.length ? (
           <StaticPicker
             items={preparation.sourceChoices.map(({ value, label }) => ({
               value,
@@ -508,18 +486,24 @@ function MealPreparationOverlays({
             value={preparation.selectedSourceChoice?.value ?? null}
             onValueChange={preparation.setSourceSelectionId}
             label="Prepared recipe"
-            placeholder="Choose an earlier recipe"
+            placeholder="Choose a prepared recipe"
           />
         ) : (
           <Description>
-            No earlier recipe occurrences are available in the recent meal
-            window.
+            No prepared recipes are available from another recent meal.
           </Description>
         )}
       </ResponsiveDialog>
       {preparation.selectedPreparation ? (
         <PortionSheet
           source={preparation.selectedPreparation}
+          currentMealId={currentMealId}
+          recipeServings={
+            recipes.find(
+              (recipe) =>
+                recipe.id === preparation.selectedPreparation?.mealRecipeId,
+            )?.recipe.servings ?? preparation.selectedSourceChoice?.servings
+          }
           targetMeals={preparation.targetMeals}
           eaters={preparation.eaters}
           open
@@ -618,51 +602,70 @@ function RecipeRow({
   };
 
   return (
-    <Row align="center" gap="sm" className="border border-[var(--border)] p-2">
-      <Link
-        {...entityDetailLink("recipe", mr.recipe.id)}
-        className="flex-1 truncate text-sm font-medium hover:underline"
-        title={mr.recipe.name}
-      >
-        {mr.recipe.name}
-        {ordinal ? ` · ${ordinal}` : null}
-      </Link>
-      <Row align="center" gap="xs">
-        <Input
-          type="number"
-          step={0.5}
-          min={0.5}
-          value={scale}
-          className="h-7 w-16 text-right tabular-nums"
-          onChange={(e) => setScale(e.target.value)}
-          onBlur={commitScale}
-          aria-label="Scale"
-        />
-        <span className="text-xs text-muted-foreground">×</span>
-      </Row>
-      <span className="w-16 text-right text-sm tabular-nums">
-        {formatCostEstimate(mr.scaledTotals)}
-      </span>
-      {onOpenPreparation ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => onOpenPreparation(mr.id)}
+    <div className="rounded-md border border-[var(--border)] px-3 py-2">
+      <Row align="center" justify="between" gap="sm">
+        <Link
+          {...entityDetailLink("recipe", mr.recipe.id)}
+          className="min-w-0 flex-1 truncate text-sm font-medium hover:underline"
+          title={mr.recipe.name}
         >
-          Portions
-        </Button>
-      ) : null}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        aria-label="Remove recipe"
-        disabled={removeRecipe.isPending}
-        onClick={() => removeRecipe.mutate({ id: mr.id })}
-      >
-        <Trash2 className="size-4" />
-      </Button>
-    </Row>
+          {mr.recipe.name}
+          {ordinal ? ` · ${ordinal}` : null}
+        </Link>
+        {onOpenPreparation ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onOpenPreparation(mr.id)}
+          >
+            Edit portions
+          </Button>
+        ) : null}
+      </Row>
+      <details className="text-xs">
+        <summary className="min-h-10 cursor-pointer content-center text-muted-foreground hover:text-foreground">
+          Planning details
+        </summary>
+        <Row
+          align="center"
+          justify="between"
+          gap="sm"
+          wrap
+          className="border-t pt-2"
+        >
+          <Row align="center" gap="xs">
+            <span className="text-muted-foreground">Recipe scale</span>
+            <Input
+              type="number"
+              step={0.25}
+              min={0.01}
+              value={scale}
+              className="h-9 w-20 text-right tabular-nums"
+              onChange={(e) => setScale(e.target.value)}
+              onBlur={commitScale}
+              aria-label="Recipe scale"
+            />
+            <span className="text-muted-foreground">×</span>
+          </Row>
+          <Row align="center" gap="sm">
+            <span className="text-muted-foreground tabular-nums">
+              {formatCostEstimate(mr.scaledTotals)}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={`Remove ${mr.recipe.name}`}
+              disabled={removeRecipe.isPending}
+              onClick={() => removeRecipe.mutate({ id: mr.id })}
+            >
+              <Trash2 className="size-4" />
+              Remove
+            </Button>
+          </Row>
+        </Row>
+      </details>
+    </div>
   );
 }

@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { StaticPicker } from "~/app/_components/combobox/static-picker";
 import { Row, Stack } from "~/components/layout";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
 import { DialogFooter } from "~/components/ui/dialog";
@@ -13,12 +12,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
-import {
-  estimateTone,
-  formatCostEstimate,
-  formatNutrientEstimate,
-  MealNutritionEstimates,
-} from "../meal-nutrition";
+import { MealNutritionEstimates } from "../meal-nutrition";
 import {
   mealLabel,
   type MealPreparation,
@@ -32,7 +26,6 @@ type PortionDraft = {
   targetMealId: PreparationTargetOption["id"] | null;
   eaterId: PreparationEaterOption["id"] | null;
   grams: string;
-  confirmed: boolean;
 };
 
 const portionKey = (targetMealId: string, eaterId: string) =>
@@ -83,12 +76,17 @@ function setCommand(
     mealId: row.targetMealId,
     ledgerPartyId: row.eaterId,
     grams: Number(row.grams),
-    confirmed: row.confirmed,
+    // The redesigned editor records an entered amount directly. The legacy
+    // confirmation field stays in the wire contract, but is no longer a UI
+    // state people have to manage.
+    confirmed: true,
   };
 }
 
 export function PortionSheet({
   source,
+  currentMealId,
+  recipeServings,
   targetMeals,
   eaters,
   open,
@@ -97,6 +95,8 @@ export function PortionSheet({
   isSaving = false,
 }: {
   source: MealPreparation;
+  currentMealId: PreparationTargetOption["id"];
+  recipeServings?: number | null;
   targetMeals: PreparationTargetOption[];
   eaters: PreparationEaterOption[];
   open: boolean;
@@ -104,7 +104,10 @@ export function PortionSheet({
   onSave: (request: PreparationSaveRequest) => void | Promise<void>;
   isSaving?: boolean;
 }) {
-  const firstTarget = targetMeals[0]?.id ?? null;
+  const firstTarget =
+    targetMeals.find((meal) => meal.id === currentMealId)?.id ??
+    targetMeals[0]?.id ??
+    null;
   const firstEater = eaters[0]?.id ?? null;
   const draftSequence = useRef(0);
   const newDraft = (): PortionDraft => ({
@@ -112,7 +115,6 @@ export function PortionSheet({
     targetMealId: firstTarget,
     eaterId: firstEater,
     grams: "",
-    confirmed: false,
   });
   const [expectedYield, setExpectedYield] = useState(
     source.estimatedYieldGrams == null
@@ -129,7 +131,6 @@ export function PortionSheet({
           targetMealId: portion.targetMeal.id,
           eaterId: portion.eater.id,
           grams: String(portion.grams),
-          confirmed: portion.confirmedAt != null,
         }))
       : [newDraft()],
   );
@@ -189,11 +190,20 @@ export function PortionSheet({
       )
       .map(removeCommand);
 
+    const changed = rows.filter(isCompleteDraft).flatMap((row) => {
+      const original = source.portions.find(
+        (portion) =>
+          portion.targetMeal.id === row.targetMealId &&
+          portion.eater.id === row.eaterId,
+      );
+      return original?.grams === Number(row.grams) ? [] : [setCommand(row)];
+    });
+
     void onSave({
       mealRecipeId: source.mealRecipeId,
       estimatedYieldGrams: expectedYield === "" ? null : expectedNumber,
       actualYieldGrams: actualYield === "" ? null : yieldNumber,
-      changes: [...removed, ...rows.filter(isCompleteDraft).map(setCommand)],
+      changes: [...removed, ...changed],
     });
   };
 
@@ -234,6 +244,12 @@ export function PortionSheet({
         />
         <PeopleFields
           source={source}
+          currentMealId={currentMealId}
+          gramsPerServing={gramsPerServing(
+            source.yieldBasis,
+            recipeServings,
+            source.scale,
+          )}
           rows={rows}
           eaters={eaters}
           targetMeals={targetMeals}
@@ -281,19 +297,7 @@ function YieldFields({
             recipe occurrence.
           </Description>
         </Stack>
-        <Row align="center" gap="xs" wrap>
-          <Badge variant={estimateTone(source.totals.cost)}>
-            {formatCostEstimate(source.totals)}
-          </Badge>
-          <Badge variant={estimateTone(source.totals.nutrition.kcal)}>
-            {formatNutrientEstimate(source.totals, "kcal")}
-          </Badge>
-          <Badge variant={estimateTone(source.totals.nutrition.protein)}>
-            {formatNutrientEstimate(source.totals, "protein")}
-          </Badge>
-        </Row>
       </Row>
-      <MealNutritionEstimates totals={source.totals} />
       <div className="grid grid-cols-2 gap-3">
         <Stack gap="xs">
           <Label htmlFor={`${source.mealRecipeId}-expected`}>
@@ -341,12 +345,22 @@ function YieldFields({
           ? "Made yield unlocks per-gram cost and nutrition estimates."
           : `Basis: ${yieldBasisLabel(source.yieldBasis)}.`}
       </Description>
+      <details className="text-xs">
+        <summary className="min-h-10 cursor-pointer content-center text-muted-foreground hover:text-foreground">
+          Recipe nutrition details
+        </summary>
+        <div className="border-t pt-2">
+          <MealNutritionEstimates totals={source.totals} />
+        </div>
+      </details>
     </Stack>
   );
 }
 
 function PeopleFields({
   source,
+  currentMealId,
+  gramsPerServing,
   rows,
   eaters,
   targetMeals,
@@ -355,6 +369,8 @@ function PeopleFields({
   onUpdate,
 }: {
   source: MealPreparation;
+  currentMealId: PreparationTargetOption["id"];
+  gramsPerServing: number | null;
   rows: PortionDraft[];
   eaters: PreparationEaterOption[];
   targetMeals: PreparationTargetOption[];
@@ -362,14 +378,36 @@ function PeopleFields({
   onRemove: (index: number) => void;
   onUpdate: (index: number, patch: Partial<PortionDraft>) => void;
 }) {
+  const indexedRows = rows.map((row, index) => ({ row, index }));
+  const currentRows = indexedRows.filter(
+    ({ row }) => row.targetMealId === currentMealId,
+  );
+  const otherRows = indexedRows.filter(
+    ({ row }) => row.targetMealId !== currentMealId,
+  );
+  const renderRow = ({ row, index }: (typeof indexedRows)[number]) => (
+    <PortionDraftRow
+      key={row.id}
+      source={source}
+      row={row}
+      index={index}
+      eaters={eaters}
+      targetMeals={targetMeals}
+      gramsPerServing={gramsPerServing}
+      canRemove={rows.length > 1 || source.portions.length > 0}
+      onRemove={() => onRemove(index)}
+      onUpdate={(patch) => onUpdate(index, patch)}
+    />
+  );
+
   return (
     <Stack gap="sm">
       <Row align="center" justify="between">
         <Stack gap={null}>
           <span className="text-sm font-medium">Who ate how much?</span>
           <Description size="xs">
-            Each row stays tied to this recipe. Nothing is combined across
-            foods.
+            Enter the amount for this meal. Portions saved to another meal stay
+            with that meal's date.
           </Description>
         </Stack>
         <Button type="button" variant="outline" size="sm" onClick={onAdd}>
@@ -378,19 +416,17 @@ function PeopleFields({
         </Button>
       </Row>
       <Stack gap="sm">
-        {rows.map((row, index) => (
-          <PortionDraftRow
-            key={row.id}
-            source={source}
-            row={row}
-            index={index}
-            eaters={eaters}
-            targetMeals={targetMeals}
-            canRemove={rows.length > 1 || source.portions.length > 0}
-            onRemove={() => onRemove(index)}
-            onUpdate={(patch) => onUpdate(index, patch)}
-          />
-        ))}
+        {currentRows.map(renderRow)}
+        {otherRows.length ? (
+          <details className="rounded-md border border-[var(--border)] bg-[var(--muted)]/35 px-3 py-2">
+            <summary className="min-h-10 cursor-pointer content-center text-sm font-medium">
+              Other meals · {otherRows.length}
+            </summary>
+            <Stack gap="sm" className="pt-2">
+              {otherRows.map(renderRow)}
+            </Stack>
+          </details>
+        ) : null}
       </Stack>
     </Stack>
   );
@@ -402,6 +438,7 @@ function PortionDraftRow({
   index,
   eaters,
   targetMeals,
+  gramsPerServing,
   canRemove,
   onRemove,
   onUpdate,
@@ -411,6 +448,7 @@ function PortionDraftRow({
   index: number;
   eaters: PreparationEaterOption[];
   targetMeals: PreparationTargetOption[];
+  gramsPerServing: number | null;
   canRemove: boolean;
   onRemove: () => void;
   onUpdate: (patch: Partial<PortionDraft>) => void;
@@ -478,17 +516,41 @@ function PortionDraftRow({
           />
         </Stack>
       </div>
-      <label className="flex min-h-11 items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="size-4 accent-primary"
-          checked={row.confirmed}
-          onChange={(event) => onUpdate({ confirmed: event.target.checked })}
-        />
-        Confirmed eaten
-      </label>
+      {gramsPerServing ? (
+        <Row align="center" gap="xs" wrap>
+          <Description size="xs">
+            1 serving ≈ {Math.round(gramsPerServing)} g
+          </Description>
+          {[0.5, 1, 1.5].map((servings) => (
+            <Button
+              key={servings}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                onUpdate({
+                  grams: String(Math.round(gramsPerServing * servings)),
+                })
+              }
+            >
+              {servings}×
+            </Button>
+          ))}
+        </Row>
+      ) : null}
     </div>
   );
+}
+
+function gramsPerServing(
+  basis: MealPreparationYieldBasis,
+  servings: number | null | undefined,
+  recipeScale: number,
+): number | null {
+  if (!servings || basis.kind === "missing") return null;
+  if (basis.upperGrams != null && basis.upperGrams !== basis.lowerGrams)
+    return null;
+  return basis.lowerGrams / (servings * recipeScale);
 }
 
 function yieldBasisLabel(basis: MealPreparationYieldBasis): string {

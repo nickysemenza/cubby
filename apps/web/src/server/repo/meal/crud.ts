@@ -21,6 +21,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   meal,
+  mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
   recipe,
@@ -78,6 +79,12 @@ type MealColumnPatch = {
 };
 
 export const MEAL_DELETE_EDGE_POLICY = {
+  "MealFoodEntry.mealId": {
+    code: "soft-delete-food-entries",
+    effect: "soft-delete",
+    description:
+      "Deleting a meal soft-deletes its product and manual food entries.",
+  },
   "MealRecipe.mealId": {
     code: "soft-delete-association",
     effect: "soft-delete",
@@ -420,6 +427,11 @@ export const deleteMeals = async (
         removal: "soft",
         actor,
         children: [
+          {
+            table: mealFoodEntry,
+            parentColumns: [mealFoodEntry.mealId],
+            auditKey: "cascadedMealFoodEntries",
+          },
           {
             table: mealRecipe,
             parentColumns: [mealRecipe.mealId],

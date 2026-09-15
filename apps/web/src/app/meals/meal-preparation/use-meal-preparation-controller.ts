@@ -1,6 +1,6 @@
 import type { MealShortcode } from "@cubby/schemas/identifiers";
 import type { MealOut } from "@cubby/schemas/meal";
-import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { addDays, format, parseISO, subDays } from "date-fns";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -21,15 +21,19 @@ export type PreparationSourceChoice = {
   mealId: MealShortcode;
   mealRecipeId: string;
   label: string;
+  servings: number | null;
 };
 
 function sourceChoicesFor(
   meals: MealOut[] | undefined,
   beforeDate: string,
+  currentMealId: MealShortcode,
 ): PreparationSourceChoice[] {
   return (
     meals
-      ?.filter((target) => target.date < beforeDate)
+      ?.filter(
+        (target) => target.date <= beforeDate && target.id !== currentMealId,
+      )
       .flatMap((target) =>
         target.recipes.map((recipe, index) => {
           const duplicate =
@@ -48,6 +52,7 @@ function sourceChoicesFor(
             mealId: target.id,
             mealRecipeId: recipe.id,
             label: `${recipe.recipe.name}${ordinal ? ` · ${ordinal}` : ""} · ${target.name ?? target.date}`,
+            servings: recipe.recipe.servings ?? null,
           };
         }),
       ) ?? []
@@ -58,10 +63,12 @@ export function useMealPreparationController({
   mealId,
   mealDate,
   invalidate,
+  onSaved,
 }: {
   mealId: MealShortcode;
   mealDate: string | undefined;
   invalidate: () => void;
+  onSaved?: () => void;
 }) {
   const [openMealRecipeId, setOpenMealRecipeId] = useState<string | null>(null);
   const [sourcePickerOpen, setSourcePickerOpen] = useState(false);
@@ -71,25 +78,26 @@ export function useMealPreparationController({
   const preparationQuery = useQuery(
     mealOperations.getPreparations.queryOptions({ mealId }),
   );
-  const dateRangeQueries =
-    mealDate != null && preparationQuery.data != null
-      ? [
-          mealOperations.getByDateRange.queryOptions({
-            from: format(subDays(parseISO(mealDate), 30), "yyyy-MM-dd"),
-            to: format(addDays(parseISO(mealDate), 30), "yyyy-MM-dd"),
-          }),
-          mealOperations.getByDateRange.queryOptions({
-            from: format(subDays(parseISO(mealDate), 30), "yyyy-MM-dd"),
-            to: mealDate,
-          }),
-        ]
-      : [];
-  const [targetMealsQuery, sourceMealsQuery] = useQueries({
-    queries: dateRangeQueries,
+  const rangeAnchor = mealDate ?? "1970-01-01";
+  const rangeStart = format(subDays(parseISO(rangeAnchor), 30), "yyyy-MM-dd");
+  const rangeEnd = format(addDays(parseISO(rangeAnchor), 30), "yyyy-MM-dd");
+  const targetMealsQuery = useQuery({
+    ...mealOperations.getByDateRange.queryOptions({
+      from: rangeStart,
+      to: rangeEnd,
+    }),
+    enabled: mealDate != null && openMealRecipeId != null,
+  });
+  const sourceMealsQuery = useQuery({
+    ...mealOperations.getByDateRange.queryOptions({
+      from: rangeStart,
+      to: rangeAnchor,
+    }),
+    enabled: mealDate != null && sourcePickerOpen,
   });
   const eatersQuery = useQuery({
     ...ledgerParty.options.queryOptions(null),
-    enabled: preparationQuery.data != null,
+    enabled: openMealRecipeId != null,
   });
   const targetMeals: PreparationTargetOption[] =
     targetMealsQuery?.data
@@ -110,6 +118,7 @@ export function useMealPreparationController({
   const sourceChoices = sourceChoicesFor(
     sourceMealsQuery?.data,
     mealDate ?? "",
+    mealId,
   );
   const selectedSourceChoice = sourceChoices.find(
     (choice) => choice.value === sourceSelectionId,
@@ -135,6 +144,7 @@ export function useMealPreparationController({
         void sourcePreparationQuery.refetch();
         invalidate();
         toast.success("Portions saved");
+        onSaved?.();
       },
       onError: (error) => toast.error(getErrorMessage(error)),
     }),
@@ -148,6 +158,7 @@ export function useMealPreparationController({
     selectedSourceChoice,
     selectedPreparation,
     sourcePickerOpen,
+    isLoadingSourceChoices: sourceMealsQuery.isLoading,
     openMealRecipeId,
     isSaving: savePreparationMutation.isPending,
     setSourcePickerOpen,
@@ -168,6 +179,7 @@ export function useMealPreparationController({
     },
     save: (request: PreparationSaveRequest) =>
       savePreparationMutation.mutate(request),
+    refetchPreparations: () => preparationQuery.refetch(),
   } satisfies {
     view: MealPreparationsView | undefined;
     targetMeals: PreparationTargetOption[];
@@ -178,6 +190,7 @@ export function useMealPreparationController({
       | MealPreparationsView["preparations"][number]
       | undefined;
     sourcePickerOpen: boolean;
+    isLoadingSourceChoices: boolean;
     openMealRecipeId: string | null;
     isSaving: boolean;
     setSourcePickerOpen: typeof setSourcePickerOpen;
@@ -187,5 +200,6 @@ export function useMealPreparationController({
     chooseSource: () => void;
     closePreparation: () => void;
     save: (request: PreparationSaveRequest) => void;
+    refetchPreparations: typeof preparationQuery.refetch;
   };
 }

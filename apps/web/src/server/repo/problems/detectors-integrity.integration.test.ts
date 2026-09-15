@@ -16,6 +16,7 @@ import {
   ledgerSourceClaim,
   locationImage,
   mealImage,
+  mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
   plantingImage,
@@ -52,7 +53,7 @@ import {
 /**
  * Regression suite for `findReferentialLivenessViolations` (detectors-integrity.ts)
  * — the audit that finds every LIVE row whose FK points at a SOFT-DELETED target,
- * across the 80 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
+ * across the 83 `must-target-live` incoming edges in `ENTITY_EDGE_SEMANTICS`.
  *
  * The matrix below is driven from `INCOMING_EDGES` × `ENTITY_EDGE_SEMANTICS`
  * themselves (not a hand-copied edge list), so a newly-added `must-target-live`
@@ -522,6 +523,20 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "MealFoodEntry.mealId": async (db, targetId) => {
+    const [party, product] = await Promise.all([
+      mkLedgerParty(db),
+      mkProduct(db),
+    ]);
+    return insertAndReturn(db, mealFoodEntry, {
+      mealId: parseEntityId("meal", targetId),
+      ledgerPartyId: party.id,
+      sourceKind: "product",
+      productId: product.id,
+      grams: 1,
+    });
+  },
+
   "MealRecipePortion.mealId": async (db, targetId) => {
     const [sourceMeal, recipe, party] = await Promise.all([
       mkMeal(db),
@@ -550,6 +565,17 @@ const SOURCE_FACTORIES = {
       mealRecipeId: preparation.id,
       mealId: meal.id,
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
+      grams: 1,
+    });
+  },
+
+  "MealFoodEntry.ledgerPartyId": async (db, targetId) => {
+    const [meal, product] = await Promise.all([mkMeal(db), mkProduct(db)]);
+    return insertAndReturn(db, mealFoodEntry, {
+      mealId: meal.id,
+      ledgerPartyId: parseEntityId("ledgerParty", targetId),
+      sourceKind: "product",
+      productId: product.id,
       grams: 1,
     });
   },
@@ -614,6 +640,17 @@ const SOURCE_FACTORIES = {
     return insertAndReturn(db, purchaseProduct, {
       purchaseId: p.id,
       productId: parseEntityId("product", targetId),
+    });
+  },
+
+  "MealFoodEntry.productId": async (db, targetId) => {
+    const [meal, party] = await Promise.all([mkMeal(db), mkLedgerParty(db)]);
+    return insertAndReturn(db, mealFoodEntry, {
+      mealId: meal.id,
+      ledgerPartyId: party.id,
+      sourceKind: "product",
+      productId: parseEntityId("product", targetId),
+      grams: 1,
     });
   },
 
@@ -1066,11 +1103,11 @@ const derivedMustTargetLiveEdges = deriveMustTargetLiveEdges();
 describe("findReferentialLivenessViolations", () => {
   const ctx = withTestDb();
 
-  it("derives 74 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
+  it("derives 83 must-target-live edges from INCOMING_EDGES × ENTITY_EDGE_SEMANTICS", () => {
     // Mirrors EXPECTED_EDGE_COUNT in detectors-integrity.ts — an independent
     // spot check computed from the same two source-of-truth maps, not from the
     // detector's own (unexported) derivation.
-    expect(derivedMustTargetLiveEdges).toHaveLength(80);
+    expect(derivedMustTargetLiveEdges).toHaveLength(83);
   });
 
   it("the hand-written fixture map covers exactly the derived edges (a new edge fails here, not silently)", () => {

@@ -29,6 +29,11 @@ typealias ProblemCountsOut = Components.Schemas.ProblemsCount
 typealias DashboardCountsOut = Components.Schemas.DashboardCountsOut
 typealias MealRowOut = Components.Schemas.MealOut
 typealias MealListRowOut = Components.Schemas.MealListItemOut
+typealias MealNutritionOut = Components.Schemas.MealNutritionOut
+typealias MealNutritionInput = Components.Schemas.MealNutritionInput
+typealias NutritionMealOut = Components.Schemas.NutritionMeal
+typealias MealTotalsOut = Components.Schemas.MealTotals
+typealias MeasureEstimateOut = Components.Schemas.MeasureEstimate
 typealias UploadInput = Components.Schemas.InitiateUploadWithoutEntity
 typealias UploadOut = Components.Schemas.InitiateUploadWithoutEntityResponse
 typealias UPCLookupOut = Components.Schemas.UpcLookupOutput
@@ -610,6 +615,87 @@ extension TodayMeal {
 extension TodayProblemCounts {
     init(_ out: ProblemCountsOut) {
         self.init(total: Int(out.total), coverageTotal: Int(out.coverageTotal))
+    }
+}
+
+// MARK: - Meal nutrition
+
+extension MealNutritionSummary {
+    init(_ out: MealNutritionOut) {
+        meals = out.meals.map(MealNutritionMeal.init)
+        people = out.people.map { person in
+            MealNutritionPerson(
+                id: person.eater.id,
+                name: person.eater.name,
+                totals: MacroSummary(person.totals),
+                foods: person.foods.map(MealNutritionFood.init),
+                meals: person.meals.map {
+                    MealNutritionMealSubtotal(
+                        meal: MealNutritionMeal($0.meal), totals: MacroSummary($0.totals))
+                }
+            )
+        }
+    }
+}
+
+extension MealNutritionMeal {
+    init(_ out: NutritionMealOut) {
+        id = out.id
+        date = out.date
+        name = out.name
+        mealType = out.mealType?.rawValue
+    }
+}
+
+extension MealNutritionFood {
+    init(_ out: Components.Schemas.MealNutritionFood) {
+        switch out {
+        case .manual(let food):
+            self.init(
+                source: .manual(id: food.id), meal: MealNutritionMeal(food.meal), name: food.name,
+                grams: food.grams, totals: MacroSummary(food.totals))
+        case .product(let food):
+            self.init(
+                source: .product(id: food.id, productID: food.productId),
+                meal: MealNutritionMeal(food.meal), name: food.name, grams: food.grams,
+                totals: MacroSummary(food.totals))
+        case .recipe(let food):
+            self.init(
+                source: .recipe(
+                    mealRecipeID: food.mealRecipeId, recipeID: food.recipeId,
+                    sourceMealID: food.sourceMealId),
+                meal: MealNutritionMeal(food.meal), name: food.name, grams: food.grams,
+                totals: MacroSummary(food.totals))
+        }
+    }
+}
+
+extension MacroSummary {
+    init(_ out: MealTotalsOut) {
+        let nutrition = out.nutrition.additionalProperties
+        calories = NutritionAmount(nutrition["kcal"])
+        protein = NutritionAmount(nutrition["protein"])
+        carbs = NutritionAmount(nutrition["carbs"])
+        fat = NutritionAmount(nutrition["fat"])
+    }
+}
+
+extension NutritionAmount {
+    init(_ out: MeasureEstimateOut?) {
+        guard let out else {
+            self = .unavailable
+            return
+        }
+        switch out {
+        case .complete(let estimate):
+            self = .complete(lower: estimate.lower, upper: estimate.upper)
+        case .partial(let estimate):
+            self = .partial(lower: estimate.lower, upper: estimate.upper)
+        case .pending:
+            self = .pending
+        case .unavailable:
+            self = .unavailable
+        }
     }
 }
 

@@ -26,7 +26,7 @@ export const ENTITY_NATIVE_COVERAGE = {
   "cookbook": {"httpActions":[],"imageAttach":false,"imageOrder":false,"rpcIds":[]},
   "location": {"httpActions":["create","get","list","update"],"imageAttach":true,"imageOrder":true,"rpcIds":["location.bulkUpdateParent","location.ensureGlobalUnknown","location.makeTree"]},
   "inventory": {"httpActions":["create","get","list"],"imageAttach":false,"imageOrder":false,"rpcIds":["inventory.findDuplicates","inventory.getByLocationIds","inventory.reconcileSession","inventory.resolveScanStrays","inventory.scanAtLocation"]},
-  "meal": {"httpActions":["get","list","update"],"imageAttach":true,"imageOrder":true,"rpcIds":[]},
+  "meal": {"httpActions":["get","list","update"],"imageAttach":true,"imageOrder":true,"rpcIds":["meal.getNutrition"]},
   "ledgerParty": {"httpActions":["get","list"],"imageAttach":false,"imageOrder":false,"rpcIds":[]},
   "ledgerTransfer": {"httpActions":["get","list"],"imageAttach":false,"imageOrder":false,"rpcIds":[]},
   "project": {"httpActions":["get","list"],"imageAttach":false,"imageOrder":false,"rpcIds":[]},

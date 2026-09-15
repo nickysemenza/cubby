@@ -11,6 +11,7 @@ import { RecordedSpendCard } from "~/app/_components/home/RecordedSpendCard";
 import { ProblemsBanner } from "~/app/_components/homepage/problems-banner";
 import { expense } from "~/app/expenses/expense.functions";
 import { location } from "~/app/locations/location.functions";
+import { TodayNutrition } from "~/app/meals/daily-nutrition";
 import { meal } from "~/app/meals/meal.functions";
 import { task } from "~/app/tasks/task.functions";
 import { CollapsibleSection, Grid, Section } from "~/components/layout";
@@ -43,6 +44,9 @@ export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
     const asOf = getHomeAsOfWindow();
     await Promise.allSettled([
+      context.queryClient.ensureQueryData(
+        meal.getNutrition.queryOptions({ date: asOf.meals.from }),
+      ),
       context.queryClient.ensureQueryData(problems.getCounts.queryOptions()),
       context.queryClient.ensureQueryData(task.todayBriefing.queryOptions()),
       context.queryClient.ensureQueryData(
@@ -110,7 +114,10 @@ function Home() {
           as a vertical briefing. */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <TodayAttention />
-        <TodayMeals asOf={asOf} />
+        <div className="grid content-start gap-6">
+          <TodayNutrition initialDate={asOf.meals.from} />
+          <TodayMeals asOf={asOf} />
+        </div>
       </div>
 
       <DailyPasses />

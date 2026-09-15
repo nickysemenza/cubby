@@ -50,6 +50,7 @@ import {
   ingredient,
   inventoryEntry,
   location,
+  mealFoodEntry,
   product,
   planting,
   productComponent,
@@ -159,6 +160,18 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
           and(
             eq(purchaseProduct.productId, product.id),
             notDeleted(purchaseProduct),
+          ),
+        ),
+    ),
+  "MealFoodEntry.productId": (dbClient) =>
+    notExists(
+      dbClient
+        .select({ id: sql`1` })
+        .from(mealFoodEntry)
+        .where(
+          and(
+            eq(mealFoodEntry.productId, product.id),
+            notDeleted(mealFoodEntry),
           ),
         ),
     ),

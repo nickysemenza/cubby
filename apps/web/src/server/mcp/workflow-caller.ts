@@ -43,6 +43,7 @@ import { moveInventoryEntriesWorkflow } from "~/server/workflows/inventory.serve
 import {
   addRecipeToMealWorkflow,
   getMealPreparationsWorkflow,
+  getMealNutritionWorkflow,
   getShoppingListWorkflow,
   removeMealRecipeWorkflow,
   saveMealRecipePreparationWorkflow,
@@ -195,6 +196,10 @@ const callerDomains = {
         moveInventoryEntriesWorkflow(context.db, context.actorContext, input),
   },
   meal: {
+    getNutrition:
+      (context: CallerContext) =>
+      (input: Parameters<typeof getMealNutritionWorkflow>[1]) =>
+        getMealNutritionWorkflow(context.readDb, input, context.usdaClient),
     getPreparations:
       (context: CallerContext) =>
       (input: Parameters<typeof getMealPreparationsWorkflow>[1]) =>

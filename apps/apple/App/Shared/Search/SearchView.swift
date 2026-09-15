@@ -77,7 +77,9 @@ struct SearchContent: View {
             .porcelainScreen()
             .navigationTitle("Search")
             .searchable(text: $search.query, placement: Self.searchPlacement, prompt: searchPrompt)
-            .searchToolbarBehavior(.minimize)
+            #if os(iOS)
+                .searchToolbarBehavior(.minimize)
+            #endif
             .searchFocused($searchFieldFocused)
             .accessibilityIdentifier("search.content")
             .searchSuggestions {

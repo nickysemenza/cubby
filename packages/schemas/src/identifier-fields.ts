@@ -18,6 +18,10 @@ export type ExpenseAttributionId = z.infer<typeof expenseAttributionId>;
 export const mealRecipeId = brandedId("MealRecipeId");
 export type MealRecipeId = z.infer<typeof mealRecipeId>;
 
+/** Meal-owned food entry identity, like a MealRecipe occurrence. */
+export const mealFoodEntryId = brandedId("MealFoodEntryId");
+export type MealFoodEntryId = z.infer<typeof mealFoodEntryId>;
+
 /** Storage-only identity for a portion row; never exposed by meal APIs. */
 export const mealRecipePortionId = brandedId("MealRecipePortionId");
 export type MealRecipePortionId = z.infer<typeof mealRecipePortionId>;

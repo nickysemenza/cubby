@@ -3,6 +3,18 @@ import * as schemas from "@cubby/schemas/meal";
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const mealContract = defineContract("meal", {
+  getNutrition: query({
+    input: schemas.mealNutritionInput,
+    output: schemas.mealNutritionOut,
+  }),
+  saveFood: mutation({
+    input: schemas.saveMealFoodInput,
+    output: schemas.mealFoodMutationOut,
+  }),
+  removeFood: mutation({
+    input: schemas.removeMealFoodInput,
+    output: schemas.mealFoodMutationOut,
+  }),
   getByDateRange: query({
     input: schemas.mealDateRange,
     output: schemas.mealListOut,

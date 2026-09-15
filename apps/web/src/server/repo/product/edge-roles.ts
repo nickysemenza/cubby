@@ -3,7 +3,7 @@
  * edge semantics — replacing the "must agree on both" prose comment that used
  * to sit next to `deleteProducts` in `crud.ts`.
  *
- * `product` has fourteen incoming edges (`INCOMING_EDGES.product` in
+ * `product` has sixteen incoming edges (`INCOMING_EDGES.product` in
  * `entity-incoming-edges.ts`). Their *stable roles* now live in
  * `ENTITY_EDGE_SEMANTICS.product` (`~/server/db/entity-edge-semantics`)
  * alongside every other entity's, because a role describes what an edge means
@@ -172,6 +172,14 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
       "A product recorded against the order that bought it can't be deleted — that link is often the only path back to the purchase, since an installment order's expenses can't carry a product.",
     reason: "PRODUCT_HAS_PURCHASE_LINKS",
     label: "purchase links",
+  },
+  "MealFoodEntry.productId": {
+    code: "block-live-meal-food-entry",
+    effect: "block",
+    description:
+      "A product used by a live meal food entry can't be deleted because the recorded grams depend on that product's nutrition source.",
+    reason: "CONSTRAINT_VIOLATION",
+    label: "meal food entries",
   },
   "WishCandidate.productId": {
     code: "block-live-wishlist-candidate",

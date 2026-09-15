@@ -594,6 +594,11 @@ export const httpContract = httpContractBuilder.router(
         "getByDateRange",
         contracts.mealContract.ops["getByDateRange"],
       ),
+      getNutrition: rpcQueryPost(
+        "meal",
+        "getNutrition",
+        contracts.mealContract.ops["getNutrition"],
+      ),
       getPreparations: rpcQuery(
         "meal",
         "getPreparations",
@@ -604,10 +609,20 @@ export const httpContract = httpContractBuilder.router(
         "getShoppingList",
         contracts.mealContract.ops["getShoppingList"],
       ),
+      removeFood: rpcMutation(
+        "meal",
+        "removeFood",
+        contracts.mealContract.ops["removeFood"],
+      ),
       removeRecipe: rpcMutation(
         "meal",
         "removeRecipe",
         contracts.mealContract.ops["removeRecipe"],
+      ),
+      saveFood: rpcMutation(
+        "meal",
+        "saveFood",
+        contracts.mealContract.ops["saveFood"],
       ),
       savePreparation: rpcMutation(
         "meal",

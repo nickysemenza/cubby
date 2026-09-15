@@ -624,14 +624,30 @@ public actor CubbyClient {
         }
     }
 
-    /// The meals planned for one calendar day, in the device's own time zone.
-    public func meals(on date: Date, calendar: Calendar = .current) async throws -> [TodayMeal] {
-        let day = Self.plainDate(date, in: calendar)
+    /// The meals planned for one household calendar day.
+    public func meals(on date: Date) async throws -> [TodayMeal] {
+        let day = HouseholdDay.string(for: date)
         return try await perform {
             var query = Operations.Resources_meal_list.Input.Query(page: 1, pageSize: 20, sort: "date")
             query.from = day
             query.to = day
             return try await api.resources_meal_list(query: query).ok.body.json.items.map(TodayMeal.init)
+        }
+    }
+
+    public func mealNutrition(mealID: String) async throws -> MealNutritionSummary {
+        let input = MealNutritionInput(value1: .init(mealId: mealID))
+        return try await perform {
+            MealNutritionSummary(
+                try await api.meal_getNutrition(.init(body: .json(input))).ok.body.json)
+        }
+    }
+
+    public func mealNutrition(on day: String) async throws -> MealNutritionSummary {
+        let input = MealNutritionInput(value2: .init(date: day))
+        return try await perform {
+            MealNutritionSummary(
+                try await api.meal_getNutrition(.init(body: .json(input))).ok.body.json)
         }
     }
 
@@ -672,12 +688,6 @@ public actor CubbyClient {
         }
     }
 
-    /// `yyyy-MM-dd` in the given calendar — "today" means the day the user is in, not a UTC day
-    /// that may already have rolled over.
-    private static func plainDate(_ date: Date, in calendar: Calendar) -> String {
-        let parts = calendar.dateComponents([.year, .month, .day], from: date)
-        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-    }
 }
 
 extension CubbyClient: GardenService {}

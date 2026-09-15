@@ -58,6 +58,7 @@ import {
   ingredient,
   inventoryEntry,
   location,
+  mealFoodEntry,
   product,
   planting,
   productComponent,
@@ -2069,6 +2070,14 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       where: and(
         inArray(purchaseProduct.productId, ids),
         notDeleted(purchaseProduct),
+      ),
+      columns: { productId: true },
+    }),
+  "MealFoodEntry.productId": (tx, ids) =>
+    tx.query.mealFoodEntry.findMany({
+      where: and(
+        inArray(mealFoodEntry.productId, ids),
+        notDeleted(mealFoodEntry),
       ),
       columns: { productId: true },
     }),

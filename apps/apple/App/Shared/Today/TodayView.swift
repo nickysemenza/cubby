@@ -3,23 +3,40 @@ import SwiftUI
 
 struct TodayView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.scenePhase) private var scenePhase
     @State private var today: TodayModel?
+    @State private var nutrition: MealNutritionModel?
+    @State private var householdDay = HouseholdDay.string(for: .now)
 
     var body: some View {
         Group {
             if let today {
+                let nutrition = nutrition
                 TodayContent(
-                    dateText: Date.now.formatted(.dateTime.weekday(.wide).month(.wide).day()),
+                    dateText: displayDate,
                     tasks: today.tasks, meals: today.meals, problems: today.problems,
-                    onRefresh: { await today.refresh() },
+                    nutrition: nutrition?.state ?? .loading,
+                    nutritionDay: householdDay,
+                    onRefresh: {
+                        if let nutrition {
+                            async let todayRefresh: Void = today.refresh()
+                            async let nutritionRefresh: Void = nutrition.refresh()
+                            _ = await (todayRefresh, nutritionRefresh)
+                        } else {
+                            await today.refresh()
+                        }
+                    },
                     tasksError: today.tasksError, mealsError: today.mealsError,
                     problemsError: today.problemsError,
+                    nutritionError: nutrition?.refreshError,
                     onRetryTasks: { await today.refreshTasks() },
                     onRetryMeals: { await today.refreshMeals() },
                     onRetryProblems: { await today.refreshProblems() },
+                    onRetryNutrition: { await nutrition?.refresh() },
                     tasksIsLoading: today.tasksIsLoading,
                     mealsIsLoading: today.mealsIsLoading,
-                    problemsIsLoading: today.problemsIsLoading
+                    problemsIsLoading: today.problemsIsLoading,
+                    nutritionIsLoading: nutrition?.isLoading ?? false
                 )
             } else {
                 LoadingIndicator.screen(label: "Loading Today")
@@ -27,12 +44,48 @@ struct TodayView: View {
         }
         .navigationTitle("Today")
         .task(id: model.host) {
-            guard today == nil else { return }
+            today = nil
+            nutrition = nil
+            await synchronizeDay(forceRefresh: true)
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(60))
+                } catch {
+                    return
+                }
+                await synchronizeDay()
+            }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await synchronizeDay(forceRefresh: true) } }
+        }
+    }
+
+    private var displayDate: String {
+        HouseholdDay.date(from: householdDay)?.formatted(
+            Date.FormatStyle(date: .omitted, time: .omitted, timeZone: HouseholdDay.timeZone)
+                .weekday(.wide).month(.wide).day()) ?? householdDay
+    }
+
+    /// Keeps the visible day, nutrition query, and breakdown link on one household-day value.
+    /// The minute pulse handles an open foreground app; scene activation covers suspended time.
+    private func synchronizeDay(forceRefresh: Bool = false) async {
+        let currentDay = HouseholdDay.string(for: .now)
+        let dayChanged = currentDay != householdDay
+        if dayChanged { householdDay = currentDay }
+
+        if today == nil {
             let today = TodayModel(client: model.client)
             today.onProblemCount = { [weak model] total in model?.problemsTotal = total }
             self.today = today
-            await today.refresh()
         }
+        if nutrition == nil || dayChanged {
+            nutrition = MealNutritionModel(query: .day(currentDay), client: model.client)
+        }
+        guard dayChanged || forceRefresh, let today, let nutrition else { return }
+        async let todayRefresh: Void = today.refresh()
+        async let nutritionRefresh: Void = nutrition.refresh()
+        _ = await (todayRefresh, nutritionRefresh)
     }
 }
 
@@ -41,104 +94,293 @@ struct TodayContent: View {
     let tasks: TodaySectionState<[TodayTask]>
     let meals: TodaySectionState<[TodayMeal]>
     let problems: TodaySectionState<TodayProblemCounts>
+    var nutrition: TodaySectionState<MealNutritionSummary> = .loading
+    var nutritionDay = HouseholdDay.string(for: .now)
     let onRefresh: @Sendable () async -> Void
     var tasksError: String?
     var mealsError: String?
     var problemsError: String?
+    var nutritionError: String?
     var onRetryTasks: (@Sendable () async -> Void)?
     var onRetryMeals: (@Sendable () async -> Void)?
     var onRetryProblems: (@Sendable () async -> Void)?
+    var onRetryNutrition: (@Sendable () async -> Void)?
     var tasksIsLoading = false
     var mealsIsLoading = false
     var problemsIsLoading = false
+    var nutritionIsLoading = false
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        List {
-            Section {
-                Text(dateText).foregroundStyle(.secondary)
-            }
-            Section("Tasks") {
-                switch tasks {
-                case .loading: LoadingIndicator(label: "Loading tasks")
-                case .failed(let message):
-                    failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
-                case .loaded(let rows):
-                    if rows.isEmpty { Text("Nothing due").foregroundStyle(.secondary) }
-                    ForEach(rows) { task in
-                        NavigationLink(value: Route.entityDetail(.task, id: task.id)) { TaskRow(task: task) }
+        #if os(macOS)
+            macDashboard
+        #else
+            iOSList
+        #endif
+    }
+
+    #if os(iOS)
+        private var iOSList: some View {
+            List {
+                Section {
+                    Text(dateText).foregroundStyle(.secondary)
+                }
+                Section("Tasks") {
+                    switch tasks {
+                    case .loading: LoadingIndicator(label: "Loading tasks")
+                    case .failed(let message):
+                        failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                    case .loaded(let rows):
+                        if rows.isEmpty { Text("Nothing due").foregroundStyle(.secondary) }
+                        ForEach(rows) { task in
+                            NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
+                                TaskRow(task: task)
+                            }
+                        }
+                    }
+                    if let tasksError {
+                        failure(tasksError, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
                     }
                 }
-                if let tasksError {
-                    failure(tasksError, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
-                }
-            }
-            Section("Meals today") {
-                switch meals {
-                case .loading: LoadingIndicator(label: "Loading meals")
-                case .failed(let message):
-                    failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
-                case .loaded(let rows):
-                    if rows.isEmpty { Text("No meals planned").foregroundStyle(.secondary) }
-                    ForEach(rows) { meal in
-                        NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) { MealRow(meal: meal) }
+                Section("Meals today") {
+                    switch meals {
+                    case .loading: LoadingIndicator(label: "Loading meals")
+                    case .failed(let message):
+                        failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                    case .loaded(let rows):
+                        if rows.isEmpty { Text("No meals planned").foregroundStyle(.secondary) }
+                        ForEach(rows) { meal in
+                            NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
+                                MealRow(meal: meal)
+                            }
+                        }
+                    }
+                    if let mealsError {
+                        failure(mealsError, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
                     }
                 }
-                if let mealsError {
-                    failure(mealsError, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                Section("Nutrition today") {
+                    switch nutrition {
+                    case .loading: LoadingIndicator(label: "Loading nutrition")
+                    case .failed(let message):
+                        failure(
+                            message, isLoading: nutritionIsLoading,
+                            retry: onRetryNutrition ?? onRefresh)
+                    case .loaded(let summary):
+                        MealNutritionCompactView(summary: summary)
+                        NavigationLink(value: Route.nutrition(day: nutritionDay)) {
+                            Label("View food breakdown", systemImage: "chart.bar.doc.horizontal")
+                        }
+                    }
+                    if let nutritionError {
+                        failure(
+                            nutritionError, isLoading: nutritionIsLoading,
+                            retry: onRetryNutrition ?? onRefresh)
+                    }
                 }
-            }
-            Section("Problems") {
-                switch problems {
-                case .loading: LoadingIndicator(label: "Loading problems")
-                case .failed(let message):
-                    failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
-                case .loaded(let counts):
-                    LabeledContent("Open problems", value: counts.total.formatted())
-                    LabeledContent("Coverage", value: counts.coverageTotal.formatted())
+                Section("Problems") {
+                    switch problems {
+                    case .loading: LoadingIndicator(label: "Loading problems")
+                    case .failed(let message):
+                        failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                    case .loaded(let counts):
+                        LabeledContent("Open problems", value: counts.total.formatted())
+                        LabeledContent("Coverage", value: counts.coverageTotal.formatted())
+                    }
+                    if let problemsError {
+                        failure(
+                            problemsError, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                    }
                 }
-                if let problemsError {
-                    failure(problemsError, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
-                }
-            }
-            Section("Shortcuts") {
-                NavigationLink(value: Route.entityList(.product)) {
-                    Label("Browse products", systemImage: "shippingbox")
-                }
-                Button {
-                    model.navigator.section = .capture
-                } label: {
-                    Label("Capture", systemImage: "barcode.viewfinder")
-                }
-                Button {
-                    model.navigator.section = .capture
-                    model.navigator.paths[.capture] = [.audit(locationID: nil)]
-                } label: {
-                    Label("Walk the shelf", systemImage: "checklist")
-                }
-                NavigationLink(value: Route.needsPhoto(locationID: nil)) {
-                    Label("Needs a photo", systemImage: "camera.badge.ellipsis")
-                }
-                Button {
-                    model.navigator.openIdentify()
-                } label: {
-                    Label("Identify a photo", systemImage: "camera.metering.center.weighted")
-                }
-                NavigationLink(value: Route.garden) { Label("Garden", systemImage: "leaf") }
-                #if os(macOS)
-                    SettingsLink { Label("Settings", systemImage: "gearshape") }
-                #else
+                Section("Shortcuts") {
+                    NavigationLink(value: Route.entityList(.product)) {
+                        Label("Browse products", systemImage: "shippingbox")
+                    }
+                    Button {
+                        model.navigator.section = .capture
+                    } label: {
+                        Label("Capture", systemImage: "barcode.viewfinder")
+                    }
+                    Button {
+                        model.navigator.section = .capture
+                        model.navigator.paths[.capture] = [.audit(locationID: nil)]
+                    } label: {
+                        Label("Walk the shelf", systemImage: "checklist")
+                    }
+                    NavigationLink(value: Route.needsPhoto(locationID: nil)) {
+                        Label("Needs a photo", systemImage: "camera.badge.ellipsis")
+                    }
+                    Button {
+                        model.navigator.openIdentify()
+                    } label: {
+                        Label("Identify a photo", systemImage: "camera.metering.center.weighted")
+                    }
+                    NavigationLink(value: Route.garden) { Label("Garden", systemImage: "leaf") }
                     NavigationLink {
                         SettingsView()
                     } label: {
                         Label("Settings", systemImage: "gearshape")
                     }
-                #endif
+                }
+            }
+            .refreshControl(onRefresh)
+            .accessibilityIdentifier("today.sections")
+        }
+    #endif
+
+    #if os(macOS)
+        private var macDashboard: some View {
+            ScrollView {
+                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
+                    Text(dateText)
+                        .font(.porcelainHeadline)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: PorcelainTokens.Space.lg) {
+                            macPrimaryColumn
+                                .frame(minWidth: 500, maxWidth: .infinity, alignment: .topLeading)
+                            macSecondaryColumn
+                                .frame(minWidth: 280, maxWidth: 340, alignment: .topLeading)
+                        }
+                        VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                            macPrimaryColumn
+                            macSecondaryColumn
+                        }
+                    }
+                }
+                .frame(maxWidth: 1080, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .top)
+                .padding(PorcelainTokens.Space.xxl)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .background(PorcelainTokens.canvas)
+            .refreshControl(onRefresh)
+            .accessibilityIdentifier("today.sections")
+        }
+
+        private var macPrimaryColumn: some View {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                dashboardPanel("Meals today", systemImage: "fork.knife") {
+                    switch meals {
+                    case .loading: LoadingIndicator(label: "Loading meals")
+                    case .failed(let message):
+                        failure(message, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                    case .loaded(let rows):
+                        if rows.isEmpty { Text("No meals planned").foregroundStyle(.secondary) }
+                        ForEach(rows) { meal in
+                            NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
+                                MealRow(meal: meal)
+                            }
+                        }
+                    }
+                    if let mealsError {
+                        failure(mealsError, isLoading: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
+                    }
+                }
+
+                dashboardPanel("Nutrition today", systemImage: "chart.bar.doc.horizontal") {
+                    switch nutrition {
+                    case .loading: LoadingIndicator(label: "Loading nutrition")
+                    case .failed(let message):
+                        failure(
+                            message, isLoading: nutritionIsLoading,
+                            retry: onRetryNutrition ?? onRefresh)
+                    case .loaded(let summary):
+                        MealNutritionCompactView(summary: summary)
+                        NavigationLink(value: Route.nutrition(day: nutritionDay)) {
+                            Label("View food breakdown", systemImage: "arrow.right")
+                        }
+                    }
+                    if let nutritionError {
+                        failure(
+                            nutritionError, isLoading: nutritionIsLoading,
+                            retry: onRetryNutrition ?? onRefresh)
+                    }
+                }
             }
         }
-        .refreshControl(onRefresh)
-        .accessibilityIdentifier("today.sections")
-    }
+
+        private var macSecondaryColumn: some View {
+            VStack(alignment: .leading, spacing: PorcelainTokens.Space.lg) {
+                dashboardPanel("Tasks", systemImage: "checklist") {
+                    switch tasks {
+                    case .loading: LoadingIndicator(label: "Loading tasks")
+                    case .failed(let message):
+                        failure(message, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                    case .loaded(let rows):
+                        if rows.isEmpty { Text("Nothing due").foregroundStyle(.secondary) }
+                        ForEach(rows) { task in
+                            NavigationLink(value: Route.entityDetail(.task, id: task.id)) {
+                                TaskRow(task: task)
+                            }
+                        }
+                    }
+                    if let tasksError {
+                        failure(tasksError, isLoading: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
+                    }
+                }
+
+                dashboardPanel("Problems", systemImage: "exclamationmark.triangle") {
+                    switch problems {
+                    case .loading: LoadingIndicator(label: "Loading problems")
+                    case .failed(let message):
+                        failure(message, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                    case .loaded(let counts):
+                        LabeledContent("Open problems", value: counts.total.formatted())
+                        LabeledContent("Coverage", value: counts.coverageTotal.formatted())
+                    }
+                    if let problemsError {
+                        failure(
+                            problemsError, isLoading: problemsIsLoading, retry: onRetryProblems ?? onRefresh)
+                    }
+                }
+
+                dashboardPanel("Shortcuts", systemImage: "arrow.up.right.square") {
+                    macShortcuts
+                }
+            }
+        }
+
+        @ViewBuilder private var macShortcuts: some View {
+            NavigationLink(value: Route.entityList(.product)) {
+                Label("Browse products", systemImage: "shippingbox")
+            }
+            Button {
+                model.navigator.section = .capture
+            } label: {
+                Label("Capture", systemImage: "barcode.viewfinder")
+            }
+            Button {
+                model.navigator.section = .capture
+                model.navigator.paths[.capture] = [.audit(locationID: nil)]
+            } label: {
+                Label("Walk the shelf", systemImage: "checklist")
+            }
+            NavigationLink(value: Route.needsPhoto(locationID: nil)) {
+                Label("Needs a photo", systemImage: "camera.badge.ellipsis")
+            }
+            Button {
+                model.navigator.openIdentify()
+            } label: {
+                Label("Identify a photo", systemImage: "camera.metering.center.weighted")
+            }
+            NavigationLink(value: Route.garden) { Label("Garden", systemImage: "leaf") }
+            SettingsLink { Label("Settings", systemImage: "gearshape") }
+        }
+
+        private func dashboardPanel<Content: View>(
+            _ title: String, systemImage: String, @ViewBuilder content: () -> Content
+        ) -> some View {
+            Panel {
+                Label(title, systemImage: systemImage)
+                    .font(.porcelainHeadline)
+                    .foregroundStyle(PorcelainTokens.graphite)
+                Divider()
+                content()
+            }
+        }
+    #endif
 
     private func failure(_ message: String, isLoading: Bool, retry: @escaping @Sendable () async -> Void)
         -> some View
@@ -246,6 +488,8 @@ private func formattedDueDate(_ raw: String) -> String {
             tasks: .loaded(PreviewFixtures.sampleTodayTasks),
             meals: .loaded(PreviewFixtures.sampleTodayMeals),
             problems: .loaded(PreviewFixtures.sampleTodayProblems),
+            nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
+            nutritionDay: "2026-09-14",
             onRefresh: {}
         )
         .navigationTitle("Today")
@@ -259,6 +503,7 @@ private func formattedDueDate(_ raw: String) -> String {
             tasks: .loaded([]),
             meals: .loaded([]),
             problems: .loaded(TodayProblemCounts(total: 0, coverageTotal: 0)),
+            nutrition: .loaded(MealNutritionSummary(meals: [], people: [])),
             onRefresh: {}
         )
         .navigationTitle("Today")
@@ -272,8 +517,28 @@ private func formattedDueDate(_ raw: String) -> String {
             tasks: .loading,
             meals: .failed("The server returned an error."),
             problems: .loading,
+            nutrition: .failed("Nutrition is temporarily unavailable."),
             onRefresh: {}
         )
         .navigationTitle("Today")
     }
 }
+
+#if os(macOS)
+    #Preview("Today — narrow Mac") {
+        NavigationStack {
+            TodayContent(
+                dateText: "Friday, September 11",
+                tasks: .loaded(PreviewFixtures.sampleTodayTasks),
+                meals: .loaded(PreviewFixtures.sampleTodayMeals),
+                problems: .loaded(PreviewFixtures.sampleTodayProblems),
+                nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
+                nutritionDay: "2026-09-14",
+                onRefresh: {}
+            )
+            .navigationTitle("Today")
+        }
+        .frame(width: 700, height: 900)
+        .environment(PreviewFixtures.signedInModel())
+    }
+#endif

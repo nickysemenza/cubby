@@ -7,6 +7,7 @@ import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
+import { saveMealFoodInput } from "@cubby/schemas/meal";
 import { ledgerTransferCreateInput } from "@cubby/schemas/ledger-transfer";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
@@ -27,9 +28,11 @@ import {
 import { createUploadedImageRecord } from "~/server/repo/image";
 import { createLedgerParty } from "~/server/repo/ledger-party";
 import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
+import { saveMealFood } from "~/server/repo/meal/food";
 import { getDb } from "~/server/repo/database-helpers";
 import { requireActor } from "~/server/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 
 type CreatedEntity = { id: string };
 const fixtureSessionSchema = z.object({
@@ -350,6 +353,100 @@ export async function seedNutritionPrerequisite(
     recipes: [{ recipeId: recipe.id, scale: 1 }],
   });
   return { recipe, measured, incomplete, meal };
+}
+
+export async function seedMealNutritionPrerequisite(
+  page: Page,
+  name: string,
+  options: { seedProductPortion?: boolean } = {},
+) {
+  const member = await createFixture(
+    page,
+    "ledgerParty",
+    ledgerPartyCreateInput.parse({
+      name: `${name} member`,
+      kind: "member",
+    }),
+  );
+  const guest = await createFixture(
+    page,
+    "ledgerParty",
+    ledgerPartyCreateInput.parse({
+      name: `${name} guest`,
+      kind: "guest",
+    }),
+  );
+  const product = await createFixture(
+    page,
+    "product",
+    productCreateInput.parse({
+      ...productFixtureInput(`${name} snack`, "E2E fixture"),
+      labelNutrition: {
+        servingGrams: 30,
+        nutrients: { kcal: 120, protein: 3, carbs: 20, fat: 4 },
+        source: "E2E package label",
+      },
+    }),
+  );
+  const today = householdLocalDate();
+  const futureDate = householdDaysFromNow(2);
+  const inlineDate = householdDaysFromNow(3);
+  const meal = await createFixture(page, "meal", {
+    date: today,
+    name: `${name} meal`,
+    mealType: "snack",
+    mealKind: "other",
+    recipes: [],
+  });
+  const futureMeal = await createFixture(page, "meal", {
+    date: futureDate,
+    name: `${name} future meal`,
+    mealType: "snack",
+    mealKind: "other",
+    recipes: [],
+  });
+  const db = getFixtureDb();
+  const context = requireActor(
+    createTestRequestContext(db, {
+      auth: { userId: await fixtureUserId(page) },
+    }),
+  );
+  await saveMealFood(
+    db,
+    saveMealFoodInput.parse({
+      mealId: meal.id,
+      ledgerPartyId: guest.id,
+      sourceKind: "manual",
+      name: `${name} manual snack`,
+      grams: null,
+      nutrients: { kcal: 250, protein: 20, carbs: 0 },
+    }),
+    context.actorContext,
+  );
+  if (options.seedProductPortion) {
+    await saveMealFood(
+      db,
+      saveMealFoodInput.parse({
+        mealId: meal.id,
+        ledgerPartyId: member.id,
+        sourceKind: "product",
+        productId: product.id,
+        grams: 45,
+      }),
+      context.actorContext,
+    );
+  }
+  return {
+    member,
+    guest,
+    product,
+    meal,
+    futureMeal,
+    today,
+    futureDate,
+    inlineDate,
+    manualFoodName: `${name} manual snack`,
+  };
 }
 
 export async function clearNutritionCachePrerequisite(shortcode: string) {

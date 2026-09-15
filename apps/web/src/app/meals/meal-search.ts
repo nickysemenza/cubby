@@ -16,7 +16,7 @@ const dateParamSchema = z
   .optional()
   .catch(undefined);
 
-export type MealCalendarView = "calendar" | "table";
+export type MealCalendarView = "calendar" | "table" | "nutrition";
 
 // Merges `tableSearchFields` (sort/page/pageSize) so the Table view's
 // useTableState urlSync round-trips through this route's search params —
@@ -24,9 +24,10 @@ export type MealCalendarView = "calendar" | "table";
 // the table's sort/page silently resets (see tasks.index.tsx for the same
 // pattern).
 export const mealCalendarSearchSchema = z.object({
-  view: z.enum(["calendar", "table"]).optional().catch(undefined),
+  view: z.enum(["calendar", "table", "nutrition"]).optional().catch(undefined),
   period: calendarPeriodParam,
   week: dateParamSchema,
+  date: z.iso.date().optional().catch(undefined),
   // Meals have no /meals/new route — the create is a dialog, opened by this
   // param. That makes it deep-linkable, which is what lets the action registry
   // and the empty-state CTA point at it (they can only express a destination).
@@ -41,6 +42,7 @@ export const mealCalendarSearchDefaults = {
   view: undefined,
   period: undefined,
   week: undefined,
+  date: undefined,
   create: undefined,
 } as const;
 

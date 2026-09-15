@@ -40,6 +40,7 @@ filter:
     - location.bulkUpdateParent
     - location.ensureGlobalUnknown
     - location.makeTree
+    - meal.getNutrition
     - problems.getCounts
     - product.findOrCreateByCode
     - product.findOrCreateByUPC

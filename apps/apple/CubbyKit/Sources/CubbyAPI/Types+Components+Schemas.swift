@@ -1436,9 +1436,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseListItemOut/date`.
             package var date: Components.Schemas.PlainDate
             /// - Remark: Generated from `#/components/schemas/ExpenseListItemOut/lineKind`.
-            package var lineKind: Components.Schemas.OutputSchema233
+            package var lineKind: Components.Schemas.OutputSchema235
             /// - Remark: Generated from `#/components/schemas/ExpenseListItemOut/lineBasis`.
-            package var lineBasis: Components.Schemas.OutputSchema234
+            package var lineBasis: Components.Schemas.OutputSchema236
             /// - Remark: Generated from `#/components/schemas/ExpenseListItemOut/costType`.
             package var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseListItemOut/trade`.
@@ -1527,8 +1527,8 @@ extension Components {
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
                 date: Components.Schemas.PlainDate,
-                lineKind: Components.Schemas.OutputSchema233,
-                lineBasis: Components.Schemas.OutputSchema234,
+                lineKind: Components.Schemas.OutputSchema235,
+                lineBasis: Components.Schemas.OutputSchema236,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade,
                 url: Swift.String? = nil,
@@ -1636,11 +1636,11 @@ extension Components {
                     forKey: .date
                 )
                 self.lineKind = try container.decode(
-                    Components.Schemas.OutputSchema233.self,
+                    Components.Schemas.OutputSchema235.self,
                     forKey: .lineKind
                 )
                 self.lineBasis = try container.decode(
-                    Components.Schemas.OutputSchema234.self,
+                    Components.Schemas.OutputSchema236.self,
                     forKey: .lineBasis
                 )
                 self.costType = try container.decode(
@@ -1824,9 +1824,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/date`.
             package var date: Components.Schemas.PlainDate
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/lineKind`.
-            package var lineKind: Components.Schemas.OutputSchema233
+            package var lineKind: Components.Schemas.OutputSchema235
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/lineBasis`.
-            package var lineBasis: Components.Schemas.OutputSchema234
+            package var lineBasis: Components.Schemas.OutputSchema236
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/costType`.
             package var costType: Components.Schemas.CostType
             /// - Remark: Generated from `#/components/schemas/ExpenseOut/trade`.
@@ -1912,8 +1912,8 @@ extension Components {
                 name: Swift.String,
                 cost: Components.Schemas.WholeCentAmount? = nil,
                 date: Components.Schemas.PlainDate,
-                lineKind: Components.Schemas.OutputSchema233,
-                lineBasis: Components.Schemas.OutputSchema234,
+                lineKind: Components.Schemas.OutputSchema235,
+                lineBasis: Components.Schemas.OutputSchema236,
                 costType: Components.Schemas.CostType,
                 trade: Components.Schemas.Trade,
                 url: Swift.String? = nil,
@@ -2018,11 +2018,11 @@ extension Components {
                     forKey: .date
                 )
                 self.lineKind = try container.decode(
-                    Components.Schemas.OutputSchema233.self,
+                    Components.Schemas.OutputSchema235.self,
                     forKey: .lineKind
                 )
                 self.lineBasis = try container.decode(
-                    Components.Schemas.OutputSchema234.self,
+                    Components.Schemas.OutputSchema236.self,
                     forKey: .lineBasis
                 )
                 self.costType = try container.decode(
@@ -8656,23 +8656,23 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/input_schema146`.
-        package struct InputSchema146: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/input_schema146/kind`.
+        /// - Remark: Generated from `#/components/schemas/input_schema147`.
+        package struct InputSchema147: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/input_schema147/kind`.
             @frozen package enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case product = "product"
             }
-            /// - Remark: Generated from `#/components/schemas/input_schema146/kind`.
-            package var kind: Components.Schemas.InputSchema146.KindPayload
-            /// - Remark: Generated from `#/components/schemas/input_schema146/value`.
+            /// - Remark: Generated from `#/components/schemas/input_schema147/kind`.
+            package var kind: Components.Schemas.InputSchema147.KindPayload
+            /// - Remark: Generated from `#/components/schemas/input_schema147/value`.
             package var value: Components.Schemas.ProductShortcode
-            /// Creates a new `InputSchema146`.
+            /// Creates a new `InputSchema147`.
             ///
             /// - Parameters:
             ///   - kind:
             ///   - value:
             package init(
-                kind: Components.Schemas.InputSchema146.KindPayload,
+                kind: Components.Schemas.InputSchema147.KindPayload,
                 value: Components.Schemas.ProductShortcode
             ) {
                 self.kind = kind
@@ -11791,6 +11791,26 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/MealFoodEntryId`.
+        package typealias MealFoodEntryId = Swift.String
+        /// - Remark: Generated from `#/components/schemas/MealFoodNutrients`.
+        package struct MealFoodNutrients: Codable, Hashable, Sendable {
+            /// A container of undocumented properties.
+            package var additionalProperties: [String: Swift.Double]
+            /// Creates a new `MealFoodNutrients`.
+            ///
+            /// - Parameters:
+            ///   - additionalProperties: A container of undocumented properties.
+            package init(additionalProperties: [String: Swift.Double] = .init()) {
+                self.additionalProperties = additionalProperties
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+            }
+            package func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeAdditionalProperties(additionalProperties)
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/MealKind`.
         @frozen package enum MealKind: String, Codable, Hashable, Sendable, CaseIterable {
             case cooked = "cooked"
@@ -11993,6 +12013,602 @@ extension Components {
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "items",
                     "meta"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MealNutritionFood`.
+        @frozen package enum MealNutritionFood: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFood/MealNutritionFoodManual`.
+            case manual(Components.Schemas.MealNutritionFoodManual)
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFood/MealNutritionFoodProduct`.
+            case product(Components.Schemas.MealNutritionFoodProduct)
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFood/MealNutritionFoodRecipe`.
+            case recipe(Components.Schemas.MealNutritionFoodRecipe)
+            package enum CodingKeys: String, CodingKey {
+                case sourceKind
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                let discriminator = try container.decode(
+                    Swift.String.self,
+                    forKey: .sourceKind
+                )
+                switch discriminator {
+                case "manual":
+                    self = .manual(try .init(from: decoder))
+                case "product":
+                    self = .product(try .init(from: decoder))
+                case "recipe":
+                    self = .recipe(try .init(from: decoder))
+                default:
+                    throw Swift.DecodingError.unknownOneOfDiscriminator(
+                        discriminatorKey: CodingKeys.sourceKind,
+                        discriminatorValue: discriminator,
+                        codingPath: decoder.codingPath
+                    )
+                }
+            }
+            package func encode(to encoder: any Swift.Encoder) throws {
+                switch self {
+                case let .manual(value):
+                    try value.encode(to: encoder)
+                case let .product(value):
+                    try value.encode(to: encoder)
+                case let .recipe(value):
+                    try value.encode(to: encoder)
+                }
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual`.
+        package struct MealNutritionFoodManual: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual/meal`.
+            package var meal: Components.Schemas.NutritionMeal
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual/name`.
+            package var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual/grams`.
+            package var grams: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual/totals`.
+            package var totals: Components.Schemas.MealTotals
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual/sourceKind`.
+            @frozen package enum SourceKindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case manual = "manual"
+            }
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual/sourceKind`.
+            package var sourceKind: Components.Schemas.MealNutritionFoodManual.SourceKindPayload
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual/id`.
+            package var id: Components.Schemas.MealFoodEntryId
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodManual/nutrients`.
+            package var nutrients: Components.Schemas.MealFoodNutrients
+            /// Creates a new `MealNutritionFoodManual`.
+            ///
+            /// - Parameters:
+            ///   - meal:
+            ///   - name:
+            ///   - grams:
+            ///   - totals:
+            ///   - sourceKind:
+            ///   - id:
+            ///   - nutrients:
+            package init(
+                meal: Components.Schemas.NutritionMeal,
+                name: Swift.String,
+                grams: Swift.Double? = nil,
+                totals: Components.Schemas.MealTotals,
+                sourceKind: Components.Schemas.MealNutritionFoodManual.SourceKindPayload,
+                id: Components.Schemas.MealFoodEntryId,
+                nutrients: Components.Schemas.MealFoodNutrients
+            ) {
+                self.meal = meal
+                self.name = name
+                self.grams = grams
+                self.totals = totals
+                self.sourceKind = sourceKind
+                self.id = id
+                self.nutrients = nutrients
+            }
+            package enum CodingKeys: String, CodingKey {
+                case meal
+                case name
+                case grams
+                case totals
+                case sourceKind
+                case id
+                case nutrients
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.meal = try container.decode(
+                    Components.Schemas.NutritionMeal.self,
+                    forKey: .meal
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.grams = try container.decodeIfPresent(
+                    Swift.Double.self,
+                    forKey: .grams
+                )
+                self.totals = try container.decode(
+                    Components.Schemas.MealTotals.self,
+                    forKey: .totals
+                )
+                self.sourceKind = try container.decode(
+                    Components.Schemas.MealNutritionFoodManual.SourceKindPayload.self,
+                    forKey: .sourceKind
+                )
+                self.id = try container.decode(
+                    Components.Schemas.MealFoodEntryId.self,
+                    forKey: .id
+                )
+                self.nutrients = try container.decode(
+                    Components.Schemas.MealFoodNutrients.self,
+                    forKey: .nutrients
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "meal",
+                    "name",
+                    "grams",
+                    "totals",
+                    "sourceKind",
+                    "id",
+                    "nutrients"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct`.
+        package struct MealNutritionFoodProduct: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct/meal`.
+            package var meal: Components.Schemas.NutritionMeal
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct/name`.
+            package var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct/grams`.
+            package var grams: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct/totals`.
+            package var totals: Components.Schemas.MealTotals
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct/sourceKind`.
+            @frozen package enum SourceKindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case product = "product"
+            }
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct/sourceKind`.
+            package var sourceKind: Components.Schemas.MealNutritionFoodProduct.SourceKindPayload
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct/id`.
+            package var id: Components.Schemas.MealFoodEntryId
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodProduct/productId`.
+            package var productId: Components.Schemas.ProductShortcode
+            /// Creates a new `MealNutritionFoodProduct`.
+            ///
+            /// - Parameters:
+            ///   - meal:
+            ///   - name:
+            ///   - grams:
+            ///   - totals:
+            ///   - sourceKind:
+            ///   - id:
+            ///   - productId:
+            package init(
+                meal: Components.Schemas.NutritionMeal,
+                name: Swift.String,
+                grams: Swift.Double? = nil,
+                totals: Components.Schemas.MealTotals,
+                sourceKind: Components.Schemas.MealNutritionFoodProduct.SourceKindPayload,
+                id: Components.Schemas.MealFoodEntryId,
+                productId: Components.Schemas.ProductShortcode
+            ) {
+                self.meal = meal
+                self.name = name
+                self.grams = grams
+                self.totals = totals
+                self.sourceKind = sourceKind
+                self.id = id
+                self.productId = productId
+            }
+            package enum CodingKeys: String, CodingKey {
+                case meal
+                case name
+                case grams
+                case totals
+                case sourceKind
+                case id
+                case productId
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.meal = try container.decode(
+                    Components.Schemas.NutritionMeal.self,
+                    forKey: .meal
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.grams = try container.decodeIfPresent(
+                    Swift.Double.self,
+                    forKey: .grams
+                )
+                self.totals = try container.decode(
+                    Components.Schemas.MealTotals.self,
+                    forKey: .totals
+                )
+                self.sourceKind = try container.decode(
+                    Components.Schemas.MealNutritionFoodProduct.SourceKindPayload.self,
+                    forKey: .sourceKind
+                )
+                self.id = try container.decode(
+                    Components.Schemas.MealFoodEntryId.self,
+                    forKey: .id
+                )
+                self.productId = try container.decode(
+                    Components.Schemas.ProductShortcode.self,
+                    forKey: .productId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "meal",
+                    "name",
+                    "grams",
+                    "totals",
+                    "sourceKind",
+                    "id",
+                    "productId"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe`.
+        package struct MealNutritionFoodRecipe: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/meal`.
+            package var meal: Components.Schemas.NutritionMeal
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/name`.
+            package var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/grams`.
+            package var grams: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/totals`.
+            package var totals: Components.Schemas.MealTotals
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/sourceKind`.
+            @frozen package enum SourceKindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case recipe = "recipe"
+            }
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/sourceKind`.
+            package var sourceKind: Components.Schemas.MealNutritionFoodRecipe.SourceKindPayload
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/mealRecipeId`.
+            package var mealRecipeId: Components.Schemas.MealRecipeId
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/recipeId`.
+            package var recipeId: Components.Schemas.RecipeShortcode
+            /// - Remark: Generated from `#/components/schemas/MealNutritionFoodRecipe/sourceMealId`.
+            package var sourceMealId: Components.Schemas.MealShortcode
+            /// Creates a new `MealNutritionFoodRecipe`.
+            ///
+            /// - Parameters:
+            ///   - meal:
+            ///   - name:
+            ///   - grams:
+            ///   - totals:
+            ///   - sourceKind:
+            ///   - mealRecipeId:
+            ///   - recipeId:
+            ///   - sourceMealId:
+            package init(
+                meal: Components.Schemas.NutritionMeal,
+                name: Swift.String,
+                grams: Swift.Double? = nil,
+                totals: Components.Schemas.MealTotals,
+                sourceKind: Components.Schemas.MealNutritionFoodRecipe.SourceKindPayload,
+                mealRecipeId: Components.Schemas.MealRecipeId,
+                recipeId: Components.Schemas.RecipeShortcode,
+                sourceMealId: Components.Schemas.MealShortcode
+            ) {
+                self.meal = meal
+                self.name = name
+                self.grams = grams
+                self.totals = totals
+                self.sourceKind = sourceKind
+                self.mealRecipeId = mealRecipeId
+                self.recipeId = recipeId
+                self.sourceMealId = sourceMealId
+            }
+            package enum CodingKeys: String, CodingKey {
+                case meal
+                case name
+                case grams
+                case totals
+                case sourceKind
+                case mealRecipeId
+                case recipeId
+                case sourceMealId
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.meal = try container.decode(
+                    Components.Schemas.NutritionMeal.self,
+                    forKey: .meal
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.grams = try container.decodeIfPresent(
+                    Swift.Double.self,
+                    forKey: .grams
+                )
+                self.totals = try container.decode(
+                    Components.Schemas.MealTotals.self,
+                    forKey: .totals
+                )
+                self.sourceKind = try container.decode(
+                    Components.Schemas.MealNutritionFoodRecipe.SourceKindPayload.self,
+                    forKey: .sourceKind
+                )
+                self.mealRecipeId = try container.decode(
+                    Components.Schemas.MealRecipeId.self,
+                    forKey: .mealRecipeId
+                )
+                self.recipeId = try container.decode(
+                    Components.Schemas.RecipeShortcode.self,
+                    forKey: .recipeId
+                )
+                self.sourceMealId = try container.decode(
+                    Components.Schemas.MealShortcode.self,
+                    forKey: .sourceMealId
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "meal",
+                    "name",
+                    "grams",
+                    "totals",
+                    "sourceKind",
+                    "mealRecipeId",
+                    "recipeId",
+                    "sourceMealId"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MealNutritionInput`.
+        package struct MealNutritionInput: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MealNutritionInput/value1`.
+            package struct Value1Payload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/MealNutritionInput/value1/mealId`.
+                package var mealId: Components.Schemas.MealShortcode
+                /// Creates a new `Value1Payload`.
+                ///
+                /// - Parameters:
+                ///   - mealId:
+                package init(mealId: Components.Schemas.MealShortcode) {
+                    self.mealId = mealId
+                }
+                package enum CodingKeys: String, CodingKey {
+                    case mealId
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/MealNutritionInput/value1`.
+            package var value1: Components.Schemas.MealNutritionInput.Value1Payload?
+            /// - Remark: Generated from `#/components/schemas/MealNutritionInput/value2`.
+            package struct Value2Payload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/MealNutritionInput/value2/date`.
+                package var date: Swift.String
+                /// Creates a new `Value2Payload`.
+                ///
+                /// - Parameters:
+                ///   - date:
+                package init(date: Swift.String) {
+                    self.date = date
+                }
+                package enum CodingKeys: String, CodingKey {
+                    case date
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/MealNutritionInput/value2`.
+            package var value2: Components.Schemas.MealNutritionInput.Value2Payload?
+            /// Creates a new `MealNutritionInput`.
+            ///
+            /// - Parameters:
+            ///   - value1:
+            ///   - value2:
+            package init(
+                value1: Components.Schemas.MealNutritionInput.Value1Payload? = nil,
+                value2: Components.Schemas.MealNutritionInput.Value2Payload? = nil
+            ) {
+                self.value1 = value1
+                self.value2 = value2
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                var errors: [any Swift.Error] = []
+                do {
+                    self.value1 = try .init(from: decoder)
+                } catch {
+                    errors.append(error)
+                }
+                do {
+                    self.value2 = try .init(from: decoder)
+                } catch {
+                    errors.append(error)
+                }
+                try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                    [
+                        self.value1,
+                        self.value2
+                    ],
+                    type: Self.self,
+                    codingPath: decoder.codingPath,
+                    errors: errors
+                )
+            }
+            package func encode(to encoder: any Swift.Encoder) throws {
+                try self.value1?.encode(to: encoder)
+                try self.value2?.encode(to: encoder)
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MealNutritionOut`.
+        package struct MealNutritionOut: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MealNutritionOut/meals`.
+            package var meals: [Components.Schemas.NutritionMeal]
+            /// - Remark: Generated from `#/components/schemas/MealNutritionOut/people`.
+            package var people: [Components.Schemas.MealNutritionPerson]
+            /// Creates a new `MealNutritionOut`.
+            ///
+            /// - Parameters:
+            ///   - meals:
+            ///   - people:
+            package init(
+                meals: [Components.Schemas.NutritionMeal],
+                people: [Components.Schemas.MealNutritionPerson]
+            ) {
+                self.meals = meals
+                self.people = people
+            }
+            package enum CodingKeys: String, CodingKey {
+                case meals
+                case people
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.meals = try container.decode(
+                    [Components.Schemas.NutritionMeal].self,
+                    forKey: .meals
+                )
+                self.people = try container.decode(
+                    [Components.Schemas.MealNutritionPerson].self,
+                    forKey: .people
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "meals",
+                    "people"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/MealNutritionPerson`.
+        package struct MealNutritionPerson: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/eater`.
+            package struct EaterPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/eater/id`.
+                package var id: Components.Schemas.LedgerPartyShortcode
+                /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/eater/name`.
+                package var name: Swift.String
+                /// Creates a new `EaterPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                package init(
+                    id: Components.Schemas.LedgerPartyShortcode,
+                    name: Swift.String
+                ) {
+                    self.id = id
+                    self.name = name
+                }
+                package enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                }
+                package init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Components.Schemas.LedgerPartyShortcode.self,
+                        forKey: .id
+                    )
+                    self.name = try container.decode(
+                        Swift.String.self,
+                        forKey: .name
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "name"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/eater`.
+            package var eater: Components.Schemas.MealNutritionPerson.EaterPayload
+            /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/totals`.
+            package var totals: Components.Schemas.MealTotals
+            /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/MealsPayload`.
+            package struct MealsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/MealsPayload/meal`.
+                package var meal: Components.Schemas.NutritionMeal
+                /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/MealsPayload/totals`.
+                package var totals: Components.Schemas.MealTotals
+                /// Creates a new `MealsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - meal:
+                ///   - totals:
+                package init(
+                    meal: Components.Schemas.NutritionMeal,
+                    totals: Components.Schemas.MealTotals
+                ) {
+                    self.meal = meal
+                    self.totals = totals
+                }
+                package enum CodingKeys: String, CodingKey {
+                    case meal
+                    case totals
+                }
+                package init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.meal = try container.decode(
+                        Components.Schemas.NutritionMeal.self,
+                        forKey: .meal
+                    )
+                    self.totals = try container.decode(
+                        Components.Schemas.MealTotals.self,
+                        forKey: .totals
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "meal",
+                        "totals"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/meals`.
+            package typealias MealsPayload = [Components.Schemas.MealNutritionPerson.MealsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/meals`.
+            package var meals: Components.Schemas.MealNutritionPerson.MealsPayload
+            /// - Remark: Generated from `#/components/schemas/MealNutritionPerson/foods`.
+            package var foods: [Components.Schemas.MealNutritionFood]
+            /// Creates a new `MealNutritionPerson`.
+            ///
+            /// - Parameters:
+            ///   - eater:
+            ///   - totals:
+            ///   - meals:
+            ///   - foods:
+            package init(
+                eater: Components.Schemas.MealNutritionPerson.EaterPayload,
+                totals: Components.Schemas.MealTotals,
+                meals: Components.Schemas.MealNutritionPerson.MealsPayload,
+                foods: [Components.Schemas.MealNutritionFood]
+            ) {
+                self.eater = eater
+                self.totals = totals
+                self.meals = meals
+                self.foods = foods
+            }
+            package enum CodingKeys: String, CodingKey {
+                case eater
+                case totals
+                case meals
+                case foods
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.eater = try container.decode(
+                    Components.Schemas.MealNutritionPerson.EaterPayload.self,
+                    forKey: .eater
+                )
+                self.totals = try container.decode(
+                    Components.Schemas.MealTotals.self,
+                    forKey: .totals
+                )
+                self.meals = try container.decode(
+                    Components.Schemas.MealNutritionPerson.MealsPayload.self,
+                    forKey: .meals
+                )
+                self.foods = try container.decode(
+                    [Components.Schemas.MealNutritionFood].self,
+                    forKey: .foods
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "eater",
+                    "totals",
+                    "meals",
+                    "foods"
                 ])
             }
         }
@@ -13203,6 +13819,66 @@ extension Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/NutritionMeal`.
+        package struct NutritionMeal: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/NutritionMeal/id`.
+            package var id: Components.Schemas.MealShortcode
+            /// - Remark: Generated from `#/components/schemas/NutritionMeal/date`.
+            package var date: Components.Schemas.PlainDate
+            /// - Remark: Generated from `#/components/schemas/NutritionMeal/name`.
+            package var name: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/NutritionMeal/mealType`.
+            package var mealType: Components.Schemas.MealType?
+            /// Creates a new `NutritionMeal`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - date:
+            ///   - name:
+            ///   - mealType:
+            package init(
+                id: Components.Schemas.MealShortcode,
+                date: Components.Schemas.PlainDate,
+                name: Swift.String? = nil,
+                mealType: Components.Schemas.MealType? = nil
+            ) {
+                self.id = id
+                self.date = date
+                self.name = name
+                self.mealType = mealType
+            }
+            package enum CodingKeys: String, CodingKey {
+                case id
+                case date
+                case name
+                case mealType
+            }
+            package init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Components.Schemas.MealShortcode.self,
+                    forKey: .id
+                )
+                self.date = try container.decode(
+                    Components.Schemas.PlainDate.self,
+                    forKey: .date
+                )
+                self.name = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.mealType = try container.decodeIfPresent(
+                    Components.Schemas.MealType.self,
+                    forKey: .mealType
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "date",
+                    "name",
+                    "mealType"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/OperationEffect`.
         @frozen package enum OperationEffect: String, Codable, Hashable, Sendable, CaseIterable {
             case block = "block"
@@ -13370,21 +14046,21 @@ extension Components {
                 }
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema186`.
-        package struct OutputSchema186: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema186/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema188`.
+        package struct OutputSchema188: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema188/id`.
             package var id: Components.Schemas.IngredientShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema186/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema188/name`.
             package var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema186/aliases`.
+            /// - Remark: Generated from `#/components/schemas/output_schema188/aliases`.
             package var aliases: [Swift.String]
-            /// - Remark: Generated from `#/components/schemas/output_schema186/naKinds`.
+            /// - Remark: Generated from `#/components/schemas/output_schema188/naKinds`.
             package var naKinds: [Components.Schemas.BaseKind]
-            /// - Remark: Generated from `#/components/schemas/output_schema186/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema188/createdAt`.
             package var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema186/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema188/updatedAt`.
             package var updatedAt: Foundation.Date
-            /// Creates a new `OutputSchema186`.
+            /// Creates a new `OutputSchema188`.
             ///
             /// - Parameters:
             ///   - id:
@@ -13452,67 +14128,67 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema190`.
-        package struct OutputSchema190: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema190/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema192`.
+        package struct OutputSchema192: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema192/id`.
             package var id: Components.Schemas.InventoryShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema190/amount`.
+            /// - Remark: Generated from `#/components/schemas/output_schema192/amount`.
             package var amount: Components.Schemas.Amount
-            /// - Remark: Generated from `#/components/schemas/output_schema190/valuation`.
+            /// - Remark: Generated from `#/components/schemas/output_schema192/valuation`.
             package var valuation: Components.Schemas.Money?
             /// When last verified in an audit session (null = never)
             ///
-            /// - Remark: Generated from `#/components/schemas/output_schema190/verifiedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema192/verifiedAt`.
             package var verifiedAt: Foundation.Date?
-            /// - Remark: Generated from `#/components/schemas/output_schema190/placement`.
+            /// - Remark: Generated from `#/components/schemas/output_schema192/placement`.
             @frozen package enum PlacementPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case stock = "stock"
                 case installed = "installed"
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema190/placement`.
-            package var placement: Components.Schemas.OutputSchema190.PlacementPayload
-            /// - Remark: Generated from `#/components/schemas/output_schema190/createdAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema192/placement`.
+            package var placement: Components.Schemas.OutputSchema192.PlacementPayload
+            /// - Remark: Generated from `#/components/schemas/output_schema192/createdAt`.
             package var createdAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema190/updatedAt`.
+            /// - Remark: Generated from `#/components/schemas/output_schema192/updatedAt`.
             package var updatedAt: Foundation.Date
-            /// - Remark: Generated from `#/components/schemas/output_schema190/location`.
+            /// - Remark: Generated from `#/components/schemas/output_schema192/location`.
             package struct LocationPayload: Codable, Hashable, Sendable {
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/id`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/id`.
                 package var id: Components.Schemas.LocationShortcode
                 /// name of location
                 ///
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/name`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/name`.
                 package var name: Swift.String
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/aliases`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/aliases`.
                 package var aliases: Components.Schemas.InputSchema45
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/tags`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/tags`.
                 package var tags: Components.Schemas.OutputSchema128?
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/type`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/type`.
                 package var _type: Components.Schemas.LocationType?
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/gardenKind`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/gardenKind`.
                 package var gardenKind: Components.Schemas.GardenLocationKind?
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/gardenConditions`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/gardenConditions`.
                 package var gardenConditions: Swift.String?
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/product`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/product`.
                 package var product: Components.Schemas.LocationIdentityProductOut?
                 /// When last verified in an audit session (null = never)
                 ///
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/lastBulkInventory`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/lastBulkInventory`.
                 package var lastBulkInventory: Foundation.Date?
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/aiDescription`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/aiDescription`.
                 package var aiDescription: Swift.String?
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/images`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/images`.
                 package var images: Components.Schemas.OutputSchema29
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/valuation`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/valuation`.
                 package var valuation: Components.Schemas.LocationValuation?
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/createdAt`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/createdAt`.
                 package var createdAt: Foundation.Date
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/updatedAt`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/updatedAt`.
                 package var updatedAt: Foundation.Date
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/displayImage`.
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/displayImage`.
                 package var displayImage: Components.Schemas.ImageUrlSummary?
-                /// - Remark: Generated from `#/components/schemas/output_schema190/location/ancestors`.
-                package var ancestors: [Components.Schemas.OutputSchema191]
+                /// - Remark: Generated from `#/components/schemas/output_schema192/location/ancestors`.
+                package var ancestors: [Components.Schemas.OutputSchema193]
                 /// Creates a new `LocationPayload`.
                 ///
                 /// - Parameters:
@@ -13548,7 +14224,7 @@ extension Components {
                     createdAt: Foundation.Date,
                     updatedAt: Foundation.Date,
                     displayImage: Components.Schemas.ImageUrlSummary? = nil,
-                    ancestors: [Components.Schemas.OutputSchema191]
+                    ancestors: [Components.Schemas.OutputSchema193]
                 ) {
                     self.id = id
                     self.name = name
@@ -13648,7 +14324,7 @@ extension Components {
                         forKey: .displayImage
                     )
                     self.ancestors = try container.decode(
-                        [Components.Schemas.OutputSchema191].self,
+                        [Components.Schemas.OutputSchema193].self,
                         forKey: .ancestors
                     )
                     try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -13671,9 +14347,9 @@ extension Components {
                     ])
                 }
             }
-            /// - Remark: Generated from `#/components/schemas/output_schema190/location`.
-            package var location: Components.Schemas.OutputSchema190.LocationPayload
-            /// Creates a new `OutputSchema190`.
+            /// - Remark: Generated from `#/components/schemas/output_schema192/location`.
+            package var location: Components.Schemas.OutputSchema192.LocationPayload
+            /// Creates a new `OutputSchema192`.
             ///
             /// - Parameters:
             ///   - id:
@@ -13689,10 +14365,10 @@ extension Components {
                 amount: Components.Schemas.Amount,
                 valuation: Components.Schemas.Money? = nil,
                 verifiedAt: Foundation.Date? = nil,
-                placement: Components.Schemas.OutputSchema190.PlacementPayload,
+                placement: Components.Schemas.OutputSchema192.PlacementPayload,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
-                location: Components.Schemas.OutputSchema190.LocationPayload
+                location: Components.Schemas.OutputSchema192.LocationPayload
             ) {
                 self.id = id
                 self.amount = amount
@@ -13732,7 +14408,7 @@ extension Components {
                     forKey: .verifiedAt
                 )
                 self.placement = try container.decode(
-                    Components.Schemas.OutputSchema190.PlacementPayload.self,
+                    Components.Schemas.OutputSchema192.PlacementPayload.self,
                     forKey: .placement
                 )
                 self.createdAt = try container.decode(
@@ -13744,7 +14420,7 @@ extension Components {
                     forKey: .updatedAt
                 )
                 self.location = try container.decode(
-                    Components.Schemas.OutputSchema190.LocationPayload.self,
+                    Components.Schemas.OutputSchema192.LocationPayload.self,
                     forKey: .location
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -13759,17 +14435,17 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema191`.
-        package struct OutputSchema191: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema191/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema193`.
+        package struct OutputSchema193: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema193/id`.
             package var id: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema191/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema193/name`.
             package var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema191/type`.
+            /// - Remark: Generated from `#/components/schemas/output_schema193/type`.
             package var _type: Components.Schemas.LocationType?
-            /// - Remark: Generated from `#/components/schemas/output_schema191/displayImage`.
+            /// - Remark: Generated from `#/components/schemas/output_schema193/displayImage`.
             package var displayImage: Components.Schemas.ImageUrlSummary?
-            /// Creates a new `OutputSchema191`.
+            /// Creates a new `OutputSchema193`.
             ///
             /// - Parameters:
             ///   - id:
@@ -13819,19 +14495,19 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema192`.
-        package struct OutputSchema192: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/output_schema192/id`.
+        /// - Remark: Generated from `#/components/schemas/output_schema194`.
+        package struct OutputSchema194: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/output_schema194/id`.
             package var id: Components.Schemas.LocationShortcode
-            /// - Remark: Generated from `#/components/schemas/output_schema192/name`.
+            /// - Remark: Generated from `#/components/schemas/output_schema194/name`.
             package var name: Swift.String
-            /// - Remark: Generated from `#/components/schemas/output_schema192/type`.
+            /// - Remark: Generated from `#/components/schemas/output_schema194/type`.
             package var _type: Components.Schemas.LocationType?
-            /// - Remark: Generated from `#/components/schemas/output_schema192/displayImage`.
+            /// - Remark: Generated from `#/components/schemas/output_schema194/displayImage`.
             package var displayImage: Components.Schemas.ImageUrlSummary?
-            /// - Remark: Generated from `#/components/schemas/output_schema192/ancestors`.
-            package var ancestors: [Components.Schemas.OutputSchema191]
-            /// Creates a new `OutputSchema192`.
+            /// - Remark: Generated from `#/components/schemas/output_schema194/ancestors`.
+            package var ancestors: [Components.Schemas.OutputSchema193]
+            /// Creates a new `OutputSchema194`.
             ///
             /// - Parameters:
             ///   - id:
@@ -13844,7 +14520,7 @@ extension Components {
                 name: Swift.String,
                 _type: Components.Schemas.LocationType? = nil,
                 displayImage: Components.Schemas.ImageUrlSummary? = nil,
-                ancestors: [Components.Schemas.OutputSchema191]
+                ancestors: [Components.Schemas.OutputSchema193]
             ) {
                 self.id = id
                 self.name = name
@@ -13878,7 +14554,7 @@ extension Components {
                     forKey: .displayImage
                 )
                 self.ancestors = try container.decode(
-                    [Components.Schemas.OutputSchema191].self,
+                    [Components.Schemas.OutputSchema193].self,
                     forKey: .ancestors
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -13890,22 +14566,22 @@ extension Components {
                 ])
             }
         }
-        /// - Remark: Generated from `#/components/schemas/output_schema204`.
-        package typealias OutputSchema204 = [Components.Schemas.TaskShortcode]
-        /// - Remark: Generated from `#/components/schemas/output_schema224`.
-        package typealias OutputSchema224 = [Components.Schemas.ProjectShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema206`.
+        package typealias OutputSchema206 = [Components.Schemas.TaskShortcode]
+        /// - Remark: Generated from `#/components/schemas/output_schema226`.
+        package typealias OutputSchema226 = [Components.Schemas.ProjectShortcode]
         /// Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema233`.
-        package typealias OutputSchema233 = Components.Schemas.ExpenseLineKind
+        /// - Remark: Generated from `#/components/schemas/output_schema235`.
+        package typealias OutputSchema235 = Components.Schemas.ExpenseLineKind
         /// Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.
         ///
-        /// - Remark: Generated from `#/components/schemas/output_schema234`.
-        package typealias OutputSchema234 = Components.Schemas.ExpenseLineBasis
+        /// - Remark: Generated from `#/components/schemas/output_schema236`.
+        package typealias OutputSchema236 = Components.Schemas.ExpenseLineBasis
         /// - Remark: Generated from `#/components/schemas/output_schema29`.
         package typealias OutputSchema29 = [Components.Schemas.ImageOut]
-        /// - Remark: Generated from `#/components/schemas/output_schema291`.
-        package typealias OutputSchema291 = [Components.Schemas.WishCandidateOut]
+        /// - Remark: Generated from `#/components/schemas/output_schema293`.
+        package typealias OutputSchema293 = [Components.Schemas.WishCandidateOut]
         /// - Remark: Generated from `#/components/schemas/output_schema32`.
         package typealias OutputSchema32 = [Components.Schemas.ExternalIdOut]
         /// - Remark: Generated from `#/components/schemas/output_schema44`.
@@ -15786,7 +16462,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/unitMappings`.
             package var unitMappings: [Components.Schemas.UnitMappingOut]
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/ingredient`.
-            package var ingredient: Components.Schemas.OutputSchema186?
+            package var ingredient: Components.Schemas.OutputSchema188?
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/inventoryEntry`.
             package var inventoryEntry: [Components.Schemas.ProductListInventoryEntryOut]
             /// - Remark: Generated from `#/components/schemas/ProductListItemOut/expenseCount`.
@@ -15864,7 +16540,7 @@ extension Components {
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField,
                 unitMappings: [Components.Schemas.UnitMappingOut],
-                ingredient: Components.Schemas.OutputSchema186? = nil,
+                ingredient: Components.Schemas.OutputSchema188? = nil,
                 inventoryEntry: [Components.Schemas.ProductListInventoryEntryOut],
                 expenseCount: Swift.Int,
                 componentCount: Swift.Int,
@@ -16042,7 +16718,7 @@ extension Components {
                     forKey: .unitMappings
                 )
                 self.ingredient = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema186.self,
+                    Components.Schemas.OutputSchema188.self,
                     forKey: .ingredient
                 )
                 self.inventoryEntry = try container.decode(
@@ -16808,13 +17484,13 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/coverImageUrl`.
             package var coverImageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/ingredient`.
-            package var ingredient: Components.Schemas.OutputSchema186?
+            package var ingredient: Components.Schemas.OutputSchema188?
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/unitMappings`.
             package var unitMappings: [Components.Schemas.UnitMappingOut]
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/inventoryEntry`.
-            package var inventoryEntry: [Components.Schemas.OutputSchema190]
+            package var inventoryEntry: [Components.Schemas.OutputSchema192]
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/servingAsLocations`.
-            package var servingAsLocations: [Components.Schemas.OutputSchema192]
+            package var servingAsLocations: [Components.Schemas.OutputSchema194]
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/componentCount`.
             package var componentCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ProductWithFoodOut/food`.
@@ -16890,10 +17566,10 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 coverImageUrl: Swift.String? = nil,
-                ingredient: Components.Schemas.OutputSchema186? = nil,
+                ingredient: Components.Schemas.OutputSchema188? = nil,
                 unitMappings: [Components.Schemas.UnitMappingOut],
-                inventoryEntry: [Components.Schemas.OutputSchema190],
-                servingAsLocations: [Components.Schemas.OutputSchema192],
+                inventoryEntry: [Components.Schemas.OutputSchema192],
+                servingAsLocations: [Components.Schemas.OutputSchema194],
                 componentCount: Swift.Int,
                 food: Components.Schemas.FoodSummary? = nil,
                 recipeUsages: [Components.Schemas.RecipeUsageOut],
@@ -17068,7 +17744,7 @@ extension Components {
                     forKey: .coverImageUrl
                 )
                 self.ingredient = try container.decodeIfPresent(
-                    Components.Schemas.OutputSchema186.self,
+                    Components.Schemas.OutputSchema188.self,
                     forKey: .ingredient
                 )
                 self.unitMappings = try container.decode(
@@ -17076,11 +17752,11 @@ extension Components {
                     forKey: .unitMappings
                 )
                 self.inventoryEntry = try container.decode(
-                    [Components.Schemas.OutputSchema190].self,
+                    [Components.Schemas.OutputSchema192].self,
                     forKey: .inventoryEntry
                 )
                 self.servingAsLocations = try container.decode(
-                    [Components.Schemas.OutputSchema192].self,
+                    [Components.Schemas.OutputSchema194].self,
                     forKey: .servingAsLocations
                 )
                 self.componentCount = try container.decode(
@@ -17782,11 +18458,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectListItemOut/parentProjectName`.
             package var parentProjectName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProjectListItemOut/childProjectIds`.
-            package var childProjectIds: Components.Schemas.OutputSchema224
+            package var childProjectIds: Components.Schemas.OutputSchema226
             /// - Remark: Generated from `#/components/schemas/ProjectListItemOut/blockedByIds`.
-            package var blockedByIds: Components.Schemas.OutputSchema224
+            package var blockedByIds: Components.Schemas.OutputSchema226
             /// - Remark: Generated from `#/components/schemas/ProjectListItemOut/blockingIds`.
-            package var blockingIds: Components.Schemas.OutputSchema224
+            package var blockingIds: Components.Schemas.OutputSchema226
             /// - Remark: Generated from `#/components/schemas/ProjectListItemOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProjectListItemOut/updatedAt`.
@@ -17837,9 +18513,9 @@ extension Components {
                 googleDriveFolderUrl: Swift.String? = nil,
                 notionPageUrl: Swift.String? = nil,
                 parentProjectName: Swift.String? = nil,
-                childProjectIds: Components.Schemas.OutputSchema224,
-                blockedByIds: Components.Schemas.OutputSchema224,
-                blockingIds: Components.Schemas.OutputSchema224,
+                childProjectIds: Components.Schemas.OutputSchema226,
+                blockedByIds: Components.Schemas.OutputSchema226,
+                blockingIds: Components.Schemas.OutputSchema226,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
@@ -17952,15 +18628,15 @@ extension Components {
                     forKey: .parentProjectName
                 )
                 self.childProjectIds = try container.decode(
-                    Components.Schemas.OutputSchema224.self,
+                    Components.Schemas.OutputSchema226.self,
                     forKey: .childProjectIds
                 )
                 self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema224.self,
+                    Components.Schemas.OutputSchema226.self,
                     forKey: .blockedByIds
                 )
                 self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema224.self,
+                    Components.Schemas.OutputSchema226.self,
                     forKey: .blockingIds
                 )
                 self.createdAt = try container.decode(
@@ -18092,11 +18768,11 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/ProjectOut/parentProjectName`.
             package var parentProjectName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ProjectOut/childProjectIds`.
-            package var childProjectIds: Components.Schemas.OutputSchema224
+            package var childProjectIds: Components.Schemas.OutputSchema226
             /// - Remark: Generated from `#/components/schemas/ProjectOut/blockedByIds`.
-            package var blockedByIds: Components.Schemas.OutputSchema224
+            package var blockedByIds: Components.Schemas.OutputSchema226
             /// - Remark: Generated from `#/components/schemas/ProjectOut/blockingIds`.
-            package var blockingIds: Components.Schemas.OutputSchema224
+            package var blockingIds: Components.Schemas.OutputSchema226
             /// - Remark: Generated from `#/components/schemas/ProjectOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/ProjectOut/updatedAt`.
@@ -18144,9 +18820,9 @@ extension Components {
                 googleDriveFolderUrl: Swift.String? = nil,
                 notionPageUrl: Swift.String? = nil,
                 parentProjectName: Swift.String? = nil,
-                childProjectIds: Components.Schemas.OutputSchema224,
-                blockedByIds: Components.Schemas.OutputSchema224,
-                blockingIds: Components.Schemas.OutputSchema224,
+                childProjectIds: Components.Schemas.OutputSchema226,
+                blockedByIds: Components.Schemas.OutputSchema226,
+                blockingIds: Components.Schemas.OutputSchema226,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 rollup: Components.Schemas.ProjectOutputFieldsProjectRollup,
@@ -18256,15 +18932,15 @@ extension Components {
                     forKey: .parentProjectName
                 )
                 self.childProjectIds = try container.decode(
-                    Components.Schemas.OutputSchema224.self,
+                    Components.Schemas.OutputSchema226.self,
                     forKey: .childProjectIds
                 )
                 self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema224.self,
+                    Components.Schemas.OutputSchema226.self,
                     forKey: .blockedByIds
                 )
                 self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema224.self,
+                    Components.Schemas.OutputSchema226.self,
                     forKey: .blockingIds
                 )
                 self.createdAt = try container.decode(
@@ -21575,7 +22251,7 @@ extension Components {
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value1`.
                 package var value1: Components.Schemas.ProductFindOrCreateByCodeInput?
                 /// - Remark: Generated from `#/components/schemas/ScanAtLocationInput/code/value2`.
-                package var value2: Components.Schemas.InputSchema146?
+                package var value2: Components.Schemas.InputSchema147?
                 /// Creates a new `CodePayload`.
                 ///
                 /// - Parameters:
@@ -21583,7 +22259,7 @@ extension Components {
                 ///   - value2:
                 package init(
                     value1: Components.Schemas.ProductFindOrCreateByCodeInput? = nil,
-                    value2: Components.Schemas.InputSchema146? = nil
+                    value2: Components.Schemas.InputSchema147? = nil
                 ) {
                     self.value1 = value1
                     self.value2 = value2
@@ -22210,9 +22886,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskListItemOut/parentTaskName`.
             package var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskListItemOut/blockedByIds`.
-            package var blockedByIds: Components.Schemas.OutputSchema204
+            package var blockedByIds: Components.Schemas.OutputSchema206
             /// - Remark: Generated from `#/components/schemas/TaskListItemOut/blockingIds`.
-            package var blockingIds: Components.Schemas.OutputSchema204
+            package var blockingIds: Components.Schemas.OutputSchema206
             /// - Remark: Generated from `#/components/schemas/TaskListItemOut/subtaskCount`.
             package var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskListItemOut/doneSubtaskCount`.
@@ -22263,8 +22939,8 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema204,
-                blockingIds: Components.Schemas.OutputSchema204,
+                blockedByIds: Components.Schemas.OutputSchema206,
+                blockingIds: Components.Schemas.OutputSchema206,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
                 images: Components.Schemas.OutputSchema29,
@@ -22372,11 +23048,11 @@ extension Components {
                     forKey: .parentTaskName
                 )
                 self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema204.self,
+                    Components.Schemas.OutputSchema206.self,
                     forKey: .blockedByIds
                 )
                 self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema204.self,
+                    Components.Schemas.OutputSchema206.self,
                     forKey: .blockingIds
                 )
                 self.subtaskCount = try container.decode(
@@ -22497,9 +23173,9 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/TaskOut/parentTaskName`.
             package var parentTaskName: Swift.String?
             /// - Remark: Generated from `#/components/schemas/TaskOut/blockedByIds`.
-            package var blockedByIds: Components.Schemas.OutputSchema204
+            package var blockedByIds: Components.Schemas.OutputSchema206
             /// - Remark: Generated from `#/components/schemas/TaskOut/blockingIds`.
-            package var blockingIds: Components.Schemas.OutputSchema204
+            package var blockingIds: Components.Schemas.OutputSchema206
             /// - Remark: Generated from `#/components/schemas/TaskOut/subtaskCount`.
             package var subtaskCount: Swift.Int
             /// - Remark: Generated from `#/components/schemas/TaskOut/doneSubtaskCount`.
@@ -22547,8 +23223,8 @@ extension Components {
                 projectName: Swift.String? = nil,
                 subjectProductName: Swift.String? = nil,
                 parentTaskName: Swift.String? = nil,
-                blockedByIds: Components.Schemas.OutputSchema204,
-                blockingIds: Components.Schemas.OutputSchema204,
+                blockedByIds: Components.Schemas.OutputSchema206,
+                blockingIds: Components.Schemas.OutputSchema206,
                 subtaskCount: Swift.Int,
                 doneSubtaskCount: Swift.Int,
                 images: Components.Schemas.OutputSchema29,
@@ -22653,11 +23329,11 @@ extension Components {
                     forKey: .parentTaskName
                 )
                 self.blockedByIds = try container.decode(
-                    Components.Schemas.OutputSchema204.self,
+                    Components.Schemas.OutputSchema206.self,
                     forKey: .blockedByIds
                 )
                 self.blockingIds = try container.decode(
-                    Components.Schemas.OutputSchema204.self,
+                    Components.Schemas.OutputSchema206.self,
                     forKey: .blockingIds
                 )
                 self.subtaskCount = try container.decode(
@@ -23839,7 +24515,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishListItemOut/acquiredAt`.
             package var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishListItemOut/candidates`.
-            package var candidates: Components.Schemas.OutputSchema291
+            package var candidates: Components.Schemas.OutputSchema293
             /// - Remark: Generated from `#/components/schemas/WishListItemOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/WishListItemOut/updatedAt`.
@@ -23862,7 +24538,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema291,
+                candidates: Components.Schemas.OutputSchema293,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 displayImages: Components.Schemas.DisplayImagesField
@@ -23905,7 +24581,7 @@ extension Components {
                     forKey: .acquiredAt
                 )
                 self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema291.self,
+                    Components.Schemas.OutputSchema293.self,
                     forKey: .candidates
                 )
                 self.createdAt = try container.decode(
@@ -23983,7 +24659,7 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/WishOut/acquiredAt`.
             package var acquiredAt: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/WishOut/candidates`.
-            package var candidates: Components.Schemas.OutputSchema291
+            package var candidates: Components.Schemas.OutputSchema293
             /// - Remark: Generated from `#/components/schemas/WishOut/createdAt`.
             package var createdAt: Foundation.Date
             /// - Remark: Generated from `#/components/schemas/WishOut/updatedAt`.
@@ -24003,7 +24679,7 @@ extension Components {
                 name: Swift.String,
                 notes: Swift.String? = nil,
                 acquiredAt: Foundation.Date? = nil,
-                candidates: Components.Schemas.OutputSchema291,
+                candidates: Components.Schemas.OutputSchema293,
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date
             ) {
@@ -24043,7 +24719,7 @@ extension Components {
                     forKey: .acquiredAt
                 )
                 self.candidates = try container.decode(
-                    Components.Schemas.OutputSchema291.self,
+                    Components.Schemas.OutputSchema293.self,
                     forKey: .candidates
                 )
                 self.createdAt = try container.decode(

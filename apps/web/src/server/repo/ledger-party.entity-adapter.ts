@@ -30,6 +30,7 @@ const ledgerPartyMergeSummary = z.object({
   accountEdgesRepointed: z.number().int().nonnegative(),
   transferEdgesRepointed: z.number().int().nonnegative(),
   portionEdgesRepointed: z.number().int().nonnegative(),
+  foodEntryEdgesRepointed: z.number().int().nonnegative(),
   carriedFields: z.array(z.string()),
 });
 

@@ -3,6 +3,16 @@ import { implementOperationDomain } from "~/server/operation-domain.server";
 import * as workflow from "~/server/workflows/meal.server";
 
 export const mealHandlers = implementOperationDomain(mealContract, {
+  getNutrition: (context, input) =>
+    workflow.getMealNutritionWorkflow(
+      context.readDb,
+      input,
+      context.usdaClient,
+    ),
+  saveFood: (context, input) =>
+    workflow.saveMealFoodWorkflow(context.db, input, context.actorContext),
+  removeFood: (context, input) =>
+    workflow.removeMealFoodWorkflow(context.db, input, context.actorContext),
   getByDateRange: (context, input) =>
     workflow.getMealsByDateRangeWorkflow(context.db, input),
   upcomingSummary: (context, input) =>

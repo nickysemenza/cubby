@@ -9,11 +9,14 @@ struct EntityDetailView: View {
 
     @Environment(AppModel.self) private var appModel
     @State private var model: GenericEntityDetailModel?
+    @State private var nutrition: MealNutritionModel?
     @State private var photoCapture: PhotoCaptureModel?
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
     var body: some View {
+        let model = model
+        let nutrition = nutrition
         content
             .porcelainScreen()
             .navigationTitle(model?.row?.title ?? descriptor.singular)
@@ -21,7 +24,15 @@ struct EntityDetailView: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
             .task(id: id) { await setup() }
-            .refreshControl { await model?.refresh(id: id) }
+            .refreshControl {
+                if let model, let nutrition {
+                    async let detailRefresh: Void = model.refresh(id: id)
+                    async let nutritionRefresh: Void = nutrition.refresh()
+                    _ = await (detailRefresh, nutritionRefresh)
+                } else {
+                    await model?.refresh(id: id)
+                }
+            }
             .userActivity(NSUserActivityTypeBrowsingWeb, isActive: model?.row != nil) { activity in
                 guard let row = model?.row else { return }
                 activity.webpageURL = appModel.webURL(for: row.id)
@@ -81,6 +92,7 @@ struct EntityDetailView: View {
     @ViewBuilder
     private var content: some View {
         if let model, let row = model.row {
+            let nutrition = nutrition
             VStack(spacing: 0) {
                 if let error = model.refreshError {
                     HStack {
@@ -88,7 +100,12 @@ struct EntityDetailView: View {
                         Button("Retry") { Task { await model.refresh(id: id) } }
                     }.padding()
                 }
-                EntityDetailContent(descriptor: descriptor, row: row)
+                EntityDetailContent(
+                    descriptor: descriptor, row: row,
+                    mealNutrition: nutrition?.state,
+                    nutritionIsLoading: nutrition?.isLoading ?? false,
+                    nutritionError: nutrition?.refreshError,
+                    onRetryNutrition: { await nutrition?.refresh() })
             }
         } else if let model {
             switch model.phase {
@@ -114,7 +131,21 @@ struct EntityDetailView: View {
 
     private func setup() async {
         if model == nil { model = GenericEntityDetailModel(descriptor: descriptor, client: appModel.client) }
-        await model?.loadInitial(id: id)
+        if key == .meal {
+            if nutrition?.query != .meal(id) {
+                nutrition = MealNutritionModel(query: .meal(id), client: appModel.client)
+            }
+        } else {
+            nutrition = nil
+        }
+        guard let model else { return }
+        if let nutrition {
+            async let detailLoad: Void = model.loadInitial(id: id)
+            async let nutritionLoad: Void = nutrition.refresh()
+            _ = await (detailLoad, nutritionLoad)
+        } else {
+            await model.loadInitial(id: id)
+        }
     }
 
 }
@@ -125,6 +156,10 @@ struct EntityDetailView: View {
 struct EntityDetailContent: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
+    var mealNutrition: TodaySectionState<MealNutritionSummary>? = nil
+    var nutritionIsLoading = false
+    var nutritionError: String? = nil
+    var onRetryNutrition: (@Sendable () async -> Void)? = nil
 
     @State private var showingRaw = false
     @State private var showingPhoto = false
@@ -167,7 +202,28 @@ struct EntityDetailContent: View {
             Section {
                 if heroPhoto != nil { hero }
                 identity
+                if descriptor.key == .meal,
+                    let day = row.raw["date"]?.stringValue,
+                    HouseholdDay.isFuture(day)
+                {
+                    Label("Planned", systemImage: "calendar.badge.clock")
+                        .font(.porcelainLabel)
+                        .foregroundStyle(.secondary)
+                }
                 if let locationAiDescription { Text(locationAiDescription) }
+            }
+            if let mealNutrition {
+                Section("Nutrition") {
+                    switch mealNutrition {
+                    case .loading:
+                        LoadingIndicator(label: "Loading nutrition")
+                    case .failed(let message):
+                        nutritionFailure(message)
+                    case .loaded(let summary):
+                        MealNutritionPeopleView(summary: summary)
+                    }
+                    if let nutritionError { nutritionFailure(nutritionError) }
+                }
             }
             if !stats.isEmpty {
                 Section("Overview") {
@@ -206,6 +262,16 @@ struct EntityDetailContent: View {
         .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
         .photoPreviewPresentation(isPresented: $showingPhoto) {
             if let photo = heroPhoto { PhotoPreview(photos: [photo], selectedID: photo.id) }
+        }
+    }
+
+    private func nutritionFailure(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
+            Text(message).font(.callout).foregroundStyle(.secondary)
+            if nutritionIsLoading { LoadingIndicator(label: "Retrying") }
+            if let onRetryNutrition {
+                Button("Retry") { Task { await onRetryNutrition() } }.disabled(nutritionIsLoading)
+            }
         }
     }
 
@@ -390,6 +456,25 @@ struct EntityDetailContent: View {
     NavigationStack {
         EntityDetailContent(descriptor: EntityCatalog[.product], row: PreviewFixtures.sampleDetailRow)
             .navigationTitle("Cast Iron Skillet")
+    }
+}
+
+#Preview("Meal with nutrition") {
+    let row = EntityRow(
+        id: "MEL-2001", title: "Garden lunch", subtitle: "Lunch", imageURL: nil,
+        raw: .object([
+            "id": .string("MEL-2001"),
+            "date": .string("2026-09-14"),
+            "name": .string("Garden lunch"),
+            "mealType": .string("lunch"),
+            "mealKind": .string("cooked"),
+        ]))
+    return NavigationStack {
+        EntityDetailContent(
+            descriptor: EntityCatalog[.meal], row: row,
+            mealNutrition: .loaded(PreviewFixtures.sampleMealNutrition)
+        )
+        .navigationTitle("Garden lunch")
     }
 }
 

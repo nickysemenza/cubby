@@ -31,6 +31,7 @@ import {
   expense,
   inventoryEntry,
   location,
+  mealFoodEntry,
   product,
   productComponent,
   productConversionCoverage,
@@ -114,6 +115,12 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     effect: "move-dedupe",
     description:
       "A merged product's purchase links move onto the survivor, skipping orders the survivor is already recorded against.",
+  },
+  "MealFoodEntry.productId": {
+    code: "repoint-meal-food-entries",
+    effect: "repoint",
+    description:
+      "Recorded meal food entries move onto the surviving product while their gram amounts remain fixed.",
   },
   "WishCandidate.productId": {
     code: "repoint-or-drop-same-wish",
@@ -642,6 +649,7 @@ interface ProductMergePlan {
   tasks: ProductAssociationRow[];
   locations: ProductAssociationRow[];
   cookbooks: ProductAssociationRow[];
+  mealFoodEntries: ProductAssociationRow[];
   conversionCoverage: ProductAssociationRow[];
   survivorImageIds: string[];
   aliases: string[];
@@ -888,6 +896,20 @@ async function buildProductMergePlan(
     ...row,
     productId: parseEntityId("product", row.productId),
   }));
+  const mealFoodEntries = (
+    await db
+      .select({ id: mealFoodEntry.id, productId: mealFoodEntry.productId })
+      .from(mealFoodEntry)
+      .where(
+        and(
+          inArray(mealFoodEntry.productId, liveLoserIds),
+          notDeleted(mealFoodEntry),
+        ),
+      )
+  ).map((row): ProductAssociationRow => ({
+    ...row,
+    productId: parseEntityId("product", row.productId),
+  }));
   const conversionCoverage = (
     await db
       .select({
@@ -984,6 +1006,7 @@ async function buildProductMergePlan(
     tasks,
     locations,
     cookbooks,
+    mealFoodEntries,
     conversionCoverage,
     survivorImageIds: imageRows
       .filter((row) => row.productId === input.keepId)
@@ -1135,7 +1158,7 @@ const productMergeSurvivorChanges = (
 /**
  * Merge `mergeIds` into `keepId`.
  *
- * Re-points or folds all eight incoming edges (see the file doc for the two
+ * Re-points or folds all sixteen incoming edges (see the file doc for the two
  * collision rules), folds the losers' names/aliases/tags into the survivor,
  * fills the survivor's null columns from them, then soft-deletes them through
  * {@link finalizeMerge} — which is also what cascades their embeddings.
@@ -1438,6 +1461,15 @@ export const mergeProducts = async (
       )
       .returning({ id: cookbook.id });
     summary.cookbooksMoved = movedCookbooks.length;
+    await tx
+      .update(mealFoodEntry)
+      .set({ productId: keepId })
+      .where(
+        and(
+          inArray(mealFoodEntry.productId, plan.loserIds),
+          notDeleted(mealFoodEntry),
+        ),
+      );
     // Money moving between products is an AUDITED change, exactly as it is on
     // `updateExpense` and in `foldChargeInto`'s purchaseId re-point — net cost
     // and the owned/sold window are derived from these rows.
@@ -1953,6 +1985,12 @@ export const previewMergeProducts = async (
       edgeKey: "Cookbook.productId",
       label: "cookbooks re-pointed",
       byTargetId: byProduct(plan.cookbooks),
+    }),
+    impact({
+      disposition: PRODUCT_MERGE_EDGE_POLICY["MealFoodEntry.productId"],
+      edgeKey: "MealFoodEntry.productId",
+      label: "meal food entries re-pointed",
+      byTargetId: byProduct(plan.mealFoodEntries),
     }),
     impact({
       disposition:

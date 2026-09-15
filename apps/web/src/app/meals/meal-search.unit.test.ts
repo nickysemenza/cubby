@@ -11,6 +11,25 @@ import {
 } from "./meal-search";
 
 describe("meal route search", () => {
+  it("round-trips a nutrition date alongside independent table state", () => {
+    expect(
+      mealCalendarSearchSchema.parse({
+        view: "nutrition",
+        date: "2026-09-15",
+        sort: "-date",
+        page: 2,
+      }),
+    ).toMatchObject({
+      view: "nutrition",
+      date: "2026-09-15",
+      sort: "-date",
+      page: 2,
+    });
+    expect(
+      mealCalendarSearchSchema.parse({ view: "nutrition", date: "2026-02-30" })
+        .date,
+    ).toBeUndefined();
+  });
   it("accepts typed calendar view/week params", () => {
     expect(
       mealCalendarSearchSchema.parse({

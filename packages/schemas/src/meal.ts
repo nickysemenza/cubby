@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./meal-nutrition";
 import { auditDateFilterFields, uniqueBy } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { mealRelatedFilterFields } from "./related-view";
@@ -257,7 +258,12 @@ export const getMealPreparationsOut = z.object({
 });
 export type GetMealPreparationsOut = z.infer<typeof getMealPreparationsOut>;
 
-export const mealPreparationNutritionDetail = z.enum(["full", "kcal", "none"]);
+export const mealPreparationNutritionDetail = z.enum([
+  "full",
+  "macros",
+  "kcal",
+  "none",
+]);
 export type MealPreparationNutritionDetail = z.infer<
   typeof mealPreparationNutritionDetail
 >;

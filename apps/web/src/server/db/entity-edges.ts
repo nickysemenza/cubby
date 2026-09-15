@@ -89,6 +89,7 @@ import {
   location,
   locationImage,
   mealImage,
+  mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
   product,
@@ -345,6 +346,14 @@ export const ENTITY_EDGES = {
     },
   }),
   meal: edges({
+    "MealFoodEntry.mealId": {
+      column: mealFoodEntry.mealId,
+      role: "composition",
+      label: "food entries",
+      description:
+        "A product or manual food amount assigned to an eater at this meal; the entry has no meaning outside the meal that owns it.",
+      liveness: { kind: "must-target-live" },
+    },
     "MealRecipe.mealId": {
       column: mealRecipe.mealId,
       role: "composition",
@@ -371,6 +380,14 @@ export const ENTITY_EDGES = {
     },
   }),
   ledgerParty: edges({
+    "MealFoodEntry.ledgerPartyId": {
+      column: mealFoodEntry.ledgerPartyId,
+      role: "association",
+      label: "meal food entries",
+      description:
+        "A product or manual food amount naming this member or guest as its eater.",
+      liveness: { kind: "must-target-live" },
+    },
     "ExpenseAttribution.ledgerPartyId": {
       column: expenseAttribution.ledgerPartyId,
       role: "ledger",
@@ -411,6 +428,14 @@ export const ENTITY_EDGES = {
     },
   }),
   product: edges({
+    "MealFoodEntry.productId": {
+      column: mealFoodEntry.productId,
+      role: "reference",
+      label: "meal food entries",
+      description:
+        "A recorded product amount whose nutrition is recalculated from the current product source while its gram amount remains fixed.",
+      liveness: { kind: "must-target-live" },
+    },
     "ProductExternalId.productId": {
       column: productExternalId.productId,
       role: "metadata",

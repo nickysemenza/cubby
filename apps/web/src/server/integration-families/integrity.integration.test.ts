@@ -4,6 +4,7 @@ import "../repo/cookbook.integration.test";
 import "../repo/entity-display-image.integration.test";
 import "../repo/image.integration.test";
 import "../repo/problems/detectors-integrity.integration.test";
+import "../repo/meal-food-entry-lifecycle.integration.test";
 import "../repo/product/merge.integration.test";
 import "../repo/product-components.integration.test";
 import "../repo/project-tools.integration.test";

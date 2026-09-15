@@ -8968,6 +8968,45 @@
         }
       }
     },
+    "/api/v1/meal/getNutrition": {
+      "post": {
+        "tags": ["meal"],
+        "parameters": [],
+        "operationId": "meal.getNutrition",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MealNutritionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealNutritionOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meal/getPreparations": {
       "get": {
         "tags": ["meal"],
@@ -9078,6 +9117,45 @@
         }
       }
     },
+    "/api/v1/meal/removeFood": {
+      "post": {
+        "tags": ["meal"],
+        "parameters": [],
+        "operationId": "meal.removeFood",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveMealFoodInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealFoodMutationOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/meal/removeRecipe": {
       "post": {
         "tags": ["meal"],
@@ -9100,6 +9178,45 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MealOut"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/meal/saveFood": {
+      "post": {
+        "tags": ["meal"],
+        "parameters": [],
+        "operationId": "meal.saveFood",
+        "requestBody": {
+          "description": "Body",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveMealFoodInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "200",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MealFoodMutationOut"
                 }
               }
             }
@@ -19887,10 +20004,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema204"
+            "$ref": "#/components/schemas/output_schema206"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema204"
+            "$ref": "#/components/schemas/output_schema206"
           },
           "subtaskCount": {
             "type": "integer",
@@ -25890,10 +26007,10 @@
             "type": "object",
             "properties": {
               "scope": {
-                "$ref": "#/components/schemas/output_schema230"
+                "$ref": "#/components/schemas/output_schema232"
               },
               "grid": {
-                "$ref": "#/components/schemas/output_schema230"
+                "$ref": "#/components/schemas/output_schema232"
               }
             },
             "required": ["scope", "grid"],
@@ -25903,19 +26020,19 @@
             "type": "object",
             "properties": {
               "tail": {
-                "$ref": "#/components/schemas/output_schema230"
+                "$ref": "#/components/schemas/output_schema232"
               },
               "causes": {
                 "type": "object",
                 "properties": {
                   "adjustments": {
-                    "$ref": "#/components/schemas/output_schema230"
+                    "$ref": "#/components/schemas/output_schema232"
                   },
                   "unattributedProject": {
-                    "$ref": "#/components/schemas/output_schema230"
+                    "$ref": "#/components/schemas/output_schema232"
                   },
                   "unattributedVendor": {
-                    "$ref": "#/components/schemas/output_schema230"
+                    "$ref": "#/components/schemas/output_schema232"
                   }
                 },
                 "required": [
@@ -26358,12 +26475,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema113"
+                "$ref": "#/components/schemas/input_schema114"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema113"
+                  "$ref": "#/components/schemas/input_schema114"
                 }
               }
             ]
@@ -26394,12 +26511,12 @@
           "vendorId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema116"
+                "$ref": "#/components/schemas/input_schema117"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema116"
+                  "$ref": "#/components/schemas/input_schema117"
                 }
               }
             ]
@@ -26455,12 +26572,12 @@
           "purchaseId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema120"
+                "$ref": "#/components/schemas/input_schema121"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema120"
+                  "$ref": "#/components/schemas/input_schema121"
                 }
               }
             ]
@@ -26504,10 +26621,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema233"
+            "$ref": "#/components/schemas/output_schema235"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema234"
+            "$ref": "#/components/schemas/output_schema236"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -26682,10 +26799,10 @@
             "$ref": "#/components/schemas/PlainDate"
           },
           "lineKind": {
-            "$ref": "#/components/schemas/output_schema233"
+            "$ref": "#/components/schemas/output_schema235"
           },
           "lineBasis": {
-            "$ref": "#/components/schemas/output_schema234"
+            "$ref": "#/components/schemas/output_schema236"
           },
           "costType": {
             "$ref": "#/components/schemas/CostType"
@@ -32023,7 +32140,7 @@
         "required": ["uploadUrl", "imageId", "key", "url"],
         "additionalProperties": false
       },
-      "input_schema104": {
+      "input_schema105": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -32060,7 +32177,7 @@
           }
         }
       },
-      "input_schema113": {
+      "input_schema114": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProjectShortcode"
@@ -32074,7 +32191,7 @@
         "pattern": "^PRJ-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "project shortcode, e.g. PRJ-4K7M"
       },
-      "input_schema116": {
+      "input_schema117": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/VendorShortcode"
@@ -32088,7 +32205,7 @@
         "pattern": "^VEN-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "vendor shortcode, e.g. VEN-4K7M"
       },
-      "input_schema120": {
+      "input_schema121": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/PurchaseShortcode"
@@ -32102,19 +32219,19 @@
         "pattern": "^PUR-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "purchase shortcode, e.g. PUR-4K7M"
       },
-      "input_schema123": {
+      "input_schema124": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectStatus"
         }
       },
-      "input_schema124": {
+      "input_schema125": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectKind"
         }
       },
-      "input_schema133": {
+      "input_schema134": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -32128,7 +32245,7 @@
           }
         }
       },
-      "input_schema134": {
+      "input_schema135": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/TaskShortcode"
@@ -32142,7 +32259,7 @@
         "pattern": "^TSK-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "task shortcode, e.g. TSK-4K7M"
       },
-      "input_schema146": {
+      "input_schema147": {
         "type": "object",
         "properties": {
           "kind": {
@@ -32155,7 +32272,7 @@
         },
         "required": ["kind", "value"]
       },
-      "input_schema147": {
+      "input_schema148": {
         "minItems": 1,
         "maxItems": 17,
         "type": "array",
@@ -32163,7 +32280,7 @@
           "$ref": "#/components/schemas/SearchableEntity"
         }
       },
-      "input_schema150": {
+      "input_schema151": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -32184,7 +32301,7 @@
           }
         }
       },
-      "input_schema151": {
+      "input_schema152": {
         "type": "object",
         "properties": {
           "orderBy": {
@@ -32296,7 +32413,10 @@
         "pattern": "^LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}$",
         "description": "location shortcode, e.g. LOC-4K7M"
       },
-      "input_schema86": {
+      "input_schema71": {
+        "$ref": "#/components/schemas/MealFoodEntryId"
+      },
+      "input_schema87": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/ProductCategory"
@@ -32309,7 +32429,7 @@
           }
         ]
       },
-      "input_schema88": {
+      "input_schema89": {
         "anyOf": [
           {
             "type": "string"
@@ -32322,7 +32442,7 @@
           }
         ]
       },
-      "input_schema97": {
+      "input_schema98": {
         "anyOf": [
           {
             "$ref": "#/components/schemas/IngredientShortcode"
@@ -34048,14 +34168,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema150"
+                "$ref": "#/components/schemas/input_schema151"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema150"
+                  "$ref": "#/components/schemas/input_schema151"
                 }
               }
             ]
@@ -35234,13 +35354,13 @@
                   "type": "string"
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema281"
+                  "$ref": "#/components/schemas/output_schema283"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema281"
+                  "$ref": "#/components/schemas/output_schema283"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema283"
+                  "$ref": "#/components/schemas/output_schema285"
                 }
               },
               "required": ["name", "inputSchema"],
@@ -35344,10 +35464,10 @@
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
                 },
                 "user": {
-                  "$ref": "#/components/schemas/output_schema284"
+                  "$ref": "#/components/schemas/output_schema286"
                 },
                 "client": {
-                  "$ref": "#/components/schemas/output_schema285"
+                  "$ref": "#/components/schemas/output_schema287"
                 }
               },
               "required": [
@@ -35439,7 +35559,7 @@
           "daily": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema286"
+              "$ref": "#/components/schemas/output_schema288"
             }
           },
           "tools": {
@@ -35457,13 +35577,13 @@
                   "type": ["string", "null"]
                 },
                 "inputSchema": {
-                  "$ref": "#/components/schemas/output_schema281"
+                  "$ref": "#/components/schemas/output_schema283"
                 },
                 "outputSchema": {
-                  "$ref": "#/components/schemas/output_schema281"
+                  "$ref": "#/components/schemas/output_schema283"
                 },
                 "annotations": {
-                  "$ref": "#/components/schemas/output_schema283"
+                  "$ref": "#/components/schemas/output_schema285"
                 },
                 "status": {
                   "$ref": "#/components/schemas/McpToolUsageStatus"
@@ -35507,19 +35627,19 @@
                 "daily": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema286"
+                    "$ref": "#/components/schemas/output_schema288"
                   }
                 },
                 "users": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema284"
+                    "$ref": "#/components/schemas/output_schema286"
                   }
                 },
                 "clients": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema285"
+                    "$ref": "#/components/schemas/output_schema287"
                   }
                 }
               },
@@ -35546,25 +35666,25 @@
           "users": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema287"
+              "$ref": "#/components/schemas/output_schema289"
             }
           },
           "clients": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema287"
+              "$ref": "#/components/schemas/output_schema289"
             }
           },
           "surfaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema287"
+              "$ref": "#/components/schemas/output_schema289"
             }
           },
           "entities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema287"
+              "$ref": "#/components/schemas/output_schema289"
             }
           }
         },
@@ -35713,6 +35833,44 @@
         },
         "required": ["from", "to"]
       },
+      "MealFoodEntryId": {
+        "type": "string",
+        "format": "uuid",
+        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+      },
+      "MealFoodMutationOut": {
+        "type": "object",
+        "properties": {
+          "mealId": {
+            "$ref": "#/components/schemas/MealShortcode"
+          },
+          "id": {
+            "$ref": "#/components/schemas/MealFoodEntryId"
+          }
+        },
+        "required": ["mealId", "id"],
+        "additionalProperties": false
+      },
+      "MealFoodNutrients": {
+        "type": "object",
+        "propertyNames": {
+          "$ref": "#/components/schemas/NutrientKey"
+        },
+        "additionalProperties": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "MealFoodNutrientsInput": {
+        "type": "object",
+        "propertyNames": {
+          "$ref": "#/components/schemas/NutrientKey"
+        },
+        "additionalProperties": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
       "MealKind": {
         "type": "string",
         "enum": ["cooked", "leftovers", "eating_out", "takeout", "other"]
@@ -35802,6 +35960,233 @@
           }
         },
         "required": ["items", "meta"],
+        "additionalProperties": false
+      },
+      "MealNutritionFood": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/MealNutritionFoodRecipe"
+          },
+          {
+            "$ref": "#/components/schemas/MealNutritionFoodProduct"
+          },
+          {
+            "$ref": "#/components/schemas/MealNutritionFoodManual"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "sourceKind",
+          "mapping": {
+            "recipe": "#/components/schemas/MealNutritionFoodRecipe",
+            "product": "#/components/schemas/MealNutritionFoodProduct",
+            "manual": "#/components/schemas/MealNutritionFoodManual"
+          }
+        }
+      },
+      "MealNutritionFoodManual": {
+        "type": "object",
+        "properties": {
+          "meal": {
+            "$ref": "#/components/schemas/NutritionMeal"
+          },
+          "name": {
+            "type": "string"
+          },
+          "grams": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0
+          },
+          "totals": {
+            "$ref": "#/components/schemas/MealTotals"
+          },
+          "sourceKind": {
+            "type": "string",
+            "const": "manual"
+          },
+          "id": {
+            "$ref": "#/components/schemas/MealFoodEntryId"
+          },
+          "nutrients": {
+            "$ref": "#/components/schemas/MealFoodNutrients"
+          }
+        },
+        "required": [
+          "meal",
+          "name",
+          "grams",
+          "totals",
+          "sourceKind",
+          "id",
+          "nutrients"
+        ],
+        "additionalProperties": false
+      },
+      "MealNutritionFoodProduct": {
+        "type": "object",
+        "properties": {
+          "meal": {
+            "$ref": "#/components/schemas/NutritionMeal"
+          },
+          "name": {
+            "type": "string"
+          },
+          "grams": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0
+          },
+          "totals": {
+            "$ref": "#/components/schemas/MealTotals"
+          },
+          "sourceKind": {
+            "type": "string",
+            "const": "product"
+          },
+          "id": {
+            "$ref": "#/components/schemas/MealFoodEntryId"
+          },
+          "productId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          }
+        },
+        "required": [
+          "meal",
+          "name",
+          "grams",
+          "totals",
+          "sourceKind",
+          "id",
+          "productId"
+        ],
+        "additionalProperties": false
+      },
+      "MealNutritionFoodRecipe": {
+        "type": "object",
+        "properties": {
+          "meal": {
+            "$ref": "#/components/schemas/NutritionMeal"
+          },
+          "name": {
+            "type": "string"
+          },
+          "grams": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0
+          },
+          "totals": {
+            "$ref": "#/components/schemas/MealTotals"
+          },
+          "sourceKind": {
+            "type": "string",
+            "const": "recipe"
+          },
+          "mealRecipeId": {
+            "$ref": "#/components/schemas/MealRecipeId"
+          },
+          "recipeId": {
+            "$ref": "#/components/schemas/RecipeShortcode"
+          },
+          "sourceMealId": {
+            "$ref": "#/components/schemas/MealShortcode"
+          }
+        },
+        "required": [
+          "meal",
+          "name",
+          "grams",
+          "totals",
+          "sourceKind",
+          "mealRecipeId",
+          "recipeId",
+          "sourceMealId"
+        ],
+        "additionalProperties": false
+      },
+      "MealNutritionInput": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "mealId": {
+                "$ref": "#/components/schemas/MealShortcode"
+              }
+            },
+            "required": ["mealId"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              }
+            },
+            "required": ["date"]
+          }
+        ]
+      },
+      "MealNutritionOut": {
+        "type": "object",
+        "properties": {
+          "meals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NutritionMeal"
+            }
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MealNutritionPerson"
+            }
+          }
+        },
+        "required": ["meals", "people"],
+        "additionalProperties": false
+      },
+      "MealNutritionPerson": {
+        "type": "object",
+        "properties": {
+          "eater": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/LedgerPartyShortcode"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": ["id", "name"],
+            "additionalProperties": false
+          },
+          "totals": {
+            "$ref": "#/components/schemas/MealTotals"
+          },
+          "meals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "meal": {
+                  "$ref": "#/components/schemas/NutritionMeal"
+                },
+                "totals": {
+                  "$ref": "#/components/schemas/MealTotals"
+                }
+              },
+              "required": ["meal", "totals"],
+              "additionalProperties": false
+            }
+          },
+          "foods": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MealNutritionFood"
+            }
+          }
+        },
+        "required": ["eater", "totals", "meals", "foods"],
         "additionalProperties": false
       },
       "MealOut": {
@@ -37025,6 +37410,25 @@
         "required": ["nutrientSummary", "nutrientsPer100"],
         "additionalProperties": false
       },
+      "NutritionMeal": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/MealShortcode"
+          },
+          "date": {
+            "$ref": "#/components/schemas/PlainDate"
+          },
+          "name": {
+            "type": ["string", "null"]
+          },
+          "mealType": {
+            "$ref": "#/components/schemas/MealType"
+          }
+        },
+        "required": ["id", "date", "name"],
+        "additionalProperties": false
+      },
       "OauthPruneOrphanedClientsInput": {
         "type": "object",
         "properties": {},
@@ -37187,7 +37591,7 @@
           }
         }
       },
-      "output_schema186": {
+      "output_schema188": {
         "type": "object",
         "properties": {
           "id": {
@@ -37229,7 +37633,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema189": {
+      "output_schema191": {
         "type": "object",
         "properties": {
           "id": {
@@ -37242,7 +37646,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema190": {
+      "output_schema192": {
         "type": "object",
         "properties": {
           "id": {
@@ -37333,7 +37737,7 @@
               "ancestors": {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/output_schema191"
+                  "$ref": "#/components/schemas/output_schema193"
                 }
               }
             },
@@ -37363,7 +37767,7 @@
         ],
         "additionalProperties": false
       },
-      "output_schema191": {
+      "output_schema193": {
         "type": "object",
         "properties": {
           "id": {
@@ -37382,7 +37786,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema192": {
+      "output_schema194": {
         "type": "object",
         "properties": {
           "id": {
@@ -37400,26 +37804,26 @@
           "ancestors": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema191"
+              "$ref": "#/components/schemas/output_schema193"
             }
           }
         },
         "required": ["id", "name", "ancestors"],
         "additionalProperties": false
       },
-      "output_schema204": {
+      "output_schema206": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/TaskShortcode"
         }
       },
-      "output_schema224": {
+      "output_schema226": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/ProjectShortcode"
         }
       },
-      "output_schema230": {
+      "output_schema232": {
         "type": "object",
         "properties": {
           "current": {
@@ -37432,15 +37836,15 @@
         "required": ["current"],
         "additionalProperties": false
       },
-      "output_schema233": {
+      "output_schema235": {
         "description": "Receipt role. Principal lines are the purchased item/service; every other value is a purchase-level adjustment.",
         "$ref": "#/components/schemas/ExpenseLineKind"
       },
-      "output_schema234": {
+      "output_schema236": {
         "description": "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
         "$ref": "#/components/schemas/ExpenseLineBasis"
       },
-      "output_schema270": {
+      "output_schema272": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticOwnFull"
@@ -37469,7 +37873,7 @@
           }
         }
       },
-      "output_schema271": {
+      "output_schema273": {
         "oneOf": [
           {
             "$ref": "#/components/schemas/RowDiagnosticTrue"
@@ -37479,7 +37883,7 @@
           }
         ]
       },
-      "output_schema281": {
+      "output_schema283": {
         "type": "object",
         "propertyNames": {
           "type": "string"
@@ -37488,7 +37892,7 @@
           "$ref": "#/components/schemas/JsonValue"
         }
       },
-      "output_schema283": {
+      "output_schema285": {
         "type": "object",
         "properties": {
           "readOnlyHint": {
@@ -37506,7 +37910,7 @@
         },
         "additionalProperties": false
       },
-      "output_schema284": {
+      "output_schema286": {
         "type": "object",
         "properties": {
           "id": {
@@ -37522,7 +37926,7 @@
         "required": ["id", "name", "email"],
         "additionalProperties": false
       },
-      "output_schema285": {
+      "output_schema287": {
         "type": "object",
         "properties": {
           "id": {
@@ -37535,7 +37939,7 @@
         "required": ["id", "name"],
         "additionalProperties": false
       },
-      "output_schema286": {
+      "output_schema288": {
         "type": "object",
         "properties": {
           "day": {
@@ -37560,7 +37964,7 @@
         "required": ["day", "success", "error", "total"],
         "additionalProperties": false
       },
-      "output_schema287": {
+      "output_schema289": {
         "type": "object",
         "properties": {
           "key": {
@@ -37584,7 +37988,7 @@
           "$ref": "#/components/schemas/ImageOut"
         }
       },
-      "output_schema291": {
+      "output_schema293": {
         "type": "array",
         "items": {
           "$ref": "#/components/schemas/WishCandidateOut"
@@ -39401,7 +39805,7 @@
           },
           "categoryFilter": {
             "description": "Filter by category",
-            "$ref": "#/components/schemas/input_schema86"
+            "$ref": "#/components/schemas/input_schema87"
           },
           "expectedQuantityMin": {
             "type": "number"
@@ -39422,7 +39826,7 @@
           },
           "tagFilters": {
             "description": "Match products carrying any of these tags",
-            "$ref": "#/components/schemas/input_schema88"
+            "$ref": "#/components/schemas/input_schema89"
           },
           "upcPresenceFilter": {
             "$ref": "#/components/schemas/PresenceFilter"
@@ -39511,12 +39915,12 @@
           "ingredientIdFilter": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema97"
+                "$ref": "#/components/schemas/input_schema98"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema97"
+                  "$ref": "#/components/schemas/input_schema98"
                 }
               }
             ]
@@ -39964,7 +40368,7 @@
             }
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema186"
+            "$ref": "#/components/schemas/output_schema188"
           },
           "inventoryEntry": {
             "type": "array",
@@ -40284,7 +40688,7 @@
                 "usedOnProjects": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/output_schema189"
+                    "$ref": "#/components/schemas/output_schema191"
                   }
                 },
                 "ownershipIntervals": {
@@ -40391,7 +40795,7 @@
                         "$ref": "#/components/schemas/PlainDate"
                       },
                       "chargedTo": {
-                        "$ref": "#/components/schemas/output_schema189"
+                        "$ref": "#/components/schemas/output_schema191"
                       },
                       "provenanceOnly": {
                         "type": "boolean"
@@ -40988,14 +41392,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema104"
+                "$ref": "#/components/schemas/input_schema105"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema104"
+                  "$ref": "#/components/schemas/input_schema105"
                 }
               }
             ]
@@ -41451,7 +41855,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema186"
+            "$ref": "#/components/schemas/output_schema188"
           },
           "unitMappings": {
             "type": "array",
@@ -41462,13 +41866,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema190"
+              "$ref": "#/components/schemas/output_schema192"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema192"
+              "$ref": "#/components/schemas/output_schema194"
             }
           },
           "food": {
@@ -41602,7 +42006,7 @@
             "format": "uri"
           },
           "ingredient": {
-            "$ref": "#/components/schemas/output_schema186"
+            "$ref": "#/components/schemas/output_schema188"
           },
           "unitMappings": {
             "type": "array",
@@ -41613,13 +42017,13 @@
           "inventoryEntry": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema190"
+              "$ref": "#/components/schemas/output_schema192"
             }
           },
           "servingAsLocations": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/output_schema192"
+              "$ref": "#/components/schemas/output_schema194"
             }
           },
           "componentCount": {
@@ -42761,10 +43165,10 @@
         "type": "object",
         "properties": {
           "statusScope": {
-            "$ref": "#/components/schemas/input_schema123"
+            "$ref": "#/components/schemas/input_schema124"
           },
           "kinds": {
-            "$ref": "#/components/schemas/input_schema124"
+            "$ref": "#/components/schemas/input_schema125"
           },
           "locations": {
             "$ref": "#/components/schemas/input_schema45"
@@ -43217,7 +43621,7 @@
           },
           "location": {
             "description": "Any exact match against locations[]",
-            "$ref": "#/components/schemas/input_schema88"
+            "$ref": "#/components/schemas/input_schema89"
           },
           "dateFrom": {
             "$ref": "#/components/schemas/input_schema33"
@@ -43243,12 +43647,12 @@
           "parentProjectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema113"
+                "$ref": "#/components/schemas/input_schema114"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema113"
+                  "$ref": "#/components/schemas/input_schema114"
                 }
               }
             ]
@@ -43388,13 +43792,13 @@
             "type": ["string", "null"]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema224"
+            "$ref": "#/components/schemas/output_schema226"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema224"
+            "$ref": "#/components/schemas/output_schema226"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema224"
+            "$ref": "#/components/schemas/output_schema226"
           },
           "createdAt": {
             "type": "string",
@@ -43533,13 +43937,13 @@
             "type": ["string", "null"]
           },
           "childProjectIds": {
-            "$ref": "#/components/schemas/output_schema224"
+            "$ref": "#/components/schemas/output_schema226"
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema224"
+            "$ref": "#/components/schemas/output_schema226"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema224"
+            "$ref": "#/components/schemas/output_schema226"
           },
           "createdAt": {
             "type": "string",
@@ -44085,10 +44489,10 @@
         "type": "object",
         "properties": {
           "statusScope": {
-            "$ref": "#/components/schemas/input_schema123"
+            "$ref": "#/components/schemas/input_schema124"
           },
           "kinds": {
-            "$ref": "#/components/schemas/input_schema124"
+            "$ref": "#/components/schemas/input_schema125"
           },
           "locations": {
             "$ref": "#/components/schemas/input_schema45"
@@ -44526,14 +44930,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema133"
+                "$ref": "#/components/schemas/input_schema134"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema133"
+                  "$ref": "#/components/schemas/input_schema134"
                 }
               }
             ]
@@ -48028,6 +48432,18 @@
         "type": "string",
         "enum": ["beforeToday", "onOrBeforeToday"]
       },
+      "RemoveMealFoodInput": {
+        "type": "object",
+        "properties": {
+          "mealId": {
+            "$ref": "#/components/schemas/MealShortcode"
+          },
+          "id": {
+            "$ref": "#/components/schemas/MealFoodEntryId"
+          }
+        },
+        "required": ["mealId", "id"]
+      },
       "RepairImageDimensionsInput": {
         "type": "object",
         "properties": {
@@ -48220,13 +48636,13 @@
             "type": "object",
             "properties": {
               "cost": {
-                "$ref": "#/components/schemas/output_schema270"
+                "$ref": "#/components/schemas/output_schema272"
               },
               "weight": {
-                "$ref": "#/components/schemas/output_schema270"
+                "$ref": "#/components/schemas/output_schema272"
               },
               "nutrients": {
-                "$ref": "#/components/schemas/output_schema270"
+                "$ref": "#/components/schemas/output_schema272"
               }
             },
             "required": ["cost", "weight", "nutrients"],
@@ -48236,10 +48652,10 @@
             "type": ["number", "null"]
           },
           "price": {
-            "$ref": "#/components/schemas/output_schema271"
+            "$ref": "#/components/schemas/output_schema273"
           },
           "gram": {
-            "$ref": "#/components/schemas/output_schema271"
+            "$ref": "#/components/schemas/output_schema273"
           },
           "nutrient": {
             "oneOf": [
@@ -48441,6 +48857,93 @@
         "required": ["ok", "value", "unit"],
         "additionalProperties": false
       },
+      "SaveMealFoodInput": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SaveMealFoodInputProduct"
+          },
+          {
+            "$ref": "#/components/schemas/SaveMealFoodInputManual"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "sourceKind",
+          "mapping": {
+            "product": "#/components/schemas/SaveMealFoodInputProduct",
+            "manual": "#/components/schemas/SaveMealFoodInputManual"
+          }
+        }
+      },
+      "SaveMealFoodInputManual": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/input_schema71"
+          },
+          "mealId": {
+            "$ref": "#/components/schemas/MealShortcode"
+          },
+          "ledgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "sourceKind": {
+            "type": "string",
+            "const": "manual"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "nutrients": {
+            "$ref": "#/components/schemas/MealFoodNutrientsInput"
+          },
+          "grams": {
+            "type": ["number", "null"],
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "mealId",
+          "ledgerPartyId",
+          "sourceKind",
+          "name",
+          "nutrients",
+          "grams"
+        ]
+      },
+      "SaveMealFoodInputProduct": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/input_schema71"
+          },
+          "mealId": {
+            "$ref": "#/components/schemas/MealShortcode"
+          },
+          "ledgerPartyId": {
+            "$ref": "#/components/schemas/LedgerPartyShortcode"
+          },
+          "sourceKind": {
+            "type": "string",
+            "const": "product"
+          },
+          "productId": {
+            "$ref": "#/components/schemas/ProductShortcode"
+          },
+          "grams": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "required": [
+          "mealId",
+          "ledgerPartyId",
+          "sourceKind",
+          "productId",
+          "grams"
+        ]
+      },
       "SaveMealRecipePreparationInput": {
         "type": "object",
         "properties": {
@@ -48497,7 +49000,7 @@
                 "$ref": "#/components/schemas/ProductFindOrCreateByCodeInput"
               },
               {
-                "$ref": "#/components/schemas/input_schema146"
+                "$ref": "#/components/schemas/input_schema147"
               }
             ],
             "description": "The scanned code."
@@ -48788,7 +49291,7 @@
           },
           "entityTypes": {
             "description": "Restrict results to these searchable entity types.",
-            "$ref": "#/components/schemas/input_schema147"
+            "$ref": "#/components/schemas/input_schema148"
           },
           "limit": {
             "default": 5,
@@ -50316,12 +50819,12 @@
           "parentTaskId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema134"
+                "$ref": "#/components/schemas/input_schema135"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema134"
+                  "$ref": "#/components/schemas/input_schema135"
                 }
               }
             ]
@@ -50364,12 +50867,12 @@
           "projectId": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema113"
+                "$ref": "#/components/schemas/input_schema114"
               },
               {
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema113"
+                  "$ref": "#/components/schemas/input_schema114"
                 }
               }
             ]
@@ -50476,10 +50979,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema204"
+            "$ref": "#/components/schemas/output_schema206"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema204"
+            "$ref": "#/components/schemas/output_schema206"
           },
           "subtaskCount": {
             "type": "integer",
@@ -50589,10 +51092,10 @@
             "type": ["string", "null"]
           },
           "blockedByIds": {
-            "$ref": "#/components/schemas/output_schema204"
+            "$ref": "#/components/schemas/output_schema206"
           },
           "blockingIds": {
-            "$ref": "#/components/schemas/output_schema204"
+            "$ref": "#/components/schemas/output_schema206"
           },
           "subtaskCount": {
             "type": "integer",
@@ -51918,14 +52421,14 @@
             },
             "anyOf": [
               {
-                "$ref": "#/components/schemas/input_schema151"
+                "$ref": "#/components/schemas/input_schema152"
               },
               {
                 "minItems": 1,
                 "maxItems": 3,
                 "type": "array",
                 "items": {
-                  "$ref": "#/components/schemas/input_schema151"
+                  "$ref": "#/components/schemas/input_schema152"
                 }
               }
             ]
@@ -52283,7 +52786,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema291"
+            "$ref": "#/components/schemas/output_schema293"
           },
           "createdAt": {
             "type": "string",
@@ -52348,7 +52851,7 @@
             "description": "When last verified in an audit session (null = never)"
           },
           "candidates": {
-            "$ref": "#/components/schemas/output_schema291"
+            "$ref": "#/components/schemas/output_schema293"
           },
           "createdAt": {
             "type": "string",

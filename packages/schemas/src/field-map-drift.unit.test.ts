@@ -428,6 +428,10 @@ const INTENTIONAL_RESPELLINGS = {
     "nested {confirmed, projected} nutrition-totals breakdown object — a different shape than meal's own scalar `totals` read field, coincidental key-name collision",
   "meal::mealAddRecipeInput::sortOrder":
     "the meal-recipe JOIN ROW's own sort position (its rank among recipes within one meal) — coincidental key-name collision with meal's own sortOrder (its rank among meals within a day)",
+  "meal::removeMealFoodInput::id":
+    "the MealFoodEntry child row's internal workflow id, distinct from the owning meal's public shortcode",
+  "meal::mealFoodMutationOut::id":
+    "the MealFoodEntry child row's internal workflow id, distinct from the owning meal's public shortcode",
   "meal::mealMcpEntityOut::recipes":
     "recipes: z.array(mealRecipeOut.omit({id: true})) — MealRecipe rows have no public shortcode (see file comment), a deliberately slimmer projection of the generated `recipes` read field",
   "meal::mealRecipeIdInput::id":

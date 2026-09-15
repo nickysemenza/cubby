@@ -4590,6 +4590,183 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.MealFoodEntry": {
+      "name": "MealFoodEntry",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "mealId": {
+          "name": "mealId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ledgerPartyId": {
+          "name": "ledgerPartyId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceKind": {
+          "name": "sourceKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "productId": {
+          "name": "productId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "grams": {
+          "name": "grams",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "nutrients": {
+          "name": "nutrients",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "MealFoodEntry_mealId_idx": {
+          "name": "MealFoodEntry_mealId_idx",
+          "columns": [
+            {
+              "expression": "mealId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "MealFoodEntry_ledgerPartyId_idx": {
+          "name": "MealFoodEntry_ledgerPartyId_idx",
+          "columns": [
+            {
+              "expression": "ledgerPartyId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "MealFoodEntry_productId_idx": {
+          "name": "MealFoodEntry_productId_idx",
+          "columns": [
+            {
+              "expression": "productId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "MealFoodEntry_mealId_Meal_id_fk": {
+          "name": "MealFoodEntry_mealId_Meal_id_fk",
+          "tableFrom": "MealFoodEntry",
+          "tableTo": "Meal",
+          "columnsFrom": [
+            "mealId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "MealFoodEntry_ledgerPartyId_LedgerParty_id_fk": {
+          "name": "MealFoodEntry_ledgerPartyId_LedgerParty_id_fk",
+          "tableFrom": "MealFoodEntry",
+          "tableTo": "LedgerParty",
+          "columnsFrom": [
+            "ledgerPartyId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "MealFoodEntry_productId_Product_id_fk": {
+          "name": "MealFoodEntry_productId_Product_id_fk",
+          "tableFrom": "MealFoodEntry",
+          "tableTo": "Product",
+          "columnsFrom": [
+            "productId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "MealFoodEntry_grams_check": {
+          "name": "MealFoodEntry_grams_check",
+          "value": "\"MealFoodEntry\".\"grams\" IS NULL OR (\"MealFoodEntry\".\"grams\" > 0 AND \"MealFoodEntry\".\"grams\" < 'Infinity'::float8)"
+        },
+        "MealFoodEntry_source_check": {
+          "name": "MealFoodEntry_source_check",
+          "value": "(\"MealFoodEntry\".\"sourceKind\" = 'product' AND \"MealFoodEntry\".\"productId\" IS NOT NULL AND \"MealFoodEntry\".\"grams\" IS NOT NULL AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'manual' AND \"MealFoodEntry\".\"productId\" IS NULL AND length(trim(\"MealFoodEntry\".\"name\")) > 0 AND \"MealFoodEntry\".\"name\" IS NOT NULL AND \"MealFoodEntry\".\"nutrients\" IS NOT NULL AND jsonb_typeof(\"MealFoodEntry\".\"nutrients\") = 'object' AND \"MealFoodEntry\".\"nutrients\" <> '{}'::jsonb)"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.MealImage": {
       "name": "MealImage",
       "schema": "",

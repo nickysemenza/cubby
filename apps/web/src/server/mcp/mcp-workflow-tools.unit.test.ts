@@ -1,12 +1,17 @@
 import { referentialLivenessViolationSchema } from "@cubby/schemas/entity-integrity";
 import { problemsCountSchema } from "@cubby/schemas/mcp";
-import { getMealPreparationsOut } from "@cubby/schemas/meal";
+import {
+  mealNutritionOut,
+  nutritionMeal,
+  getMealPreparationsOut,
+} from "@cubby/schemas/meal";
 import { buildNutrition, type NutritionTotals } from "@cubby/schemas/nutrition";
 import { productResolveNamesOut } from "@cubby/schemas/product";
 import { expenseAnalyticsOut } from "@cubby/schemas/project";
 import { recipeCostingExplain } from "@cubby/schemas/recipe-shared";
 import { similarEntitiesOut } from "@cubby/schemas/search";
 import type { McpToolCallTelemetry } from "@cubby/schemas/telemetry";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
@@ -35,6 +40,133 @@ const knownTotals: NutritionTotals = {
 };
 
 describe("MCP workflow tools", () => {
+  it("reads compact daily macros for one eater and only includes foods on request", async () => {
+    const meal = mock(nutritionMeal);
+    const view = mealNutritionOut.parse({
+      meals: [meal],
+      people: [
+        {
+          eater: {
+            id: testShortcode("ledgerParty", "intake-eater"),
+            name: "Example eater",
+          },
+          totals: knownTotals,
+          meals: [{ meal, totals: knownTotals }],
+          foods: [
+            {
+              meal,
+              totals: knownTotals,
+              name: "Example snack",
+              grams: null,
+              sourceKind: "manual",
+              id: "00000000-0000-4000-8000-000000000001",
+              nutrients: { kcal: 120 },
+            },
+          ],
+        },
+      ],
+    });
+    const person = view.people[0];
+    const food = person?.foods[0];
+    if (!person || !food) throw new Error("Expected nutrition fixture");
+    person.totals = {
+      ...knownTotals,
+      nutrition: buildNutrition((key) => {
+        if (key === "kcal") return knownTotals.nutrition.kcal;
+        if (key === "fat")
+          return {
+            status: "complete",
+            lower: 0,
+            upper: null,
+            coverage: { covered: 1, total: 1 },
+          };
+        if (key === "protein")
+          return {
+            status: "partial",
+            lower: 12,
+            upper: null,
+            coverage: { covered: 1, total: 2 },
+          };
+        if (key === "fiber")
+          return { status: "unavailable", reason: "no_data" };
+        return { status: "pending", reason: "totals_missing" };
+      }),
+    };
+    person.meals = [{ meal, totals: person.totals }];
+    person.foods = [{ ...food, meal, totals: person.totals }];
+    const getNutrition = vi.fn(async () => view);
+    const params = { date: "2000-01-01", partyId: person.eater.id };
+    const compact = await callMcpTool(
+      createMcpServer(),
+      "get_daily_intake",
+      params,
+      { meal: { getNutrition } },
+    );
+    expect(compact.isError).not.toBe(true);
+    expect(getNutrition).toHaveBeenCalledExactlyOnceWith({ date: params.date });
+    const macros = {
+      kcal: 120,
+      protein: { lower: 12, upper: null, partial: true },
+      carbs: "pending",
+      fat: 0,
+      fiber: null,
+    };
+    expect(compact.structuredContent).toEqual({
+      ...params,
+      status: "logged",
+      nutrition: macros,
+      meals: [
+        {
+          mealId: meal.id,
+          name: meal.name,
+          nutrition: macros,
+        },
+      ],
+    });
+    const full = await callMcpTool(
+      createMcpServer(),
+      "get_daily_intake",
+      { ...params, date: "2099-01-01", nutrition: "full", includeFoods: true },
+      { meal: { getNutrition } },
+    );
+    expect(full.isError).not.toBe(true);
+    expect(full.structuredContent).toMatchObject({
+      status: "planned",
+      meals: [
+        {
+          foods: [
+            {
+              name: food.name,
+              grams: food.grams,
+              sourceKind: food.sourceKind,
+            },
+          ],
+        },
+      ],
+    });
+    expect(JSON.stringify(compact.structuredContent).length).toBeLessThan(
+      JSON.stringify(full.structuredContent).length,
+    );
+  });
+
+  it("keeps a day with no assigned intake unavailable rather than inventing zero", async () => {
+    const partyId = testShortcode("ledgerParty", "empty-intake");
+    const result = await callMcpTool(
+      createMcpServer(),
+      "get_daily_intake",
+      { date: "2000-01-01", partyId },
+      { meal: { getNutrition: async () => ({ meals: [], people: [] }) } },
+    );
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toEqual({
+      date: "2000-01-01",
+      partyId,
+      status: "logged",
+      nutrition: null,
+      meals: [],
+    });
+  });
+
   it("routes counts-only problem triage to the cheap caller port", async () => {
     const getCounts = vi.fn(async () => mock(problemsCountSchema));
     const result = await callMcpTool(
@@ -280,6 +412,26 @@ describe("MCP workflow tools", () => {
       { mealId: view.mealId, nutrition: "kcal" },
       { meal: { getPreparations } },
     );
+    const macros = await callMcpTool(
+      server,
+      "get_meal_preparations",
+      { mealId: view.mealId, nutrition: "macros" },
+      { meal: { getPreparations } },
+    );
+    expect(macros.isError).not.toBe(true);
+    expect(macros.structuredContent).toMatchObject({
+      totals: {
+        confirmed: {
+          totals: {
+            nutrition: {
+              kcal: knownTotals.nutrition.kcal,
+              protein: knownTotals.nutrition.protein,
+              fiber: knownTotals.nutrition.fiber,
+            },
+          },
+        },
+      },
+    });
     const none = await callMcpTool(
       server,
       "get_meal_preparations",

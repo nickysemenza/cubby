@@ -1,5 +1,9 @@
 import type { CalendarItemKind } from "@cubby/schemas/calendar";
-import { CalendarDays, Table as TableIcon } from "lucide-react";
+import {
+  ChartNoAxesColumn,
+  CalendarDays,
+  Table as TableIcon,
+} from "lucide-react";
 
 import { UnifiedCalendar } from "~/app/calendar/unified-calendar";
 import type { CalendarPeriod } from "~/components/reui/event-calendar/event-calendar-types";
@@ -11,6 +15,7 @@ import { MealTable } from "./meal-table";
 const MEAL_KINDS: CalendarItemKind[] = ["meal"];
 export const MEAL_VIEW_OPTIONS: ViewSwitcherOption<MealCalendarView>[] = [
   { value: "calendar", label: "Calendar", icon: CalendarDays },
+  { value: "nutrition", label: "Nutrition", icon: ChartNoAxesColumn },
   { value: "table", label: "Table", icon: TableIcon },
 ];
 

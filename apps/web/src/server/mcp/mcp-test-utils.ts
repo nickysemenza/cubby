@@ -55,6 +55,7 @@ const unavailableCaller = {
   },
   inventory: { moveEntries: unavailableCallerMethod },
   meal: {
+    getNutrition: unavailableCallerMethod,
     addRecipe: unavailableCallerMethod,
     getPreparations: unavailableCallerMethod,
     updateRecipe: unavailableCallerMethod,
