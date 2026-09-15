@@ -3,6 +3,7 @@ import SwiftUI
 
 /// The typed navigation spine shared by the iOS tab stacks and the macOS split view.
 enum Route: Hashable {
+    case garden
     case entityList(EntityKey)
     case entityDetail(EntityKey, id: String)
     case gardenBedJournal(id: String)

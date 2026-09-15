@@ -20,24 +20,12 @@ struct ProductStockedAtSection: View {
     let locations: [ProductStockLocation]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow("Stocked at")
-            if locations.isEmpty {
-                Panel {
-                    Text("Not stocked anywhere")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                }
-            } else {
-                Panel(padding: 0, spacing: 0) {
-                    ForEach(Array(locations.enumerated()), id: \.element.id) { index, location in
-                        if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg) }
-                        NavigationLink(value: Route.entityDetail(.location, id: location.locationID.rawValue))
-                        {
-                            ProductStockLocationRow(location: location)
-                        }
-                        .buttonStyle(.plain)
-                    }
+        if locations.isEmpty {
+            Text("Not stocked anywhere").foregroundStyle(.secondary)
+        } else {
+            ForEach(locations) { location in
+                NavigationLink(value: Route.entityDetail(.location, id: location.locationID.rawValue)) {
+                    ProductStockLocationRow(location: location)
                 }
             }
         }
@@ -59,7 +47,6 @@ private struct ProductStockLocationRow: View {
                     Text(ancestorPath)
                         .font(.porcelainLabel)
                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        .lineLimit(1)
                 }
             }
             Spacer(minLength: PorcelainTokens.Space.sm)
@@ -74,8 +61,6 @@ private struct ProductStockLocationRow: View {
                 }
             }
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.md)
         .frame(minHeight: PorcelainTokens.touchTarget)
     }
 }
@@ -145,30 +130,16 @@ struct LocationContentsSection: View {
     private let cap = 25
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow("Contents")
-            if items.isEmpty {
-                Panel {
-                    Text("Nothing stocked here")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+        if items.isEmpty {
+            Text("Nothing stocked here").foregroundStyle(.secondary)
+        } else {
+            ForEach(visibleItems) { item in
+                NavigationLink(value: Route.entityDetail(.product, id: item.productId)) {
+                    LocationInventoryItemRow(item: item)
                 }
-            } else {
-                Panel(padding: 0, spacing: 0) {
-                    ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg) }
-                        NavigationLink(value: Route.entityDetail(.product, id: item.productId)) {
-                            LocationInventoryItemRow(item: item)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                if items.count > cap {
-                    Text("+\(items.count - cap) more")
-                        .font(.porcelainLabel)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        .padding(.horizontal, PorcelainTokens.Space.xs)
-                }
+            }
+            if items.count > cap {
+                Text("+\(items.count - cap) more").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -185,7 +156,6 @@ private struct LocationInventoryItemRow: View {
             Text(item.productName)
                 .font(.porcelainTitle)
                 .foregroundStyle(PorcelainTokens.graphite)
-                .lineLimit(2)
             Spacer(minLength: PorcelainTokens.Space.sm)
             if let amountText = item.amountText {
                 Text(amountText)
@@ -193,8 +163,6 @@ private struct LocationInventoryItemRow: View {
                     .foregroundStyle(PorcelainTokens.graphiteSecondary)
             }
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.md)
         .frame(minHeight: PorcelainTokens.touchTarget)
     }
 }
@@ -205,18 +173,9 @@ struct LocationSubLocationsSection: View {
     let children: [LocationChildSummary]
 
     var body: some View {
-        if !children.isEmpty {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-                Eyebrow("Sub-locations")
-                Panel(padding: 0, spacing: 0) {
-                    ForEach(Array(children.enumerated()), id: \.element.id) { index, child in
-                        if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg) }
-                        NavigationLink(value: Route.entityDetail(.location, id: child.id)) {
-                            LocationChildRow(child: child)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
+        ForEach(children) { child in
+            NavigationLink(value: Route.entityDetail(.location, id: child.id)) {
+                LocationChildRow(child: child)
             }
         }
     }
@@ -231,7 +190,6 @@ private struct LocationChildRow: View {
             Text(child.name)
                 .font(.porcelainTitle)
                 .foregroundStyle(PorcelainTokens.graphite)
-                .lineLimit(2)
             Spacer(minLength: PorcelainTokens.Space.sm)
             if let count = child.directItemCount {
                 Text("\(count) item\(count == 1 ? "" : "s")")
@@ -239,8 +197,6 @@ private struct LocationChildRow: View {
                     .foregroundStyle(PorcelainTokens.graphiteSecondary)
             }
         }
-        .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.md)
         .frame(minHeight: PorcelainTokens.touchTarget)
     }
 }

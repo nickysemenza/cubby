@@ -84,85 +84,81 @@ struct GardenRootView: View {
                 Button(GardenStrings.retry) { Task { await garden.load() } }
             }
         case .loaded:
-            ScrollView {
-                VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
-                    if let error = garden.saveError {
-                        Text(error)
-                            .font(.porcelainLabel)
-                            .foregroundStyle(PorcelainTokens.destructive)
-                    }
-                    if garden.guideError != nil {
-                        Text("Planting guides are temporarily unavailable. You can still record the garden.")
-                            .font(.porcelainLabel)
-                            .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                    }
-                    if garden.overview.locations.isEmpty {
-                        ContentUnavailableView {
-                            Label(GardenStrings.noGardenLocationsYet, systemImage: "leaf")
-                        } description: {
-                            Text(GardenStrings.noGardenLocationsDescription)
-                        } actions: {
-                            Button(GardenStrings.gardenSetup) { showingSetup = true }
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    ForEach(garden.overview.locations) { location in
-                        GardenLocationSection(
-                            location: location,
-                            onEntry: { entryTarget = .location(location) },
-                            onAction: { selection in
-                                if case .entry(let planting) = selection {
-                                    entryTarget = .planting(planting)
-                                } else {
-                                    action = selection
-                                }
-                            },
-                            onDetail: { detailPlanting = $0 }
-                        )
-                    }
-                    if !garden.overview.unassignedPlantings.isEmpty {
-                        GardenLocationSection(
-                            location: GardenLocation(
-                                id: "unassigned",
-                                name: GardenStrings.noLocationYet,
-                                plantings: garden.overview.unassignedPlantings
-                            ),
-                            onEntry: {},
-                            onAction: { selection in
-                                if case .entry(let planting) = selection {
-                                    entryTarget = .planting(planting)
-                                } else {
-                                    action = selection
-                                }
-                            },
-                            onDetail: { detailPlanting = $0 }
-                        )
-                    }
-                    if !garden.overview.finishedPlantings.isEmpty {
-                        Button {
-                            showingFinished = true
-                        } label: {
-                            Label(
-                                "Finished plantings (\(garden.overview.finishedPlantings.count))",
-                                systemImage: "archivebox"
-                            )
-                            .font(.porcelainBody)
-                        }
-                        .buttonStyle(.borderless)
-                    }
-                    NavigationLink {
-                        GardenHistoryView(
-                            model: garden, uploader: GardenImageUploader(service: appModel.client))
-                    } label: {
-                        Label(GardenStrings.gardenJournal, systemImage: "clock.arrow.circlepath")
-                            .font(.porcelainBody)
-                    }
-                    .accessibilityHint("Browse past garden notes, harvests, moves, and photos")
+            List {
+                if let error = garden.saveError {
+                    Text(error)
+                        .font(.porcelainLabel)
+                        .foregroundStyle(PorcelainTokens.destructive)
                 }
-                .padding(PorcelainTokens.Space.lg)
-                .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
-                .frame(maxWidth: .infinity)
+                if garden.guideError != nil {
+                    Text("Planting guides are temporarily unavailable. You can still record the garden.")
+                        .font(.porcelainLabel)
+                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
+                }
+                if garden.overview.locations.isEmpty {
+                    ContentUnavailableView {
+                        Label(GardenStrings.noGardenLocationsYet, systemImage: "leaf")
+                    } description: {
+                        Text(GardenStrings.noGardenLocationsDescription)
+                    } actions: {
+                        Button(GardenStrings.gardenSetup) { showingSetup = true }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                ForEach(garden.overview.locations) { location in
+                    GardenLocationSection(
+                        location: location,
+                        onEntry: { entryTarget = .location(location) },
+                        onAction: { selection in
+                            if case .entry(let planting) = selection {
+                                entryTarget = .planting(planting)
+                            } else {
+                                action = selection
+                            }
+                        },
+                        onDetail: { detailPlanting = $0 }
+                    )
+                }
+                if !garden.overview.unassignedPlantings.isEmpty {
+                    GardenLocationSection(
+                        location: GardenLocation(
+                            id: "unassigned",
+                            name: GardenStrings.noLocationYet,
+                            plantings: garden.overview.unassignedPlantings
+                        ),
+                        onEntry: {},
+                        onAction: { selection in
+                            if case .entry(let planting) = selection {
+                                entryTarget = .planting(planting)
+                            } else {
+                                action = selection
+                            }
+                        },
+                        onDetail: { detailPlanting = $0 }
+                    )
+                }
+                if !garden.overview.finishedPlantings.isEmpty {
+                    Button {
+                        showingFinished = true
+                    } label: {
+                        Label(
+                            "Finished plantings (\(garden.overview.finishedPlantings.count))",
+                            systemImage: "archivebox"
+                        )
+                        .font(.porcelainBody)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                NavigationLink {
+                    GardenHistoryView(
+                        model: garden, uploader: GardenImageUploader(service: appModel.client))
+                } label: {
+                    Label(GardenStrings.gardenJournal, systemImage: "clock.arrow.circlepath")
+                        .font(.porcelainBody)
+                }
+                .accessibilityHint("Browse past garden notes, harvests, moves, and photos")
             }
+            .accessibilityIdentifier("garden.overview")
             .refreshControl { await garden.refresh() }
         }
     }
@@ -181,39 +177,29 @@ private struct GardenLocationSection: View {
     let onDetail: (GardenPlanting) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    if location.id == "unassigned" {
-                        Text(location.name).font(.porcelainTitle)
-                    } else {
-                        NavigationLink(value: Route.gardenBedJournal(id: location.id)) {
-                            Text(location.name).font(.porcelainTitle)
-                        }
-                    }
-                    if let detail = locationDetail {
-                        Text(detail).font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphiteSecondary)
-                    }
+        Section {
+            if location.plantings.isEmpty {
+                Text("Nothing recorded here yet").foregroundStyle(.secondary)
+            } else {
+                ForEach(location.plantings) { planting in
+                    GardenPlantingRow(planting: planting, onAction: onAction, onDetail: onDetail)
                 }
-                Spacer()
-                if location.id != "unassigned" {
-                    Button(action: onEntry) { Image(systemName: "camera") }
+            }
+        } header: {
+            HStack {
+                if location.id == "unassigned" {
+                    Text(location.name)
+                } else {
+                    NavigationLink(value: Route.gardenBedJournal(id: location.id)) { Text(location.name) }
+                    Spacer()
+                    Button(action: onEntry) { Label(GardenStrings.logEntry, systemImage: "camera") }
+                        .labelStyle(.iconOnly)
+                        .frame(minWidth: 44, minHeight: 44)
                         .accessibilityLabel("\(GardenStrings.logEntry) at \(location.name)")
                 }
             }
-            Panel(padding: 0, spacing: 0) {
-                if location.plantings.isEmpty {
-                    Text("Nothing recorded here yet")
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        .padding(PorcelainTokens.Space.md)
-                } else {
-                    ForEach(Array(location.plantings.enumerated()), id: \.element.id) { index, planting in
-                        if index > 0 { PanelDivider() }
-                        GardenPlantingRow(planting: planting, onAction: onAction, onDetail: onDetail)
-                    }
-                }
-            }
+        } footer: {
+            if let locationDetail { Text(locationDetail) }
         }
     }
 
@@ -228,67 +214,69 @@ private struct GardenPlantingRow: View {
     let onDetail: (GardenPlanting) -> Void
 
     var body: some View {
-        Button {
-            onDetail(planting)
-        } label: {
-            HStack(spacing: PorcelainTokens.Space.md) {
-                Image(systemName: planting.status == .planned ? "calendar" : "leaf")
-                    .foregroundStyle(PorcelainTokens.cobalt)
-                    .frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(planting.displayName).font(.porcelainBody.weight(.semibold))
-                    Text(subtitle).font(.porcelainLabel).foregroundStyle(PorcelainTokens.graphiteSecondary)
+        HStack(spacing: PorcelainTokens.Space.md) {
+            Button {
+                onDetail(planting)
+            } label: {
+                HStack(spacing: PorcelainTokens.Space.md) {
+                    Image(systemName: planting.status == .planned ? "calendar" : "leaf")
+                        .foregroundStyle(PorcelainTokens.cobalt)
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(planting.displayName).font(.porcelainBody.weight(.semibold))
+                        Text(subtitle).font(.porcelainLabel).foregroundStyle(
+                            PorcelainTokens.graphiteSecondary)
+                    }
+                    Spacer(minLength: PorcelainTokens.Space.sm)
                 }
-                Spacer(minLength: PorcelainTokens.Space.sm)
-                Menu {
-                    Button {
-                        onDetail(planting)
-                    } label: {
-                        Label(GardenStrings.viewPlanting, systemImage: "info.circle")
-                    }
-                    Button {
-                        onAction(.entry(planting))
-                    } label: {
-                        Label(GardenStrings.logEntry, systemImage: "square.and.pencil")
-                    }
-                    if planting.status == .planned {
-                        Button {
-                            onAction(.start(planting))
-                        } label: {
-                            Label(GardenStrings.startPlanting, systemImage: "play")
-                        }
-                    }
-                    if planting.status != .finished {
-                        if planting.status == .growing {
-                            Button {
-                                onAction(.move(planting))
-                            } label: {
-                                Label(GardenStrings.moveEverything, systemImage: "arrow.right")
-                            }
-                            Button {
-                                onAction(.split(planting))
-                            } label: {
-                                Label(GardenStrings.moveSomeSeedlings, systemImage: "arrow.triangle.branch")
-                            }
-                        }
-                        Button {
-                            onAction(.finish(planting))
-                        } label: {
-                            Label(GardenStrings.finishPlanting, systemImage: "checkmark.circle")
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .frame(minWidth: PorcelainTokens.touchTarget, minHeight: PorcelainTokens.touchTarget)
-                }
-                .accessibilityLabel("More actions for \(planting.displayName)")
+                .contentShape(Rectangle())
             }
-            .padding(PorcelainTokens.Space.md)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("garden.planting.\(planting.id)")
+            Menu {
+                Button {
+                    onDetail(planting)
+                } label: {
+                    Label(GardenStrings.viewPlanting, systemImage: "info.circle")
+                }
+                Button {
+                    onAction(.entry(planting))
+                } label: {
+                    Label(GardenStrings.logEntry, systemImage: "square.and.pencil")
+                }
+                if planting.status == .planned {
+                    Button {
+                        onAction(.start(planting))
+                    } label: {
+                        Label(GardenStrings.startPlanting, systemImage: "play")
+                    }
+                }
+                if planting.status != .finished {
+                    if planting.status == .growing {
+                        Button {
+                            onAction(.move(planting))
+                        } label: {
+                            Label(GardenStrings.moveEverything, systemImage: "arrow.right")
+                        }
+                        Button {
+                            onAction(.split(planting))
+                        } label: {
+                            Label(GardenStrings.moveSomeSeedlings, systemImage: "arrow.triangle.branch")
+                        }
+                    }
+                    Button {
+                        onAction(.finish(planting))
+                    } label: {
+                        Label(GardenStrings.finishPlanting, systemImage: "checkmark.circle")
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .frame(minWidth: PorcelainTokens.touchTarget, minHeight: PorcelainTokens.touchTarget)
+            }
+            .accessibilityLabel("More actions for \(planting.displayName)")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(planting.displayName)
-        .accessibilityHint(subtitle)
+        .padding(.vertical, 4)
     }
 
     private var subtitle: String {

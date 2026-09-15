@@ -1,8 +1,9 @@
-# Cubby native (iOS + macOS PoC)
+# Cubby native (iOS + macOS)
 
-Vertical slice proving bearer sign-in, `swift-openapi-generator` against Cubby's OpenAPI doc,
-Rust ingredient parsing via UniFFI, and VisionKit/Vision scanning — before any real screen
-porting. See `/Users/nicky/.claude/plans/moonlit-juggling-finch.md` for the full plan.
+SwiftUI household workflows backed by CubbyKit, the generated HTTP client, and
+shared Rust computation. The app includes Today, catalog/search, capture/recount,
+photos, Garden, links, and App Intents. See [DESIGN.md](DESIGN.md) for native UX
+contracts and [the backlog](../../docs/todos.md) for deeper inventory and web parity.
 
 ## Build order
 
@@ -31,13 +32,6 @@ a matching fingerprint marker inside the xcframework skips Nx entirely. `build-r
 always builds (cargo's fingerprints make an unchanged rerun cheap) — run it directly for one-slice
 iteration (`--targets sim`). The generator build for step 2 is likewise shared across worktrees
 under `~/.cache/cubby/openapi-generator-build`.
-
-## Ownership
-
-Another agent/workstream (W1) owns `apps/apple/scripts/build-rust.sh`,
-`CubbyKit/Sources/CubbyFFI/`, `CubbyKit/Frameworks/`, and
-`CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift`. Everything else under `apps/apple/` is
-owned by W2 (this package, the app targets, and the CLI harness).
 
 ## Generated files (read-only here)
 
@@ -71,14 +65,31 @@ None of these attach a debugger; for breakpoints use the Xcode schemes below.
 
 ## Verification
 
-- `swift build --package-path apps/apple/CubbyKit`
-- `swift test --package-path apps/apple/CubbyKit`
-- `swift run --package-path apps/apple/CubbyKit cubby -- --help` (CLI harness; no Xcode scheme)
-- `xcodegen generate --spec apps/apple/project.yml` then
-  `xcodebuild -project apps/apple/Cubby.xcodeproj -scheme Cubby-iOS -destination 'generic/platform=iOS Simulator' build`
-  for the app targets (needs the xcframework from step 1 first)
-- The `Upload dSYMs to Sentry` phase is `runOnlyWhenInstalling`: it runs on archive only, so a
-  plain build or simulator run never touches `sentry-cli`. Verify it from an archive's build log.
+- `pnpm apple check` runs native formatting, CubbyKit package tests, generated API
+  drift checks, and an iOS simulator build.
+- `pnpm apple test` runs package tests only. It does **not** run the hosted app tests
+  or snapshots.
+- Run the hosted iPhone tests explicitly, using a simulator ID from `xcrun simctl
+  list devices available`:
+
+  ```sh
+  xcodebuild -project apps/apple/Cubby.xcodeproj -scheme Cubby-iOS \
+    -destination 'platform=iOS Simulator,id=<simulator-id>' \
+    -derivedDataPath apps/apple/DerivedData -parallel-testing-enabled NO test
+  ```
+
+- Run Mac navigation contracts with `xcodebuild -project apps/apple/Cubby.xcodeproj
+  -scheme Cubby-macOS -destination 'platform=macOS,arch=arm64' test`, then interact
+  with the built app.
+- Snapshot baselines use the iPhone 13 layout (390 × 844 points) on the iOS 26.5
+  runtime (23F77), recorded with Xcode 27.0 (27A266a). Keep that runtime for
+  comparisons; a runtime update needs deliberate visual review and re-recording.
+  Coverage includes light/dark, accessibility text, partial failure, loading,
+  search, editing, and scan results; a separate iPad Pro 11 layout covers tablet detail.
+- Avoid simultaneous builds sharing one DerivedData directory. The dSYM upload
+  phase runs only when archiving; ordinary builds/tests do not upload symbols.
+- UI and physical-device acceptance are separate from these gates; follow
+  [DESIGN.md](DESIGN.md#acceptance).
 
 ## Debugging on device
 

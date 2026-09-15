@@ -25,38 +25,24 @@ private struct RecountSummaryContent: View {
     let onCountAnother: () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
-                Eyebrow("Walk complete")
-                LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
-                    StatTile(label: "Verified", value: "\(summary.verified)")
-                    StatTile(label: "Changed", value: "\(summary.changed)")
-                    StatTile(label: "Added", value: "\(summary.added)")
-                    StatTile(label: "Adopted", value: "\(summary.adopted)")
-                    StatTile(label: "Bins done", value: "\(summary.binsDone)")
-                    StatTile(label: "Bins skipped", value: "\(summary.binsSkipped)")
-                }
-                VStack(spacing: PorcelainTokens.Space.sm) {
-                    if canRevisitSkipped {
-                        Button(action: onRevisitSkipped) {
-                            Text("Revisit skipped").frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(PorcelainTokens.cobalt)
-                        .frame(height: PorcelainTokens.touchTarget)
-                    }
-                    Button(action: onCountAnother) {
-                        Text("Count another").frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .frame(height: PorcelainTokens.touchTarget)
-                }
+        List {
+            Section("Walk complete") {
+                LabeledContent("Verified", value: summary.verified.formatted())
+                LabeledContent("Changed", value: summary.changed.formatted())
+                LabeledContent("Added", value: summary.added.formatted())
+                LabeledContent("Adopted", value: summary.adopted.formatted())
+                LabeledContent("Bins done", value: summary.binsDone.formatted())
+                LabeledContent("Bins skipped", value: summary.binsSkipped.formatted())
             }
-            .padding(PorcelainTokens.Space.lg)
-            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            Section {
+                if canRevisitSkipped {
+                    Button("Revisit skipped", action: onRevisitSkipped)
+                        .accessibilityIdentifier("audit.revisitSkipped")
+                }
+                Button("Count another", action: onCountAnother)
+                    .accessibilityIdentifier("audit.countAnother")
+            }
         }
-        .porcelainScreen()
     }
 }
 

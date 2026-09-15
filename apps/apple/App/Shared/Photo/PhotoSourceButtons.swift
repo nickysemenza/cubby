@@ -33,8 +33,11 @@ struct PhotoSourceButtons: View {
         }
     }
 
-    init(maxSelectionCount: Int, onSelection: @escaping ([PhotoSelectionItem]) -> Void) {
-        reviewsUploads = true
+    init(
+        maxSelectionCount: Int, reviewsUploads: Bool = true,
+        onSelection: @escaping ([PhotoSelectionItem]) -> Void
+    ) {
+        self.reviewsUploads = reviewsUploads
         self.maxSelectionCount = maxSelectionCount
         self.onSelection = onSelection
     }
@@ -89,6 +92,7 @@ struct PhotoSourceButtons: View {
                     deliver(selections)
                 }
             }
+            .nativeSheet(.picker)
         }
         .sheet(item: $review) { batch in
             PhotoMatchReviewSheet(items: batch.items, onContinue: onSelection)
@@ -138,7 +142,9 @@ struct PhotoSourceButtons: View {
                 ActionTile(
                     title: "Browse Photos", symbol: "photo.on.rectangle.angled",
                     detail: "See what is in Cubby")
-            }.buttonStyle(.plain)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("photo.source.browseLibrary")
         }
         #if os(iOS) || os(macOS)
             PhotosPicker(
@@ -150,6 +156,7 @@ struct PhotoSourceButtons: View {
                     symbol: "photo.on.rectangle", detail: "From your library")
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("photo.source.systemPicker")
             #if os(iOS)
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button {
@@ -158,6 +165,7 @@ struct PhotoSourceButtons: View {
                         ActionTile(title: "Take photo", symbol: "camera", detail: "Use the camera")
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("photo.source.camera")
                 }
             #endif
         #endif
@@ -170,6 +178,7 @@ struct PhotoSourceButtons: View {
                     symbol: "photo.on.rectangle", detail: "From files")
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("photo.source.files")
         #endif
     }
 

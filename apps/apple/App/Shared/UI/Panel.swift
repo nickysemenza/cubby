@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// A white working plane on the porcelain canvas: 8pt radius, 1px hairline, no shadow at rest.
-/// Used where a screen composes its own content instead of borrowing an inset-grouped `List`.
+/// A system group for workspaces whose content does not fit a List or Form.
 struct Panel<Content: View>: View {
     private let padding: CGFloat
     private let spacing: CGFloat
@@ -21,18 +20,11 @@ struct Panel<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: spacing) {
-            content
+        GroupBox {
+            VStack(alignment: .leading, spacing: spacing) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(padding)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(padding)
-        .background(
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel).fill(PorcelainTokens.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: PorcelainTokens.radiusPanel)
-                .strokeBorder(PorcelainTokens.hairline, lineWidth: PorcelainTokens.hairlineWidth)
-        )
     }
 }
 
@@ -41,10 +33,7 @@ struct PanelDivider: View {
     var inset: CGFloat = PorcelainTokens.Space.md
 
     var body: some View {
-        Rectangle()
-            .fill(PorcelainTokens.hairline)
-            .frame(height: PorcelainTokens.hairlineWidth)
-            .padding(.leading, inset)
+        Divider().padding(.leading, inset)
     }
 }
 
@@ -58,19 +47,14 @@ struct LabeledRow: View {
     var tone: Color = PorcelainTokens.graphite
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: PorcelainTokens.Space.md) {
-            Text(label)
-                .font(.porcelainBody)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
-            Spacer(minLength: PorcelainTokens.Space.sm)
+        LabeledContent(label) {
             Text(value)
                 .font(valueFont)
                 .foregroundStyle(tone)
-                .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
         }
         .padding(.horizontal, PorcelainTokens.Space.md)
-        .padding(.vertical, PorcelainTokens.Space.sm + 2)
+        .padding(.vertical, PorcelainTokens.Space.sm)
     }
 
     private var valueFont: Font {

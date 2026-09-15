@@ -39,9 +39,8 @@ struct BinStraysSheet: View {
                 }
             }
         }
-        #if os(macOS)
-            .frame(minWidth: 360, minHeight: 420)
-        #endif
+        .nativeSheet(.editor)
+        .interactiveDismissDisabled(resolving)
     }
 
     @ViewBuilder

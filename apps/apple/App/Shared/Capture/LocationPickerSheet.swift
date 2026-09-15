@@ -51,6 +51,7 @@ struct LocationPickerSheet: View {
                 }
                 .buttonStyle(.plain)
                 .porcelainListRow()
+                .accessibilityIdentifier("capture.location.\(option.id.rawValue)")
             }
             .listStyle(.plain)
             .porcelainScreen()
@@ -67,9 +68,7 @@ struct LocationPickerSheet: View {
             .task { if capture.locations.isEmpty { await capture.loadLocations() } }
             .refreshControl { await capture.loadLocations() }
         }
-        #if os(macOS)
-            .frame(minWidth: 360, minHeight: 420)
-        #endif
+        .nativeSheet(.picker)
     }
 }
 

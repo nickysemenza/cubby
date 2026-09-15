@@ -69,6 +69,19 @@ final class AppModel {
         self.auth = AuthFlow(baseURL: url, credentials: credentials)
     }
 
+    /// Preview state is fully established synchronously; constructing a canvas never starts work.
+    static func preview(signedIn: Bool, baseURL: URL) -> AppModel {
+        let store = InMemorySessionTokenStore()
+        let credential = CubbyCredential.bearer("preview.token")
+        if signedIn { try? store.save(credential, for: CubbyBaseURL.host(of: baseURL)) }
+        let model = AppModel(store: store, baseURL: baseURL)
+        model.client = CubbyClient(
+            baseURL: baseURL, credentials: model.credentials, session: PreviewURLProtocol.session())
+        model.credential = signedIn ? credential : nil
+        model.phase = signedIn ? .signedIn : .signedOut
+        return model
+    }
+
     var host: String { CubbyBaseURL.host(of: baseURL) }
 
     /// Re-reads the Keychain for the current host. Called at launch and after a base URL change.

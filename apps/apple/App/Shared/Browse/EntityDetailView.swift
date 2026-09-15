@@ -20,8 +20,8 @@ struct EntityDetailView: View {
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
-            .task(id: appModel.host) { await setup() }
-            .refreshControl { await model?.load(id: id) }
+            .task(id: id) { await setup() }
+            .refreshControl { await model?.refresh(id: id) }
             .userActivity(NSUserActivityTypeBrowsingWeb, isActive: model?.row != nil) { activity in
                 guard let row = model?.row else { return }
                 activity.webpageURL = appModel.webURL(for: row.id)
@@ -73,31 +73,39 @@ struct EntityDetailView: View {
             }
             .sheet(item: $photoCapture) { capture in
                 AddPhotoSheet(capture: capture) { _ in
-                    Task { await model?.load(id: id) }
+                    Task { await model?.refresh(id: id) }
                 }
             }
     }
 
     @ViewBuilder
     private var content: some View {
-        if let model {
+        if let model, let row = model.row {
+            VStack(spacing: 0) {
+                if let error = model.refreshError {
+                    HStack {
+                        Text(error).font(.callout)
+                        Button("Retry") { Task { await model.refresh(id: id) } }
+                    }.padding()
+                }
+                EntityDetailContent(descriptor: descriptor, row: row)
+            }
+        } else if let model {
             switch model.phase {
             case .idle, .loading:
                 LoadingIndicator.screen(label: "Loading \(descriptor.singular)")
             case .unavailable(let message):
                 ContentUnavailableView(message, systemImage: entitySymbol(for: key))
             case .failed(let message):
-                ContentUnavailableView(
-                    "Couldn't load \(descriptor.singular)",
-                    systemImage: "exclamationmark.triangle",
-                    description: Text(message)
-                )
-            case .loaded:
-                if let row = model.row {
-                    EntityDetailContent(descriptor: descriptor, row: row)
-                } else {
-                    ContentUnavailableView("Not found", systemImage: "questionmark.folder")
+                ContentUnavailableView {
+                    Label("Couldn't load \(descriptor.singular)", systemImage: "exclamationmark.triangle")
+                } description: {
+                    Text(message)
+                } actions: {
+                    Button("Retry") { Task { await model.loadInitial(id: id) } }
                 }
+            case .loaded:
+                ContentUnavailableView("Not found", systemImage: "questionmark.folder")
             }
         } else {
             LoadingIndicator.screen(label: "Loading \(descriptor.singular)")
@@ -105,10 +113,10 @@ struct EntityDetailView: View {
     }
 
     private func setup() async {
-        let model = GenericEntityDetailModel(descriptor: descriptor, client: appModel.client)
-        self.model = model
-        await model.load(id: id)
+        if model == nil { model = GenericEntityDetailModel(descriptor: descriptor, client: appModel.client) }
+        await model?.loadInitial(id: id)
     }
+
 }
 
 /// Plain-data detail rendering, shared by the real screen and `#Preview`s so neither needs a
@@ -155,56 +163,48 @@ struct EntityDetailContent: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: PorcelainTokens.Space.xl) {
-                hero
+        Form {
+            Section {
+                if heroPhoto != nil { hero }
                 identity
-                if let locationAiDescription {
-                    Text(locationAiDescription)
-                        .font(.porcelainBody)
-                        .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if !stats.isEmpty {
-                    LazyVGrid(columns: porcelainTwoColumns, spacing: PorcelainTokens.Space.md) {
-                        ForEach(stats) { stat in
-                            StatTile(
-                                label: stat.label, value: stat.value, detail: stat.detail, mono: stat.mono)
-                        }
-                    }
-                }
-                if descriptor.key == .product {
-                    ProductStockedAtSection(locations: productStockedAt)
-                }
-                if descriptor.key == .location {
-                    LocationContentsSection(items: locationInventoryItems)
-                    LocationSubLocationsSection(children: locationChildren)
-                }
-                if !detailRows.isEmpty {
-                    VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-                        Eyebrow("Details")
-                        Panel(padding: 0, spacing: 0) {
-                            ForEach(Array(detailRows.enumerated()), id: \.element.field.key) { index, entry in
-                                if index > 0 { PanelDivider() }
-                                LabeledRow(
-                                    label: entry.field.label,
-                                    value: entry.value,
-                                    data: entry.field.kind == .number || entry.field.kind == .date
-                                        || entry.field.kind == .timestamp,
-                                    mono: entry.field.kind == .identifier
-                                )
+                if let locationAiDescription { Text(locationAiDescription) }
+            }
+            if !stats.isEmpty {
+                Section("Overview") {
+                    ForEach(stats) { stat in
+                        LabeledContent(stat.label) {
+                            VStack(alignment: .trailing) {
+                                Text(stat.value).textSelection(.enabled)
+                                if let detail = stat.detail {
+                                    Text(detail).font(.caption).foregroundStyle(.secondary)
+                                }
                             }
                         }
                     }
                 }
-                rawDisclosure
             }
-            .padding(PorcelainTokens.Space.lg)
-            .frame(maxWidth: PorcelainTokens.readingWidth, alignment: .leading)
-            .frame(maxWidth: .infinity)
+            if descriptor.key == .product {
+                Section("Stocked at") { ProductStockedAtSection(locations: productStockedAt) }
+            }
+            if descriptor.key == .location {
+                Section("Contents") { LocationContentsSection(items: locationInventoryItems) }
+                if !locationChildren.isEmpty {
+                    Section("Sub-locations") { LocationSubLocationsSection(children: locationChildren) }
+                }
+            }
+            if !detailRows.isEmpty {
+                Section("Details") {
+                    ForEach(detailRows, id: \.field.key) { entry in
+                        LabeledContent(entry.field.label, value: entry.value)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+            Section { rawDisclosure }
         }
-        .porcelainScreen()
-        .sheet(isPresented: $showingPhoto) {
+        .formStyle(.grouped)
+        .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
+        .photoPreviewPresentation(isPresented: $showingPhoto) {
             if let photo = heroPhoto { PhotoPreview(photos: [photo], selectedID: photo.id) }
         }
     }

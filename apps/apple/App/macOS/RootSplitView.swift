@@ -3,72 +3,142 @@ import SwiftUI
 
 struct RootSplitView: View {
     @Environment(AppModel.self) private var model
-    /// Which section was showing when the window last closed, restored on relaunch. Keyed by the
-    /// window's own scene, like window size (automatic for `WindowGroup`) — a second window would
-    /// get its own.
     @SceneStorage("cubby.selectedSection") private var storedSection = AppSection.today.rawValue
     @State private var didRestoreSection = false
+    @State private var browsing: NativeBrowserSession?
+
+    private var isBrowser: Bool {
+        model.navigator.section == .search
+            || (model.navigator.section == .browse && !model.navigator.browsingGarden)
+    }
 
     var body: some View {
-        @Bindable var navigator = model.navigator
-        // The sidebar's selection is optional because a `NavigationSplitView` can have nothing
-        // selected; the navigator's is not, so a cleared sidebar falls back to Today.
-        let selection = Binding<AppSection?>(
-            get: { navigator.section },
-            set: { navigator.section = $0 ?? .today }
-        )
-        NavigationSplitView {
-            // Explicit tags: a List over Identifiable rows selects by `id` (a String), which
-            // would never match an `AppSection?` binding and leaves the sidebar unclickable.
-            List(selection: selection) {
-                ForEach(AppSection.allCases) { section in
-                    SidebarRow(section: section).tag(section)
+        Group {
+            if isBrowser {
+                NavigationSplitView {
+                    sidebar
+                } content: {
+                    browserList
+                        .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 440)
+                } detail: {
+                    recordDetail
+                }
+            } else {
+                NavigationSplitView {
+                    sidebar
+                } detail: {
+                    NavigationStack(path: model.navigator.path(for: model.navigator.section)) {
+                        Group {
+                            if model.navigator.browsingGarden && model.navigator.section == .browse {
+                                GardenRootView()
+                                    .navigationDestination(for: Route.self) {
+                                        RouteDestinationView(route: $0)
+                                    }
+                            } else {
+                                SectionView(section: model.navigator.section)
+                            }
+                        }
+                    }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 208)
-        } detail: {
-            NavigationStack(path: navigator.path(for: navigator.section)) {
-                SectionView(section: navigator.section)
-            }
         }
-        .environment(\.sectionSelection, $navigator.section)
+        .environment(
+            \.sectionSelection,
+            Binding(
+                get: { model.navigator.section }, set: { model.navigator.section = $0 }
+            )
+        )
         .frame(minWidth: 720, minHeight: 480)
         .task {
-            // Guarded so this only ever fires once per window, and skipped entirely once a deep
-            // link has already picked a section — `launchLinkApplied` is set synchronously inside
-            // `Navigator.open`, so it reads correctly here whichever of the two fires first: a
-            // link that lands before this task runs already flipped the flag (skip restoring over
-            // it); a link that lands after still wins, because it's simply the later write to
-            // `navigator.section`.
+            if browsing == nil { browsing = NativeBrowserSession(client: model.client) }
             guard !didRestoreSection else { return }
             didRestoreSection = true
-            if !navigator.launchLinkApplied, let restored = AppSection(rawValue: storedSection) {
-                navigator.section = restored
+            if !model.navigator.launchLinkApplied, let section = AppSection(rawValue: storedSection) {
+                model.navigator.section = section
             }
         }
-        .onChange(of: navigator.section) { _, newValue in
-            storedSection = newValue.rawValue
+        .onChange(of: model.navigator.section) { _, value in storedSection = value.rawValue }
+    }
+
+    private var sidebar: some View {
+        List(
+            selection: Binding<SidebarDestination?>(
+                get: { model.navigator.macDestination },
+                set: { if let value = $0 { model.navigator.macDestination = value } }
+            )
+        ) {
+            Section("Cubby") {
+                ForEach(AppSection.tabs.filter { $0 != .dev }) { section in
+                    Label(section.title, systemImage: section.symbol)
+                        .tag(SidebarDestination.section(section))
+                }
+                Label("Garden", systemImage: "leaf").tag(SidebarDestination.garden)
+            }
+            ForEach(AppDomain.allCases) { domain in
+                Section(domain.title) {
+                    ForEach(
+                        EntityCatalog.all.filter {
+                            $0.key.domain == domain && $0.key.httpActions.contains(.list)
+                        }.sorted { $0.plural < $1.plural }, id: \.key
+                    ) { descriptor in
+                        Label(descriptor.plural, systemImage: descriptor.sfSymbol)
+                            .tag(SidebarDestination.entity(descriptor.key))
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .accessibilityIdentifier("sidebar.destinations")
+        .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+    }
+
+    @ViewBuilder private var browserList: some View {
+        if browsing == nil {
+            LoadingIndicator.screen(label: "Loading browser")
+        } else if model.navigator.section == .search, let browsing {
+            SearchView(search: browsing.search)
+        } else if let key = model.navigator.browseKey, let browsing {
+            EntityListView(key: key, model: browsing.list(for: key)).id(key)
+        } else {
+            BrowseRootView()
+        }
+    }
+
+    private var recordDetail: some View {
+        NavigationStack(path: model.navigator.path(for: model.navigator.section)) {
+            Group {
+                if let record = model.navigator.selectedRecords[model.navigator.section] {
+                    RouteDestinationView(route: .entityDetail(record.key, id: record.id))
+                        .id(record)
+                } else {
+                    ContentUnavailableView("Select a record", systemImage: "sidebar.right")
+                }
+            }
+            .navigationDestination(for: Route.self) { RouteDestinationView(route: $0) }
         }
     }
 }
 
-/// A sidebar row carries the domain line it works in; see `SectionDomainMarks`.
-private struct SidebarRow: View {
-    let section: AppSection
-
-    var body: some View {
-        HStack(spacing: PorcelainTokens.Space.sm) {
-            Image(systemName: section.symbol)
-                .foregroundStyle(PorcelainTokens.graphiteSecondary)
-                .frame(width: 18)
-            Text(section.title).font(.porcelainBody)
-            Spacer(minLength: PorcelainTokens.Space.sm)
-            SectionDomainMarks(section: section)
-        }
-        .frame(minHeight: 28)
-    }
+#Preview(traits: .modifier(SignedInPreview())) {
+    RootSplitView()
 }
 
-#Preview {
-    RootSplitView().environment(PreviewFixtures.signedInModel())
+/// In-memory browsing state outlives the split view's changing column content. RootView resets
+/// this owner when its client changes, so pages and queries never cross server/session boundaries.
+private final class NativeBrowserSession {
+    let search: SearchModel
+    private let client: CubbyClient
+    private var lists: [EntityKey: GenericEntityListModel] = [:]
+
+    init(client: CubbyClient) {
+        self.client = client
+        search = SearchModel(client: client)
+    }
+
+    func list(for key: EntityKey) -> GenericEntityListModel {
+        if let existing = lists[key] { return existing }
+        let model = GenericEntityListModel(descriptor: EntityCatalog[key], client: client)
+        lists[key] = model
+        return model
+    }
 }

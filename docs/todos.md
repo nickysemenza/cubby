@@ -282,14 +282,12 @@ history is the archive. Permanent product constraints live in the
   the local M3 development machine. Keep it only while refinement and explicit
   selection materially outperform a plain `search_usda_foods` result.
 
-- **Swift 6.4 / OS 27 readiness pass on the Apple app.** Applies before any
-  deployment-target bump: `@State` is a macro, so an inline default paired with
-  an `init` assignment compiles and silently keeps the inline value — audit
-  the ~30 `_x = State(initialValue:)` custom inits (`GardenForms.swift` is the
-  pattern); `weak let` lets the 11 `@unchecked Sendable` classes become
-  `Sendable`; `@available(anyAppleOS 27, *)` replaces the five-platform list.
-  The 27 resizing model (every app resizable, `UIScreen.main` gone) is the
-  larger piece — run `/axiom:audit resize` when the target moves.
+- **Swift 6.4 / OS 27 readiness pass on the Apple app.** Before a toolchain or
+  deployment-floor change, audit state initialization, concurrency boundaries,
+  availability, and resizing against the actual SDK. Verify custom initializers and
+  Sendable assumptions with focused behavior tests.
+  Preserve the supported OS 26 path until a floor bump is explicitly chosen. Owners:
+  `apps/apple/project.yml`, `apps/apple/App`, and `CubbyKit`.
 
 ---
 
@@ -378,21 +376,24 @@ history is the archive. Permanent product constraints live in the
   refresh is not pure SQL. Moving it to the coverage page (computed on that
   page's load) keeps the badge cheap without losing the detector.
 
-- **Native iOS/macOS app beyond the proof of concept** — Promote screen porting,
-  App Intents, widgets, and TestFlight once the `apps/apple` vertical slice
-  proves its four unknowns: bearer sign-in against Better Auth, generated
-  `swift-openapi-generator` client sources against Cubby's OpenAPI doc,
-  `cubby-ffi` (UniFFI) ingredient parsing on-device, and VisionKit/Vision
-  barcode + cover-image scanning. See [apps/apple/README.md](../apps/apple/README.md)
-  for build order and ownership; removing the React scanner/PWA share target
-  waits for the native audit flow to reach parity. Still queued after the
-  Search tab, universal links, shelf overlay, and quick actions landed: NFC bin
-  tags (an NDEF record holding the label URL launches the app through the AASA
-  with no code), decoding a barcode from a photo (VisionKit `ImageAnalyzer`,
-  which also makes scan flows testable on the simulator), printing a label from
-  a location or product, a recipe cooking mode, and the widget / Control Center
-  scan control / Live Activity / share-extension set that needs the App Group
-  and Keychain access-group plumbing.
+- **Core native inventory experience.** Promote when everyday use of the native
+  redesign exposes a specific inventory bottleneck. Deepen location-first browsing,
+  stock comparison, capture/recount, and photo completion; introduce sortable Mac
+  tables, filtering, unit-aware steppers, bulk actions, or drag/drop only for a
+  demonstrated workflow. Owners: `apps/apple/App/Shared/Browse`, `Capture`, and
+  `Audit`; see [native design](../apps/apple/DESIGN.md).
+
+- **Native workflow parity with web.** Promote when a recurring household task
+  still requires switching to the web. Port one complete create/edit/action loop
+  at a time, preserving existing contracts and specialized behavior. Owners:
+  `apps/apple/App/Shared` and the generated `EntityCatalog`; build/capability context
+  lives in [the native README](../apps/apple/README.md).
+
+- **On-device Apple Intelligence.** Promote when supported household devices and a
+  measured capture friction justify one concrete draft-assistance workflow. Evaluate
+  against representative fixtures, preserve manual entry and existing services, and
+  require confirmation before writes. Owners: `apps/apple/App/Shared/Identify`,
+  `Photo`, and `Intents`. Confirm actual SDK/device support before selecting APIs.
 
 - **Exact nutrition source tracing** — Resume when upstream conversion work is in
   scope. Extend `ingredient-parser` reports to retain actual mapping identities,

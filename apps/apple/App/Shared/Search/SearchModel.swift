@@ -3,12 +3,10 @@ import Foundation
 import Observation
 
 /// Screen state for Search: debounced text search grouped by entity kind, recents for the empty
-/// state, and the code panel a submitted shortcode/barcode/link resolves into. Created per host,
-/// mirroring `CaptureModel`/`IdentifyModel`.
+/// state, and the code panel a submitted shortcode/barcode/link resolves into.
 @MainActor
 @Observable
 final class SearchModel {
-    /// One kind's hits, in the order `EntityCatalog.intentExposed` declares — not arrival order.
     struct ResultGroup: Identifiable, Equatable {
         let key: EntityKey
         let hits: [SearchHit]
@@ -23,8 +21,6 @@ final class SearchModel {
         case failed(String)
     }
 
-    /// A recent entity plus the kind it opens as — `EntityRow` alone doesn't carry that, and a
-    /// recent can be any intent-exposed kind, not just a product.
     struct RecentRow: Identifiable, Equatable {
         let key: EntityKey
         let row: EntityRow
@@ -34,41 +30,41 @@ final class SearchModel {
     var query = "" {
         didSet {
             guard query != oldValue else { return }
-            // A resolved code panel only describes the query that produced it; typing again
-            // (even to narrow a multi-product match) goes back to plain search.
-            lookupOutcome = nil
+            invalidateCurrentWork()
             debouncer.send(query)
         }
     }
     var scope: EntityKey? {
         didSet {
-            // A scope change is a new search over the same text; it rides the same debounce.
             guard scope != oldValue else { return }
+            invalidateCurrentWork()
             debouncer.send(query)
         }
     }
     private(set) var phase: Phase = .idle
     private(set) var recents: [RecentRow] = []
-    /// Set by `submit()` when the field held a shortcode, label URL, `cubby://` link, or barcode
-    /// that needs more than a plain navigation: several products, or none at all. `SearchView`
-    /// renders this as an inline panel in place of the ordinary result list.
     var lookupOutcome: LookupOutcome?
 
     private let client: CubbyClient
     private let debouncer = SearchDebouncer()
     private var watchTask: Task<Void, Never>?
-    /// Guards against a slow earlier request overwriting a faster later one.
-    private var generation = 0
+    private var searchTask: Task<Void, Never>?
+    private var lookupTask: Task<LookupOutcome, Never>?
+    private var searchGeneration = 0
+    private var lookupGeneration = 0
+    private var hasStarted = false
 
     init(client: CubbyClient) {
         self.client = client
     }
 
+    isolated deinit {
+        watchTask?.cancel()
+        searchTask?.cancel()
+        lookupTask?.cancel()
+    }
+
     #if DEBUG
-        /// Snapshot/preview-only seed: sets `phase`/`recents` directly instead of going through
-        /// `start()`'s network round trip, so a snapshot test can render "results" or "recents
-        /// present" deterministically with no live client. Never used by a real caller — those
-        /// always go through `init(client:)` followed by `start()`.
         init(client: CubbyClient, previewPhase: Phase, previewRecents: [RecentRow] = []) {
             self.client = client
             self.phase = previewPhase
@@ -76,73 +72,116 @@ final class SearchModel {
         }
     #endif
 
-    /// Starts the debounced watch loop and loads recents. Idempotent — safe to call from
-    /// `.task(id:)`, which re-runs whenever the host changes.
+    /// Starts one watcher and loads recents once. Returning from detail therefore preserves the
+    /// current query, scope, results, and scroll-driving row identity.
     func start() async {
         if watchTask == nil {
+            let values = debouncer.values()
             watchTask = Task { [weak self] in
-                guard let self else { return }
-                for await text in self.debouncer.values() {
-                    await self.runSearch(text)
+                for await text in values {
+                    guard let self else { return }
+                    self.scheduleSearch(text)
                 }
             }
         }
+        guard !hasStarted else { return }
+        hasStarted = true
         await loadRecents()
     }
 
     func stop() {
         watchTask?.cancel()
         watchTask = nil
+        searchTask?.cancel()
+        searchTask = nil
+        lookupTask?.cancel()
+        lookupTask = nil
     }
 
-    /// Reloads recents; wired to `.refreshControl` since there is nothing else on this screen to
-    /// pull-to-refresh.
+    /// Retries the current query immediately instead of waiting for another edit/debounce cycle.
+    func retry() {
+        invalidateSearch()
+        scheduleSearch(query)
+    }
+
     func refreshRecents() async {
         await loadRecents()
     }
 
-    /// Runs `CodeLookup` against the current field text: a pasted shortcode, label URL,
-    /// `cubby://` link, or barcode resolves directly instead of falling through to text search.
-    /// `.text` is not distinguished from a lookup failure here — either way the caller's ordinary
-    /// search (already running from `query`'s debounced watch) is what answers it.
+    /// Resolves the current field as a Cubby link or barcode. Editing either query dimension
+    /// cancels the lookup and prevents its late result from navigating or replacing the panel.
     func submit() async -> LookupOutcome {
         let raw = query
-        do {
-            let outcome = try await CodeLookup(service: client).resolve(raw)
-            switch outcome {
-            case .products(let rows, _) where rows.count > 1:
-                lookupOutcome = outcome
-            case .unknownCode:
-                lookupOutcome = outcome
-            default:
-                lookupOutcome = nil
+        lookupTask?.cancel()
+        lookupGeneration += 1
+        let generation = lookupGeneration
+        let client = client
+        lookupTask = Task {
+            do {
+                return try await CodeLookup(service: client).resolve(raw)
+            } catch is CancellationError {
+                return .text(raw)
+            } catch {
+                Diagnostics.report(error, context: "search.submit")
+                return .text(raw)
             }
-            return outcome
-        } catch {
-            Diagnostics.report(error, context: "search.submit")
+        }
+
+        let outcome = await lookupTask!.value
+        guard generation == lookupGeneration, raw == query else { return .text(query) }
+        lookupTask = nil
+        switch outcome {
+        case .products(let rows, _) where rows.count > 1:
+            lookupOutcome = outcome
+        case .unknownCode:
+            lookupOutcome = outcome
+        default:
             lookupOutcome = nil
-            return .text(raw)
+        }
+        return outcome
+    }
+
+    private func scheduleSearch(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, text == query else { return }
+        let requestedScope = scope
+        let generation = searchGeneration
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in
+            await self?.runSearch(trimmed, scope: requestedScope, generation: generation)
         }
     }
 
-    private func runSearch(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            phase = .idle
-            return
-        }
-        phase = .searching
-        generation += 1
-        let thisGeneration = generation
+    private func runSearch(_ text: String, scope: EntityKey?, generation: Int) async {
         do {
-            let hits = try await client.search(trimmed, kinds: scope.map { [$0] }, limit: 30)
-            guard thisGeneration == generation else { return }
+            let hits = try await client.search(text, kinds: scope.map { [$0] }, limit: 30)
+            try Task.checkCancellation()
+            guard generation == searchGeneration else { return }
             phase = hits.isEmpty ? .empty : .results(Self.group(hits))
+            searchTask = nil
+        } catch is CancellationError {
+            // A later query or scope owns the visible result.
         } catch {
-            guard thisGeneration == generation else { return }
+            guard generation == searchGeneration else { return }
             Diagnostics.report(error, context: "search.query")
             phase = .failed((error as? CubbyAPIError)?.detail?.message ?? String(describing: error))
+            searchTask = nil
         }
+    }
+
+    private func invalidateCurrentWork() {
+        lookupOutcome = nil
+        lookupTask?.cancel()
+        lookupTask = nil
+        lookupGeneration += 1
+        invalidateSearch()
+    }
+
+    private func invalidateSearch() {
+        searchTask?.cancel()
+        searchTask = nil
+        searchGeneration += 1
+        phase = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .idle : .searching
     }
 
     private static func group(_ hits: [SearchHit]) -> [ResultGroup] {
@@ -152,8 +191,6 @@ final class SearchModel {
         }
     }
 
-    /// Best-effort: an id `RecentEntities` still remembers but the server no longer has (deleted,
-    /// or from a different host) is silently skipped rather than shown as an error.
     private func loadRecents() async {
         var rows: [RecentRow] = []
         for id in RecentEntities.ids().prefix(10) {

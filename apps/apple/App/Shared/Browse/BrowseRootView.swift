@@ -12,9 +12,7 @@ struct BrowseRootView: View {
     var body: some View {
         List {
             Section {
-                NavigationLink {
-                    GardenRootView()
-                } label: {
+                gardenLink {
                     HStack(spacing: PorcelainTokens.Space.md) {
                         Image(systemName: "leaf")
                             .foregroundStyle(PorcelainTokens.cobalt)
@@ -82,19 +80,38 @@ struct BrowseRootView: View {
         .background(PorcelainTokens.canvas)
     }
 
-    private func row(for descriptor: EntityDescriptor) -> some View {
-        NavigationLink(value: Route.entityList(descriptor.key)) {
-            EntityBrowseRow(descriptor: descriptor, count: counts.count(for: descriptor.key))
-        }
-        .listRowInsets(browseRowInsets)
-        .porcelainListRow()
+    @ViewBuilder private func row(for descriptor: EntityDescriptor) -> some View {
+        #if os(macOS)
+            Button {
+                model.navigator.macDestination = .entity(descriptor.key)
+            } label: {
+                EntityBrowseRow(descriptor: descriptor, count: counts.count(for: descriptor.key))
+            }
+            .buttonStyle(.plain)
+        #else
+            NavigationLink(value: Route.entityList(descriptor.key)) {
+                EntityBrowseRow(descriptor: descriptor, count: counts.count(for: descriptor.key))
+            }
+        #endif
+    }
+
+    @ViewBuilder private func gardenLink<Content: View>(@ViewBuilder label: () -> Content) -> some View {
+        #if os(macOS)
+            Button {
+                model.navigator.macDestination = .garden
+            } label: {
+                label()
+            }.buttonStyle(.plain)
+        #else
+            NavigationLink(value: Route.garden) { label() }
+        #endif
     }
 
     /// A single quiet line for entities with no list route (cookbooks, USDA foods, images): naming
     /// them here means they still show up in search and in the domain they belong to, without
     /// pretending to be tappable rows.
     private func unlistedFootnote(names: [String]) -> some View {
-        Text("Also: \(names.joined(separator: ", ")) — no list route yet")
+        Text("Also: \(names.joined(separator: ", ")) — available in Search")
             .font(.porcelainLabel)
             .foregroundStyle(PorcelainTokens.graphiteSecondary)
             .padding(.vertical, PorcelainTokens.Space.sm)

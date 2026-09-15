@@ -26,6 +26,6 @@ struct RootTabsView: View {
     }
 }
 
-#Preview {
-    RootTabsView().environment(PreviewFixtures.signedInModel())
+#Preview(traits: .modifier(SignedInPreview())) {
+    RootTabsView()
 }
