@@ -40,7 +40,7 @@ packages:
     from: "9.28.0"
   Nuke:
     url: https://github.com/kean/Nuke
-    from: "12.8.0"
+    from: "12.9.0"
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     from: "1.19.4"

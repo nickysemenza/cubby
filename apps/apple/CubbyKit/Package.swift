@@ -12,10 +12,10 @@ let package = Package(
         .executable(name: "cubby", targets: ["cubby"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.8.0"),
-        .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.1.0"),
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
-        .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.12.1"),
+        .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.3.1"),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
+        .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.1.5"),
     ],
     targets: [
         // Rust FFI: the xcframework is produced by apps/apple/scripts/build-rust.sh (gitignored);

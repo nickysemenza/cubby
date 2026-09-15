@@ -48,8 +48,8 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@better-auth/api-key": "1.6.25",
-    "@better-auth/oauth-provider": "^1.6.25",
-    "@better-auth/passkey": "^1.6.25",
+    "@better-auth/oauth-provider": "1.6.25",
+    "@better-auth/passkey": "1.6.25",
     "@cfworker/json-schema": "^4.1.1",
     "@cubby/design-tokens": "workspace:*",
     "@cubby/mcp-apps": "workspace:*",
@@ -113,7 +113,7 @@
     "aws4fetch": "^1.0.20",
     "barcode-detector": "^3.2.1",
     "basic-auth": "^3.0.0",
-    "better-auth": "^1.6.25",
+    "better-auth": "1.6.25",
     "chrono-node": "^2.10.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -156,7 +156,7 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.45.1",
     "@cloudflare/vitest-plugin": "^1.1.5",
-    "@cloudflare/workers-types": "5.20260816.1",
+    "@cloudflare/workers-types": "5.20260908.1",
     "@devoxa/integresql-client": "^2.1.2",
     "@electric-sql/pglite": "0.5.7",
     "@electric-sql/pglite-pgvector": "0.0.8",

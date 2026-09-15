@@ -113,12 +113,16 @@ function SubtaskChecklist({ task }: { task: TaskOut }) {
       await queryClient.cancelQueries({ queryKey: subtasksKey });
       const previous =
         queryClient.getQueryData<typeof subtasksPage>(subtasksKey);
-      queryClient.setQueryData<typeof subtasksPage>(subtasksKey, (current) =>
-        patchListItem(current, String(variables.id), (item: TaskOut) => ({
-          ...item,
-          status: variables.data.status ?? item.status,
-          updatedAt: new Date(),
-        })),
+      queryClient.setQueryData<typeof subtasksPage>(
+        subtasksKey,
+        // Annotated: the updater input is NoInfer-wrapped, which would stop
+        // patchListItem inferring the page type and drop `meta` from the result.
+        (current: typeof subtasksPage) =>
+          patchListItem(current, String(variables.id), (item: TaskOut) => ({
+            ...item,
+            status: variables.data.status ?? item.status,
+            updatedAt: new Date(),
+          })),
       );
       return { previous };
     },
