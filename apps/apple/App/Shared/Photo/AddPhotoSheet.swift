@@ -35,7 +35,7 @@ struct AddPhotoSheet: View {
                                     ProgressView(value: progress, total: 1)
                                         .frame(width: 64)
                                 } else {
-                                    ProgressView().controlSize(.small)
+                                    LoadingIndicator(label: "Preparing photo").controlSize(.small)
                                 }
                                 Text("Preparing the full-quality photo…")
                                     .font(.porcelainBody)
@@ -45,7 +45,7 @@ struct AddPhotoSheet: View {
                     case .lifting:
                         Panel {
                             HStack(spacing: PorcelainTokens.Space.md) {
-                                ProgressView().controlSize(.small)
+                                LoadingIndicator(label: "Lifting subject").controlSize(.small)
                                 Text("Lifting the subject…")
                                     .font(.porcelainBody)
                                     .foregroundStyle(PorcelainTokens.graphiteSecondary)
@@ -57,7 +57,7 @@ struct AddPhotoSheet: View {
                         if case .uploading(let step) = capture.phase {
                             Panel {
                                 HStack(spacing: PorcelainTokens.Space.md) {
-                                    ProgressView().controlSize(.small)
+                                    LoadingIndicator(label: Self.label(for: step)).controlSize(.small)
                                     Text(Self.label(for: step))
                                         .font(.porcelainBody)
                                         .foregroundStyle(PorcelainTokens.graphiteSecondary)
@@ -67,7 +67,7 @@ struct AddPhotoSheet: View {
                         if preparingUpload {
                             Panel {
                                 HStack(spacing: PorcelainTokens.Space.md) {
-                                    ProgressView().controlSize(.small)
+                                    LoadingIndicator(label: "Checking final photo").controlSize(.small)
                                     Text("Checking the final photo…")
                                         .font(.porcelainBody)
                                         .foregroundStyle(PorcelainTokens.graphiteSecondary)

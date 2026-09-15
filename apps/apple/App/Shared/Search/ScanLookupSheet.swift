@@ -50,7 +50,7 @@ struct ScanLookupSheet: View {
                 #endif
                 manualEntryField
                 if resolving {
-                    ProgressView().frame(maxWidth: .infinity)
+                    LoadingIndicator(label: "Resolving code").frame(maxWidth: .infinity)
                 } else if let outcome {
                     outcomePanel(outcome)
                 } else if let errorMessage {

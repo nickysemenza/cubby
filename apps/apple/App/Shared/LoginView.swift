@@ -63,7 +63,7 @@ struct LoginView: View {
                         } label: {
                             Group {
                                 if submitting {
-                                    ProgressView().controlSize(.small)
+                                    LoadingIndicator(label: "Signing in").controlSize(.small)
                                 } else {
                                     Text("Sign in").font(.porcelainTitle)
                                 }

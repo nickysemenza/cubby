@@ -58,8 +58,7 @@ struct EntityListView: View {
     }
 
     private var loading: some View {
-        ProgressView()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        LoadingIndicator.screen(label: "Loading \(descriptor.plural)")
             .background(PorcelainTokens.canvas)
     }
 
@@ -106,7 +105,7 @@ struct EntityListView: View {
                     HStack {
                         Spacer()
                         if model.phase == .loading {
-                            ProgressView().controlSize(.small)
+                            LoadingIndicator(label: "Loading more \(descriptor.plural)").controlSize(.small)
                         } else {
                             Text("Load \(min(50, meta.totalCount - loadedRows.count)) more")
                                 .font(.porcelainTitle)

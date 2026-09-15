@@ -9,7 +9,7 @@ struct RootView: View {
         switch model.phase {
         case .restoring:
             VStack(spacing: PorcelainTokens.Space.md) {
-                ProgressView()
+                LoadingIndicator(label: "Checking sign-in")
                 Text("Checking sign-in…")
                     .font(.porcelainBody)
                     .foregroundStyle(PorcelainTokens.graphiteSecondary)

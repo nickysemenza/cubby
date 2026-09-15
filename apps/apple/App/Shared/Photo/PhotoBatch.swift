@@ -34,7 +34,7 @@ struct PhotoAttachmentImage: View {
                         Image(systemName: "photo.badge.exclamationmark")
                         Button("Retry photo") { retry += 1 }
                     }
-                default: ProgressView()
+                default: LoadingIndicator(label: "Loading photo")
                 }
             }
             .id(retry)

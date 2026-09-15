@@ -166,7 +166,7 @@ struct MatchCandidateView: View {
             } else if let error {
                 Text(error).foregroundStyle(PorcelainTokens.destructive)
             } else {
-                ProgressView()
+                LoadingIndicator(label: "Loading photo details")
             }
             Text(
                 candidate.basis == .source

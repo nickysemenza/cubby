@@ -92,7 +92,7 @@ struct UnknownCodePanel: View {
                         .buttonStyle(.bordered)
                         .disabled(creating)
                     if creating {
-                        ProgressView().controlSize(.small)
+                        LoadingIndicator(label: "Creating product").controlSize(.small)
                     }
                 }
             }

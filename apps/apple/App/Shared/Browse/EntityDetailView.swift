@@ -83,7 +83,7 @@ struct EntityDetailView: View {
         if let model {
             switch model.phase {
             case .idle, .loading:
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading \(descriptor.singular)")
             case .unavailable(let message):
                 ContentUnavailableView(message, systemImage: entitySymbol(for: key))
             case .failed(let message):
@@ -100,7 +100,7 @@ struct EntityDetailView: View {
                 }
             }
         } else {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            LoadingIndicator.screen(label: "Loading \(descriptor.singular)")
         }
     }
 

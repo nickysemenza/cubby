@@ -13,7 +13,7 @@ struct SearchView: View {
             if let search {
                 SearchContent(search: search)
             } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Loading Search")
             }
         }
         .task(id: model.host) {
@@ -150,7 +150,7 @@ struct SearchContent: View {
             case .idle:
                 emptyState
             case .searching:
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+                LoadingIndicator.screen(label: "Searching")
             case .results(let groups):
                 resultsList(groups)
             case .empty:
