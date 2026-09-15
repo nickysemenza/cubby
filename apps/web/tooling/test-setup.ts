@@ -1,3 +1,4 @@
+import { testServiceConfig } from "./test-service-config";
 import { schemaTemplateInputs } from "./schema-template-inputs";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
@@ -34,7 +35,9 @@ import { ensureDbExtensions } from "./db-extensions";
 import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 import { z } from "zod";
 
-const integreSQL = new IntegreSQLClient({ url: "http://localhost:5000" });
+let client: IntegreSQLClient | undefined;
+const getIntegreSQL = () =>
+  (client ??= new IntegreSQLClient({ url: testServiceConfig().url }));
 
 const toTestDatabase = (
   value: DatabaseClient | Database,
@@ -97,11 +100,6 @@ const countPoolQueries = (pool: Pool): Pool =>
 export async function countTestDbQueries<T>(
   run: () => Promise<T>,
 ): Promise<{ result: T; queryCount: number; statements: string[] }> {
-  if (usesPglite()) {
-    throw new Error(
-      "countTestDbQueries requires the node-postgres provider; keep query-count contracts in the IntegreSQL project",
-    );
-  }
   const measurement = {
     count: 0,
     statements: [],
@@ -132,7 +130,7 @@ export const TEST_ACTOR: ActorContext = {
 };
 
 async function getTemplateHash(): Promise<string> {
-  return integreSQL.hashFiles(schemaTemplateInputs);
+  return getIntegreSQL().hashFiles(schemaTemplateInputs);
 }
 
 export async function setup() {
@@ -140,8 +138,8 @@ export async function setup() {
   hash = await getTemplateHash();
 
   // Initialize the template database
-  await integreSQL.initializeTemplate(hash, async (databaseConfig) => {
-    const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
+  await getIntegreSQL().initializeTemplate(hash, async (databaseConfig) => {
+    const connectionUrl = getIntegreSQL().databaseConfigToConnectionUrl(
       remapDBConfig(databaseConfig),
     );
 
@@ -225,8 +223,6 @@ let fileDb: {
   testId: number;
 } | null = null;
 
-const usesPglite = () => process.env.CUBBY_TEST_DB_PROVIDER === "pglite";
-
 /** `TRUNCATE` target list, resolved once per file (see {@link resetTestDb}). */
 let truncateTargets = "";
 
@@ -249,7 +245,7 @@ let truncateTargets = "";
  */
 async function releaseTestDb(testId: number) {
   const hash = await getTemplateHash();
-  const url = `http://localhost:5000/api/v1/templates/${hash}/tests/${testId}/recreate`;
+  const url = `${testServiceConfig().url}/api/v1/templates/${hash}/tests/${testId}/recreate`;
   const response = await fetch(url, { method: "POST" });
   if (!response.ok) {
     throw new Error(
@@ -263,7 +259,7 @@ async function releaseTestDb(testId: number) {
 async function getFileDb() {
   if (fileDb) return fileDb;
 
-  const databaseConfig = await integreSQL.getTestDatabase(
+  const databaseConfig = await getIntegreSQL().getTestDatabase(
     await getTemplateHash(),
   );
   // The high-level client drops the numeric pool id, so recover it from the
@@ -274,7 +270,7 @@ async function getFileDb() {
       `test-setup: could not parse an IntegreSQL pool id from "${databaseConfig.database}"`,
     );
   }
-  const connectionUrl = integreSQL.databaseConfigToConnectionUrl(
+  const connectionUrl = getIntegreSQL().databaseConfigToConnectionUrl(
     remapDBConfig(databaseConfig),
   );
   const pool = countPoolQueries(new Pool({ connectionString: connectionUrl }));
@@ -337,13 +333,6 @@ async function getFileDb() {
  * error in some unrelated later test rather than here.
  */
 async function resetTestDb() {
-  if (usesPglite()) {
-    const { resetPgliteTestDb } = await import("./pglite-test-db");
-    return await resetPgliteTestDb({
-      user: { id: TEST_USER_ID, name: "Test User", email: "test@example.com" },
-      home: { id: TEST_HOME_ID, shortcode: TEST_HOME_SHORTCODE },
-    });
-  }
   const { rawDb, pool } = await getFileDb();
 
   // Evict every other connection to this database first. TRUNCATE needs
@@ -382,11 +371,6 @@ export interface TestDbContext {
  * their databases would never be handed back.
  */
 export async function closeTestDb() {
-  if (usesPglite()) {
-    const { closePgliteTestDb } = await import("./pglite-test-db");
-    await closePgliteTestDb();
-    return;
-  }
   if (!fileDb) return;
   const { pool, testId } = fileDb;
   fileDb = null;
@@ -442,8 +426,9 @@ export function withTestDb(source: AuditSource = "ui"): TestDbContext {
 const remapDBConfig = (
   databaseConfig: IntegreSQLDatabaseConfig,
 ): IntegreSQLDatabaseConfig => {
-  databaseConfig.host = "localhost";
-  databaseConfig.port = 5432;
+  const { host, port } = testServiceConfig();
+  databaseConfig.host = host;
+  databaseConfig.port = port;
   return databaseConfig;
 };
 

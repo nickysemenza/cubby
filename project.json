@@ -108,9 +108,6 @@
           "env": "CUBBY_TEST_INTEGRATION"
         },
         {
-          "env": "CUBBY_TEST_DB_PROVIDER"
-        },
-        {
           "env": "VITEST_MAX_THREADS"
         }
       ],

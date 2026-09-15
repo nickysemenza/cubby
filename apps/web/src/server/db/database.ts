@@ -1,14 +1,10 @@
 import type { NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
 import type { PgDatabase } from "drizzle-orm/pg-core";
-import type { PgliteQueryResultHKT } from "drizzle-orm/pglite";
 
 import type * as schema from "./schema";
 
 /** The concrete Drizzle client repository adapters are allowed to use. */
-export type DatabaseClient = PgDatabase<
-  NodePgQueryResultHKT | PgliteQueryResultHKT,
-  typeof schema
->;
+export type DatabaseClient = PgDatabase<NodePgQueryResultHKT, typeof schema>;
 
 export interface DatabaseRuntime {
   readonly client: DatabaseClient;

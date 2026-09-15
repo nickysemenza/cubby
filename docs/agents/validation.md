@@ -7,9 +7,8 @@ Choose by what can fail: unit (`*.unit.test.ts`, pure/node), UI
 (`*.integration.test.ts`, real constraints/transactions/queries), or E2E
 (`tests/e2e/**/*.spec.ts`, built browser app). Write the lowest tier that can
 expose the regression; do not duplicate the same assertion across tiers. Real
-SQL invariants remain PostgreSQL tests. PGlite is an explicit developer
-experiment, not an acceptance backend or a second copy of authoritative
-coverage. Guard scripts that CI depends on remain load-bearing.
+SQL invariants remain PostgreSQL tests. Guard scripts that CI depends on remain
+load-bearing.
 
 Default to real implementations at every tier. Pure tests call the real pure
 module, UI tests render the real component tree, PostgreSQL tests observe real
@@ -39,26 +38,22 @@ small real-PostgreSQL family without bypassing the authoritative manifest.
 `pnpm test` runs all fast unit, UI, contract, and auxiliary-package tests;
 `pnpm test:postgres` runs the retained PostgreSQL contracts; and
 `pnpm test:e2e` runs the PostgreSQL-backed browser contracts. The legacy
-`test:integration:postgres` and `test:e2e:postgres` names are aliases. Start
-PostgreSQL with `docker compose -p cubby up -d` before either authoritative
-database tier. `pnpm test:all` (also `test:local`) runs the fast tier first,
+`test:integration:postgres` and `test:e2e:postgres` names are aliases. On macOS these commands start disposable Apple PostgreSQL
+and IntegreSQL containers and remove them afterward; independent commands use
+independent pairs. CI/Linux use external services; the Docker fallback is
+`docker compose -p cubby up -d` plus `CUBBY_TEST_SERVICES=external`.
+`pnpm test:all` (also `test:local`) runs the fast tier first,
 then PostgreSQL and Playwright concurrently.
 Those authoritative tiers use distinct IntegreSQL template hashes so concurrent
 template initialization cannot reset the browser database during a local run.
-
-`pnpm test:pglite` is the explicit Docker-free PGlite experiment.
-`pnpm test:e2e:pglite -- tests/e2e/<file>.spec.ts` runs a targeted browser
-experiment on that backend. Neither command is part of `test`, `test:all`, CI,
-or acceptance, and PGlite-only success is never evidence that a database change
-is ready.
 
 `pnpm test:changed` is likewise Docker-free and registers neither database
 project. Use `pnpm test:changed:postgres <ref>` when changed integration
 coverage needs the real backend.
 
-Tier-specific traps: `pnpm test:e2e <spec>` can forward the path such that
-Playwright runs **zero** tests and still exits 0 — confirm the trailing
-`N passed` line. Local E2E serves whatever is in `dist/`; a green run after a
+Tier-specific traps: target a browser file as `pnpm test:e2e <spec>` without an
+extra `--`; the E2E reporter rejects an empty test run. Local E2E serves whatever
+is in `dist/`; a green run after a
 stale build proves nothing (`verify:local` builds first). A standalone
 `request.newContext()` in E2E is *not* cookie-less — it inherits the project's
 `storageState`, so unauthenticated API assertions need

@@ -19,10 +19,10 @@ The **[Tenets](../../README.md#tenets)** there are binding on design proposals: 
   runs the other's files, so a change touching any `.tsx` under `apps/web/src`
   needs `test:ui` too, even when `test:unit` looks like the narrowest tier.
   Use `pnpm test:file:postgres src/…` or `pnpm test:postgres` when the behavior
-  requires real SQL, sessions, locks, pools, or node-postgres fidelity; those
-  commands need `docker compose -p cubby up -d`. `pnpm test:e2e` is likewise
-  PostgreSQL-backed. PGlite exists only through `pnpm test:pglite` and targeted
-  `pnpm test:e2e:pglite -- <spec>` experiments; it is not acceptance evidence.
+  requires real SQL, sessions, locks, pools, or node-postgres fidelity.
+  `pnpm test:e2e` is likewise PostgreSQL-backed. On macOS those commands own
+  disposable Apple PostgreSQL and IntegreSQL containers. Linux and CI use
+  external services; Docker Compose remains an external-service fallback.
   Reserve `pnpm test:all`/`test:local` for pre-PR or genuinely cross-layer work.
   Use the [test-placement table](#test-placement) to decide which tier a change
   can actually break.

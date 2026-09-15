@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { z } from "zod";
+import { resolveE2EWorkers } from "../apps/web/tooling/e2e-workers.ts";
 
 const workflow = readFileSync(".github/workflows/ci.yaml", "utf8");
 const playwrightConfig = readFileSync("apps/web/playwright.config.ts", "utf8");
@@ -96,7 +97,8 @@ test("PostgreSQL and browser jobs select the authoritative suites", () => {
   assert.doesNotMatch(workflow, /expected-tests|CUBBY_EXPECT_POSTGRES_TESTS/u);
   assert.doesNotMatch(webPackage, /CUBBY_EXPECT_(?:POSTGRES|E2E)_TESTS/u);
   assert.match(playwrightConfig, /retries: 0/u);
-  assert.match(playwrightConfig, /workers: 1/u);
+  assert.match(playwrightConfig, /workers: resolveE2EWorkers\(\)/u);
+  assert.equal(resolveE2EWorkers({ CI: "true" }, "linux"), 1);
 });
 
 test("Playwright package and CI browser cache use the same exact version", () => {
