@@ -7,6 +7,7 @@ import {
   financialTransactionCreateInput,
   purchaseSettlementCheckExpression,
 } from "./financial-transaction";
+import { updateStatementRowsInput } from "./statement-row";
 
 const account = {
   name: "Visa ····4242",
@@ -173,5 +174,51 @@ describe("financial transaction contracts", () => {
     ).toBe(
       `"purchaseId" IS NULL OR ("kind" IN ('purchase', 'refund', 'adjustment', 'income') AND (("kind" IN ('purchase') AND "amount" > 0) OR ("kind" IN ('refund', 'income') AND "amount" < 0) OR "kind" IN ('adjustment')))`,
     );
+  });
+});
+
+describe("statement row update contracts", () => {
+  const selector = { source: "monarch", externalIds: ["row-1"] };
+
+  it("requires a complete disposition decision", () => {
+    expect(
+      updateStatementRowsInput.safeParse({
+        selector,
+        data: { disposition: "ignored" },
+      }).success,
+    ).toBe(false);
+    expect(
+      updateStatementRowsInput.safeParse({
+        selector,
+        data: {
+          disposition: "open",
+          dispositionReason: "not_modeled",
+          dispositionNote: "stale explanation",
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts complete ignored and cleared open decisions", () => {
+    expect(
+      updateStatementRowsInput.safeParse({
+        selector,
+        data: {
+          disposition: "ignored",
+          dispositionReason: "not_modeled",
+          dispositionNote: "Household spending outside Cubby",
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      updateStatementRowsInput.safeParse({
+        selector,
+        data: {
+          disposition: "open",
+          dispositionReason: null,
+          dispositionNote: null,
+        },
+      }).success,
+    ).toBe(true);
   });
 });

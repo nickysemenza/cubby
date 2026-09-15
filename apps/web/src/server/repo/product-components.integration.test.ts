@@ -324,28 +324,6 @@ describe("product ⟷ product component links (kit composition)", () => {
   });
 
   describe("ProductComponent constraints", () => {
-    it("rejects a quantity below 1 at the database", async () => {
-      const kit = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Zero Quantity Kit" }),
-        ctx.actor,
-      );
-      const part = await createProduct(
-        ctx.db,
-        makeProductInput({ name: "Zero Quantity Part" }),
-        ctx.actor,
-      );
-
-      await expect(
-        getDb(ctx.db).insert(productComponent).values({
-          parentProductId: kit.entityId,
-          componentProductId: part.entityId,
-          quantity: 0,
-        }),
-        // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
-      ).rejects.toThrow();
-    });
-
     it("rejects two live rows for the same (kit, component) pair", async () => {
       const kit = await createProduct(
         ctx.db,

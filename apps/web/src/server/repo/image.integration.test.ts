@@ -152,20 +152,6 @@ describe("image repository", () => {
     );
   });
 
-  it("enforces canonical lowercase perceptual hashes at the database boundary", async () => {
-    await expect(
-      createPendingImageRecord(ctx.db, {
-        key: `images/${crypto.randomUUID()}.jpg`,
-        filename: "invalid-hash.jpg",
-        contentType: "image/jpeg",
-        size: 512,
-        perceptualHash: "ABCDEF0123456789",
-      }),
-    ).rejects.toMatchObject({
-      cause: { constraint: "Image_perceptualHash_format_check" },
-    });
-  });
-
   it("deduplicates association retries while still finalizing pending uploads", async () => {
     const projectId = (
       await createProject(

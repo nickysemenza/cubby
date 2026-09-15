@@ -5,7 +5,9 @@ import {
   recordStatementRowsInput,
   type StatementImportInput,
   type StatementRowInput,
+  type UpdateStatementRowsInput,
 } from "@cubby/schemas/statement-row";
+import { fromAny } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -304,10 +306,10 @@ describe("statement row ledger", () => {
     await expect(
       updateStatementRows(
         ctx.db,
-        {
+        fromAny<UpdateStatementRowsInput, unknown>({
           selector: { source: "monarch", externalIds: [row!.externalId] },
           data: { disposition: "ignored" },
-        },
+        }),
         ctx.actor,
       ),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.

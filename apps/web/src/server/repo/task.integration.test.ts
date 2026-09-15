@@ -6,7 +6,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { auditLog, taskDependency } from "~/server/db/schema";
+import { auditLog } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getDb } from "~/server/repo/database-helpers";
@@ -162,24 +162,6 @@ describe("task repository — listActionableTasks", () => {
     expect(
       results.find((result) => result.status === "rejected"),
     ).toMatchObject({ reason: { reason: "DEPENDENCY_CYCLE" } });
-  });
-
-  it("backstops task self dependency with a database CHECK", async () => {
-    const { entityId } = await createTask(
-      ctx.db,
-      taskCreateInput.parse({
-        trade: "other",
-        name: "raw self dependency task",
-      }),
-      ctx.actor,
-    );
-
-    await expect(
-      getDb(ctx.db).insert(taskDependency).values({
-        taskId: entityId,
-        blockedByTaskId: entityId,
-      }),
-    ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 });
 

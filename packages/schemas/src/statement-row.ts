@@ -260,14 +260,32 @@ export type StatementRowSelector = z.infer<typeof statementRowSelector>;
  * Only the judgment fields. Provider evidence is immutable after ingest, which
  * is enforced by this schema's shape rather than by convention.
  */
-export const statementRowUpdateData = z.strictObject({
+const statementRowUpdateFields = {
   accountId: financialAccountShortcode.nullable().optional(),
-  disposition: statementRowDisposition.optional(),
-  dispositionReason: statementRowDispositionReason.nullable().optional(),
-  dispositionNote: z.string().nullable().optional(),
   supersededByExternalId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
-});
+};
+
+export const statementRowUpdateData = z.discriminatedUnion("disposition", [
+  z.strictObject({
+    ...statementRowUpdateFields,
+    disposition: z.undefined().optional(),
+    dispositionReason: z.undefined().optional(),
+    dispositionNote: z.undefined().optional(),
+  }),
+  z.strictObject({
+    ...statementRowUpdateFields,
+    disposition: z.literal("open"),
+    dispositionReason: z.null(),
+    dispositionNote: z.null(),
+  }),
+  z.strictObject({
+    ...statementRowUpdateFields,
+    disposition: z.literal("ignored"),
+    dispositionReason: statementRowDispositionReason,
+    dispositionNote: z.string().trim().min(1),
+  }),
+]);
 export type StatementRowUpdateData = z.infer<typeof statementRowUpdateData>;
 
 export const updateStatementRowsInput = z.strictObject({

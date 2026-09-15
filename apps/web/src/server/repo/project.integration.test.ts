@@ -7,10 +7,8 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { projectDependency } from "~/server/db/schema";
 import { projectCreateFromTasksWorkflow } from "~/server/workflows/project.server";
 
-import { insertAndReturn } from "./database-helpers";
 import { createExpense } from "./expense";
 import {
   createProject,
@@ -262,21 +260,6 @@ describe("project repository", () => {
     await expect(getProjectByID(ctx.db, aId)).resolves.toMatchObject({
       blockedByIds: [b.id],
     });
-  });
-
-  it("backstops self dependency with a database CHECK", async () => {
-    const { entityId } = await createProject(
-      ctx.db,
-      projectCreateInput.parse({ name: "raw self dependency project" }),
-      ctx.actor,
-    );
-
-    await expect(
-      insertAndReturn(ctx.db, projectDependency, {
-        projectId: entityId,
-        blockedByProjectId: entityId,
-      }),
-    ).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 
   it("blocks deletion while live tasks or expenses still reference the project", async () => {

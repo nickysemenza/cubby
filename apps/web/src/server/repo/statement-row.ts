@@ -15,6 +15,7 @@ import {
   recordStatementRowsInput,
   statementImportOut,
   statementRowOut,
+  updateStatementRowsInput,
 } from "@cubby/schemas/statement-row";
 import { and, asc, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 
@@ -681,7 +682,7 @@ export async function updateStatementRows(
   // Unused: StatementRow has no `AuditEntityType` — see deleteStatementRows.
   _actor: ActorContext,
 ) {
-  const { data, selector } = input;
+  const { data, selector } = updateStatementRowsInput.parse(input);
   return withTransaction(db, async (tx) => {
     const values: Partial<typeof statementRow.$inferInsert> = {};
     if (data.disposition !== undefined) values.disposition = data.disposition;

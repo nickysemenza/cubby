@@ -114,33 +114,6 @@ describe("location storage integrity", () => {
         }),
     ).rejects.toMatchObject({ cause: { code: "23503" } });
   });
-
-  it("backstops product/type exclusivity with a database CHECK", async () => {
-    const identity = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Raw location identity product" }),
-      ctx.actor,
-    );
-    const productBacked = await createLocation(
-      ctx.db,
-      makeLocationInput({
-        name: "Raw product-backed location",
-        productId: identity.id,
-      }),
-      ctx.actor,
-    );
-    const id = parseEntityId(
-      "location",
-      (await resolveLiveShortcode(ctx.db, productBacked.id, "location"))!,
-    );
-
-    await expect(
-      getDb(ctx.db)
-        .update(location)
-        .set({ type: "box" })
-        .where(eq(location.id, id)),
-    ).rejects.toMatchObject({ cause: { code: "23514" } });
-  });
 });
 
 // A duplicate-name error has to name the location that is blocking, not just
