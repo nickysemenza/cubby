@@ -36,7 +36,7 @@ type LogoCandidate = {
 
 type VendorLogoReplacementInput = Parameters<typeof replaceVendorLogo>[1];
 
-export interface VendorLogoCandidatePorts {
+interface VendorLogoCandidatePorts {
   fetchResponse: typeof fetchExternalResponse;
   inspect: typeof inspectImageFile;
 }

@@ -124,34 +124,13 @@
                           "type": "object",
                           "properties": {
                             "brand_owner": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
+                              "type": ["string", "null"]
                             },
                             "brand_name": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
+                              "type": ["string", "null"]
                             },
                             "branded_food_category": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
+                              "type": ["string", "null"]
                             },
                             "gtin_upc": {
                               "type": "string",
@@ -159,47 +138,19 @@
                               "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
                             },
                             "ingredients": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "null"
-                                }
-                              ]
+                              "type": ["string", "null"]
                             },
                             "serving": {
                               "type": "object",
                               "properties": {
                                 "serving_size": {
-                                  "anyOf": [
-                                    {
-                                      "type": "number"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["number", "null"]
                                 },
                                 "serving_size_unit": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "null"]
                                 },
                                 "household_serving_fulltext": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "null"]
                                 }
                               },
                               "required": [
@@ -329,14 +280,7 @@
                             "type": "number"
                           },
                           "modifier": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ]
+                            "type": ["string", "null"]
                           },
                           "gram_weight": {
                             "type": "number"
@@ -424,34 +368,13 @@
                               "type": "object",
                               "properties": {
                                 "brand_owner": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "null"]
                                 },
                                 "brand_name": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "null"]
                                 },
                                 "branded_food_category": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "null"]
                                 },
                                 "gtin_upc": {
                                   "type": "string",
@@ -459,47 +382,19 @@
                                   "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
                                 },
                                 "ingredients": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "null"]
                                 },
                                 "serving": {
                                   "type": "object",
                                   "properties": {
                                     "serving_size": {
-                                      "anyOf": [
-                                        {
-                                          "type": "number"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
-                                      ]
+                                      "type": ["number", "null"]
                                     },
                                     "serving_size_unit": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
-                                      ]
+                                      "type": ["string", "null"]
                                     },
                                     "household_serving_fulltext": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
-                                      ]
+                                      "type": ["string", "null"]
                                     }
                                   },
                                   "required": [
@@ -629,14 +524,7 @@
                                 "type": "number"
                               },
                               "modifier": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "null"
-                                  }
-                                ]
+                                "type": ["string", "null"]
                               },
                               "gram_weight": {
                                 "type": "number"
@@ -762,34 +650,13 @@
                                     "type": "object",
                                     "properties": {
                                       "brand_owner": {
-                                        "anyOf": [
-                                          {
-                                            "type": "string"
-                                          },
-                                          {
-                                            "type": "null"
-                                          }
-                                        ]
+                                        "type": ["string", "null"]
                                       },
                                       "brand_name": {
-                                        "anyOf": [
-                                          {
-                                            "type": "string"
-                                          },
-                                          {
-                                            "type": "null"
-                                          }
-                                        ]
+                                        "type": ["string", "null"]
                                       },
                                       "branded_food_category": {
-                                        "anyOf": [
-                                          {
-                                            "type": "string"
-                                          },
-                                          {
-                                            "type": "null"
-                                          }
-                                        ]
+                                        "type": ["string", "null"]
                                       },
                                       "gtin_upc": {
                                         "type": "string",
@@ -797,47 +664,19 @@
                                         "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
                                       },
                                       "ingredients": {
-                                        "anyOf": [
-                                          {
-                                            "type": "string"
-                                          },
-                                          {
-                                            "type": "null"
-                                          }
-                                        ]
+                                        "type": ["string", "null"]
                                       },
                                       "serving": {
                                         "type": "object",
                                         "properties": {
                                           "serving_size": {
-                                            "anyOf": [
-                                              {
-                                                "type": "number"
-                                              },
-                                              {
-                                                "type": "null"
-                                              }
-                                            ]
+                                            "type": ["number", "null"]
                                           },
                                           "serving_size_unit": {
-                                            "anyOf": [
-                                              {
-                                                "type": "string"
-                                              },
-                                              {
-                                                "type": "null"
-                                              }
-                                            ]
+                                            "type": ["string", "null"]
                                           },
                                           "household_serving_fulltext": {
-                                            "anyOf": [
-                                              {
-                                                "type": "string"
-                                              },
-                                              {
-                                                "type": "null"
-                                              }
-                                            ]
+                                            "type": ["string", "null"]
                                           }
                                         },
                                         "required": [
@@ -970,14 +809,7 @@
                                       "type": "number"
                                     },
                                     "modifier": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
-                                      ]
+                                      "type": ["string", "null"]
                                     },
                                     "gram_weight": {
                                       "type": "number"
@@ -1121,34 +953,13 @@
                                 "type": "object",
                                 "properties": {
                                   "brand_owner": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
+                                    "type": ["string", "null"]
                                   },
                                   "brand_name": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
+                                    "type": ["string", "null"]
                                   },
                                   "branded_food_category": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
+                                    "type": ["string", "null"]
                                   },
                                   "gtin_upc": {
                                     "type": "string",
@@ -1156,47 +967,19 @@
                                     "description": "EAN-8 (8), UPC-A (12), EAN-13 (13), or GTIN-14 (14) barcode"
                                   },
                                   "ingredients": {
-                                    "anyOf": [
-                                      {
-                                        "type": "string"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ]
+                                    "type": ["string", "null"]
                                   },
                                   "serving": {
                                     "type": "object",
                                     "properties": {
                                       "serving_size": {
-                                        "anyOf": [
-                                          {
-                                            "type": "number"
-                                          },
-                                          {
-                                            "type": "null"
-                                          }
-                                        ]
+                                        "type": ["number", "null"]
                                       },
                                       "serving_size_unit": {
-                                        "anyOf": [
-                                          {
-                                            "type": "string"
-                                          },
-                                          {
-                                            "type": "null"
-                                          }
-                                        ]
+                                        "type": ["string", "null"]
                                       },
                                       "household_serving_fulltext": {
-                                        "anyOf": [
-                                          {
-                                            "type": "string"
-                                          },
-                                          {
-                                            "type": "null"
-                                          }
-                                        ]
+                                        "type": ["string", "null"]
                                       }
                                     },
                                     "required": [
@@ -1326,14 +1109,7 @@
                                   "type": "number"
                                 },
                                 "modifier": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string"
-                                    },
-                                    {
-                                      "type": "null"
-                                    }
-                                  ]
+                                  "type": ["string", "null"]
                                 },
                                 "gram_weight": {
                                   "type": "number"
@@ -1407,14 +1183,7 @@
             "in": "query",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "boolean"
-                }
-              ]
+              "type": "boolean"
             }
           },
           {
