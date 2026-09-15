@@ -1,7 +1,10 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { toPublicImpact } from "@cubby/schemas/entity-integrity";
 import type { ExpenseId, LedgerTransferId } from "@cubby/schemas/identifiers";
-import type { LedgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
+import {
+  ledgerSourceClaims,
+  type LedgerSourceClaimInput,
+} from "@cubby/schemas/ledger-transfer";
 import { and, eq, inArray } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 
@@ -136,9 +139,10 @@ export async function replaceLedgerSourceClaims(
   owner: ClaimOwner,
   claims: readonly LedgerSourceClaimInput[],
 ): Promise<void> {
+  const parsedClaims = ledgerSourceClaims.parse(claims);
   const { targetAmount } = owner;
-  const keys = await Promise.all(claims.map(ledgerSourceKey));
-  assertClaimAmounts(targetAmount, claims);
+  const keys = await Promise.all(parsedClaims.map(ledgerSourceKey));
+  assertClaimAmounts(targetAmount, parsedClaims);
   const valuesFor = (claim: LedgerSourceClaimInput, key: string) => ({
     expenseId: isExpenseOwner(owner) ? owner.expenseId : null,
     ledgerTransferId: isExpenseOwner(owner) ? null : owner.ledgerTransferId,
@@ -161,7 +165,7 @@ export async function replaceLedgerSourceClaims(
   // prevents replacement sets with reversed input order from deadlocking.
   // This makes both first claims and tombstone revival serialize without
   // advisory importer locks while preserving exact-retry audit idempotency.
-  const reservations = claims
+  const reservations = parsedClaims
     .map((claim, index) => valuesFor(claim, keys[index]!))
     .sort((left, right) =>
       `${left.source}\0${left.sourceKey}`.localeCompare(
@@ -251,7 +255,7 @@ export async function replaceLedgerSourceClaims(
     .from(ledgerSourceClaim)
     .where(and(currentOwner, notDeleted(ledgerSourceClaim)));
   const wanted = new Set(
-    claims.map((claim, index) => `${claim.source}\0${keys[index]}`),
+    parsedClaims.map((claim, index) => `${claim.source}\0${keys[index]}`),
   );
   const retired = currentRows
     .filter((row) => !wanted.has(`${row.source}\0${row.sourceKey}`))
@@ -261,7 +265,7 @@ export async function replaceLedgerSourceClaims(
       .update(ledgerSourceClaim)
       .set({ deletedAt: new Date() })
       .where(inArray(ledgerSourceClaim.id, retired));
-  for (const [index, claim] of claims.entries()) {
+  for (const [index, claim] of parsedClaims.entries()) {
     const key = keys[index]!;
     const row = existing.find(
       (candidate) =>

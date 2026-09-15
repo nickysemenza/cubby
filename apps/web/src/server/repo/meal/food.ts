@@ -3,6 +3,7 @@ import {
   mealFoodMutationOut,
   mealFoodAmountFromStored,
   type MealNutritionInput,
+  saveMealFoodInput,
   type SaveMealFoodInput,
   type removeMealFoodInput,
 } from "@cubby/schemas/meal";
@@ -34,17 +35,18 @@ export const saveMealFood = (
   db: Database,
   input: SaveMealFoodInput,
   actor: ActorContext,
-) =>
-  withTransaction(db, async (tx) => {
+) => {
+  const command = saveMealFoodInput.parse(input);
+  return withTransaction(db, async (tx) => {
     const [eater] = await lockLedgerPartiesForReference(tx, [
-      input.ledgerPartyId,
+      command.ledgerPartyId,
     ]);
     if (!eater || eater.kind === "household")
       throw createAppError(
         "CONSTRAINT_VIOLATION",
         "Choose a member or guest as the eater.",
       );
-    const mealId = await resolveOrThrow(tx, "meal", input.mealId);
+    const mealId = await resolveOrThrow(tx, "meal", command.mealId);
     const [target] = await tx
       .select({ id: meal.id })
       .from(meal)
@@ -52,8 +54,8 @@ export const saveMealFood = (
       .for("key share");
     if (!target) throw createAppError("MEAL_NOT_FOUND", "Meal not found");
     const productId =
-      input.sourceKind === "product"
-        ? await resolveOrThrow(tx, "product", input.productId)
+      command.sourceKind === "product"
+        ? await resolveOrThrow(tx, "product", command.productId)
         : null;
     if (productId) {
       const [source] = await tx
@@ -65,8 +67,8 @@ export const saveMealFood = (
         throw createAppError("PRODUCT_NOT_FOUND", "Product not found");
     }
     const ingredientId =
-      input.sourceKind === "ingredient"
-        ? await resolveOrThrow(tx, "ingredient", input.ingredientId)
+      command.sourceKind === "ingredient"
+        ? await resolveOrThrow(tx, "ingredient", command.ingredientId)
         : null;
     if (ingredientId) {
       const [source] = await tx
@@ -87,19 +89,19 @@ export const saveMealFood = (
       ledgerPartyId: eater.id,
       productId,
       ingredientId,
-      sourceKind: input.sourceKind,
-      amount: mealFoodAmountFromStored(input),
+      sourceKind: command.sourceKind,
+      amount: mealFoodAmountFromStored(command),
       grams: null,
-      name: input.sourceKind === "manual" ? input.name : null,
-      nutrients: input.sourceKind === "manual" ? input.nutrients : null,
+      name: command.sourceKind === "manual" ? command.name : null,
+      nutrients: command.sourceKind === "manual" ? command.nutrients : null,
     };
-    const rows = input.id
+    const rows = command.id
       ? await tx
           .update(mealFoodEntry)
           .set(values)
           .where(
             and(
-              eq(mealFoodEntry.id, input.id),
+              eq(mealFoodEntry.id, command.id),
               eq(mealFoodEntry.mealId, mealId),
               notDeleted(mealFoodEntry),
             ),
@@ -120,8 +122,9 @@ export const saveMealFood = (
       entityId: mealId,
       action: "update",
     });
-    return mealFoodMutationOut.parse({ mealId: input.mealId, id: saved.id });
+    return mealFoodMutationOut.parse({ mealId: command.mealId, id: saved.id });
   });
+};
 
 export const removeMealFood = (
   db: Database,

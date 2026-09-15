@@ -13,6 +13,7 @@ import {
   type MealPreparationYieldBasis,
   type SaveMealRecipePreparationInput,
   type SaveMealRecipePreparationOut,
+  saveMealRecipePreparationInput,
   saveMealRecipePreparationOut,
 } from "@cubby/schemas/meal";
 import type { MealKind } from "@cubby/schemas/meal-classification";
@@ -250,8 +251,9 @@ export const saveMealRecipePreparation = async (
   db: Database,
   input: SaveMealRecipePreparationInput,
   actor: ActorContext,
-): Promise<SaveMealRecipePreparationOut> =>
-  withTransaction(db, async (tx) => {
+): Promise<SaveMealRecipePreparationOut> => {
+  const command = saveMealRecipePreparationInput.parse(input);
+  return withTransaction(db, async (tx) => {
     const [candidateOccurrence] = await tx
       .select({
         id: mealRecipe.id,
@@ -263,7 +265,7 @@ export const saveMealRecipePreparation = async (
       })
       .from(mealRecipe)
       .where(
-        and(eq(mealRecipe.id, input.mealRecipeId), notDeleted(mealRecipe)),
+        and(eq(mealRecipe.id, command.mealRecipeId), notDeleted(mealRecipe)),
       );
     if (!candidateOccurrence)
       throw createAppError("MEAL_RECIPE_NOT_FOUND", "Meal recipe not found");
@@ -274,7 +276,7 @@ export const saveMealRecipePreparation = async (
     // deletion or deadlocking a party merge that folds portions.
     const parties = await lockLedgerPartiesForReference(
       tx,
-      input.changes.map((change) => change.ledgerPartyId),
+      command.changes.map((change) => change.ledgerPartyId),
     );
     if (parties.some((party) => party.kind === "household"))
       throw createAppError(
@@ -284,7 +286,7 @@ export const saveMealRecipePreparation = async (
     const targetIds = await resolveAllOrThrow(
       tx,
       "meal",
-      input.changes.map((change) => change.mealId),
+      command.changes.map((change) => change.mealId),
     );
     const mealIds = [
       ...new Set([candidateOccurrence.mealId, ...targetIds]),
@@ -311,7 +313,9 @@ export const saveMealRecipePreparation = async (
         actualYieldGrams: mealRecipe.actualYieldGrams,
       })
       .from(mealRecipe)
-      .where(and(eq(mealRecipe.id, input.mealRecipeId), notDeleted(mealRecipe)))
+      .where(
+        and(eq(mealRecipe.id, command.mealRecipeId), notDeleted(mealRecipe)),
+      )
       .for("update");
     if (!occurrence || occurrence.mealId !== candidateOccurrence.mealId)
       throw createAppError("MEAL_RECIPE_NOT_FOUND", "Meal recipe not found");
@@ -346,7 +350,7 @@ export const saveMealRecipePreparation = async (
         mealFoodAmountFromStored(portion),
       ]),
     );
-    for (const [index, change] of input.changes.entries()) {
+    for (const [index, change] of command.changes.entries()) {
       const targetId = targetIds[index]!;
       const party = parties[index]!;
       const key = `${targetId}:${party.id}`;
@@ -356,12 +360,12 @@ export const saveMealRecipePreparation = async (
     const { nextActualYield } = await resolveYieldBasisAndValidateShares(
       tx,
       occurrence,
-      input,
+      command,
       finalAmounts,
     );
 
     const now = new Date();
-    for (const [index, change] of input.changes.entries()) {
+    for (const [index, change] of command.changes.entries()) {
       const targetId = targetIds[index]!;
       const party = parties[index]!;
       const key = `${targetId}:${party.id}`;
@@ -397,7 +401,7 @@ export const saveMealRecipePreparation = async (
           confirmedAt,
         });
     }
-    await updatePreparationYields(tx, occurrence.id, input);
+    await updatePreparationYields(tx, occurrence.id, command);
 
     const affectedIds = new Set([
       occurrence.mealId,
@@ -426,13 +430,14 @@ export const saveMealRecipePreparation = async (
     return saveMealRecipePreparationOut.parse({
       mealRecipeId: occurrence.id,
       estimatedYieldGrams:
-        input.estimatedYieldGrams === undefined
+        command.estimatedYieldGrams === undefined
           ? occurrence.estimatedYieldGrams
-          : input.estimatedYieldGrams,
+          : command.estimatedYieldGrams,
       actualYieldGrams: nextActualYield,
       affectedMealIds,
     });
   });
+};
 
 /**
  * One directional read: a meal is relevant if it prepared an occurrence OR

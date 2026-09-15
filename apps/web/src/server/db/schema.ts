@@ -397,14 +397,6 @@ export const mealRecipe = pgTable(
   (table) => [
     index("MealRecipe_mealId_idx").on(table.mealId),
     index("MealRecipe_recipeId_idx").on(table.recipeId),
-    check(
-      "MealRecipe_estimatedYieldGrams_check",
-      sql`${table.estimatedYieldGrams} IS NULL OR ${table.estimatedYieldGrams} > 0`,
-    ),
-    check(
-      "MealRecipe_actualYieldGrams_check",
-      sql`${table.actualYieldGrams} IS NULL OR ${table.actualYieldGrams} > 0`,
-    ),
   ],
 );
 
@@ -438,15 +430,7 @@ export const mealRecipePortion = pgTable(
     index("MealRecipePortion_mealRecipeId_idx").on(table.mealRecipeId),
     index("MealRecipePortion_mealId_idx").on(table.mealId),
     index("MealRecipePortion_ledgerPartyId_idx").on(table.ledgerPartyId),
-    check(
-      "MealRecipePortion_grams_check",
-      sql`${table.grams} IS NULL OR ${table.grams} > 0`,
-    ),
     check("MealRecipePortion_amount_check", validMealFoodAmount(table.amount)),
-    check(
-      "MealRecipePortion_amount_source_check",
-      sql`(${table.amount} IS NULL) <> (${table.grams} IS NULL)`,
-    ),
   ],
 );
 
@@ -484,19 +468,7 @@ export const mealFoodEntry = pgTable(
     index("MealFoodEntry_ledgerPartyId_idx").on(table.ledgerPartyId),
     index("MealFoodEntry_ingredientId_idx").on(table.ingredientId),
     index("MealFoodEntry_productId_idx").on(table.productId),
-    check(
-      "MealFoodEntry_grams_check",
-      sql`${table.grams} IS NULL OR (${table.grams} > 0 AND ${table.grams} < 'Infinity'::float8)`,
-    ),
     check("MealFoodEntry_amount_check", validMealFoodAmount(table.amount)),
-    check(
-      "MealFoodEntry_amount_compatibility_check",
-      sql`${table.amount} IS NULL OR ${table.grams} IS NULL`,
-    ),
-    check(
-      "MealFoodEntry_source_check",
-      sql`(${table.sourceKind} = 'ingredient' AND ${table.ingredientId} IS NOT NULL AND ${table.productId} IS NULL AND (${table.amount} IS NOT NULL OR ${table.grams} IS NOT NULL) AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'product' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NOT NULL AND (${table.amount} IS NOT NULL OR ${table.grams} IS NOT NULL) AND ${table.name} IS NULL AND ${table.nutrients} IS NULL) OR (${table.sourceKind} = 'manual' AND ${table.ingredientId} IS NULL AND ${table.productId} IS NULL AND length(trim(${table.name})) > 0 AND ${table.name} IS NOT NULL AND ${table.nutrients} IS NOT NULL AND jsonb_typeof(${table.nutrients}) = 'object' AND ${table.nutrients} <> '{}'::jsonb)`,
-    ),
   ],
 );
 
@@ -703,10 +675,6 @@ export const location = pgTable(
     index("Location_type_active_idx")
       .on(table.type)
       .where(sql`${table.deletedAt} IS NULL`),
-    check(
-      "Location_productId_type_check",
-      sql`${table.productId} IS NULL OR ${table.type} IS NULL`,
-    ),
   ],
 );
 
@@ -861,10 +829,6 @@ export const inventoryEntry = pgTable(
 
 export const image = pgTable("Image", generatedImageColumns(), (table) => [
   shortcodeUnique("Image", table.shortcode),
-  check(
-    "Image_perceptualHash_format_check",
-    sql`${table.perceptualHash} IS NULL OR ${table.perceptualHash} ~ '^[0-9a-f]{16}$'`,
-  ),
   uniqueIndex("Image_key_key")
     .on(table.key)
     .where(sql`${table.deletedAt} IS NULL`),
@@ -970,10 +934,6 @@ export const plantingLocationPeriod = pgTable(
     ...baseTimestamps(),
   },
   (table) => [
-    check(
-      "PlantingLocationPeriod_startKind_check",
-      sql`${table.startKind} in ('actual', 'recorded')`,
-    ),
     uniqueIndex("PlantingLocationPeriod_plantingId_sequence_key").on(
       table.plantingId,
       table.sequence,
@@ -1165,10 +1125,6 @@ export const projectDependency = pgTable(
       table.blockedByProjectId,
     ),
     index("ProjectDependency_blockedBy_idx").on(table.blockedByProjectId),
-    check(
-      "ProjectDependency_no_self_check",
-      sql`${table.projectId} <> ${table.blockedByProjectId}`,
-    ),
   ],
 );
 
@@ -1269,10 +1225,6 @@ export const taskDependency = pgTable(
       table.blockedByTaskId,
     ),
     index("TaskDependency_blockedBy_idx").on(table.blockedByTaskId),
-    check(
-      "TaskDependency_no_self_check",
-      sql`${table.taskId} <> ${table.blockedByTaskId}`,
-    ),
   ],
 );
 
@@ -1304,10 +1256,6 @@ export const ledgerParty = pgTable(
     uniqueIndex("LedgerParty_household_singleton_key")
       .on(table.kind)
       .where(sql`${table.deletedAt} IS NULL AND ${table.kind} = 'household'`),
-    check(
-      "LedgerParty_kind_check",
-      sql`${table.kind} IN ('member', 'guest', 'household')`,
-    ),
   ],
 );
 
@@ -1345,10 +1293,6 @@ export const purchase = pgTable(
       .where(sql`${table.orderId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
     index("Purchase_vendorId_idx").on(table.vendorId),
     index("Purchase_date_idx").on(table.date),
-    check(
-      "Purchase_statedTotal_whole_cent_check",
-      sql`${table.statedTotal} IS NULL OR abs(${table.statedTotal} * 100 - round(${table.statedTotal} * 100)) < 0.0000001`,
-    ),
     index("Purchase_orderId_gin_idx").using(
       "gin",
       sql`${table.orderId} gin_trgm_ops`,
@@ -1449,15 +1393,6 @@ export const productComponent = pgTable(
     index("ProductComponent_componentProductId_idx").on(
       table.componentProductId,
     ),
-    check("ProductComponent_quantity_check", sql`${table.quantity} >= 1`),
-    // A product cannot be its own component. Deliberately narrow: catching a
-    // longer cycle (a kit nested inside one of its own components several
-    // hops down) is a graph-traversal question for the write path, not
-    // something a single-row CHECK can express.
-    check(
-      "ProductComponent_not_self_check",
-      sql`${table.parentProductId} <> ${table.componentProductId}`,
-    ),
   ],
 );
 
@@ -1499,14 +1434,6 @@ export const financialTransaction = pgTable(
       "gin",
       table.sourceRefs,
     ),
-    check(
-      "FinancialTransaction_amount_whole_cent_check",
-      sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
-    ),
-    check(
-      "FinancialTransaction_posted_date_check",
-      sql`${table.status} <> 'posted' OR ${table.postedDate} IS NOT NULL`,
-    ),
   ],
 );
 
@@ -1540,18 +1467,6 @@ export const financialTransactionAllocation = pgTable(
       table.transactionId,
     ),
     index("FinancialTransactionAllocation_purchaseId_idx").on(table.purchaseId),
-    // Same whole-cent and non-zero rules as FinancialTransaction.amount: a
-    // zero-dollar allocation says nothing, and unlinking is deleting the row
-    // rather than zeroing it.
-    //
-    // Declarable here only because push emits CHECKs inside CREATE TABLE for a
-    // NEW table; it is edits to an EXISTING table's CHECK that push silently
-    // ignores. Treat this expression as immutable — changing it later means a
-    // hand-applied ALTER plus a pg_constraint re-read.
-    check(
-      "FinancialTransactionAllocation_amount_whole_cent_check",
-      sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
-    ),
   ],
 );
 
@@ -1566,10 +1481,6 @@ export const ledgerTransfer = pgTable(
     index("LedgerTransfer_fromPartyId_idx").on(table.fromPartyId),
     index("LedgerTransfer_toPartyId_idx").on(table.toPartyId),
     index("LedgerTransfer_date_idx").on(table.date),
-    check(
-      "LedgerTransfer_amount_whole_cent_check",
-      sql`${table.amount} > 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
-    ),
   ],
 );
 
@@ -1600,14 +1511,6 @@ export const statementImport = pgTable(
     check(
       "StatementImport_source_slug_check",
       sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
-    ),
-    check(
-      "StatementImport_dateKind_check",
-      sql`${table.dateKind} IN ('posted', 'transaction', 'unknown')`,
-    ),
-    check(
-      "StatementImport_rowCountDeclared_check",
-      sql`${table.rowCountDeclared} IS NULL OR ${table.rowCountDeclared} >= 0`,
     ),
   ],
 );
@@ -1709,34 +1612,6 @@ export const statementRow = pgTable(
       sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
     ),
     check(
-      "StatementRow_amount_whole_cent_check",
-      sql`${table.amount} <> 0 AND abs(${table.amount} * 100 - round(${table.amount} * 100)) < 0.0000001`,
-    ),
-    check(
-      "StatementRow_providerAmount_whole_cent_check",
-      sql`${table.providerAmount} <> 0 AND abs(${table.providerAmount} * 100 - round(${table.providerAmount} * 100)) < 0.0000001`,
-    ),
-    check(
-      "StatementRow_providerStatus_check",
-      sql`${table.providerStatus} IS NULL OR ${table.providerStatus} IN ('posted', 'pending')`,
-    ),
-    // Ignoring a row is a judgment and must carry its reasoning; leaving it open
-    // is the default and needs none.
-    check(
-      "StatementRow_disposition_check",
-      sql`(${table.disposition} = 'open' AND ${table.dispositionReason} IS NULL AND ${table.dispositionNote} IS NULL)
-          OR (${table.disposition} = 'ignored' AND ${table.dispositionReason} IS NOT NULL AND ${table.dispositionNote} IS NOT NULL)`,
-    ),
-    // The enum is enforced by zod at the router/MCP boundary, but the bulk
-    // disposition scripts write this column over raw SQL and bypass that. A
-    // typo would store cleanly and then throw on the read path, 500ing the list
-    // for the whole source — so the vocabulary is pinned here too.
-    check(
-      "StatementRow_dispositionReason_check",
-      sql`${table.dispositionReason} IS NULL OR ${table.dispositionReason} IN
-          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')`,
-    ),
-    check(
       "StatementRow_externalId_format_check",
       sql`${table.externalId} ~ '^v1:[0-9a-f]{64}$'`,
     ),
@@ -1762,35 +1637,6 @@ export const expense = pgTable(
     index("Expense_lineKind_idx").on(table.lineKind),
     index("Expense_name_gin_idx").using("gin", sql`${table.name} gin_trgm_ops`),
     index("Expense_purchaseId_idx").on(table.purchaseId),
-    check(
-      "Expense_cost_whole_cent_check",
-      sql`${table.cost} IS NULL OR abs(${table.cost} * 100 - round(${table.cost} * 100)) < 0.0000001`,
-    ),
-    // Signed; zero only where the money is known to be negative — see the
-    // ledger rule on `productQuantity`.
-    //
-    // The `cost IS NOT NULL` guard is load-bearing and is NOT redundant with
-    // `cost < 0`. A CHECK rejects only on FALSE, and for an unclassified row
-    // `NULL < 0` is NULL, so `(0 <> 0 OR NULL)` is NULL and the row would be
-    // ADMITTED — quietly allowing the one shape the rule above forbids. The
-    // guard collapses that NULL to FALSE. (Found in review on #772, where the
-    // first version of this constraint had exactly that hole.)
-    //
-    // NOTE: `drizzle-kit push` does NOT diff CHECK constraints, so editing this
-    // line changes tests (the template is built from schema.ts) and nothing
-    // else. A change here must be applied to production by hand and read back
-    // from `pg_constraint`.
-    check(
-      "Expense_productQuantity_check",
-      sql`${table.productQuantity} IS NULL OR (${table.productId} IS NOT NULL AND (${table.productQuantity} <> 0 OR (${table.cost} IS NOT NULL AND ${table.cost} < 0)))`,
-    ),
-    // NOTE: `drizzle-kit push` does not diff CHECK constraints (see the longer
-    // note on FinancialTransaction_purchase_settlement_check above). This one
-    // requires the same hand-applied ALTER + pg_constraint read-back.
-    check(
-      "Expense_lineKind_productId_check",
-      sql`${table.lineKind} = 'principal' OR ${table.productId} IS NULL`,
-    ),
   ],
 );
 
@@ -1824,14 +1670,6 @@ export const expenseAttribution = pgTable(
       ),
     index("ExpenseAttribution_expenseId_idx").on(table.expenseId),
     index("ExpenseAttribution_ledgerPartyId_idx").on(table.ledgerPartyId),
-    check(
-      "ExpenseAttribution_role_check",
-      sql`${table.role} IN ('beneficiary', 'funder')`,
-    ),
-    check(
-      "ExpenseAttribution_weight_check",
-      sql`${table.weight} > 0 AND ${table.weight} <= 9007199254740991`,
-    ),
   ],
 );
 
@@ -1868,27 +1706,8 @@ export const ledgerSourceClaim = pgTable(
     index("LedgerSourceClaim_expenseId_idx").on(table.expenseId),
     index("LedgerSourceClaim_ledgerTransferId_idx").on(table.ledgerTransferId),
     check(
-      "LedgerSourceClaim_owner_check",
-      sql`(${table.expenseId} IS NOT NULL) <> (${table.ledgerTransferId} IS NOT NULL)`,
-    ),
-    check(
-      "LedgerSourceClaim_sourceKeyVersion_check",
-      sql`${table.sourceKeyVersion} > 0`,
-    ),
-    check(
       "LedgerSourceClaim_source_check",
       sql`${table.source} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND ${table.source} = lower(trim(${table.source}))`,
-    ),
-    check(
-      "LedgerSourceClaim_reconciliation_check",
-      sql`abs(${table.targetAmountAtClaim} * 100 - round(${table.targetAmountAtClaim} * 100)) < 0.0000001
-          AND abs(((${table.normalizedEvidence}->>'amount')::double precision) * 100 - round(((${table.normalizedEvidence}->>'amount')::double precision) * 100)) < 0.0000001
-          AND ((${table.reconciliationDecision} = 'amounts_match'
-            AND ${table.reconciliationNote} IS NULL
-            AND abs(((${table.normalizedEvidence}->>'amount')::double precision) - ${table.targetAmountAtClaim}) < 0.0000001)
-          OR (${table.reconciliationDecision} = 'accept_target_amount'
-            AND length(trim(${table.reconciliationNote})) > 0
-            AND abs(((${table.normalizedEvidence}->>'amount')::double precision) - ${table.targetAmountAtClaim}) >= 0.0000001))`,
     ),
   ],
 );

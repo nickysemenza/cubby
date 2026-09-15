@@ -72,6 +72,7 @@
     "./mcp": "./src/mcp.ts",
     "./oauth": "./src/oauth.ts",
     "./problems": "./src/problems.ts",
+    "./persisted-invariants": "./src/persisted-invariants.ts",
     "./recipe": "./src/recipe.ts",
     "./recipe-fields": "./src/recipe-fields.ts",
     "./recipe-flow": "./src/recipe-flow.ts",

@@ -259,6 +259,30 @@ export const derivedProblemQueries = [
     },
   }),
   defineProblem({
+    key: "persistedInvariantViolations",
+    problemClass: PROBLEM_CLASS.persistedInvariantViolations,
+    executionLane: "fast",
+    continuation: {
+      kind: "none",
+      reason: "Each result is a persisted row outside its domain schema.",
+    },
+    freshness: { kind: "live" },
+    title: "Persisted invariant violations",
+    description:
+      "Rows that bypassed or escaped application validation and no longer satisfy Cubby's domain model.",
+    emptyMessage: "Every persisted row satisfies its application schema.",
+    source: {
+      kind: "derived",
+      diagnostic: "persisted-invariant-violations",
+      grain: "polymorphic",
+      operations: [
+        { label: "Read registered persisted-row projections" },
+        { label: "Parse each row through its canonical Zod schema" },
+        { label: "Keep rows with one or more schema issues" },
+      ],
+    },
+  }),
+  defineProblem({
     key: "dependencyCycles",
     problemClass: PROBLEM_CLASS.dependencyCycles,
     executionLane: "fast",

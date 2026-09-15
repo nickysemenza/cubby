@@ -9,6 +9,7 @@ import {
   type PurchaseShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+import { financialTransactionAllocationPersistedInvariant } from "@cubby/schemas/persisted-invariants";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -233,6 +234,11 @@ export async function writeAllocationSet(
   next: readonly AllocationInput[],
   before: AllocationSnapshot,
 ): Promise<void> {
+  for (const row of next) {
+    financialTransactionAllocationPersistedInvariant.parse({
+      amount: row.amount,
+    });
+  }
   const existing = before.get(transactionId) ?? [];
   const nextByPurchase = new Map(next.map((row) => [row.purchaseId, row]));
   const removed = existing.filter((row) => !nextByPurchase.has(row.purchaseId));

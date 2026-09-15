@@ -102,12 +102,11 @@ describe("meal food entry lifecycle", () => {
     expect(deleted?.id).toBe(entry.id);
   });
 
-  it("enforces canonical amount shape, migration exclusivity, and source exclusivity", async () => {
-    const [meal, party, product, ingredientSource] = await Promise.all([
+  it("enforces the retained canonical amount storage shape", async () => {
+    const [meal, party, product] = await Promise.all([
       seedMeal(),
       seedParty("Amount constraint eater"),
       seedProduct("Amount constraint product"),
-      seedIngredient("Amount constraint ingredient"),
     ]);
     const base = {
       mealId: meal.id,
@@ -116,17 +115,6 @@ describe("meal food entry lifecycle", () => {
       productId: product.id,
     };
 
-    await expect(
-      getDb(ctx.db)
-        .insert(mealFoodEntry)
-        .values({
-          ...base,
-          amount: { value: 1, unit: "cup" },
-          grams: 1,
-        }),
-    ).rejects.toMatchObject({
-      cause: { constraint: "MealFoodEntry_amount_compatibility_check" },
-    });
     await expect(
       getDb(ctx.db)
         .insert(mealFoodEntry)
@@ -159,18 +147,6 @@ describe("meal food entry lifecycle", () => {
         }),
     ).rejects.toMatchObject({
       cause: { constraint: "MealFoodEntry_amount_check" },
-    });
-    await expect(
-      getDb(ctx.db)
-        .insert(mealFoodEntry)
-        .values({
-          ...base,
-          ingredientId: ingredientSource.id,
-          amount: { value: 1, unit: "g" },
-          grams: null,
-        }),
-    ).rejects.toMatchObject({
-      cause: { constraint: "MealFoodEntry_source_check" },
     });
     await expect(
       insertAndReturn(ctx.db, mealFoodEntry, {
@@ -478,45 +454,6 @@ describe("meal food entry lifecycle", () => {
         },
       ]),
     );
-  });
-
-  it("requires exactly one canonical or legacy amount for every recipe portion", async () => {
-    const [meal, party] = await Promise.all([
-      seedMeal(),
-      seedParty("Portion constraint eater"),
-    ]);
-    const preparation = await seedPreparation(
-      meal.id,
-      "Portion constraint recipe",
-    );
-    const base = {
-      mealRecipeId: preparation.id,
-      mealId: meal.id,
-      ledgerPartyId: party.id,
-    };
-
-    await expect(
-      getDb(ctx.db)
-        .insert(mealRecipePortion)
-        .values({
-          ...base,
-          amount: { value: 1, unit: "slice" },
-          grams: 50,
-        }),
-    ).rejects.toMatchObject({
-      cause: { constraint: "MealRecipePortion_amount_source_check" },
-    });
-    await expect(
-      getDb(ctx.db)
-        .insert(mealRecipePortion)
-        .values({
-          ...base,
-          amount: null,
-          grams: null,
-        }),
-    ).rejects.toMatchObject({
-      cause: { constraint: "MealRecipePortion_amount_source_check" },
-    });
   });
 
   it("refuses to fold colliding recipe portions with different entered units", async () => {

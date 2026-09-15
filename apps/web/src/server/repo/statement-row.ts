@@ -12,6 +12,7 @@ import type {
   UpdateStatementRowsInput,
 } from "@cubby/schemas/statement-row";
 import {
+  recordStatementRowsInput,
   statementImportOut,
   statementRowOut,
 } from "@cubby/schemas/statement-row";
@@ -355,9 +356,10 @@ export async function recordStatementRows(
   // Unused: StatementRow has no `AuditEntityType` — see deleteStatementRows.
   _actor: ActorContext,
 ) {
-  const { source } = input.import;
+  const command = recordStatementRowsInput.parse(input);
+  const { source } = command.import;
   const rows = await Promise.all(
-    input.rows.map(async (row) => ({
+    command.rows.map(async (row) => ({
       ...row,
       source,
       externalId: await statementRowExternalId({
@@ -380,9 +382,9 @@ export async function recordStatementRows(
     idCounts.set(row.externalId, (idCounts.get(row.externalId) ?? 0) + 1);
   const indistinguishableDuplicates = rows.length - idCounts.size;
   const rowsOmitted =
-    input.import.rowCountDeclared === null
+    command.import.rowCountDeclared === null
       ? null
-      : input.import.rowCountDeclared - rows.length;
+      : command.import.rowCountDeclared - rows.length;
 
   // Advisory only. An un-normalized Copilot or Apple Card export is almost
   // entirely positive here, and every one of its rows will have hashed to a
@@ -406,7 +408,7 @@ export async function recordStatementRows(
       .where(
         and(
           eq(statementImport.source, source),
-          eq(statementImport.fingerprint, input.import.fingerprint),
+          eq(statementImport.fingerprint, command.import.fingerprint),
           notDeleted(statementImport),
         ),
       )
@@ -436,7 +438,7 @@ export async function recordStatementRows(
     const alreadyInAnotherBatch = stored.length - alreadyInThisBatch;
     const novel = distinctIds.length - stored.length;
 
-    if (input.dryRun) {
+    if (command.dryRun) {
       return {
         batchId: existingBatch?.id ?? null,
         batchCreated: false,
@@ -461,11 +463,11 @@ export async function recordStatementRows(
           .insert(statementImport)
           .values({
             source,
-            label: input.import.label,
-            fingerprint: input.import.fingerprint,
-            dateKind: input.import.dateKind,
-            rowCountDeclared: input.import.rowCountDeclared,
-            notes: input.import.notes,
+            label: command.import.label,
+            fingerprint: command.import.fingerprint,
+            dateKind: command.import.dateKind,
+            rowCountDeclared: command.import.rowCountDeclared,
+            notes: command.import.notes,
           })
           .returning({ id: statementImport.id })
       )[0]?.id;

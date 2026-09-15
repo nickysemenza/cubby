@@ -25,6 +25,7 @@ import {
   countDependencyCycles,
   countEntitiesMissingEmbeddings,
   countReferentialLivenessViolations,
+  countPersistedInvariantViolations,
   findDependencyCycles,
   findDuplicateFinancialAccountSourceAliases,
   findDuplicateFinancialTransactionSourceRefs,
@@ -42,6 +43,7 @@ import {
   findWeightSoldProducts,
   findProductsWithUpcGaps,
   findReferentialLivenessViolations,
+  findPersistedInvariantViolations,
   findToolsUsedOutsideOwnership,
 } from "~/server/repo/problems";
 import { computeAttentionItems } from "~/server/repo/project";
@@ -306,6 +308,12 @@ export const diagnosticAdapters = {
       healthySample(findReferentialLivenessViolations(db), limit),
     count: async (db) =>
       healthyCount(await countReferentialLivenessViolations(db)),
+  },
+  "persisted-invariant-violations": {
+    sample: (db, _options, limit) =>
+      healthySample(findPersistedInvariantViolations(db), limit),
+    count: async (db) =>
+      healthyCount(await countPersistedInvariantViolations(db)),
   },
   "dependency-cycles": {
     sample: (db, _options, limit) =>

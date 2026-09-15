@@ -4,18 +4,13 @@ import { describe, expect, it } from "vitest";
 import { mealFoodEntry, mealRecipe, mealRecipePortion } from "./schema";
 
 describe("meal preparation storage schema", () => {
-  it("stores nullable positive whole-gram yields on MealRecipe", () => {
+  it("stores nullable yields without a domain CHECK", () => {
     const config = getTableConfig(mealRecipe);
 
     expect(config.columns.map((column) => column.name)).toEqual(
       expect.arrayContaining(["estimatedYieldGrams", "actualYieldGrams"]),
     );
-    expect(config.checks.map((constraint) => constraint.name)).toEqual(
-      expect.arrayContaining([
-        "MealRecipe_estimatedYieldGrams_check",
-        "MealRecipe_actualYieldGrams_check",
-      ]),
-    );
+    expect(config.checks).toEqual([]);
   });
 
   it("enforces one live portion per source occurrence, target meal, and eater", () => {
@@ -33,13 +28,9 @@ describe("meal preparation storage schema", () => {
         "deletedAt",
       ]),
     );
-    expect(config.checks.map((constraint) => constraint.name)).toEqual(
-      expect.arrayContaining([
-        "MealRecipePortion_grams_check",
-        "MealRecipePortion_amount_check",
-        "MealRecipePortion_amount_source_check",
-      ]),
-    );
+    expect(config.checks.map((constraint) => constraint.name)).toEqual([
+      "MealRecipePortion_amount_check",
+    ]);
 
     const liveKey = config.indexes.find(
       (index) =>
@@ -83,14 +74,9 @@ describe("meal preparation storage schema", () => {
     expect(config.indexes.map((index) => index.config.name)).toContain(
       "MealFoodEntry_ingredientId_idx",
     );
-    expect(config.checks.map((constraint) => constraint.name)).toEqual(
-      expect.arrayContaining([
-        "MealFoodEntry_grams_check",
-        "MealFoodEntry_amount_check",
-        "MealFoodEntry_amount_compatibility_check",
-        "MealFoodEntry_source_check",
-      ]),
-    );
+    expect(config.checks.map((constraint) => constraint.name)).toEqual([
+      "MealFoodEntry_amount_check",
+    ]);
     expect(
       config.foreignKeys.some(
         (foreignKey) =>

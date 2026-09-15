@@ -172,6 +172,8 @@ describe("meal preparation contracts", () => {
           },
           recipe: { id: recipeId, name: "Soup" },
           scale: 1,
+          recipeServings: 4,
+          recipeYield: { value: 500, unit: "g" },
           estimatedYieldGrams: 520,
           actualYieldGrams: 500,
           yieldBasis: {
@@ -183,6 +185,12 @@ describe("meal preparation contracts", () => {
           sourceSummary: {
             assignedGrams: 350,
             confirmedGrams: 200,
+            assignedShare: {
+              status: "complete",
+              lower: 0.7,
+              upper: null,
+              coverage: { covered: 1, total: 1 },
+            },
             unassignedGrams: 150,
           },
           portions: [
@@ -195,7 +203,20 @@ describe("meal preparation contracts", () => {
                 mealKind: "cooked",
               },
               eater: { id: eaterId, name: "Household member", kind: "member" },
+              amount: { value: 200, unit: "g" },
               grams: 200,
+              weight: {
+                status: "complete",
+                lower: 200,
+                upper: null,
+                coverage: { covered: 1, total: 1 },
+              },
+              batchShare: {
+                status: "complete",
+                lower: 0.4,
+                upper: null,
+                coverage: { covered: 1, total: 1 },
+              },
               confirmedAt: new Date("2026-08-31T19:00:00Z"),
               servedHere: true,
               totals: totals(4, 400, 32),

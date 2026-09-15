@@ -49,6 +49,7 @@ describe("PROBLEM_CLASS", () => {
     projectsMissingBudget: "defect",
     projectsWithDateDrift: "defect",
     referentialLivenessViolations: "defect",
+    persistedInvariantViolations: "defect",
     soldButStillStocked: "defect",
     kitsCountedTwice: "defect",
     staleParentRecipes: "defect",

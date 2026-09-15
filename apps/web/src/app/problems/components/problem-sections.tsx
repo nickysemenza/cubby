@@ -1501,6 +1501,37 @@ const DECLARED_SECTIONS = [
     },
   }),
   section({
+    id: "persisted-invariants",
+    label: "Invariant defects",
+    select: (p) => p.persistedInvariantViolations,
+    problemKeys: ["persistedInvariantViolations"],
+    icon: AlertTriangle,
+    hideWhenEmpty: true,
+    title: "Persisted rows outside the domain model",
+    description:
+      "These are application or migration defects, not routine cleanup. Repair each from its source evidence rather than applying an automatic fix.",
+    groupBy: (items) => groupBy(items, (item) => item.domain),
+    renderItem: (violation) => ({
+      key: `${violation.table}-${violation.recordId}`,
+      title: `${violation.table} record violates its application schema`,
+      subtitle: violation.owner
+        ? `${entityLabel(violation.owner.entity)} ${violation.owner.id}`
+        : `Internal record ${violation.recordId}`,
+      details: violation.issues.map((issue) => (
+        <div
+          key={`${issue.path}-${issue.message}`}
+          className="font-mono text-xs text-muted-foreground"
+        >
+          {issue.path}: {issue.message}
+        </div>
+      )),
+      route:
+        violation.owner && isBrowserRoutedEntity(violation.owner.entity)
+          ? entityDetailLink(violation.owner.entity, violation.owner.id)
+          : undefined,
+    }),
+  }),
+  section({
     id: "referential-liveness",
     label: "Dangling refs",
     select: (p) => p.referentialLivenessViolations,

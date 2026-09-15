@@ -1,11 +1,7 @@
 import { z } from "zod";
 export * from "./meal-nutrition";
 export * from "./meal-amount";
-import {
-  mealFoodAmount,
-  mealAmountInputFields,
-  hasRequiredMealAmount,
-} from "./meal-amount";
+import { mealFoodAmount, hasRequiredMealAmount } from "./meal-amount";
 import { recipeYieldSchema } from "./recipe-shared";
 import { auditDateFilterFields, uniqueBy } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
@@ -154,7 +150,10 @@ const mealRecipePreparationSetChange = z
     action: z.literal("set"),
     mealId: mealShortcode,
     ledgerPartyId: ledgerPartyShortcode,
-    ...mealAmountInputFields,
+    amount: mealFoodAmount.nullable().optional(),
+    // Legacy only, but the storage column is integer and the former CHECK
+    // rejected fractional grams. Keep that contract at this command seam.
+    grams: mealYieldGrams.nullable().optional(),
     confirmed: z.boolean(),
   })
   .refine(hasRequiredMealAmount, "Enter either amount or legacy grams");

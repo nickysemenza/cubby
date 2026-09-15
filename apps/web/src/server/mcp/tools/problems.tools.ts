@@ -7,6 +7,7 @@ import {
   allProblemsMcpSchema,
   assembleAllProblems,
   referentialLivenessViolationsMcpOut,
+  persistedInvariantViolationsMcpOut,
 } from "@cubby/schemas/problems";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -26,6 +27,11 @@ function projectProblemTypeSlice(
       return problemsTypeSliceOut.parse({
         ...slice,
         items: referentialLivenessViolationsMcpOut.parse(slice.items),
+      });
+    case "persistedInvariantViolations":
+      return problemsTypeSliceOut.parse({
+        ...slice,
+        items: persistedInvariantViolationsMcpOut.parse(slice.items),
       });
     default:
       return slice;

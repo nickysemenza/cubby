@@ -1497,20 +1497,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "Expense_cost_whole_cent_check": {
-          "name": "Expense_cost_whole_cent_check",
-          "value": "\"Expense\".\"cost\" IS NULL OR abs(\"Expense\".\"cost\" * 100 - round(\"Expense\".\"cost\" * 100)) < 0.0000001"
-        },
-        "Expense_productQuantity_check": {
-          "name": "Expense_productQuantity_check",
-          "value": "\"Expense\".\"productQuantity\" IS NULL OR (\"Expense\".\"productId\" IS NOT NULL AND (\"Expense\".\"productQuantity\" <> 0 OR (\"Expense\".\"cost\" IS NOT NULL AND \"Expense\".\"cost\" < 0)))"
-        },
-        "Expense_lineKind_productId_check": {
-          "name": "Expense_lineKind_productId_check",
-          "value": "\"Expense\".\"lineKind\" = 'principal' OR \"Expense\".\"productId\" IS NULL"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.ExpenseAttribution": {
@@ -1682,16 +1669,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "ExpenseAttribution_role_check": {
-          "name": "ExpenseAttribution_role_check",
-          "value": "\"ExpenseAttribution\".\"role\" IN ('beneficiary', 'funder')"
-        },
-        "ExpenseAttribution_weight_check": {
-          "name": "ExpenseAttribution_weight_check",
-          "value": "\"ExpenseAttribution\".\"weight\" > 0 AND \"ExpenseAttribution\".\"weight\" <= 9007199254740991"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.FinancialAccount": {
@@ -2149,16 +2127,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "FinancialTransaction_amount_whole_cent_check": {
-          "name": "FinancialTransaction_amount_whole_cent_check",
-          "value": "\"FinancialTransaction\".\"amount\" <> 0 AND abs(\"FinancialTransaction\".\"amount\" * 100 - round(\"FinancialTransaction\".\"amount\" * 100)) < 0.0000001"
-        },
-        "FinancialTransaction_posted_date_check": {
-          "name": "FinancialTransaction_posted_date_check",
-          "value": "\"FinancialTransaction\".\"status\" <> 'posted' OR \"FinancialTransaction\".\"postedDate\" IS NOT NULL"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.FinancialTransactionAllocation": {
@@ -2296,12 +2265,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "FinancialTransactionAllocation_amount_whole_cent_check": {
-          "name": "FinancialTransactionAllocation_amount_whole_cent_check",
-          "value": "\"FinancialTransactionAllocation\".\"amount\" <> 0 AND abs(\"FinancialTransactionAllocation\".\"amount\" * 100 - round(\"FinancialTransactionAllocation\".\"amount\" * 100)) < 0.0000001"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.GardenEntry": {
@@ -2853,12 +2817,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "Image_perceptualHash_format_check": {
-          "name": "Image_perceptualHash_format_check",
-          "value": "\"Image\".\"perceptualHash\" IS NULL OR \"Image\".\"perceptualHash\" ~ '^[0-9a-f]{16}$'"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.Ingredient": {
@@ -3420,12 +3379,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "LedgerParty_kind_check": {
-          "name": "LedgerParty_kind_check",
-          "value": "\"LedgerParty\".\"kind\" IN ('member', 'guest', 'household')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.LedgerSourceClaim": {
@@ -3599,21 +3553,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "LedgerSourceClaim_owner_check": {
-          "name": "LedgerSourceClaim_owner_check",
-          "value": "(\"LedgerSourceClaim\".\"expenseId\" IS NOT NULL) <> (\"LedgerSourceClaim\".\"ledgerTransferId\" IS NOT NULL)"
-        },
-        "LedgerSourceClaim_sourceKeyVersion_check": {
-          "name": "LedgerSourceClaim_sourceKeyVersion_check",
-          "value": "\"LedgerSourceClaim\".\"sourceKeyVersion\" > 0"
-        },
         "LedgerSourceClaim_source_check": {
           "name": "LedgerSourceClaim_source_check",
           "value": "\"LedgerSourceClaim\".\"source\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND \"LedgerSourceClaim\".\"source\" = lower(trim(\"LedgerSourceClaim\".\"source\"))"
-        },
-        "LedgerSourceClaim_reconciliation_check": {
-          "name": "LedgerSourceClaim_reconciliation_check",
-          "value": "abs(\"LedgerSourceClaim\".\"targetAmountAtClaim\" * 100 - round(\"LedgerSourceClaim\".\"targetAmountAtClaim\" * 100)) < 0.0000001\n          AND abs(((\"LedgerSourceClaim\".\"normalizedEvidence\"->>'amount')::double precision) * 100 - round(((\"LedgerSourceClaim\".\"normalizedEvidence\"->>'amount')::double precision) * 100)) < 0.0000001\n          AND ((\"LedgerSourceClaim\".\"reconciliationDecision\" = 'amounts_match'\n            AND \"LedgerSourceClaim\".\"reconciliationNote\" IS NULL\n            AND abs(((\"LedgerSourceClaim\".\"normalizedEvidence\"->>'amount')::double precision) - \"LedgerSourceClaim\".\"targetAmountAtClaim\") < 0.0000001)\n          OR (\"LedgerSourceClaim\".\"reconciliationDecision\" = 'accept_target_amount'\n            AND length(trim(\"LedgerSourceClaim\".\"reconciliationNote\")) > 0\n            AND abs(((\"LedgerSourceClaim\".\"normalizedEvidence\"->>'amount')::double precision) - \"LedgerSourceClaim\".\"targetAmountAtClaim\") >= 0.0000001))"
         }
       },
       "isRLSEnabled": false
@@ -3779,12 +3721,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "LedgerTransfer_amount_whole_cent_check": {
-          "name": "LedgerTransfer_amount_whole_cent_check",
-          "value": "\"LedgerTransfer\".\"amount\" > 0 AND abs(\"LedgerTransfer\".\"amount\" * 100 - round(\"LedgerTransfer\".\"amount\" * 100)) < 0.0000001"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.Location": {
@@ -4124,12 +4061,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "Location_productId_type_check": {
-          "name": "Location_productId_type_check",
-          "value": "\"Location\".\"productId\" IS NULL OR \"Location\".\"type\" IS NULL"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.LocationImage": {
@@ -4796,21 +4728,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "MealFoodEntry_grams_check": {
-          "name": "MealFoodEntry_grams_check",
-          "value": "\"MealFoodEntry\".\"grams\" IS NULL OR (\"MealFoodEntry\".\"grams\" > 0 AND \"MealFoodEntry\".\"grams\" < 'Infinity'::float8)"
-        },
         "MealFoodEntry_amount_check": {
           "name": "MealFoodEntry_amount_check",
           "value": "\n  \"MealFoodEntry\".\"amount\" IS NULL OR COALESCE((\n    jsonb_typeof(\"MealFoodEntry\".\"amount\") = 'object'\n    AND \"MealFoodEntry\".\"amount\" ? 'value'\n    AND \"MealFoodEntry\".\"amount\" ? 'unit'\n    AND \"MealFoodEntry\".\"amount\" - 'value' - 'unit' = '{}'::jsonb\n    AND CASE\n      WHEN jsonb_typeof(\"MealFoodEntry\".\"amount\"->'value') = 'number' THEN\n        (\"MealFoodEntry\".\"amount\"->>'value')::numeric > 0\n        AND (\"MealFoodEntry\".\"amount\"->>'value')::numeric < 'Infinity'::numeric\n      ELSE false\n    END\n    AND jsonb_typeof(\"MealFoodEntry\".\"amount\"->'unit') = 'string'\n    AND length(trim(\"MealFoodEntry\".\"amount\"->>'unit')) > 0\n    AND \"MealFoodEntry\".\"amount\"->>'unit' = trim(\"MealFoodEntry\".\"amount\"->>'unit')\n  ), false)\n"
-        },
-        "MealFoodEntry_amount_compatibility_check": {
-          "name": "MealFoodEntry_amount_compatibility_check",
-          "value": "\"MealFoodEntry\".\"amount\" IS NULL OR \"MealFoodEntry\".\"grams\" IS NULL"
-        },
-        "MealFoodEntry_source_check": {
-          "name": "MealFoodEntry_source_check",
-          "value": "(\"MealFoodEntry\".\"sourceKind\" = 'ingredient' AND \"MealFoodEntry\".\"ingredientId\" IS NOT NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND (\"MealFoodEntry\".\"amount\" IS NOT NULL OR \"MealFoodEntry\".\"grams\" IS NOT NULL) AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'product' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NOT NULL AND (\"MealFoodEntry\".\"amount\" IS NOT NULL OR \"MealFoodEntry\".\"grams\" IS NOT NULL) AND \"MealFoodEntry\".\"name\" IS NULL AND \"MealFoodEntry\".\"nutrients\" IS NULL) OR (\"MealFoodEntry\".\"sourceKind\" = 'manual' AND \"MealFoodEntry\".\"ingredientId\" IS NULL AND \"MealFoodEntry\".\"productId\" IS NULL AND length(trim(\"MealFoodEntry\".\"name\")) > 0 AND \"MealFoodEntry\".\"name\" IS NOT NULL AND \"MealFoodEntry\".\"nutrients\" IS NOT NULL AND jsonb_typeof(\"MealFoodEntry\".\"nutrients\") = 'object' AND \"MealFoodEntry\".\"nutrients\" <> '{}'::jsonb)"
         }
       },
       "isRLSEnabled": false
@@ -5086,16 +5006,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "MealRecipe_estimatedYieldGrams_check": {
-          "name": "MealRecipe_estimatedYieldGrams_check",
-          "value": "\"MealRecipe\".\"estimatedYieldGrams\" IS NULL OR \"MealRecipe\".\"estimatedYieldGrams\" > 0"
-        },
-        "MealRecipe_actualYieldGrams_check": {
-          "name": "MealRecipe_actualYieldGrams_check",
-          "value": "\"MealRecipe\".\"actualYieldGrams\" IS NULL OR \"MealRecipe\".\"actualYieldGrams\" > 0"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.MealRecipePortion": {
@@ -5286,17 +5197,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "MealRecipePortion_grams_check": {
-          "name": "MealRecipePortion_grams_check",
-          "value": "\"MealRecipePortion\".\"grams\" IS NULL OR \"MealRecipePortion\".\"grams\" > 0"
-        },
         "MealRecipePortion_amount_check": {
           "name": "MealRecipePortion_amount_check",
           "value": "\n  \"MealRecipePortion\".\"amount\" IS NULL OR COALESCE((\n    jsonb_typeof(\"MealRecipePortion\".\"amount\") = 'object'\n    AND \"MealRecipePortion\".\"amount\" ? 'value'\n    AND \"MealRecipePortion\".\"amount\" ? 'unit'\n    AND \"MealRecipePortion\".\"amount\" - 'value' - 'unit' = '{}'::jsonb\n    AND CASE\n      WHEN jsonb_typeof(\"MealRecipePortion\".\"amount\"->'value') = 'number' THEN\n        (\"MealRecipePortion\".\"amount\"->>'value')::numeric > 0\n        AND (\"MealRecipePortion\".\"amount\"->>'value')::numeric < 'Infinity'::numeric\n      ELSE false\n    END\n    AND jsonb_typeof(\"MealRecipePortion\".\"amount\"->'unit') = 'string'\n    AND length(trim(\"MealRecipePortion\".\"amount\"->>'unit')) > 0\n    AND \"MealRecipePortion\".\"amount\"->>'unit' = trim(\"MealRecipePortion\".\"amount\"->>'unit')\n  ), false)\n"
-        },
-        "MealRecipePortion_amount_source_check": {
-          "name": "MealRecipePortion_amount_source_check",
-          "value": "(\"MealRecipePortion\".\"amount\" IS NULL) <> (\"MealRecipePortion\".\"grams\" IS NULL)"
         }
       },
       "isRLSEnabled": false
@@ -6790,12 +6693,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "PlantingLocationPeriod_startKind_check": {
-          "name": "PlantingLocationPeriod_startKind_check",
-          "value": "\"PlantingLocationPeriod\".\"startKind\" in ('actual', 'recorded')"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.Product": {
@@ -7287,16 +7185,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "ProductComponent_quantity_check": {
-          "name": "ProductComponent_quantity_check",
-          "value": "\"ProductComponent\".\"quantity\" >= 1"
-        },
-        "ProductComponent_not_self_check": {
-          "name": "ProductComponent_not_self_check",
-          "value": "\"ProductComponent\".\"parentProductId\" <> \"ProductComponent\".\"componentProductId\""
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.ProductConversionCoverage": {
@@ -8200,12 +8089,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "ProjectDependency_no_self_check": {
-          "name": "ProjectDependency_no_self_check",
-          "value": "\"ProjectDependency\".\"projectId\" <> \"ProjectDependency\".\"blockedByProjectId\""
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.ProjectImage": {
@@ -8677,12 +8561,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "Purchase_statedTotal_whole_cent_check": {
-          "name": "Purchase_statedTotal_whole_cent_check",
-          "value": "\"Purchase\".\"statedTotal\" IS NULL OR abs(\"Purchase\".\"statedTotal\" * 100 - round(\"Purchase\".\"statedTotal\" * 100)) < 0.0000001"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.PurchaseImage": {
@@ -10074,14 +9953,6 @@
         "StatementImport_source_slug_check": {
           "name": "StatementImport_source_slug_check",
           "value": "\"StatementImport\".\"source\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND \"StatementImport\".\"source\" = lower(trim(\"StatementImport\".\"source\"))"
-        },
-        "StatementImport_dateKind_check": {
-          "name": "StatementImport_dateKind_check",
-          "value": "\"StatementImport\".\"dateKind\" IN ('posted', 'transaction', 'unknown')"
-        },
-        "StatementImport_rowCountDeclared_check": {
-          "name": "StatementImport_rowCountDeclared_check",
-          "value": "\"StatementImport\".\"rowCountDeclared\" IS NULL OR \"StatementImport\".\"rowCountDeclared\" >= 0"
         }
       },
       "isRLSEnabled": false
@@ -10435,26 +10306,6 @@
         "StatementRow_source_slug_check": {
           "name": "StatementRow_source_slug_check",
           "value": "\"StatementRow\".\"source\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND \"StatementRow\".\"source\" = lower(trim(\"StatementRow\".\"source\"))"
-        },
-        "StatementRow_amount_whole_cent_check": {
-          "name": "StatementRow_amount_whole_cent_check",
-          "value": "\"StatementRow\".\"amount\" <> 0 AND abs(\"StatementRow\".\"amount\" * 100 - round(\"StatementRow\".\"amount\" * 100)) < 0.0000001"
-        },
-        "StatementRow_providerAmount_whole_cent_check": {
-          "name": "StatementRow_providerAmount_whole_cent_check",
-          "value": "\"StatementRow\".\"providerAmount\" <> 0 AND abs(\"StatementRow\".\"providerAmount\" * 100 - round(\"StatementRow\".\"providerAmount\" * 100)) < 0.0000001"
-        },
-        "StatementRow_providerStatus_check": {
-          "name": "StatementRow_providerStatus_check",
-          "value": "\"StatementRow\".\"providerStatus\" IS NULL OR \"StatementRow\".\"providerStatus\" IN ('posted', 'pending')"
-        },
-        "StatementRow_disposition_check": {
-          "name": "StatementRow_disposition_check",
-          "value": "(\"StatementRow\".\"disposition\" = 'open' AND \"StatementRow\".\"dispositionReason\" IS NULL AND \"StatementRow\".\"dispositionNote\" IS NULL)\n          OR (\"StatementRow\".\"disposition\" = 'ignored' AND \"StatementRow\".\"dispositionReason\" IS NOT NULL AND \"StatementRow\".\"dispositionNote\" IS NOT NULL)"
-        },
-        "StatementRow_dispositionReason_check": {
-          "name": "StatementRow_dispositionReason_check",
-          "value": "\"StatementRow\".\"dispositionReason\" IS NULL OR \"StatementRow\".\"dispositionReason\" IN\n          ('not_modeled', 'not_a_purchase', 'duplicate_of_other_source', 'pre_cubby', 'other')"
         },
         "StatementRow_externalId_format_check": {
           "name": "StatementRow_externalId_format_check",
@@ -10944,12 +10795,7 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "TaskDependency_no_self_check": {
-          "name": "TaskDependency_no_self_check",
-          "value": "\"TaskDependency\".\"taskId\" <> \"TaskDependency\".\"blockedByTaskId\""
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.TaskImage": {

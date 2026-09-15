@@ -85,6 +85,7 @@ const PROBLEM_LABELS = {
   invalidFinancialJson: (n) => `${n} invalid financial record`,
   incompleteStatementImports: (n) => `${n} incomplete statement import`,
   referentialLivenessViolations: (n) => pl(n, "dangling reference"),
+  persistedInvariantViolations: (n) => pl(n, "persisted invariant violation"),
 } satisfies Record<keyof ProblemsCount["byType"], (n: number) => string>;
 
 export const ProblemsBadge = () => {

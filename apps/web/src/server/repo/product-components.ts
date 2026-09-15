@@ -505,8 +505,8 @@ async function preflightAttachComponents(
     };
   }
 
-  // Multi-hop cycle guard: the one-hop self-reference is refused above (and
-  // backstopped by the DB CHECK), but A→B→A several hops down is only visible
+  // Multi-hop cycle guard: the one-hop self-reference is refused above, but
+  // A→B→A several hops down is only visible
   // by walking the WHOLE live edge set with the proposed new edges projected on
   // top. See the `findMergeComponentCycle` import comment.
   const liveEdges = await allLiveComponentEdges(dbc);

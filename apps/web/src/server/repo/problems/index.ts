@@ -68,6 +68,10 @@ export {
   findDependencyCycles,
   findReferentialLivenessViolations,
 } from "./detectors-integrity";
+export {
+  countPersistedInvariantViolations,
+  findPersistedInvariantViolations,
+} from "./detectors-persisted-invariants";
 // Name drift (one name, two spellings) — free-text manufacturer + vendor roster
 export {
   findDuplicateVendors,

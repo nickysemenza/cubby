@@ -15,12 +15,10 @@ export const PRODUCT_QUANTITY_DESCRIPTION =
 /**
  * Product units — signed, fractional, and zero only where the cost is negative.
  * Fractional because the unit is the shelf's unit and `InventoryEntry.amount`
- * has always been divisible; see `Expense.productQuantity` in schema.ts. See
- * `Expense.productQuantity` in schema.ts for the full ledger rule; the DB CHECK
- * enforces the same pairing. The cross-field half cannot live on this schema
- * (it has no view of `cost`), so `assertQuantitySignMatchesCost` owns it and is
- * what every write path actually calls — this only rejects the value that is
- * wrong regardless of cost.
+ * has always been divisible. The cross-field half cannot live on this scalar
+ * schema (it has no view of `cost`), so `assertQuantitySignMatchesCost` owns
+ * the command rule and the persisted-invariant registry audits stored rows.
+ * This only rejects the value that is wrong regardless of cost.
  */
 export const signedProductQuantity = z
   .number()

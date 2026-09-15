@@ -32,6 +32,9 @@ import { searchableEntityRefFields } from "./search";
 const publicEntityIdSchema = anyShortcodeSchema(
   nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
 );
+const shortcodeEntitySchema = z.enum(
+  nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
+);
 
 export { baseKind, type BaseKind } from "./codec";
 
@@ -693,6 +696,21 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 export const sectionTotalsSchema = z.record(z.string(), z.number().int());
 export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
 
+export const persistedInvariantViolationSchema = z.object({
+  domain: z.string().min(1),
+  table: z.string().min(1),
+  recordId: z.string().min(1),
+  owner: z
+    .object({ entity: shortcodeEntitySchema, id: publicEntityIdSchema })
+    .nullable(),
+  issues: z
+    .array(z.object({ path: z.string().min(1), message: z.string().min(1) }))
+    .min(1),
+});
+export type PersistedInvariantViolation = z.infer<
+  typeof persistedInvariantViolationSchema
+>;
+
 const problemsFastFields = {
   duplicateInventory: z.array(duplicateUniqueProductSchema),
   duplicateProductIdentities: z.array(duplicateProductIdentitySchema),
@@ -733,6 +751,7 @@ const problemsFastFields = {
   // 34 indexed FK joins), so it belongs in `fast` rather than earning its own
   // cost group: the expense is I/O, not the CPU the other groups isolate.
   referentialLivenessViolations: z.array(referentialLivenessViolationSchema),
+  persistedInvariantViolations: z.array(persistedInvariantViolationSchema),
   dependencyCycles: z.array(
     z.object({
       entity: z.enum(["project", "task"]),
@@ -888,14 +907,20 @@ const referentialLivenessViolationMcpOut =
     targetId: true,
     sourceId: true,
   });
+const persistedInvariantViolationMcpOut =
+  persistedInvariantViolationSchema.omit({ recordId: true });
 
 /** MCP problem catalog with storage-only diagnostic identifiers removed. */
 export const allProblemsMcpSchema = allProblemsSchema.extend({
   referentialLivenessViolations: z.array(referentialLivenessViolationMcpOut),
+  persistedInvariantViolations: z.array(persistedInvariantViolationMcpOut),
 });
 
 export const referentialLivenessViolationsMcpOut = z.array(
   referentialLivenessViolationMcpOut,
+);
+export const persistedInvariantViolationsMcpOut = z.array(
+  persistedInvariantViolationMcpOut,
 );
 
 export const EMPTY_SECTION_TOTALS: SectionTotals = Object.freeze({});
@@ -1036,6 +1061,11 @@ export const PROBLEM_CLASS = {
   // clearing the FK and deleting the source row are both plausible and not
   // interchangeable, and picking wrong destroys data with no restore path.
   referentialLivenessViolations: "defect",
+  // These rows passed storage but violate the application-owned domain model.
+  // They indicate a write-path or migration defect, never routine cleanup, and
+  // intentionally have no automatic repair because each domain needs a
+  // different evidence-backed decision.
+  persistedInvariantViolations: "defect",
   // Project/Task blocked-by edges are DAGs. New writes are locked and checked,
   // so a reported cycle is out-of-band corruption that can make actionable
   // work and tracker chains contradict one another or terminate defensively.
