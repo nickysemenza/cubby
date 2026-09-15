@@ -8,7 +8,7 @@ import Foundation
 public actor CredentialProvider {
     public let host: String
     private let store: any SessionTokenStore
-    private var cached: CubbyCredential??
+    private var cached: CubbyAuthState??
 
     /// - Parameter host: the Keychain key. Use `CubbyBaseURL.host(of:)` so dev and prod tokens
     ///   never collide.
@@ -18,15 +18,72 @@ public actor CredentialProvider {
     }
 
     public func current() -> CubbyCredential? {
+        currentState()?.credential
+    }
+
+    func currentState() -> CubbyAuthState? {
         if let cached { return cached }
-        let loaded = try? store.load(for: host)
+        let loaded = try? store.loadState(for: host)
         cached = .some(loaded)
         return loaded
     }
 
     public func set(_ credential: CubbyCredential) throws {
-        try store.save(credential, for: host)
-        cached = .some(credential)
+        let state = CubbyAuthState(credential: credential)
+        try store.saveState(state, for: host)
+        cached = .some(state)
+    }
+
+    func requestState(at date: Date) -> CubbyAuthState? {
+        guard var state = currentState() else { return nil }
+        if let deadline = state.freshReadUntil, deadline <= date {
+            state.freshReadUntil = nil
+            try? store.saveState(state, for: host)
+            cached = .some(state)
+        }
+        return state
+    }
+
+    func updateSessionDataCookies(from setCookieHeaders: [String]) {
+        guard var state = currentState(), case .bearer = state.credential else { return }
+        let cookies = Self.sessionDataCookies(from: setCookieHeaders)
+        guard cookies.sawSessionDataCookie else { return }
+        state.sessionDataCookies = cookies.values
+        try? store.saveState(state, for: host)
+        cached = .some(state)
+    }
+
+    func markFreshReads(seconds: Int, now: Date) {
+        guard (1...300).contains(seconds), var state = currentState() else { return }
+        state.freshReadUntil = now.addingTimeInterval(TimeInterval(seconds))
+        try? store.saveState(state, for: host)
+        cached = .some(state)
+    }
+
+    private static func sessionDataCookies(from headers: [String]) -> (
+        sawSessionDataCookie: Bool, values: [String: String]
+    ) {
+        var sawSessionDataCookie = false
+        var values: [String: String] = [:]
+        for header in headers {
+            let pair = header.split(separator: ";", maxSplits: 1)[0]
+            let parts = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { continue }
+            let name = String(parts[0]).trimmingCharacters(in: .whitespaces)
+            guard isSessionDataCookieName(name) else { continue }
+            sawSessionDataCookie = true
+            let deleting = header.range(of: "max-age=0", options: .caseInsensitive) != nil
+            if !deleting && !parts[1].isEmpty { values[name] = String(parts[1]) }
+        }
+        return (sawSessionDataCookie, values)
+    }
+
+    private static func isSessionDataCookieName(_ name: String) -> Bool {
+        let normalized = name.hasPrefix("__Secure-") ? String(name.dropFirst(9)) : name
+        let base = "better-auth.session_data"
+        guard normalized == base || normalized.hasPrefix("\(base).") else { return false }
+        guard normalized.count > base.count else { return true }
+        return normalized.dropFirst(base.count + 1).allSatisfy(\.isNumber)
     }
 
     public func invalidate() {

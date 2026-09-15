@@ -77,9 +77,11 @@ interface ReadDatabaseSelection {
 const selectReadDatabase = (opts: {
   headers: Pick<Headers, "get">;
   actor?: RequestActor;
+  clientAllowsBoundedStale?: boolean;
 }): ReadDatabaseSelection => {
   const readConsistency = decideReadConsistency({
     browserRequest: !opts.actor && isBrowserUiRequest(opts.headers),
+    clientAllowsBoundedStale: opts.clientAllowsBoundedStale,
     boundedStaleAvailable: boundedStaleDb !== db,
     headers: opts.headers,
   });
@@ -93,6 +95,7 @@ const selectReadDatabase = (opts: {
 export const createRequestContext = async (opts: {
   headers: Headers;
   actor?: RequestActor;
+  clientAllowsBoundedStale?: boolean;
 }) => {
   const headersObj: Record<string, string> = {};
   opts.headers.forEach((value, key) => {

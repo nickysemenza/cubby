@@ -7,6 +7,7 @@ const request = (options?: {
   boundedStaleAvailable?: boolean;
   cookie?: string;
   freshReadHeader?: boolean;
+  clientAllowsBoundedStale?: boolean;
 }) => {
   const headers = new Headers();
   if (options?.cookie) headers.set("cookie", options.cookie);
@@ -14,6 +15,7 @@ const request = (options?: {
   return decideReadConsistency({
     browserRequest: options?.browserRequest ?? true,
     boundedStaleAvailable: options?.boundedStaleAvailable ?? true,
+    clientAllowsBoundedStale: options?.clientAllowsBoundedStale ?? false,
     headers,
   });
 };
@@ -54,6 +56,28 @@ describe("read consistency", () => {
     expect(request({ browserRequest: false })).toEqual({
       consistency: "strong",
       reason: "non-browser-origin",
+    });
+  });
+
+  it("lets an explicit client list policy use bounded-stale reads", () => {
+    expect(
+      request({ browserRequest: false, clientAllowsBoundedStale: true }),
+    ).toEqual({
+      consistency: "bounded-stale",
+      reason: "client-policy",
+    });
+  });
+
+  it("keeps an explicit client policy strong after a mutation", () => {
+    expect(
+      request({
+        browserRequest: false,
+        clientAllowsBoundedStale: true,
+        freshReadHeader: true,
+      }),
+    ).toEqual({
+      consistency: "strong",
+      reason: "fresh-after-write",
     });
   });
 

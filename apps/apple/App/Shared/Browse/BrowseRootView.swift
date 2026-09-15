@@ -7,7 +7,6 @@ import SwiftUI
 struct BrowseRootView: View {
     @Environment(AppModel.self) private var model
     @State private var query = ""
-    @State private var counts = BrowseCountsModel()
 
     var body: some View {
         List {
@@ -54,9 +53,11 @@ struct BrowseRootView: View {
             }
         }
         .task(id: model.host) {
-            await counts.load(client: model.client)
+            await model.browseCounts.load(client: model.client, host: model.host)
         }
-        .refreshControl { await counts.load(client: model.client) }
+        .refreshControl {
+            await model.browseCounts.load(client: model.client, host: model.host, force: true)
+        }
     }
 
     @ViewBuilder
@@ -85,12 +86,18 @@ struct BrowseRootView: View {
             Button {
                 model.navigator.macDestination = .entity(descriptor.key)
             } label: {
-                EntityBrowseRow(descriptor: descriptor, count: counts.count(for: descriptor.key))
+                EntityBrowseRow(
+                    descriptor: descriptor,
+                    count: model.browseCounts.count(for: descriptor.key)
+                )
             }
             .buttonStyle(.plain)
         #else
             NavigationLink(value: Route.entityList(descriptor.key)) {
-                EntityBrowseRow(descriptor: descriptor, count: counts.count(for: descriptor.key))
+                EntityBrowseRow(
+                    descriptor: descriptor,
+                    count: model.browseCounts.count(for: descriptor.key)
+                )
             }
         #endif
     }
@@ -151,11 +158,18 @@ struct BrowseRootView: View {
 @Observable
 final class BrowseCountsModel {
     private(set) var counts: DashboardCounts?
+    private var requestedHost: String?
 
-    func load(client: CubbyClient) async {
+    func load(client: CubbyClient, host: String, force: Bool = false) async {
+        guard force || requestedHost != host else { return }
+        requestedHost = host
         do {
-            counts = try await client.dashboardCounts()
+            let loaded = try await client.dashboardCounts()
+            guard requestedHost == host else { return }
+            counts = loaded
         } catch {
+            guard requestedHost == host else { return }
+            requestedHost = nil
             counts = nil
             Diagnostics.report(error, context: "browse.counts")
         }

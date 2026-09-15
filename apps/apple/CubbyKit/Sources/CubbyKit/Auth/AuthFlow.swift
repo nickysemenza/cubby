@@ -37,6 +37,7 @@ public actor AuthFlow {
         }
         let credential = CubbyCredential.bearer(token)
         try await credentials.set(credential)
+        await updateSessionDataCookies(from: http)
         // Idempotent given the token we just stored, but keeps sign-in and sign-out sharing one
         // "did the server hand us a different token" code path.
         await refreshTokenIfRotated(from: http)
@@ -60,7 +61,10 @@ public actor AuthFlow {
         do {
             let (data, response) = try await session.data(for: request)
             let http = response as? HTTPURLResponse
-            if let http { await refreshTokenIfRotated(from: http) }
+            if let http {
+                await refreshTokenIfRotated(from: http)
+                await updateSessionDataCookies(from: http)
+            }
             let status = http?.statusCode ?? 0
             guard (200..<300).contains(status) else {
                 await credentials.invalidate()
@@ -79,6 +83,17 @@ public actor AuthFlow {
         guard let token = response.value(forHTTPHeaderField: "set-auth-token") else { return }
         if case .bearer(let current) = await credentials.current(), current == token { return }
         try? await credentials.set(.bearer(token))
+    }
+
+    private func updateSessionDataCookies(from response: HTTPURLResponse) async {
+        guard let url = response.url,
+            let raw = response.value(forHTTPHeaderField: "Set-Cookie")
+        else { return }
+        let cookies = HTTPCookie.cookies(
+            withResponseHeaderFields: ["Set-Cookie": raw],
+            for: url
+        ).map { "\($0.name)=\($0.value)" }
+        await credentials.updateSessionDataCookies(from: cookies)
     }
 
     private static func error(for status: Int, body: Data) -> AuthError {

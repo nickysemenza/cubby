@@ -19,13 +19,13 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
             fileURL: URL.applicationSupportDirectory.appending(path: "Cubby/credentials.json"))
     }
 
-    public func load(for host: String) throws -> CubbyCredential? {
+    public func loadState(for host: String) throws -> CubbyAuthState? {
         try read()[host]
     }
 
-    public func save(_ credential: CubbyCredential, for host: String) throws {
+    public func saveState(_ state: CubbyAuthState, for host: String) throws {
         var all = try read()
-        all[host] = credential
+        all[host] = state
         try write(all)
     }
 
@@ -35,12 +35,17 @@ public final class FileSessionTokenStore: SessionTokenStore, Sendable {
         try write(all)
     }
 
-    private func read() throws -> [String: CubbyCredential] {
+    private func read() throws -> [String: CubbyAuthState] {
         guard FileManager.default.fileExists(atPath: fileURL.path(percentEncoded: false)) else { return [:] }
-        return try JSONDecoder().decode([String: CubbyCredential].self, from: Data(contentsOf: fileURL))
+        let data = try Data(contentsOf: fileURL)
+        if let states = try? JSONDecoder().decode([String: CubbyAuthState].self, from: data) {
+            return states
+        }
+        let credentials = try JSONDecoder().decode([String: CubbyCredential].self, from: data)
+        return credentials.mapValues { CubbyAuthState(credential: $0) }
     }
 
-    private func write(_ all: [String: CubbyCredential]) throws {
+    private func write(_ all: [String: CubbyAuthState]) throws {
         let directory = fileURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(
             at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])

@@ -29,4 +29,20 @@ struct FileTokenStoreTests {
         #expect(try store.load(for: "b.example") == .apiKey("cubby_b"))
         try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
     }
+
+    @Test func readsLegacyCredentialFilesWithoutSigningTheUserOut() throws {
+        let store = temporaryStore()
+        try FileManager.default.createDirectory(
+            at: store.fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let legacy = try JSONEncoder().encode([
+            "legacy.example": CubbyCredential.bearer("legacy-token")
+        ])
+        try legacy.write(to: store.fileURL)
+
+        #expect(try store.load(for: "legacy.example") == .bearer("legacy-token"))
+        #expect(try store.loadState(for: "legacy.example")?.sessionDataCookies == [:])
+        try? FileManager.default.removeItem(at: store.fileURL.deletingLastPathComponent())
+    }
 }

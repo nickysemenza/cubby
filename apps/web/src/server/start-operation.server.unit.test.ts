@@ -96,6 +96,28 @@ describe("runStartOperation", () => {
     expect(authenticate).not.toHaveBeenCalled();
   });
 
+  it("honors the HTTP adapter's bounded-stale policy for safe list reads", async () => {
+    const run = vi.fn(async () => true as const);
+    await runStartOperation({
+      operation: "entity.list",
+      type: "query",
+      input: {},
+      inputSchema: z.object({}),
+      outputSchema: z.literal(true),
+      request: {
+        ...request(),
+        apiContext: { ...context, requestOrigin: "api" },
+        apiReadPolicy: "context",
+      },
+      run,
+    });
+
+    expect(run).toHaveBeenCalledWith(
+      expect.objectContaining({ db: database, readDb: cachedDatabase }),
+      {},
+    );
+  });
+
   it("propagates a request id only through the structured failure", () => {
     expect(
       normalizeStartOperationError(

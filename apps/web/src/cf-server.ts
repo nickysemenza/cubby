@@ -49,6 +49,12 @@ const getHandler = () => {
   return handlerPromise;
 };
 
+let httpApiPromise: Promise<typeof import("./server/http-api")>;
+const getHttpApi = () => {
+  httpApiPromise ??= import("./server/http-api");
+  return httpApiPromise;
+};
+
 const calendarFeedHandler = createCalendarFeedHandler((origin) =>
   externalCalendarFeedStateFor(origin),
 );
@@ -197,10 +203,16 @@ const handler = {
                       boundedStale: env.HYPERDRIVE_CACHED.connectionString,
                     },
                     async () => {
-                      const { default: handler } = await withTrace(
-                        "cf.importHandler",
-                        () => getHandler(),
+                      const handlerImport = withTrace("cf.importHandler", () =>
+                        getHandler(),
                       );
+                      const httpApiImport = url.pathname.startsWith("/api/v1/")
+                        ? withTrace("cf.importHttpApi", () => getHttpApi())
+                        : Promise.resolve(undefined);
+                      const [{ default: handler }] = await Promise.all([
+                        handlerImport,
+                        httpApiImport,
+                      ]);
                       // Scoped here rather than around the whole handler body: this
                       // is the only region where request-scoped work runs, and
                       // waitUntil must belong to THIS request's context.

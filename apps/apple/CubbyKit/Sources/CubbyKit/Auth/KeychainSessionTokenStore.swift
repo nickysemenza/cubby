@@ -13,7 +13,7 @@ public final class KeychainSessionTokenStore: SessionTokenStore, Sendable {
 
     public init() {}
 
-    public func load(for host: String) throws -> CubbyCredential? {
+    public func loadState(for host: String) throws -> CubbyAuthState? {
         var query = Self.baseQuery(for: host)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -26,7 +26,12 @@ public final class KeychainSessionTokenStore: SessionTokenStore, Sendable {
             guard let data = result as? Data else {
                 throw KeychainError(status: status)
             }
-            return try JSONDecoder().decode(CubbyCredential.self, from: data)
+            if let state = try? JSONDecoder().decode(CubbyAuthState.self, from: data) {
+                return state
+            }
+            return CubbyAuthState(
+                credential: try JSONDecoder().decode(CubbyCredential.self, from: data)
+            )
         case errSecItemNotFound:
             return nil
         default:
@@ -34,15 +39,14 @@ public final class KeychainSessionTokenStore: SessionTokenStore, Sendable {
         }
     }
 
-    public func save(_ credential: CubbyCredential, for host: String) throws {
-        let data = try JSONEncoder().encode(credential)
-
-        if try load(for: host) != nil {
-            let query = Self.baseQuery(for: host)
-            let update: [String: Any] = [kSecValueData as String: data]
-            let status = SecItemUpdate(query as CFDictionary, update as CFDictionary)
-            guard status == errSecSuccess else { throw KeychainError(status: status) }
-            return
+    public func saveState(_ state: CubbyAuthState, for host: String) throws {
+        let data = try JSONEncoder().encode(state)
+        let query = Self.baseQuery(for: host)
+        let update: [String: Any] = [kSecValueData as String: data]
+        let updateStatus = SecItemUpdate(query as CFDictionary, update as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else {
+            throw KeychainError(status: updateStatus)
         }
 
         var attributes = Self.baseQuery(for: host)
@@ -61,11 +65,15 @@ public final class KeychainSessionTokenStore: SessionTokenStore, Sendable {
     }
 
     private static func baseQuery(for host: String) -> [String: Any] {
-        [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: host,
         ]
+        #if os(macOS)
+            query[kSecUseDataProtectionKeychain as String] = true
+        #endif
+        return query
     }
 }
 

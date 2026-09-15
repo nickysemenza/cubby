@@ -76,6 +76,30 @@ struct AuthFlowTests {
         #expect(await credentials.current() == .bearer("session-token-abc"))
     }
 
+    @Test func signInStoresTheSignedSessionDataCache() async throws {
+        defer { resetHandlerAfterTest() }
+        AuthStubURLProtocol.handler.withLock { handler in
+            handler = { _ in
+                (
+                    200,
+                    [
+                        "set-auth-token": "session-token-abc",
+                        "Set-Cookie": "better-auth.session_data=signed-cache; Path=/; HttpOnly",
+                    ],
+                    Data("{}".utf8)
+                )
+            }
+        }
+        let (flow, credentials) = try makeFlow()
+        _ = try await flow.signIn(email: "nicky@example.com", password: "hunter2")
+
+        #expect(
+            await credentials.currentState()?.sessionDataCookies == [
+                "better-auth.session_data": "signed-cache"
+            ]
+        )
+    }
+
     @Test func signInEveryRequestCarriesTheOriginHeader() async throws {
         defer { resetHandlerAfterTest() }
         let capturedOrigin = Mutex<String?>(nil)

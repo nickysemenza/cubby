@@ -26,6 +26,7 @@ final class AppModel {
     private(set) var auth: AuthFlow
     private(set) var credentials: CredentialProvider
     let navigator = Navigator()
+    let browseCounts = BrowseCountsModel()
     /// Today's open-problem count, mirrored here so the iOS tab badge can show it without owning
     /// `TodayModel` (which `TodayView` creates per host). `TodayModel.fetchProblems` writes it.
     var problemsTotal: Int?
@@ -97,6 +98,7 @@ final class AppModel {
         guard credentials === provider, !Task.isCancelled else { return }
         credential = current
         phase = current == nil ? .signedOut : .signedIn
+        if current != nil { warmBrowseCounts() }
     }
 
     func signIn(email: String, password: String) async {
@@ -104,6 +106,7 @@ final class AppModel {
         do {
             credential = try await auth.signIn(email: email, password: password)
             phase = .signedIn
+            warmBrowseCounts()
         } catch let error as AuthError {
             lastError = error.message
             Diagnostics.report(error, context: "auth.signIn")
@@ -176,5 +179,12 @@ final class AppModel {
         self.credentials = credentials
         client = CubbyClient(baseURL: baseURL, credentials: credentials)
         auth = AuthFlow(baseURL: baseURL, credentials: credentials)
+    }
+
+    /// Starts the one cheap dashboard-count request without delaying authentication UI.
+    private func warmBrowseCounts() {
+        let client = client
+        let host = host
+        Task { await browseCounts.load(client: client, host: host) }
     }
 }
