@@ -8,8 +8,6 @@
         "scripts/apple.ts!",
         "scripts/test-services.ts!",
         "scripts/test-services.test.ts!",
-        "scripts/check-soft-delete-filters.ts!",
-        "scripts/check-unsafe-identifiers.unit.test.ts!",
         "scripts/check-security-audit.ts!",
         "scripts/ci-scope.ts!",
         "scripts/ci-scope.test.ts!",

@@ -1,0 +1,13 @@
+import { exists, sql } from "drizzle-orm";
+import { db } from "~/server/db/db";
+import { recipe } from "~/server/db/schema";
+
+export function auditedGuard() {
+  return db
+    .select()
+    .from(recipe)
+    .where(
+      // includes-deleted: intentionally auditing soft-deleted rows too
+      exists(db.select().from(recipe).where(sql`${recipe.id} = 1`)),
+    );
+}
