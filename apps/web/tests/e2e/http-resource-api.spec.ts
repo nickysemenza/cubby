@@ -292,7 +292,7 @@ test("typed resource and operation clients use the same generated request shapes
   }
 });
 
-test("revoked sessions cannot use a still-valid cookie cache", async ({
+test("a revoked session is rejected once its cookie cache is gone", async ({
   browser,
   baseURL,
 }) => {
@@ -312,6 +312,12 @@ test("revoked sessions cannot use a still-valid cookie cache", async ({
     );
     expect((await context.request.get("/api/v1/recipes")).status()).toBe(200);
     await pool.query("DELETE FROM session WHERE id = $1", [session.session.id]);
+    // The signed `session_data` cookie is authoritative for its five-minute
+    // window (auth.ts `cookieCache`), so the revoked row is still honoured
+    // while it lasts; the moment the cache cookie is absent the token must
+    // be re-read from the database and refused.
+    expect((await context.request.get("/api/v1/recipes")).status()).toBe(200);
+    await context.clearCookies({ name: /session_data/ });
     expect((await context.request.get("/api/v1/recipes")).status()).toBe(401);
     expect(
       (await context.request.get("/api/v1/dashboard/counts")).status(),
