@@ -38,19 +38,28 @@ const renderIndexRoute = (
   const { basePath } = browserRoutes(entity);
   const page = `${pascalCase(basePath)}Page`;
   const plural = entity.inspector.plural ?? entity.inspector.singular;
-  const dialog = entity.route.create === "dialog";
+  // `create: "dialog"` always renders the trigger (it is also what makes
+  // `?create=true` addressable); declared actions render beside it.
+  // `actions: null` opts the list out because its component owns the create
+  // affordance itself.
+  const createAction =
+    entity.route.create === "dialog" && list.actions !== null
+      ? `<CreateDialogAction request={captureRequest(${JSON.stringify(entity.key)})}>New ${entity.inspector.singular}</CreateDialogAction>`
+      : null;
+  const declaredAction = list.actions ? `<${list.actions.export} />` : null;
+  const actionNodes = [createAction, declaredAction].filter(
+    (node): node is string => node !== null,
+  );
   const actions =
-    list.actions === null
+    actionNodes.length === 0
       ? null
-      : list.actions === undefined
-        ? dialog
-          ? `<CreateDialogAction request={captureRequest(${JSON.stringify(entity.key)})}>New ${entity.inspector.singular}</CreateDialogAction>`
-          : null
-        : `<${list.actions.export} />`;
+      : actionNodes.length === 1
+        ? actionNodes[0]
+        : `<>${actionNodes.join("")}</>`;
   const imports = [
     'import { createFileRoute, stripSearchParams } from "@tanstack/react-router";',
     "",
-    ...(actions !== null && list.actions === undefined
+    ...(createAction !== null
       ? [
           'import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";',
         ]
@@ -58,7 +67,7 @@ const renderIndexRoute = (
     'import { listPage } from "~/app/_components/routing/entity-routes";',
     importLine(list.component),
     ...(list.actions ? [importLine(list.actions)] : []),
-    ...(actions !== null && list.actions === undefined
+    ...(createAction !== null
       ? ['import { captureRequest } from "~/entities/editing/editor-requests";']
       : []),
     ...(withLoader

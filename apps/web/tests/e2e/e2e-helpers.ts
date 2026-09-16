@@ -339,26 +339,52 @@ export async function openCommandPalette(page: Page): Promise<Locator> {
   return palette;
 }
 
+/**
+ * Find a just-created record through the global command palette and land on
+ * its detail page. `/locations`, `/ingredients`, and `/inventory` no longer
+ * navigate to the new record on create (the dialog just closes and the list
+ * refreshes in place — see `EntityEditDialog`), so this is the addressable
+ * way back to a detail URL without depending on list sort order, pagination,
+ * or the active list view (gallery vs. table).
+ */
+async function findViaCommandPalette(page: Page, query: string, name: string) {
+  const palette = await openCommandPalette(page);
+  await palette.getByPlaceholder("Search or jump to a page\u2026").fill(query);
+  const result = palette
+    .locator("div.truncate.text-sm", { hasText: name })
+    .first();
+  await expect(result).toBeVisible({ timeout: 10000 });
+  await result.click();
+}
+
 export async function createLocation(
   page: Page,
   name: string,
   opts: { parentName?: string; type?: string } = {},
 ): Promise<string> {
-  await page.goto("/locations/new");
+  // `/locations/new` is gone; locations are created in the list's dialog,
+  // addressable via `?create=true` (see `CreateDialogAction`).
+  await page.goto("/locations?create=true");
   await waitForFormHydration(page);
-  await page.getByPlaceholder("Enter location name").fill(name);
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
   if (opts.type) {
-    await page.getByPlaceholder("Select a location type").click();
+    await dialog.getByPlaceholder("Select a location type").click();
     await page.getByRole("option", { name: opts.type, exact: true }).click();
   }
   if (opts.parentName) {
     await selectComboboxItem(
       page,
-      page.getByRole("combobox", { name: /parent location/i }),
+      dialog.getByRole("combobox", { name: /parent location/i }),
       opts.parentName,
     );
   }
-  await page.getByRole("button", { name: /^Create$/ }).click();
+  await dialog.getByRole("button", { name: /^Create$/ }).click();
+  // On success the dialog closes and the list refreshes — it does not
+  // navigate to the new location's detail page.
+  await expect(dialog).not.toBeVisible({ timeout: 15000 });
+
+  await findViaCommandPalette(page, `locations:${name}`, name);
   await expect(page).toHaveURL(
     /\/locations\/LOC-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
     {
@@ -401,10 +427,18 @@ export async function createProduct(
 }
 
 export async function createIngredientViaForm(page: Page, name: string) {
-  await page.goto("/ingredients/new");
+  // `/ingredients/new` is gone; ingredients are created in the list's
+  // dialog, addressable via `?create=true` (see `CreateDialogAction`).
+  await page.goto("/ingredients?create=true");
   await waitForFormHydration(page);
-  await fillInput(page, "Enter ingredient name", name);
-  await page.getByRole("button", { name: /^Create$/ }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
+  await dialog.getByRole("button", { name: /^Create$/ }).click();
+  // On success the dialog closes and the list refreshes — it does not
+  // navigate to the new ingredient's detail page.
+  await expect(dialog).not.toBeVisible({ timeout: 15000 });
+
+  await findViaCommandPalette(page, `ingredients:${name}`, name);
   const ingredientShortcodeRe =
     /\/ingredients\/ING-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/;
   await expect(page).toHaveURL(ingredientShortcodeRe, { timeout: 15000 });
@@ -460,6 +494,11 @@ export async function createProductWithIngredientMappings(
   ).toBeVisible({ timeout: 10000 });
 }
 
+/**
+ * Opens the inventory list's create dialog (`?create=true`, see
+ * `CreateDialogAction`) and reaches the new entry through the command palette,
+ * the same shape as `createLocation` and `createIngredientViaForm`.
+ */
 export async function addInventory(
   page: Page,
   productName: string,
@@ -467,26 +506,32 @@ export async function addInventory(
   quantity: number,
   unit: string,
 ) {
-  await page.goto("/inventory/new");
+  await page.goto("/inventory?create=true");
   await waitForFormHydration(page);
+  const dialog = page.getByRole("dialog");
 
   await selectComboboxItem(
     page,
-    page.getByRole("combobox", { name: /product/i }),
+    dialog.getByRole("combobox", { name: "Product", exact: true }),
     productName,
   );
 
   await selectComboboxItem(
     page,
-    page.getByRole("combobox", { name: /location/i }),
+    dialog.getByRole("combobox", { name: "Location", exact: true }),
     locationName,
   );
 
-  await page.getByLabel("Amount Value").fill(quantity.toString());
+  await dialog.getByLabel("Amount Value").fill(quantity.toString());
 
-  await page.getByRole("textbox", { name: "Amount Unit" }).fill(unit);
+  await dialog.getByRole("textbox", { name: "Amount Unit" }).fill(unit);
 
-  await page.getByRole("button", { name: /^Create$/ }).click();
+  await dialog.getByRole("button", { name: /^Create$/ }).click();
+  // On success the dialog closes and the list refreshes — it does not
+  // navigate to the new inventory entry's detail page.
+  await expect(dialog).not.toBeVisible({ timeout: 15000 });
+
+  await findViaCommandPalette(page, `inventory:${productName}`, productName);
   await expect(page).toHaveURL(
     /\/inventory\/INV-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{4}/,
     {

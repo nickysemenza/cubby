@@ -27,7 +27,7 @@ test.describe("iPhone WebKit smoke", () => {
         // The initial opaque document can reject storage access.
       }
     });
-    await page.goto("/locations/new#deploy-skew", {
+    await page.goto("/locations#deploy-skew", {
       waitUntil: "domcontentloaded",
     });
     await waitForAppHydration(page);
