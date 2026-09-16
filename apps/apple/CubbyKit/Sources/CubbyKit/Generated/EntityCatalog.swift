@@ -2,31 +2,8 @@
 
 // swift-format-ignore-file
 
+import CubbyAPISupport
 import Foundation
-
-public enum EntityKey: String, CaseIterable, Codable, Sendable {
-  case product = "product"
-  case recipe = "recipe"
-  case ingredient = "ingredient"
-  case cookbook = "cookbook"
-  case location = "location"
-  case inventory = "inventory"
-  case meal = "meal"
-  case ledgerParty = "ledgerParty"
-  case ledgerTransfer = "ledgerTransfer"
-  case project = "project"
-  case task = "task"
-  case vendor = "vendor"
-  case purchase = "purchase"
-  case financialAccount = "financialAccount"
-  case financialTransaction = "financialTransaction"
-  case wish = "wish"
-  case expense = "expense"
-  case usdaFood = "usda-food"
-  case image = "image"
-  case planting = "planting"
-  case gardenEntry = "gardenEntry"
-}
 
 public enum EntityAction: String, CaseIterable, Codable, Sendable {
   case get = "get"

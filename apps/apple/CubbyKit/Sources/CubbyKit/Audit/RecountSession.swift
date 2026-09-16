@@ -1,3 +1,4 @@
+import CubbyAPI
 import Foundation
 import Observation
 
@@ -44,7 +45,7 @@ public final class RecountSession {
     }
 
     enum Event: Sendable {
-        case scanned(ScanResult)
+        case scanned(ScanAtLocationOut)
         case failed(String)
     }
 
@@ -170,12 +171,10 @@ public final class RecountSession {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let bin = currentBin, !trimmed.isEmpty else { return }
 
-        if let parsed = Shortcode.parse(trimmed), parsed.key == .location, let tree {
-            switch BinPlan.plan(scanned: LocationCode(parsed.code), anchor: bin.id, in: tree) {
+        if let label = CubbyLabel(trimmed), label.key == .location, let tree {
+            switch BinPlan.plan(scanned: LocationCode(label.code), anchor: bin.id, in: tree) {
             case .confirm:
-                push(
-                    Self.chip(label: tree[LocationCode(parsed.code)]?.name ?? parsed.code, status: .confirmed)
-                )
+                push(Self.chip(label: tree[LocationCode(label.code)]?.name ?? label.code, status: .confirmed))
             case .adopt(let adoptable):
                 if !adoptions.contains(where: { $0.id == adoptable.id }) { adoptions.append(adoptable) }
                 push(Self.chip(label: adoptable.name, status: .added))
@@ -185,15 +184,7 @@ public final class RecountSession {
             return
         }
 
-        let code: ScanCode
-        switch ScanCode.classify(trimmed) {
-        case .success(let classified): code = classified
-        case .failure(let error):
-            push(Self.chip(label: trimmed, status: .failed(error.message)))
-            return
-        }
-
-        if let index = rowIndex(matching: code) {
+        if let index = rowIndex(matchingScanned: trimmed) {
             if let last = lastLocalMatch, last.raw == trimmed,
                 date.timeIntervalSince(last.at) < ScanSession.debounceInterval
             {
@@ -244,7 +235,7 @@ public final class RecountSession {
 
     /// Moves every queued stray into the current bin, then refetches the bin: the moved rows
     /// are now expected here, and the snapshot has moved with them.
-    public func resolveStrays() async throws -> StrayResolution? {
+    public func resolveStrays() async throws -> ResolveScanStraysOut? {
         guard let bin = currentBin, !strays.isEmpty else { return nil }
         let moves = strays.flatMap { stray in
             stray.rows.map { StrayMove(entryId: $0.entryId, quantity: $0.ambiguousQuantity ? 1 : nil) }
@@ -267,11 +258,11 @@ public final class RecountSession {
         lastError = nil
 
         let resolutions = rows.map { ($0.id, $0.resolution ?? RecountResolution.verify) }
-        let body = ReconcileBody(
+        let body = ReconcileSessionPayload(
             locationId: bin.id,
             expectedInventoryEntryIds: rows.map(\.id),
             snapshotUpdatedAt: RecountRow.snapshotTimestamp(rows.map(\.row)),
-            resolutions: resolutions.map { ReconcileBody.Resolution($0.1, for: $0.0) }
+            resolutions: resolutions.map { $0.1.resolution(for: $0.0) }
         )
         do {
             _ = try await service.reconcile(body)
@@ -410,28 +401,24 @@ public final class RecountSession {
         pendingVerify = []
     }
 
-    func row(matching code: ScanCode) -> RowState? {
-        rowIndex(matching: code).map { rows[$0] }
+    func row(matchingScanned raw: String) -> RowState? {
+        rowIndex(matchingScanned: raw).map { rows[$0] }
     }
 
-    private func rowIndex(matching code: ScanCode) -> Int? {
-        switch code {
-        case .product(let id):
-            return rows.firstIndex { $0.row.product.id == id }
-        case .barcode(let digits), .isbn(let digits):
-            let gtin = RecountRow.gtin14(digits)
-            return rows.firstIndex { $0.row.product.barcodes.contains(gtin) }
+    /// An expected row for a raw read, offline: a product label by id, a barcode or ISBN by the
+    /// GTIN-14 it is stored as. Anything else is not in the bin as far as the device can tell.
+    private func rowIndex(matchingScanned raw: String) -> Int? {
+        if let label = CubbyLabel(raw) {
+            guard label.key == .product else { return nil }
+            return rows.firstIndex { $0.row.product.id.rawValue == label.code }
         }
+        guard let gtin = ScanCodes.gtin14(raw) else { return nil }
+        return rows.firstIndex { $0.row.product.barcodes.contains(gtin) }
     }
 
     private static func perform(_ read: ScanRead, service: any RecountService) async -> Event {
-        let code: ScanCode
-        switch ScanCode.classify(read.raw) {
-        case .success(let classified): code = classified
-        case .failure(let error): return .failed(error.message)
-        }
         do {
-            return .scanned(try await service.scan(code, at: read.anchor))
+            return .scanned(try await service.scan(raw: read.raw, at: read.anchor))
         } catch {
             return .failed(message(for: error))
         }

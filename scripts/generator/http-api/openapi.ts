@@ -25,6 +25,7 @@ import {
   inlinePrimitiveComponents,
   mapSchemas,
   nameJsonValues,
+  openTupleItems,
   optionalNullableProperties,
   residualNullPointers,
 } from "./document-passes.ts";
@@ -343,6 +344,7 @@ const buildOpenApiDocument = async (): Promise<{
     dropRequiredWithoutProperties,
     fillDiscriminatorMappings,
     integerLiterals,
+    openTupleItems,
   ];
   const components = passes.reduce((current, pass) => pass(current), emitted);
   /**

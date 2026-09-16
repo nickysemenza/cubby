@@ -71,6 +71,11 @@ const CACHEABLE_METHODS = [
   // sub-recipe referenced from two places re-expands and asks this the same
   // question each time.
   "recipe_yield_fraction",
+  // Pure ISBN validation/normalization, called on every keystroke of the
+  // product forms' ISBN field (live preview + the book-category inference) —
+  // same re-render redundancy as `parse_ingredient` above.
+  "normalize_isbn",
+  "isbn_from_gtin",
 ] as const;
 // NOTE: cost_recipes and expand_recipe_needs are deliberately NOT cached —
 // their args are whole recipe closures (multi-KB stringify keys, fresh object

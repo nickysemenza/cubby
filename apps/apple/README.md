@@ -13,7 +13,10 @@ contracts and [the backlog](../../docs/todos.md) for deeper inventory and web pa
 2. `apps/apple/scripts/generate-openapi.sh` — runs the CLI `swift-openapi-generator` against
    `apps/web/src/lib/generated/http-openapi.gen.json`, writes committed sources under
    `CubbyKit/Sources/CubbyAPI/{Types,Client}.swift`. That output is its own SPM target so a
-   hand-written CubbyKit edit no longer recompiles ~58k generated lines.
+   hand-written CubbyKit edit no longer recompiles ~58k generated lines; app code names its
+   types through the aliases `pnpm generate` writes to `CubbyKit/Generated/APITypes.swift`, with
+   the branded codes and `PlainDate` supplied by the tiny `CubbyAPISupport` target.
+   `generate-openapi.sh --check` fails when the committed client is stale.
 3. `xcodegen generate --spec apps/apple/project.yml` — produces `Cubby.xcodeproj` (gitignored).
 4. Optional: `brew install getsentry/tools/sentry-cli` and put an org auth token in
    `~/.sentryclirc`. Only the `Upload dSYMs to Sentry` archive phase needs it (project
@@ -35,12 +38,13 @@ under `~/.cache/cubby/openapi-generator-build`.
 
 ## Generated files (read-only here)
 
-- `CubbyKit/Sources/CubbyKit/Generated/EntityCatalog.swift` — emitted by
-  `scripts/generator/entities/render/swift-catalog.ts` from the entity spine. Regenerate with
+- `CubbyKit/Sources/CubbyKit/Generated/{EntityCatalog,OperationRoutes,EntityOperations,APITypes}.swift`
+  and `CubbyKit/Sources/CubbyAPISupport/Generated/EntityKey.swift` — emitted by
+  `scripts/generator/` from the entity spine and the OpenAPI document. Regenerate with
   `pnpm generate` from the repo root.
 - `CubbyKit/Sources/CubbyAPI/*.swift` — the whole `CubbyAPI` target is swift-openapi-generator's
   output (`Client.swift` plus `Types*.swift`). Regenerate with
-  `apps/apple/scripts/generate-openapi.sh`; `check-openapi-drift.sh` fails when stale.
+  `apps/apple/scripts/generate-openapi.sh`; `generate-openapi.sh --check` fails when stale.
 - `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift` — emitted by `uniffi-bindgen` from `cubby-ffi/`.
   Regenerate with `apps/apple/scripts/build-rust.sh`.
 

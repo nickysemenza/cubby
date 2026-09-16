@@ -1,5 +1,4 @@
 import { entityRefKey } from "@cubby/schemas/entity";
-import { productCodeSearchTerms } from "@cubby/schemas/isbn";
 import {
   type SearchableEntity,
   searchableEntities,
@@ -7,6 +6,7 @@ import {
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/repo/database-helpers";
 import {
@@ -277,7 +277,13 @@ async function getSearchDocumentSources(
       aliases: textList(row.aliases ?? []),
       keywords:
         row.entityType === "product" || row.entityType === "inventory"
-          ? [...new Set(keywords.flatMap(productCodeSearchTerms))]
+          ? [
+              ...new Set(
+                keywords.flatMap((keyword) =>
+                  wasm.product_code_search_terms(keyword),
+                ),
+              ),
+            ]
           : keywords,
     };
   });

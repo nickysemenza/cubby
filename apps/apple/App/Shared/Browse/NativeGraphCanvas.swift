@@ -3,7 +3,7 @@ import SwiftUI
 
 struct NativeGraphCanvas: View {
     let graph: EntityGraph
-    let selected: EntityReference?
+    let selected: EntityRef?
     let selectedEdgeID: String?
     let camera: GraphCamera
     let onSelect: (EntityGraphNode) -> Void
@@ -258,7 +258,7 @@ struct NativeGraphCanvas: View {
         )
     }
     private func drawEdges(context: inout GraphicsContext, size: CGSize) {
-        let pathIDs = Set(graph.paths.first { $0.destination == selected }?.edgeIDs ?? [])
+        let pathIDs = Set(graph.paths.first { $0.destination == selected }?.edgeIds ?? [])
         for edge in graph.edges {
             guard let (a, b) = endpoints(edge, size: size) else { continue }
             if max(a.x, b.x) < 0 || min(a.x, b.x) > size.width || max(a.y, b.y) < 0

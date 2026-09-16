@@ -1,5 +1,4 @@
 import { displayGtin } from "@cubby/schemas/external-id";
-import { isbnFromGtin, normalizeIsbn } from "@cubby/schemas/isbn";
 import {
   productCategory,
   productCategoryValues,
@@ -50,6 +49,7 @@ import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
 
 import { WithEntitySearch } from "../_components/combobox/with-search-hook";
 import {
@@ -400,7 +400,8 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
                       await updateProductMutation.mutateAsync({
                         id: info.row.original.id,
                         data:
-                          newValue != null && normalizeIsbn(newValue) !== null
+                          newValue != null &&
+                          wasm.normalize_isbn(newValue) != null
                             ? { isbn: newValue }
                             : { upc: newValue },
                       });
@@ -409,7 +410,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
                     trigger="pencil"
                     renderValue={(current) => {
                       if (!current) return <NoneValue />;
-                      const isbn = isbnFromGtin(current);
+                      const isbn = wasm.isbn_from_gtin(current);
                       if (isbn) {
                         return (
                           <span className="font-mono tabular-nums">

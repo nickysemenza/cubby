@@ -45,7 +45,7 @@ final class CaptureModel {
         defer { loadingLocations = false }
         do {
             let page = try await client.locationOptions(page: 1, pageSize: 200)
-            locations = page.items.map { LocationOption(id: $0.id, name: $0.name, path: $0.path) }
+            locations = page.items.map { LocationOption(id: $0.id, name: $0.name, path: $0.parent?.name) }
             locationError = nil
         } catch {
             locationError = (error as? CubbyAPIError)?.detail?.message ?? String(describing: error)
@@ -58,7 +58,7 @@ final class CaptureModel {
     func submit(_ raw: String) {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return }
-        if let label = Shortcode.extract(from: value), label.key == .location {
+        if let label = CubbyLabel(value), label.key == .location {
             select(LocationOption(id: LocationCode(label.code), name: label.code, path: nil))
             return
         }

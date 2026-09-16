@@ -1,6 +1,5 @@
 import { displayGtin } from "@cubby/schemas/external-id";
 import type { ImageOut } from "@cubby/schemas/image";
-import { isbnFromGtin } from "@cubby/schemas/isbn";
 import {
   productCategory,
   type ProductWithFoodOut,
@@ -21,6 +20,7 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { EntityBasicInfo } from "~/entities/entity-display";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
+import { wasm } from "~/lib/wasm";
 
 import {
   describeProductPricingSource,
@@ -59,7 +59,7 @@ export const ProductBasicInfo: FC<ProductBasicInfoProps> = ({
     .catch(null)
     .parse(product.category);
   const primaryIsbn = product.primaryGtin
-    ? isbnFromGtin(product.primaryGtin)
+    ? wasm.isbn_from_gtin(product.primaryGtin)
     : null;
 
   // Mutation for inline editing (price, category, etc.)

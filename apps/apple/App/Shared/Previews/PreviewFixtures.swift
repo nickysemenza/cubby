@@ -8,6 +8,16 @@ import SwiftUI
 enum PreviewFixtures {
     static let previewURL = URL(string: "http://cubby.preview.invalid")!
 
+    /// A wire-shaped fixture, decoded exactly as the generated client decodes a response. A
+    /// fixture that fails to decode is a programming error in the preview, not a runtime state.
+    nonisolated static func decode<T: Decodable>(_ json: String) -> T {
+        do {
+            return try JSONDecoder.cubby().decode(T.self, from: Data(json.utf8))
+        } catch {
+            fatalError("Preview fixture does not decode as \(T.self): \(error)")
+        }
+    }
+
     static func signedOutModel() -> AppModel {
         AppModel.preview(signedIn: false, baseURL: previewURL)
     }
@@ -71,90 +81,124 @@ enum PreviewFixtures {
     }()
 
     /// `task.todayBriefing`'s `next` rows, for `TodayView`'s preview.
-    static let sampleTodayTasks: [TodayTask] = [
-        TodayTask(
-            id: "TSK-1001", name: "Refill pantry staples list", status: "in_progress",
-            dueDate: "2026-09-11", projectName: "Kitchen"
-        ),
-        TodayTask(
-            id: "TSK-1002", name: "Ship the porcelain overhaul PR", status: "not_started",
-            dueDate: "2026-09-12", projectName: "Cubby app"
-        ),
-        TodayTask(id: "TSK-1003", name: "Call the fridge repair vendor back", status: "not_started"),
-    ]
+    static let sampleTodayTasks: [TaskTodayBriefingItemOut] = decode(
+        """
+        [{"id": "TSK-1001", "name": "Refill pantry staples list", "status": "in_progress",
+          "dueDate": "2026-09-11", "dueEndDate": null, "projectId": "PRJ-1001", "projectName": "Kitchen"},
+         {"id": "TSK-1002", "name": "Ship the porcelain overhaul PR", "status": "not_started",
+          "dueDate": "2026-09-12", "dueEndDate": null, "projectId": "PRJ-1002", "projectName": "Cubby app"},
+         {"id": "TSK-1003", "name": "Call the fridge repair vendor back", "status": "not_started",
+          "dueDate": null, "dueEndDate": null, "projectId": null, "projectName": null}]
+        """)
 
     /// Today's `GET /api/v1/meals` rows, for `TodayView`'s preview.
-    static let sampleTodayMeals: [TodayMeal] = [
-        TodayMeal(
-            id: "MEA-2001", name: "Dinner", mealType: "dinner", mealKind: "cooked",
-            recipeNames: ["Braised Short Ribs", "Roasted Carrots"]
-        ),
-        TodayMeal(id: "MEA-2002", name: "Lunch", mealType: "lunch", mealKind: "leftovers"),
-    ]
+    static let sampleTodayMeals: [MealListItem] = decode(
+        """
+        [\(meal(id: "MEA-2001", name: "Dinner", type: "dinner", kind: "cooked", recipes: ["Braised Short Ribs", "Roasted Carrots"])),
+         \(meal(id: "MEA-2002", name: "Lunch", type: "lunch", kind: "leftovers", recipes: []))]
+        """)
 
-    /// `problems/getCounts`, for `TodayView`'s preview.
-    static let sampleTodayProblems = TodayProblemCounts(total: 14, coverageTotal: 3)
+    private static func meal(id: String, name: String, type: String, kind: String, recipes: [String])
+        -> String
+    {
+        let recipeRows = recipes.enumerated().map { index, recipe in
+            """
+            {"id": "\(id)-\(index)", "mealId": "\(id)", "recipeId": "RCP-\(index)",
+             "recipe": {"id": "RCP-\(index)", "name": "\(recipe)", "servings": null, "yield": null, "totals": null},
+             "scale": 1, "sortOrder": \(index),
+             "estimatedYieldGrams": null, "actualYieldGrams": null, "scaledTotals": \(totals),
+             "createdAt": "2026-09-14T10:00:00.000Z", "updatedAt": "2026-09-14T10:00:00.000Z"}
+            """
+        }
+        return """
+            {"id": "\(id)", "date": "2026-09-14", "name": "\(name)", "sortOrder": null, "mealType": "\(type)",
+             "mealKind": "\(kind)", "recipes": [\(recipeRows.joined(separator: ","))], "totals": \(totals),
+             "images": [], "displayName": "\(name)", "createdAt": "2026-09-14T10:00:00.000Z",
+             "updatedAt": "2026-09-14T10:00:00.000Z", "displayImages": []}
+            """
+    }
 
-    static let sampleMealNutrition: MealNutritionSummary = {
-        let lunch = MealNutritionMeal(
-            id: "MEL-2001", date: "2026-09-14", name: "Garden lunch", mealType: "lunch")
-        let complete: (Double) -> NutritionAmount = { .complete(lower: $0, upper: nil) }
-        let subtotal: (Double) -> NutritionAmount = { .partial(lower: $0, upper: nil) }
-        return MealNutritionSummary(
-            meals: [lunch],
-            people: [
-                MealNutritionPerson(
-                    id: "LDP-1001", name: "Alex",
-                    totals: MacroSummary(
-                        calories: subtotal(642), protein: subtotal(31.4), carbs: subtotal(78.2),
-                        fat: subtotal(22.7)),
-                    foods: [
-                        MealNutritionFood(
-                            source: .recipe(
-                                mealRecipeID: "meal-recipe-preview-1", recipeID: "RCP-1001",
-                                sourceMealID: lunch.id),
-                            meal: lunch, name: "Tomato tart", grams: 245,
-                            totals: MacroSummary(
-                                calories: complete(512), protein: complete(18.4), carbs: complete(62.2),
-                                fat: complete(21.1))),
-                        MealNutritionFood(
-                            source: .product(id: "meal-food-preview-1", productID: "PRD-1001"),
-                            meal: lunch, name: "Greek yogurt", grams: 170,
-                            totals: MacroSummary(
-                                calories: complete(130), protein: complete(13), carbs: complete(16),
-                                fat: .unavailable)),
-                    ],
-                    meals: [
-                        MealNutritionMealSubtotal(
-                            meal: lunch,
-                            totals: MacroSummary(
-                                calories: subtotal(642), protein: subtotal(31.4),
-                                carbs: subtotal(78.2), fat: subtotal(22.7)))
-                    ]),
-                MealNutritionPerson(
-                    id: "LDP-1002", name: "Sam",
-                    totals: MacroSummary(
-                        calories: complete(488), protein: complete(21.8), carbs: complete(59.5),
-                        fat: complete(18.6)),
-                    foods: [
-                        MealNutritionFood(
-                            source: .recipe(
-                                mealRecipeID: "meal-recipe-preview-2", recipeID: "RCP-1001",
-                                sourceMealID: lunch.id),
-                            meal: lunch, name: "Tomato tart", grams: 220,
-                            totals: MacroSummary(
-                                calories: complete(488), protein: complete(21.8), carbs: complete(59.5),
-                                fat: complete(18.6)))
-                    ],
-                    meals: [
-                        MealNutritionMealSubtotal(
-                            meal: lunch,
-                            totals: MacroSummary(
-                                calories: complete(488), protein: complete(21.8),
-                                carbs: complete(59.5), fat: complete(18.6)))
-                    ]),
-            ])
+    private static let totals = """
+        {"cost": {"status": "unavailable", "reason": "no_data"}, "nutrition": {}}
+        """
+
+    /// `problems/getCounts`, for `TodayView`'s preview; every per-check count is zero. The list
+    /// is every check the server counts (`ProblemsCount.byType` requires each key), so a new
+    /// check fails this preview loudly instead of silently rendering a stale shape.
+    static let sampleTodayProblems: ProblemsCount = {
+        let checks = [
+            "duplicateInventory", "duplicateProductIdentities", "orphanedProducts",
+            "partiallyImportedCookbooks", "soldButStillStocked", "kitsCountedTwice",
+            "unlinkedExitExpenses", "purchaselessExitExpenses", "toolsUsedOutsideOwnership",
+            "productsWithNoImages", "entitiesMissingEmbeddings", "staleParentRecipes",
+            "understatedCostMeals", "unknownParkedItems", "inventoryWithoutPricePath",
+            "weightSoldProducts", "manufacturerSpellingVariants", "duplicateVendors",
+            "vendorsWithoutLogos", "purchasesNotReconciling",
+            "purchaseFinancialSettlementMismatches", "duplicateSpendCandidates",
+            "duplicateFinancialTransactionSourceRefs", "duplicateFinancialAccountSourceAliases",
+            "financialTransactionAllocationDefects", "invalidFinancialJson",
+            "referentialLivenessViolations", "dependencyCycles", "incompleteStatementImports",
+            "ingredientsWithPartialCoverage", "productsWithIslandedMappings",
+            "productsWithTitleDerivableSize", "productsWithBetterUpcData", "overdueTasks",
+            "stalledProjects", "projectsMissingBudget", "pastDuePlannedExpenses",
+            "unclassifiedExpenses", "blockedWorkProjects", "projectsWithDateDrift",
+            "ingredientsWithoutProduct", "staleLocations", "productsWithoutMappings",
+            "productsMissingPrice", "unvaluedBucketProducts", "neverVerifiedInventory",
+            "locationsWithoutAiDescription", "emptyLocations", "negativeExpectedQuantity",
+            "unusedIngredientsWithProduct", "unusedIngredientsWithoutProduct",
+        ]
+        let byType = checks.map { "\"\($0)\": 0" }.joined(separator: ", ")
+        return decode("{\"total\": 14, \"coverageTotal\": 3, \"byType\": {\(byType)}}")
     }()
+
+    static let sampleMealNutrition: MealNutritionOut = decode(
+        """
+        {"meals": [\(lunch)],
+         "people": [
+           {"eater": {"id": "LDP-1001", "name": "Alex"},
+            "totals": \(macros(642, 31.4, 78.2, 22.7, status: "partial")),
+            "meals": [{"meal": \(lunch), "totals": \(macros(642, 31.4, 78.2, 22.7, status: "partial"))}],
+            "foods": [
+              {"sourceKind": "recipe", "mealRecipeId": "meal-recipe-preview-1", "recipeId": "RCP-1001",
+               "sourceMealId": "MEL-2001", "meal": \(lunch), "name": "Tomato tart", "amount": null,
+               "grams": 245, "weight": \(complete(245)), "batchShare": \(complete(1)),
+               "totals": \(macros(512, 18.4, 62.2, 21.1))},
+              {"sourceKind": "product", "id": "meal-food-preview-1", "productId": "PRD-1001",
+               "meal": \(lunch), "name": "Greek yogurt", "amount": null, "grams": 170,
+               "weight": \(complete(170)), "batchShare": \(complete(1)),
+               "totals": \(macros(130, 13, 16, nil))}]},
+           {"eater": {"id": "LDP-1002", "name": "Sam"},
+            "totals": \(macros(488, 21.8, 59.5, 18.6)),
+            "meals": [{"meal": \(lunch), "totals": \(macros(488, 21.8, 59.5, 18.6))}],
+            "foods": [
+              {"sourceKind": "recipe", "mealRecipeId": "meal-recipe-preview-2", "recipeId": "RCP-1001",
+               "sourceMealId": "MEL-2001", "meal": \(lunch), "name": "Tomato tart", "amount": null,
+               "grams": 220, "weight": \(complete(220)), "batchShare": \(complete(1)),
+               "totals": \(macros(488, 21.8, 59.5, 18.6))}]}]}
+        """)
+
+    private static let lunch = """
+        {"id": "MEL-2001", "date": "2026-09-14", "name": "Garden lunch", "mealType": "lunch"}
+        """
+
+    private static func complete(_ value: Double) -> String {
+        "{\"status\": \"complete\", \"lower\": \(value), \"upper\": null, \"coverage\": {\"covered\": 1, \"total\": 1}}"
+    }
+
+    private static func macros(
+        _ kcal: Double, _ protein: Double, _ carbs: Double, _ fat: Double?, status: String = "complete"
+    ) -> String {
+        func estimate(_ value: Double?) -> String {
+            guard let value else { return "{\"status\": \"unavailable\", \"reason\": \"no_data\"}" }
+            return
+                "{\"status\": \"\(status)\", \"lower\": \(value), \"upper\": null, \"coverage\": {\"covered\": 1, \"total\": 1}}"
+        }
+        return """
+            {"cost": {"status": "unavailable", "reason": "no_data"},
+             "nutrition": {"kcal": \(estimate(kcal)), "protein": \(estimate(protein)),
+                           "carbs": \(estimate(carbs)), "fat": \(estimate(fat))}}
+            """
+    }
 }
 
 struct SignedInPreview: PreviewModifier {

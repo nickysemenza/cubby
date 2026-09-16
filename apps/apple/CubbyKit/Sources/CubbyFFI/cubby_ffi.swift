@@ -614,6 +614,70 @@ public func FfiConverterTypeAmount_lower(_ value: Amount) -> RustBuffer {
 
 
 /**
+ * Mirrors `recipebridge::NormalizedIsbn` (`isbn13`, `isbn10`, `gtin14`) at the
+ * UniFFI boundary, exhaustively destructured for the same reason `Amount`
+ * is above: a field added upstream fails this to compile instead of
+ * silently dropping data.
+ */
+public struct NormalizedIsbn: Equatable, Hashable {
+    public var isbn13: String
+    public var isbn10: String?
+    public var gtin14: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(isbn13: String, isbn10: String?, gtin14: String) {
+        self.isbn13 = isbn13
+        self.isbn10 = isbn10
+        self.gtin14 = gtin14
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension NormalizedIsbn: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNormalizedIsbn: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NormalizedIsbn {
+        return
+            try NormalizedIsbn(
+                isbn13: FfiConverterString.read(from: &buf), 
+                isbn10: FfiConverterOptionString.read(from: &buf), 
+                gtin14: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: NormalizedIsbn, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.isbn13, into: &buf)
+        FfiConverterOptionString.write(value.isbn10, into: &buf)
+        FfiConverterString.write(value.gtin14, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNormalizedIsbn_lift(_ buf: RustBuffer) throws -> NormalizedIsbn {
+    return try FfiConverterTypeNormalizedIsbn.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNormalizedIsbn_lower(_ value: NormalizedIsbn) -> RustBuffer {
+    return FfiConverterTypeNormalizedIsbn.lower(value)
+}
+
+
+/**
  * A reduced projection of `recipebridge::WIngredient` for the PoC: `usage`
  * and `parse_notes` are review/classification metadata the native client
  * does not consume yet, so they stay off the FFI surface until a screen
@@ -743,6 +807,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeNormalizedIsbn: FfiConverterRustBuffer {
+    typealias SwiftType = NormalizedIsbn?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeNormalizedIsbn.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeNormalizedIsbn.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
     typealias SwiftType = [String]
 
@@ -790,6 +878,18 @@ fileprivate struct FfiConverterSequenceTypeAmount: FfiConverterRustBuffer {
     }
 }
 /**
+ * Validate either ISBN encoding and return the single identity Cubby
+ * stores, or `None` when `value` is neither a valid ISBN-10 nor ISBN-13.
+ */
+public func normalizeIsbn(value: String) -> NormalizedIsbn?  {
+    return try!  FfiConverterOptionTypeNormalizedIsbn.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_cubby_ffi_fn_func_normalize_isbn(
+        FfiConverterString.lower(value),uniffiCallStatus
+    )
+})
+}
+/**
  * Parses one ingredient line (e.g. "2 cups flour"). Never fails: an
  * unparseable line falls back to a name-only ingredient, same as the WASM
  * consumer sees.
@@ -799,6 +899,19 @@ public func parseIngredient(line: String) -> ParsedIngredient  {
         uniffiCallStatus in
     uniffi_cubby_ffi_fn_func_parse_ingredient(
         FfiConverterString.lower(line),uniffiCallStatus
+    )
+})
+}
+/**
+ * Classify a raw scanner code as a GTIN-14 (ISBN check-digit match, or a
+ * plausible-length all-digit barcode zero-padded to 14). `None` when
+ * neither applies. See `recipebridge::scan_code_gtin14` for the exact rule.
+ */
+public func scanCodeGtin14(raw: String) -> String?  {
+    return try!  FfiConverterOptionString.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_cubby_ffi_fn_func_scan_code_gtin14(
+        FfiConverterString.lower(raw),uniffiCallStatus
     )
 })
 }
@@ -830,7 +943,13 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_cubby_ffi_checksum_func_normalize_isbn() != 25756) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_cubby_ffi_checksum_func_parse_ingredient() != 21450) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_cubby_ffi_checksum_func_scan_code_gtin14() != 34382) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_cubby_ffi_checksum_func_size_unit_aliases() != 28231) {

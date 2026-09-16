@@ -317,7 +317,7 @@ private final class PhotoBatchUploadModel {
             var attached: [ImageCode] = []
             if key == .gardenEntry {
                 let entry = try await client.gardenEntry(id: id)
-                var represented = Set(entry.images.map(\.id))
+                var represented = Set(entry.images.map(\.id.rawValue))
                 var selectedReferences: [String: String] = [:]
                 for item in items {
                     let reference: String

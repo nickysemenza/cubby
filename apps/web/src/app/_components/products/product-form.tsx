@@ -1,11 +1,6 @@
 import { displayGtin, type ExternalIdInput } from "@cubby/schemas/external-id";
 import { type ImageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import {
-  isbnFromGtin,
-  isbn as isbnSchema,
-  normalizeIsbn,
-} from "@cubby/schemas/isbn";
-import {
   type ProductLabelNutrition,
   productLabelNutrition,
 } from "@cubby/schemas/nutrition";
@@ -42,11 +37,13 @@ import {
   isMoneyUnit,
 } from "~/lib/price-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { type EntityFormProps, FormWrapper } from "../form-utils";
 import {
   EMPTY_LABEL_NUTRITION_DRAFT,
+  isbnFormField,
   type LabelNutritionFormValue,
   type ProductFormFieldPaths,
   ProductFormFields,
@@ -128,7 +125,7 @@ const labelNutritionField = labelNutritionDraft
 const PRODUCT_FORM_EXTEND = {
   collections: z.array(z.string()),
   upc: upc.nullable(),
-  isbn: isbnSchema.nullable(),
+  isbn: isbnFormField.nullable(),
   fdc_id: fdcId.nullable(),
   unitMappings: z.array(unitMappingInput).superRefine((mappings, ctx) => {
     mappings.forEach((m, i) => {
@@ -258,8 +255,8 @@ const ProductLivePreview: FC<{ control: Control<ProductFormValues> }> = ({
         <InfoRow label="ISBN">
           {v.isbn ? (
             <span className="font-mono">
-              {normalizeIsbn(v.isbn)?.isbn13 ??
-                isbnFromGtin(v.isbn)?.isbn13 ??
+              {wasm.normalize_isbn(v.isbn)?.isbn13 ??
+                wasm.isbn_from_gtin(v.isbn)?.isbn13 ??
                 v.isbn}
             </span>
           ) : undefined}
@@ -364,7 +361,7 @@ function labelNutritionFormDefaults(
 
 function editProductFormDefaults(
   product: ProductWithIngredient,
-  productIsbn: ReturnType<typeof isbnFromGtin>,
+  productIsbn: ReturnType<typeof wasm.isbn_from_gtin>,
 ): ProductFormValues {
   return {
     name: product.name,
@@ -401,7 +398,7 @@ function productFormDefaults({
   productIsbn,
 }: ProductFormInitialValues & {
   product?: ProductWithIngredient;
-  productIsbn: ReturnType<typeof isbnFromGtin>;
+  productIsbn: ReturnType<typeof wasm.isbn_from_gtin>;
 }): ProductFormValues {
   return product
     ? editProductFormDefaults(product, productIsbn)
@@ -503,7 +500,9 @@ export const ProductForm: FC<ProductFormProps> = (props) => {
   const initialUpc = mode === "create" ? props.initialUpc : undefined;
   const initialFdcId = mode === "create" ? props.initialFdcId : undefined;
   const productIsbn =
-    product?.primaryGtin == null ? null : isbnFromGtin(product.primaryGtin);
+    product?.primaryGtin == null
+      ? undefined
+      : wasm.isbn_from_gtin(product.primaryGtin);
 
   const controller = useEntityFormController("product", props, {
     fields: PRODUCT_FORM_FIELDS,

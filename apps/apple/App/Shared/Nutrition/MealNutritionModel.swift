@@ -9,7 +9,7 @@ enum MealNutritionQuery: Hashable {
 @MainActor
 @Observable
 final class MealNutritionModel {
-    private(set) var state: TodaySectionState<MealNutritionSummary> = .loading
+    private(set) var state: TodaySectionState<MealNutritionOut> = .loading
     private(set) var isLoading = false
     private(set) var refreshError: String?
 
@@ -59,13 +59,13 @@ final class MealNutritionModel {
         isLoading = false
     }
 
-    private var loadedValue: MealNutritionSummary? {
+    private var loadedValue: MealNutritionOut? {
         if case .loaded(let value) = state { return value }
         return nil
     }
 
     private static func fetch(_ query: MealNutritionQuery, client: CubbyClient) async throws
-        -> MealNutritionSummary
+        -> MealNutritionOut
     {
         switch query {
         case .meal(let id): return try await client.mealNutrition(mealID: id)

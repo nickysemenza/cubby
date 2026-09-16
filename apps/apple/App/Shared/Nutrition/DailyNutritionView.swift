@@ -2,13 +2,13 @@ import CubbyKit
 import SwiftUI
 
 struct DailyNutritionView: View {
-    var previewSummary: MealNutritionSummary?
+    var previewSummary: MealNutritionOut?
 
     @Environment(AppModel.self) private var appModel
     @State private var selectedDay: String
     @State private var nutrition: MealNutritionModel?
 
-    init(day: String, previewSummary: MealNutritionSummary? = nil) {
+    init(day: String, previewSummary: MealNutritionOut? = nil) {
         self.previewSummary = previewSummary
         _selectedDay = State(initialValue: day)
     }
@@ -39,7 +39,7 @@ struct DailyNutritionView: View {
     }
 
     private func content(
-        state: TodaySectionState<MealNutritionSummary>, isLoading: Bool, refreshError: String?,
+        state: TodaySectionState<MealNutritionOut>, isLoading: Bool, refreshError: String?,
         onRefresh: @escaping @Sendable () async -> Void
     ) -> some View {
         List {

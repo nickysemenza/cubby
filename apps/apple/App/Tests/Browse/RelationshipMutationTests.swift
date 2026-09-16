@@ -10,7 +10,8 @@ struct RelationshipMutationTests {
         let model = PreviewFixtures.signedInModel()
         let recommendation = ActionableRelationshipRecommendation.expenseProject(
             .init(
-                expenseID: "EXP-1001",
+                kind: .expenseProject,
+                expenseId: "EXP-1001",
                 target: .init(id: "PRJ-1001", name: "Workshop"),
                 effectiveStart: nil,
                 effectiveEnd: nil,
@@ -35,8 +36,9 @@ struct RelationshipMutationTests {
         let model = PreviewFixtures.signedInModel()
         let recommendation = ActionableRelationshipRecommendation.inventoryPlacement(
             .init(
-                inventoryID: "INV-1001",
-                target: .init(id: "LOC-1001", name: "Pantry"),
+                kind: .inventoryPlacement,
+                inventoryId: InventoryEntryCode("INV-1001"),
+                target: .init(id: LocationCode("LOC-1001"), name: "Pantry"),
                 reasons: ["Only established stock location"]
             )
         )
@@ -61,8 +63,9 @@ struct RelationshipMutationTests {
         )
         let recommendation = ActionableRelationshipRecommendation.inventoryPlacement(
             .init(
-                inventoryID: "INV-1001",
-                target: .init(id: "LOC-1001", name: "Workshop"),
+                kind: .inventoryPlacement,
+                inventoryId: InventoryEntryCode("INV-1001"),
+                target: .init(id: LocationCode("LOC-1001"), name: "Workshop"),
                 reasons: ["Only established stock location"]
             )
         )

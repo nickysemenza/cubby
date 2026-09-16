@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   foldPositionalDuplicates,
   integerLiterals,
+  openTupleItems,
   type JsonSchema,
 } from "../../../scripts/generator/http-api/document-passes";
 
@@ -97,6 +98,39 @@ describe("integerLiterals", () => {
       revision: { type: "integer", enum: [1, 2] },
       ratio: { type: "number", const: 0.5 },
       count: { type: "number" },
+    });
+  });
+});
+
+describe("openTupleItems", () => {
+  it("drops the `items: false` a closed tuple carries, which OpenAPIKit rejects", () => {
+    const components = {
+      Doc: {
+        type: "object",
+        properties: {
+          headers: {
+            type: "array",
+            items: {
+              type: "array",
+              prefixItems: [{ type: "string" }, { type: "string" }],
+              items: false,
+              minItems: 2,
+            },
+          },
+          open: { type: "array", items: { type: "string" } },
+        },
+      },
+    } satisfies Record<string, JsonSchema>;
+    expect(openTupleItems(components).Doc?.properties).toEqual({
+      headers: {
+        type: "array",
+        items: {
+          type: "array",
+          prefixItems: [{ type: "string" }, { type: "string" }],
+          minItems: 2,
+        },
+      },
+      open: { type: "array", items: { type: "string" } },
     });
   });
 });

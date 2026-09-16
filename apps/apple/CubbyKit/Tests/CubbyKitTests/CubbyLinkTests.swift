@@ -51,8 +51,9 @@ struct CubbyLinkTests {
         // A real route that isn't a shortcode, and a bare host, both fail to resolve.
         #expect(link("https://cubby.nickysemenza.com/recipes") == nil)
         #expect(link("https://example.com/") == nil)
-        // Labels printed before the prefix cutover carry the legacy single-letter prefix.
-        #expect(link("https://cubby.nickysemenza.com/L-A3F2") == .entity(.location, id: "LOC-A3F2"))
+        // Labels printed before the prefix cutover (`L-A3F2`) are the server's to resolve; the
+        // app's offline prefix match only knows canonical prefixes.
+        #expect(link("https://cubby.nickysemenza.com/L-A3F2") == nil)
     }
 
     @Test func roundTrips() throws {

@@ -37,9 +37,9 @@ public enum CubbyLink: Sendable, Hashable {
 
         if scheme == "http" || scheme == "https" {
             guard let last = components.path.split(separator: "/").map(String.init).last,
-                let parsed = Shortcode.parse(last)
+                let label = CubbyLabel(last)
             else { return nil }
-            self = .entity(parsed.key, id: parsed.code)
+            self = .entity(label.key, id: label.code)
             return
         }
 
@@ -48,8 +48,8 @@ public enum CubbyLink: Sendable, Hashable {
         let location = components.queryItems?.first { $0.name == "location" }?.value
         switch (host, segments.count) {
         case ("entity", 1):
-            guard let parsed = Shortcode.parse(segments[0]) else { return nil }
-            self = .entity(parsed.key, id: parsed.code)
+            guard let label = CubbyLabel(segments[0]) else { return nil }
+            self = .entity(label.key, id: label.code)
         case ("capture", 0):
             guard let scope = Self.locationScope(location) else { return nil }
             self = .capture(location: scope)
@@ -103,7 +103,7 @@ public enum CubbyLink: Sendable, Hashable {
     /// `nil`, so the whole link is rejected rather than silently dropping the scope.
     private static func locationScope(_ raw: String?) -> LocationCode?? {
         guard let raw else { return .some(nil) }
-        guard let parsed = Shortcode.parse(raw), parsed.key == .location else { return nil }
-        return .some(LocationCode(parsed.code))
+        guard let label = CubbyLabel(raw), label.key == .location else { return nil }
+        return .some(LocationCode(label.code))
     }
 }

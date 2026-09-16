@@ -1,3 +1,4 @@
+import CubbyAPI
 import Foundation
 
 /// The server calls a walk needs beyond scanning. `CubbyClient` conforms; tests stub it.
@@ -11,7 +12,7 @@ public protocol AuditService: Sendable {
     func stockRows(at location: LocationCode) async throws -> [RecountRow]
     /// Products stocked in more than one location, for the Duplicate badge.
     func duplicateProductIDs() async throws -> Set<ProductCode>
-    func reconcile(_ body: ReconcileBody) async throws -> [RecountRow]
+    func reconcile(_ body: ReconcileSessionPayload) async throws -> [RecountRow]
     /// Re-parents bins under `parent`. Returns how many changed.
     func adopt(_ bins: [LocationCode], into parent: LocationCode) async throws -> Int
 }

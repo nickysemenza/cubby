@@ -4,12 +4,15 @@ import SwiftUI
 /// A deliberately small garden home: current lists by place, planning stays visible, and every
 /// write starts with a short sheet rather than a spatial editor or a scheduler.
 struct GardenRootView: View {
+    /// The pseudo-location that groups plantings not yet in a bed or tray; never sent anywhere.
+    static let unassignedID = LocationCode("unassigned")
+
     @Environment(AppModel.self) private var appModel
     @State private var garden: GardenModel?
     @State private var showingCreate = false
     @State private var entryTarget: GardenEntryTarget?
     @State private var action: GardenPlantingAction?
-    @State private var detailPlanting: GardenPlanting?
+    @State private var detailPlanting: GardenPlantingOut?
     @State private var showingFinished = false
     @State private var showingSetup = false
 
@@ -42,12 +45,12 @@ struct GardenRootView: View {
         .navigationDestination(item: $detailPlanting) { planting in
             if let garden {
                 GardenPlantingDetailView(
-                    model: garden, planting: planting, guide: garden.guide(for: planting.ingredient.id),
+                    model: garden, planting: planting, guide: garden.guide(for: planting.ingredientId),
                     source: garden.guideSource, uploader: GardenImageUploader(service: appModel.client))
             }
         }
         .sheet(isPresented: $showingFinished) {
-            if let garden { FinishedPlantingsSheet(plantings: garden.overview.finishedPlantings) }
+            if let garden { FinishedPlantingsSheet(plantings: garden.overview.finished) }
         }
         .sheet(isPresented: $showingSetup) {
             if let garden { GardenSetupSheet(model: garden) }
@@ -119,12 +122,14 @@ struct GardenRootView: View {
                         onDetail: { detailPlanting = $0 }
                     )
                 }
-                if !garden.overview.unassignedPlantings.isEmpty {
+                if !garden.overview.unassigned.isEmpty {
                     GardenLocationSection(
-                        location: GardenLocation(
-                            id: "unassigned",
+                        location: GardenLocationSummaryOut(
+                            id: Self.unassignedID,
                             name: GardenStrings.noLocationYet,
-                            plantings: garden.overview.unassignedPlantings
+                            gardenKind: nil,
+                            gardenConditions: nil,
+                            plantings: garden.overview.unassigned
                         ),
                         onEntry: {},
                         onAction: { selection in
@@ -137,12 +142,12 @@ struct GardenRootView: View {
                         onDetail: { detailPlanting = $0 }
                     )
                 }
-                if !garden.overview.finishedPlantings.isEmpty {
+                if !garden.overview.finished.isEmpty {
                     Button {
                         showingFinished = true
                     } label: {
                         Label(
-                            "Finished plantings (\(garden.overview.finishedPlantings.count))",
+                            "Finished plantings (\(garden.overview.finished.count))",
                             systemImage: "archivebox"
                         )
                         .font(.porcelainBody)
@@ -171,10 +176,10 @@ struct GardenRootView: View {
 }
 
 private struct GardenLocationSection: View {
-    let location: GardenLocation
+    let location: GardenLocationSummaryOut
     let onEntry: () -> Void
     let onAction: (GardenPlantingAction) -> Void
-    let onDetail: (GardenPlanting) -> Void
+    let onDetail: (GardenPlantingOut) -> Void
 
     var body: some View {
         Section {
@@ -187,10 +192,12 @@ private struct GardenLocationSection: View {
             }
         } header: {
             HStack {
-                if location.id == "unassigned" {
+                if location.id == GardenRootView.unassignedID {
                     Text(location.name)
                 } else {
-                    NavigationLink(value: Route.gardenBedJournal(id: location.id)) { Text(location.name) }
+                    NavigationLink(value: Route.gardenBedJournal(id: location.id.rawValue)) {
+                        Text(location.name)
+                    }
                     Spacer()
                     Button(action: onEntry) { Label(GardenStrings.logEntry, systemImage: "camera") }
                         .labelStyle(.iconOnly)
@@ -204,14 +211,15 @@ private struct GardenLocationSection: View {
     }
 
     private var locationDetail: String? {
-        [location.gardenKind, location.conditions].compactMap { $0 }.joined(separator: " · ").nilIfEmpty
+        [location.gardenKind?.rawValue, location.gardenConditions].compactMap { $0 }.joined(separator: " · ")
+            .nilIfEmpty
     }
 }
 
 private struct GardenPlantingRow: View {
-    let planting: GardenPlanting
+    let planting: GardenPlantingOut
     let onAction: (GardenPlantingAction) -> Void
-    let onDetail: (GardenPlanting) -> Void
+    let onDetail: (GardenPlantingOut) -> Void
 
     var body: some View {
         HStack(spacing: PorcelainTokens.Space.md) {
@@ -287,35 +295,35 @@ private struct GardenPlantingRow: View {
 }
 
 enum GardenEntryTarget: Identifiable {
-    case location(GardenLocation)
-    case planting(GardenPlanting)
+    case location(GardenLocationSummaryOut)
+    case planting(GardenPlantingOut)
 
     var id: String {
         switch self {
-        case .location(let location): "location-\(location.id)"
+        case .location(let location): "location-\(location.id.rawValue)"
         case .planting(let planting): "planting-\(planting.id)"
         }
     }
 
     var locationID: String? {
         switch self {
-        case .location(let location): location.id
-        case .planting(let planting): planting.location?.id
+        case .location(let location): location.id.rawValue
+        case .planting(let planting): planting.locationId?.rawValue
         }
     }
 
-    var planting: GardenPlanting? {
+    var planting: GardenPlantingOut? {
         if case .planting(let planting) = self { return planting }
         return nil
     }
 }
 
 enum GardenPlantingAction: Identifiable {
-    case entry(GardenPlanting)
-    case start(GardenPlanting)
-    case move(GardenPlanting)
-    case split(GardenPlanting)
-    case finish(GardenPlanting)
+    case entry(GardenPlantingOut)
+    case start(GardenPlantingOut)
+    case move(GardenPlantingOut)
+    case split(GardenPlantingOut)
+    case finish(GardenPlantingOut)
 
     var id: String {
         switch self {

@@ -33,7 +33,7 @@ for entry in "$kit_dir"/*; do
   [ "$name" = "Generated" ] && continue
   targets+=("$entry")
 done
-targets+=(apps/apple/App apps/apple/CubbyKit/Sources/cubby apps/apple/CubbyKit/Tests)
+targets+=(apps/apple/App apps/apple/CubbyKit/Sources/cubby apps/apple/CubbyKit/Sources/CubbyAPISupport apps/apple/CubbyKit/Tests)
 swift format lint --strict --configuration apps/apple/.swift-format --recursive "${targets[@]}"
 
 # --force-resolved-versions: a bare `swift test` re-resolves and rewrites
@@ -41,10 +41,8 @@ swift format lint --strict --configuration apps/apple/.swift-format --recursive 
 # after every run. Pins change only via a deliberate `swift package update`.
 swift test --package-path apps/apple/CubbyKit --force-resolved-versions
 
-# generate-openapi.sh has no --check flag in this tree (only <out-dir> /
-# --rebuild-generator), so drift is checked with the separate script; another
-# lane is folding this into generate-openapi.sh --check.
-apps/apple/scripts/check-openapi-drift.sh
+# Fails when the committed CubbyAPI client no longer matches the OpenAPI document.
+apps/apple/scripts/generate-openapi.sh --check
 
 # Same DerivedData as `pnpm apple`, so this build is incremental over the dev
 # loop's instead of a second full compile of CubbyKit.

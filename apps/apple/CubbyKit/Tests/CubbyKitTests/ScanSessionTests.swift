@@ -7,9 +7,9 @@ import Testing
 /// A scan service whose behaviour each test scripts. Records the maximum number of in-flight
 /// scans so serialization is observable, and can hold a scan open until released.
 final class StubScanService: ScanService, Sendable {
-    typealias Responder = @Sendable (ScanCode, LocationCode) async throws -> ScanResult
+    typealias Responder = @Sendable (String, LocationCode) async throws -> ScanAtLocationOut
 
-    private let state = Mutex<(active: Int, maxActive: Int, calls: [(ScanCode, LocationCode)])>((0, 0, []))
+    private let state = Mutex<(active: Int, maxActive: Int, calls: [(String, LocationCode)])>((0, 0, []))
     let responder: Mutex<Responder>
 
     init(_ responder: @escaping Responder) {
@@ -17,39 +17,41 @@ final class StubScanService: ScanService, Sendable {
     }
 
     var maxActive: Int { state.withLock { $0.maxActive } }
-    var calls: [(ScanCode, LocationCode)] { state.withLock { $0.calls } }
+    var calls: [(String, LocationCode)] { state.withLock { $0.calls } }
 
-    func scan(_ code: ScanCode, at location: LocationCode) async throws -> ScanResult {
+    func scan(raw: String, at location: LocationCode) async throws -> ScanAtLocationOut {
         state.withLock {
             $0.active += 1
             $0.maxActive = max($0.maxActive, $0.active)
-            $0.calls.append((code, location))
+            $0.calls.append((raw, location))
         }
         defer { state.withLock { $0.active -= 1 } }
         let responder = responder.withLock { $0 }
-        return try await responder(code, location)
+        return try await responder(raw, location)
     }
 
-    func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> StrayResolution {
-        StrayResolution(moved: moves.count, skipped: [])
+    func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> ResolveScanStraysOut {
+        ResolveScanStraysOut(moved: moves.count, skipped: [], sideEffects: .init(backgroundBatches: []))
     }
 
     static func result(
-        _ outcome: ScanOutcome, id: String = "PRD-2345", name: String = "Sample", strays: [Stray] = []
-    ) -> ScanResult {
-        ScanResult(
+        _ outcome: ScanAtLocationOut.OutcomePayload, id: String = "PRD-2345", name: String = "Sample",
+        strays: [ScanStrayOut] = []
+    ) -> ScanAtLocationOut {
+        ScanAtLocationOut(
             outcome: outcome,
-            product: ScannedProduct(
+            product: .init(
                 id: ProductCode(id), name: name, created: false, manufacturer: nil, hasPrice: true),
-            strays: strays
+            strays: strays,
+            sideEffects: .init(backgroundBatches: [])
         )
     }
 }
 
-private func stray(_ entry: String, ambiguous: Bool = false) -> Stray {
-    Stray(
-        entryId: InventoryEntryCode(entry), locationId: LocationCode("LOC-9999"), locationName: "Elsewhere",
-        ambiguousQuantity: ambiguous)
+private func stray(_ entry: String, ambiguous: Bool = false) -> ScanStrayOut {
+    ScanStrayOut(
+        entryId: InventoryEntryCode(entry), location: .init(id: LocationCode("LOC-9999"), name: "Elsewhere"),
+        amount: Amount(value: 1, unit: "each"), ambiguousQuantity: ambiguous)
 }
 
 /// Waits until the session has nothing pending, or fails after a bounded time.
@@ -68,8 +70,8 @@ struct ScanSessionTests {
     let shelf = LocationCode("LOC-2345")
 
     @Test func shelfAnnotationsFollowWhatEachCodeResolvedTo() async throws {
-        let service = StubScanService { code, _ in
-            code.value == "4006381333931"
+        let service = StubScanService { raw, _ in
+            raw == "4006381333931"
                 ? StubScanService.result(.queued, id: "PRD-3456", name: "Elsewhere Thing")
                 : StubScanService.result(.added, name: "Bulbs")
         }
@@ -168,10 +170,23 @@ struct ScanSessionTests {
         #expect(session.chips.first?.status == .failed("HTTP 500"))
         #expect(session.lastError == "HTTP 500")
 
+        // The server classifies every read; an unreadable one is its validation error.
+        service.responder.withLock { responder in
+            responder = { _, _ in
+                throw CubbyAPIError(
+                    status: 400, operationID: "inventory.scanAtLocation",
+                    detail: .init(
+                        code: "VALIDATION",
+                        message: "Use a Cubby shortcode, UPC/EAN/GTIN barcode, or valid ISBN.",
+                        reason: nil, requestId: nil))
+            }
+        }
         session.submit("hello")
         try await settle(session)
-        #expect(session.chips.first?.status == .failed(ScanCodeError.unrecognized.message))
-        #expect(service.calls.count == 1)
+        #expect(
+            session.chips.first?.status
+                == .failed("Use a Cubby shortcode, UPC/EAN/GTIN barcode, or valid ISBN."))
+        #expect(service.calls.count == 2)
     }
 
     @Test func repeatReadsWithinTheDebounceWindowAreIgnored() async throws {

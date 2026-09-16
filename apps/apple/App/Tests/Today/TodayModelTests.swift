@@ -142,7 +142,7 @@ struct TodayModelTests {
     nonisolated private static let failurePayload = Data(
         #"{"code":"TEST","message":"Still offline"}"#.utf8)
 
-    private static func loadedTaskName(_ state: TodaySectionState<[TodayTask]>) -> String? {
+    private static func loadedTaskName(_ state: TodaySectionState<[TaskTodayBriefingItemOut]>) -> String? {
         guard case .loaded(let tasks) = state else { return nil }
         return tasks.first?.name
     }

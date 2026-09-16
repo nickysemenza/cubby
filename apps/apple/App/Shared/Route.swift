@@ -3,7 +3,7 @@ import SwiftUI
 
 /// The typed navigation spine shared by the iOS tab stacks and the macOS split view.
 enum Route: Hashable {
-    case graph(EntityReference?)
+    case graph(EntityRef?)
     case garden
     case nutrition(day: String)
     case entityList(EntityKey)

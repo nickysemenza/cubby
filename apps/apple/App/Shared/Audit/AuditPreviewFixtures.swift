@@ -12,7 +12,7 @@ enum AuditPreviewData {
     static let sampleRow = RecountRow(
         id: InventoryEntryCode("INV-1234"),
         amount: Amount(value: 3, unit: "each"),
-        updatedAtRaw: "2026-09-01T12:00:00.000Z",
+        updatedAt: Date(timeIntervalSince1970: 1_788_000_000),
         product: RecountRow.Product(
             id: ProductCode("PRD-2345"),
             name: "Sample Product",

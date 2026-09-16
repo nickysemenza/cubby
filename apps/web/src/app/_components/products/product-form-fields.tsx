@@ -3,7 +3,6 @@ import {
   externalIdKind,
 } from "@cubby/schemas/external-id";
 import { ingredientShortcode } from "@cubby/schemas/identifiers";
-import { normalizeIsbn } from "@cubby/schemas/isbn";
 import { hasFoodIndicators, productCategory } from "@cubby/schemas/product";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
@@ -41,6 +40,7 @@ import { EntityPrimitiveFields } from "~/entities/editing/entity-primitive-field
 import type { useImageState } from "~/hooks/useImageState";
 import { upc } from "~/lib/upc.functions";
 import { cn } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
 
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { UsdaFoodSearchField } from "../combobox/with-usda-food-search";
@@ -203,6 +203,29 @@ const observedProductFieldsSchema = z.object({
 });
 
 const ingredientReferenceSchema = z.object({ id: z.string() });
+
+/**
+ * Client-side counterpart to the deleted `@cubby/schemas/isbn`'s `isbn` Zod
+ * export: trims, then validates + normalizes to the canonical GTIN-14 via the
+ * WASM boundary. `packages/schemas` cannot depend on `@cubby/recipebridge`
+ * (it must stay isomorphic), so this lives with the two product forms
+ * (`ProductForm`, `QuickInventoryAdd`) that need it for their own zod
+ * resolver — everywhere else reads through `wasm.normalize_isbn` directly.
+ */
+export const isbnFormField = z
+  .string()
+  .trim()
+  .transform((value, ctx) => {
+    const normalized = wasm.normalize_isbn(value);
+    if (!normalized) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "expected a valid ISBN-10 or ISBN-13",
+      });
+      return z.NEVER;
+    }
+    return normalized.gtin14;
+  });
 
 export interface ProductFormFieldValues extends FieldValues {
   name: string;
@@ -882,7 +905,9 @@ export function ProductFormFields<TFieldValues extends ProductFormFieldValues>({
     ingredientId,
   });
   const isBookForced =
-    !isFoodForced && isbnValue != null && normalizeIsbn(isbnValue) !== null;
+    !isFoodForced &&
+    isbnValue != null &&
+    wasm.normalize_isbn(isbnValue) != null;
 
   useEffect(() => {
     if (!isBookForced) return;

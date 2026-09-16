@@ -37,5 +37,6 @@ apps/web/src/routes/_authenticated/wishes.$shortcode.tsx linguist-generated
 apps/web/src/routes/_authenticated/wishes.index.tsx linguist-generated
 apps/web/src/server/db/__snapshots__/application-schema.json linguist-generated
 apps/apple/CubbyKit/Sources/CubbyKit/Generated/** linguist-generated
+apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/** linguist-generated
 apps/apple/CubbyKit/Sources/CubbyAPI/** linguist-generated
 apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift linguist-generated

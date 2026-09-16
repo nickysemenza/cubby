@@ -49,12 +49,12 @@ public enum EntityGraphLayout {
             return EntityGraphLayoutResult(centers: [:], width: 0, height: 0)
         }
 
-        var neighbors: [EntityReference: Set<EntityReference>] = [:]
+        var neighbors: [EntityRef: Set<EntityRef>] = [:]
         for edge in graph.edges {
             neighbors[edge.source, default: []].insert(edge.target)
             neighbors[edge.target, default: []].insert(edge.source)
         }
-        var layerByReference: [EntityReference: Int] = [graph.root: 0]
+        var layerByReference: [EntityRef: Int] = [graph.root: 0]
         var queue = [graph.root]
         var cursor = 0
         while cursor < queue.count {
@@ -122,7 +122,7 @@ public enum EntityGraphLayout {
 
     private static func orderedNodes(
         _ nodes: [EntityGraphNode],
-        neighbors: [EntityReference: Set<EntityReference>]
+        neighbors: [EntityRef: Set<EntityRef>]
     ) -> [EntityGraphNode] {
         nodes.sorted { left, right in
             let leftNeighbor = (neighbors[left.reference] ?? []).map(\.stableKey).min() ?? ""
@@ -134,7 +134,7 @@ public enum EntityGraphLayout {
         }
     }
 
-    private static func stableReferenceOrder(_ left: EntityReference, _ right: EntityReference) -> Bool {
+    private static func stableReferenceOrder(_ left: EntityRef, _ right: EntityRef) -> Bool {
         left.stableKey < right.stableKey
     }
 }
