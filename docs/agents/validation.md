@@ -75,29 +75,43 @@ Narrow the other gates too: `pnpm typecheck:web` is useful when only the web app
 is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
 entity freshness, Knip, and script types concurrently; the high-risk
 SQL/soft-delete and unsafe-identifier guards are Oxlint rules now (see Quality
-policy below), not a separate script step. `pnpm check:all` adds bindings, OpenAPI, all orchestration tests,
-and security validation. Dependency
-deduplication runs separately when a package manifest, workspace file, patch, or
-lockfile changed; CI and pre-PR validation run the applicable superset.
+policy below), not a separate script step. `pnpm check:all` adds bindings,
+OpenAPI, all orchestration tests, security validation, and the calendar
+Durable Object tests (`workers-tests`). Dependency deduplication
+(`pnpm dedupe:check`) is a separate manual step now — it does not run inside
+`verify:local`/`verify:push`; run it yourself after a package manifest,
+workspace file, patch, or lockfile change, or let hosted `pnpm run check:all`
+catch it.
 
-Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm check` plus
-changed Vitest/PostgreSQL, E2E, Cloudflare, auxiliary, per-manifest Rust, and
-Apple gates from the commits being pushed, and never escalates to the full
-suite. Hooks are mandatory: agents never use `--no-verify` to bypass a failure.
-Pre-commit checks the **whole working tree**, not the index, so a commit fails
-while any concurrent agent's files are mid-edit — stage early and commit
-between agent waves. Regenerated files (`routeTree.gen.ts` and friends) are
-fine to commit; do not revert generated churn. Pre-commit does not `cargo fmt`
-recipebridge; the pre-push gate does, so check Rust formatting before pushing.
+Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm verify:push`
+(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple && pnpm
+check`): Nx computes which projects are affected from each target's declared
+`inputs` against `nx.json`'s `defaultBase` (`origin/main`), so a web-only
+push naturally skips `rust`/`apple` rather than a hand-written path classifier
+deciding to skip them, and it never escalates to the full suite. Hooks are
+mandatory: agents never use `--no-verify` to bypass a failure. Pre-commit
+checks the **whole working tree**, not the index, so a commit fails while any
+concurrent agent's files are mid-edit — stage early and commit between agent
+waves. Regenerated files (`routeTree.gen.ts` and friends) are fine to commit;
+do not revert generated churn. Pre-commit does not `cargo fmt` recipebridge;
+the pre-push gate's `rust` target does, so check Rust formatting before
+pushing.
 
 Local verification gates merging: run `pnpm verify:local` on the clean final
-commit. This is the merge gate, and it does escalate: high-risk paths run the
-full routine suite; use `pnpm verify:local:full` to force it. E2E always
-follows a fresh web build. Hosted full verification and
-coverage are explicitly dispatched when needed (see [CI](../ci.md)). Main builds
-and deploys affected Workers automatically without repeating tests. If hosted
-verification is requested, observe its exact final commit result before merge.
-`claude-review` remains an opt-in PR label; previews are manually dispatched.
+commit (`nx run-many -t
+generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple`, after
+rejecting an uncommitted or untracked tree). This is the merge gate. Unlike
+the deleted `ci-scope.ts`, there is no separate "high-risk" classification
+that escalates it — `verify:local` always runs the full target list, and an
+unaffected native/Postgres/E2E gate replays from Nx's cache instead of
+re-executing; `pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true` to force
+every target to actually run, which is what a high-risk or pre-release change
+should use. E2E always follows a fresh web build (`e2e`'s `dependsOn:
+["build-cf"]`). Hosted full verification and coverage are explicitly
+dispatched when needed (see [CI](../ci.md)). Main builds and deploys affected
+Workers automatically without repeating tests. If hosted verification is
+requested, observe its exact final commit result before merge. `claude-review`
+remains an opt-in PR label; previews are manually dispatched.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. Subagents run `pnpm

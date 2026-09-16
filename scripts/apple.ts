@@ -22,7 +22,6 @@
 // use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/CLAUDE.md
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
-import { runAppleCheck } from "./ci-scope.ts";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -358,7 +357,7 @@ const main = () => {
     case "test":
       return test();
     case "check":
-      return runAppleCheck();
+      return run("sh", [join(ROOT, "scripts/apple-check.sh")]);
     case "help":
     case "--help":
     case "-h":

@@ -1,0 +1,70 @@
+{
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "name": "@cubby/web",
+  "targets": {
+    // Package.json infers a "test" target for the fast Vitest projects
+    // (unit/unit-pure/mcp-contract/ui); it spans multiple projects and isn't
+    // scoped narrowly enough for the repo-wide `{projectRoot}` cache default
+    // (targetDefaults in nx.json) to be safe here, so opt back out.
+    "test": {
+      "cache": false
+    },
+    "postgres": {
+      "command": "pnpm run test:postgres",
+      "options": {
+        "cwd": "apps/web"
+      },
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/src/server/**",
+        "{projectRoot}/drizzle/**",
+        "{projectRoot}/tooling/**",
+        "{projectRoot}/vitest.config.ts",
+        "{workspaceRoot}/packages/schemas/**",
+        "{workspaceRoot}/scripts/test-services.ts",
+        {
+          "env": "CUBBY_TEST_SHUFFLE_SEED"
+        }
+      ]
+    },
+    "build-cf": {
+      "command": "pnpm run build:cf",
+      "options": {
+        "cwd": "apps/web"
+      },
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "e2e": {
+      "command": "pnpm run test:e2e",
+      "options": {
+        "cwd": "apps/web"
+      },
+      // Not cached: real browser runs against disposable Postgres/IntegreSQL
+      // containers have side effects and (documented, measured) flake, so a
+      // blind replay would hide either. dependsOn ensures the bundle it
+      // serves from dist/ is current before it runs.
+      "cache": false,
+      "dependsOn": ["build-cf"],
+      "inputs": [
+        "{projectRoot}/src/**",
+        "{projectRoot}/tests/e2e/**",
+        "{projectRoot}/playwright.config.ts",
+        "{projectRoot}/vite.config.ts"
+      ]
+    },
+    "workers-tests": {
+      "command": "pnpm run test:calendar",
+      "options": {
+        "cwd": "apps/web"
+      },
+      "cache": true,
+      "inputs": [
+        "{projectRoot}/src/server/calendar/**",
+        "{projectRoot}/src/server/database-freshness/**",
+        "{projectRoot}/vitest.calendar.config.ts"
+      ]
+    }
+  }
+}

@@ -96,8 +96,9 @@ const qb = new QueryBuilder();
  *    database-helpers/query.ts).
  *  - **Soft deletes.** `notDeleted(task)` is load-bearing: a project whose
  *    tasks were all soft-deleted must NOT read as dated. `pnpm check`'s
- *    `check-soft-delete-filters.mjs` only scans `exists()`/`notExists()`
- *    bodies, so it cannot see this one — it is on review to keep it here.
+ *    `cubby/require-soft-delete-filter` oxlint rule only scans
+ *    `exists()`/`notExists()` bodies, so it cannot see this one — it is on
+ *    review to keep it here.
  *  - **Nullable FK.** `task.projectId` is nullable and a NULL inside a
  *    `NOT IN` list makes the whole predicate UNKNOWN, so without
  *    `isNotNull(task.projectId)` `buildUndatedProjectWhere` would count zero

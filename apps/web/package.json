@@ -28,7 +28,6 @@
     "db:push": "pnpm run db:ensure-extensions && drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:studio": "drizzle-kit studio",
-    "knip": "knip",
     "types:generate": "wrangler types --env-interface Env --env-file .env.example --strict-vars=false --include-runtime=false",
     "types:check": "pnpm types:generate --check",
     "build:cf": "node ../mcp-apps/build.mjs --if-stale && rm -rf dist && DEPLOY_TARGET=cloudflare NODE_ENV=production vite build && tsx scripts/build-sw.ts",
