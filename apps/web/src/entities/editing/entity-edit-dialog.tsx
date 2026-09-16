@@ -11,6 +11,24 @@ type SupportedEntityEditDialogRequest =
   | (Omit<EntityEditRequest<"task", "create", "capture">, "surface"> & {
       intent: "capture";
     })
+  | (Omit<EntityEditRequest<"ingredient", "create", "capture">, "surface"> & {
+      intent: "capture";
+    })
+  | (Omit<EntityEditRequest<"ingredient", "update", "full">, "surface"> & {
+      intent: "full";
+    })
+  | (Omit<EntityEditRequest<"inventory", "create", "capture">, "surface"> & {
+      intent: "capture";
+    })
+  | (Omit<EntityEditRequest<"inventory", "update", "full">, "surface"> & {
+      intent: "full";
+    })
+  | (Omit<EntityEditRequest<"location", "create", "capture">, "surface"> & {
+      intent: "capture";
+    })
+  | (Omit<EntityEditRequest<"location", "update", "full">, "surface"> & {
+      intent: "full";
+    })
   | (Omit<EntityEditRequest<"expense", "create", "capture">, "surface"> & {
       intent: "capture";
     })

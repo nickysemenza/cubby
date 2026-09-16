@@ -4,8 +4,12 @@ import type {
   ProductShortcode,
   ProjectShortcode,
 } from "@cubby/schemas/identifiers";
+import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
+import type { InfLocation } from "@cubby/schemas/location";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
+import type { z } from "zod";
 
 import type { EntityEditDraft } from "./intent-types";
 import type { EditableEntity, EntityEditRequest } from "./types";
@@ -187,5 +191,58 @@ export const wishEditRequest = (
     name: wish.name,
     notes: wish.notes,
     candidateProductIds: wish.candidates.map(({ id }) => id),
+  },
+});
+
+/**
+ * Every field the ingredient "full" intent edits (`name`, `aliases`,
+ * `naKinds`, `usuallyOnHand`) is already a top-level key on `ingredientOut`,
+ * so the generic per-field `initial` lookup seeds the dialog with no help —
+ * unlike location/inventory below, whose reference fields read from a
+ * relation object the record carries under a different key.
+ */
+export const ingredientEditRequest = (
+  ingredient: IngredientWithFoodOut,
+): Omit<EntityEditRequest<"ingredient", "update", "full">, "surface"> & {
+  intent: "full";
+} => ({
+  entity: "ingredient",
+  operation: "update",
+  intent: "full",
+  record: ingredient,
+});
+
+export const inventoryEditRequest = (
+  item: z.infer<typeof inventoryWithLocationAndProductOut>,
+): Omit<EntityEditRequest<"inventory", "update", "full">, "surface"> & {
+  intent: "full";
+} => ({
+  entity: "inventory",
+  operation: "update",
+  intent: "full",
+  record: item,
+  // `productId`/`locationId` project only as the nested `product`/`location`
+  // relation objects on this read shape — the generic `initial` lookup reads
+  // the record by field key, so the bare ids need an explicit seed.
+  seed: {
+    productId: item.product.id,
+    locationId: item.location.id,
+  },
+});
+
+export const locationEditRequest = (
+  location: InfLocation,
+): Omit<EntityEditRequest<"location", "update", "full">, "surface"> & {
+  intent: "full";
+} => ({
+  entity: "location",
+  operation: "update",
+  intent: "full",
+  record: location,
+  // `productId`/`parentId` project only as the nested `product`/`parent`
+  // relation objects — same reasoning as `inventoryEditRequest` above.
+  seed: {
+    productId: location.product?.id ?? null,
+    parentId: location.parent?.id ?? null,
   },
 });

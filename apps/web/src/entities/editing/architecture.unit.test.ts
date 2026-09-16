@@ -21,8 +21,6 @@ describe("entity editing architecture", () => {
       source("./editor-presentations.tsx"),
       source("./entity-edit-dialog.tsx"),
       source("./entity-edit-dialog-content.tsx"),
-      source("./entity-edit-page.tsx"),
-      source("./entity-form-dialog.tsx"),
     ].join("\n");
 
     expect(uiSources).not.toMatch(/mutationOptions|invalidateKeys|zodResolver/);

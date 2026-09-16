@@ -20,6 +20,7 @@ import { useUpcAwareCreate } from "~/app/_components/products/use-upc-aware-crea
 import { location } from "~/app/locations/location.functions";
 import { product } from "~/app/products/product.functions";
 import { vendor } from "~/app/vendors/vendor.functions";
+import { captureRequest } from "~/entities/editing/editor-requests";
 import {
   entityListFor,
   type EntityListParams,
@@ -47,9 +48,14 @@ import {
   type UseEntitySearchConfig,
 } from "./entity-search-hooks";
 
-const EntityFormDialog = lazy(() =>
-  import("~/entities/editing/entity-form-dialog").then((module) => ({
-    default: module.EntityFormDialog,
+const EntityEditDialog = lazy(() =>
+  import("~/entities/editing/entity-edit-dialog").then((module) => ({
+    default: module.EntityEditDialog,
+  })),
+);
+const ProductCreateDialog = lazy(() =>
+  import("~/app/_components/products/product-create-dialog").then((module) => ({
+    default: module.ProductCreateDialog,
   })),
 );
 
@@ -341,18 +347,30 @@ function EntitySearchCreateDialog<TId extends string, TDetail>({
   resolveWithEntity: (item: ComboboxItem<TId>) => void;
 }) {
   if (!isDialogOpen) return null;
+  const onSuccess = (result: unknown) => {
+    const parsed = parseCreatedResult?.(result);
+    if (parsed === undefined) return;
+    resolveWithEntity(buildDetail(parsed));
+  };
+  if (entity === "product") {
+    return (
+      <Suspense fallback={null}>
+        <ProductCreateDialog
+          open
+          onOpenChange={setIsDialogOpen}
+          seed={{ name: pendingName }}
+          onSuccess={onSuccess}
+        />
+      </Suspense>
+    );
+  }
   return (
     <Suspense fallback={null}>
-      <EntityFormDialog
-        entity={entity}
+      <EntityEditDialog
         open
         onOpenChange={setIsDialogOpen}
-        seed={{ name: pendingName }}
-        onSuccess={(result) => {
-          const parsed = parseCreatedResult?.(result);
-          if (parsed === undefined) return;
-          resolveWithEntity(buildDetail(parsed));
-        }}
+        request={captureRequest(entity, { name: pendingName })}
+        onSuccess={onSuccess}
       />
     </Suspense>
   );

@@ -3,17 +3,17 @@ import type {
   inventoryWithLocationAndProductOut,
 } from "@cubby/schemas/inventory";
 import { Package } from "lucide-react";
-import type { FC } from "react";
+import { type FC, useState } from "react";
 import type { z } from "zod";
 
 import { Page } from "~/components/page/Page";
 import { DetailEditAction } from "~/components/ui/detail-edit-action";
+import { inventoryEditRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
-import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { InventoryBasicInfo } from "./inventory-basic-info";
-import { InventoryForm } from "./inventory-form";
 
 type InventoryItem = z.infer<typeof inventoryWithLocationAndProductOut>;
 
@@ -24,7 +24,8 @@ interface InventoryDetailProps {
 export const InventoryDetail: FC<InventoryDetailProps> = ({
   record: inventoryitem,
 }) => {
-  const { commonSections, editMode } = useEntityDetail<
+  const [editOpen, setEditOpen] = useState(false);
+  const { commonSections } = useEntityDetail<
     "inventory",
     InventoryItem,
     InventoryUpdateInput
@@ -34,16 +35,13 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
   });
 
   const sections: DetailSection[] = [
-    editableDetailSection({
+    {
       id: "inventory-details",
       title: "Inventory Item Details",
       icon: Package,
       placement: "primary",
-      editMode,
-      Form: InventoryForm,
-      entity: inventoryitem,
-      children: <InventoryBasicInfo inventoryitem={inventoryitem} />,
-    }),
+      content: <InventoryBasicInfo inventoryitem={inventoryitem} />,
+    },
     ...commonSections,
   ];
 
@@ -54,10 +52,15 @@ export const InventoryDetail: FC<InventoryDetailProps> = ({
       title={inventoryitem.product.name}
       rawData={inventoryitem}
       heroActions={{
-        primary: <DetailEditAction onClick={editMode.startEditing} />,
+        primary: <DetailEditAction onClick={() => setEditOpen(true)} />,
       }}
     >
       <DetailSections sections={sections} rawData={inventoryitem} />
+      <EntityEditDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        request={inventoryEditRequest(inventoryitem)}
+      />
     </Page>
   );
 };

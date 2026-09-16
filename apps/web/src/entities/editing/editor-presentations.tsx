@@ -17,6 +17,7 @@ import {
 import { z } from "zod";
 
 import { WithEntitySearch } from "~/app/_components/combobox/with-search-hook";
+import { EntityInlineLink } from "~/app/_components/EntityInlineLink";
 import {
   NullableNumericField,
   PlainDateField,
@@ -26,6 +27,7 @@ import {
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
 import { VendorField } from "~/app/_components/form-utils/vendor-field";
 import { FormFieldGroup } from "~/app/_components/forms/form-field-group";
+import { TypeFieldWithAI } from "~/app/_components/locations/type-field-with-ai";
 import {
   costTypeOptions,
   expenseLineKindOptions,
@@ -40,8 +42,10 @@ import {
   type FinancialTransactionFormValues,
 } from "~/app/finance/financial-transaction-form";
 import { tradeOptions } from "~/app/projects/shared";
-import { Row } from "~/components/layout";
+import { AliasesField } from "~/components/forms/aliases-field";
+import { Row, Stack } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
+import { Description } from "~/components/ui/description";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import type { ResponsiveDialog } from "~/components/ui/responsive-dialog";
@@ -209,6 +213,118 @@ function ExpenseCaptureFields({ form, context }: EntityEditorFieldsProps) {
 
 function ProjectCaptureFields() {
   return <EntityIntentFields entity="project" intent="capture" />;
+}
+
+/**
+ * Live duplicate-name check for ingredient CREATE only — an edit dialog
+ * watches the same field but starting from the record's own name, which
+ * would otherwise flag itself as a duplicate on every keystroke. Reuses
+ * `ingredient.list`'s name filter (the same fuzzy search the pickers use).
+ */
+function IngredientDuplicateNameHint({ form }: EntityEditorFieldsProps) {
+  const name = z.string().catch("").parse(form.watch("name"));
+  const [debouncedName] = useDebouncedValue(name, { wait: 300 });
+  const trimmed = debouncedName.trim();
+  const enabled = trimmed.length >= 2;
+
+  const { data } = useQuery({
+    ...entityListFor("ingredient").queryOptions({
+      filters: { nameFilter: trimmed },
+      pagination: { pageIndex: 0, pageSize: 5 },
+    }),
+    enabled,
+  });
+
+  const matches = data?.items ?? [];
+  if (!enabled || matches.length === 0) return null;
+
+  const lower = trimmed.toLowerCase();
+  const exact = matches.some(
+    (m) =>
+      m.name.toLowerCase() === lower ||
+      m.aliases.some((a) => a.toLowerCase() === lower),
+  );
+
+  return (
+    <Stack gap="xs">
+      <Description size="xs" className={exact ? "text-warning-ink" : undefined}>
+        {exact
+          ? "An ingredient with this name already exists — did you mean to use it?"
+          : "Similar ingredients already exist. Use one of these instead of creating a duplicate?"}
+      </Description>
+      <Row gap="xs" wrap>
+        {matches.map((m) => (
+          <EntityInlineLink
+            displayImage={undefined}
+            key={m.id}
+            entity="ingredient"
+            data={{ name: m.name, id: m.id }}
+          />
+        ))}
+      </Row>
+    </Stack>
+  );
+}
+
+function IngredientCaptureFields(props: EntityEditorFieldsProps) {
+  return (
+    <>
+      <EntityIntentFields entity="ingredient" intent="capture" />
+      <IngredientDuplicateNameHint {...props} />
+    </>
+  );
+}
+
+function IngredientFullFields() {
+  return <EntityIntentFields entity="ingredient" intent="full" mode="edit" />;
+}
+
+function InventoryCaptureFields() {
+  return <EntityIntentFields entity="inventory" intent="capture" />;
+}
+
+function InventoryFullFields() {
+  return <EntityIntentFields entity="inventory" intent="full" mode="edit" />;
+}
+
+/**
+ * Location's rich fields beyond what `EntityIntentFields` renders generically:
+ * `type` is declared with no editor control (like meal's `pendingImageIds`)
+ * because it needs the AI-suggest widget and to disappear entirely once a
+ * product link supplies the form factor instead — behavior with no generic
+ * equivalent, so it stays a hand-rendered field bound to the same `"type"`
+ * RHF path the kernel already resolves. `collections` is a pure editor-only
+ * pseudo field (folded into the stored `tags` at submit by
+ * `locationBuildData` in `definitions.ts`) shown only once a location
+ * exists — the create dialog stays a quick add; aliases/collections/photos
+ * are filled in afterward from the edit dialog.
+ */
+function LocationFields({ form, record }: EntityEditorFieldsProps) {
+  const editing = record !== undefined;
+  const nameValue = z.string().catch("").parse(form.watch("name"));
+  const productIdValue = z.string().catch("").parse(form.watch("productId"));
+  const linked = productIdValue.length > 0;
+  return (
+    <>
+      <EntityIntentFields
+        entity="location"
+        intent={editing ? "full" : "capture"}
+        mode={editing ? "edit" : "create"}
+      />
+      {!linked && (
+        <TypeFieldWithAI form={form} name="type" locationName={nameValue} />
+      )}
+      {editing && (
+        <AliasesField
+          form={form}
+          name="collections"
+          title="Collections"
+          addButtonText="Add Collection"
+          placeholder="e.g. painting"
+        />
+      )}
+    </>
+  );
 }
 
 function VendorCaptureFields() {
@@ -447,7 +563,13 @@ type EntityEditorPresentationKey =
   | "financialTransaction:create:capture"
   | "financialTransaction:update:full"
   | "wish:create:full"
-  | "wish:update:full";
+  | "wish:update:full"
+  | "ingredient:create:capture"
+  | "ingredient:update:full"
+  | "inventory:create:capture"
+  | "inventory:update:full"
+  | "location:create:capture"
+  | "location:update:full";
 
 interface PresentationEntityByKey {
   "meal:create:capture": "meal";
@@ -462,6 +584,12 @@ interface PresentationEntityByKey {
   "financialTransaction:update:full": "financialTransaction";
   "wish:create:full": "wish";
   "wish:update:full": "wish";
+  "ingredient:create:capture": "ingredient";
+  "ingredient:update:full": "ingredient";
+  "inventory:create:capture": "inventory";
+  "inventory:update:full": "inventory";
+  "location:create:capture": "location";
+  "location:update:full": "location";
 }
 
 const presentations = {
@@ -562,6 +690,50 @@ const presentations = {
     size: "lg",
     Fields: WishFields,
     successMessage: () => "Wishlist updated",
+  },
+  "ingredient:create:capture": {
+    title: () => "New Ingredient",
+    description: () =>
+      "A canonical cooking ingredient — products and recipes link to it afterward.",
+    Fields: IngredientCaptureFields,
+    successMessage: (result) => `Added "${resultName(result, "ingredient")}"`,
+  },
+  "ingredient:update:full": {
+    title: () => "Edit Ingredient",
+    description: () => "Aliases replace the complete alternate-name list.",
+    submitLabel: "Save changes",
+    Fields: IngredientFullFields,
+    successMessage: () => "Ingredient updated",
+  },
+  "inventory:create:capture": {
+    title: () => "Add to Inventory",
+    description: () => "Record an approximate quantity at a physical location.",
+    Fields: InventoryCaptureFields,
+    successMessage: () => "Added to inventory",
+  },
+  "inventory:update:full": {
+    title: () => "Edit Inventory Item",
+    description: () =>
+      "Move it, correct the quantity, or flip it between stock and installed.",
+    submitLabel: "Save changes",
+    Fields: InventoryFullFields,
+    successMessage: () => "Inventory item updated",
+  },
+  "location:create:capture": {
+    title: () => "Create New Location",
+    description: () =>
+      "Alternate names, collections, and photos can be added afterward from the location's own page.",
+    Fields: LocationFields,
+    successMessage: (result) => `Added "${resultName(result, "location")}"`,
+  },
+  "location:update:full": {
+    title: () => "Edit Location",
+    description: () =>
+      "Aliases and collections each replace their complete list.",
+    submitLabel: "Save changes",
+    size: "lg",
+    Fields: LocationFields,
+    successMessage: () => "Location updated",
   },
 } satisfies {
   [K in EntityEditorPresentationKey]: EntityEditorPresentation<

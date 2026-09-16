@@ -20,7 +20,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
-import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
+import { captureRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { cn } from "~/lib/utils";
 
 import { EntityInlineLink } from "../../EntityInlineLink";
@@ -138,11 +139,10 @@ export function IngredientPreviewTable({
 
   return (
     <>
-      <EntityFormDialog
-        entity="ingredient"
+      <EntityEditDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
-        seed={{ name: selectedIngredientName }}
+        request={captureRequest("ingredient", { name: selectedIngredientName })}
       />
 
       {/* "Raw" shows the grammar's carve of each source line. Off by default so

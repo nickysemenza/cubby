@@ -5,6 +5,11 @@ import {
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  collectionSlugsFromTags,
+  collectionTagFromSlug,
+  normalizeCollectionSlug,
+} from "@cubby/shared/collection-tag";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -69,6 +74,13 @@ interface FieldOptions<E extends EditableEntity> {
   normalize?: (value: EntityEditValue) => EntityEditValue;
   access?: EditField<E>["access"];
   validate?: EditField<E>["validate"];
+  /**
+   * Override the generic record/create-default `initial` lookup — for an
+   * editor-only pseudo field with no model field to read a record value from
+   * (e.g. location's `collections`, folded from the stored `tags` at submit
+   * and unfolded back into a list here for edit-mode seeding).
+   */
+  initial?: EditField<E>["initial"];
 }
 
 interface IntentOptions<E extends EditableEntity> {
@@ -212,7 +224,9 @@ const builderFor = <E extends EditableEntity>(
     entity,
     id,
     access: options?.access ?? (() => editable),
-    initial: ({ operation, record, context }) => {
+    initial: (input) => {
+      if (options?.initial) return options.initial(input);
+      const { operation, record, context } = input;
       // Every gallery entity's `pendingImageIds` is array-valued and
       // `readKey: null` (never populated from a record), so its one true
       // default is an empty array — not the generic text field's `null` —
@@ -522,6 +536,39 @@ const normalizeFinancialTransaction = (
 
 const vendorCreateDefaults = { name: "", website: null, notes: null } as const;
 
+/**
+ * `collections` is an editor-only pseudo field (no model field, no stored
+ * column): a friendlier list of bare slugs than the namespaced `tags` a
+ * location actually stores. Folded into `tags` at submit, and unfolded back
+ * out of the record's `tags` for edit-mode seeding (`initial` override below)
+ * — kept next to `entity-primitive-fields.tsx`'s `location-collections`
+ * renderer, which owns the RHF field this bag ultimately targets.
+ */
+const foldCollectionsIntoTags = (collections: EntityEditValue): string[] => {
+  const parsed = z.array(z.string()).catch([]).parse(collections);
+  return parsed
+    .map((value) => value.trim())
+    .filter((value) => value !== "")
+    .map(normalizeCollectionSlug)
+    .filter((slug) => slug !== "")
+    .map(collectionTagFromSlug);
+};
+
+/**
+ * A fresh product link always clears `type` (a linked location's form factor
+ * comes from the SKU); `collections` folds into the stored `tags` column and
+ * never reaches the create/update contract on its own.
+ */
+const locationBuildData = (patch: EntityEditValueBag): EntityEditValueBag => {
+  const data: EntityEditValueBag = { ...patch };
+  if ("collections" in data) {
+    data.tags = foldCollectionsIntoTags(data.collections);
+    delete data.collections;
+  }
+  if (data.productId) data.type = null;
+  return data;
+};
+
 /** Field fragments per semantic intent come from the entity declaration. */
 const fieldsFor = (entity: EditableEntity, semanticIntent: string) =>
   Object.entries(generatedEntityEditIntents[entity].fields).find(
@@ -558,7 +605,26 @@ export const entityEditRegistry: EntityEditRegistry = {
     fields: f.fieldsFrom(["full"]),
   })),
   location: buildDefinition("location", (f) => ({
-    fields: f.fieldsFrom(["full"]),
+    fields: f.fieldsFrom(["full"], {
+      // `collections` has no model field (editor-only, folded into `tags` at
+      // submit) — seed edit mode from the record's own `tags`, since the
+      // generic `initial` lookup has no `collections` key to read.
+      collections: {
+        initial: ({ record }) =>
+          record
+            ? collectionSlugsFromTags(
+                z.array(z.string()).catch([]).parse(record.tags),
+              )
+            : [],
+      },
+    }),
+    create: {
+      capture: { defaults: { type: "room" }, buildData: locationBuildData },
+      full: { defaults: { type: "room" }, buildData: locationBuildData },
+    },
+    update: {
+      full: { buildData: locationBuildData },
+    },
   })),
   planting: buildDefinition("planting", (f) => ({
     // `status` and `locationId` are lifecycle/location state — corrected only

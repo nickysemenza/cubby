@@ -15,8 +15,10 @@ import {
 } from "~/app/_components/combobox/with-search-hook";
 import { WithVendorShortcodeSearch } from "~/app/_components/combobox/with-vendor-search";
 import {
+  NullableNumericField,
   PlainDateField,
   SelectField,
+  SideBySideFields,
   UnifiedTextField,
 } from "~/app/_components/form-utils";
 import { EntityValueField } from "~/app/_components/form-utils/entity-value-field";
@@ -28,6 +30,7 @@ import {
 } from "~/app/projects/project-options";
 import { tradeOptions } from "~/app/projects/trade-options";
 import { taskStatusOptions } from "~/app/tasks/task-options";
+import { AliasesField } from "~/components/forms/aliases-field";
 import { Row } from "~/components/layout";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Input } from "~/components/ui/input";
@@ -348,6 +351,50 @@ interface SpecializedIntentRendererProps {
   field: PrimitiveFieldModel;
   form: UseFormReturn<FieldValues>;
   idPrefix: string;
+  mode: EditMode;
+}
+
+/**
+ * The shared `string[]` list editor for any `control.renderer: "tag-list"`
+ * field (ingredient/location aliases, ingredient's enrichment exclusions,
+ * …) — one control for every declaration that reuses this convention name,
+ * keyed by the field's own key so multiple tag-list fields on one intent
+ * render independently.
+ */
+function TagListField({ field, form }: SpecializedIntentRendererProps) {
+  return (
+    <AliasesField
+      form={form}
+      name={field.key}
+      title={field.label}
+      addButtonText={`Add ${field.label}`}
+    />
+  );
+}
+
+/**
+ * Inventory's `amount` field is a `{ value, unit }` object with no single
+ * scalar control — the shared value/unit row from `inventory-form.tsx`.
+ */
+function AmountField({ field, form }: SpecializedIntentRendererProps) {
+  return (
+    <SideBySideFields>
+      <NullableNumericField
+        form={form}
+        name={`${field.key}.value`}
+        label="Amount Value"
+        placeholder="Enter amount"
+        fraction
+      />
+      <UnifiedTextField
+        form={form}
+        name={`${field.key}.unit`}
+        label="Amount Unit"
+        placeholder="Enter unit"
+        nullable={false}
+      />
+    </SideBySideFields>
+  );
 }
 
 /**
@@ -358,9 +405,25 @@ interface SpecializedIntentRendererProps {
  * specialized, non-reference field with no entry here fails loudly rather
  * than silently dropping the field.
  */
-const specializedIntentRenderers: Readonly<
+const specializedIntentRenderers = {
+  "tag-list": TagListField,
+  amount: AmountField,
+} satisfies Readonly<
   Record<string, ComponentType<SpecializedIntentRendererProps>>
-> = {};
+>;
+
+/** Looks up a manifest-declared `control.renderer` name, or `undefined` for
+ * one this registry doesn't (yet) carry an entry for. */
+function specializedRendererFor(
+  name: string,
+): ComponentType<SpecializedIntentRendererProps> | undefined {
+  if (!Object.hasOwn(specializedIntentRenderers, name)) return undefined;
+  // SAFETY: the `Object.hasOwn` check above proves `name` is one of
+  // `specializedIntentRenderers`'s own declared keys, not an arbitrary string.
+  return specializedIntentRenderers[
+    name as keyof typeof specializedIntentRenderers
+  ];
+}
 
 /**
  * One reference field's search provider: the vendor picker needs its own
@@ -469,8 +532,9 @@ export function EntityIntentFields({
         }
         const presentation = entityFieldPresentation(entity, field.key, mode);
         if (presentation.control.kind === "specialized") {
-          const Renderer =
-            specializedIntentRenderers[presentation.control.renderer ?? ""];
+          const Renderer = specializedRendererFor(
+            presentation.control.renderer ?? "",
+          );
           if (!Renderer) {
             throw new Error(
               `Field ${entity}.${field.key} has no specialized intent renderer for "${presentation.control.renderer}"`,
@@ -483,6 +547,7 @@ export function EntityIntentFields({
               field={field}
               form={form}
               idPrefix={idPrefix}
+              mode={mode}
             />
           );
         }

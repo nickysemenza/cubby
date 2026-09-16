@@ -11,6 +11,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { ArrowLeft, Loader2, Maximize2 } from "lucide-react";
 
+import { createActionFor } from "~/app/_components/actions/action-items";
 import { Button } from "~/components/ui/button";
 import { NativeSelect } from "~/components/ui/native-select";
 import { useHydratedLoading } from "~/hooks/useHydrated";
@@ -64,6 +65,7 @@ export function IsometricPantry() {
   // Hydration-stable: the server renders this branch with no tree, while the
   // client's first render already has the streamed one. See useHydratedLoading.
   const isLoading = useHydratedLoading(queryLoading);
+  const addInventoryTarget = createActionFor("inventory");
 
   if (isLoading) {
     return (
@@ -83,9 +85,15 @@ export function IsometricPantry() {
         <p className="mt-2 text-sm">
           Add some inventory items to see them here
         </p>
-        <Link to="/inventory/new" className="mt-4">
-          <Button variant="outline">Add Inventory</Button>
-        </Link>
+        {addInventoryTarget && (
+          <Link
+            to={addInventoryTarget.to}
+            search={addInventoryTarget.search}
+            className="mt-4"
+          >
+            <Button variant="outline">Add Inventory</Button>
+          </Link>
+        )}
       </div>
     );
   }
