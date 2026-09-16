@@ -59,7 +59,7 @@ describe("meal preparation contracts", () => {
     });
   });
 
-  it("allows clearing either yield but rejects non-positive or fractional grams", () => {
+  it("allows clearing either yield but rejects non-positive or fractional yield grams", () => {
     expect(
       saveMealRecipePreparationInput.safeParse({
         mealRecipeId,
@@ -68,6 +68,8 @@ describe("meal preparation contracts", () => {
       }).success,
     ).toBe(true);
 
+    // estimatedYieldGrams/actualYieldGrams stay `mealYieldGrams` (int, positive):
+    // an authored yield is always a whole gram count.
     for (const grams of [0, -1, 1.5]) {
       expect(
         saveMealRecipePreparationInput.safeParse({
@@ -76,6 +78,11 @@ describe("meal preparation contracts", () => {
           changes: [],
         }).success,
       ).toBe(false);
+    }
+  });
+
+  it("rejects non-positive change grams but allows fractional grams (#1058 generic meal amounts)", () => {
+    for (const grams of [0, -1]) {
       expect(
         saveMealRecipePreparationInput.safeParse({
           mealRecipeId,
@@ -91,6 +98,71 @@ describe("meal preparation contracts", () => {
         }).success,
       ).toBe(false);
     }
+
+    // Unlike the authored yields above, a change's `grams` comes from
+    // `mealAmountInputFields` (finite().positive(), no int()) so a fractional
+    // portion is valid.
+    expect(
+      saveMealRecipePreparationInput.safeParse({
+        mealRecipeId,
+        changes: [
+          {
+            action: "set",
+            mealId,
+            ledgerPartyId: eaterId,
+            grams: 1.5,
+            confirmed: false,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a set change with both amount and grams, or neither (hasOneMealAmountInput/hasRequiredMealAmount)", () => {
+    expect(
+      saveMealRecipePreparationInput.safeParse({
+        mealRecipeId,
+        changes: [
+          {
+            action: "set",
+            mealId,
+            ledgerPartyId: eaterId,
+            amount: { value: 200, unit: "g" },
+            grams: 200,
+            confirmed: false,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      saveMealRecipePreparationInput.safeParse({
+        mealRecipeId,
+        changes: [
+          {
+            action: "set",
+            mealId,
+            ledgerPartyId: eaterId,
+            confirmed: false,
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      saveMealRecipePreparationInput.safeParse({
+        mealRecipeId,
+        changes: [
+          {
+            action: "set",
+            mealId,
+            ledgerPartyId: eaterId,
+            amount: { value: 200, unit: "g" },
+            confirmed: false,
+          },
+        ],
+      }).success,
+    ).toBe(true);
   });
 
   it("rejects ambiguous duplicate changes for the same target meal and eater", () => {
@@ -172,6 +244,8 @@ describe("meal preparation contracts", () => {
           },
           recipe: { id: recipeId, name: "Soup" },
           scale: 1,
+          recipeServings: 4,
+          recipeYield: { value: 520, unit: "g" },
           estimatedYieldGrams: 520,
           actualYieldGrams: 500,
           yieldBasis: {
@@ -183,6 +257,7 @@ describe("meal preparation contracts", () => {
           sourceSummary: {
             assignedGrams: 350,
             confirmedGrams: 200,
+            assignedShare: complete(0.7),
             unassignedGrams: 150,
           },
           portions: [
@@ -195,7 +270,10 @@ describe("meal preparation contracts", () => {
                 mealKind: "cooked",
               },
               eater: { id: eaterId, name: "Household member", kind: "member" },
+              amount: { value: 200, unit: "g" },
               grams: 200,
+              weight: complete(200),
+              batchShare: complete(0.4),
               confirmedAt: new Date("2026-08-31T19:00:00Z"),
               servedHere: true,
               totals: totals(4, 400, 32),
