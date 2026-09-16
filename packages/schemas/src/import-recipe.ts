@@ -163,7 +163,7 @@ export const upsertCookbookInput = z.object({
   coverImageId: z.uuid().optional(),
   /**
    * The book's ISBN as a canonical GTIN-14, picked out of the EPUB's OPF
-   * `<dc:identifier>` values by `isbnFromEpubIdentifiers`. Absent when the book
+   * `<dc:identifier>` values by `wasm.isbn_from_epub_identifiers`. Absent when the book
    * declares no valid ISBN (plenty declare only a Calibre UUID).
    *
    * Transient: it is NOT stored on the Cookbook. The importer resolves it to a

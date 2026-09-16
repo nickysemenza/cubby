@@ -1,5 +1,4 @@
 import { displayGtin } from "@cubby/schemas/external-id";
-import { isbnFromGtin, normalizeIsbn } from "@cubby/schemas/isbn";
 import {
   productCategory,
   productCategoryValues,
@@ -40,13 +39,17 @@ import {
 } from "~/components/ui/tooltip";
 import type { ViewSwitcherOption } from "~/components/ui/view-switcher";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { relatedData } from "~/lib/related-data.functions";
 import { booleanCellOptions, presenceCellOptions } from "~/lib/select-options";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import { formatCurrency } from "~/lib/utils";
+import { wasm } from "~/lib/wasm";
 
 import { WithEntitySearch } from "../_components/combobox/with-search-hook";
 import {
@@ -397,7 +400,8 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
                       await updateProductMutation.mutateAsync({
                         id: info.row.original.id,
                         data:
-                          newValue != null && normalizeIsbn(newValue) !== null
+                          newValue != null &&
+                          wasm.normalize_isbn(newValue) != null
                             ? { isbn: newValue }
                             : { upc: newValue },
                       });
@@ -406,7 +410,7 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
                     trigger="pencil"
                     renderValue={(current) => {
                       if (!current) return <NoneValue />;
-                      const isbn = isbnFromGtin(current);
+                      const isbn = wasm.isbn_from_gtin(current);
                       if (isbn) {
                         return (
                           <span className="font-mono tabular-nums">
@@ -1066,26 +1070,18 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
       filterOptions,
       extraActions,
       nameEditable,
+      // `dataGaps`/`modelPresence`/`upcPresence`/`notesPresence` are
+      // filter-hosting synthetic columns and `components` is a relation
+      // column — none has a matching `model.fields` entry, so they stay
+      // hand-declared here. Every other key below is declared
+      // `display.listHidden` on `00-product.entity.ts` now.
       initialColumnVisibility: {
-        tags: false,
-        fdc_id: false,
-        model: false,
-        manufacturer: false,
-        createdAt: false,
-        notes: false,
-        expenseTotal: false,
-        expectedQuantity: false,
-        quantityVariance: false,
-        dataQuality: false,
         dataGaps: false,
-        externalIds: false,
         modelPresence: false,
         upcPresence: false,
         notesPresence: false,
-        stockTracked: false,
         components: false,
-        usdaUnavailable: false,
-        onHandUnits: false,
+        ...entityListHiddenColumns("product"),
       },
       groupConfig,
       tree: productTree,
@@ -1163,7 +1159,6 @@ export function ProductList({ initialCategory, view }: ProductListProps) {
             onRowHover={onRowHover}
             onRowHoverEnd={onRowHoverEnd}
             currentRowId={preview?.rowKey}
-            defaultDensity="dense"
             desktopInspector={dockedInspector}
             inspectorToggle={inspectorToggle}
           />

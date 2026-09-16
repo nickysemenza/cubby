@@ -237,7 +237,6 @@ function ResourcesTable({
     entity: "product",
     data: rows,
     columns,
-    layoutKey: "project:resources",
     selection,
     isLoading,
     getRowId: (row) => row.id,
@@ -391,14 +390,10 @@ function SelectableResourceTable({
       }),
     [helper, suggested],
   );
-  const layoutKey = suggested
-    ? "project:resource-suggestions"
-    : "project:resource-picker";
   const workbench = useBoundedListWorkbench({
     entity: "product",
     data: rows,
     columns,
-    layoutKey,
     isLoading,
     getRowId: (row) => row.id,
     enableRowSelection: true,

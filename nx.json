@@ -6,9 +6,14 @@
   "tui": {
     "enabled": false
   },
+  "defaultBase": "origin/main",
   "namedInputs": {
-    "default": [
-      "{workspaceRoot}/**/*",
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "sharedGlobals": [
+      "{workspaceRoot}/pnpm-lock.yaml",
+      "{workspaceRoot}/pnpm-workspace.yaml",
+      "{workspaceRoot}/tsconfig.json",
+      "{workspaceRoot}/nx.json",
       {
         "runtime": "node --version"
       },
@@ -21,6 +26,17 @@
       {
         "env": "CI"
       }
+    ],
+    // Whole-tree scope for cubby-checks' repo-wide gates (generate, types,
+    // lint, format, knip): a project-scoped `default` narrows every other
+    // project to `{projectRoot}`, but these targets genuinely read the whole
+    // tree. Apple/Rust native sources and prose never change their output.
+    "repo": [
+      "{workspaceRoot}/**/*",
+      "!{workspaceRoot}/apps/apple/**",
+      "!{workspaceRoot}/cubby-ffi/**",
+      "!{workspaceRoot}/**/*.md",
+      "!{workspaceRoot}/.claude/**"
     ]
   },
   "analytics": false,
@@ -28,6 +44,14 @@
     "nx:run-commands": {
       "inputs": ["default"],
       "outputs": []
+    },
+    // Applies to every package.json-inferred `test` target (the aux packages
+    // under apps/* and packages/*); `{projectRoot}` resolves per-project.
+    // apps/web/project.json overrides this back to `cache: false` — its own
+    // "test" spans multiple Vitest projects and isn't scoped this narrowly.
+    "test": {
+      "cache": true,
+      "inputs": ["{projectRoot}/**/*"]
     }
   }
 }

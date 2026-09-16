@@ -6,57 +6,65 @@ production Workers without running tests or E2E again.
 
 ## Local verification
 
-After committing, run `pnpm verify:local`. It rejects uncommitted code, includes
-deleted paths, runs repository checks and selects affected web, PostgreSQL,
-browser, build, auxiliary and Rust gates using `scripts/ci-scope.ts`. Unknown
-paths fail safe. High-risk changes run the complete routine suite;
-`pnpm verify:local:full` forces that suite for any revision. Use
-`CUBBY_VERIFY_BASE` to override the default merge base with `origin/main`.
-The full command includes WASM preparation, dependency installation/deduplication,
-repository checks, workspace and PostgreSQL tests, Rust formatting/lint/tests,
-auxiliary builds and a fresh web build. It then runs the fast tests followed by
-PostgreSQL and browser tests concurrently through the existing `concurrently`
-npm runner. Those two tiers use isolated database templates; a failure stops
-the peer and fails verification. It deploys nothing. Both `pnpm verify:push`
-and `pnpm verify:local` print each step's elapsed seconds and a total.
+`scripts/ci-scope.ts`'s hand-rolled path classifier is gone. Affected-ness and
+scoping are now Nx's job: every gate is a target on the project whose files it
+covers (`apps/web/project.json` — `postgres`, `build-cf`, `e2e`,
+`workers-tests`; `recipebridge/project.json` and `cubby-ffi/project.json` —
+`rust`; `apps/apple/project.json` — `apple-check`; the repo-wide `generate`, `types`,
+`lint`, `format`, `knip` gates stay on root `project.json`'s `cubby-checks`
+project), each with `inputs` that hash only the files it actually reads. A
+target whose inputs are unchanged since the last run replays its cached result
+instead of re-executing.
+
+After committing, run `pnpm verify:local`
+(`nx run-many -t generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`).
+`--parallel=1` is deliberate: every tier is already parallel inside (vitest
+workers, Playwright workers, cargo, xcodebuild), and running tiers side by
+side on one host reproduces the contention the sequential `test:all` removed
+— measured 2026-09-16, the web unit tier took 196s instead of 24s under
+`run-many`'s default parallelism and tripped a 5s test timeout.
+It first rejects an uncommitted or untracked working tree, then runs every
+target across every project — most replay from cache on a small change, so an
+unaffected native/Postgres/E2E gate costs a cache lookup, not a rebuild. It
+deploys nothing. `pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true` first,
+forcing every target to actually execute regardless of cache state — use it
+for high-risk changes or before a release. Both print each step's elapsed
+seconds and a total (Nx's own `--outputStyle=stream` reporting).
 
 **Pre-push.** `.husky/pre-push` runs `pnpm verify:push`
-(`node scripts/ci-scope.ts --push`): a scoped fast gate that never escalates to
-the full suite. It runs `requireCommittedCode`, resolves the base (merge-base
-with `origin/main`, falling back to `HEAD^` and saying so), then: `pnpm wasm`
-only when `recipebridge/` changed; `pnpm install --frozen-lockfile` plus
-`pnpm dedupe:check` only when dependency manifests or the lockfile changed;
-always `pnpm check` (not `check:all`); then only the lanes whose paths
-changed — changed Vitest (`test:changed`) or PostgreSQL (`test:changed:postgres`)
-tests, the Cloudflare build, E2E for routing paths, auxiliary worker
-tests/builds, and Rust fmt/clippy/test per changed manifest (`recipebridge/`
-selects recipebridge, `cubby-ffi/` selects cubby-ffi, `rust-toolchain.toml`
-selects both). High-risk paths do not escalate the push gate. Unknown
-(unclassified) paths run the JavaScript gates and print a warning to run
-`pnpm verify:local` before merging.
+(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple-check --parallel=1 && pnpm check`):
+a scoped fast gate that never escalates to the full suite. `nx affected` compares
+the working tree's content hashes against `nx.json`'s `defaultBase`
+(`origin/main`; override per-invocation with `nx affected --base=<ref>` or the
+`NX_BASE` env var) and runs each named target only on the projects whose
+inputs actually changed — a web-only change skips `rust`/`apple-check` entirely
+rather than a hand-written prefix classifier deciding to skip them. `pnpm
+check` (repository-wide `generate`/`types`/`lint`/`format`/`knip`) always runs
+afterward regardless of scope.
 
 Node 24, pnpm 12.3.4, Rust/wasm-pack, Apple `container` on macOS (external PostgreSQL/IntegreSQL on Linux) and Playwright
 browsers must be available. Follow [validation guidance](agents/validation.md) for database setup.
 PostgreSQL remains the authoritative integration tier; Playwright retains a
 single worker and no retries. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count.
-Browser verification always follows the current web build. Pre-commit still
-runs `pnpm check`.
+Browser verification always follows the current web build (the `e2e` target
+`dependsOn: ["build-cf"]`). Pre-commit still runs `pnpm check`.
 
-A change under `apps/apple/` or `cubby-ffi/` additionally selects the `apple`
-check — true for both the push gate and `pnpm verify:local`: `node
+A change under `apps/apple/` or `cubby-ffi/` selects the `apple` Nx target
+(`scripts/apple-check.sh`, the former `ci-scope.ts` `runAppleCheck` body): `node
 scripts/ensure-apple-ffi.ts` (Nx-cached xcframework + UniFFI shim; a stale
 committed `cubby_ffi.swift` fails as a dirty tree), `xcodegen
 generate --use-cache`,
 `swift test --package-path apps/apple/CubbyKit`,
-`apps/apple/scripts/check-openapi-drift.sh`, then an `xcodebuild` simulator
+`apps/apple/scripts/generate-openapi.sh --check`, then an `xcodebuild` simulator
 build. It skips itself (with a message, not a failure) when `xcode-select -p`
-fails, so a machine without Xcode still passes. `rust` gates run fmt/clippy/test
-per changed manifest (`recipebridge/Cargo.toml`, `cubby-ffi/Cargo.toml`);
-`verify:local:full` and high-risk runs loop both manifests regardless of what
-changed. There is no hosted macOS runner yet — the `apple` check only runs
-locally; a `workflow_dispatch` job behind a `run_ios` input is a possible
-follow-up, not implemented.
+fails, so a machine without Xcode still passes — `pnpm apple check` runs the
+same script directly. The `rust` target runs fmt/clippy/test per crate
+(`recipebridge/project.json`, `cubby-ffi/project.json`); `verify:local(:full)`
+runs both projects' `rust` target regardless of what changed, `verify:push`
+only the affected one. There is no hosted macOS runner yet — the `apple`
+target only runs locally; a `workflow_dispatch` job behind a `run_ios` input is
+a possible follow-up, not implemented.
 
 ## Optional hosted suite
 
@@ -76,8 +84,12 @@ automatically.
 
 ## Deployment
 
-`.github/workflows/deploy.yaml` runs on `main` pushes. It classifies all changed
-paths, builds the affected Workers and deploys them. Each Worker serializes
+`.github/workflows/deploy.yaml` runs on `main` pushes. A `dorny/paths-filter`
+step (replacing the deleted `scripts/ci-scope.ts` `classifyPaths`) classifies
+changed paths into `web`/`usda`/`upc` filters, builds the affected Workers and
+deploys them. Unlike the deleted classifier, an entirely unrecognised
+top-level path is not a fail-safe "deploy everything" — add the path to the
+filter(s) it should affect. Each Worker serializes
 production deployments and checks that the commit is still current main before
 building and again before deploying. Production never depends on a test job.
 This trusts verification performed before merging. Builds/deployments still use
@@ -125,6 +137,76 @@ PostgreSQL, 35 seconds for Playwright, and 60 seconds end to end (55-second
 median target). Re-benchmark five warm `pnpm test:all` runs after changing test
 selection, worker counts, database provisioning, or browser harness startup.
 
+### Integration families to vitest-native (2026-09-15)
+
+The 8 `src/server/integration-families/*.integration.test.ts` import-index
+files (each importing many real `*.integration.test.ts` contract modules to
+fake a "family" Vitest could target as one file) are gone. The `integration`
+Vitest project now includes `src/**/*.integration.test.ts` directly — 77 real
+files (one, `garden.integration.test.ts`, moved from
+`integration-families/` to `src/server/repo/`, a real 1,070-line contract, not
+an index) — with `pool: "forks"`, `isolate: false`, so a worker's fork shares
+one module graph across its share of those files instead of re-isolating for
+each. `test:file:postgres <path>` now runs that exact file directly
+(`vitest run --project integration <path>`, no resolver); the deleted
+`tooling/run-postgres-file.ts` used to resolve a contract module to its owning
+family file first.
+
+Measured on the same 8-core, 24 GiB Mac, `VITEST_MAX_WORKERS=6`, comparing the
+old family structure against the new one on the same commit (only
+`vitest.config.ts`/the file layout differed). `uptime` load is the 1-minute
+average at the start of each run — the host was shared with other concurrent
+work, so absolute numbers are noisy; the comparison is same-host, same-load-ish,
+interleaved:
+
+| Structure | Wall times (s) | Median | Vitest-reported duration (s) | Load (1-min) at each run |
+|---|---|---|---|---|
+| 8 family files (before) | 28, 29, 31 | 29s | 25.25, 25.36, 26.77 | 4.6, 6.0, 6.7 |
+| 77 real files, `isolate: false` (after) | 34, 27, 35, 20, 20 | 27s | 27.23, 22.66, 30.86, 16.25, 16.40 | 28.6, 19.6, 14.1, 14.1, 11.2 |
+
+The after-column ran under markedly *higher* average load (other work
+contending for the same 8 cores) and still matched or beat the before-column's
+median on both wall time and Vitest's own duration; the two fastest after-runs
+(16.3s duration, 20s wall, load 11–14) landed well below every before-run. Both
+structures pass the same 420/425 tests with the same 5 pre-existing failures
+in `product-orchestration.service.integration.test.ts` and
+`recipe-costing.cascade.integration.test.ts` (a stale fixture missing fields
+added elsewhere, and a `warn` call-count assertion) — unrelated to this
+restructure and reproduced identically before and after it, so they are not a
+regression here. Bring-up cost (a single 5-test file via `test:file:postgres`,
+wall time minus Vitest's own reported duration): ~3.5s before, ~3.5s after —
+unchanged, as expected (bring-up is the container pair, not the test layout).
+Ten slowest files: before, the worst "file" was really a family lump (18.9s
+`integrity`, 18.3s `financial`, 15.2s `inventory`, 14.3s `recipe`); after, the
+worst real file is 5.0s (`repo/problems.integration.test.ts`), then 3.6s
+(`repo/ingredient.integration.test.ts`) — the balanced 77-file split removes
+the lumpy tail a handful of oversized family files used to create. Three
+shuffle seeds (default, `CUBBY_TEST_SHUFFLE_SEED=1`, `=2`) reproduced the exact
+same 5 failures with no additional flakes, so `isolate: false`'s per-worker
+module singletons (`db.ts`'s `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`,
+`ai/models.ts`, `semantic/embeddings.ts`, `clients/notion.ts`'s LRU caches)
+did not surface a cross-file dependency in this run. **Decision: kept
+vitest-native** — median wall and duration were ≤ the family baseline despite
+higher load during the after-runs.
+
+`mcp-contract` moved from `sequence.groupOrder: 1` (a serial tail after
+group 0) to `groupOrder: 0` (runs alongside `unit`/`ui`), and the former
+`unit-pure` project's 2 files folded into `unit`. This requires `mcp-contract`
+to share `unit`/`ui`'s `maxWorkers: 5` — Vitest rejects mismatched
+`maxWorkers` within one `groupOrder` — so the project's old dedicated
+`fileParallelism: false` (a single shared worker) was dropped in favor of
+`isolate: false` alone. Fast-tier (`pnpm test`, root `NX_SKIP_NX_CACHE=true`)
+before/after, interleaved on the same host: before 29s/30s/32s wall
+(`@cubby/web` Vitest duration 25.09/25.97/27.98s), after 31s/28s/28s wall
+(duration 26.62/24.38/24.41s) — a modest, consistent improvement, smaller than
+hoped for because this host's aux-package Nx overhead and general load
+dominate the wrapper's wall time more than the ~15s `@cubby/web` Vitest run
+itself. One run of the combined `unit`+`mcp-contract`+`ui` group hit a 15s
+timeout in `worker-validation.unit.test.ts` under a load spike (the group can
+now run up to 15 threads across 3 projects on 8 cores); it passed cleanly on
+every other run, including standalone, so this looks like host contention
+rather than a correctness regression — worth watching on a shared CI runner.
+
 ### Apple container worker measurements (2026-09-15)
 
 On the 8-core, 24 GiB Mac running macOS 27, `container` 1.4.1 and Node
@@ -144,39 +226,114 @@ boundaries decreased across the comparison. These are measurements on a busy dev
 not a runtime-independent speed guarantee. Each completed run left zero
 containers and zero volumes; downloaded images remained cached.
 
-Seven warm `NX_SKIP_NX_CACHE=true pnpm test:all` samples executed the tests
-(no replayed Nx results). Each PostgreSQL tier passed all 407 contracts. The
-browser tier discovered 65 tests, with no skips or retries:
+Seven warm `NX_SKIP_NX_CACHE=true pnpm test:all` samples on 2026-09-15 (median
+**250.21s**; 3 of 7 hit a hydration timeout — sample 3: calendar; sample 6:
+placement navigation and mobile; sample 7: relationship page) and the
+worker-scoped browser harness's 141.59s three-worker sample are the
+historical baseline this section replaced;
+both predate the `test:all` sequencing fix below. Keep them as reference only —
+the test count, sequencing, and worker cap have all since changed, so their
+absolute wall times are not comparable to the table below.
 
-| Sample | Total wall time | Browser result |
-|---|---|---|
-| 1 | 242.48s | 65 passed |
-| 2 | 250.21s | 65 passed |
-| 3 | 259.69s | 64 passed; calendar hydration timeout |
-| 4 | 215.70s | 65 passed |
-| 5 | 248.93s | 65 passed |
-| 6 | 378.90s | 63 passed; placement navigation and mobile hydration timeouts |
-| 7 | 396.65s | 64 passed; relationship page hydration timeout |
+### E2E flake root cause and `test:all` sequencing (2026-09-16)
 
-The median across all samples was **250.21s**; four samples passed completely.
-This exceeds the local-suite target above and does not establish a speedup over
-Docker. Host load reached 76 on eight cores during investigation, with Spotlight
-using over two cores; contention is a possible cause, not a proven explanation.
-The failing scenarios subsequently passed 10 nutrition repetitions and 12 traced
-readiness repetitions. A standalone traced browser run passed all 65 tests in
-265.87s. The intermittent readiness failures remain unresolved; no retries or
-larger timeouts were added to hide them.
+`test:all` ran `concurrently "pnpm test:postgres" "pnpm test:e2e"`: 6 vitest
+forks plus 3 Playwright workers (each its own Node process running workerd and
+a browser), a 4-vCPU PostgreSQL VM, and a 1-vCPU IntegreSQL VM, all on one
+8-core host at once. `waitForAppHydration` (`tests/e2e/e2e-helpers.ts`) waits
+for the authenticated shell's `data-hydrated="true"` marker — bundle fetch,
+parse, and execute on a main thread starved by that oversubscription — while
+`gotoAuthenticatedPage` navigates with `domcontentloaded`, so the same 15s
+budget also covers SSR's `get-session` lookup racing the concurrent
+PostgreSQL tier's `pg_terminate_backend` + truncate-and-reseed cycle per unit
+test. `trace: "on-first-retry"` paired with `retries: 0` meant a failure never
+recorded a trace, and the helper's one message ("Sign In is visible") covered
+both an unhydrated shell and SSR genuinely rendering the signed-out shell,
+so a flake gave no way to tell which had happened without re-running under a
+debugger.
 
-The worker-scoped browser harness that followed gives every Playwright worker a
-separate IntegreSQL clone, object store, and Wrangler runtime. A fresh-build
-three-worker run passed all 65 tests without retries or skips in **141.59s** and
-left zero containers and volumes. One uncached one-worker `test:all` sample also
-passed all 407 PostgreSQL contracts and the browser lane in 397s. The planned
-five-sample 1/2/3 comparison stopped when the host became actively used; a
-concurrent two-worker sample timed out one PostgreSQL contract, so those
-`test:all` timings are not a valid worker-count comparison. The local default
-remains three from the earlier browser-only measurements; repeat the full matrix
-on an idle host before treating its wall times as a new baseline.
+Fix, landed here: (1) `test:all` → `pnpm test && node scripts/test-services.ts
+-- sh -c 'pnpm test:postgres && pnpm test:e2e'` — one container pair,
+sequential, so PostgreSQL and the browser tier never compete for the same
+cores; nested `test-services.ts` invocations no-op their own container
+bring-up via the inherited `CUBBY_TEST_SERVICES=external`. (2) `playwright.config.ts`
+`trace: "retain-on-failure"` (the only setting that actually records anything
+with `retries: 0`). (3) `waitForAppHydration` now throws one of two distinct
+messages — `"Shell not hydrated within budget at <url> (get-session: <status>)"`
+or `"SSR rendered the unauthenticated shell at <url> (get-session: <status>)"`
+— fetching the `get-session` status once, only after the retry budget is
+already exhausted, so the diagnostic fetch itself never adds latency to the
+retry loop. The next flake's error message will name which of the two
+happened and what the session endpoint reported at that moment, without a
+trace re-run. (4) `tooling/e2e-workers.ts` accepts `CUBBY_E2E_WORKERS` up to 4
+(was 3), for future headroom experiments; the local default stays 3 (see
+below). No timeouts were raised and no retries were added.
+
+B1's E2E-side spec consolidation shrank the same-day surface: the four
+per-viewport specs `declared-vendor-display`, `declared-ledger-display`,
+`declared-record-lists`, and `financial-transaction-fields` (8 tests, column
+rendering already covered by `entity-display.<entity>.unit.test.tsx`) became
+one desktop case in `declared-record-lists.spec.ts` plus one mobile case
+folded into `mobile.entity-views.spec.ts`; the other three specs were
+deleted. Sixteen `page.screenshot({ path: testInfo.outputPath(...) })`
+attachments that nothing read were deleted from those and other specs. Total
+discovered E2E tests: **58** (`pnpm --filter @cubby/web exec playwright test
+--list`), down from the historical 65.
+
+Measured on the same 8-core, 24 GiB Mac, `container` 1.4.1 — **not idle**: the
+host ran three other worktrees' Nx daemons and their own test/build work
+throughout this session (1-minute `uptime` load ranged 4 to 26 across the
+runs below, against the plan's idle-host assumption). Given that, this table
+is evidence of direction, not a clean absolute baseline; re-run the matrix on
+an idle host before trusting the wall times as a new target.
+
+| Config | Runs | Wall (s) | E2E wall (s, solo) | Flakes | Load (1-min) before → after |
+|---|---|---|---|---|---|
+| Concurrent (old), full crash | 1 | 180 | — (e2e never ran a test: `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL`) | run-ending crash | 4.6 → n/a |
+| Concurrent (old), completed | 1 | 159 | — | 4/58 (see below) | 8.9 → 10.8 |
+| Sequential (adopted) | 4 | 207, 266, 162, 202 | — | 4/58, same 4 each run | 4.5→13.6, 16.8→19.3, 15.7→11.5, 8.7→11.6 |
+| E2E alone, 3 workers | 2 | — | 155, 137 | 4/58 both | 11.4→26.4, 3.1→14.0 |
+| E2E alone, 4 workers | 1 | — | 134 | 4/58 | 7.9 → 12.4 |
+
+Every failure across every config, every worker count, and even the one run
+that *started* from a near-idle 3.1 load (climbing to 14 purely from the
+run's own postgres+integresql+3-browser-worker footprint) was the *same* four
+tests: `create-recipe-full-flow.spec.ts`, `product-ssr.spec.ts`,
+`mobile.phone-workflows.spec.ts`, `http-resource-api.spec.ts` — three of them
+exactly the hydration-timeout shape this fix targets (a `Create|Save|Move`
+button or click target not appearing within budget) and the fourth a
+session-revocation cache race. None of those four files are touched by this
+change (`git status` confirms it), and none were touched by any commit on
+this branch; they fail identically regardless of `test:all` sequencing or
+worker count, including from a near-idle start. That rules out "this
+change caused it" and points instead to a **pre-existing host-contention
+sensitivity**: these are the tests closest to their own timeout budget, so
+they are the first to tip over the instant *any* significant load appears —
+even the load the E2E run's own three browser workers plus PostgreSQL
+generate by themselves on this 8-core machine. This is a narrower claim than
+H1 as originally framed (which blamed the specific PostgreSQL+Playwright
+`test:all` concurrency): the sequential fix removes that specific
+concurrency, but E2E alone still saturates the box enough to reproduce the
+same four failures. The concurrent shape's one clearly worse behavior is its
+failure mode at the high end: a full crash with zero test output, versus the
+sequential shape's four-for-four completed runs that at least name their
+failures.
+
+**Decision:** adopt the sequential `test:all` regardless — it removes the
+specific PostgreSQL/Playwright CPU oversubscription by construction, and its
+worst observed outcome (a reported failure) is strictly more debuggable than
+the concurrent shape's worst observed outcome (a silent crash). Keep the local
+E2E worker default at 3: the 3-vs-4-worker sample is too small and too noisy
+(load swung 12+ points within single runs) to justify moving the default;
+`CUBBY_E2E_WORKERS=4` is available for a follow-up comparison on an idle host
+now that the cap allows it. **This session did not reach 0 flakes** in any
+sequential run: the same four pre-existing, unrelated tests failed every
+time, including from a near-idle start, so they are not attributable to the
+sequencing fix and are out of this change's scope — track them separately as
+a follow-up (their own resource footprint, not `test:all`'s scheduling, is
+the lead). Re-run `pnpm test:all` ×3–5 on a host with nothing else running at
+all (not just "idle-ish") to confirm the sequencing fix's flake rate in
+isolation from these four.
 
 A warm targeted PostgreSQL family passed 24 tests in 12.38s including service
 startup and cleanup. An earlier Docker sample took 18.07s, but was not a matched
@@ -207,14 +364,29 @@ a Drizzle transaction. Do not put a pure case back into PostgreSQL merely to
 increase database coverage, and do not replace PostgreSQL with a mock database
 interface.
 
+### Final join of the code-deletion pass (2026-09-16)
+
+Measured on the merged branch, host shared with an unrelated build (1-minute
+load 5–20 throughout), so wall clocks are pessimistic:
+
+| gate | result |
+|---|---|
+| `pnpm test:all` (sequential) | 3:13, 2:54, 2:37 — 0 failures, 0 flakes |
+| `pnpm test:e2e` alone (fresh `build:cf`) | 1:51 for 65 tests (was ~2:20 standalone) |
+| `pnpm test:postgres` | 77 files / 422 tests; median 27s vs 29s for the eight family bundles |
+| `@cubby/web` vitest duration | 24.2s |
+| `pnpm verify:local:full` (`--parallel=1`) | 6:49, all 11 targets across 14 projects |
+| `pnpm verify:local:full` (default parallelism, rejected) | 10:54 and red — unit tier 196s, timeouts |
+| `pnpm exec oxlint .` with the two new plugin rules | 1.9s |
+
 ## Operational checks
 
 Before changing CI, run:
 
 ```sh
-node --test scripts/ci-scope.test.ts
 actionlint -no-color .github/workflows/*.yaml
 pnpm run check
+pnpm exec nx show projects --affected --base=origin/main
 ```
 
 After a material workflow change, compare at least ten representative runs for

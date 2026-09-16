@@ -10,18 +10,18 @@ public final class EntityGraphExplorer {
 
     public private(set) var graph: EntityGraph?
     public private(set) var visibleGraph: EntityGraph?
-    public private(set) var selectedNode: EntityReference?
+    public private(set) var selectedNode: EntityRef?
     public var selectedEdgeID: String?
-    public private(set) var history: [EntityReference] = []
+    public private(set) var history: [EntityRef] = []
     public private(set) var historyIndex = 0
     public private(set) var busy: Set<String> = []
     public private(set) var errors: [String: String] = [:]
-    public private(set) var expanded: Set<EntityReference> = []
+    public private(set) var expanded: Set<EntityRef> = []
     public private(set) var counts: [String: Int] = [:]
     public private(set) var loading = false
     private let client: any EntityRelationshipsClient
     private var generation = 0
-    private var tasks: [String: Task<EntityGraphPage, Error>] = [:]
+    private var tasks: [String: Task<EntityGraphOutput, Error>] = [:]
 
     public init(client: any EntityRelationshipsClient, initialGraph: EntityGraph? = nil) {
         self.client = client
@@ -38,7 +38,7 @@ public final class EntityGraphExplorer {
         (graph?.nodes.count ?? 0) >= Self.nodeLimit || (graph?.edges.count ?? 0) >= Self.edgeLimit
     }
 
-    public func start(at root: EntityReference) async {
+    public func start(at root: EntityRef) async {
         generation += 1
         let requestGeneration = generation
         for task in tasks.values { task.cancel() }
@@ -63,7 +63,7 @@ public final class EntityGraphExplorer {
         loading = false
     }
 
-    public func select(_ reference: EntityReference) {
+    public func select(_ reference: EntityRef) {
         guard graph?.nodes.contains(where: { $0.reference == reference }) == true else { return }
         selectedNode = reference; selectedEdgeID = nil
         if history.indices.contains(historyIndex), history[historyIndex] == reference { return }
@@ -84,7 +84,7 @@ public final class EntityGraphExplorer {
             counts[branch.id] ?? (branch.totalCount <= Self.pageSize ? branch.items.count : 0))
     }
 
-    public func expand(_ reference: EntityReference) async {
+    public func expand(_ reference: EntityRef) async {
         guard let root = graph?.root, !atCapacity, !expanded.contains(reference) else { return }
         let requestGeneration = generation
         let client = client
@@ -127,8 +127,8 @@ public final class EntityGraphExplorer {
         }
     }
 
-    private func read(key: String, operation: @escaping @Sendable () async throws -> EntityGraphPage) async
-        -> EntityGraphPage?
+    private func read(key: String, operation: @escaping @Sendable () async throws -> EntityGraphOutput) async
+        -> EntityGraphOutput?
     {
         guard !busy.contains(key) else { return nil }
         busy.insert(key); errors[key] = nil
@@ -155,30 +155,30 @@ public final class EntityGraphExplorer {
         var allowed: Set<String> = []
         for branch in graph.branches {
             let members = Set(branch.items.prefix(shownCount(for: branch)))
-            for id in branch.edgeIDs {
+            for id in branch.edgeIds {
                 if let edge = edgesByID[id], members.contains(edge.source) || members.contains(edge.target) {
                     allowed.insert(id)
                 }
             }
         }
-        var adjacency: [EntityReference: [(EntityReference, String)]] = [:]
+        var adjacency: [EntityRef: [(EntityRef, String)]] = [:]
         for edge in graph.edges where allowed.contains(edge.id) {
             adjacency[edge.source, default: []].append((edge.target, edge.id))
             adjacency[edge.target, default: []].append((edge.source, edge.id))
         }
-        var reached: Set<EntityReference> = [graph.root]
+        var reached: Set<EntityRef> = [graph.root]
         var queue = [graph.root]
-        var paths: [EntityReference: EntityGraphPath] = [
-            graph.root: .init(nodeReferences: [graph.root], edgeIDs: [])
+        var paths: [EntityRef: EntityGraphPath] = [
+            graph.root: .init(nodeRefs: [graph.root], edgeIds: [])
         ]
         var cursor = 0
         while cursor < queue.count {
             let current = queue[cursor]; cursor += 1
             for (next, edge) in adjacency[current] ?? [] where reached.insert(next).inserted {
                 queue.append(next)
-                if let path = paths[current], path.edgeIDs.count < 8 {
+                if let path = paths[current], path.edgeIds.count < 8 {
                     paths[next] = .init(
-                        nodeReferences: path.nodeReferences + [next], edgeIDs: path.edgeIDs + [edge])
+                        nodeRefs: path.nodeRefs + [next], edgeIds: path.edgeIds + [edge])
                 }
             }
         }
@@ -191,12 +191,12 @@ public final class EntityGraphExplorer {
             completion: graph.completion, truncated: graph.truncated)
     }
 
-    nonisolated private static func page(_ graph: EntityGraph) -> EntityGraphPage {
+    nonisolated private static func page(_ graph: EntityGraph) -> EntityGraphOutput {
         .init(nodes: graph.nodes, edges: graph.edges, branches: graph.branches, truncated: graph.truncated)
     }
 
     /// One budget across all pages; retain earlier identities when incoming pages exceed it.
-    nonisolated public static func merge(_ graph: EntityGraph?, page: EntityGraphPage, root: EntityReference)
+    nonisolated public static func merge(_ graph: EntityGraph?, page: EntityGraphOutput, root: EntityRef)
         -> EntityGraph
     {
         var nodes = graph?.nodes ?? []
@@ -205,18 +205,18 @@ public final class EntityGraphExplorer {
             nodes.append(node); nodeIDs.insert(node.id)
         }
         var edges = graph?.edges ?? []
-        var edgeIDs = Set(edges.map(\.id))
+        var edgeIds = Set(edges.map(\.id))
         for edge in page.edges
-        where !edgeIDs.contains(edge.id) && edges.count < edgeLimit && nodeIDs.contains(edge.source.stableKey)
+        where !edgeIds.contains(edge.id) && edges.count < edgeLimit && nodeIDs.contains(edge.source.stableKey)
             && nodeIDs.contains(edge.target.stableKey)
         {
-            edges.append(edge); edgeIDs.insert(edge.id)
+            edges.append(edge); edgeIds.insert(edge.id)
         }
         var branches = graph?.branches ?? []
         for next in page.branches where nodeIDs.contains(next.root.stableKey) {
             let index = branches.firstIndex { $0.id == next.id }
             let old = index.map { branches[$0] }
-            var seenItems: Set<EntityReference> = []
+            var seenItems: Set<EntityRef> = []
             var seenEdges: Set<String> = []
             let branch = EntityGraphBranch(
                 root: next.root, relationshipKey: next.relationshipKey, label: next.label,
@@ -225,8 +225,8 @@ public final class EntityGraphExplorer {
                 items: ((old?.items ?? []) + next.items).filter {
                     nodeIDs.contains($0.stableKey) && seenItems.insert($0).inserted
                 },
-                edgeIDs: ((old?.edgeIDs ?? []) + next.edgeIDs).filter {
-                    edgeIDs.contains($0) && seenEdges.insert($0).inserted
+                edgeIds: ((old?.edgeIds ?? []) + next.edgeIds).filter {
+                    edgeIds.contains($0) && seenEdges.insert($0).inserted
                 })
             if let index { branches[index] = branch } else { branches.append(branch) }
         }

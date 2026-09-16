@@ -9,10 +9,15 @@ struct CubbyLinkTests {
         URL(string: string).flatMap(CubbyLink.init(url:))
     }
 
-    @Test func entityLinksResolveTheKindFromThePrefix() {
-        #expect(link("cubby://entity/PRD-2345") == .entity(.product, id: "PRD-2345"))
-        #expect(link("cubby://entity/loc-2345") == .entity(.location, id: "LOC-2345"))
-        #expect(link("cubby://entity/RCP-2345") == .entity(.recipe, id: "RCP-2345"))
+    @Test(
+        arguments: [
+            ("cubby://entity/PRD-2345", EntityKey.product, "PRD-2345"),
+            ("cubby://entity/loc-2345", EntityKey.location, "LOC-2345"),
+            ("cubby://entity/RCP-2345", EntityKey.recipe, "RCP-2345"),
+        ]
+    )
+    func entityLinksResolveTheKindFromThePrefix(urlString: String, kind: EntityKey, id: String) {
+        #expect(link(urlString) == .entity(kind, id: id))
     }
 
     @Test func captureAndAuditTakeAnOptionalLocation() {
@@ -46,8 +51,9 @@ struct CubbyLinkTests {
         // A real route that isn't a shortcode, and a bare host, both fail to resolve.
         #expect(link("https://cubby.nickysemenza.com/recipes") == nil)
         #expect(link("https://example.com/") == nil)
-        // Labels printed before the prefix cutover carry the legacy single-letter prefix.
-        #expect(link("https://cubby.nickysemenza.com/L-A3F2") == .entity(.location, id: "LOC-A3F2"))
+        // Labels printed before the prefix cutover (`L-A3F2`) are the server's to resolve; the
+        // app's offline prefix match only knows canonical prefixes.
+        #expect(link("https://cubby.nickysemenza.com/L-A3F2") == nil)
     }
 
     @Test func roundTrips() throws {

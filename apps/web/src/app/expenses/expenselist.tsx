@@ -25,7 +25,10 @@ import { Row } from "~/components/layout";
 import { usePageCount } from "~/components/page/Page";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { purchaseLabel } from "~/lib/purchase-label";
@@ -425,7 +428,8 @@ export function ExpenseList() {
     // Purchase is visible by default; its Order # detail remains opt-in.
     // `lineBasis` reads "Line item" on all but a handful of rows, so the column
     // is dead weight by default; its header filter is the surface that matters.
-    initialColumnVisibility: { orderId: false, lineBasis: false },
+    // Both are declared `display.listHidden` on `16-expense.entity.ts` now.
+    initialColumnVisibility: entityListHiddenColumns("expense"),
   });
   const {
     onRowClick,

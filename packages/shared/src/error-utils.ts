@@ -113,6 +113,10 @@ export const AppErrors = {
   // invisible downstream. Enforced again by
   // `ProductExternalId_gtin_digits_check`.
   PRODUCT_GTIN_INVALID: "BAD_REQUEST",
+  // A raw scanner value (`{ kind: "scan" }`) that names nothing stockable: not
+  // a Cubby label, barcode or ISBN, or a label for the wrong entity. The
+  // message is the same sentence the web scanner shows.
+  SCAN_CODE_UNRECOGNIZED: "BAD_REQUEST",
   INGREDIENT_HAS_PRODUCTS: "PRECONDITION_FAILED",
   INGREDIENT_HAS_MEAL_FOOD_ENTRIES: "PRECONDITION_FAILED",
   INGREDIENT_HAS_RECIPES: "PRECONDITION_FAILED",

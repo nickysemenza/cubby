@@ -32,8 +32,9 @@ the spelling — the transcripts carried three competing ones (`pnpm vitest run`
 `apps/web`, because that is where Vitest's root is; a repo-root-relative path
 matches nothing and exits 1 with "No test files found". Use
 `pnpm test:file:postgres src/…` for a PostgreSQL contract file. That command
-resolves a source contract module to its owning family entrypoint, so it runs a
-small real-PostgreSQL family without bypassing the authoritative manifest.
+runs the given file directly against the `integration` Vitest project — there
+is no family resolver or entrypoint indirection; every `*.integration.test.ts`
+file under `apps/web/src` is its own Vitest test file.
 
 `pnpm test` runs all fast unit, UI, contract, and auxiliary-package tests;
 `pnpm test:postgres` runs the retained PostgreSQL contracts; and
@@ -42,10 +43,17 @@ small real-PostgreSQL family without bypassing the authoritative manifest.
 and IntegreSQL containers and remove them afterward; independent commands use
 independent pairs. CI/Linux use external services; the Docker fallback is
 `docker compose -p cubby up -d` plus `CUBBY_TEST_SERVICES=external`.
-`pnpm test:all` (also `test:local`) runs the fast tier first,
-then PostgreSQL and Playwright concurrently.
-Those authoritative tiers use distinct IntegreSQL template hashes so concurrent
-template initialization cannot reset the browser database during a local run.
+`pnpm test:all` (also `test:local`) runs the fast tier, then PostgreSQL, then
+Playwright — one container pair, sequentially. Running the PostgreSQL and
+Playwright tiers concurrently (6 vitest forks plus 3 Playwright workers, each
+with its own workerd and browser, on an 8-core host) was the primary cause of
+E2E flakes: hydration waits and SSR session lookups compete for the same
+starved main thread and database connections that the concurrent PostgreSQL
+contract run is also using. Sequencing removes that contention by
+construction; see [CI](../ci.md) for the measurements behind the change.
+Those authoritative tiers still use distinct IntegreSQL template hashes so a
+later template initialization cannot reset an earlier tier's checked-out
+databases.
 
 `pnpm test:changed` is likewise Docker-free and registers neither database
 project. Use `pnpm test:changed:postgres <ref>` when changed integration
@@ -73,30 +81,45 @@ it. 24% of all test runs used to be a re-run of one that had just failed.
 
 Narrow the other gates too: `pnpm typecheck:web` is useful when only the web app
 is touched. `pnpm check` runs full-tree Oxlint/Oxfmt, TypeScript,
-entity freshness, Knip, script types, and the high-risk SQL/soft-delete guards
-concurrently. `pnpm check:all` adds bindings, OpenAPI, all orchestration tests,
-and security validation. Dependency
-deduplication runs separately when a package manifest, workspace file, patch, or
-lockfile changed; CI and pre-PR validation run the applicable superset.
+entity freshness, Knip, and script types concurrently; the high-risk
+SQL/soft-delete and unsafe-identifier guards are Oxlint rules now (see Quality
+policy below), not a separate script step. `pnpm check:all` adds bindings,
+OpenAPI, all orchestration tests, security validation, and the calendar
+Durable Object tests (`workers-tests`). Dependency deduplication
+(`pnpm dedupe:check`) is a separate manual step now — it does not run inside
+`verify:local`/`verify:push`; run it yourself after a package manifest,
+workspace file, patch, or lockfile change, or let hosted `pnpm run check:all`
+catch it.
 
-Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm check` plus
-changed Vitest/PostgreSQL, E2E, Cloudflare, auxiliary, per-manifest Rust, and
-Apple gates from the commits being pushed, and never escalates to the full
-suite. Hooks are mandatory: agents never use `--no-verify` to bypass a failure.
-Pre-commit checks the **whole working tree**, not the index, so a commit fails
-while any concurrent agent's files are mid-edit — stage early and commit
-between agent waves. Regenerated files (`routeTree.gen.ts` and friends) are
-fine to commit; do not revert generated churn. Pre-commit does not `cargo fmt`
-recipebridge; the pre-push gate does, so check Rust formatting before pushing.
+Pre-commit runs the complete `pnpm check`. Pre-push runs `pnpm verify:push`
+(`nx affected -t typecheck,test,build-cf,postgres,e2e,rust,apple-check --parallel=1 && pnpm
+check`): Nx computes which projects are affected from each target's declared
+`inputs` against `nx.json`'s `defaultBase` (`origin/main`), so a web-only
+push naturally skips `rust`/`apple-check` rather than a hand-written path classifier
+deciding to skip them, and it never escalates to the full suite. Hooks are
+mandatory: agents never use `--no-verify` to bypass a failure. Pre-commit
+checks the **whole working tree**, not the index, so a commit fails while any
+concurrent agent's files are mid-edit — stage early and commit between agent
+waves. Regenerated files (`routeTree.gen.ts` and friends) are fine to commit;
+do not revert generated churn. Pre-commit does not `cargo fmt` recipebridge;
+the pre-push gate's `rust` target does, so check Rust formatting before
+pushing.
 
 Local verification gates merging: run `pnpm verify:local` on the clean final
-commit. This is the merge gate, and it does escalate: high-risk paths run the
-full routine suite; use `pnpm verify:local:full` to force it. E2E always
-follows a fresh web build. Hosted full verification and
-coverage are explicitly dispatched when needed (see [CI](../ci.md)). Main builds
-and deploys affected Workers automatically without repeating tests. If hosted
-verification is requested, observe its exact final commit result before merge.
-`claude-review` remains an opt-in PR label; previews are manually dispatched.
+commit (`nx run-many -t
+generate,types,lint,format,knip,test,postgres,build-cf,e2e,rust,apple-check --parallel=1`, after
+rejecting an uncommitted or untracked tree). This is the merge gate. Unlike
+the deleted `ci-scope.ts`, there is no separate "high-risk" classification
+that escalates it — `verify:local` always runs the full target list, and an
+unaffected native/Postgres/E2E gate replays from Nx's cache instead of
+re-executing; `pnpm verify:local:full` sets `NX_SKIP_NX_CACHE=true` to force
+every target to actually run, which is what a high-risk or pre-release change
+should use. E2E always follows a fresh web build (`e2e`'s `dependsOn:
+["build-cf"]`). Hosted full verification and coverage are explicitly
+dispatched when needed (see [CI](../ci.md)). Main builds and deploys affected
+Workers automatically without repeating tests. If hosted verification is
+requested, observe its exact final commit result before merge. `claude-review`
+remains an opt-in PR label; previews are manually dispatched.
 
 One agent owns a particular gate; other agents continue useful work and consume
 the owner's distilled result instead of repeating it. Subagents run `pnpm
@@ -131,6 +154,30 @@ and underscore-prefixed bindings are established schema and library interop
 patterns; and mutating `sort`/`reverse` calls cannot be mechanically replaced by
 copying variants without changing behavior. Intentional local exceptions to
 enabled rules use a one-line Oxlint directive with a constraint-focused reason.
+
+The `cubby` Oxlint plugin (`tools/oxlint/cubby/`) ports two former standalone
+scripts. `cubby/no-unsafe-identifiers` (repo-wide `error`, off for `*.test.*`,
+`*.spec.*`, `*.fixtures.*`, `tests/`, `test/`, `__fixtures__/`, `test-support/`,
+and `tooling/` paths, and `packages/*/src/testing.ts`) replaces the deleted
+`scripts/check-unsafe-identifiers.ts`. Its `unsafe-helper-declaration`/
+`unsafe-helper-import`/`unsafe-helper-call` checks are exact, purely syntactic
+ports. Its `branded-assertion` check is NOT: the deleted script walked
+import/re-export chains across files to resolve whether an asserted-to type was
+ultimately branded; a single-file Oxlint rule cannot see another file's AST, so
+this rule only resolves types and values declared in the SAME file. Asserting a
+value into a type/alias imported from elsewhere is not flagged even when that
+type is branded at its declaration site — an accepted, documented coverage loss
+(operator decision). `anti-slop/require-safety-comment-for-type-assertion`
+still requires a `SAFETY:` comment on every non-const assertion regardless, so
+an unflagged branded assertion on an imported alias still needs a justification
+comment. `cubby/require-soft-delete-filter` (scoped to
+`apps/web/src/server/**/*.ts` and `packages/*/src/**/*.ts`, excluding
+`*.test.ts`) replaces the deleted `scripts/check-soft-delete-filters.ts` +
+`scripts/schema-storage.ts`; its soft-deletable table catalog is parsed once,
+at plugin load, directly from `schema.ts` + the generated entity-columns file —
+the same parser the deleted `schema-storage.ts` used — never from the
+`application-schema.json` snapshot, whose `lowerFirst(sqlName)` convention does
+not hold for the `oauth_*` auth tables.
 
 Oxfmt owns maintained JavaScript, TypeScript, JSX, TSX, JSON/JSONC, CSS, and HTML.
 It sorts imports only in maintained web source, excluding generated files; sorts

@@ -4,9 +4,8 @@
  * `@cubby/schemas/project` and `project.createFromTasks` (routers/project.ts).
  * Neither side persists if the other fails (plain `withTransaction` rollback).
  *
- * Deliberately does NOT call `createProject`/`moveTasks` (both start their own
- * top-level `withTransaction`) — the create + move happen inline against the
- * same `tx`, mirroring `moveTasks`' own column-write shape one level down.
+ * Deliberately does NOT call `createProject` (which starts its own top-level
+ * `withTransaction`) — the create + move happen inline against the same `tx`.
  */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
@@ -44,7 +43,7 @@ export async function createProjectFromTasks(
   taskEntityIds: TaskId[];
 }> {
   // Resolved live-only up front — the same "resolving IS the liveness check"
-  // pattern as `createProject`/`moveTasks`.
+  // pattern as `createProject`.
   const taskIdsUuid = await resolveAllOrThrow(db, "task", input.taskIds);
 
   const { projectId, taskIds } = await withTransaction(db, async (tx) => {

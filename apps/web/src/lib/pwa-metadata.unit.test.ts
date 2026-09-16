@@ -7,28 +7,22 @@ import { z } from "zod";
 const PORCELAIN_CANVAS = "#f7f9fc";
 
 describe("PWA Porcelain color metadata", () => {
-  it("keeps document, manifest, and offline colors synchronized", () => {
+  it("keeps document and manifest colors synchronized", () => {
     const manifest = z
       .object({ theme_color: z.string(), background_color: z.string() })
       .parse(JSON.parse(readFileSync(resolve("public/manifest.json"), "utf8")));
     const root = readFileSync(resolve("src/routes/__root.tsx"), "utf8");
-    const offline = readFileSync(resolve("public/offline.html"), "utf8");
 
     expect(manifest.theme_color).toBe(PORCELAIN_CANVAS);
     expect(manifest.background_color).toBe(PORCELAIN_CANVAS);
     expect(root).toContain(`content: "${PORCELAIN_CANVAS}"`);
-    expect(offline).toContain(`content="${PORCELAIN_CANVAS}"`);
-    expect(offline).toContain(`--bg: ${PORCELAIN_CANVAS}`);
   });
 });
 
 describe("PWA deployment cache headers", () => {
-  it("revalidates the worker while keeping hashed assets immutable", () => {
+  it("keeps hashed assets immutable", () => {
     const headers = readFileSync(resolve("public/_headers"), "utf8");
 
-    expect(headers).toMatch(
-      /\/sw\.js\s+Cache-Control: public, max-age=0, must-revalidate/,
-    );
     expect(headers).toMatch(
       /\/assets\/\*\s+Cache-Control: public, max-age=31536000, immutable/,
     );

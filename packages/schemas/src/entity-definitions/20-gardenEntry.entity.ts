@@ -14,9 +14,9 @@ const optionalText = z.string().trim().min(1).nullable();
 export default defineEntity({
   key: "gardenEntry",
   names: { singular: "Garden Entry", plural: "Garden Entries" },
-  route: { basePath: "garden-entries" },
+  route: { basePath: "garden-entries", list: null, detail: null },
   table: "GardenEntry",
-  identifiers: { brand: "GardenEntryId", shortcode: "GDE-", legacy: null },
+  identifiers: { brand: "GardenEntryId", shortcode: "GDE-" },
   presentation: {
     titleField: "displayName",
     domain: "house",
@@ -63,6 +63,7 @@ export default defineEntity({
       {
         key: "observedOn",
         kind: "date",
+        control: { kind: "date", initial: "today" },
         validation: {
           read: plainDate,
           create: plainDate,

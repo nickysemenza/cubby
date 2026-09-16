@@ -1,14 +1,13 @@
 import type { TaskOut } from "@cubby/schemas/project";
 import { format, parseISO } from "date-fns";
 import { keyBy } from "es-toolkit";
-import { useState } from "react";
 
+import { useDeleteEntityAction } from "~/app/_components/actions/delete-entity-action";
 import { useEntityActionMutation } from "~/app/_components/hooks/useActionMutation";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 
 import type { BoardColumnKey } from "./board/board-types";
 import { TaskCard } from "./board/TaskCard";
-import { TaskDeleteDialog } from "./board/TaskDeleteDialog";
 
 type TaskAgendaGroup = { day: string; tasks: TaskOut[] };
 
@@ -42,18 +41,17 @@ export function groupTasksByDueDate(
  * The phone form of the Timeline's Gantt: chronological ruled rows instead of
  * a horizontal bar chart, one section per due date — the same "breakpoint
  * decides, both trees render" move `TaskBoard`'s `BoardAgenda` and the
- * calendar's `CalendarAgenda` make. Reuses `TaskCard` (through the same
- * `TaskDeleteDialog` the board uses) so a row can't drift from how the board
- * renders the identical task.
+ * calendar's `CalendarAgenda` make. Reuses `TaskCard`, and the shared
+ * `useDeleteEntityAction("task")` dialog so a row can't drift from how the
+ * board deletes the identical task.
  *
- * Status changes and deletes here are plain mutate-and-invalidate (no
- * optimistic cache patch) — this view has no `task.board`/`task.chartData`
- * cache to patch (see `useBoardMutations`' two supported sources), and a
- * refetch-driven update is an acceptable trade for a read-first fallback
- * view.
+ * Status changes are plain mutate-and-invalidate (no optimistic cache patch)
+ * — this view has no `task.board`/`task.chartData` cache to patch (see
+ * `useBoardMutations`' two supported sources), and a refetch-driven update is
+ * an acceptable trade for a read-first fallback view. Deletes go through the
+ * generic entity command port for the same reason.
  */
 export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
-  const [pendingDelete, setPendingDelete] = useState<TaskOut | null>(null);
   const groups = groupTasksByDueDate(tasks);
   // Best-effort blocker-name resolution — only from tasks THIS agenda has
   // loaded (the dated subset), same fallback TaskCard already has for a
@@ -66,13 +64,9 @@ export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
     intent: "status",
     mutationFn: entityMutationOptionsFactory("task", "update"),
   });
-  const remove = useEntityActionMutation({
-    entity: "task",
-    operation: "delete",
-    intent: "delete",
-    mutationFn: entityMutationOptionsFactory("task", "delete"),
-    onSuccess: () => setPendingDelete(null),
-  });
+  // Always rendered on `/tasks` (via `TasksTimelineView`), so the action's
+  // default navigate-to-list on success is a harmless no-op re-navigation.
+  const deleteAction = useDeleteEntityAction("task");
 
   if (groups.length === 0) return null;
 
@@ -106,7 +100,7 @@ export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
                     onSetStatus={(status) =>
                       setStatus.mutate({ id: task.id, data: { status } })
                     }
-                    onRequestDelete={setPendingDelete}
+                    onRequestDelete={(task) => void deleteAction.run?.([task])}
                   />
                 );
               })}
@@ -114,17 +108,7 @@ export function TasksAgenda({ tasks }: { tasks: TaskOut[] }) {
           </section>
         ))}
       </div>
-      <TaskDeleteDialog
-        task={pendingDelete}
-        isDeleting={remove.isPending}
-        onOpenChange={(open) => {
-          if (!open) setPendingDelete(null);
-        }}
-        onConfirm={async () => {
-          if (pendingDelete)
-            await remove.mutateAsync({ ids: [pendingDelete.id] });
-        }}
-      />
+      {deleteAction.dialog}
     </>
   );
 }

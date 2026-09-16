@@ -1,3 +1,4 @@
+import CubbyAPI
 import Foundation
 
 public struct ImageHashEntry: Sendable, Hashable, Codable {
@@ -19,6 +20,28 @@ public struct ImageHashEntry: Sendable, Hashable, Codable {
         self.sourceFingerprint = sourceFingerprint
         self.width = width
         self.height = height
+    }
+
+    /// One `image.hashIndex` row, its hex hashes parsed.
+    public init(_ item: ImageHashIndexItem) throws {
+        try self.init(
+            id: item.id,
+            perceptualHash: item.perceptualHash.map { try PerceptualHash64(hex: $0) },
+            sourceFingerprint: item.sourceFingerprint.map {
+                try SourceFingerprint(hash: PerceptualHash64(hex: $0.hash), aspectRatio: $0.aspectRatio)
+            },
+            width: item.width,
+            height: item.height)
+    }
+}
+
+/// A hash computed on-device for an image the server could not hash itself.
+public struct ImageHashUpdate: Sendable, Hashable {
+    public let id: ImageCode
+    public let perceptualHash: PerceptualHash64
+    public init(id: ImageCode, perceptualHash: PerceptualHash64) {
+        self.id = id
+        self.perceptualHash = perceptualHash
     }
 }
 

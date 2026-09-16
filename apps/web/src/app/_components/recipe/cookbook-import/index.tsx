@@ -11,7 +11,6 @@ import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
 } from "@cubby/schemas/image";
-import { isbnFromEpubIdentifiers } from "@cubby/schemas/isbn";
 import { useMutation, useQueries } from "@tanstack/react-query";
 import { useBlocker } from "@tanstack/react-router";
 import { AlertTriangle } from "lucide-react";
@@ -386,7 +385,8 @@ export function CookbookImport({
           subjects: [...outline.source.subjects],
           // The OPF names one identifier "unique" but that is usually a Calibre
           // UUID, so scan all of them for a valid ISBN.
-          isbn: isbnFromEpubIdentifiers(outline.source.identifiers),
+          isbn:
+            wasm.isbn_from_epub_identifiers(outline.source.identifiers) ?? null,
         },
         cover,
         coverPreviewUrl,
@@ -565,7 +565,10 @@ export function CookbookImport({
               meta: {
                 author: cookbook.source.authors,
                 subjects: cookbook.source.subjects,
-                isbn: isbnFromEpubIdentifiers(cookbook.source.identifiers),
+                isbn:
+                  wasm.isbn_from_epub_identifiers(
+                    cookbook.source.identifiers,
+                  ) ?? null,
               },
               selected: new Set(recipes.map((entry) => entry.recipe.id)),
               results: new Map<string, ImportResult>(),
@@ -841,7 +844,9 @@ export function CookbookImport({
           };
           // Transient — the server resolves it to a Product and stores only the
           // link. Omitted, not nulled, when the EPUB declares no ISBN.
-          const isbn = isbnFromEpubIdentifiers(extraction.source.identifiers);
+          const isbn = wasm.isbn_from_epub_identifiers(
+            extraction.source.identifiers,
+          );
           if (isbn) cookbookInput.isbn = isbn;
           const cookbook = await upsertCookbook.mutateAsync(cookbookInput);
           cookbookId = cookbook.id;

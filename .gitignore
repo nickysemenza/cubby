@@ -95,3 +95,6 @@ apps/apple/CubbyKit/Frameworks/
 
 # Sentry auth token for the Apple dSYM upload phase lives in ~/.sentryclirc; never in the tree.
 .sentryclirc
+
+# Impeccable design-audit artifacts are session output, not source.
+.impeccable/

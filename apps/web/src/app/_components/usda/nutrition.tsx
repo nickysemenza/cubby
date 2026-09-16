@@ -1,13 +1,13 @@
 import type { NutrientSummary, NutritionInfo } from "@cubby/usda-schemas";
 import { useMemo } from "react";
 
+import { useTableColumnLayout } from "../data-table/column-layout";
 import RTable from "../data-table/Table";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../data-table/table-features";
-import { useCubbyTableLayout } from "../data-table/table-layout";
 
 export const NutritionInfoTable: React.FC<{
   n: NutritionInfo;
@@ -50,19 +50,20 @@ export const NutritionInfoTable: React.FC<{
     [columnHelper],
   );
 
-  const layout = useCubbyTableLayout({
-    key: "usda:nutrition",
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
     columns,
   });
   const table = useCubbyTable({
     data: nutrientSummary,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns: tableColumns,
+    meta: { defaultLayout },
     enableSorting: false,
     enableFilters: false,
     getRowId: (row) => `${row.name}-${row.unit}`,
     initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
       pagination: {
         pageSize: 10,
         pageIndex: 0,

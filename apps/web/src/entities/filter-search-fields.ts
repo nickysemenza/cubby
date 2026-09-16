@@ -3,11 +3,6 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 
 import type { FilterSpecCore } from "./filters";
 
-export {
-  entityFilterSearchFields,
-  entityFilterUrlKeys,
-} from "./filter-search-fields.gen";
-
 /**
  * Server-safe semantic entries used by Problem Query assemblies.
  *

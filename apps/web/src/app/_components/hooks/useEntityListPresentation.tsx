@@ -1,25 +1,22 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { relatedViewsFor } from "@cubby/schemas/related-view";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { useStore } from "@tanstack/react-store";
+import type { ColumnVisibilityState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { browserEntityDefinition, defaultSortFor } from "~/entities/entities";
+import { defaultSortDirectionFor, defaultSortFor } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 
 import type { EntityActionSubject } from "../actions/entity-actions";
 import type { BulkActionsConfig } from "../data-table/bulk-actions.types";
+import { useRevealTableColumnsOnce } from "../data-table/column-layout";
 import type { RowLinkResolver } from "../data-table/columnHelpers";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
   createCubbyColumnHelper,
 } from "../data-table/table-features";
-import {
-  useCubbyTableLayout,
-  useRevealTableColumnsOnce,
-} from "../data-table/table-layout";
 import {
   type TableStateReturn,
   useTableState,
@@ -82,14 +79,10 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     onInspectRow,
     includeCatalogActions,
   });
-  const listConfig = useMemo(
-    () => browserEntityDefinition(entity).list,
-    [entity],
-  );
   const defaultSort = defaultSortFor(entity);
-  // The registry declares direction alongside the field, so a name-sorted
+  // The manifest declares direction alongside the field, so a name-sorted
   // roster opens A→Z instead of the table's blanket descending default.
-  const defaultSortDesc = listConfig?.defaultSortDirection !== "asc";
+  const defaultSortDesc = defaultSortDirectionFor(entity) !== "asc";
   const mergedTableStateOptions = useMemo(
     () => ({
       initialSort: defaultSort,
@@ -139,9 +132,6 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   initialColumnVisibility,
   transientColumnVisibility,
   revealColumns,
-  layoutKey,
-  legacyLayoutVisibilityKey,
-  legacyLayoutSizingKey,
   state,
   supportsServerSorting,
   mappingsMap = null,
@@ -164,9 +154,6 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   initialColumnVisibility?: Record<string, boolean>;
   transientColumnVisibility?: Record<string, boolean>;
   revealColumns?: { key: string; visibility: Record<string, boolean> };
-  layoutKey?: string;
-  legacyLayoutVisibilityKey?: string;
-  legacyLayoutSizingKey?: string;
   state: ReturnType<typeof useEntityListPresentationState<TData>>;
   supportsServerSorting: boolean;
   mappingsMap?: Record<string, UnitMapping[]> | null;
@@ -265,16 +252,14 @@ export function useEntityListPresentation<TData extends BaseListRow>({
     rowLink,
     subject,
   });
-  const persistedLayoutKey = layoutKey ?? entity;
-  const layout = useCubbyTableLayout({
-    key: persistedLayoutKey,
-    columns: allColumns,
-    initialColumnVisibility: mergedInitialColumnVisibility,
-    legacyVisibilityKey: legacyLayoutVisibilityKey ?? persistedLayoutKey,
-    legacySizingKey: legacyLayoutSizingKey ?? persistedLayoutKey,
-  });
-  useRevealTableColumnsOnce(layout, revealColumns);
-  const columnVisibility = useStore(layout.atoms.columnVisibility);
+  // Lifted here (rather than left to `useTableConfig`'s own internal
+  // fallback) because this hook needs to read visibility live, before the
+  // table exists, to decide which related columns are worth fetching preview
+  // data for. The caller feeds `columnVisibility`/`setColumnVisibility` back
+  // into `useTableConfig` as its controlled visibility state.
+  const [columnVisibility, setColumnVisibility] =
+    useState<ColumnVisibilityState>(mergedInitialColumnVisibility);
+  useRevealTableColumnsOnce(setColumnVisibility, revealColumns);
   const visibleRelatedKeys = useMemo(
     () =>
       relatedViews
@@ -290,7 +275,8 @@ export function useEntityListPresentation<TData extends BaseListRow>({
   });
   return {
     allColumns,
-    layout,
+    columnVisibility,
+    setColumnVisibility,
     initialColumnVisibility: mergedInitialColumnVisibility,
     rowContentVersion,
   };

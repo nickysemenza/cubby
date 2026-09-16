@@ -30,12 +30,6 @@ export function useHydrated(): boolean {
  * and emits the content. React reports that as a hydration mismatch and throws
  * the whole tree away to re-render it on the client.
  *
- * `PersistQueryClientProvider` is a second, independent source of the same
- * flip: while it restores the IndexedDB cache the first client render is
- * `isRestoring`, which suppresses react-query's optimistic `fetchStatus:
- * "fetching"` — so `isLoading` (= `isPending && isFetching`) is false on the
- * client even when it was true on the server.
- *
  * Forcing the gate `true` until hydration finishes makes the two renders
  * identical by construction, whatever the cache happens to hold. Content still
  * appears on the render immediately after hydration: the data is already in the

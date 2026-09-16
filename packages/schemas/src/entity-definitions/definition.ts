@@ -118,6 +118,14 @@ const metadataSchemas = () => {
         .optional()
         .default(null),
       section: nonEmptyString().optional().default("main"),
+      /** Editor placeholder text, generic-editor only. */
+      placeholder: nonEmptyString().nullable().optional().default(null),
+      /**
+       * A create-only initial value the generic editor derives at draft time
+       * instead of from the field's record/schema default. `"today"` is the
+       * only member today (the household's local calendar date).
+       */
+      initial: z.literal("today").nullable().optional().default(null),
     })
     .strict();
 
@@ -158,7 +166,13 @@ const metadataSchemas = () => {
         .default(null),
       /** List cell formatter chosen by the shared column compiler. */
       format: z
-        .enum(["currency", "plainDate", "timestamp", "external-link"])
+        .enum([
+          "currency",
+          "signedCurrency",
+          "plainDate",
+          "timestamp",
+          "external-link",
+        ])
         .nullable()
         .optional()
         .default(null),
@@ -173,6 +187,16 @@ const metadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /**
+       * Hidden by default in the generated column's initial visibility, but
+       * still toggleable via the View menu — the one per-field fact the old
+       * per-page `initialColumnVisibility` literal actually carried; everything
+       * else in those objects was a plain columnId echo of `display.list`.
+       */
+      listHidden: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(false),
     })
     .strict();
 
@@ -224,6 +248,13 @@ const metadataSchemas = () => {
       default: nonEmptyString(),
       computed: z.array(nonEmptyString()).optional().default([]),
       groupable: z.array(nonEmptyString()).optional().default([]),
+      /**
+       * Direction the list opens `default` in. Defaults to "desc", which is
+       * right for the date/amount columns most lists open on and wrong for a
+       * name roster — `ledgerParty`/`financialAccount` declare "asc" so a
+       * name-sorted list opens A→Z instead of Z→A.
+       */
+      direction: z.enum(["asc", "desc"]).optional().default("desc"),
     })
     .strict();
 
@@ -261,10 +292,44 @@ const metadataSchemas = () => {
     .object({ module: nonEmptyString(), export: nonEmptyString() })
     .strict();
 
+  /**
+   * Browser route ownership. `list` / `detail` name the page component the
+   * generator renders into `routes/_authenticated/<basePath>.index.tsx` /
+   * `.$<detailParam>.tsx`; `null` keeps that file hand-written. `create` is
+   * how a record is made from the list: `"dialog"` puts `?create=true` in
+   * the list's search schema and the generated index renders the capture
+   * dialog action; `"page"` means a hand-written `<basePath>.new.tsx`
+   * exists and is linked as `routes.new`. It sits beside `list` rather than
+   * inside it because a hand-written list (product, recipe) still owns a
+   * `/new` page.
+   */
   const entityRouteMetadataSchema = z
     .object({
       basePath: nonEmptyString(),
       detailParam: nonEmptyString().optional(),
+      create: z.enum(["dialog", "page"]).optional(),
+      list: z
+        .object({
+          component: sourceRefMetadataSchema,
+          /**
+           * Header actions component; omitted renders the capture dialog
+           * action when `create` is `"dialog"`, `null` renders none.
+           */
+          actions: sourceRefMetadataSchema.nullable().optional(),
+        })
+        .strict()
+        .nullable(),
+      detail: z
+        .object({
+          component: sourceRefMetadataSchema,
+          /**
+           * `(shortcode: string) => queryOptions` for an entity outside the
+           * kernel detail roster (image); the roster's use `entityDetailFor`.
+           */
+          query: sourceRefMetadataSchema.optional(),
+        })
+        .strict()
+        .nullable(),
     })
     .strict();
 
@@ -272,7 +337,19 @@ const metadataSchemas = () => {
     .object({
       brand: nonEmptyString().nullable(),
       shortcode: nonEmptyString().nullable(),
-      legacy: nonEmptyString().nullable(),
+    })
+    .strict();
+
+  /**
+   * Resource verbs the Apple app calls, each with the reason. `list` and
+   * `get` are native for every HTTP entity, and `update` for every gallery
+   * entity (image attach/reorder), so only opt-in verbs are declared here.
+   */
+  const entityNativeMetadataSchema = z
+    .object({
+      create: nonEmptyString().optional(),
+      update: nonEmptyString().optional(),
+      delete: nonEmptyString().optional(),
     })
     .strict();
 
@@ -543,6 +620,7 @@ const metadataSchemas = () => {
       route: entityRouteMetadataSchema.nullable(),
       table: nonEmptyString().nullable(),
       identifiers: entityIdentifiersMetadataSchema,
+      native: entityNativeMetadataSchema.optional(),
       presentation: entityPresentationMetadataSchema,
       fields: entityContractMetadataSchema.nullable(),
       model: entityFieldModelMetadataSchema.optional(),

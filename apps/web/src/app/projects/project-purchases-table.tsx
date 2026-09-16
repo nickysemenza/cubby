@@ -182,7 +182,6 @@ export function ProjectPurchasesTable({
     columns,
     tree,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    layoutKey: "purchase:project-detail",
     initialColumnVisibility: INITIAL_COLUMN_VISIBILITY,
     hiddenFilterColumns: ["project"],
   });

@@ -132,9 +132,6 @@ export function LinkedTransactions({
     initialColumnVisibility: {
       "related:financialTransaction.vendor": false,
     },
-    layoutKey: accountId
-      ? "financial-transaction:account-detail"
-      : "financial-transaction:purchase-settlement",
   });
 
   return (

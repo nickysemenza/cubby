@@ -31,11 +31,17 @@ let package = Package(
         // swift-openapi-generator's ~58k-line output, isolated from the hand-written code so an
         // edit to CubbyKit does not recompile it (Release/WMO archives and Debug incremental
         // builds both paid that cost while it lived in CubbyKit). Generated symbols are
-        // `accessModifier: package`, so CubbyKit can name them and the App target cannot.
+        // `accessModifier: public`, named outside CubbyAPI only through the generated aliases in
+        // CubbyKit/Generated/APITypes.swift.
+        // The hand-written types the generated client is configured to use instead of its own
+        // (`typeOverrides` in openapi/openapi-generator-config.yaml): branded shortcodes and
+        // PlainDate. Kept apart from CubbyKit so CubbyAPI can depend on it.
+        .target(name: "CubbyAPISupport"),
         .target(
             name: "CubbyAPI",
             dependencies: [
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime")
+                "CubbyAPISupport",
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
             ],
             // Line tables only: nothing here is ever stepped through, and full debug info for
             // ~58k generated lines is what makes LLDB stall on launch (see apps/apple/CLAUDE.md's
@@ -50,6 +56,7 @@ let package = Package(
             name: "CubbyKit",
             dependencies: [
                 "CubbyAPI",
+                "CubbyAPISupport",
                 "CubbyFFI",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),

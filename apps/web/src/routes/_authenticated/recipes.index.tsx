@@ -9,7 +9,7 @@ import { listPage } from "~/app/_components/routing/entity-routes";
 import { RecipeList } from "~/app/recipes/recipelist";
 import { Button } from "~/components/ui/button";
 import { entityListLoader } from "~/entities/entity-list-ssr";
-import { recipeListSearchSchema } from "~/entities/list-search";
+import { entitySearch } from "~/entities/generated/entity-search.gen";
 import { pageTitle } from "~/lib/page-title";
 
 // Bound to a const, not inlined into the options object: the router plugin's
@@ -49,8 +49,8 @@ const RecipesPage = listPage({
 });
 
 export const Route = createFileRoute("/_authenticated/recipes/")({
-  validateSearch: recipeListSearchSchema,
-  search: { middlewares: [stripSearchParams({})] },
+  validateSearch: entitySearch.recipe.schema,
+  search: { middlewares: [stripSearchParams(entitySearch.recipe.defaults)] },
   loaderDeps: ({ search }) => search,
   loader: entityListLoader("recipe"),
   head: () => ({ meta: [{ title: pageTitle("Recipes") }] }),

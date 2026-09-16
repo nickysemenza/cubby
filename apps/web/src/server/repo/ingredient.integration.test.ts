@@ -1,7 +1,7 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { count, eq } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
@@ -551,30 +551,19 @@ describe("ingredient", () => {
     // and the re-SELECT finds tx1's committed row.
     const name = "racy salt";
 
-    let releaseTx1!: () => void;
-    const tx1Committed = new Promise<void>((resolve) => {
-      releaseTx1 = resolve;
-    });
-
     // tx1 runs findOrCreate, then holds the transaction open (lock held) until
-    // we release it below.
-    const tx1 = withTransaction(ctx.db, async (tx) => {
-      const row = await findOrCreateIngredient(tx, name);
-      await tx1Committed;
-      return row;
+    // raceUniqueInsert confirms tx2 is blocked on it.
+    // tx2 races the same name; its INSERT blocks on tx1's lock.
+    const { winner: a, loser: b } = await raceUniqueInsert(ctx, {
+      winner: (releaseSignal) =>
+        withTransaction(ctx.db, async (tx) => {
+          const row = await findOrCreateIngredient(tx, name);
+          await releaseSignal;
+          return row;
+        }),
+      loser: () =>
+        withTransaction(ctx.db, async (tx) => findOrCreateIngredient(tx, name)),
     });
-
-    await new Promise((r) => setTimeout(r, 100));
-
-    // tx2 races the same name; its INSERT will block on tx1's lock.
-    const tx2 = withTransaction(ctx.db, async (tx) =>
-      findOrCreateIngredient(tx, name),
-    );
-
-    await new Promise((r) => setTimeout(r, 100));
-    releaseTx1();
-
-    const [a, b] = await Promise.all([tx1, tx2]);
 
     // Both callers resolve to the same surviving row, no error thrown.
     expect(a.id).toEqual(b.id);

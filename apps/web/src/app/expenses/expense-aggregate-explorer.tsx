@@ -18,6 +18,7 @@ import {
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { useTableColumnLayout } from "~/app/_components/data-table/column-layout";
 import RTable from "~/app/_components/data-table/Table";
 import {
   createCubbyColumnCollection,
@@ -25,7 +26,6 @@ import {
   type CubbyColumnDef,
   useCubbyTable,
 } from "~/app/_components/data-table/table-features";
-import { useCubbyTableLayout } from "~/app/_components/data-table/table-layout";
 import { Row, Stack } from "~/components/layout";
 import { CrossTabTable } from "~/components/matrix/cross-tab-table";
 import { Button } from "~/components/ui/button";
@@ -618,17 +618,23 @@ function ExpenseAnalyzeOneDimension({
       add(compareColumn("percent", "Delta %", "percent"));
     });
   }, [comparison, data, metric, onOpenLedger]);
-  const layout = useCubbyTableLayout({ key: "expense:analyze", columns });
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
+    columns,
+  });
   const table = useCubbyTable({
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns: tableColumns,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+      pagination: { pageIndex: 0, pageSize: 500 },
+    },
+    meta: { defaultLayout },
     getRowId: (row) => row.id,
     state: { sorting },
     onSortingChange: setSorting,
     enableCellSelection: false,
-    initialState: { pagination: { pageIndex: 0, pageSize: 500 } },
   });
 
   return (

@@ -132,17 +132,6 @@ describe("LocationVisual", () => {
     expect(screen.getByText("Location photo")).toBeInTheDocument();
   });
 
-  it("uses a compact phone aspect ratio while retaining the desktop plate", () => {
-    renderVisual(
-      <LocationVisual location={containerLocation()} variant="hero" />,
-    );
-
-    expect(
-      screen.getByLabelText("Visual overview of Abrasives box")
-        .firstElementChild,
-    ).toHaveClass("aspect-video", "md:aspect-[4/3]");
-  });
-
   it("keeps compact media non-interactive inside an outer location link", () => {
     renderVisual(
       <LocationVisual location={containerLocation()} variant="compact" />,

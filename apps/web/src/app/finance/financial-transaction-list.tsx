@@ -18,7 +18,10 @@ import {
 import { NoneValue } from "~/components/ui/none-value";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { presenceCellOptions } from "~/lib/select-options";
 
@@ -46,24 +49,17 @@ const NO_OPTIONS: FinancialAccountOptionsOut = [];
 const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
 
 /**
- * Module-level: this feeds the merged-visibility `useMemo`, so an inline object
- * literal would rebuild the table's column visibility on every render.
- *
- * `merchant`, `possibleVendor` (`vendorInference`) and `source` (`sourceRefs`)
- * were already hidden by default. `rawDescription`, `sourceCategory` and
- * `notes` are also declared `list: true` on the entity (for the native
- * catalog / the "Columns" menu), but were never a column on this page before
- * this migration — kept hidden here rather than newly surfaced, same
- * treatment as the three already-hidden ones.
+ * `merchant`, `possibleVendor` (`vendorInference`), `source` (`sourceRefs`),
+ * `rawDescription`, `sourceCategory` and `notes` are declared
+ * `display.listHidden` on `14-financialTransaction.entity.ts` now.
+ * `purchasePresence` is a filter-hosting synthetic column outside the field
+ * model, so it stays hand-declared here. Module-level: this feeds the
+ * merged-visibility `useMemo`, so an inline object literal would rebuild the
+ * table's column visibility on every render.
  */
 export const FINANCIAL_TRANSACTION_INITIAL_COLUMN_VISIBILITY = {
   purchasePresence: false,
-  merchant: false,
-  possibleVendor: false,
-  source: false,
-  rawDescription: false,
-  sourceCategory: false,
-  notes: false,
+  ...entityListHiddenColumns("financialTransaction"),
 };
 
 export function FinancialTransactionList() {

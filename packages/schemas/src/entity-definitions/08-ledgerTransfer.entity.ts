@@ -17,9 +17,23 @@ import { z } from "zod";
 export default defineEntity({
   key: "ledgerTransfer",
   names: { singular: "Ledger Transfer", plural: "Transfers" },
-  route: { basePath: "ledger-transfers" },
+  route: {
+    basePath: "ledger-transfers",
+    list: {
+      component: {
+        module: "~/app/finance/ledger-transfer-list",
+        export: "LedgerTransferList",
+      },
+    },
+    detail: {
+      component: {
+        module: "~/app/finance/ledger-transfer-detail",
+        export: "LedgerTransferDetail",
+      },
+    },
+  },
   table: "LedgerTransfer",
-  identifiers: { brand: "LedgerTransferId", shortcode: "LTR-", legacy: null },
+  identifiers: { brand: "LedgerTransferId", shortcode: "LTR-" },
   // Ledger transfers have no name field; `fromPartyName` is the most
   // identifying human-readable value a transfer carries.
   presentation: {
@@ -288,16 +302,12 @@ export default defineEntity({
         urlOnly: true,
       },
       {
-        columnId: "dateFrom",
-        kind: "text",
-        placeholder: "Transfer date from...",
-        urlOnly: true,
-      },
-      {
-        columnId: "dateTo",
-        kind: "text",
-        placeholder: "Transfer date to...",
-        urlOnly: true,
+        columnId: "date",
+        kind: "range",
+        placeholder: "Filter by transfer date...",
+        deriveSchema: true,
+        stored: true,
+        range: { kind: "date" },
       },
     ],
   },

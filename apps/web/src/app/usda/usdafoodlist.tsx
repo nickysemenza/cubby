@@ -294,8 +294,6 @@ export function USDAFoodList({
       buildFilters: buildUSDAFilters,
       columns,
       tableStateOptions: USDA_TABLE_STATE,
-      layoutKey: "usdaFood",
-      legacyLayoutSizingKey: "usdaFood",
     },
   );
   const {
@@ -317,7 +315,6 @@ export function USDAFoodList({
         onRowHover={onRowHover}
         onRowHoverEnd={onRowHoverEnd}
         currentRowId={preview?.rowKey ?? preview?.id}
-        defaultDensity="dense"
         desktopInspector={dockedInspector}
         inspectorToggle={inspectorToggle}
       />

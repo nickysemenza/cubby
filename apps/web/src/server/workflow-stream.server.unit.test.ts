@@ -51,7 +51,7 @@ const runtime: WorkflowStreamRuntime = {
 };
 
 const responseFor = (
-  operation: "ai.backfillLocationDescriptions" | "agent.askStream",
+  operation: "ai.backfillLocationDescriptions",
   run: StreamRun,
 ) =>
   workflowStreamResponse(
@@ -131,15 +131,5 @@ describe("workflow stream freshness notifications", () => {
     await vi.waitFor(() => {
       expect(recordDatabaseWrite.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
-  });
-
-  it("does not notify for read-only agent streaming", async () => {
-    const response = await responseFor("agent.askStream", async function* () {
-      yield { n: 1 };
-    });
-
-    await response.text();
-
-    expect(recordDatabaseWrite).not.toHaveBeenCalled();
   });
 });

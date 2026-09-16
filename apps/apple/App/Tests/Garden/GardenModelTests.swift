@@ -40,8 +40,9 @@ struct GardenModelTests {
         let model = GardenModel(service: service)
         await model.load()
 
-        let input = CreateGardenPlanting(
-            ingredientID: "ING-1", locationID: "LOC-1", productID: "PRD-1", status: .growing)
+        let input = GardenCreatePlantingInput(
+            ingredientId: "ING-1", locationId: LocationCode("LOC-1"), status: .growing,
+            sourceProductId: ProductCode("PRD-1"))
 
         // Toggle off: never writes back, even though the association differs.
         _ = await model.create(input, rememberSource: false)
@@ -66,15 +67,15 @@ struct GardenModelTests {
 /// A `GardenService` fake that counts calls and records writes; no network involved. `final class`
 /// so `GardenModel.SharedStore` (keyed by `ObjectIdentifier`) can key off of it.
 private final class StubGardenService: GardenService, @unchecked Sendable {
-    var overview = GardenOverview(locations: [], finishedPlantings: [])
+    var overview = GardenOverviewOut(locations: [], finished: [], unassigned: [])
     var options = GardenOptions(ingredients: [], locations: [], products: [])
-    var guides = GardenGuidesDocument(schemaVersion: 1, sources: [], guides: [])
+    var guides = GardenGuidesDocument(schemaVersion: ._1, sources: [], guides: [])
     private(set) var overviewCallCount = 0
     private(set) var optionsCallCount = 0
     private(set) var guidesCallCount = 0
     private(set) var setProductCalls: [(id: String, growsIngredientID: String?)] = []
 
-    func gardenOverview() async throws -> GardenOverview {
+    func gardenOverview() async throws -> GardenOverviewOut {
         overviewCallCount += 1
         return overview
     }
@@ -86,13 +87,13 @@ private final class StubGardenService: GardenService, @unchecked Sendable {
         guidesCallCount += 1
         return guides
     }
-    func createGardenPlanting(_ input: CreateGardenPlanting) async throws {}
-    func recordGardenEntry(_ input: RecordGardenEntry) async throws {}
+    func createGardenPlanting(_ input: GardenCreatePlantingInput) async throws {}
+    func recordGardenEntry(_ input: GardenRecordEntryInput) async throws {}
     func startGardenPlanting(
         id: String, locationID: String, startedAt: Date, method: GardenStartMethod
     ) async throws {}
-    func moveGardenPlanting(_ input: MoveGardenPlanting) async throws {}
-    func splitGardenPlanting(_ input: SplitGardenPlanting) async throws {}
+    func moveGardenPlanting(_ input: GardenMovePlantingInput) async throws {}
+    func splitGardenPlanting(_ input: GardenSplitPlantingInput) async throws {}
     func finishGardenPlanting(id: String, finishedAt: Date, note: String?) async throws {}
     func createGardenLocation(name: String, kind: GardenLocationKind, conditions: String?) async throws {}
     func updateGardenLocation(
@@ -102,16 +103,16 @@ private final class StubGardenService: GardenService, @unchecked Sendable {
         setProductCalls.append((id: id, growsIngredientID: growsIngredientID))
     }
     func setGardenIngredient(id: String, guideKey: String?) async throws {}
-    func updateGardenPlanting(_ input: EditGardenPlanting) async throws {}
+    func updateGardenPlanting(id: String, _ data: PlantingUpdateData) async throws {}
     func gardenEntries(
         locationID: String?, plantingID: String?, page: Int
-    ) async throws -> (items: [GardenEntry], hasMore: Bool) { (items: [], hasMore: false) }
+    ) async throws -> (items: [GardenEntryOut], hasMore: Bool) { (items: [], hasMore: false) }
     func gardenJournal(
         plantingID: String, includeBedContext: Bool, page: Int
-    ) async throws -> (items: [GardenJournalEntry], hasMore: Bool) { (items: [], hasMore: false) }
-    func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriod] { [] }
+    ) async throws -> (items: [GardenJournalEntryOut], hasMore: Bool) { (items: [], hasMore: false) }
+    func gardenLocationHistory(plantingID: String) async throws -> [GardenLocationPeriodOut] { [] }
     func correctGardenLocationDates(
-        plantingID: String, periods: [GardenLocationPeriod]
-    ) async throws -> [GardenLocationPeriod] { periods }
-    func updateGardenEntry(_ input: EditGardenEntry) async throws {}
+        plantingID: String, periods: [GardenLocationPeriodOut]
+    ) async throws -> [GardenLocationPeriodOut] { periods }
+    func updateGardenEntry(id: String, _ data: GardenEntryUpdateData) async throws {}
 }

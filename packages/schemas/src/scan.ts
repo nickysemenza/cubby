@@ -24,7 +24,8 @@ import { productFindOrCreateByCodeInput } from "./product";
  * resolve through find-or-create. A `PRD-` label names one that certainly
  * does — Cubby printed it — so it resolves by lookup and never creates.
  * Without this variant, enabling QR would read Cubby's own product labels and
- * then reject them.
+ * then reject them. A raw `scan` (inherited from the product input) is
+ * classified server-side into one of the other three.
  */
 export const scanAtLocationCode = z.union([
   productFindOrCreateByCodeInput,

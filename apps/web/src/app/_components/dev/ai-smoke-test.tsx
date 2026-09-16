@@ -1,4 +1,3 @@
-import { agentAskInputSchema, agentResultSchema } from "@cubby/schemas/agent";
 import {
   aiLocationIdInput,
   categorySuggestionInput,
@@ -16,7 +15,6 @@ import {
 import { useState } from "react";
 import { z } from "zod";
 
-import { useAgentStream } from "~/app/_components/hooks/useAgentStream";
 import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -30,14 +28,12 @@ import {
 import { Description } from "~/components/ui/description";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
-import { agent } from "~/lib/agent.functions";
 import { ai } from "~/lib/ai.functions";
 import { getErrorMessage } from "~/lib/error-utils";
 
 /** The registry model each spec's code path actually runs on, shown per card
  * instead of one global badge now that every feature can pick its own tier. */
 const FAST_TIER_MODEL = "gpt-5.6-luna";
-const REASONING_TIER_MODEL = "claude-sonnet-5";
 
 const jsonValueSchema = z.json();
 type JsonValue = z.infer<typeof jsonValueSchema>;
@@ -47,8 +43,7 @@ type SmokeResult =
   | z.infer<typeof locationSuggestionSchema>
   | z.infer<typeof usdaFoodSuggestionOut>
   | z.infer<typeof productIdentificationSchema>
-  | z.infer<typeof detectedInventorySchema>
-  | z.infer<typeof agentResultSchema>;
+  | z.infer<typeof detectedInventorySchema>;
 
 interface EndpointSpec {
   key: string;
@@ -117,14 +112,6 @@ const SPECS: EndpointSpec[] = [
     model: FAST_TIER_MODEL,
     defaultInput: { locationId: "replace-with-location-uuid" },
     run: (i) => ai.detectInventoryItems.call(aiLocationIdInput.parse(i)),
-  },
-  {
-    key: "agentAsk",
-    label: "agent.ask",
-    description: "Agentic MCP loop (non-streaming) over your data",
-    model: REASONING_TIER_MODEL,
-    defaultInput: { query: "how many products do I have?" },
-    run: (i) => agent.ask.call(agentAskInputSchema.parse(i)),
   },
 ];
 
@@ -211,65 +198,6 @@ function EndpointCard({
   );
 }
 
-function AgentStreamCard() {
-  const stream = useAgentStream();
-  const [query, setQuery] = useState("how many products do I have?");
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>agent.askStream</CardTitle>
-        <CardDescription>
-          Streaming agent — live token + tool reveal
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-2">
-        <Textarea
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          spellCheck={false}
-          rows={2}
-        />
-        <Row align="center" gap="sm">
-          <Button
-            size="sm"
-            onClick={() => stream.ask(query)}
-            disabled={stream.isStreaming}
-          >
-            Run
-          </Button>
-          {stream.isStreaming && (
-            <Badge variant="secondary">
-              <Spinner size="sm" />{" "}
-              {stream.toolStatus ? `tool: ${stream.toolStatus}` : "streaming"}
-            </Badge>
-          )}
-          {!stream.isStreaming && stream.result && (
-            <Badge variant="positive">
-              done · {stream.result.toolCalls.length} tool call(s)
-            </Badge>
-          )}
-        </Row>
-        {stream.error && (
-          <pre className="overflow-auto text-2xs whitespace-pre-wrap text-destructive">
-            {stream.error}
-          </pre>
-        )}
-        {stream.answer && (
-          <div className="max-h-72 overflow-auto rounded-md bg-muted/40 p-2 text-xs/relaxed whitespace-pre-wrap">
-            {stream.answer}
-          </div>
-        )}
-        {stream.result && stream.result.sources.length > 0 && (
-          <Description size="2xs">
-            sources: {stream.result.sources.map((s) => s.name).join(", ")}
-          </Description>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
 export function AiSmokeTest() {
   const [inputs, setInputs] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -345,7 +273,7 @@ export function AiSmokeTest() {
           className="ml-auto"
           onClick={runAll}
         >
-          Run all (non-streaming)
+          Run all
         </Button>
       </Row>
       <div className="grid gap-4 md:grid-cols-2">
@@ -363,7 +291,6 @@ export function AiSmokeTest() {
             onRun={() => void runOne(spec)}
           />
         ))}
-        <AgentStreamCard />
       </div>
     </div>
   );

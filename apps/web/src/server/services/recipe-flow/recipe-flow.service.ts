@@ -135,7 +135,7 @@ type RecipeFlowCandidateAssessment =
       issues: string[];
     };
 
-export function assessRecipeFlowCandidate(
+function assessRecipeFlowCandidate(
   recipe: RecipeOut,
   candidate: RecipeFlowAiPlan,
 ): RecipeFlowCandidateAssessment {
@@ -167,7 +167,7 @@ export function assessRecipeFlowCandidate(
     : validation;
 }
 
-export function flowPromptInput(recipe: RecipeOut): RecipeFlowPromptInput {
+function flowPromptInput(recipe: RecipeOut): RecipeFlowPromptInput {
   return {
     title: recipe.name,
     sections: recipe.sections.map((section) => ({

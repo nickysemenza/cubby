@@ -30,6 +30,7 @@ export const relatednessContract = defineContract("relatedness", {
 
 export const recommendationsContract = defineContract("recommendations", {
   forEntity: query({
+    native: "Native inline relationship recommendations",
     input: entityRecommendationsInput,
     output: entityRecommendationsOut,
   }),

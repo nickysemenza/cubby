@@ -59,8 +59,8 @@ describe("HTTP contract", () => {
     }
     expect(mismatches).toEqual([]);
     // Flat-input queries are GET; the structured ones travel as POST bodies.
-    expect(transports).toEqual({ get: 120, post: 33, mutation: 87 });
-    expect(Object.keys(document.paths)).toHaveLength(277);
+    expect(transports).toEqual({ get: 120, post: 33, mutation: 86 });
+    expect(Object.keys(document.paths)).toHaveLength(276);
     const analytics = rpc.find(
       (route) => metadataOf(route).operation === "expense.analytics",
     );
@@ -170,7 +170,7 @@ describe("HTTP contract", () => {
   it("narrows sort and groupBy to the entity's declared roster", () => {
     // The live route schema is what the document is generated from, so the
     // same roster shows in both: the contract now, the document after
-    // `generate:http-api`.
+    // `pnpm generate`.
     const listQueryOf = (path: string) => {
       const route = routes.find(
         (candidate) => candidate.path === path && candidate.method === "GET",

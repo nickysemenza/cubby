@@ -29,7 +29,7 @@ import { useDebug } from "~/hooks/useDebug";
 import { useNavAuthed } from "~/hooks/useNavAuthed";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
 import { buildMetadataQueryOptions } from "~/lib/build-metadata";
-import { useFlag } from "~/lib/flags";
+import { FLAGS } from "~/lib/flags";
 import { PerfProfiler } from "~/lib/perf/PerfProfiler";
 
 import { Provider } from "../integrations/tanstack-query/root-provider";
@@ -40,15 +40,15 @@ import appCss from "../styles.css?url";
 // none of which is needed for first paint. Loaded on first ⌘K / search click.
 const GlobalCommandMenu = React.lazy(loadCommandMenu);
 
-// Keep production devtools out of the initial client path. The persisted flag
-// still controls whether this lazy chunk is requested and mounted.
+// Keep production devtools out of the initial client path. The `devtools`
+// flag still controls whether this lazy chunk is requested and mounted.
 const loadTanStackDevtools = createClientOnlyFn(
   () => import("~/integrations/tanstack-devtools"),
 );
 const TanStackDevtoolsMount = React.lazy(loadTanStackDevtools);
 
-// Lazy + flag-gated: the perf overlay and its web-vitals collector only load when
-// the `perfOverlay` flag is on (flippable on /settings, any environment).
+// Lazy + flag-gated: the perf overlay and its web-vitals collector only load
+// when the `perfOverlay` flag is on (flags.ts, compile-time).
 const PerfOverlay = React.lazy(() =>
   import("~/app/_components/perf-overlay").then((m) => ({
     default: m.PerfOverlay,
@@ -56,7 +56,7 @@ const PerfOverlay = React.lazy(() =>
 );
 
 function PerfOverlayMount() {
-  const enabled = useFlag("perfOverlay");
+  const enabled = FLAGS.perfOverlay;
   if (!enabled) return null;
   return (
     <React.Suspense fallback={null}>

@@ -4,6 +4,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const mealContract = defineContract("meal", {
   getNutrition: query({
+    native: "Meal and daily macro summaries",
     input: schemas.mealNutritionInput,
     output: schemas.mealNutritionOut,
   }),

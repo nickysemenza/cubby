@@ -118,8 +118,7 @@ export const vendorMergeSummaryOut = z.object({
    * soft-deleted. Reported as a count, not per-purchase: the plan tracks
    * folded pairs by internal purchase id, and turning those into the
    * `PUR-` shortcodes a caller could act on would need a lookup the plan
-   * doesn't already carry (see `previewMergeVendors`'s own transitive counts
-   * for a finer breakdown, computed separately for that read-only preview).
+   * doesn't already carry.
    */
   purchasesFolded: z.number().int().nonnegative(),
   carriedFields: z.array(z.string()),

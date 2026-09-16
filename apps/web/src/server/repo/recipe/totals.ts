@@ -186,25 +186,6 @@ export const getRecipeTotalsState = async (
     return row ?? null;
   });
 
-/**
- * Raw `totalsComputedAt` for one recipe, live or soft-deleted. Every other
- * reader in this file requires `notDeleted` (that's the point of the liveness
- * guard on {@link markRecipesStale}), so there is otherwise no way to observe
- * whether a stamp reached a deleted row — this exists for that verification.
- * includes-deleted: diagnostic-only read, not a correctness-sensitive query.
- */
-export const getRecipeTotalsStateIncludingDeleted = async (
-  db: Database | DrizzleTransaction,
-  id: RecipeId,
-): Promise<{ totalsComputedAt: Date | null } | null> => {
-  const [row] = await unwrapDb(db)
-    .select({ totalsComputedAt: recipe.totalsComputedAt })
-    .from(recipe)
-    .where(eq(recipe.id, id))
-    .limit(1);
-  return row ?? null;
-};
-
 /** All active recipe ids — for a full backfill/recompute. */
 export const selectAllActiveRecipeIds = async (
   db: Database | DrizzleTransaction,

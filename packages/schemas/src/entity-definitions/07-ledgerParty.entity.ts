@@ -5,9 +5,23 @@ import { z } from "zod";
 export default defineEntity({
   key: "ledgerParty",
   names: { singular: "Ledger Party", plural: "Ledger Parties" },
-  route: { basePath: "ledger-parties" },
+  route: {
+    basePath: "ledger-parties",
+    list: {
+      component: {
+        module: "~/app/finance/ledger-party-list",
+        export: "LedgerPartyList",
+      },
+    },
+    detail: {
+      component: {
+        module: "~/app/finance/ledger-party-detail",
+        export: "LedgerPartyDetail",
+      },
+    },
+  },
   table: "LedgerParty",
-  identifiers: { brand: "LedgerPartyId", shortcode: "LPY-", legacy: null },
+  identifiers: { brand: "LedgerPartyId", shortcode: "LPY-" },
   presentation: {
     titleField: "name",
     domain: "finance",
@@ -112,6 +126,8 @@ export default defineEntity({
     sort: {
       fields: ["name", "kind", "createdAt", "updatedAt"],
       default: "name",
+      // A name roster reads A→Z, unlike the blanket descending default.
+      direction: "asc",
     },
     intents: {
       fields: {

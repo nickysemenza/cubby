@@ -30,7 +30,6 @@ export {
   getLocationCoverImageUrlsByLocationIds,
   isGlobalUnknownLocation,
   locationList,
-  locationOptions,
   locationSearch,
   updateLocation,
   updateLocationAiDescription,
@@ -38,7 +37,6 @@ export {
 // Lookup operations
 export {
   findOrCreateLocationByName,
-  getLocationByShortcode,
   getLocationPutAwayCandidates,
   getLocationsByShortcodes,
   type LocationPutAwayCandidate,

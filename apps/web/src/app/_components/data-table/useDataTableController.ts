@@ -8,17 +8,13 @@ import { useIsMobile } from "~/hooks/useMobile";
 import { cn } from "~/lib/utils";
 
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
+import { columnWidthVariables } from "./column-layout";
+import { ROW_DENSITY } from "./density";
 import { useTableVirtualizer } from "./hooks/useTableVirtualizer";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
-import { columnWidthVariables } from "./table-layout";
 import { useCellSelection } from "./useCellSelection";
 import { useDesktopGroupedRows } from "./useDesktopGroupedRows";
 import type { GroupConfig } from "./useGroupedList";
-import {
-  densityConfig,
-  type TableDensity,
-  useTableDensity,
-} from "./useTableDensity";
 
 export function useDataTableController<TItem extends RowData>({
   table,
@@ -27,7 +23,6 @@ export function useDataTableController<TItem extends RowData>({
   grouped,
   verticalAlign,
   onRowClick,
-  defaultDensity,
 }: {
   table: ITable<TItem>;
   infiniteScroll?: InfiniteScrollControls;
@@ -36,8 +31,6 @@ export function useDataTableController<TItem extends RowData>({
   verticalAlign: "top" | "middle";
   /** Row-open handler — used by cell selection's Cmd/Ctrl+Enter. */
   onRowClick?: (row: Row<TItem>) => void;
-  /** First-visit density only; a person's stored Display choice still wins. */
-  defaultDensity?: TableDensity;
 }) {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
@@ -47,8 +40,7 @@ export function useDataTableController<TItem extends RowData>({
   // empty/data state and mismatch SSR (CUBBY-3J / CUBBY-3). Keep showing the
   // loading row until hydrated so the first client render matches SSR.
   const hydrated = useHydrated();
-  const { density } = useTableDensity(defaultDensity);
-  const dConfig = densityConfig[density];
+  const dConfig = ROW_DENSITY;
 
   const desktopInfiniteObserverRef = useRef<IntersectionObserver | null>(null);
 

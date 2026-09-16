@@ -233,7 +233,6 @@ export function LinkExpensesDialog({
     entity: "expense",
     data: candidates,
     columns,
-    layoutKey: "purchase:expense-picker",
     isLoading: candidatesQuery.isPending,
     getRowId: (row) => row.id,
     enableRowSelection: true,

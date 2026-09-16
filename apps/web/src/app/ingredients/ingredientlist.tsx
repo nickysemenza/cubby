@@ -24,6 +24,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import { captureRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { EntityIcon } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
@@ -134,6 +136,7 @@ export function IngredientList() {
     [],
   );
   const foodByProductId = useProductFoodSummaries(foodHydrationIds);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Mutation for inline editing (name)
   const updateIngredientMutation = useUpdateMutation({
@@ -334,17 +337,18 @@ export function IngredientList() {
                 Enrich {stubCount} stub{stubCount === 1 ? "" : "s"}
               </Button>
             )}
-            <Button
-              variant="default"
-              render={<Link to="/ingredients/new" />}
-              nativeButton={false}
-            >
+            <Button variant="default" onClick={() => setCreateOpen(true)}>
               New
             </Button>
           </Row>
         }
       />
       <PreviewSheet />
+      <EntityEditDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        request={captureRequest("ingredient")}
+      />
     </ProductFoodSummariesProvider>
   );
 }

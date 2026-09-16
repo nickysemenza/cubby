@@ -17,9 +17,9 @@ import {
   normalizeGtin,
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { productCodeSearchTerms } from "@cubby/schemas/isbn";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 
+import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { product, productExternalId } from "~/server/db/schema";
 import { notDeleted, unwrapDb } from "~/server/repo/database-helpers";
@@ -104,7 +104,7 @@ export const loadAllGtins = async (
  * the package, which for a stored GTIN-14 is usually a suffix of it.
  */
 export const productMatchesGtinTerm = (term: string): SQL => {
-  const terms = [...new Set(productCodeSearchTerms(term.trim()))];
+  const terms = [...new Set(wasm.product_code_search_terms(term.trim()))];
   return sql`EXISTS (
     SELECT 1 FROM "ProductExternalId" pei
     WHERE pei."productId" = ${product.id}

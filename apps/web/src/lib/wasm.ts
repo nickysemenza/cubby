@@ -9,7 +9,7 @@ import type * as RecipeBridge from "@cubby/recipebridge";
 import { LRUCache } from "lru-cache";
 import type { ReadonlyDeep } from "type-fest";
 
-import { getFlag } from "~/lib/flags";
+import { FLAGS } from "~/lib/flags";
 import { recordWasmCache } from "~/lib/perf/perf-store";
 import { executeWasm } from "~/lib/wasm-execution";
 
@@ -71,6 +71,11 @@ const CACHEABLE_METHODS = [
   // sub-recipe referenced from two places re-expands and asks this the same
   // question each time.
   "recipe_yield_fraction",
+  // Pure ISBN validation/normalization, called on every keystroke of the
+  // product forms' ISBN field (live preview + the book-category inference) —
+  // same re-render redundancy as `parse_ingredient` above.
+  "normalize_isbn",
+  "isbn_from_gtin",
 ] as const;
 // NOTE: cost_recipes and expand_recipe_needs are deliberately NOT cached —
 // their args are whole recipe closures (multi-KB stringify keys, fresh object
@@ -122,14 +127,12 @@ const instrumentedWasm = new Proxy(instance, {
       const key = `${name}:${JSON.stringify(args)}`;
       const cached = resultCache.get(key); // updates recency on hit
       if (cached !== undefined) {
-        if (getFlag("perfOverlay"))
-          recordWasmCache(name, true, resultCache.size);
+        if (FLAGS.perfOverlay) recordWasmCache(name, true, resultCache.size);
         return cached;
       }
       const result = executeWasm(name, fn, args);
       if (result !== null && result !== undefined) resultCache.set(key, result);
-      if (getFlag("perfOverlay"))
-        recordWasmCache(name, false, resultCache.size);
+      if (FLAGS.perfOverlay) recordWasmCache(name, false, resultCache.size);
       return result;
     };
   },

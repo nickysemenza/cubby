@@ -8,7 +8,6 @@ import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import { locationCreateInput } from "@cubby/schemas/location";
 import { ledgerPartyCreateInput } from "@cubby/schemas/ledger-party";
 import { saveMealFoodInput } from "@cubby/schemas/meal";
-import { ledgerTransferCreateInput } from "@cubby/schemas/ledger-transfer";
 import { productCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus, taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
@@ -26,8 +25,6 @@ import {
   entityBrowserMutationCommandSchema,
 } from "~/server/entity-kernel/contracts";
 import { createUploadedImageRecord } from "~/server/repo/image";
-import { createLedgerParty } from "~/server/repo/ledger-party";
-import { createLedgerTransfer } from "~/server/repo/ledger-transfer";
 import { saveMealFood } from "~/server/repo/meal/food";
 import { getDb } from "~/server/repo/database-helpers";
 import { requireActor } from "~/server/request-context";
@@ -458,56 +455,6 @@ export async function clearNutritionCachePrerequisite(shortcode: string) {
   await getDb(getFixtureDb()).execute(sql`UPDATE ${schema.recipe}
     SET "totals" = NULL, "totalsComputedAt" = NULL
     WHERE ${schema.recipe.shortcode} = ${shortcode}`);
-}
-
-export async function seedLedgerDisplayPrerequisite(page: Page, name: string) {
-  const db = getFixtureDb();
-  const context = requireActor(
-    createTestRequestContext(db, {
-      auth: { userId: await fixtureUserId(page) },
-    }),
-  );
-  const from = await createLedgerParty(
-    db,
-    ledgerPartyCreateInput.parse({
-      name: `${name} sender`,
-      kind: "member",
-      notes: `${name} party notes`,
-    }),
-    context.actorContext,
-  );
-  const to = await createLedgerParty(
-    db,
-    ledgerPartyCreateInput.parse({ name: `${name} recipient`, kind: "guest" }),
-    context.actorContext,
-  );
-  const transfer = await createLedgerTransfer(
-    db,
-    ledgerTransferCreateInput.parse({
-      fromPartyId: from.output.id,
-      toPartyId: to.output.id,
-      amount: 12.34,
-      date: "2026-09-09",
-      notes: `${name} transfer notes`,
-    }),
-    context.actorContext,
-  );
-  const account = await createFixture(
-    page,
-    "financialAccount",
-    financialAccountCreateInput.parse({
-      name: `${name} cash`,
-      identity: { kind: "cash" },
-      ledgerPartyId: from.output.id,
-      notes: `${name} account notes`,
-    }),
-  );
-  return {
-    from: from.output,
-    to: to.output,
-    transfer: transfer.output,
-    account,
-  };
 }
 
 export const seedVendorDisplayPrerequisite = (page: Page, name: string) =>

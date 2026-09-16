@@ -103,7 +103,6 @@ describe("operation catalog", () => {
       meta: {
         cacheTags: [["calendar", "range"]],
         cacheProfile: "browse",
-        persistence: "memory",
       },
     });
   });

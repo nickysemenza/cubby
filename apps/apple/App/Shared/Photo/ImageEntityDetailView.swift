@@ -5,32 +5,36 @@ import SwiftUI
 struct ImageEntityDetailView: View {
     let id: ImageCode
     @Environment(AppModel.self) private var appModel
-    @State private var detail: CubbyImageDetail?
+    @State private var detail: ImageWithEntity?
     @State private var error: String?
 
     var body: some View {
         List {
             if let detail {
-                PhotoAttachmentImage(
-                    photo: PhotoAttachment(
-                        id: detail.id.rawValue, filename: detail.filename,
-                        source: .remote(detail.url)), renderedWidth: nil
-                ).frame(maxHeight: 420)
+                if let url = detail.imageURL {
+                    PhotoAttachmentImage(
+                        photo: PhotoAttachment(
+                            id: detail.id.rawValue, filename: detail.filename, source: .remote(url)),
+                        renderedWidth: nil
+                    ).frame(maxHeight: 420)
+                }
                 LabeledContent("Image", value: detail.id.rawValue)
                 Section("Used in") {
                     if detail.associations.isEmpty {
                         Text("No current associations").foregroundStyle(.secondary)
                     }
                     ForEach(detail.associations) { association in
-                        if let key = EntityKey(rawValue: association.entityType) {
-                            NavigationLink(value: Route.entityDetail(key, id: association.entityID)) {
+                        if let key = association.key {
+                            NavigationLink(value: Route.entityDetail(key, id: association.entityId)) {
                                 VStack(alignment: .leading) {
-                                    Label(association.name, systemImage: entitySymbol(for: key))
-                                    Text(association.role).font(.caption).foregroundStyle(.secondary)
+                                    Label(association.entityName, systemImage: entitySymbol(for: key))
+                                    Text(association.role.rawValue).font(.caption).foregroundStyle(.secondary)
                                 }
                             }
                         } else {
-                            Link(association.name, destination: appModel.webURL(for: association.entityID))
+                            Link(
+                                association.entityName,
+                                destination: appModel.webURL(for: association.entityId))
                         }
                     }
                 }

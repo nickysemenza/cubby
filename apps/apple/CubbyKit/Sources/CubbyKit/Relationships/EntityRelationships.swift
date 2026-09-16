@@ -1,171 +1,25 @@
 import Foundation
 import Observation
 
-/// A shortcode-backed record reference shared by graph and recommendation APIs.
-public struct EntityReference: Codable, Sendable, Hashable, Identifiable {
-    public let entity: EntityKey
-    public let id: String
-
-    public init(entity: EntityKey, id: String) {
-        self.entity = entity
-        self.id = id
-    }
-
-    public var stableKey: String { "\(entity.rawValue):\(id)" }
-}
-
-public struct EntityGraphNode: Sendable, Hashable, Identifiable {
-    public let reference: EntityReference
-    public let label: String
-    public let metadata: [String: String]
-    public let imageURL: URL?
-
-    public init(
-        reference: EntityReference,
-        label: String,
-        metadata: [String: String] = [:],
-        imageURL: URL? = nil
-    ) {
-        self.reference = reference
-        self.label = label
-        self.metadata = metadata
-        self.imageURL = imageURL
-    }
-
-    public var id: String { reference.stableKey }
-}
-
-public struct EntityGraphEdge: Sendable, Hashable, Identifiable {
-    public let id: String
-    public let source: EntityReference
-    public let target: EntityReference
-    public let relationshipKey: String
-    public let label: String
-    public let sourceKey: String
-    public let provenance: [String]
-
-    public init(
-        id: String,
-        source: EntityReference,
-        target: EntityReference,
-        relationshipKey: String,
-        label: String,
-        sourceKey: String,
-        provenance: [String]
-    ) {
-        self.id = id
-        self.source = source
-        self.target = target
-        self.relationshipKey = relationshipKey
-        self.label = label
-        self.sourceKey = sourceKey
-        self.provenance = provenance
-    }
-}
-
-public struct EntityGraphBranch: Sendable, Hashable, Identifiable {
-    public let root: EntityReference
-    public let relationshipKey: String
-    public let label: String
-    public let target: EntityKey
-    public let totalCount: Int
-    public let nextOffset: Int?
-    public let items: [EntityReference]
-    public let edgeIDs: [String]
-
-    public init(
-        root: EntityReference,
-        relationshipKey: String,
-        label: String,
-        target: EntityKey,
-        totalCount: Int,
-        nextOffset: Int?,
-        items: [EntityReference],
-        edgeIDs: [String]
-    ) {
-        self.root = root
-        self.relationshipKey = relationshipKey
-        self.label = label
-        self.target = target
-        self.totalCount = totalCount
-        self.nextOffset = nextOffset
-        self.items = items
-        self.edgeIDs = edgeIDs
-    }
-
-    public var id: String { "\(root.stableKey)|\(relationshipKey)" }
-}
-
-public struct EntityGraphPath: Sendable, Hashable, Identifiable {
-    public let nodeReferences: [EntityReference]
-    public let edgeIDs: [String]
-
-    public init(nodeReferences: [EntityReference], edgeIDs: [String]) {
-        self.nodeReferences = nodeReferences
-        self.edgeIDs = edgeIDs
-    }
-
-    public var id: String {
-        "\(nodeReferences.map(\.stableKey).joined(separator: ">"))|\(edgeIDs.joined(separator: ">"))"
-    }
-
-    public var destination: EntityReference? { nodeReferences.last }
-}
-
-public enum EntityGraphCompletionStatus: String, Sendable, Hashable {
-    case exhausted
-    case depthLimit = "depth-limit"
-    case paginationLimit = "pagination-limit"
-    case budgetLimit = "budget-limit"
-}
-
-public struct EntityGraphCompletion: Sendable, Hashable {
-    public let status: EntityGraphCompletionStatus
-    public let requestedDepth: Int
-    public let reachedDepth: Int
-
-    public init(status: EntityGraphCompletionStatus, requestedDepth: Int, reachedDepth: Int) {
-        self.status = status
-        self.requestedDepth = requestedDepth
-        self.reachedDepth = reachedDepth
-    }
-}
-
-public struct EntityGraphPage: Sendable, Hashable {
-    public let nodes: [EntityGraphNode]
-    public let edges: [EntityGraphEdge]
-    public let branches: [EntityGraphBranch]
-    public let truncated: Bool
-
-    public init(
-        nodes: [EntityGraphNode],
-        edges: [EntityGraphEdge],
-        branches: [EntityGraphBranch],
-        truncated: Bool
-    ) {
-        self.nodes = nodes
-        self.edges = edges
-        self.branches = branches
-        self.truncated = truncated
-    }
-}
-
+/// The explored neighbourhood around one record: `entity.explore`'s page plus every
+/// `entity.graph` page merged into it since. The wire types are the generated ones; only the
+/// merge is ours.
 public struct EntityGraph: Sendable, Hashable {
-    public let root: EntityReference
+    public let root: EntityRef
     public let nodes: [EntityGraphNode]
     public let edges: [EntityGraphEdge]
     public let branches: [EntityGraphBranch]
     public let paths: [EntityGraphPath]
-    public let completion: EntityGraphCompletion
+    public let completion: EntityGraphExploreCompletion
     public let truncated: Bool
 
     public init(
-        root: EntityReference,
+        root: EntityRef,
         nodes: [EntityGraphNode],
         edges: [EntityGraphEdge],
         branches: [EntityGraphBranch],
         paths: [EntityGraphPath],
-        completion: EntityGraphCompletion,
+        completion: EntityGraphExploreCompletion,
         truncated: Bool
     ) {
         self.root = root
@@ -177,9 +31,15 @@ public struct EntityGraph: Sendable, Hashable {
         self.truncated = truncated
     }
 
+    public init(root: EntityRef, output: EntityGraphExploreOutput) {
+        self.init(
+            root: root, nodes: output.nodes, edges: output.edges, branches: output.branches,
+            paths: output.paths, completion: output.completion, truncated: output.truncated)
+    }
+
     /// Merges one canonical `entity.graph` page and extends loaded explanatory paths through the
     /// requested branch. The graph retains non-path cycle edges while paths stay simple and bounded.
-    public func merging(_ page: EntityGraphPage, for requestedBranch: EntityGraphBranch) -> EntityGraph {
+    public func merging(_ page: EntityGraphOutput, for requestedBranch: EntityGraphBranch) -> EntityGraph {
         let nodesByID = Dictionary(
             (nodes + page.nodes).map { ($0.id, $0) }, uniquingKeysWith: { _, newer in newer })
         let edgesByID = Dictionary(
@@ -196,7 +56,7 @@ public struct EntityGraph: Sendable, Hashable {
                     totalCount: next.totalCount,
                     nextOffset: next.nextOffset,
                     items: Self.uniqued(requestedBranch.items + next.items),
-                    edgeIDs: Self.uniqued(requestedBranch.edgeIDs + next.edgeIDs)
+                    edgeIds: Self.uniqued(requestedBranch.edgeIds + next.edgeIds)
                 )
             } ?? requestedBranch
 
@@ -231,7 +91,7 @@ public struct EntityGraph: Sendable, Hashable {
 
     private static func extendingPaths(
         _ existing: [EntityGraphPath],
-        root: EntityReference,
+        root: EntityRef,
         requestedBranch: EntityGraphBranch,
         returnedBranch: EntityGraphBranch?,
         pageEdges: [EntityGraphEdge]
@@ -239,11 +99,11 @@ public struct EntityGraph: Sendable, Hashable {
         guard let returnedBranch else { return existing }
         let bases =
             requestedBranch.root == root
-            ? [EntityGraphPath(nodeReferences: [root], edgeIDs: [])]
+            ? [EntityGraphPath(nodeRefs: [root], edgeIds: [])]
             : existing.filter { $0.destination == requestedBranch.root }
         guard !bases.isEmpty else { return existing }
 
-        let branchEdgeIDs = Set(returnedBranch.edgeIDs)
+        let branchEdgeIDs = Set(returnedBranch.edgeIds)
         var candidates: [EntityGraphPath] = []
         for item in returnedBranch.items.sorted(by: { $0.stableKey < $1.stableKey }) {
             let edges = pageEdges.filter { edge in
@@ -251,12 +111,12 @@ public struct EntityGraph: Sendable, Hashable {
                     && ((edge.source == requestedBranch.root && edge.target == item)
                         || (edge.target == requestedBranch.root && edge.source == item))
             }.sorted { $0.id < $1.id }
-            for base in bases.sorted(by: { $0.id < $1.id }) where !base.nodeReferences.contains(item) {
-                for edge in edges where base.edgeIDs.count < 8 && base.nodeReferences.count < 9 {
+            for base in bases.sorted(by: { $0.id < $1.id }) where !base.nodeRefs.contains(item) {
+                for edge in edges where base.edgeIds.count < 8 && base.nodeRefs.count < 9 {
                     candidates.append(
                         EntityGraphPath(
-                            nodeReferences: base.nodeReferences + [item],
-                            edgeIDs: base.edgeIDs + [edge.id]
+                            nodeRefs: base.nodeRefs + [item],
+                            edgeIds: base.edgeIds + [edge.id]
                         ))
                 }
             }
@@ -264,7 +124,7 @@ public struct EntityGraph: Sendable, Hashable {
 
         var result = existing
         var seen = Set(existing.map(\.id))
-        var countByDestination: [EntityReference: Int] = [:]
+        var countByDestination: [EntityRef: Int] = [:]
         for path in existing {
             if let destination = path.destination {
                 countByDestination[destination, default: 0] += 1
@@ -282,130 +142,9 @@ public struct EntityGraph: Sendable, Hashable {
     }
 }
 
-public enum EmbeddingReadiness: String, Sendable, Hashable {
-    case ready, stale, uncomputed, unavailable
-}
-
-public struct RelationshipTarget: Sendable, Hashable, Identifiable {
-    public let id: String
-    public let name: String
-
-    public init(id: String, name: String) {
-        self.id = id
-        self.name = name
-    }
-}
-
-public struct RelationshipEvidence: Sendable, Hashable {
-    public let signal: String
-    public let detail: String?
-    public let weight: Double
-
-    public init(signal: String, detail: String?, weight: Double) {
-        self.signal = signal
-        self.detail = detail
-        self.weight = weight
-    }
-}
-
-public struct ExpenseProjectRecommendation: Sendable, Hashable, Identifiable {
-    public let expenseID: String
-    public let target: RelationshipTarget
-    public let effectiveStart: String?
-    public let effectiveEnd: String?
-    public let sameTradeCount: Int
-    public let exactProductCount: Int
-    public let supportingExpenses: [RelationshipTarget]
-    public let reasons: [String]
-
-    public init(
-        expenseID: String,
-        target: RelationshipTarget,
-        effectiveStart: String?,
-        effectiveEnd: String?,
-        sameTradeCount: Int,
-        exactProductCount: Int,
-        supportingExpenses: [RelationshipTarget],
-        reasons: [String]
-    ) {
-        self.expenseID = expenseID
-        self.target = target
-        self.effectiveStart = effectiveStart
-        self.effectiveEnd = effectiveEnd
-        self.sameTradeCount = sameTradeCount
-        self.exactProductCount = exactProductCount
-        self.supportingExpenses = supportingExpenses
-        self.reasons = reasons
-    }
-
-    public var id: String { "expense-project:\(expenseID):\(target.id)" }
-}
-
-public struct InventoryPlacementRecommendation: Sendable, Hashable, Identifiable {
-    public let inventoryID: String
-    public let target: RelationshipTarget
-    public let reasons: [String]
-
-    public init(inventoryID: String, target: RelationshipTarget, reasons: [String]) {
-        self.inventoryID = inventoryID
-        self.target = target
-        self.reasons = reasons
-    }
-
-    public var id: String { "inventory-placement:\(inventoryID):\(target.id)" }
-}
-
-public struct ProductRelationshipRecommendation: Sendable, Hashable, Identifiable {
-    public let target: RelationshipTarget
-    public let score: Double
-    public let evidence: [RelationshipEvidence]
-
-    public init(target: RelationshipTarget, score: Double, evidence: [RelationshipEvidence]) {
-        self.target = target
-        self.score = score
-        self.evidence = evidence
-    }
-
-    public var id: String { "product-related:\(target.id)" }
-}
-
-public enum EntityRecommendationGroup: Sendable, Hashable, Identifiable {
-    case expenseProject(
-        status: EmbeddingReadiness,
-        currentTarget: RelationshipTarget?,
-        proposals: [ExpenseProjectRecommendation]
-    )
-    case inventoryPlacement(
-        status: EmbeddingReadiness,
-        currentTarget: RelationshipTarget?,
-        proposals: [InventoryPlacementRecommendation]
-    )
-    case productRelated(status: EmbeddingReadiness, proposals: [ProductRelationshipRecommendation])
-
-    public var id: String {
-        switch self {
-        case .expenseProject: "expense-project"
-        case .inventoryPlacement: "inventory-placement"
-        case .productRelated: "product-related"
-        }
-    }
-}
-
-public struct EntityRecommendations: Sendable, Hashable {
-    public let source: EntityReference
-    public let basisKey: String
-    public let groups: [EntityRecommendationGroup]
-
-    public init(source: EntityReference, basisKey: String, groups: [EntityRecommendationGroup]) {
-        self.source = source
-        self.basisKey = basisKey
-        self.groups = groups
-    }
-}
-
 public enum ActionableRelationshipRecommendation: Sendable, Hashable, Identifiable {
-    case expenseProject(ExpenseProjectRecommendation)
-    case inventoryPlacement(InventoryPlacementRecommendation)
+    case expenseProject(ExpenseProjectProposal)
+    case inventoryPlacement(InventoryPlacementProposal)
 
     public var id: String {
         switch self {
@@ -414,12 +153,12 @@ public enum ActionableRelationshipRecommendation: Sendable, Hashable, Identifiab
         }
     }
 
-    public var subject: EntityReference {
+    public var subject: EntityRef {
         switch self {
         case .expenseProject(let proposal):
-            EntityReference(entity: .expense, id: proposal.expenseID)
+            EntityRef(entity: .expense, id: proposal.expenseId)
         case .inventoryPlacement(let proposal):
-            EntityReference(entity: .inventory, id: proposal.inventoryID)
+            EntityRef(entity: .inventory, id: proposal.inventoryId.rawValue)
         }
     }
 }
@@ -428,11 +167,11 @@ public enum ActionableRelationshipRecommendation: Sendable, Hashable, Identifiab
 /// source into stock already at the destination, so this may differ from the proposal's subject.
 public struct RelationshipAcceptance: Sendable, Hashable {
     public let recommendation: ActionableRelationshipRecommendation
-    public let destination: EntityReference
+    public let destination: EntityRef
 
     public init(
         recommendation: ActionableRelationshipRecommendation,
-        destination: EntityReference
+        destination: EntityRef
     ) {
         self.recommendation = recommendation
         self.destination = destination
@@ -443,16 +182,16 @@ public struct RelationshipAcceptance: Sendable, Hashable {
 
 /// Boundary used by the shared observable model and by small deterministic test clients.
 public protocol EntityRelationshipsClient: Sendable {
-    func exploreRelationships(root: EntityReference, depth: Int) async throws -> EntityGraph
+    func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph
     func relationshipPage(
-        root: EntityReference,
+        root: EntityRef,
         relationshipKey: String,
         offset: Int,
         limit: Int
-    ) async throws -> EntityGraphPage
-    func recommendations(for source: EntityReference) async throws -> EntityRecommendations
+    ) async throws -> EntityGraphOutput
+    func recommendations(for source: EntityRef) async throws -> EntityRecommendationsOut
     func assignExpense(_ expenseID: String, toProject projectID: String) async throws
-    func moveInventory(_ inventoryID: String, to locationID: String) async throws -> EntityReference
+    func moveInventory(_ inventoryID: String, to locationID: String) async throws -> EntityRef
 }
 
 @MainActor
@@ -466,9 +205,9 @@ public final class EntityRelationshipsModel {
         case idle, loadingInitial, refreshing
     }
 
-    public private(set) var source: EntityReference?
+    public private(set) var source: EntityRef?
     public private(set) var graph: EntityGraph?
-    public private(set) var recommendationDocument: EntityRecommendations?
+    public private(set) var recommendationDocument: EntityRecommendationsOut?
     public private(set) var phase: Phase = .idle
     public private(set) var activity: Activity = .idle
     public private(set) var graphError: String?
@@ -476,7 +215,7 @@ public final class EntityRelationshipsModel {
     public private(set) var collapsedBranchIDs: Set<String> = []
     public private(set) var pagingBranchIDs: Set<String> = []
     public private(set) var pageErrors: [String: String] = [:]
-    public private(set) var selectedNode: EntityReference?
+    public private(set) var selectedNode: EntityRef?
     public private(set) var selectedPathIndex = 0
     public private(set) var acceptingRecommendationID: String?
     public private(set) var acceptError: String?
@@ -495,9 +234,9 @@ public final class EntityRelationshipsModel {
     public var visibleGraph: EntityGraph? {
         guard let graph else { return nil }
         let hiddenEdgeIDs = Set(
-            graph.branches.filter { collapsedBranchIDs.contains($0.id) }.flatMap(\.edgeIDs))
+            graph.branches.filter { collapsedBranchIDs.contains($0.id) }.flatMap(\.edgeIds))
         let candidateEdges = graph.edges.filter { !hiddenEdgeIDs.contains($0.id) }
-        var reachable: Set<EntityReference> = [graph.root]
+        var reachable: Set<EntityRef> = [graph.root]
         var changed = true
         while changed {
             changed = false
@@ -513,7 +252,7 @@ public final class EntityRelationshipsModel {
                 reachable.contains($0.source) && reachable.contains($0.target)
             },
             branches: graph.branches,
-            paths: graph.paths.filter { Set($0.nodeReferences).isSubset(of: reachable) },
+            paths: graph.paths.filter { Set($0.nodeRefs).isSubset(of: reachable) },
             completion: graph.completion,
             truncated: graph.truncated
         )
@@ -529,25 +268,25 @@ public final class EntityRelationshipsModel {
     private let pageSize: Int
     private var requestGeneration = 0
     private var graphTask: Task<EntityGraph, Error>?
-    private var recommendationTask: Task<EntityRecommendations, Error>?
-    private var pageTasks: [String: Task<EntityGraphPage, Error>] = [:]
+    private var recommendationTask: Task<EntityRecommendationsOut, Error>?
+    private var pageTasks: [String: Task<EntityGraphOutput, Error>] = [:]
     private var acceptTask: Task<RelationshipAcceptance, Error>?
 
     public init(
         client: any EntityRelationshipsClient,
         pageSize: Int = 12,
         initialGraph: EntityGraph? = nil,
-        initialRecommendations: EntityRecommendations? = nil
+        initialRecommendations: EntityRecommendationsOut? = nil
     ) {
         self.client = client
         self.pageSize = pageSize
         graph = initialGraph
         recommendationDocument = initialRecommendations
-        source = initialGraph?.root ?? initialRecommendations?.source
+        source = initialGraph?.root ?? initialRecommendations.map { EntityRef($0.source) }
         if source != nil { phase = .loaded }
     }
 
-    public func loadInitial(source: EntityReference) async {
+    public func loadInitial(source: EntityRef) async {
         guard self.source != source || phase != .loaded else { return }
         await load(
             source: source,
@@ -568,7 +307,7 @@ public final class EntityRelationshipsModel {
         await refresh()
     }
 
-    public func focus(on reference: EntityReference) async {
+    public func focus(on reference: EntityRef) async {
         guard let source, graph?.nodes.contains(where: { $0.reference == reference }) == true else {
             return
         }
@@ -624,7 +363,7 @@ public final class EntityRelationshipsModel {
         pagingBranchIDs.remove(branch.id)
     }
 
-    public func select(_ node: EntityReference?) {
+    public func select(_ node: EntityRef?) {
         selectedNode = node
         selectedPathIndex = 0
     }
@@ -634,7 +373,7 @@ public final class EntityRelationshipsModel {
         selectedPathIndex = index
     }
 
-    public func paths(to node: EntityReference?) -> [EntityGraphPath] {
+    public func paths(to node: EntityRef?) -> [EntityGraphPath] {
         guard let node else { return [] }
         return visibleGraph?.paths.filter { $0.destination == node } ?? []
     }
@@ -659,7 +398,7 @@ public final class EntityRelationshipsModel {
             try Task.checkCancellation()
             switch recommendation {
             case .expenseProject(let proposal):
-                try await client.assignExpense(proposal.expenseID, toProject: proposal.target.id)
+                try await client.assignExpense(proposal.expenseId, toProject: proposal.target.id)
                 return RelationshipAcceptance(
                     recommendation: recommendation,
                     destination: recommendation.subject
@@ -668,8 +407,8 @@ public final class EntityRelationshipsModel {
                 return RelationshipAcceptance(
                     recommendation: recommendation,
                     destination: try await client.moveInventory(
-                        proposal.inventoryID,
-                        to: proposal.target.id
+                        proposal.inventoryId.rawValue,
+                        to: proposal.target.id.rawValue
                     )
                 )
             }
@@ -707,8 +446,8 @@ public final class EntityRelationshipsModel {
     }
 
     private func load(
-        source: EntityReference,
-        graphRoot: EntityReference,
+        source: EntityRef,
+        graphRoot: EntityRef,
         retainingContent: Bool
     ) async {
         cancelRequests()
@@ -762,7 +501,7 @@ public final class EntityRelationshipsModel {
 
         do {
             let result = try await nextRecommendationTask.value
-            if generation == requestGeneration, result.source == source {
+            if generation == requestGeneration, EntityRef(result.source) == source {
                 recommendationDocument = result
             }
         } catch is CancellationError {

@@ -167,7 +167,7 @@ MCP / jobs      ───────────────↗
 JSONL routes    →  cancellable workflow streams
 ```
 
-- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm entity:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
+- Typed declarations with real Zod schemas in `packages/schemas/src/entity-definitions/*.entity.ts` compile the exhaustive manifest, schema bindings, browser roster, filter URL catalog, kernel action capabilities, and contract cases. `pnpm generate:check` rejects stale or invalid artifacts; typecheck verifies referenced exports.
 - `executeEntity` is the baseline CRUD/filter/search/relation interface. TanStack Start is the browser entity adapter; MCP and jobs invoke the kernel directly. Explicit Start functions adapt workflows, while typed JSONL routes carry cancellable progress streams.
 - Services own workflows and external enrichment such as USDA data. Repositories retain transaction ownership, invariants, and entity-specific SQL.
 - `Database` is a request-scoped handle: routers and services pass it through, while repository helpers are the sanctioned place to resolve its Drizzle client. This keeps the layered architecture by convention and API locality.
@@ -253,7 +253,7 @@ pnpm run dev
 ```
 
 Database-backed tests start and stop their own services on macOS. For example,
-`pnpm test:file:postgres src/server/integration-families/project.integration.test.ts`
+`pnpm test:file:postgres src/server/repo/vendor.integration.test.ts`
 uses disposable databases, independently of your application's `DATABASE_URL`.
 For optional traces, run `pnpm trace` in another terminal and enable
 `CUBBY_OTEL=1` for the app. Ctrl-C stops Jaeger.
@@ -352,7 +352,7 @@ them under `$CODEX_HOME/worktrees`. A few things to know:
   IntegreSQL at 1 CPU/256 MiB, with a 4/16 database pool and 4 provisioning tasks.
   `VITEST_MAX_WORKERS` overrides the measured PostgreSQL default of 6. Playwright
   gives each worker its own database, object storage, and Worker harness;
-  `CUBBY_E2E_WORKERS=1|2|3` overrides its local macOS default of 3. CI and Linux
+  `CUBBY_E2E_WORKERS=1|2|3|4` overrides its local macOS default of 3. CI and Linux
   default to one browser worker. Multiple pairs share the host's finite CPU and memory.
 - **⚠ Shared prod DB:** every worktree's `DATABASE_URL` is the **same prod Neon**
   instance (dev DB *is* prod). `db:push` and data changes from one worktree are
@@ -609,9 +609,10 @@ Run TS scripts with the web tsconfig so schema import aliases resolve. The
 native Apple app (`apps/apple`) generates its client from the committed
 document and is the API's consumer of record.
 
-After changing contracts, declarations or schemas, run `pnpm generate` (entity,
-start-operation, then HTTP OpenAPI generation) and `pnpm generate:check` before a
-PR; `pnpm check:all` includes it. Operation contracts, entity capabilities, and
+After changing contracts, declarations or schemas, run `pnpm generate` (one
+generator, `scripts/generator/`, running its entity, start-operation and HTTP
+OpenAPI stages in order) and `pnpm generate:check` before a PR; `pnpm check`
+includes it. Operation contracts, entity capabilities, and
 runtime schemas remain authoritative; new ordinary operations require no
 HTTP-specific edits. Wire schemas are derived from the domain schemas by
 `toWire` (`apps/web/src/lib/http-api/wire.ts`): Dates become ISO strings, output

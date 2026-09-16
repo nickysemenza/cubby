@@ -16,7 +16,10 @@ import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  editableFieldOverrides,
+  EntityBasicInfo,
+} from "~/entities/entity-display";
 import {
   cancelQueriesByTags,
   restoreQueries,
@@ -54,7 +57,7 @@ const WISH_TAGS: readonly OperationCacheTag[] = [["wish"]];
  * registered `wish.candidates` relationship both show up automatically — see
  * `entityManifest.wish` and `relatedViewRegistry`.
  */
-export function WishDetail({ wish }: { wish: WishOut }) {
+export function WishDetail({ record: wish }: { record: WishOut }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
 
@@ -112,7 +115,15 @@ export function WishDetail({ wish }: { wish: WishOut }) {
       data: { acquired: !wish.acquiredAt },
     });
 
+  // `notes` is plain scalar → update {key} — generic. `name` keeps its
+  // required-field guard (a cleared name is a no-op, not a write attempt).
   const fieldOverrides = {
+    ...editableFieldOverrides(
+      "wish",
+      wish,
+      ["notes"],
+      updateMutation.mutateAsync,
+    ),
     name: () => ({
       value: (
         <EditableCell
@@ -122,18 +133,6 @@ export function WishDetail({ wish }: { wish: WishOut }) {
             // Required field — a cleared name is a no-op, not a null write.
             if (!name) return;
             await updateMutation.mutateAsync({ id: wish.id, data: { name } });
-          }}
-          renderValue={(v) => v ?? <NoneValue />}
-        />
-      ),
-    }),
-    notes: () => ({
-      value: (
-        <EditableCell
-          value={wish.notes}
-          config={{ type: "text", multiline: true, rows: 4 }}
-          onSave={async (notes) => {
-            await updateMutation.mutateAsync({ id: wish.id, data: { notes } });
           }}
           renderValue={(v) => v ?? <NoneValue />}
         />

@@ -1,10 +1,12 @@
+import CubbyAPI
 import Foundation
 import Observation
 
 /// The server calls a sweep needs. `CubbyClient` conforms; tests stub it.
 public protocol ScanService: Sendable {
-    func scan(_ code: ScanCode, at location: LocationCode) async throws -> ScanResult
-    func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> StrayResolution
+    /// The raw scanner or keyboard value, resolved by the server (`{kind: "scan"}`).
+    func scan(raw: String, at location: LocationCode) async throws -> ScanAtLocationOut
+    func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws -> ResolveScanStraysOut
 }
 
 extension CubbyClient: ScanService {}
@@ -59,7 +61,7 @@ public final class ScanSession {
         public var id: ProductCode { productID }
         public let productID: ProductCode
         public let productName: String
-        public let rows: [Stray]
+        public let rows: [ScanStrayOut]
     }
 
     public struct Tally: Sendable, Hashable {
@@ -70,7 +72,7 @@ public final class ScanSession {
 
     /// What one read turned into, before the anchor gate.
     enum Event: Sendable {
-        case scanned(ScanResult)
+        case scanned(ScanAtLocationOut)
         case failed(String)
     }
 
@@ -112,17 +114,9 @@ public final class ScanSession {
         let chip = Chip(id: token, label: raw, status: .pending)
         chips = Array(([chip] + chips).prefix(Self.recentLimit))
         rawByToken[token] = raw
-        if let key = Self.key(forScanned: raw) {
-            scanned[key, default: Seen(label: raw, status: .pending, count: 0)].status = .pending
-        }
+        scanned[ScanCodes.key(forScanned: raw), default: Seen(label: raw, status: .pending, count: 0)]
+            .status = .pending
         return true
-    }
-
-    /// The identity a raw read resolves to: the canonical code value, so a UPC-A read and its
-    /// EAN-13 spelling land on the same entry. Nil for anything the classifier refuses.
-    public static func key(forScanned raw: String) -> String? {
-        guard case .success(let code) = ScanCode.classify(raw) else { return nil }
-        return code.value
     }
 
     public func reset() {
@@ -141,7 +135,7 @@ public final class ScanSession {
 
     /// Commits every queued stray into the current location. Rows flagged `ambiguousQuantity`
     /// move one unit; the rest move whole.
-    public func resolveStrays() async throws -> StrayResolution? {
+    public func resolveStrays() async throws -> ResolveScanStraysOut? {
         guard let location, !strays.isEmpty else { return nil }
         let moves = strays.flatMap { stray in
             stray.rows.map { StrayMove(entryId: $0.entryId, quantity: $0.ambiguousQuantity ? 1 : nil) }
@@ -151,16 +145,10 @@ public final class ScanSession {
         return resolution
     }
 
-    /// Classifies and scans one read. Static so the drain's work closure captures the service,
-    /// not the session.
+    /// Scans one read. Static so the drain's work closure captures the service, not the session.
     private static func perform(_ read: ScanRead, service: any ScanService) async -> Event {
-        let code: ScanCode
-        switch ScanCode.classify(read.raw) {
-        case .success(let classified): code = classified
-        case .failure(let error): return .failed(error.message)
-        }
         do {
-            return .scanned(try await service.scan(code, at: read.anchor))
+            return .scanned(try await service.scan(raw: read.raw, at: read.anchor))
         } catch let error as CubbyAPIError {
             return .failed(error.detail?.message ?? "HTTP \(error.status)")
         } catch {
@@ -181,7 +169,7 @@ public final class ScanSession {
         lastError = message
     }
 
-    private func apply(_ result: ScanResult, to chipID: UUID) {
+    private func apply(_ result: ScanAtLocationOut, to chipID: UUID) {
         patch(chipID) {
             $0.label = result.product.name
             switch result.outcome {
@@ -212,10 +200,9 @@ public final class ScanSession {
     }
 
     private func note(_ chipID: UUID, _ change: (inout Seen) -> Void) {
-        guard let raw = rawByToken.removeValue(forKey: chipID), let key = Self.key(forScanned: raw) else {
-            return
-        }
-        change(&scanned[key, default: Seen(label: raw, status: .pending, count: 0)])
+        guard let raw = rawByToken.removeValue(forKey: chipID) else { return }
+        change(
+            &scanned[ScanCodes.key(forScanned: raw), default: Seen(label: raw, status: .pending, count: 0)])
     }
 
     private func patch(_ chipID: UUID, _ change: (inout Chip) -> Void) {

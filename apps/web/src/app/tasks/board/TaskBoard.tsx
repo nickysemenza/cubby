@@ -13,6 +13,7 @@ import {
 import { keyBy } from "es-toolkit";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 
+import { useDeleteEntityAction } from "~/app/_components/actions/delete-entity-action";
 import {
   createDndAnnouncements,
   cubbyDndScreenReaderInstructions,
@@ -27,6 +28,7 @@ import { Row } from "~/components/layout";
 import { taskCaptureRequest } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { useIsMobile } from "~/hooks/useMobile";
+import { getErrorMessage } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 
 import type { BoardColsMode, BoardLaneMode } from "./board-model";
@@ -52,7 +54,6 @@ import {
   type CardRenderProps,
   ColumnHeader,
 } from "./BoardColumn";
-import { TaskDeleteDialog } from "./TaskDeleteDialog";
 import { edgeForDrop, useBoardDnd } from "./use-board-dnd";
 import {
   type BoardCacheTarget,
@@ -159,10 +160,34 @@ export function TaskBoard({
     null,
   );
 
-  // Hoisted for the same reason as the quick-add dialog above, plus one of its
-  // own: the optimistic delete drops the card out of `cellTasks`, so a dialog
-  // owned by the card would unmount before the mutation settles.
-  const [pendingDelete, setPendingDelete] = useState<TaskOut | null>(null);
+  // The delete action itself is hoisted here (not owned by `TaskCard`) for
+  // the same reason the quick-add dialog is: the optimistic delete drops the
+  // card out of `cellTasks`, so a dialog owned by the card would unmount
+  // before the mutation settles (see `useDeleteEntityAction`'s own doc for
+  // why the caller, not the row, must hold the staged delete).
+  const deleteAction = useDeleteEntityAction(
+    "task",
+    {
+      isPending: isDeleting,
+      remove: async (ids) => {
+        const id = ids[0];
+        if (!id) return { ok: false, issues: [] };
+        try {
+          await deleteTask(parseShortcodeFor("task", id));
+          return { ok: true, entity: "task", id, changed: true };
+        } catch (error) {
+          return {
+            ok: false,
+            issues: [{ message: getErrorMessage(error), source: "server" }],
+          };
+        }
+      },
+    },
+    // `TaskBoard` can be embedded inside another entity's own detail page
+    // (see `ProjectDetail`) — navigating to `/tasks` after a delete there
+    // would take the household off the project they were looking at.
+    { navigateOnSuccess: false },
+  );
 
   const columns = useMemo(() => buildColumns(tasks, cols), [tasks, cols]);
   const lanes = useMemo(
@@ -183,10 +208,18 @@ export function TaskBoard({
       showStatus: cols !== "status",
       onSetStatus: (taskId: TaskOut["id"], status: TaskStatus) =>
         moveTask(taskId, { status }),
-      onRequestDelete: setPendingDelete,
+      onRequestDelete: (task: TaskOut) => void deleteAction.run?.([task]),
       dropTarget,
     }),
-    [taskById, showProjectOnCards, cols, lane, moveTask, dropTarget],
+    [
+      taskById,
+      showProjectOnCards,
+      cols,
+      lane,
+      moveTask,
+      dropTarget,
+      deleteAction,
+    ],
   );
 
   // Column header counts span every lane; project/trade columns count only
@@ -388,18 +421,7 @@ export function TaskBoard({
           })}
         />
       )}
-      <TaskDeleteDialog
-        task={pendingDelete}
-        isDeleting={isDeleting}
-        onOpenChange={(open) => {
-          if (!open) setPendingDelete(null);
-        }}
-        onConfirm={async () => {
-          if (!pendingDelete) return;
-          await deleteTask(pendingDelete.id);
-          setPendingDelete(null);
-        }}
-      />
+      {deleteAction.dialog}
     </>
   );
 }

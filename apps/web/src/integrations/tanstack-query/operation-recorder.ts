@@ -1,7 +1,7 @@
 import { isCancelledError, type QueryClient } from "@tanstack/react-query";
 import { type JSONType, z } from "zod";
 
-import { getFlag } from "~/lib/flags";
+import { FLAGS } from "~/lib/flags";
 import {
   type OperationOutcome,
   type OperationTransport,
@@ -50,7 +50,7 @@ function isOperationCancellation(error: ObservedFailure): boolean {
   );
 }
 
-const consoleEnabled = () => "window" in globalThis && getFlag("queryLogger");
+const consoleEnabled = () => "window" in globalThis && FLAGS.queryLogger;
 
 export function beginObservedOperation(options: {
   kind: ObservedKind;

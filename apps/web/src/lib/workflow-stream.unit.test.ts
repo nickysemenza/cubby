@@ -34,7 +34,7 @@ describe("workflow JSONL stream", () => {
 
     const stream = await openWorkflowStream(
       {
-        operation: "agent.askStream",
+        operation: "recipe.importCookbookStream",
         kind: "mutation",
         url: "/api/workflows/test-progress",
         input: { id: "one" },
@@ -47,7 +47,9 @@ describe("workflow JSONL stream", () => {
     for await (const event of stream) events.push(event);
     expect(events).toEqual([{ type: "progress", done: 1, at }]);
     const headers = new Headers(requestInit?.headers);
-    expect(headers.get("x-cubby-operation")).toBe("agent.askStream");
+    expect(headers.get("x-cubby-operation")).toBe(
+      "recipe.importCookbookStream",
+    );
     expect(headers.get("x-cubby-operation-kind")).toBe("subscription");
     expect(headers.get("x-cubby-operation-id")).toBeNull();
   });
@@ -67,7 +69,7 @@ describe("workflow JSONL stream", () => {
 
     const stream = await openWorkflowStream(
       {
-        operation: "agent.askStream",
+        operation: "recipe.importCookbookStream",
         kind: "mutation",
         url: "/api/workflows/test-failure",
         input: null,
@@ -106,7 +108,7 @@ describe("production workflow stream runtime", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const stream = await openWorkflowStream({
-      operation: "agent.askStream",
+      operation: "recipe.importCookbookStream",
       kind: "query",
       url: "/api/workflows/test-progress",
       input: { id: "one" },

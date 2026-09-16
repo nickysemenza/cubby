@@ -29,7 +29,7 @@ interface BulkStreamHandlers<Item, Result> {
 /**
  * Drives a server-side JSONL workflow stream (`async function*` yielding
  * {@link BulkProgressEvent}s) into progress-bar state. The work runs server-side
- * in one request; this hook just consumes the stream. Generalizes `useAgentStream`.
+ * in one request; this hook just consumes the stream.
  *
  * Usage (handlers are per-`start`, so they can close over per-invocation context):
  * ```ts

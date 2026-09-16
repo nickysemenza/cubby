@@ -5,13 +5,13 @@ import { describe, expect, it } from "vitest";
 import { diagnosticAdapters } from "~/server/services/problem-diagnostics.service";
 
 import { getEntityFilters } from "./filter-manifest";
-import { entityFilterUrlKeys } from "./filter-search-fields";
 import {
   buildFiltersFromManifest,
   decodeFilters,
   encodeFilters,
 } from "./filters";
 import type { FilterSpecCore } from "./filters";
+import { entityFilterUrlKeys } from "./generated/entity-search.gen";
 import { problemActionsFor } from "./problem-actions";
 import {
   compileProblemFilters,

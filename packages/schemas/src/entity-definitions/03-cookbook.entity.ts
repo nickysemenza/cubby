@@ -5,9 +5,9 @@ import { z } from "zod";
 export default defineEntity({
   key: "cookbook",
   names: { singular: "Cookbook", plural: "Cookbooks" },
-  route: { basePath: "cookbooks" },
+  route: { basePath: "cookbooks", list: null, detail: null },
   table: "Cookbook",
-  identifiers: { brand: "CookbookId", shortcode: "CKB-", legacy: null },
+  identifiers: { brand: "CookbookId", shortcode: "CKB-" },
   presentation: {
     titleField: "book",
     domain: "cook",

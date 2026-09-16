@@ -12,9 +12,16 @@ import { z } from "zod";
 export default defineEntity({
   key: "task",
   names: { singular: "Task", plural: "Tasks" },
-  route: { basePath: "tasks" },
+  route: {
+    basePath: "tasks",
+    create: "dialog",
+    list: null,
+    detail: {
+      component: { module: "~/app/tasks/task-detail", export: "TaskDetail" },
+    },
+  },
   table: "Task",
-  identifiers: { brand: "TaskId", shortcode: "TSK-", legacy: null },
+  identifiers: { brand: "TaskId", shortcode: "TSK-" },
   presentation: {
     titleField: "name",
     domain: "house",
@@ -32,7 +39,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        control: { kind: "text" },
+        control: { kind: "text", placeholder: "What needs doing?" },
         display: { list: true, detail: true, standard: "name", detailOrder: 0 },
         validation: {
           read: z.string().min(1),
@@ -134,7 +141,7 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date", section: "schedule" },
-        display: { list: true, detail: true, detailOrder: 4 },
+        display: { list: true, detail: true, detailOrder: 4, listHidden: true },
         validation: {
           read: plainDate.describe("End of a due-date range").nullable(),
           create: plainDate
@@ -169,7 +176,7 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number", section: "ordering" },
-        display: { list: true },
+        display: { list: true, listHidden: true },
         validation: {
           read: z.number().nullable(),
           create: z.number().nullable().default(null),

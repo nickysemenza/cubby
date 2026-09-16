@@ -12,7 +12,10 @@
  *    detected structurally, by the module itself importing from
  *    `./generated/entity-field-schemas.*`, rather than a hand-kept list that
  *    would silently stop covering a new one;
- *  - anything outside `packages/schemas/src` that resolves into `apps/`.
+ *  - anything outside `packages/schemas/src` that resolves into `apps/`;
+ *  - `@cubby/recipebridge` (the WASM boundary), by bare specifier — schemas
+ *    must stay isomorphic, so this one external package is checked by name
+ *    rather than by resolving it, unlike everything else this walk skips.
  *
  * Declarations are the input codegen reads to PRODUCE the generated schema
  * modules and their field-schema exports; a declaration reaching back into
@@ -44,6 +47,15 @@ const SRC_ROOT = resolve(SCHEMAS_ROOT, "src");
 const ENTITY_DEFINITIONS_DIR = join(SRC_ROOT, "entity-definitions");
 const GENERATED_ROOT = join(SRC_ROOT, "generated");
 const SELF_PACKAGE_NAME = "@cubby/schemas";
+/** Schemas must stay isomorphic — never reach the WASM boundary. */
+const FORBIDDEN_EXTERNAL_SPECIFIER = "@cubby/recipebridge";
+
+function isForbiddenExternalSpecifier(spec: string): boolean {
+  return (
+    spec === FORBIDDEN_EXTERNAL_SPECIFIER ||
+    spec.startsWith(`${FORBIDDEN_EXTERNAL_SPECIFIER}/`)
+  );
+}
 
 interface PackageManifest {
   exports?: Record<string, string>;
@@ -162,6 +174,16 @@ function findBoundaryViolations(declarationFile: string): BoundaryViolation[] {
     const specifiers = extractSpecifiers(readFileSync(file, "utf8"));
 
     for (const spec of specifiers) {
+      if (isForbiddenExternalSpecifier(spec)) {
+        violations.push({
+          reachedModule: spec,
+          reason:
+            "is @cubby/recipebridge — schemas must not depend on the WASM boundary",
+          chain: [...chain, spec],
+        });
+        continue;
+      }
+
       const resolved = resolveSpecifier(file, spec);
       if (!resolved) continue; // external package — not this boundary's concern
 

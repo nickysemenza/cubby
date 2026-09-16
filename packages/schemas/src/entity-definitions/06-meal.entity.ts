@@ -15,9 +15,19 @@ import { z } from "zod";
 export default defineEntity({
   key: "meal",
   names: { singular: "Meal", plural: "Meals" },
-  route: { basePath: "meals" },
+  route: {
+    basePath: "meals",
+    create: "dialog",
+    list: null,
+    detail: {
+      component: {
+        module: "~/app/meals/meal-detail-page",
+        export: "MealDetailPage",
+      },
+    },
+  },
   table: "Meal",
-  identifiers: { brand: "MealId", shortcode: "MEL-", legacy: null },
+  identifiers: { brand: "MealId", shortcode: "MEL-" },
   presentation: {
     titleField: "displayName",
     domain: "plan",
@@ -35,7 +45,7 @@ export default defineEntity({
       {
         key: "date",
         kind: "date",
-        control: { kind: "date", section: "schedule" },
+        control: { kind: "date", section: "schedule", initial: "today" },
         display: { list: true, detail: true },
         validation: {
           read: mealDate,
@@ -47,7 +57,7 @@ export default defineEntity({
         key: "name",
         kind: "text",
         nullable: true,
-        control: { kind: "text" },
+        control: { kind: "text", placeholder: "Meal name (optional)" },
         display: { list: true, detail: true },
         validation: {
           read: z.string().nullable(),
@@ -71,7 +81,7 @@ export default defineEntity({
         key: "mealType",
         kind: "enum",
         nullable: true,
-        control: { kind: "select" },
+        control: { kind: "select", placeholder: "Which meal of the day?" },
         display: { list: true, detail: true },
         validation: {
           read: mealTypeSchema.nullable(),

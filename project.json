@@ -2,21 +2,16 @@
   "$schema": "./node_modules/nx/schemas/project-schema.json",
   "name": "cubby-checks",
   "targets": {
-    "entity": {
-      "command": "tsx scripts/entity-generator/main.ts --check",
-      "cache": true
-    },
-    "start-ops": {
-      "command": "tsx --tsconfig apps/web/tsconfig.json scripts/start-operation-registry-generator.ts --check",
-      "cache": true
+    "generate": {
+      "command": "pnpm generate:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
+      "cache": true,
+      "inputs": ["repo"]
     },
     "types": {
       "command": "pnpm typecheck",
       "cache": true,
       "inputs": [
-        "default",
-        "!{workspaceRoot}/apps/apple/**",
-        "!{workspaceRoot}/cubby-ffi/**",
+        "repo",
         {
           "runtime": "git hash-object packages/wasm/package.json packages/wasm/*.d.ts"
         }
@@ -26,41 +21,28 @@
       "command": "oxlint .",
       "cache": true,
       "inputs": [
-        "default",
-        "!{workspaceRoot}/**/*.md",
+        "repo",
         "!{workspaceRoot}/**/*.mdx",
         "!{workspaceRoot}/**/*.rs",
         "!{workspaceRoot}/**/*.toml",
-        "!{workspaceRoot}/**/*.lock",
-        "!{workspaceRoot}/apps/apple/**",
-        "!{workspaceRoot}/cubby-ffi/**"
+        "!{workspaceRoot}/**/*.lock"
       ]
     },
     "format": {
       "command": "oxfmt --check .",
       "cache": true,
       "inputs": [
-        "default",
-        "!{workspaceRoot}/**/*.md",
+        "repo",
         "!{workspaceRoot}/**/*.mdx",
         "!{workspaceRoot}/**/*.rs",
         "!{workspaceRoot}/**/*.toml",
-        "!{workspaceRoot}/**/*.lock",
-        "!{workspaceRoot}/apps/apple/**",
-        "!{workspaceRoot}/cubby-ffi/**"
+        "!{workspaceRoot}/**/*.lock"
       ]
-    },
-    "soft-delete": {
-      "command": "node scripts/check-soft-delete-filters.ts",
-      "cache": false
-    },
-    "identifiers": {
-      "command": "node scripts/check-unsafe-identifiers.ts --include-tests",
-      "cache": true
     },
     "knip": {
       "command": "knip --no-config-hints --cache",
-      "cache": false
+      "cache": true,
+      "inputs": ["repo"]
     },
     "bindings": {
       "command": "pnpm --filter @cubby/web --filter @cubby/upc-lookup --filter @cubby/usda-api --workspace-concurrency=2 types:check",
@@ -79,13 +61,15 @@
       "cache": false
     },
     "fast-tests": {
-      "command": "pnpm -r --workspace-concurrency=2 test && touch apps/web/.vitest-failures.txt",
+      // Aux packages (apps/mcp-apps, apps/upc-lookup, apps/usda-api,
+      // packages/*) run through their own cached `test` target
+      // (targetDefaults above) instead of `pnpm -r --workspace-concurrency=2
+      // test`: an aux-untouched run replays from cache instead of competing
+      // with the (uncached, heavier) web Vitest run for CPU.
+      "command": "nx run-many -t test --exclude=cubby-checks --output-style=stream && touch apps/web/.vitest-failures.txt",
       "cache": true,
       "inputs": [
         "default",
-        {
-          "runtime": "git rev-parse HEAD"
-        },
         {
           "runtime": "git ls-files --others --ignored --exclude-standard -- packages/wasm ':(glob)**/.env*'"
         },
@@ -108,7 +92,7 @@
           "env": "CUBBY_TEST_INTEGRATION"
         },
         {
-          "env": "VITEST_MAX_THREADS"
+          "env": "VITEST_MAX_WORKERS"
         }
       ],
       "outputs": [
@@ -154,10 +138,6 @@
         "{workspaceRoot}/apps/apple/CubbyKit/Frameworks/CubbyFFI.xcframework",
         "{workspaceRoot}/apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift"
       ]
-    },
-    "http-api": {
-      "command": "pnpm --filter @cubby/web generate:http-api:check && redocly lint apps/web/src/lib/generated/http-openapi.gen.json --config redocly.yaml",
-      "cache": true
     }
   }
 }

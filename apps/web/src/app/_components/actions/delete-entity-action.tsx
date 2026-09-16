@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { BulkActionDialog } from "~/components/dialogs/bulk-action-dialog";
 import { useEntityCommands } from "~/entities/editing/use-entity-commands";
 import type { EntityCommands } from "~/entities/editing/use-entity-commands";
-import { entities, entityDialogLabel } from "~/entities/entities";
+import { entities, entityLabel } from "~/entities/entities";
 import {
   generatedBrowserCrudEntities,
   type GeneratedBrowserCrudEntity,
@@ -23,13 +23,8 @@ export type DeleteEntityActionCommands = Pick<
 
 export function deleteDescriptionForEntity(
   entity: GeneratedBrowserCrudEntity,
-  record: Pick<EntityActionRow, "name" | "subtaskCount"> = {},
 ): string {
-  if (entity === "task") {
-    const subtaskCount = record.subtaskCount ?? 0;
-    return `${subtaskCount > 0 ? `This also deletes ${subtaskCount} subtask${subtaskCount === 1 ? "" : "s"}, and removes` : "This also removes"} the task from any dependency chains. This action cannot be undone.`;
-  }
-  const label = entityDialogLabel(entity).toLowerCase();
+  const label = entityLabel(entity).toLowerCase();
   return `This will permanently remove this ${label} from your workspace. This action cannot be undone.`;
 }
 
@@ -41,6 +36,17 @@ export function deleteDescriptionForEntity(
 export function useDeleteEntityAction(
   entity: Entity,
   commandOverride?: DeleteEntityActionCommands,
+  options?: {
+    /**
+     * Skip the after-delete `navigate` to the entity's list route. Default
+     * `true` suits a "detail"/"inspector" surface — the row deleted IS the
+     * page (or the page's list) the caller is already on. A board/agenda
+     * surface that can be embedded inside another entity's own detail page
+     * (e.g. `TaskBoard` inside `ProjectDetail`) passes `false` so deleting a
+     * row there doesn't navigate the household away from that page.
+     */
+    navigateOnSuccess?: boolean;
+  },
 ): EntityActionHandles {
   // SAFETY: this action definition is registered only for generated CRUD entities.
   const generatedEntity = entity as GeneratedBrowserCrudEntity;
@@ -52,7 +58,7 @@ export function useDeleteEntityAction(
   const resolveRef = useRef<((result: { success: boolean }) => void) | null>(
     null,
   );
-  const label = entityDialogLabel(generatedEntity);
+  const label = entityLabel(generatedEntity);
 
   const finish = useCallback((success: boolean) => {
     setStaged(null);
@@ -92,7 +98,7 @@ export function useDeleteEntityAction(
         action="Delete"
         variant="destructive"
         pendingLabel="Deleting..."
-        description={deleteDescriptionForEntity(generatedEntity, staged)}
+        description={deleteDescriptionForEntity(generatedEntity)}
         renderItem={(item) => item.name}
         error={
           failures.length > 0 ? (
@@ -118,7 +124,8 @@ export function useDeleteEntityAction(
           // transport payload for this action to inspect.
           toast.success(`${label} deleted`);
           finish(true);
-          void navigate({ to: entities[generatedEntity].routes.list });
+          if (options?.navigateOnSuccess ?? true)
+            void navigate({ to: entities[generatedEntity].routes.list });
         }}
         isPending={commands.isPending}
       />

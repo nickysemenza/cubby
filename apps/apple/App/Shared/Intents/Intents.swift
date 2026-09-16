@@ -142,13 +142,14 @@ struct ScanCodeIntent: AppIntent {
         guard location.kind == .location else {
             return .result(dialog: "\(location.title) is not a location.")
         }
-        let scanCode: ScanCode
-        switch ScanCode.classify(code) {
-        case .success(let classified): scanCode = classified
-        case .failure(let error): return .result(dialog: "\(error.message)")
-        }
         let client = try await IntentContext.client()
-        let result = try await client.scan(scanCode, at: LocationCode(location.id))
+        // The server classifies the code; its validation message is the dialog for a bad one.
+        let result: ScanAtLocationOut
+        do {
+            result = try await client.scan(raw: code, at: LocationCode(location.id))
+        } catch let error as CubbyAPIError where error.status == 400 {
+            return .result(dialog: "\(error.detail?.message ?? "That code could not be read.")")
+        }
         RecentEntities.record(location.id)
         let dialog: IntentDialog
         switch result.outcome {

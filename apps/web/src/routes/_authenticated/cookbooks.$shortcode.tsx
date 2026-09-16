@@ -14,7 +14,6 @@ import {
   type DetailSection,
   DetailSections,
 } from "~/app/_components/data-table/detail-page";
-import { tableSearchFields } from "~/app/_components/data-table/table-search";
 import { useBulkStream } from "~/app/_components/hooks/useBulkStream";
 import { IngredientUsagePanel } from "~/app/_components/ingredient/ingredient-usage-panel";
 import { notFoundPage } from "~/app/_components/routing/entity-routes";
@@ -33,7 +32,7 @@ import { Description } from "~/components/ui/description";
 import { Image } from "~/components/ui/image";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { cookbook as cookbookOperations } from "~/entities/cookbook.functions";
-import { entityFilterSearchFields } from "~/entities/filter-search-fields";
+import { entitySearch } from "~/entities/generated/entity-search.gen";
 import { useDetailTitle } from "~/hooks/useDocumentTitle";
 import { useTabParam } from "~/hooks/useTabParam";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
@@ -66,17 +65,12 @@ const TAB_LABELS = {
 const searchSchema = z.object({
   // Active tab, deep-linkable. Default ("recipes") is omitted from the URL.
   tab: tabSchema.optional().catch(undefined),
-  // Embedded RecipeList mirrors sort/page to the URL (useTableState urlSync) —
-  // merge so this strict schema doesn't strip those keys.
-  ...tableSearchFields,
-  ...entityFilterSearchFields("recipe"),
+  // Embedded RecipeList mirrors its filters and sort/page to the URL
+  // (useTableState urlSync) — merge so this strict schema doesn't strip them.
+  ...entitySearch.recipe.schema.shape,
 });
 
-const CookbookNotFound = notFoundPage(
-  "cookbook",
-  "Cookbook not found",
-  "This cookbook is no longer available.",
-);
+const CookbookNotFound = notFoundPage("cookbook");
 
 export interface CookbookDetailLoaderPort {
   load(shortcode: string): Promise<CookbookSummary | null>;

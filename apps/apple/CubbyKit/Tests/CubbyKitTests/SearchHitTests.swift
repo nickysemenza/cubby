@@ -5,16 +5,14 @@ import Testing
 
 @Suite("SearchHit")
 struct SearchHitTests {
-    @Test func decodesHitsAndResolvesKnownKinds() throws {
+    @Test func decodesHitsAndResolvesKinds() throws {
         let hits = try Fixtures.decode([SearchHit].self, from: "search-find.json")
-        #expect(hits.count == 3)
+        #expect(hits.count == 2)
         #expect(hits[0].key == .product)
         #expect(hits[0].imageURL?.host() == "images.example")
         #expect(hits[1].key == .location)
         #expect(hits[1].subtitle == "Home › Garage › Shelf A")
         #expect(hits[1].typeHint == "box")
-        // An unknown kind decodes (the app must not crash on a new server kind) but has no key.
-        #expect(hits[2].key == nil)
     }
 
     @Test func stockedAtReadsInventoryEntries() throws {

@@ -90,14 +90,15 @@ final class PhotoMatchStore {
             do {
                 let document = try await client.imageHashIndex()
                 guard generation == token, !Task.isCancelled else { return }
-                _ = try HashIndex(entries: [], algorithmRevision: document.algorithmRevision)
-                entries = Dictionary(uniqueKeysWithValues: document.items.map { ($0.id, $0) })
+                _ = try HashIndex(entries: [], algorithmRevision: document.algorithmRevision.rawValue)
+                let items = try document.items.map(ImageHashEntry.init)
+                entries = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
                 entriesRevision += 1
-                totalCount = document.items.count
+                totalCount = items.count
                 remainingCount = document.repair.count
                 hasIndex = true
                 let querySnapshot = queries.filter { priorityIDs?.contains($0.key) ?? true }
-                let matched = try await Self.match(entries: document.items, queries: querySnapshot)
+                let matched = try await Self.match(entries: items, queries: querySnapshot)
                 guard generation == token, !Task.isCancelled else { return }
                 publishServerMatches(matched, for: querySnapshot, replacing: true)
                 pendingQueries = pendingQueries.filter { queries[$0.key] != $0.value }
@@ -108,8 +109,11 @@ final class PhotoMatchStore {
                 }
                 revision += 1
                 if !observers.isEmpty {
+                    let repairs = document.repair.compactMap { row in
+                        URL(string: row.url).map { (row.id, $0) }
+                    }
                     repairTask = Task {
-                        await self.repair(document.repair, client: client, token: token)
+                        await self.repair(repairs, client: client, token: token)
                     }
                 }
             } catch is CancellationError {} catch {
@@ -209,7 +213,8 @@ final class PhotoMatchStore {
         guard accountGeneration == account, !Task.isCancelled else { throw CancellationError() }
     }
 
-    private func repair(_ rows: [ImageHashRepair], client: CubbyClient, token: UUID) async {
+    /// `rows` are the images the server could not hash itself, with their source URLs.
+    private func repair(_ rows: [(id: ImageCode, url: URL)], client: CubbyClient, token: UUID) async {
         guard generation == token, !Task.isCancelled, !rows.isEmpty else { return }
         isRepairing = true; repairFailures = 0
         defer { if generation == token { isRepairing = false } }
@@ -228,7 +233,7 @@ final class PhotoMatchStore {
                 for update in written.items {
                     guard let old = entries[update.id] else { continue }
                     let entry = ImageHashEntry(
-                        id: old.id, perceptualHash: update.perceptualHash,
+                        id: old.id, perceptualHash: try PerceptualHash64(hex: update.perceptualHash),
                         sourceFingerprint: old.sourceFingerprint, width: old.width, height: old.height)
                     entries[old.id] = entry
                     added.append(entry)
@@ -305,10 +310,10 @@ final class PhotoMatchStore {
         let update: ImageHashUpdate?
     }
 
-    nonisolated private static func fetchHashes(_ rows: [ImageHashRepair]) async -> [RepairResult] {
+    nonisolated private static func fetchHashes(_ rows: [(id: ImageCode, url: URL)]) async -> [RepairResult] {
         await withTaskGroup(of: RepairResult.self) { group in
             var iterator = rows.makeIterator()
-            func enqueue(_ row: ImageHashRepair) {
+            func enqueue(_ row: (id: ImageCode, url: URL)) {
                 group.addTask {
                     do {
                         try Task.checkCancellation()

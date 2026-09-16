@@ -55,6 +55,8 @@ public enum BinPlan {
                 message: "\(target.name) contains \(anchorNode.name) — it can't move inside it.")
         }
         return .adopt(
-            AdoptableBin(id: target.id, name: target.name, type: target.type, currentParentName: parent.name))
+            AdoptableBin(
+                id: target.id, name: target.name, type: target._type?.rawValue, currentParentName: parent.name
+            ))
     }
 }

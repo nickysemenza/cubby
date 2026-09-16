@@ -27,9 +27,20 @@ import { z } from "zod";
 export default defineEntity({
   key: "expense",
   names: { singular: "Expense", plural: "Expenses" },
-  route: { basePath: "expenses" },
+  route: {
+    basePath: "expenses",
+    create: "dialog",
+    list: null,
+    detail: {
+      component: {
+        module: "~/app/expenses/expense-detail",
+        export: "ExpenseDetail",
+      },
+    },
+  },
   table: "Expense",
-  identifiers: { brand: "ExpenseId", shortcode: "EXP-", legacy: null },
+  identifiers: { brand: "ExpenseId", shortcode: "EXP-" },
+  native: { update: "Accept expense project recommendation" },
   presentation: {
     titleField: "name",
     domain: "finance",
@@ -65,7 +76,13 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         control: { kind: "number", renderer: "money", section: "details" },
-        display: { list: true, detail: true, detailOrder: 20 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 20,
+          format: "currency",
+          mobile: { slot: "trailing", priority: 1 },
+        },
         validation: {
           read: wholeCentAmount.describe("Dollars").nullable(),
           create: wholeCentAmount.nullable().default(null),
@@ -75,7 +92,7 @@ export default defineEntity({
       {
         key: "date",
         kind: "date",
-        control: { kind: "date", section: "schedule" },
+        control: { kind: "date", section: "schedule", initial: "today" },
         display: { list: true, detail: true, detailOrder: 30 },
         validation: {
           read: plainDate,
@@ -102,7 +119,12 @@ export default defineEntity({
         kind: "enum",
         label: "Itemization",
         control: { kind: "select", section: "details" },
-        display: { list: true, detail: true, detailOrder: 140 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 140,
+          listHidden: true,
+        },
         validation: {
           read: expenseLineBasisSchema.describe(
             "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
@@ -252,7 +274,12 @@ export default defineEntity({
         nullable: true,
         label: "Order #",
         control: { kind: "text", section: "details" },
-        display: { list: true, detail: true, detailOrder: 110 },
+        display: {
+          list: true,
+          detail: true,
+          detailOrder: 110,
+          listHidden: true,
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),

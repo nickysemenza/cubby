@@ -1,5 +1,5 @@
 import type { RowData } from "@tanstack/react-table";
-import { AlignJustify, LayoutList, List, Settings2 } from "lucide-react";
+import { Settings2 } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "~/components/ui/button";
@@ -8,43 +8,24 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { ResponsiveSheet } from "~/components/ui/responsive-sheet";
-import { ChoiceSwitcher } from "~/components/ui/view-switcher";
 import { humanize } from "~/entities/filters";
 import { useIsMobile } from "~/hooks/useMobile";
 
+import { isTableLayoutCustomized } from "./column-layout";
 import type {
   CubbyColumn as Column,
   CubbyTable as Table,
 } from "./table-features";
-import { isTableLayoutCustomized } from "./table-layout";
 import TableLayoutCustomizer from "./TableLayoutCustomizer";
-import { type TableDensity, useTableDensity } from "./useTableDensity";
-
-const densityOptions: {
-  value: TableDensity;
-  label: string;
-  icon: typeof List;
-}[] = [
-  { value: "comfortable", label: "Comfortable", icon: List },
-  { value: "compact", label: "Compact", icon: LayoutList },
-  { value: "dense", label: "Dense", icon: AlignJustify },
-];
-
-const isTableDensity = (value: string): value is TableDensity =>
-  densityOptions.some((option) => option.value === value);
 
 const isStringHeader = (value: unknown): value is string =>
   typeof value === "string";
 
 interface DataTableViewOptionsProps<TData extends RowData> {
   table: Table<TData>;
-  defaultDensity?: TableDensity;
 }
 
 /**
@@ -67,9 +48,7 @@ export function columnLabel<TData extends RowData>(
 
 export function DataTableViewOptions<TData extends RowData>({
   table,
-  defaultDensity,
 }: DataTableViewOptionsProps<TData>) {
-  const { density, setDensity } = useTableDensity(defaultDensity);
   const isMobile = useIsMobile();
   const [mobileOpen, setMobileOpen] = useState(false);
   const isCustomized = isTableLayoutCustomized(
@@ -111,21 +90,9 @@ export function DataTableViewOptions<TData extends RowData>({
           open={mobileOpen}
           onOpenChange={setMobileOpen}
           title="Display settings"
-          description="Choose the table density, order, visibility, and pinned columns."
+          description="Choose the column order, visibility, and pinned columns."
         >
           <div className="space-y-4">
-            <section className="space-y-2">
-              <h3 className="text-2xs font-medium tracking-wider text-muted-foreground uppercase">
-                Density
-              </h3>
-              <ChoiceSwitcher
-                ariaLabel="Table density"
-                options={densityOptions}
-                value={density}
-                onValueChange={setDensity}
-                className="w-full [&_[data-slot=toggle-group-item]]:flex-1"
-              />
-            </section>
             {isCustomized && (
               <p className="text-xs text-muted-foreground">
                 Customized layout — restore defaults below
@@ -155,23 +122,6 @@ export function DataTableViewOptions<TData extends RowData>({
         align="end"
         className="max-h-[75vh] w-[480px] overflow-y-auto"
       >
-        <DropdownMenuGroup>
-          <DropdownMenuLabel>Density</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={density}
-            onValueChange={(value) => {
-              if (isTableDensity(value)) setDensity(value);
-            }}
-          >
-            {densityOptions.map((opt) => (
-              <DropdownMenuRadioItem key={opt.value} value={opt.value}>
-                <opt.icon className="mr-2 size-3.5" />
-                {opt.label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
         {isCustomized && (
           <DropdownMenuGroup>
             <DropdownMenuLabel className="text-2xs text-muted-foreground">

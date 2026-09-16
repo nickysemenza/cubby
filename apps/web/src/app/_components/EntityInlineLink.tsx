@@ -605,7 +605,7 @@ function asDisplayableUrl(
 }
 
 /** Normalize established enriched projections while DTOs converge on one field. */
-function displayImageFromData(
+export function displayImageFromData(
   data: InlineImageProjection,
 ): ImageUrlSummary | null {
   const direct = [

@@ -236,6 +236,57 @@ describe("findOrCreateByCode", () => {
     expect([a.created, b.created].sort()).toEqual([false, true]);
     expect(a.product.id).toBe(b.product.id);
   });
+
+  it("classifies a raw scan: a printed product label resolves by lookup", async () => {
+    const upc = "044444444444";
+    const existing = await quickCreateProduct(
+      ctx.db,
+      { name: "Labelled Widget", upc },
+      ctx.actor,
+    );
+    const result = await findOrCreateByCode(
+      ctx.db,
+      unexpectedUsdaClient(),
+      unexpectedUpcLookupClient(),
+      { kind: "scan", value: `https://cubby.example.com/${existing.id}` },
+      ctx.actor,
+    );
+    // A label resolves through the detail read, so compare identity, not shape.
+    expect(result.created).toBe(false);
+    expect(result.product.id).toBe(existing.id);
+  });
+
+  it("classifies a raw scan: a barcode takes the UPC path", async () => {
+    const upc = "055555555555";
+    const existing = await quickCreateProduct(
+      ctx.db,
+      { name: "Scanned Widget", upc },
+      ctx.actor,
+    );
+    const result = await findOrCreateByCode(
+      ctx.db,
+      unexpectedUsdaClient(),
+      unexpectedUpcLookupClient(),
+      { kind: "scan", value: ` ${upc} ` },
+      ctx.actor,
+    );
+    expect(result).toEqual({ product: existing, created: false });
+  });
+
+  it("refuses a raw scan that names nothing stockable with the scanner's copy", async () => {
+    await expect(
+      findOrCreateByCode(
+        ctx.db,
+        unexpectedUsdaClient(),
+        unexpectedUpcLookupClient(),
+        { kind: "scan", value: "RCP-4K7M" },
+        ctx.actor,
+      ),
+    ).rejects.toMatchObject({
+      message: "That's a recipe label — nothing that sits on a shelf.",
+      cause: { reason: "SCAN_CODE_UNRECOGNIZED" },
+    });
+  });
 });
 
 describe("applyUpcDataWithSideEffects", () => {

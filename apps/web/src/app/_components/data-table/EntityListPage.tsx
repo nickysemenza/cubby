@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { usePageCount } from "~/components/page/Page";
-import { browserEntityDefinition, entities } from "~/entities/entities";
+import { entities } from "~/entities/entities";
 
 import {
   type BaseListRow,
@@ -148,7 +148,6 @@ export function EntityListPage<
         getRowClassName={getRowClassName}
         showCellSelectionStats={showCellSelectionStats}
         verticalAlign={verticalAlign}
-        defaultDensity={browserEntityDefinition(entity).list?.defaultDensity}
         currentRowId={currentPreview?.rowKey}
         desktopInspector={dockedInspector}
         inspectorToggle={inspectorToggle}

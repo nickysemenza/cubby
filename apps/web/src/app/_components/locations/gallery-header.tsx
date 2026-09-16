@@ -3,9 +3,8 @@ import {
   type LocationType,
   locationType,
 } from "@cubby/schemas/location";
-import { Link } from "@tanstack/react-router";
 import { Plus, Search, X } from "lucide-react";
-import { useId } from "react";
+import { useId, useState } from "react";
 import { z } from "zod";
 
 import { EntityStat } from "~/components/entity/entity-stat";
@@ -15,8 +14,9 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { FilterableCombobox } from "~/components/ui/combobox";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { captureRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { EntityIcon } from "~/entities/entities";
-import type { EmptyFilter } from "~/hooks/useGalleryViewState";
 import { cn } from "~/lib/utils";
 
 import { LocationBreadcrumb } from "./location-breadcrumb";
@@ -24,6 +24,7 @@ import { locationTypeOptionsWithTheme } from "./location-icons";
 
 const EMPTY_BREADCRUMB: InfLocation[] = [];
 const emptyFilterSchema = z.enum(["all", "withItems", "empty"]);
+export type EmptyFilter = z.infer<typeof emptyFilterSchema>;
 
 interface GalleryHeaderProps {
   searchTerm: string;
@@ -57,6 +58,7 @@ export function GalleryHeader({
   const hideNonMatchingId = useId();
   const hasActiveFilters =
     searchTerm || locationTypeFilter || emptyFilter !== "all";
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <div className={cn("sticky top-0 z-10 border-b", className)}>
@@ -231,13 +233,17 @@ export function GalleryHeader({
         <Button
           size="sm"
           className="h-8 gap-1 text-xs"
-          render={<Link to="/locations/new" />}
-          nativeButton={false}
+          onClick={() => setCreateOpen(true)}
         >
           <Plus className="size-3.5" />
           New Location
         </Button>
       </Row>
+      <EntityEditDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        request={captureRequest("location")}
+      />
     </div>
   );
 }

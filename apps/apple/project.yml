@@ -41,9 +41,6 @@ packages:
   Nuke:
     url: https://github.com/kean/Nuke
     from: "12.9.0"
-  SnapshotTesting:
-    url: https://github.com/pointfreeco/swift-snapshot-testing
-    from: "1.19.4"
 
 targetTemplates:
   CubbyApp:
@@ -167,7 +164,7 @@ targets:
     settings:
       configs:
         # Lets `Cubby-iOS-Tests` `@testable import Cubby` to reach internal preview/content
-        # sub-views (e.g. `SearchContent`, `PreviewFixtures`) for snapshot tests. iOS-only: the
+        # sub-views (e.g. `SearchContent`, `PreviewFixtures`). iOS-only: the
         # macOS target has no test bundle, so its Debug config is untouched.
         Debug:
           ENABLE_TESTABILITY: YES
@@ -176,9 +173,9 @@ targets:
     templateAttributes:
       plat: macOS
     platform: macOS
-  # Snapshot tests for iOS-only screens (App/Tests/Snapshots). Hosted by Cubby-iOS so
-  # `@testable import Cubby` and `.environment`/`AppModel` work exactly as the app's own
-  # `#Preview`s do. macOS hosts the cross-platform navigation contracts below.
+  # Tests for iOS-only screens. Hosted by Cubby-iOS so `@testable import Cubby`
+  # and `.environment`/`AppModel` work exactly as the app's own `#Preview`s do.
+  # macOS hosts the cross-platform navigation contracts below.
   Cubby-iOS-Tests:
     type: bundle.unit-test
     platform: iOS
@@ -189,8 +186,6 @@ targets:
         buildPhase: resources
     dependencies:
       - target: Cubby-iOS
-      - package: SnapshotTesting
-        product: SnapshotTesting
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

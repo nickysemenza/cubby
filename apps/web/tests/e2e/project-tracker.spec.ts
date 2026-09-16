@@ -12,7 +12,7 @@ test("command palette search deep-links a task straight to its detail page", asy
 
   const palette = await openCommandPalette(page);
   await palette
-    .getByPlaceholder("Search, jump to a page, or ask Cubby…")
+    .getByPlaceholder("Search or jump to a page…")
     .fill(`tasks:${name}`);
   const resultName = palette
     .locator("div.truncate.text-sm", { hasText: name })

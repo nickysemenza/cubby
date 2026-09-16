@@ -74,7 +74,7 @@ public actor FeaturePrintIndex {
     /// indexed are skipped, so this is safe to call repeatedly. Returns how many were added.
     @discardableResult
     public func build(
-        from products: [ProductSummary],
+        from products: [ProductDetail],
         loader: CoverImageLoader = CoverImageLoader(),
         concurrency: Int = 6,
         progress: (@Sendable (Int, Int) -> Void)? = nil
@@ -82,7 +82,7 @@ public actor FeaturePrintIndex {
         let pending = products.filter { $0.coverImageURL != nil && entries[$0.id] == nil }
         var added = 0
         var done = 0
-        await withTaskGroup(of: (ProductSummary, FeaturePrintObservation)?.self) { group in
+        await withTaskGroup(of: (ProductDetail, FeaturePrintObservation)?.self) { group in
             var iterator = pending.makeIterator()
             func enqueue() {
                 guard let product = iterator.next(), let url = product.coverImageURL else { return }

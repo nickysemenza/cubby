@@ -69,20 +69,25 @@ test("direct links fall back to the parent and directories remain reachable thro
 });
 
 test("form validation and picker entry remain reachable", async ({ page }) => {
-  await gotoAuthenticatedPage(page, "/locations/new");
+  // Locations are created in the list's dialog; `?create=true` is the
+  // addressable way in (see CreateDialogAction).
+  await gotoAuthenticatedPage(page, "/locations?create=true");
   await seedLocationPrerequisite(page, "Phone parent pantry");
-  await page.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.locator('[aria-invalid="true"]').first()).toBeInViewport();
-  await page
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(
+    dialog.locator('[aria-invalid="true"]').first(),
+  ).toBeInViewport();
+  await dialog
     .getByRole("textbox", { name: "Name", exact: true })
     .fill("Phone pantry");
-  const picker = page.getByRole("combobox", { name: /Parent location/i });
+  const picker = dialog.getByRole("combobox", { name: /Parent location/i });
   await picker.fill("Phone parent");
   await page.getByRole("option", { name: /Phone parent pantry/ }).click();
   await expect(picker).toHaveValue("Phone parent pantry — room");
-  const clear = page
-    .getByRole("main")
-    .getByRole("button", { name: /^Clear parent location/i });
+  const clear = dialog.getByRole("button", {
+    name: /^Clear parent location/i,
+  });
   const target = await clear.boundingBox();
   expect(target?.width).toBeGreaterThanOrEqual(44);
   expect(target?.height).toBeGreaterThanOrEqual(44);

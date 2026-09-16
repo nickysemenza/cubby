@@ -20,6 +20,8 @@ import type { DetailHeroStat } from "~/components/layouts/page-hero";
 import { Page } from "~/components/page/Page";
 import { Button } from "~/components/ui/button";
 import { Description } from "~/components/ui/description";
+import { ingredientEditRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { labelNutrientsPer100 } from "~/lib/label-nutrition";
 import {
   getAllUnitMappingsFromProduct,
@@ -27,7 +29,6 @@ import {
 } from "~/lib/unit-mapping-utils";
 
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
-import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { FullNutrientBreakdown } from "../nutrition/FullNutrientBreakdown";
 import { NutrientDensityStats } from "../nutrition/NutrientDensityStats";
@@ -36,11 +37,10 @@ import { RecipeUsagesTable } from "../recipe/recipe-usages-table";
 import { UnitCoveragePanel } from "../units/UnitCoveragePanel";
 import { EnrichIngredientDialog } from "./enrich-ingredient-dialog";
 import { IngredientBasicInfo } from "./ingredient-basic-info";
-import { IngredientForm } from "./ingredient-form";
 import { IngredientProductShelf } from "./ingredient-product-shelf";
 
 interface IngredientDetailProps {
-  ingredient: IngredientWithFoodOut;
+  record: IngredientWithFoodOut;
 }
 
 /**
@@ -63,11 +63,14 @@ export function selectNutritionProduct(
   );
 }
 
-export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
+export const IngredientDetail: FC<IngredientDetailProps> = ({
+  record: ingredient,
+}) => {
   const [isEnriching, setIsEnriching] = useState(false);
   const startEnriching = useCallback(() => setIsEnriching(true), []);
+  const [editOpen, setEditOpen] = useState(false);
 
-  const { commonSections, editMode, mappings } = useEntityDetail<
+  const { commonSections, mappings } = useEntityDetail<
     "ingredient",
     IngredientWithFoodOut,
     IngredientUpdateInput
@@ -88,21 +91,18 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
     : [];
 
   const sections: DetailSection[] = [
-    editableDetailSection({
+    {
       id: "basic-information",
       title: "Basic Information",
       icon: Info,
       placement: "supporting",
-      editMode,
-      Form: IngredientForm,
-      entity: ingredient,
-      children: (
+      content: (
         <IngredientBasicInfo
           ingredient={ingredient}
-          onEdit={editMode.startEditing}
+          onEdit={() => setEditOpen(true)}
         />
       ),
-    }),
+    },
     // Custom section: Garden (only when a garden guide key is set) — see
     // `garden-seam-sections.tsx`. Every other ingredient's page never
     // mentions the garden.
@@ -237,6 +237,11 @@ export const IngredientDetail: FC<IngredientDetailProps> = ({ ingredient }) => {
         onOpenChange={(open) => {
           if (!open) setIsEnriching(false);
         }}
+      />
+      <EntityEditDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        request={ingredientEditRequest(ingredient)}
       />
     </>
   );

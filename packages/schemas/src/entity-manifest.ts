@@ -28,7 +28,6 @@ export const entityDescriptor = z.object({
   dbTable: z.string().nullable(),
   idBrand: z.string().nullable(),
   shortcodePrefix: z.string().optional(),
-  legacyShortcodePrefix: z.string().optional(),
   softDelete: z.boolean(),
   browserRoutes: z.boolean().optional(),
   auditable: z.boolean(),
@@ -207,3 +206,6 @@ export type SearchableEntity = (typeof searchableEntities)[number];
 
 export const isAuditableEntity = (entity: Entity): entity is AuditableEntity =>
   entityManifest[entity].auditable;
+
+export const isGalleryEntity = (entity: Entity): entity is GalleryEntity =>
+  entityManifest[entity].imageStorage === "gallery";

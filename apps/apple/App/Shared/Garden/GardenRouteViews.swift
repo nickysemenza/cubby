@@ -5,14 +5,14 @@ struct GardenPlantingRouteView: View {
     @Environment(AppModel.self) private var appModel
     let id: String
     @State private var garden: GardenModel?
-    @State private var planting: GardenPlanting?
+    @State private var planting: GardenPlantingOut?
     @State private var error: String?
 
     var body: some View {
         Group {
             if let planting, let garden {
                 GardenPlantingDetailView(
-                    model: garden, planting: planting, guide: garden.guide(for: planting.ingredient.id),
+                    model: garden, planting: planting, guide: garden.guide(for: planting.ingredientId),
                     source: garden.guideSource, uploader: GardenImageUploader(service: appModel.client))
             } else if let error {
                 ContentUnavailableView {
@@ -45,7 +45,7 @@ struct GardenEntryRouteView: View {
     @Environment(AppModel.self) private var appModel
     let id: String
     @State private var garden: GardenModel?
-    @State private var entry: GardenEntry?
+    @State private var entry: GardenEntryOut?
     @State private var error: String?
     @State private var correcting = false
 
@@ -100,7 +100,7 @@ struct GardenEntryRouteView: View {
 
 /// Link targets and photo controls are siblings so previewing a photo never pushes the entry.
 struct GardenEntrySummary: View {
-    let entry: GardenEntry
+    let entry: GardenEntryOut
     var linksToEntry = true
     private var heading: some View {
         VStack(alignment: .leading) {
@@ -117,7 +117,11 @@ struct GardenEntrySummary: View {
                         )
                 }
             }
-            Text(entry.observedAt.formatted(date: .abbreviated, time: .omitted)).font(.porcelainLabel)
+            Text(
+                entry.observedOn.date?.formatted(date: .abbreviated, time: .omitted)
+                    ?? entry.observedOn.rawValue
+            )
+            .font(.porcelainLabel)
         }
     }
     var body: some View {
@@ -127,16 +131,16 @@ struct GardenEntrySummary: View {
             } else {
                 heading
             }
-            NavigationLink(value: Route.entityDetail(.location, id: entry.locationID)) {
-                Text(entry.locationName ?? "View location").font(.porcelainLabel)
+            NavigationLink(value: Route.entityDetail(.location, id: entry.locationId.rawValue)) {
+                Text(entry.locationName).font(.porcelainLabel)
             }
-            if let plantingID = entry.plantingID {
+            if let plantingID = entry.plantingId {
                 NavigationLink(value: Route.entityDetail(.planting, id: plantingID)) {
                     Text(entry.plantingName ?? "View planting").font(.porcelainLabel)
                 }
             }
             if let amount = entry.harvestAmount {
-                Text(entry.plantingID == nil ? GardenStrings.harvestSummary(amount) : amount)
+                Text(entry.plantingId == nil ? GardenStrings.harvestSummary(amount) : amount)
             }
             if let note = entry.note { Text(note) }
             GardenImageStrip(images: entry.images)
@@ -150,7 +154,7 @@ struct GardenBedJournalView: View {
     let locationID: String?
     private enum LoadPhase: Equatable { case idle, loading, loaded }
     @State private var phase: LoadPhase = .idle
-    @State private var entries: [GardenEntry] = []
+    @State private var entries: [GardenEntryOut] = []
     @State private var page = 1
     @State private var hasMore = false
     /// The concurrency guard, separate from `phase`: `phase` only ever advances `.idle` →
@@ -211,7 +215,11 @@ struct GardenBedJournalView: View {
             if let garden, let locationID {
                 GardenEntrySheet(
                     model: garden,
-                    target: .location(.init(id: locationID, name: locationName, plantings: [])),
+                    target: .location(
+                        .init(
+                            id: LocationCode(locationID), name: locationName, gardenKind: nil,
+                            gardenConditions: nil,
+                            plantings: [])),
                     uploader: GardenImageUploader(service: appModel.client))
             }
         }

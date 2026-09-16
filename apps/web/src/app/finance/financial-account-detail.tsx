@@ -20,9 +20,9 @@ import {
 } from "./financial-account-options";
 import { LinkedTransactions } from "./linked-transactions";
 export function FinancialAccountDetail({
-  account,
+  record: account,
 }: {
-  account: FinancialAccountOut;
+  record: FinancialAccountOut;
 }) {
   const [editOpen, setEditOpen] = useState(false);
   return (

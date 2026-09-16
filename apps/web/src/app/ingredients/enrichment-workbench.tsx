@@ -717,7 +717,6 @@ export function EnrichmentWorkbench({
     bulkActions,
     onInspectRow: inspectRow,
     includeCatalogActions: false,
-    layoutKey: "ingredient:enrichment-workbench",
     tableStateOptions: ENRICHMENT_TABLE_STATE,
     initialColumnVisibility: {
       focusRank: false,
@@ -855,7 +854,6 @@ export function EnrichmentWorkbench({
               contextualStatus={contextualStatus}
               emptyState={tableEmptyState}
               showColumnMenu
-              defaultDensity="dense"
               onRowClick={onRowClick}
               onRowHover={onRowHover}
               onRowHoverEnd={onRowHoverEnd}

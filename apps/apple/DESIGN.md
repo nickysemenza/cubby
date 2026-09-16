@@ -72,4 +72,3 @@ avoid duplicate haptics, and respect Reduce Motion.
 
 Validate iPhone and Mac workflows, iPad resizing, light/dark, accessibility text,
 VoiceOver, keyboard-only navigation, Reduce Motion, and Reduce Transparency.
-Snapshots are visual regressions, not interaction or physical-camera signoff.

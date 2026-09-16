@@ -1,8 +1,11 @@
-import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
+import type { Entity } from "@cubby/schemas/entity";
+import {
+  isAuditableEntity,
+  isGalleryEntity,
+} from "@cubby/schemas/entity-manifest";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
-import { Clock, ImageIcon, Scale } from "lucide-react";
+import { Clock, ImageIcon } from "lucide-react";
 import { createElement, useMemo } from "react";
-import { z } from "zod";
 
 import type { EditableEntity } from "~/entities/editing/types";
 import {
@@ -10,16 +13,28 @@ import {
   type EntityDetailController,
   useEntityDetailController,
 } from "~/entities/editing/use-entity-detail-controller";
-import { entities } from "~/entities/entities";
 
 import { AuditLogList } from "../audit-log/audit-log-list";
 import type { DetailSection } from "../data-table/detail-page";
 import EntityImageList from "../EntityImageList";
-import { UnitMappingDisplay } from "../units/UnitMappingDisplay";
 
-const commonSectionTypeList = z.array(
-  z.enum(["images", "unit-mappings", "history"]),
-);
+/**
+ * Gallery entities whose Images section is NOT this hook's plain read-only
+ * list: `product`/`location` show their gallery as the detail page's own
+ * hero image strip (a more prominent placement than a supporting section,
+ * still driven by `capabilities.images === "gallery"`), and
+ * `meal`/`task`/`planting` edit their gallery inline via
+ * `EntityPhotosSection` (add/remove, not just display) at a page-chosen
+ * position. Deriving a second, generic "Images" section for any of these
+ * five would duplicate or contradict that placement.
+ */
+const CUSTOM_IMAGE_PLACEMENT: ReadonlySet<Entity> = new Set([
+  "product",
+  "location",
+  "meal",
+  "task",
+  "planting",
+]);
 
 /** Base interface for entities that can have images */
 interface WithImages {
@@ -47,7 +62,7 @@ interface UseEntityDetailOptions<
 }
 
 interface UseEntityDetailReturn<TUpdateInput> {
-  /** Common sections based on entity config (images, unit-mappings, history) */
+  /** Common sections derived from entity capabilities (images, history) */
   commonSections: DetailSection[];
   /** Edit mode state and handlers */
   editMode: EntityDetailController<TUpdateInput>;
@@ -61,7 +76,11 @@ interface UseEntityDetailReturn<TUpdateInput> {
  * Handles:
  * - Edit mode state via the shared entity detail controller
  * - Async unit mappings loading if getMappings provided
- * - Building common sections based on entity config (images, unit-mappings, history)
+ * - Building common sections from entity capabilities: History for every
+ *   `capabilities.auditable` entity, Images for every `capabilities.images
+ *   === "gallery"` entity that doesn't already place its gallery elsewhere
+ *   (see `CUSTOM_IMAGE_PLACEMENT`). Unlike the old per-entity declared array,
+ *   nothing here can drift from what the manifest actually says.
  */
 export function useEntityDetail<
   E extends EditableEntity,
@@ -73,11 +92,6 @@ export function useEntityDetail<
   getMappings,
   onSuccess,
 }: UseEntityDetailOptions<E, TData>): UseEntityDetailReturn<TUpdateInput> {
-  const entityConfig = entities[entity];
-  const commonSectionTypes = commonSectionTypeList.parse(
-    entityConfig.detail?.commonSections ?? [],
-  );
-
   // Set up edit mode
   const editMode = useEntityDetailController<E, TUpdateInput>({
     entity,
@@ -90,53 +104,34 @@ export function useEntityDetail<
     [data, getMappings],
   );
 
-  // Build common sections based on entity config
+  // Build common sections from entity capabilities. Order matches every
+  // declared array this replaces: Images always precedes History.
   const commonSections: DetailSection[] = [];
 
-  for (const sectionType of commonSectionTypes) {
-    switch (sectionType) {
-      case "images":
-        commonSections.push({
-          id: "images",
-          title: "Images",
-          icon: ImageIcon,
-          placement: "supporting",
-          content: createElement(EntityImageList, {
-            images: data.images ?? [],
-          }),
-        });
-        break;
+  if (isGalleryEntity(entity) && !CUSTOM_IMAGE_PLACEMENT.has(entity)) {
+    commonSections.push({
+      id: "images",
+      title: "Images",
+      icon: ImageIcon,
+      placement: "supporting",
+      content: createElement(EntityImageList, {
+        images: data.images ?? [],
+      }),
+    });
+  }
 
-      case "unit-mappings":
-        commonSections.push({
-          id: "unit-mappings",
-          title: "Unit Mappings",
-          icon: Scale,
-          placement: "supporting",
-          content: createElement(UnitMappingDisplay, {
-            mappings,
-            title: "",
-          }),
-        });
-        break;
-
-      case "history": {
-        if (isAuditableEntity(entity)) {
-          commonSections.push({
-            id: "history",
-            title: "History",
-            icon: Clock,
-            placement: "supporting",
-            content: createElement(AuditLogList, {
-              entityType: entity,
-              entityId: data.id,
-              showEntityLink: false,
-            }),
-          });
-        }
-        break;
-      }
-    }
+  if (isAuditableEntity(entity)) {
+    commonSections.push({
+      id: "history",
+      title: "History",
+      icon: Clock,
+      placement: "supporting",
+      content: createElement(AuditLogList, {
+        entityType: entity,
+        entityId: data.id,
+        showEntityLink: false,
+      }),
+    });
   }
 
   return {

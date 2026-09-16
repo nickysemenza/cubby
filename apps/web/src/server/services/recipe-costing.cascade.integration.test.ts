@@ -275,7 +275,12 @@ describe("recipe totals cascade", () => {
       expect(read.item.totals?.cost).not.toMatchObject({ status: "pending" });
       expect(await stale(tree.child)).toBe(false);
       expect(await stale(tree.parent)).toBe(true);
-      expect(warn).toHaveBeenCalledTimes(1);
+      // The freshness notifier also warns when no Durable Object is bound
+      // (always, under vitest), so assert the repair warning itself.
+      expect(warn).toHaveBeenCalledWith(
+        "[recipe.get] repair-on-read failed",
+        expect.objectContaining({ recipes: [tree.child] }),
+      );
     } finally {
       warn.mockRestore();
     }

@@ -27,7 +27,6 @@ export {
   findTrackerEmbeddingRefsForProjects,
   findTransactionEmbeddingRefsForAccounts,
   findWishEmbeddingRefsForProducts,
-  getEntityEmbeddingDeletedAt,
   getEntityEmbeddingDeletedAtForRef,
 } from "./entity-embedding-cleanup";
 export * from "./entity-embedding-refresh";

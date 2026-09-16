@@ -13,7 +13,6 @@ import {
   productShortcode,
 } from "../identifier-fields.js";
 import { imageOut } from "./field-primitives.js";
-import { isbn } from "@cubby/schemas/isbn";
 import { money } from "@cubby/schemas/money";
 import { productLabelNutrition } from "@cubby/schemas/nutrition";
 import {
@@ -28,9 +27,19 @@ import { z } from "zod";
 export default defineEntity({
   key: "product",
   names: { singular: "Product", plural: "Products" },
-  route: { basePath: "products" },
+  route: {
+    basePath: "products",
+    create: "page",
+    list: null,
+    detail: {
+      component: {
+        module: "~/app/_components/products/product-detail",
+        export: "ProductDetail",
+      },
+    },
+  },
   table: "Product",
-  identifiers: { brand: "ProductId", shortcode: "PRD-", legacy: "P-" },
+  identifiers: { brand: "ProductId", shortcode: "PRD-" },
   presentation: {
     titleField: "name",
     // Pantry/Inventory wayfinding, not a Product status colour; USDA data
@@ -86,7 +95,13 @@ export default defineEntity({
         key: "tags",
         kind: "text-array",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { list: true, listOrder: 16, detail: true, detailOrder: 10 },
+        display: {
+          list: true,
+          listOrder: 16,
+          detail: true,
+          detailOrder: 10,
+          listHidden: true,
+        },
         validation: {
           read: z.array(z.string()),
           create: z.array(z.string()).default([]),
@@ -111,10 +126,15 @@ export default defineEntity({
         nullable: true,
         readKey: null,
         control: { kind: "text" },
+        // Plain string: check-digit validation + GTIN-14 normalization now
+        // happen at the repository boundary (`resolvePrimaryProductCodeInput`
+        // in `apps/web/src/server/repo/product/update-helpers.ts`), not here —
+        // `packages/schemas` cannot depend on the WASM boundary that
+        // validation needs (see `@cubby/recipebridge`).
         validation: {
           read: null,
-          create: isbn.nullable().optional(),
-          update: isbn.nullable().optional(),
+          create: z.string().trim().nullable().optional(),
+          update: z.string().trim().nullable().optional(),
         },
       },
       {
@@ -132,6 +152,7 @@ export default defineEntity({
           detailOrder: 7,
           width: "sm",
           format: "external-link",
+          listHidden: true,
         },
         validation: {
           read: fdcId.nullable(),
@@ -150,6 +171,7 @@ export default defineEntity({
           detailOrder: 2,
           width: "md",
           mobile: { slot: "subtitle", priority: 20 },
+          listHidden: true,
         },
         validation: {
           read: z.string(),
@@ -171,6 +193,7 @@ export default defineEntity({
           detail: true,
           detailOrder: 3,
           width: "md",
+          listHidden: true,
         },
         validation: {
           read: z.string().nullable(),
@@ -183,7 +206,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea", section: "notes" },
-        display: { list: true, listOrder: 5, width: "md" },
+        display: { list: true, listOrder: 5, width: "md", listHidden: true },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -317,7 +340,13 @@ export default defineEntity({
         kind: "text-array",
         label: "External IDs",
         control: { kind: "specialized", renderer: "tag-list" },
-        display: { list: true, listOrder: 8, detail: true, detailOrder: 9 },
+        display: {
+          list: true,
+          listOrder: 8,
+          detail: true,
+          detailOrder: 9,
+          listHidden: true,
+        },
         validation: {
           read: z.array(externalIdOut),
           create: externalIdInputs.default([]),
@@ -332,7 +361,7 @@ export default defineEntity({
         // Hidden by default via the page's `initialColumnVisibility` — this
         // was already declared `list: true` before this migration, but the
         // page never wired `createEntityDisplayColumns` up to render it.
-        display: { list: true, listOrder: 18 },
+        display: { list: true, listOrder: 18, listHidden: true },
         validation: {
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
@@ -347,7 +376,7 @@ export default defineEntity({
         // headed this "Stock tracking".
         label: "Stock tracking",
         control: { kind: "checkbox" },
-        display: { list: true, listOrder: 6, width: "sm" },
+        display: { list: true, listOrder: 6, width: "sm", listHidden: true },
         validation: {
           read: z.boolean().nullable(),
           create: z.boolean().nullable().optional(),
@@ -448,7 +477,7 @@ export default defineEntity({
         // Default label would be "Data Quality"; the list column has always
         // headed this "Data quality".
         label: "Data quality",
-        display: { list: true, listOrder: 7 },
+        display: { list: true, listOrder: 7, listHidden: true },
         validation: {
           read: dataQuality,
           create: null,
@@ -463,7 +492,7 @@ export default defineEntity({
         key: "expenseTotal",
         kind: "number",
         label: "Net basis",
-        display: { list: true, listOrder: 10 },
+        display: { list: true, listOrder: 10, listHidden: true },
         validation: {
           read: money,
           create: null,
@@ -500,14 +529,19 @@ export default defineEntity({
         // `expectedQuantity` field above no longer renders a list column, so
         // this is the sole claimant of that (persisted) column id now.
         readKey: null,
-        display: { list: true, listOrder: 13, columnId: "expectedQuantity" },
+        display: {
+          list: true,
+          listOrder: 13,
+          columnId: "expectedQuantity",
+          listHidden: true,
+        },
       },
       {
         key: "quantityVariance",
         kind: "number",
         nullable: true,
         label: "Variance",
-        display: { list: true, listOrder: 14 },
+        display: { list: true, listOrder: 14, listHidden: true },
         validation: {
           read: z.number().nullable(),
           create: null,
@@ -546,7 +580,7 @@ export default defineEntity({
         key: "onHandUnits",
         kind: "number",
         nullable: true,
-        display: { list: true, listOrder: 19 },
+        display: { list: true, listOrder: 19, listHidden: true },
         validation: {
           read: z.number().nullable(),
           create: null,

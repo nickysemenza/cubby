@@ -15,6 +15,7 @@ import {
   IntegreSQLClient,
   type IntegreSQLDatabaseConfig,
 } from "@devoxa/integresql-client";
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { beforeEach } from "vitest";
@@ -209,11 +210,23 @@ async function seedTestHome(rawDb: ReturnType<typeof drizzle>) {
 /**
  * The database for THIS test file.
  *
- * Vitest runs the integration project with the forks pool and `isolate: true`,
- * so each test file gets its own module registry — this cache is therefore
- * per-file, not per-worker. That is deliberate: several suites read global
- * "zero" invariants (`findOrphanedEntityEmbeddings`) and recent-N windows
- * (`listBackgroundBatches`) that are only meaningful within one file.
+ * Vitest runs the integration project with the forks pool and `isolate:
+ * false`, so the JS module registry is shared across every file a worker
+ * runs — this variable itself would leak across files in the same worker if
+ * nothing reset it. It doesn't: `tooling/integration-teardown.ts` registers a
+ * FILE-scoped `afterAll` (setupFiles run fresh per file even when the module
+ * graph is shared) that calls {@link closeTestDb}, which sets `fileDb = null`
+ * before the next file in the worker can call {@link getFileDb} again. So
+ * this cache is file-scoped in effect, not because the registry is fresh, but
+ * because it is explicitly torn down. That distinction matters for anything
+ * that ISN'T reset here — a true per-worker module singleton (`db.ts`'s
+ * `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`, `ai/models.ts`,
+ * `semantic/embeddings.ts`, `clients/notion.ts`'s LRU caches) now persists
+ * across files in the same worker, which is exactly what several suites'
+ * global "zero" invariants (`findOrphanedEntityEmbeddings`) and recent-N
+ * windows (`listBackgroundBatches`) rely on NOT happening — they stay correct
+ * only because they scope by `TEST_HOME_ID`/`TEST_USER_ID` rows that
+ * `resetTestDb()` truncates every test, not because the module graph resets.
  */
 let fileDb: {
   db: Database;
@@ -421,6 +434,77 @@ export function withTestDb(source: AuditSource = "ui"): TestDbContext {
     ctx.actor = actor;
   });
   return ctx;
+}
+
+const LOCK_POLL_INTERVAL_MS = 50;
+const LOCK_POLL_TIMEOUT_MS = 5_000;
+
+/**
+ * Poll until some other session on this test's database is blocked waiting
+ * on a lock. Bounded at 5s (polled every ~50ms) so a broken lock path fails
+ * fast with a clear message instead of hanging the test.
+ */
+async function waitForLockWaiter(db: Database): Promise<void> {
+  // Lazy: this module is also vitest's `globalSetup`, which runs in the main
+  // process before `test.env` applies, and `database-helpers/core` pulls in
+  // `env.ts`, whose validation would fail there.
+  const { getDb } = await import("../src/server/repo/database-helpers/core");
+  const deadline = Date.now() + LOCK_POLL_TIMEOUT_MS;
+  for (;;) {
+    const result = await getDb(db).execute(sql`
+      SELECT count(*) AS "count" FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'
+    `);
+    const waiting = Number(result.rows[0]?.count ?? 0);
+    if (waiting > 0) return;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        "raceUniqueInsert: no session started waiting on a lock within " +
+          `${LOCK_POLL_TIMEOUT_MS}ms`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
+  }
+}
+
+/**
+ * Deterministically forces a unique-row race between two concurrent
+ * operations, for the "recovers from a concurrent create race instead of
+ * 500ing" integration tests. Replaces the fixed `setTimeout` pairs those
+ * tests used to force the race with a poll on real lock contention.
+ *
+ * `winner(releaseSignal)` must open a transaction, perform its INSERT (or
+ * equivalent), await `releaseSignal` while still inside that transaction —
+ * holding the row lock open — and only then return (which commits). `loser()`
+ * starts immediately after `winner`, and is expected to block on the row lock
+ * `winner` is holding. This polls `pg_stat_activity` for a session on this
+ * test's database actually waiting on a lock (the loser having reached its
+ * blocked INSERT) before resolving `releaseSignal`, instead of guessing with
+ * a sleep on each side of the race.
+ */
+export async function raceUniqueInsert<TWinner, TLoser>(
+  ctx: TestDbContext,
+  args: {
+    winner: (releaseSignal: Promise<void>) => Promise<TWinner>;
+    loser: () => Promise<TLoser>;
+  },
+): Promise<{ winner: TWinner; loser: TLoser }> {
+  let release!: () => void;
+  const releaseSignal = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+
+  const winnerPromise = args.winner(releaseSignal);
+  const loserPromise = args.loser();
+
+  await waitForLockWaiter(ctx.db);
+  release();
+
+  const [winnerResult, loserResult] = await Promise.all([
+    winnerPromise,
+    loserPromise,
+  ]);
+  return { winner: winnerResult, loser: loserResult };
 }
 
 const remapDBConfig = (

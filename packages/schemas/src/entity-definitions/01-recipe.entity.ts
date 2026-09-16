@@ -15,9 +15,9 @@ import { z } from "zod";
 export default defineEntity({
   key: "recipe",
   names: { singular: "Recipe", plural: "Recipes" },
-  route: { basePath: "recipes" },
+  route: { basePath: "recipes", create: "page", list: null, detail: null },
   table: "Recipe",
-  identifiers: { brand: "RecipeId", shortcode: "RCP-", legacy: null },
+  identifiers: { brand: "RecipeId", shortcode: "RCP-" },
   presentation: {
     titleField: "name",
     domain: "cook",
@@ -112,11 +112,10 @@ export default defineEntity({
         nullable: true,
         description: "Optional. Supports Markdown.",
         control: { kind: "textarea" },
-        // Declared list: true (so the "Columns" menu can surface it), but
-        // never actually shown by default — recipelist.tsx keeps it out of
-        // `initialColumnVisibility`, matching its behavior before this
-        // field went through `createEntityDisplayColumns`.
-        display: { list: true, detail: true },
+        // Hidden by default (`listHidden`) but toggleable via the View menu —
+        // never actually shown by default before this field went through
+        // `createEntityDisplayColumns`.
+        display: { list: true, detail: true, listHidden: true },
         validation: {
           read: recipeNotes.nullable().optional(),
           create: recipeNotes.nullable().optional(),

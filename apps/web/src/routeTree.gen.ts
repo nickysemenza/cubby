@@ -21,7 +21,6 @@ import { Route as AuthenticatedActivitiesRouteImport } from './routes/_authentic
 import { Route as AuthenticatedActivityRouteImport } from './routes/_authenticated/activity'
 import { Route as AuthenticatedAiSmokeTestRouteImport } from './routes/_authenticated/ai-smoke-test'
 import { Route as AuthenticatedAiUsageRouteImport } from './routes/_authenticated/ai-usage'
-import { Route as AuthenticatedAskRouteImport } from './routes/_authenticated/ask'
 import { Route as AuthenticatedBackgroundJobsRouteImport } from './routes/_authenticated/background-jobs'
 import { Route as AuthenticatedCalendarRouteImport } from './routes/_authenticated/calendar'
 import { Route as AuthenticatedDesignRouteImport } from './routes/_authenticated/design'
@@ -62,13 +61,11 @@ import { Route as AuthenticatedImagesShortcodeRouteImport } from './routes/_auth
 import { Route as AuthenticatedIngredientsIndexRouteImport } from './routes/_authenticated/ingredients.index'
 import { Route as AuthenticatedIngredientsShortcodeRouteImport } from './routes/_authenticated/ingredients.$shortcode'
 import { Route as AuthenticatedIngredientsEquivalencesRouteImport } from './routes/_authenticated/ingredients.equivalences'
-import { Route as AuthenticatedIngredientsNewRouteImport } from './routes/_authenticated/ingredients.new'
 import { Route as AuthenticatedIngredientsWorkbenchRouteImport } from './routes/_authenticated/ingredients.workbench'
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory.index'
 import { Route as AuthenticatedInventoryShortcodeRouteImport } from './routes/_authenticated/inventory.$shortcode'
 import { Route as AuthenticatedInventoryBulkEditRouteImport } from './routes/_authenticated/inventory.bulk-edit'
 import { Route as AuthenticatedInventoryBulkMoveRouteImport } from './routes/_authenticated/inventory.bulk-move'
-import { Route as AuthenticatedInventoryNewRouteImport } from './routes/_authenticated/inventory.new'
 import { Route as AuthenticatedInventorySessionRouteImport } from './routes/_authenticated/inventory.session'
 import { Route as AuthenticatedLedgerPartiesIndexRouteImport } from './routes/_authenticated/ledger-parties.index'
 import { Route as AuthenticatedLedgerPartiesShortcodeRouteImport } from './routes/_authenticated/ledger-parties.$shortcode'
@@ -77,7 +74,6 @@ import { Route as AuthenticatedLedgerTransfersShortcodeRouteImport } from './rou
 import { Route as AuthenticatedLocationsIndexRouteImport } from './routes/_authenticated/locations.index'
 import { Route as AuthenticatedLocationsShortcodeRouteImport } from './routes/_authenticated/locations.$shortcode'
 import { Route as AuthenticatedLocationsArrangeRouteImport } from './routes/_authenticated/locations.arrange'
-import { Route as AuthenticatedLocationsNewRouteImport } from './routes/_authenticated/locations.new'
 import { Route as AuthenticatedLocationsPhotoPassRouteImport } from './routes/_authenticated/locations.photo-pass'
 import { Route as AuthenticatedMealsIndexRouteImport } from './routes/_authenticated/meals.index'
 import { Route as AuthenticatedMealsShortcodeRouteImport } from './routes/_authenticated/meals.$shortcode'
@@ -187,11 +183,6 @@ const AuthenticatedAiSmokeTestRoute =
 const AuthenticatedAiUsageRoute = AuthenticatedAiUsageRouteImport.update({
   id: '/ai-usage',
   path: '/ai-usage',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedAskRoute = AuthenticatedAskRouteImport.update({
-  id: '/ask',
-  path: '/ask',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedBackgroundJobsRoute =
@@ -416,12 +407,6 @@ const AuthenticatedIngredientsEquivalencesRoute =
     path: '/ingredients/equivalences',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedIngredientsNewRoute =
-  AuthenticatedIngredientsNewRouteImport.update({
-    id: '/ingredients/new',
-    path: '/ingredients/new',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedIngredientsWorkbenchRoute =
   AuthenticatedIngredientsWorkbenchRouteImport.update({
     id: '/ingredients/workbench',
@@ -450,12 +435,6 @@ const AuthenticatedInventoryBulkMoveRoute =
   AuthenticatedInventoryBulkMoveRouteImport.update({
     id: '/inventory/bulk-move',
     path: '/inventory/bulk-move',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedInventoryNewRoute =
-  AuthenticatedInventoryNewRouteImport.update({
-    id: '/inventory/new',
-    path: '/inventory/new',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedInventorySessionRoute =
@@ -504,12 +483,6 @@ const AuthenticatedLocationsArrangeRoute =
   AuthenticatedLocationsArrangeRouteImport.update({
     id: '/locations/arrange',
     path: '/locations/arrange',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedLocationsNewRoute =
-  AuthenticatedLocationsNewRouteImport.update({
-    id: '/locations/new',
-    path: '/locations/new',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedLocationsPhotoPassRoute =
@@ -789,7 +762,6 @@ export interface FileRoutesByFullPath {
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ai-usage': typeof AuthenticatedAiUsageRoute
-  '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
@@ -822,18 +794,15 @@ export interface FileRoutesByFullPath {
   '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
-  '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
   '/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
   '/inventory/$shortcode': typeof AuthenticatedInventoryShortcodeRoute
   '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
-  '/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/ledger-parties/$shortcode': typeof AuthenticatedLedgerPartiesShortcodeRoute
   '/ledger-transfers/$shortcode': typeof AuthenticatedLedgerTransfersShortcodeRoute
   '/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
-  '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/locations/photo-pass': typeof AuthenticatedLocationsPhotoPassRoute
   '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
@@ -904,7 +873,6 @@ export interface FileRoutesByTo {
   '/activity': typeof AuthenticatedActivityRoute
   '/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/ai-usage': typeof AuthenticatedAiUsageRoute
-  '/ask': typeof AuthenticatedAskRoute
   '/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/calendar': typeof AuthenticatedCalendarRoute
   '/design': typeof AuthenticatedDesignRoute
@@ -937,18 +905,15 @@ export interface FileRoutesByTo {
   '/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
-  '/ingredients/new': typeof AuthenticatedIngredientsNewRoute
   '/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
   '/inventory/$shortcode': typeof AuthenticatedInventoryShortcodeRoute
   '/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
-  '/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/ledger-parties/$shortcode': typeof AuthenticatedLedgerPartiesShortcodeRoute
   '/ledger-transfers/$shortcode': typeof AuthenticatedLedgerTransfersShortcodeRoute
   '/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
-  '/locations/new': typeof AuthenticatedLocationsNewRoute
   '/locations/photo-pass': typeof AuthenticatedLocationsPhotoPassRoute
   '/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
@@ -1022,7 +987,6 @@ export interface FileRoutesById {
   '/_authenticated/activity': typeof AuthenticatedActivityRoute
   '/_authenticated/ai-smoke-test': typeof AuthenticatedAiSmokeTestRoute
   '/_authenticated/ai-usage': typeof AuthenticatedAiUsageRoute
-  '/_authenticated/ask': typeof AuthenticatedAskRoute
   '/_authenticated/background-jobs': typeof AuthenticatedBackgroundJobsRoute
   '/_authenticated/calendar': typeof AuthenticatedCalendarRoute
   '/_authenticated/design': typeof AuthenticatedDesignRoute
@@ -1055,18 +1019,15 @@ export interface FileRoutesById {
   '/_authenticated/images/$shortcode': typeof AuthenticatedImagesShortcodeRoute
   '/_authenticated/ingredients/$shortcode': typeof AuthenticatedIngredientsShortcodeRoute
   '/_authenticated/ingredients/equivalences': typeof AuthenticatedIngredientsEquivalencesRoute
-  '/_authenticated/ingredients/new': typeof AuthenticatedIngredientsNewRoute
   '/_authenticated/ingredients/workbench': typeof AuthenticatedIngredientsWorkbenchRoute
   '/_authenticated/inventory/$shortcode': typeof AuthenticatedInventoryShortcodeRoute
   '/_authenticated/inventory/bulk-edit': typeof AuthenticatedInventoryBulkEditRoute
   '/_authenticated/inventory/bulk-move': typeof AuthenticatedInventoryBulkMoveRoute
-  '/_authenticated/inventory/new': typeof AuthenticatedInventoryNewRoute
   '/_authenticated/inventory/session': typeof AuthenticatedInventorySessionRoute
   '/_authenticated/ledger-parties/$shortcode': typeof AuthenticatedLedgerPartiesShortcodeRoute
   '/_authenticated/ledger-transfers/$shortcode': typeof AuthenticatedLedgerTransfersShortcodeRoute
   '/_authenticated/locations/$shortcode': typeof AuthenticatedLocationsShortcodeRoute
   '/_authenticated/locations/arrange': typeof AuthenticatedLocationsArrangeRoute
-  '/_authenticated/locations/new': typeof AuthenticatedLocationsNewRoute
   '/_authenticated/locations/photo-pass': typeof AuthenticatedLocationsPhotoPassRoute
   '/_authenticated/meals/$shortcode': typeof AuthenticatedMealsShortcodeRoute
   '/_authenticated/meals/shopping-list': typeof AuthenticatedMealsShoppingListRoute
@@ -1140,7 +1101,6 @@ export interface FileRouteTypes {
     | '/activity'
     | '/ai-smoke-test'
     | '/ai-usage'
-    | '/ask'
     | '/background-jobs'
     | '/calendar'
     | '/design'
@@ -1173,18 +1133,15 @@ export interface FileRouteTypes {
     | '/images/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
-    | '/ingredients/new'
     | '/ingredients/workbench'
     | '/inventory/$shortcode'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
-    | '/inventory/new'
     | '/inventory/session'
     | '/ledger-parties/$shortcode'
     | '/ledger-transfers/$shortcode'
     | '/locations/$shortcode'
     | '/locations/arrange'
-    | '/locations/new'
     | '/locations/photo-pass'
     | '/meals/$shortcode'
     | '/meals/shopping-list'
@@ -1255,7 +1212,6 @@ export interface FileRouteTypes {
     | '/activity'
     | '/ai-smoke-test'
     | '/ai-usage'
-    | '/ask'
     | '/background-jobs'
     | '/calendar'
     | '/design'
@@ -1288,18 +1244,15 @@ export interface FileRouteTypes {
     | '/images/$shortcode'
     | '/ingredients/$shortcode'
     | '/ingredients/equivalences'
-    | '/ingredients/new'
     | '/ingredients/workbench'
     | '/inventory/$shortcode'
     | '/inventory/bulk-edit'
     | '/inventory/bulk-move'
-    | '/inventory/new'
     | '/inventory/session'
     | '/ledger-parties/$shortcode'
     | '/ledger-transfers/$shortcode'
     | '/locations/$shortcode'
     | '/locations/arrange'
-    | '/locations/new'
     | '/locations/photo-pass'
     | '/meals/$shortcode'
     | '/meals/shopping-list'
@@ -1372,7 +1325,6 @@ export interface FileRouteTypes {
     | '/_authenticated/activity'
     | '/_authenticated/ai-smoke-test'
     | '/_authenticated/ai-usage'
-    | '/_authenticated/ask'
     | '/_authenticated/background-jobs'
     | '/_authenticated/calendar'
     | '/_authenticated/design'
@@ -1405,18 +1357,15 @@ export interface FileRouteTypes {
     | '/_authenticated/images/$shortcode'
     | '/_authenticated/ingredients/$shortcode'
     | '/_authenticated/ingredients/equivalences'
-    | '/_authenticated/ingredients/new'
     | '/_authenticated/ingredients/workbench'
     | '/_authenticated/inventory/$shortcode'
     | '/_authenticated/inventory/bulk-edit'
     | '/_authenticated/inventory/bulk-move'
-    | '/_authenticated/inventory/new'
     | '/_authenticated/inventory/session'
     | '/_authenticated/ledger-parties/$shortcode'
     | '/_authenticated/ledger-transfers/$shortcode'
     | '/_authenticated/locations/$shortcode'
     | '/_authenticated/locations/arrange'
-    | '/_authenticated/locations/new'
     | '/_authenticated/locations/photo-pass'
     | '/_authenticated/meals/$shortcode'
     | '/_authenticated/meals/shopping-list'
@@ -1581,13 +1530,6 @@ declare module '@tanstack/react-router' {
       path: '/ai-usage'
       fullPath: '/ai-usage'
       preLoaderRoute: typeof AuthenticatedAiUsageRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/ask': {
-      id: '/_authenticated/ask'
-      path: '/ask'
-      fullPath: '/ask'
-      preLoaderRoute: typeof AuthenticatedAskRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/background-jobs': {
@@ -1870,13 +1812,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIngredientsEquivalencesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/ingredients/new': {
-      id: '/_authenticated/ingredients/new'
-      path: '/ingredients/new'
-      fullPath: '/ingredients/new'
-      preLoaderRoute: typeof AuthenticatedIngredientsNewRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/ingredients/workbench': {
       id: '/_authenticated/ingredients/workbench'
       path: '/ingredients/workbench'
@@ -1910,13 +1845,6 @@ declare module '@tanstack/react-router' {
       path: '/inventory/bulk-move'
       fullPath: '/inventory/bulk-move'
       preLoaderRoute: typeof AuthenticatedInventoryBulkMoveRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/inventory/new': {
-      id: '/_authenticated/inventory/new'
-      path: '/inventory/new'
-      fullPath: '/inventory/new'
-      preLoaderRoute: typeof AuthenticatedInventoryNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/inventory/session': {
@@ -1973,13 +1901,6 @@ declare module '@tanstack/react-router' {
       path: '/locations/arrange'
       fullPath: '/locations/arrange'
       preLoaderRoute: typeof AuthenticatedLocationsArrangeRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/locations/new': {
-      id: '/_authenticated/locations/new'
-      path: '/locations/new'
-      fullPath: '/locations/new'
-      preLoaderRoute: typeof AuthenticatedLocationsNewRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/locations/photo-pass': {
@@ -2313,7 +2234,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedActivityRoute: typeof AuthenticatedActivityRoute
   AuthenticatedAiSmokeTestRoute: typeof AuthenticatedAiSmokeTestRoute
   AuthenticatedAiUsageRoute: typeof AuthenticatedAiUsageRoute
-  AuthenticatedAskRoute: typeof AuthenticatedAskRoute
   AuthenticatedBackgroundJobsRoute: typeof AuthenticatedBackgroundJobsRoute
   AuthenticatedCalendarRoute: typeof AuthenticatedCalendarRoute
   AuthenticatedDesignRoute: typeof AuthenticatedDesignRoute
@@ -2341,18 +2261,15 @@ interface AuthenticatedRouteChildren {
   AuthenticatedImagesShortcodeRoute: typeof AuthenticatedImagesShortcodeRoute
   AuthenticatedIngredientsShortcodeRoute: typeof AuthenticatedIngredientsShortcodeRoute
   AuthenticatedIngredientsEquivalencesRoute: typeof AuthenticatedIngredientsEquivalencesRoute
-  AuthenticatedIngredientsNewRoute: typeof AuthenticatedIngredientsNewRoute
   AuthenticatedIngredientsWorkbenchRoute: typeof AuthenticatedIngredientsWorkbenchRoute
   AuthenticatedInventoryShortcodeRoute: typeof AuthenticatedInventoryShortcodeRoute
   AuthenticatedInventoryBulkEditRoute: typeof AuthenticatedInventoryBulkEditRoute
   AuthenticatedInventoryBulkMoveRoute: typeof AuthenticatedInventoryBulkMoveRoute
-  AuthenticatedInventoryNewRoute: typeof AuthenticatedInventoryNewRoute
   AuthenticatedInventorySessionRoute: typeof AuthenticatedInventorySessionRoute
   AuthenticatedLedgerPartiesShortcodeRoute: typeof AuthenticatedLedgerPartiesShortcodeRoute
   AuthenticatedLedgerTransfersShortcodeRoute: typeof AuthenticatedLedgerTransfersShortcodeRoute
   AuthenticatedLocationsShortcodeRoute: typeof AuthenticatedLocationsShortcodeRoute
   AuthenticatedLocationsArrangeRoute: typeof AuthenticatedLocationsArrangeRoute
-  AuthenticatedLocationsNewRoute: typeof AuthenticatedLocationsNewRoute
   AuthenticatedLocationsPhotoPassRoute: typeof AuthenticatedLocationsPhotoPassRoute
   AuthenticatedMealsShortcodeRoute: typeof AuthenticatedMealsShortcodeRoute
   AuthenticatedMealsShoppingListRoute: typeof AuthenticatedMealsShoppingListRoute
@@ -2409,7 +2326,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedActivityRoute: AuthenticatedActivityRoute,
   AuthenticatedAiSmokeTestRoute: AuthenticatedAiSmokeTestRoute,
   AuthenticatedAiUsageRoute: AuthenticatedAiUsageRoute,
-  AuthenticatedAskRoute: AuthenticatedAskRoute,
   AuthenticatedBackgroundJobsRoute: AuthenticatedBackgroundJobsRoute,
   AuthenticatedCalendarRoute: AuthenticatedCalendarRoute,
   AuthenticatedDesignRoute: AuthenticatedDesignRoute,
@@ -2446,13 +2362,11 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedIngredientsShortcodeRoute,
   AuthenticatedIngredientsEquivalencesRoute:
     AuthenticatedIngredientsEquivalencesRoute,
-  AuthenticatedIngredientsNewRoute: AuthenticatedIngredientsNewRoute,
   AuthenticatedIngredientsWorkbenchRoute:
     AuthenticatedIngredientsWorkbenchRoute,
   AuthenticatedInventoryShortcodeRoute: AuthenticatedInventoryShortcodeRoute,
   AuthenticatedInventoryBulkEditRoute: AuthenticatedInventoryBulkEditRoute,
   AuthenticatedInventoryBulkMoveRoute: AuthenticatedInventoryBulkMoveRoute,
-  AuthenticatedInventoryNewRoute: AuthenticatedInventoryNewRoute,
   AuthenticatedInventorySessionRoute: AuthenticatedInventorySessionRoute,
   AuthenticatedLedgerPartiesShortcodeRoute:
     AuthenticatedLedgerPartiesShortcodeRoute,
@@ -2460,7 +2374,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedLedgerTransfersShortcodeRoute,
   AuthenticatedLocationsShortcodeRoute: AuthenticatedLocationsShortcodeRoute,
   AuthenticatedLocationsArrangeRoute: AuthenticatedLocationsArrangeRoute,
-  AuthenticatedLocationsNewRoute: AuthenticatedLocationsNewRoute,
   AuthenticatedLocationsPhotoPassRoute: AuthenticatedLocationsPhotoPassRoute,
   AuthenticatedMealsShortcodeRoute: AuthenticatedMealsShortcodeRoute,
   AuthenticatedMealsShoppingListRoute: AuthenticatedMealsShoppingListRoute,

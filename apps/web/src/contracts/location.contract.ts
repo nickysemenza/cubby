@@ -28,6 +28,7 @@ const shortcodeInput = z.object({ shortcode: z.string() });
 
 export const locationContract = defineContract("location", {
   makeTree: query({
+    native: "Audit scope picker",
     input: z.undefined(),
     output: infLocationListOut,
   }),
@@ -36,10 +37,12 @@ export const locationContract = defineContract("location", {
     output: locationValuationSummaryOut,
   }),
   ensureGlobalUnknown: mutation({
+    native: "Audit relocate target",
     input: z.undefined(),
     output: infLocation,
   }),
   bulkUpdateParent: mutation({
+    native: "Audit adopt",
     input: locationBulkUpdateParentInput,
     output: locationBulkUpdateParentOut,
   }),

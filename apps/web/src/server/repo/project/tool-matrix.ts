@@ -164,8 +164,9 @@ export async function projectToolMatrix(
       // any of them (notDeleted included) to the WHERE degenerates this to an
       // inner join and silently drops every tool with no qualifying expense —
       // exactly the unassigned population, and only observable at floor 0.
-      // `check-soft-delete-filters.mjs` scans only exists()/notExists() bodies,
-      // so CI cannot catch that regression; the integration test does.
+      // The `cubby/require-soft-delete-filter` oxlint rule scans only
+      // exists()/notExists() bodies, so CI cannot catch that regression; the
+      // integration test does.
       .leftJoin(
         expense,
         and(

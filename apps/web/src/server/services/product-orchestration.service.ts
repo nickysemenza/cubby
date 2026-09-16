@@ -13,29 +13,33 @@ import {
   type IngredientId,
   type IngredientShortcode,
   type ProductId,
+  type ProductShortcode,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
-import { isbnFromGtin } from "@cubby/schemas/isbn";
 import type {
   ProductCreateInput,
-  ProductFindOrCreateByCodeInput,
   ProductTopLevelOut,
   ProductUpdateInput,
   ProductWithFoodAndSideEffectsOut,
 } from "@cubby/schemas/product";
+import type { ScanAtLocationCode } from "@cubby/schemas/scan";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { uniq } from "es-toolkit";
 
 import { getErrorMessage } from "~/lib/error-utils";
 import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { type ResolvedProductCode, resolveProductScan } from "~/lib/scan-code";
+import { wasm } from "~/lib/wasm";
 import type { UpcLookupPort } from "~/server/clients/upc-lookup";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import { createAppError } from "~/server/errors/app-error";
 import { runWithConflictRecovery } from "~/server/errors/db-errors";
 import {
   findProductByGtin,
   findProductsWithNoImages,
+  getProductByShortcode,
   quickCreateProduct,
 } from "~/server/repo/product";
 import {
@@ -443,7 +447,7 @@ async function findOrCreateByISBN(
   canonicalGtin: string,
   actor: ActorContext,
 ): Promise<FindOrCreateByUPCResult> {
-  const normalized = isbnFromGtin(canonicalGtin);
+  const normalized = wasm.isbn_from_gtin(canonicalGtin);
   if (!normalized) {
     throw new Error(`Invalid canonical ISBN: ${canonicalGtin}`);
   }
@@ -505,23 +509,75 @@ async function findOrCreateByISBN(
   );
 }
 
-export function findOrCreateByCode(
+/**
+ * A raw scanner value, classified with the web scanner's own rules so the
+ * refusal copy is the same sentence on every surface. A Cubby label for a
+ * non-product entity is refused here too: it names nothing stockable.
+ */
+const classifyProductScan = (raw: string): ResolvedProductCode => {
+  const parsed = resolveProductScan(raw);
+  if (!parsed.ok) throw createAppError("SCAN_CODE_UNRECOGNIZED", parsed.error);
+  return parsed.value;
+};
+
+/**
+ * A Cubby product label names a product that already exists — Cubby printed
+ * it — so it resolves by lookup and never creates.
+ */
+const findProductByLabel = async (
+  db: Database,
+  shortcode: ProductShortcode,
+): Promise<FindOrCreateByUPCResult> => {
+  const product = await getProductByShortcode(db, shortcode);
+  if (!product)
+    throw createAppError(
+      "PRODUCT_NOT_FOUND",
+      `No product found for ${shortcode}.`,
+    );
+  return { product, created: false };
+};
+
+// `async` so an unrecognized scan rejects instead of throwing synchronously.
+export async function findOrCreateByCode(
   db: Database,
   usdaClient: UsdaFoodLookupPort,
   upcLookupClient: UpcLookupPort,
-  input: ProductFindOrCreateByCodeInput,
+  input: ScanAtLocationCode,
   actor: ActorContext,
 ): Promise<FindOrCreateByUPCResult> {
-  return input.kind === "isbn"
-    ? findOrCreateByISBN(db, upcLookupClient, input.value, actor)
-    : findOrCreateByUPC(
+  const code = input.kind === "scan" ? classifyProductScan(input.value) : input;
+  switch (code.kind) {
+    case "product":
+      return findProductByLabel(db, code.value);
+    case "isbn": {
+      // `code.value` is now a raw, unvalidated string — the schema-level
+      // `isbn` field became a plain trimmed string (check-digit validation +
+      // GTIN-14 normalization moved here) because `packages/schemas` cannot
+      // depend on the WASM boundary that validation needs.
+      const normalizedIsbn = wasm.normalize_isbn(code.value);
+      if (!normalizedIsbn) {
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "expected a valid ISBN-10 or ISBN-13",
+        );
+      }
+      return findOrCreateByISBN(
+        db,
+        upcLookupClient,
+        normalizedIsbn.gtin14,
+        actor,
+      );
+    }
+    case "barcode":
+      return findOrCreateByUPC(
         db,
         usdaClient,
         upcLookupClient,
-        input.value,
+        code.value,
         undefined,
         actor,
       );
+  }
 }
 
 export interface UpcImageBackfillCandidate {

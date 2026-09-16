@@ -26,13 +26,18 @@ primitives compose domain projections without importing generated schema maps.
 Run:
 
 ```bash
-pnpm entity:generate
-pnpm entity:check
+pnpm generate
+pnpm generate:check
 ```
 
-`entity:check` fails on invalid metadata, duplicate entity keys or routes, invalid
-relation policies, unsupported capabilities, and stale, missing, or extraneous
-generated files. Typecheck verifies declaration types and referenced exports.
+One generator (`scripts/generator/main.ts`) runs three stages in order: the
+entity stage (`scripts/generator/entities/`), the Start operation registry
+(`scripts/generator/start-operations/`), and the HTTP OpenAPI document with
+its native derivations (`scripts/generator/http-api/`). `generate:check` fails
+on invalid metadata, duplicate entity keys or routes, invalid relation
+policies, unsupported capabilities, and stale, missing, or extraneous generated
+files from any stage. Typecheck verifies declaration types and referenced
+exports.
 
 ## One declaration, several consumers
 
@@ -42,9 +47,17 @@ Each declaration co-locates schemas and field policy:
 export default defineEntity({
   key: "example",
   names: { singular: "Example", plural: "Examples" },
-  route: { basePath: "examples" },
+  route: {
+    basePath: "examples",
+    // "dialog" puts `?create=true` in the list search and renders the capture
+    // action; "page" links a hand-written `examples.new.tsx` as `routes.new`.
+    create: "dialog",
+    // `null` keeps the route module hand-written; a component ref generates it.
+    list: { component: { module: "~/app/examples/example-list", export: "ExampleList" } },
+    detail: { component: { module: "~/app/examples/example-detail", export: "ExampleDetail" } },
+  },
   table: "Example",
-  identifiers: { brand: "ExampleId", shortcode: "EXM-", legacy: null },
+  identifiers: { brand: "ExampleId", shortcode: "EXM-" },
   presentation: {
     titleField: "name",
     domain: "pantry",
@@ -314,13 +327,19 @@ from/to fields, with the numeric/date kind inferred from the model field
 declaration module must not export `filterSchemas`.
 
 Generated artifacts provide the exhaustive entity keys and traits, public
-shortcode contracts (including inbound-only legacy aliases), schema bindings,
-client-safe inspector metadata, browser route roster, filter field/URL catalogs,
-kernel and MCP action capabilities, relation-specific command schemas,
-repository/relation-adapter assembly, and contract cases.
-Shared browser helpers consume the roster, while TanStack route modules remain
-thin handwritten entrypoints. Specialized screens stay as extension slots in
-shared shells.
+shortcode contracts (the inbound-only `P-`/`L-` label aliases live only in
+`packages/shared/src/shortcode.ts`, never in the manifest), schema bindings,
+client-safe inspector metadata, browser route roster, the typed list search
+schema per entity (`entities/generated/entity-search.gen.ts`: manifest filter
+keys, table keys and `create`, with `defaults` naming every key for
+`stripSearchParams`), kernel and MCP action capabilities, relation-specific
+command schemas, repository/relation-adapter assembly, and contract cases.
+The list and detail route modules an entity declares through `route.list` /
+`route.detail` are generated too (`routes/_authenticated/<basePath>.index.tsx`
+and `.$shortcode.tsx`, with the generated header); a `null` slot keeps that
+module hand-written, composing route-only keys onto
+`entitySearch.<entity>.schema.shape`. Specialized screens stay as extension
+slots in shared shells.
 
 Inspector metadata projects declared actions, filter keys, MCP operations,
 lifecycle/capability flags, reference targets, schema source-reference strings,
@@ -366,8 +385,7 @@ The server-owned strong-read registry retains credentials, interactive inventory
 import preparation and diagnostics. Mutations and mutating workflow streams
 remain authoritative, including their internal reads. HTTP methods do not decide
 policy: a query transported through POST is still cache-eligible. Each MCP tool
-execution, including an in-process agent tool, selects a new caller from the same
-freshness state. Availability reads use the selected database; recipe repairs and
+execution selects a new caller from the same freshness state. Availability reads use the selected database; recipe repairs and
 their immediate follow-up reads remain strong.
 
 Workflow operations are explicit Start functions with no entity business logic in
@@ -377,9 +395,7 @@ before that deployment must reload before calling the removed function.
 MCP invokes `executeEntity` directly through the `entity` tool and publishes its
 machine-readable contract at `entities://catalog`. The `get_entities` capability
 uses the same generated get/list/search contracts with mutation actions excluded
-by its input schema. The in-app assistant receives this read-only capability;
-the combined mutation tool remains excluded. Workflow-shaped MCP tools
-remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
+by its input schema. Workflow-shaped MCP tools remain separate. MCP, jobs, repositories, entity modules, and kernel tests must
 not import browser transport modules. Explicit workflow adapters and typed JSONL
 stream routes are the only transport seams; business behavior remains in
 workflow modules.
@@ -453,8 +469,9 @@ irreducible transaction and collision rules.
    and relationship projections explicit. A physical change still requires a
    compatible migration; generation does not apply production DDL.
 3. Add a kernel repository adapter for the capabilities the spec declares.
-4. Add thin TanStack route modules and workflow extensions where needed.
-5. Run `pnpm entity:generate`; review generated source like handwritten source.
+4. Point `route.list` / `route.detail` at the page components (or set them
+   `null` and hand-write the route module); add workflow extensions where needed.
+5. Run `pnpm generate`; review generated source like handwritten source.
 6. Declare physical edge semantics and operation-specific lifecycle policies,
    when the entity participates in deletion or merge.
 7. Run generated action contracts and the affected PostgreSQL contracts, plus

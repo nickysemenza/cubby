@@ -6,15 +6,14 @@ import type {
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 
+import { useTableColumnLayout } from "./column-layout";
 import {
-  materializeCubbyColumns,
   type CubbyColumnCollection,
   type CubbyRow,
   type CubbyTable,
   cubbyStructuralTableStateSelector,
   useCubbyTable,
 } from "./table-features";
-import type { CubbyTableLayoutController } from "./table-layout";
 import type { ServerTotals } from "./table-meta";
 import type { TableStateReturn } from "./useTableState";
 
@@ -47,8 +46,11 @@ interface UseTableConfigOptions<TData extends RowData> {
    */
   columnVisibility?: ColumnVisibilityState;
   onColumnVisibilityChange?: OnChangeFn<ColumnVisibilityState>;
-  /** Unified persisted v9 layout owner. Preferred over visibility-only control. */
-  layout?: CubbyTableLayoutController<TData>;
+  /**
+   * Stable id for the desktop scroll pane (see `table-meta.ts`). Omit for a
+   * table with no scroll-restoration need.
+   */
+  scrollRestorationId?: string;
   /**
    * Server-computed totals over the FULL filtered set, surfaced to footer
    * renderers via table meta — client rows only cover loaded pages.
@@ -93,7 +95,7 @@ export function useTableConfig<TData extends RowData>({
   initialColumnVisibility,
   columnVisibility: controlledVisibility,
   onColumnVisibilityChange: controlledOnVisibilityChange,
-  layout,
+  scrollRestorationId,
   serverTotals,
   rowContentVersion,
   getSubRows,
@@ -116,19 +118,22 @@ export function useTableConfig<TData extends RowData>({
   // difference is what the empty state would otherwise be blind to.
   const urlScopeCount = allFilters.length - columnFilters.length;
 
+  const { columns: tableColumns, defaultLayout } = useTableColumnLayout({
+    columns,
+    initialColumnVisibility,
+  });
   const [internalVisibility, setInternalVisibility] = useState<
     Record<string, boolean>
-  >(initialColumnVisibility ?? {});
+  >(defaultLayout.columnVisibility);
   const columnVisibility = controlledVisibility ?? internalVisibility;
   const setColumnVisibility =
     controlledOnVisibilityChange ?? setInternalVisibility;
-  const tableColumns = layout?.columns ?? materializeCubbyColumns(columns);
 
   // Memoize table options to prevent recreating on every render
   const tableOptions = useMemo(() => {
     const meta = {
-      defaultLayout: layout?.defaultLayout,
-      scrollRestorationId: layout?.key,
+      defaultLayout,
+      scrollRestorationId,
     };
     if (serverTotals) {
       Object.assign(meta, { serverTotals });
@@ -144,10 +149,8 @@ export function useTableConfig<TData extends RowData>({
       sorting,
       columnFilters,
       pagination,
+      columnVisibility,
     };
-    if (!layout) {
-      Object.assign(state, { columnVisibility });
-    }
     if (rowSelection) {
       Object.assign(state, { rowSelection });
     }
@@ -158,6 +161,15 @@ export function useTableConfig<TData extends RowData>({
       onPaginationChange: setPagination,
       onSortingChange: setSorting,
       onColumnFiltersChange: setColumnFilters,
+      onColumnVisibilityChange: setColumnVisibility,
+      // TanStack Table (v9) owns columnOrder/columnPinning/columnSizing
+      // uncontrolled after mount — this only seeds them; a drag, pin, or
+      // resize action calls `table.setColumnOrder`/etc. directly and TanStack
+      // keeps that in its own state from then on.
+      initialState: {
+        columnOrder: defaultLayout.columnOrder,
+        columnPinning: defaultLayout.columnPinning,
+      },
       manualSorting,
       manualFiltering,
       manualPagination,
@@ -177,11 +189,6 @@ export function useTableConfig<TData extends RowData>({
       state,
     };
 
-    if (!layout) {
-      Object.assign(options, {
-        onColumnVisibilityChange: setColumnVisibility,
-      });
-    }
     if (enableSorting !== undefined) {
       Object.assign(options, { enableSorting });
     }
@@ -206,21 +213,19 @@ export function useTableConfig<TData extends RowData>({
     if (autoResetExpanded !== undefined) {
       Object.assign(options, { autoResetExpanded });
     }
-    if (layout) {
-      Object.assign(options, { atoms: layout.atoms });
-    }
 
     return options;
   }, [
     data,
     tableColumns,
+    defaultLayout,
+    scrollRestorationId,
     sorting,
     setSorting,
     columnFilters,
     setColumnFilters,
     columnVisibility,
     setColumnVisibility,
-    layout,
     pagination,
     setPagination,
     manualSorting,

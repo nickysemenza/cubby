@@ -7,8 +7,8 @@ import Observation
 @MainActor @Observable
 final class GardenJournalModel {
     private let service: any GardenService
-    let planting: GardenPlanting
-    private(set) var entries: [GardenJournalEntry] = []
+    let planting: GardenPlantingOut
+    private(set) var entries: [GardenJournalEntryOut] = []
     private(set) var hasMore = false
     private(set) var isLoading = false
     private(set) var error: String?
@@ -17,7 +17,7 @@ final class GardenJournalModel {
     private var failedPage = 1
     private var failedReplacing = true
 
-    init(service: any GardenService, planting: GardenPlanting) {
+    init(service: any GardenService, planting: GardenPlantingOut) {
         self.service = service; self.planting = planting
     }
 
@@ -61,13 +61,13 @@ final class GardenJournalModel {
 @MainActor @Observable
 final class GardenLocationHistoryModel {
     private let service: any GardenService
-    let planting: GardenPlanting
-    private(set) var periods: [GardenLocationPeriod] = []
+    let planting: GardenPlantingOut
+    private(set) var periods: [GardenLocationPeriodOut] = []
     private(set) var isLoading = false
     private(set) var isSaving = false
     private(set) var error: String?
 
-    init(service: any GardenService, planting: GardenPlanting) {
+    init(service: any GardenService, planting: GardenPlantingOut) {
         self.service = service
         self.planting = planting
     }
@@ -83,7 +83,7 @@ final class GardenLocationHistoryModel {
         }
     }
 
-    func save(_ revised: [GardenLocationPeriod]) async -> Bool {
+    func save(_ revised: [GardenLocationPeriodOut]) async -> Bool {
         guard !isSaving else { return false }
         isSaving = true
         error = nil

@@ -32,6 +32,7 @@ import {
 } from "../actions/entity-actions";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 import { CellSelectionContext } from "./cell-selection-context";
+import { columnWidthValue } from "./column-layout";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DesktopDataRow as DataRow } from "./DesktopDataRow";
@@ -45,11 +46,9 @@ import { MobileListScreen } from "./MobileListScreen";
 import { RowsPerPageSelect } from "./rows-per-page-select";
 import { SectionHeader } from "./SectionHeader";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
-import { columnWidthValue } from "./table-layout";
 import TableHeaderLayout from "./TableHeaderLayout";
 import { useDataTableController } from "./useDataTableController";
 import type { GroupConfig } from "./useGroupedList";
-import type { TableDensity } from "./useTableDensity";
 
 type DesktopPaneStyle = React.CSSProperties & {
   "--row-accent"?: string;
@@ -149,7 +148,6 @@ export interface RTableProps<TItem extends RowData> {
    */
   currentRowId?: string;
   /** First-visit density for this surface; stored user choice remains global. */
-  defaultDensity?: TableDensity;
   /** Callback when a row is hovered (desktop) — used to prefetch row data */
   onRowHover?: (row: Row<TItem>) => void;
   /** Cancels an uncommitted row-preview intent. */
@@ -269,7 +267,6 @@ function TableStatus<TItem extends RowData>({
 
 function DesktopTableToolbar<TItem extends RowData>({
   table,
-  defaultDensity,
   entity,
   filterOptionHints,
   inspectorToggle,
@@ -287,7 +284,6 @@ function DesktopTableToolbar<TItem extends RowData>({
 }: Pick<
   RTableProps<TItem>,
   | "table"
-  | "defaultDensity"
   | "entity"
   | "filterOptionHints"
   | "inspectorToggle"
@@ -307,7 +303,6 @@ function DesktopTableToolbar<TItem extends RowData>({
   return (
     <DataTableToolbar
       table={table}
-      defaultDensity={defaultDensity}
       entity={entity}
       filterOptionHints={filterOptionHints}
       additionalContent={
@@ -867,7 +862,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     disableMobileDetailsHref,
     onRowClick,
     currentRowId,
-    defaultDensity,
     onRowHover,
     onRowHoverEnd,
     infiniteScroll,
@@ -892,7 +886,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     grouped,
     verticalAlign,
     onRowClick,
-    defaultDensity,
   });
   const pageIdentity = usePageIdentity();
   const workbenchTarget = usePageWorkbenchTarget();
@@ -973,7 +966,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   const desktopToolbar = showToolbar ? (
     <DesktopTableToolbar
       table={table}
-      defaultDensity={defaultDensity}
       entity={entity}
       filterOptionHints={filterOptionHints}
       inspectorToggle={topLevelInspectorToggle}
@@ -1167,7 +1159,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           })}
           toolbarVariant={tableChromeVariant(embedded)}
           emptyState={emptyState}
-          defaultDensity={defaultDensity}
         />
       )}
 

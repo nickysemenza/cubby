@@ -6,11 +6,11 @@ import {
   storedExternalIdUrl,
 } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
-import { isbnFromGtin, normalizeIsbn } from "@cubby/schemas/isbn";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { isCanonicalPriceMapping } from "~/lib/price-mapping-utils";
+import { wasm } from "~/lib/wasm";
 import type { DrizzleTransaction } from "~/server/db";
 import { productExternalId, productUnitMappings } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -203,8 +203,9 @@ function requireCanonicalGtin(value: string): string {
 }
 
 function requireCanonicalIsbn(value: string): string {
-  const normalized = isbnFromGtin(value.trim()) ?? normalizeIsbn(value);
-  if (normalized === null) {
+  const normalized =
+    wasm.isbn_from_gtin(value.trim()) ?? wasm.normalize_isbn(value);
+  if (normalized == null) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       `“${value}” is not a valid ISBN-10 or ISBN-13.`,
@@ -252,7 +253,7 @@ export function externalIdsContainIsbn(
     (entry) =>
       entry.deletedAt == null &&
       entry.source.trim().toLowerCase() === GTIN_SOURCE &&
-      isbnFromGtin(entry.externalId) !== null,
+      wasm.isbn_from_gtin(entry.externalId) != null,
   );
 }
 

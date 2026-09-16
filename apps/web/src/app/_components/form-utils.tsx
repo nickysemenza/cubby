@@ -24,7 +24,7 @@ import { Input } from "~/components/ui/input";
 import { QuantityInput } from "~/components/ui/quantity-input";
 import { Spinner } from "~/components/ui/spinner";
 import { Textarea } from "~/components/ui/textarea";
-import { useFlag } from "~/lib/flags";
+import { FLAGS } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 
 import type { ComboboxItem, PickerEntity } from "./combobox/combobox-types";
@@ -207,10 +207,9 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
    */
   successMessage?: string;
 }) {
-  // Runtime opt-in via the `formDevtools` developer flag. The hook runs in all
-  // builds (Rules of Hooks), but the panel only mounts when the devtools are
-  // bundled (dev) AND the user has flipped the flag on in Settings → Developer.
-  const formDevtoolsEnabled = useFlag("formDevtools");
+  // Compile-time opt-in via the `formDevtools` flag. The panel only mounts
+  // when the devtools are bundled (dev) AND the flag is on (see flags.ts).
+  const formDevtoolsEnabled = FLAGS.formDevtools;
   useSubmitSuccessToast(isPending, error, successMessage);
   return (
     <FormProvider {...form}>

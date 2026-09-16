@@ -3,7 +3,7 @@
  *
  * Pure detection/query helpers for the Problems page (all DB + WASM access). The
  * service layer (`problems.service.ts`) composes these into the orchestrated
- * findAllProblems / findMaintenanceCounts scans, cross-entity deletes, and the
+ * per-group scans, `findMaintenanceCounts`, cross-entity deletes, and the
  * re-parse mutation — it never touches the DB directly. Import detectors from
  * `~/server/repo/problems` (this barrel) rather than the individual modules.
  *

@@ -182,8 +182,6 @@ export function LocationChildrenTable({
     tableStateOptions: EMBEDDED_TABLE_STATE,
     // Distinct column set from the /locations index, so it needs its own
     // persisted View settings rather than sharing `table-columns:location`.
-    layoutKey: "location:contents",
-    legacyLayoutVisibilityKey: "location:location-contents",
   });
   const { table } = workbench;
 

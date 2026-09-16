@@ -7,9 +7,12 @@ import {
 } from "./workflow-stream-dispatch.server";
 
 const request = () =>
-  new Request("https://cubby.test/api/workflow-stream/agent.askStream", {
-    method: "POST",
-  });
+  new Request(
+    "https://cubby.test/api/workflow-stream/recipe.importCookbookStream",
+    {
+      method: "POST",
+    },
+  );
 
 /** The dispatcher answers a refusal as one NDJSON error frame, not a throw. */
 const refusalSchema = z.object({
@@ -29,9 +32,13 @@ describe("workflow stream dispatcher", () => {
     const load = vi.fn<WorkflowStreamLoaderPort["load"]>(async () => selected);
     const sent = request();
 
-    const response = await dispatchWorkflowStream("agent.askStream", sent, {
-      load,
-    });
+    const response = await dispatchWorkflowStream(
+      "recipe.importCookbookStream",
+      sent,
+      {
+        load,
+      },
+    );
 
     expect(await response.text()).toBe("frames");
     expect(load).toHaveBeenCalledOnce();
@@ -73,13 +80,13 @@ describe("workflow stream dispatcher", () => {
 
   it("refuses a declared stream that has no loader", async () => {
     const response = await dispatchWorkflowStream(
-      "agent.askStream",
+      "recipe.importCookbookStream",
       request(),
       { load: () => undefined },
     );
 
     expect((await refusal(response)).error.message).toContain(
-      "No workflow stream handler is registered for agent.askStream",
+      "No workflow stream handler is registered for recipe.importCookbookStream",
     );
   });
 });

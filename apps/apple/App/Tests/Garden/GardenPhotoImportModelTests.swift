@@ -36,7 +36,7 @@ struct GardenPhotoImportModelTests {
     @Test func existingOnlySelectionIsAttached() async throws {
         var item = try selection(capturedAt: Date(timeIntervalSince1970: 1_700_000_000))
         item.existingImageID = ImageCode("IMG-EXISTING")
-        var records: [RecordGardenEntry] = []
+        var records: [GardenRecordEntryInput] = []
         let model = await model(
             items: [item],
             record: {
@@ -46,7 +46,7 @@ struct GardenPhotoImportModelTests {
         model.locationID = "LOC-1"
 
         #expect(await model.save())
-        #expect(records.first?.pendingImageIDs == [ImageCode("IMG-EXISTING")])
+        #expect(records.first?.pendingImageIds == [ImageCode("IMG-EXISTING")])
         #expect(model.uploadedIDs == [ImageCode("IMG-EXISTING")])
     }
 
@@ -55,7 +55,7 @@ struct GardenPhotoImportModelTests {
         var earlierAlias = try selection(capturedAt: Date(timeIntervalSince1970: 1_700_000_000))
         earlierAlias.existingImageID = ImageCode("draft:\(later.id)")
         var uploadCount = 0
-        var records: [RecordGardenEntry] = []
+        var records: [GardenRecordEntryInput] = []
         let model = await model(
             items: [later, earlierAlias],
             upload: { _ in
@@ -71,7 +71,7 @@ struct GardenPhotoImportModelTests {
         #expect(await model.save())
         #expect(uploadCount == 1)
         #expect(records.count == 2)
-        #expect(records.allSatisfy { $0.pendingImageIDs == [ImageCode("IMG-UPLOADED")] })
+        #expect(records.allSatisfy { $0.pendingImageIds == [ImageCode("IMG-UPLOADED")] })
     }
 
     @Test func removingMatchedSourceBlocksSaveWithClearError() async throws {
@@ -103,7 +103,7 @@ struct GardenPhotoImportModelTests {
             },
             record: { entry in
                 recordCount += 1
-                recordedLocations.append(entry.locationID)
+                recordedLocations.append(entry.locationId.rawValue)
                 if recordCount == 2, failSecondRecord {
                     failSecondRecord = false
                     throw TestFailure.record

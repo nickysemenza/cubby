@@ -4,7 +4,7 @@ import SwiftUI
 /// Per-person macros with each entered food underneath. The adaptive grid presents two people
 /// side by side when space permits and naturally becomes one column on iPhone.
 struct MealNutritionPeopleView: View {
-    let summary: MealNutritionSummary
+    let summary: MealNutritionOut
     var showMealHeadings = false
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -20,7 +20,7 @@ struct MealNutritionPeopleView: View {
                         personPanel(person)
                     }
                 }
-                if summary.people.contains(where: { $0.totals.containsPartialEstimate }) {
+                if summary.people.contains(where: { MacroSummary($0.totals).containsPartialEstimate }) {
                     Text("+ means a known subtotal; some food nutrition is missing. — means unavailable.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -36,7 +36,7 @@ struct MealNutritionPeopleView: View {
     private func personPanel(_ person: MealNutritionPerson) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: PorcelainTokens.Space.md) {
-                MacroGrid(totals: person.totals, prominent: true)
+                MacroGrid(totals: MacroSummary(person.totals), prominent: true)
                 if person.foods.isEmpty {
                     Text("No foods assigned")
                         .font(.callout)
@@ -76,36 +76,40 @@ struct MealNutritionPeopleView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            MacroGrid(totals: food.totals)
+            MacroGrid(totals: MacroSummary(food.totals))
         }
         .padding(.vertical, PorcelainTokens.Space.xs)
     }
 
     @ViewBuilder private func foodLink(_ food: MealNutritionFood) -> some View {
-        switch food.source {
-        case .recipe(_, let recipeID, _):
-            NavigationLink(value: Route.entityDetail(.recipe, id: recipeID)) { Text(food.name) }
-        case .product(_, let productID):
-            NavigationLink(value: Route.entityDetail(.product, id: productID)) { Text(food.name) }
-        case .ingredient(_, let ingredientID):
-            NavigationLink(value: Route.entityDetail(.ingredient, id: ingredientID)) { Text(food.name) }
+        switch food {
+        case .recipe(let recipe):
+            NavigationLink(value: Route.entityDetail(.recipe, id: recipe.recipeId)) { Text(food.name) }
+        case .product(let product):
+            NavigationLink(value: Route.entityDetail(.product, id: product.productId.rawValue)) {
+                Text(food.name)
+            }
+        case .ingredient(let ingredient):
+            NavigationLink(value: Route.entityDetail(.ingredient, id: ingredient.ingredientId)) {
+                Text(food.name)
+            }
         case .manual:
             Text(food.name)
         }
     }
 
-    private func mealLink(_ meal: MealNutritionMeal) -> some View {
+    private func mealLink(_ meal: NutritionMeal) -> some View {
         NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) {
             Text(meal.displayName)
         }
     }
 
-    private func mealHeading(_ meal: MealNutritionMeal, for person: MealNutritionPerson) -> some View {
+    private func mealHeading(_ meal: NutritionMeal, for person: MealNutritionPerson) -> some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
             mealLink(meal)
                 .font(.porcelainTitle)
             if let subtotal = person.meals.first(where: { $0.meal.id == meal.id }) {
-                MacroGrid(totals: subtotal.totals)
+                MacroGrid(totals: MacroSummary(subtotal.totals))
             }
         }
         .padding(.top, PorcelainTokens.Space.xs)
@@ -114,7 +118,7 @@ struct MealNutritionPeopleView: View {
 
 /// Today's compact home summary: one total row per person and no repeated per-food detail.
 struct MealNutritionCompactView: View {
-    let summary: MealNutritionSummary
+    let summary: MealNutritionOut
 
     var body: some View {
         if summary.people.isEmpty {
@@ -124,7 +128,7 @@ struct MealNutritionCompactView: View {
             ForEach(summary.people) { person in
                 VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
                     Text(person.name).font(.porcelainTitle)
-                    MacroGrid(totals: person.totals)
+                    MacroGrid(totals: MacroSummary(person.totals))
                 }
                 .padding(.vertical, PorcelainTokens.Space.xs)
             }
@@ -155,7 +159,7 @@ private struct MacroGrid: View {
     }
 
     private func macro(
-        _ label: String, amount: NutritionAmount, unit: String, calories: Bool = false
+        _ label: String, amount: MeasureEstimate, unit: String, calories: Bool = false
     ) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
@@ -175,21 +179,21 @@ private struct MacroGrid: View {
     }
 }
 
-private extension NutritionAmount {
+private extension MeasureEstimate {
     func formatted(calories: Bool) -> String {
         switch self {
-        case .complete(let lower, let upper): format(lower: lower, upper: upper, calories: calories)
-        case .partial(let lower, let upper):
-            "\(format(lower: lower, upper: upper, calories: calories))+"
+        case .complete(let estimate): format(lower: estimate.lower, upper: estimate.upper, calories: calories)
+        case .partial(let estimate):
+            "\(format(lower: estimate.lower, upper: estimate.upper, calories: calories))+"
         case .unavailable, .pending: "—"
         }
     }
 
     func accessibilityValue(calories: Bool) -> String {
         switch self {
-        case .complete(let lower, let upper): format(lower: lower, upper: upper, calories: calories)
-        case .partial(let lower, let upper):
-            "\(format(lower: lower, upper: upper, calories: calories)), known subtotal"
+        case .complete(let estimate): format(lower: estimate.lower, upper: estimate.upper, calories: calories)
+        case .partial(let estimate):
+            "\(format(lower: estimate.lower, upper: estimate.upper, calories: calories)), known subtotal"
         case .unavailable: "unavailable"
         case .pending: "pending"
         }
@@ -226,6 +230,6 @@ private extension NutritionAmount {
 }
 
 #Preview("Macro grid") {
-    MacroGrid(totals: PreviewFixtures.sampleMealNutrition.people[0].totals, prominent: true)
+    MacroGrid(totals: MacroSummary(PreviewFixtures.sampleMealNutrition.people[0].totals), prominent: true)
         .padding()
 }

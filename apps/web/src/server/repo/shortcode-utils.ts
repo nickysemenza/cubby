@@ -58,7 +58,7 @@ export type ShortcodeTable = PgTable & {
 /**
  * Every table with a public shortcode, keyed by the entity name used across the
  * manifest, the prefix registry, and the resolvers. Generated from the entity
- * manifest (`dbTable` + `shortcodePrefix`) — see `scripts/entity-generator.ts`.
+ * manifest (`dbTable` + `shortcodePrefix`) — see `scripts/generator/entities/`.
  */
 export const SHORTCODE_TABLE = GENERATED_SHORTCODE_TABLE satisfies Record<
   ShortcodeType,

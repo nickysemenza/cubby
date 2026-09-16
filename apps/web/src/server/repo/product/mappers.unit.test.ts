@@ -583,21 +583,37 @@ describe("on-hand counts units in service as locations", () => {
             ],
     }) satisfies ProductListDB;
 
-  it("sums loose stock and in-use locations against the ledger", () => {
-    const result = dbProductToListAPI(stockedRow(2, 1), []);
-    expect(result.onHandUnits).toBe(3);
-    expect(result.quantityVariance).toBe(0);
-  });
-
-  it("counts locations even when nothing is on a shelf", () => {
-    const result = dbProductToListAPI(stockedRow(3, null), []);
-    expect(result.onHandUnits).toBe(3);
-    expect(result.quantityVariance).toBe(0);
-  });
-
-  it("stays null when there is neither stock nor a location", () => {
-    const result = dbProductToListAPI(stockedRow(0, null), []);
-    expect(result.onHandUnits).toBeNull();
-    expect(result.quantityVariance).toBeNull();
-  });
+  it.each([
+    {
+      name: "sums loose stock and in-use locations against the ledger",
+      locationCount: 2,
+      entryValue: 1,
+      onHandUnits: 3,
+      quantityVariance: 0,
+    },
+    {
+      name: "counts locations even when nothing is on a shelf",
+      locationCount: 3,
+      entryValue: null,
+      onHandUnits: 3,
+      quantityVariance: 0,
+    },
+    {
+      name: "stays null when there is neither stock nor a location",
+      locationCount: 0,
+      entryValue: null,
+      onHandUnits: null,
+      quantityVariance: null,
+    },
+  ])(
+    "$name",
+    ({ locationCount, entryValue, onHandUnits, quantityVariance }) => {
+      const result = dbProductToListAPI(
+        stockedRow(locationCount, entryValue),
+        [],
+      );
+      expect(result.onHandUnits).toBe(onHandUnits);
+      expect(result.quantityVariance).toBe(quantityVariance);
+    },
+  );
 });

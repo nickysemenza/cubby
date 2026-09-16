@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { getErrorMessage } from "~/lib/error-utils";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
@@ -23,6 +22,7 @@ import type { ComboboxItem } from "../combobox/combobox-types";
 import { EntityPicker } from "../combobox/entity-picker";
 import { WithEntitySearch } from "../combobox/with-search-hook";
 import { useEntityActionMutation } from "../hooks/useActionMutation";
+import { ProductCreateDialog } from "../products/product-create-dialog";
 import { ProductForm } from "../products/product-form";
 
 const productCreateMutationOptions = entityMutationOptionsFactory(
@@ -61,8 +61,7 @@ function CreateProductFromFoodButton({
         <PackagePlus />
         Create product from this food
       </Button>
-      <EntityFormDialog
-        entity="product"
+      <ProductCreateDialog
         open={open}
         onOpenChange={setOpen}
         seed={{

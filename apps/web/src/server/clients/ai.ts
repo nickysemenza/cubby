@@ -142,17 +142,12 @@ function imageParts(imageUrls: string[]): ImagePart[] {
 }
 
 /**
- * Pure request builders, one per feature the eval harness (`scripts/ai-eval.ts`)
- * needs to run across arbitrary models: each returns the exact
- * systemPrompts/messages the matching `AiClient` method sends, so the
- * harness and the client share one source of truth for prompt text instead
- * of the harness carrying a hand-maintained snapshot. The output schema and
- * model options are NOT here: they belong to the feature record, which the
- * harness reads too. Keep these free of side effects (no adapter, no
- * `chat()` call) — `runStructuredFeature` owns dispatch, usage accounting,
- * and error surfacing.
+ * Pure request builders: each returns the exact systemPrompts/messages the
+ * matching `AiClient` method sends. Keep these free of side effects (no
+ * adapter, no `chat()` call) — `runStructuredFeature` owns dispatch, usage
+ * accounting, and error surfacing.
  */
-export function buildCategorySuggestionRequest(
+function buildCategorySuggestionRequest(
   productName: string,
   manufacturer: string,
 ): AiChatRequest {
@@ -170,7 +165,7 @@ Categorize this product and explain your reasoning.`,
   };
 }
 
-export function buildInventoryDetectionRequest(
+function buildInventoryDetectionRequest(
   imageUrls: string[],
   locationName: string,
 ): AiChatRequest {
@@ -212,7 +207,7 @@ Do not list the storage crate/bin/drawer itself. Do not list vague clutter, pack
   };
 }
 
-export function buildRecipeFlowRequest(
+function buildRecipeFlowRequest(
   recipeJson: string,
   guidance: string | null,
 ): AiChatRequest {

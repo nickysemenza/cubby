@@ -80,7 +80,10 @@ import {
 } from "~/entities/editing/editor-requests";
 import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { EntityBasicInfo } from "~/entities/entity-display";
+import {
+  editableFieldOverrides,
+  EntityBasicInfo,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { image } from "~/entities/image.functions";
 import { focusOnMount } from "~/hooks/focus-on-mount";
@@ -474,6 +477,11 @@ const buildProjectOverviewRenderers = (args: {
 }) => {
   const { project, parentProjectOptions, saveProject } = args;
   return {
+    // `icon` is plain scalar → update {key} — generic. `name` keeps its
+    // required-field guard (a cleared name is a no-op, not a write attempt).
+    ...editableFieldOverrides("project", project, ["icon"], (variables) =>
+      saveProject(variables.data),
+    ),
     name: () => ({
       value: (
         <EditableCell
@@ -482,16 +490,6 @@ const buildProjectOverviewRenderers = (args: {
           onSave={async (name) => {
             if (name) await saveProject({ name });
           }}
-          renderValue={(value) => value ?? <NoneValue />}
-        />
-      ),
-    }),
-    icon: () => ({
-      value: (
-        <EditableCell
-          value={project.icon}
-          config={{ type: "text", placeholder: "e.g. 🔧" }}
-          onSave={async (icon) => saveProject({ icon })}
           renderValue={(value) => value ?? <NoneValue />}
         />
       ),

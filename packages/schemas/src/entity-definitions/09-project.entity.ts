@@ -16,9 +16,9 @@ import { z } from "zod";
 export default defineEntity({
   key: "project",
   names: { singular: "Project", plural: "Projects" },
-  route: { basePath: "projects" },
+  route: { basePath: "projects", create: "dialog", list: null, detail: null },
   table: "Project",
-  identifiers: { brand: "ProjectId", shortcode: "PRJ-", legacy: null },
+  identifiers: { brand: "ProjectId", shortcode: "PRJ-" },
   presentation: {
     titleField: "name",
     domain: "house",
@@ -36,7 +36,7 @@ export default defineEntity({
       {
         key: "name",
         kind: "text",
-        control: { kind: "text" },
+        control: { kind: "text", placeholder: "What are you working on?" },
         display: {
           list: true,
           detail: true,
@@ -99,7 +99,7 @@ export default defineEntity({
         kind: "number",
         nullable: true,
         label: "Estimate",
-        control: { kind: "number", renderer: "money" },
+        control: { kind: "number", renderer: "money", placeholder: "e.g. 500" },
         display: {
           list: true,
           detail: true,

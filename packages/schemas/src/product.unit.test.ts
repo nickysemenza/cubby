@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { productMcpOut, productQuantitySummaryBatchInput } from "./product";
+import {
+  productFindOrCreateByCodeInput,
+  productMcpOut,
+  productQuantitySummaryBatchInput,
+} from "./product";
+import { scanAtLocationCode } from "./scan";
 
 describe("productMcpOut", () => {
   it("carries product-enrichment identity and image summary fields", () => {
@@ -64,5 +69,38 @@ describe("productQuantitySummaryBatchInput", () => {
         ids: Array.from({ length: 501 }, () => "PRD-ABCD"),
       }).success,
     ).toBe(true);
+  });
+});
+
+describe("productFindOrCreateByCodeInput", () => {
+  it.each([
+    [{ kind: "barcode", value: "012345678905" }, "012345678905"],
+    // Only trims: check-digit validation + GTIN-14 normalization happen in
+    // `product.findOrCreateByCode`'s "isbn" arm (schemas cannot depend on
+    // the WASM boundary that validation needs).
+    [{ kind: "isbn", value: "  978-0-306-40615-7  " }, "978-0-306-40615-7"],
+    // The raw arm only trims: the server classifies it into one of the others.
+    [{ kind: "scan", value: "  P-4K7M " }, "P-4K7M"],
+  ])("accepts the %o arm", (input, value) => {
+    expect(productFindOrCreateByCodeInput.parse(input)).toEqual({
+      kind: input.kind,
+      value,
+    });
+  });
+
+  it("rejects an empty scan", () => {
+    expect(
+      productFindOrCreateByCodeInput.safeParse({ kind: "scan", value: "  " })
+        .success,
+    ).toBe(false);
+  });
+
+  it("reaches the sweep input as the same arm", () => {
+    expect(
+      scanAtLocationCode.parse({ kind: "scan", value: "PRD-4K7M" }),
+    ).toEqual({ kind: "scan", value: "PRD-4K7M" });
+    expect(
+      scanAtLocationCode.parse({ kind: "product", value: "PRD-4K7M" }),
+    ).toEqual({ kind: "product", value: "PRD-4K7M" });
   });
 });

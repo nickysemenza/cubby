@@ -16,7 +16,6 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DeleteExpensesWithPurchaseEffectsOut,
   ExpenseBulkCostTypeInput,
-  ExpenseBulkMoveInput,
   ExpenseBulkTradeInput,
   ExpenseCreateInput,
   ExpenseOut,
@@ -909,52 +908,6 @@ export const createExpense = async (
     entityId: result.id,
     priceAffectedProductIds: result.priceAffectedProductIds,
   };
-};
-
-export const moveExpenses = async (
-  db: Database,
-  input: ExpenseBulkMoveInput,
-  actor: ActorContext,
-): Promise<ExpenseOut[]> => {
-  const updatedIds = await withTransaction(db, async (tx) => {
-    const projectId =
-      input.projectId !== null
-        ? await resolveLiveProjectId(tx, input.projectId)
-        : null;
-
-    const ids = await resolveLiveExpenseIds(tx, input.ids);
-
-    const before = await tx.query.expense.findMany({
-      where: and(inArray(expense.id, ids), notDeleted(expense)),
-      columns: { id: true, projectId: true },
-    });
-    if (before.length === 0) return [];
-
-    await tx
-      .update(expense)
-      .set({ projectId })
-      .where(and(inArray(expense.id, ids), notDeleted(expense)));
-
-    const auditEntries: AuditEntryInput[] = [];
-    for (const row of before) {
-      const changes = computeChanges(row, { id: row.id, projectId }, [
-        "projectId",
-      ]);
-      if (changes) {
-        auditEntries.push({
-          entityType: "expense",
-          entityId: row.id,
-          action: "update",
-          changes,
-        });
-      }
-    }
-    await logAuditEntries(tx, actor, auditEntries);
-
-    return before.map((row) => row.id);
-  });
-
-  return getExpensesByIDs(db, updatedIds);
 };
 
 export const setExpensesTrade = async (

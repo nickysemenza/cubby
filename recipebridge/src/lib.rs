@@ -9,6 +9,7 @@
 //! - [`costing`] — the recipe costing engine (consumption model, two-pass totals)
 //! - [`needs`] — sub-recipe expansion into flat, scaled ingredient needs
 //! - [`epub`] — EPUB cookbook extraction (re-exported from upstream `cookbook::wasm`)
+//! - [`isbn`] — ISBN-10/ISBN-13 validation and GTIN-14 normalization
 //!
 //! Boundary types: `#[derive(Tsify)]` generates the `.d.ts` from the Rust
 //! structs (no hand-written `typescript_custom_section` except `AmountKind`),
@@ -38,6 +39,7 @@ mod epub;
 mod estimates;
 mod food_calculation;
 mod food_mappings;
+mod isbn;
 mod needs;
 mod parse;
 mod reconcile;
@@ -50,6 +52,7 @@ pub use epub::*;
 pub use estimates::*;
 pub use food_calculation::*;
 pub use food_mappings::*;
+pub use isbn::*;
 pub use needs::*;
 pub use parse::*;
 

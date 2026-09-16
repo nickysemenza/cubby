@@ -1,4 +1,3 @@
-import { searchableEntities } from "@cubby/schemas/entity-manifest";
 import type {
   SearchableEntity,
   SearchComponentPlacement,
@@ -6,24 +5,10 @@ import type {
   SearchInventoryPlacement,
   SearchResultGroup,
 } from "@cubby/schemas/search";
-import {
-  type ParsedShortcode,
-  parseShortcode,
-  type ShortcodeType,
-} from "@cubby/shared";
+import { type ParsedShortcode, parseShortcode } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import {
-  Activity,
-  ChevronRight,
-  Equal,
-  MapPin,
-  Search,
-  Settings,
-  Sparkles,
-  Wrench,
-  X,
-} from "lucide-react";
+import { ChevronRight, Equal, MapPin, Search, Settings, X } from "lucide-react";
 import * as React from "react";
 
 import { Row } from "~/components/layout";
@@ -36,7 +21,6 @@ import {
   CommandList,
   CommandSeparator,
 } from "~/components/ui/command";
-import { IconTile } from "~/components/ui/icon-tile";
 import { Spinner } from "~/components/ui/spinner";
 import {
   EntityIcon,
@@ -46,7 +30,6 @@ import {
 } from "~/entities/entities";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
 import { useDebug } from "~/hooks/useDebug";
-import { setFlag, useFlag } from "~/lib/flags";
 import { cn } from "~/lib/utils";
 
 import { recordCommandMenuOpened } from "./command-menu-loader";
@@ -58,7 +41,6 @@ import {
 import { parsePastedShortcode } from "./command-menu/pasted-shortcode";
 import { quickActions } from "./command-menu/quick-actions";
 import type { QuickAction } from "./command-menu/quick-actions";
-import { getRecents, pushRecent } from "./command-menu/recents";
 import { parseCommandSearchScope } from "./command-menu/search-scope";
 import { useConversionAnswer } from "./command-menu/use-conversion-answer";
 import { useGlobalSearch } from "./command-menu/use-global-search";
@@ -68,7 +50,6 @@ import {
   entityTypeMap,
   getSearchMatchText,
   getSearchResultRoute,
-  rememberSearchResult,
   SearchResultMedia,
 } from "./search/search-utils";
 
@@ -89,12 +70,6 @@ const goToLeaves = completeNavLeaves.filter(
     !quickActionPaths.has(leaf.to),
 );
 
-const AskCubbyPanel = React.lazy(() =>
-  import("./command-menu/ask-cubby").then((module) => ({
-    default: module.AskCubbyPanel,
-  })),
-);
-
 interface GlobalCommandMenuProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -106,12 +81,6 @@ type GoToPage = (
   searchParams?: NavigationSearch | { create: true },
 ) => void;
 type CommandMenuNavigate = ReturnType<typeof useNavigate>;
-
-/** Narrow a shortcode's entity to the searchable subset `recents` stores. */
-const isSearchableEntity = (
-  entity: ShortcodeType,
-): entity is ShortcodeType & SearchableEntity =>
-  searchableEntities.some((candidate) => candidate === entity);
 
 /**
  * The preview is deliberately limited to the legacy shortcode routes. A
@@ -174,8 +143,7 @@ export function GlobalCommandMenu({
   );
   const searchInputRef = React.useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const { isDevtoolsVisible, toggleDevtools } = useDebug();
-  const perfOverlayOn = useFlag("perfOverlay");
+  const { isDevtoolsVisible } = useDebug();
 
   React.useEffect(() => {
     if (open) recordCommandMenuOpened();
@@ -185,38 +153,13 @@ export function GlobalCommandMenu({
     useGlobalSearch(search, searchScope ?? undefined);
   const conversion = useConversionAnswer(searchScope ? "" : search);
 
-  // Opt-in: the agent only runs when the user explicitly selects the Ask item.
-  // Keyword/shortcode fast paths stay instant and untouched. Streams the
-  // answer for a progressive "typing" reveal.
-  const [answerMode, setAnswerMode] = React.useState(false);
-  const [askQuery, setAskQuery] = React.useState<string | null>(null);
-  const runAsk = (query: string) => {
-    const trimmed = query.trim();
-    if (trimmed.length === 0) return;
-    setAskQuery(trimmed);
-    setAnswerMode(true);
-  };
-  const exitAnswerMode = () => {
-    setAnswerMode(false);
-  };
   const { parsedShortcode, shortcodeName } = useShortcodePreview(
     search,
     searchScope,
   );
 
-  const navigateToShortcode = (target: ParsedShortcode, name?: string) => {
+  const navigateToShortcode = (target: ParsedShortcode) => {
     if (!isBrowserRoutedEntity(target.type)) return;
-    // Recents needs a name, so it only gets an entry once the preview query has
-    // landed — navigation itself never waits on it. Only the three legacy
-    // shortcode preview queries above can contribute a name on this fast path;
-    // ordinary text search covers every searchable entity.
-    if (name && isSearchableEntity(target.type)) {
-      pushRecent({
-        entityType: target.type,
-        id: target.shortcode,
-        name,
-      });
-    }
     navigate({
       to: entities[target.type].routes.detail,
       params: entityDetailParams(target.shortcode),
@@ -226,39 +169,24 @@ export function GlobalCommandMenu({
 
   const goToShortcode = () => {
     if (!parsedShortcode) return;
-    navigateToShortcode(parsedShortcode, shortcodeName);
+    navigateToShortcode(parsedShortcode);
   };
 
   // The ⌘K hotkey is owned by the app shell (__root.tsx) so the shortcut works
   // before this (lazily loaded) menu has mounted. Don't register it here too,
   // or it would double-toggle once mounted.
 
-  // Reset search and answer mode when dialog closes
+  // Reset search when dialog closes
   React.useEffect(() => {
     if (!open) {
       setSearch("");
       setSearchScope(null);
-      setAnswerMode(false);
-      setAskQuery(null);
     }
   }, [open]);
 
-  // Recent jumps — read on open so the list reflects other tabs/sessions.
-  const [recents, setRecents] = React.useState<ReturnType<typeof getRecents>>(
-    [],
-  );
-  React.useEffect(() => {
-    if (open) setRecents(getRecents());
-  }, [open]);
-
-  const goToEntity = (
-    entityType: SearchableEntity,
-    shortcode: string,
-    name?: string,
-  ) => {
+  const goToEntity = (entityType: SearchableEntity, shortcode: string) => {
     const entity = entities[entityTypeMap[entityType]];
     if (entity) {
-      if (name) pushRecent({ entityType, id: shortcode, name });
       navigate({
         to: entity.routes.detail,
         params: entityDetailParams(shortcode),
@@ -267,20 +195,7 @@ export function GlobalCommandMenu({
     }
   };
 
-  // An agent citation's shortcode is nullable: sources are scraped out of MCP
-  // tool payloads, and not every projection carries one. No code means no
-  // navigation — better a dead click than a uuid URL that 404s.
-  const goToSource = (
-    entityType: SearchableEntity,
-    shortcode: string | null,
-    name?: string,
-  ) => {
-    if (!shortcode) return;
-    goToEntity(entityType, shortcode, name);
-  };
-
   const goToSearchResult = (item: SearchDestination) => {
-    rememberSearchResult(item);
     navigate(getSearchResultRoute(item));
     setOpen(false);
   };
@@ -361,146 +276,99 @@ export function GlobalCommandMenu({
             scopeLabel={scopeLabel}
           />
           <CommandList className="max-h-96">
-            {answerMode ? (
-              <React.Suspense fallback={<CommandSearchSpinner />}>
-                <AskCubbyPanel
-                  query={askQuery ?? search}
-                  showToolCalls={isDevtoolsVisible}
-                  onBack={exitAnswerMode}
-                  onSelectSource={goToSource}
-                />
-              </React.Suspense>
-            ) : (
-              <>
-                {/* Inline unit conversion — "250 g flour in cups" */}
-                {conversion && (
-                  <CommandGroup heading="Conversion">
-                    <CommandItem
-                      value={`conversion-${search}`}
-                      onSelect={() =>
-                        goToEntity(
-                          "ingredient",
-                          conversion.ingredientShortcode,
-                          conversion.ingredientName,
-                        )
-                      }
-                      className="flex items-center gap-2"
-                    >
-                      <Equal className="size-4 shrink-0 text-primary" />
-                      <span className="truncate font-mono text-sm font-semibold tabular-nums">
-                        {conversion.input} {conversion.ingredientName} ={" "}
-                        {conversion.result}
+            <>
+              {/* Inline unit conversion — "250 g flour in cups" */}
+              {conversion && (
+                <CommandGroup heading="Conversion">
+                  <CommandItem
+                    value={`conversion-${search}`}
+                    onSelect={() =>
+                      goToEntity("ingredient", conversion.ingredientShortcode)
+                    }
+                    className="flex items-center gap-2"
+                  >
+                    <Equal className="size-4 shrink-0 text-primary" />
+                    <span className="truncate font-mono text-sm font-semibold tabular-nums">
+                      {conversion.input} {conversion.ingredientName} ={" "}
+                      {conversion.result}
+                    </span>
+                    {conversion.cost && (
+                      <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+                        ≈ {conversion.cost}
                       </span>
-                      {conversion.cost && (
-                        <span className="ml-auto shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
-                          ≈ {conversion.cost}
-                        </span>
-                      )}
-                    </CommandItem>
-                  </CommandGroup>
-                )}
+                    )}
+                  </CommandItem>
+                </CommandGroup>
+              )}
 
-                {/* Loading state — first results only; refetches keep the
+              {/* Loading state — first results only; refetches keep the
                 previous list rendered (dimmed) instead of blanking it */}
-                {isLoading && (
-                  <Row align="center" justify="center" className="py-6">
-                    <Spinner className="text-muted-foreground" />
-                  </Row>
-                )}
+              {isLoading && (
+                <Row align="center" justify="center" className="py-6">
+                  <Spinner className="text-muted-foreground" />
+                </Row>
+              )}
 
-                {/* Empty state */}
-                {isEmpty && !isLoading && !parsedShortcode && (
-                  <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
-                    {scopeLabel
-                      ? `No ${scopeLabel.toLocaleLowerCase()} matched “${search}”.`
-                      : "Nothing matched — try another word."}
-                  </output>
-                )}
+              {/* Empty state */}
+              {isEmpty && !isLoading && !parsedShortcode && (
+                <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
+                  {scopeLabel
+                    ? `No ${scopeLabel.toLocaleLowerCase()} matched “${search}”.`
+                    : "Nothing matched — try another word."}
+                </output>
+              )}
 
-                {searchScope && !hasSearch && (
-                  <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
-                    Type to search {scopeLabel}.
-                  </output>
-                )}
+              {searchScope && !hasSearch && (
+                <output className="block py-6 text-center text-xs/relaxed text-muted-foreground">
+                  Type to search {scopeLabel}.
+                </output>
+              )}
 
-                <ShortcodeCommandItems
-                  actions={entityActions}
-                  name={shortcodeName}
-                  onClose={() => setOpen(false)}
-                  onGoToShortcode={goToShortcode}
-                  parsedShortcode={parsedShortcode}
-                />
+              <ShortcodeCommandItems
+                actions={entityActions}
+                name={shortcodeName}
+                onClose={() => setOpen(false)}
+                onGoToShortcode={goToShortcode}
+                parsedShortcode={parsedShortcode}
+              />
 
-                <SearchResults
-                  error={error}
-                  hasResults={hasResults}
-                  isDevtoolsVisible={isDevtoolsVisible}
-                  isLoading={isLoading}
-                  navigate={navigate}
-                  onClose={() => setOpen(false)}
-                  onSelectResult={goToSearchResult}
-                  results={results}
-                  retry={retry}
-                  search={search}
-                  searchScope={searchScope}
-                  scopeLabel={scopeLabel}
-                />
+              <SearchResults
+                error={error}
+                hasResults={hasResults}
+                isDevtoolsVisible={isDevtoolsVisible}
+                isLoading={isLoading}
+                navigate={navigate}
+                onClose={() => setOpen(false)}
+                onSelectResult={goToSearchResult}
+                results={results}
+                retry={retry}
+                search={search}
+                searchScope={searchScope}
+                scopeLabel={scopeLabel}
+              />
 
-                <MatchingQuickActions
-                  actions={filteredActions}
-                  hasResults={hasResults}
-                  hasSearch={hasSearch}
-                  isLoading={isLoading}
-                  onGoToPage={goToPage}
-                />
+              <MatchingQuickActions
+                actions={filteredActions}
+                hasResults={hasResults}
+                hasSearch={hasSearch}
+                isLoading={isLoading}
+                onGoToPage={goToPage}
+              />
 
-                {/* Agent is available after direct navigation results and actions. */}
-                {hasSearch && !isLoading && (
-                  <CommandGroup>
-                    <CommandItem
-                      value={`ask-cubby-${search}`}
-                      onSelect={() => runAsk(search)}
-                      className="flex items-center gap-2"
-                    >
-                      <Sparkles className="size-4 text-primary" />
-                      <span className="truncate">
-                        Ask Cubby:{" "}
-                        <span className="text-muted-foreground">
-                          "{search}"
-                        </span>
-                      </span>
-                    </CommandItem>
-                  </CommandGroup>
-                )}
-
-                <DefaultCommandMenu
-                  filteredActions={filteredActions}
-                  hasSearch={hasSearch}
-                  isDevtoolsVisible={isDevtoolsVisible}
-                  isLoading={isLoading}
-                  navigate={navigate}
-                  onClose={() => setOpen(false)}
-                  onGoToEntity={goToEntity}
-                  onGoToPage={goToPage}
-                  perfOverlayOn={perfOverlayOn}
-                  recents={recents}
-                  searchScope={searchScope}
-                  toggleDevtools={toggleDevtools}
-                />
-              </>
-            )}
+              <DefaultCommandMenu
+                filteredActions={filteredActions}
+                hasSearch={hasSearch}
+                isLoading={isLoading}
+                navigate={navigate}
+                onClose={() => setOpen(false)}
+                onGoToPage={goToPage}
+                searchScope={searchScope}
+              />
+            </>
           </CommandList>
         </CommandDialog>
       )}
     </EntityPaletteActionsHost>
-  );
-}
-
-function CommandSearchSpinner() {
-  return (
-    <Row align="center" justify="center" className="py-6">
-      <Spinner className="text-muted-foreground" />
-    </Row>
   );
 }
 
@@ -527,9 +395,7 @@ function CommandMenuInput({
     <CommandInput
       ref={searchInputRef}
       placeholder={
-        scopeLabel
-          ? `Search ${scopeLabel}…`
-          : "Search, jump to a page, or ask Cubby…"
+        scopeLabel ? `Search ${scopeLabel}…` : "Search or jump to a page…"
       }
       value={search}
       onValueChange={onSearchChange}
@@ -1034,39 +900,24 @@ function SearchEntityResultItem({
 function DefaultCommandMenu({
   filteredActions,
   hasSearch,
-  isDevtoolsVisible,
   isLoading,
   navigate,
   onClose,
-  onGoToEntity,
   onGoToPage,
-  perfOverlayOn,
-  recents,
   searchScope,
-  toggleDevtools,
 }: {
   filteredActions: QuickAction[];
   hasSearch: boolean;
-  isDevtoolsVisible: boolean;
   isLoading: boolean;
   navigate: CommandMenuNavigate;
   onClose: () => void;
-  onGoToEntity: (
-    entityType: SearchableEntity,
-    shortcode: string,
-    name?: string,
-  ) => void;
   onGoToPage: GoToPage;
-  perfOverlayOn: boolean;
-  recents: ReturnType<typeof getRecents>;
   searchScope: SearchableEntity | null;
-  toggleDevtools: () => void;
 }) {
   if (hasSearch || searchScope || isLoading) return null;
 
   return (
     <>
-      <RecentCommandItems recents={recents} onGoToEntity={onGoToEntity} />
       <QuickActionItems actions={filteredActions} onGoToPage={onGoToPage} />
       <CommandSeparator />
       <CommandGroup heading="Go to">
@@ -1088,74 +939,11 @@ function DefaultCommandMenu({
           <Settings className="size-4" />
           <span>Settings</span>
         </CommandItem>
-        <CommandItem
-          onSelect={() => {
-            setFlag("perfOverlay", !perfOverlayOn);
-            onClose();
-          }}
-        >
-          <Activity className="size-4" />
-          <span>{perfOverlayOn ? "Hide" : "Show"} performance overlay</span>
-        </CommandItem>
-        <CommandItem
-          onSelect={() => {
-            toggleDevtools();
-            onClose();
-          }}
-        >
-          <Wrench className="size-4" />
-          <span>{isDevtoolsVisible ? "Hide" : "Show"} Devtools</span>
-        </CommandItem>
       </CommandGroup>
       <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
         Tip: paste a shortcode (PRD-, LOC-, RCP-…) to jump instantly.
       </div>
     </>
-  );
-}
-
-function RecentCommandItems({
-  onGoToEntity,
-  recents,
-}: {
-  onGoToEntity: (
-    entityType: SearchableEntity,
-    shortcode: string,
-    name?: string,
-  ) => void;
-  recents: ReturnType<typeof getRecents>;
-}) {
-  if (recents.length === 0) return null;
-
-  return (
-    <CommandGroup heading="Jump back">
-      {recents.map((recent) => (
-        <CommandItem
-          key={`recent-${recent.entityType}-${recent.id}`}
-          value={`recent-${recent.id}`}
-          onSelect={() =>
-            onGoToEntity(recent.entityType, recent.id, recent.name)
-          }
-          className="flex items-center gap-2"
-        >
-          <IconTile
-            size="sm"
-            className={cn(
-              "size-6 rounded",
-              entities[entityTypeMap[recent.entityType]]?.color.bg ??
-                "bg-muted/50",
-              entities[entityTypeMap[recent.entityType]]?.color.text,
-            )}
-          >
-            <EntityIcon
-              entity={entityTypeMap[recent.entityType]}
-              className="size-3.5"
-            />
-          </IconTile>
-          <span className="truncate">{recent.name}</span>
-        </CommandItem>
-      ))}
-    </CommandGroup>
   );
 }
 

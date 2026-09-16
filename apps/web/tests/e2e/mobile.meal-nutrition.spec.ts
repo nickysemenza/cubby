@@ -21,10 +21,6 @@ test("phone meal nutrition stacks people and keeps the food form in bounds", asy
     page.getByRole("region", { name: `${name} guest nutrition` }),
   ).toBeVisible();
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("meal-nutrition-phone-overview.png"),
-    fullPage: true,
-  });
 
   await page.getByRole("button", { name: "Add food", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add food" });
@@ -35,11 +31,6 @@ test("phone meal nutrition stacks people and keeps the food form in bounds", asy
   await expect(dialog.getByLabel(/Serving amount/)).toBeVisible();
   await expect(dialog.getByLabel("Unit")).toHaveValue("g");
   await expectViewportBounded(page);
-
-  await page.screenshot({
-    path: testInfo.outputPath("meal-nutrition-phone-form.png"),
-    fullPage: false,
-  });
 
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).not.toBeVisible();
@@ -52,8 +43,4 @@ test("phone meal nutrition stacks people and keeps the food form in bounds", asy
     page.getByRole("region", { name: `${name} guest nutrition` }),
   ).toBeVisible();
   await expectViewportBounded(page);
-  await page.screenshot({
-    path: testInfo.outputPath("meal-nutrition-daily-phone.png"),
-    fullPage: true,
-  });
 });

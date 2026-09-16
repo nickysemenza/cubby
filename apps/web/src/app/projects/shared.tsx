@@ -123,13 +123,16 @@ import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 import { multiSelectFilterFnBy, type FilterValue } from "~/entities/filters";
-import type { ProjectRowsRenderer } from "~/lib/list-view-normalization";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getStatusBadgeProps } from "~/lib/status-colors";
 import { cn, formatCurrency } from "~/lib/utils";
 import { persistedVendorId } from "~/lib/vendor-logo";
 
-import { PROJECT_STATUS_OPTIONS, projectKindOptions } from "./project-options";
+import {
+  PROJECT_STATUS_OPTIONS,
+  projectKindOptions,
+  type ProjectRowsRenderer,
+} from "./project-options";
 import { buildProjectTree, type ProjectTreeRow } from "./project-tree";
 import { project } from "./project.functions";
 import { tradeOptions } from "./trade-options";
@@ -450,12 +453,7 @@ export function TaskList({
     entity: "task",
     data: sortedData,
     columns,
-    layoutKey: "task:embedded",
-    layout: {
-      initialColumnVisibility: EMBEDDED_TASK_COLUMNS,
-      legacyVisibilityKey: "task:embedded",
-      legacySizingKey: "task:embedded",
-    },
+    initialColumnVisibility: EMBEDDED_TASK_COLUMNS,
     selection,
     deleteDialog,
     // The table holds its full scoped set, so client-side facet counts are exact.
@@ -1103,12 +1101,7 @@ export function ExpenseList({
     entity: "expense",
     data: expenses,
     columns,
-    layoutKey: "expense:embedded",
-    layout: {
-      initialColumnVisibility: EMBEDDED_EXPENSE_COLUMNS,
-      legacyVisibilityKey: "expense:embedded",
-      legacySizingKey: "expense:embedded",
-    },
+    initialColumnVisibility: EMBEDDED_EXPENSE_COLUMNS,
     selection,
     deleteDialog,
     getRowId: (row) => row.id,

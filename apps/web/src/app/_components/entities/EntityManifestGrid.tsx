@@ -9,6 +9,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import type { EntityPresentation } from "@cubby/schemas/entity-summary";
+import { LEGACY_SHORTCODE_PREFIX } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy, Minus, Stamp } from "lucide-react";
 import { type ReactNode, useId } from "react";
@@ -109,9 +110,21 @@ function extendedManifest(entity: Entity): EntityDescriptor {
   return entityManifest[entity] as EntityDescriptor;
 }
 
+/**
+ * The inbound-only single-letter prefix a printed label may still carry. Not
+ * a manifest fact: the parser's alias table in `@cubby/shared` is the only
+ * place the legacy form survives.
+ */
+function legacyPrefix(entity: Entity): string | null {
+  return (
+    Object.entries(LEGACY_SHORTCODE_PREFIX).find(
+      ([, target]) => target === entity,
+    )?.[0] ?? null
+  );
+}
+
 function acceptedCodes(entity: Entity) {
-  const metadata = entityInspectorMetadata[entity];
-  return [metadata.shortcodePrefix, metadata.legacyShortcodePrefix]
+  return [entityInspectorMetadata[entity].shortcodePrefix, legacyPrefix(entity)]
     .filter((prefix) => prefix !== null)
     .map((prefix) => `${prefix}XXXX`);
 }
@@ -160,8 +173,8 @@ function PrintedLabelContract({ entity }: { entity: "product" | "location" }) {
       </div>
       <p className="mt-1 text-sm">
         Cubby emits <code>{metadata.shortcodePrefix}XXXX</code> and permanently
-        accepts <code>{metadata.legacyShortcodePrefix}XXXX</code> inbound
-        because physical labels using the shorter prefix already exist.
+        accepts <code>{legacyPrefix(entity)}XXXX</code> inbound because physical
+        labels using the shorter prefix already exist.
       </p>
     </div>
   );
@@ -504,7 +517,7 @@ const nativeDomain = (domain: EntityPresentation["domain"]): string =>
  * `EntityOperations.swift`). "HTTP exposes" is the web API's resource verbs
  * — what Swift's `httpActions` mirrors; "Native client" is the narrower set
  * the filtered OpenAPI client actually carries (create/update/delete are
- * opt-in via `native-operations.json`).
+ * opt-in via the entity declaration's `native` block).
  */
 function NativeSection({ entity }: { entity: Entity }) {
   const metadata = entityInspectorMetadata[entity];
@@ -709,10 +722,7 @@ export function EntityInspector({
               <Chips key="accept" items={acceptedCodes(entity)} />,
             ],
             ["Compatibility", physicalCompatibility(entity)],
-            [
-              "Alias direction",
-              metadata.legacyShortcodePrefix ? "inbound only" : "none",
-            ],
+            ["Alias direction", legacyPrefix(entity) ? "inbound only" : "none"],
             ["Permanence", physicalPermanence(entity)],
           ]}
         />

@@ -23,6 +23,7 @@ import { Input } from "~/components/ui/input";
 import { relatedData } from "~/lib/related-data.functions";
 import { formatCurrency } from "~/lib/utils";
 
+import { useTableColumnLayout } from "../data-table/column-layout";
 import { createCurrencyColumn } from "../data-table/columnHelpers";
 import RTable from "../data-table/Table";
 import {
@@ -31,7 +32,6 @@ import {
   type CubbyColumnDef,
   useCubbyTable,
 } from "../data-table/table-features";
-import { useCubbyTableLayout } from "../data-table/table-layout";
 import type { InfiniteScrollControls } from "../hooks/useInfiniteTableList";
 
 const PAGE_SIZE = 25;
@@ -387,17 +387,18 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
     [sorting],
   );
 
-  const layoutKey = `related-summary:${relationKey}`;
-  const layout = useCubbyTableLayout({
-    key: layoutKey,
+  const { columns: normalizedColumns, defaultLayout } = useTableColumnLayout({
     columns: tableColumns,
-    legacySizingKey: layoutKey,
   });
   const table = useCubbyTable({
     data: rows,
-    columns: layout.columns,
-    atoms: layout.atoms,
-    meta: { defaultLayout: layout.defaultLayout },
+    columns: normalizedColumns,
+    initialState: {
+      columnOrder: defaultLayout.columnOrder,
+      columnPinning: defaultLayout.columnPinning,
+      columnVisibility: defaultLayout.columnVisibility,
+    },
+    meta: { defaultLayout },
     getRowId: (row) => row.id,
     manualSorting: true,
     manualFiltering: true,

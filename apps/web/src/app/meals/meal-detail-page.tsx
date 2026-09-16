@@ -86,7 +86,8 @@ function recipeOrdinal(
   );
 }
 
-export function MealDetailPage({ mealId }: { mealId: MealShortcode }) {
+export function MealDetailPage({ record }: { record: MealDetail }) {
+  const mealId = record.id;
   const invalidate = useInvalidateMeals();
   const mealKey = entityDetailFor("meal").queryKey(mealId);
   const [addFoodOpen, setAddFoodOpen] = useState(false);

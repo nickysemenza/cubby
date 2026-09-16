@@ -13,6 +13,11 @@ import {
   textCellData,
   timestampCellData,
 } from "~/app/_components/data-table/cell-data";
+import { renderOptionCell } from "~/app/_components/data-table/columnHelpers";
+import {
+  EditableCell,
+  type FilterableComboboxItem,
+} from "~/app/_components/data-table/editable-cell";
 import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
@@ -35,6 +40,24 @@ type DisplayField = EntityFieldModel["fields"][number];
 type DisplaySurface = "list" | "detail";
 const entityDisplayFields = (entity: Entity, surface: DisplaySurface) =>
   entityFieldModels[entity].fields.filter((field) => field.display[surface]);
+
+/**
+ * Columns hidden by default (`display.listHidden`) but still toggleable via
+ * the View menu — the one per-field fact a page's old `initialColumnVisibility`
+ * literal genuinely carried; everything else in those objects was either a
+ * plain columnId echo of a `display.list` field (redundant) or a computed/
+ * relation column outside the field model (which this cannot see and a page
+ * must keep declaring itself). Callers merge this into their own
+ * `initialColumnVisibility` rather than replacing it outright.
+ */
+export const entityListHiddenColumns = (
+  entity: Entity,
+): Record<string, boolean> =>
+  Object.fromEntries(
+    entityDisplayFields(entity, "list")
+      .filter((field) => field.display.listHidden)
+      .map((field) => [field.display.columnId ?? field.key, false]),
+  );
 
 /** Declared `listOrder` first, ascending; unordered fields keep model order. */
 const orderedListFields = (entity: Entity): DisplayField[] =>
@@ -87,6 +110,17 @@ function renderFormattedScalar(
     case "currency":
       return value.kind === "number" ? (
         <span className="text-positive">{formatCurrency(value.raw)}</span>
+      ) : (
+        renderScalarValue(value, "list")
+      );
+    // Negative money is legitimate domain-wide (a refund-only vendor, a
+    // credit), so a signed renderer — flat "text-positive" only reads as
+    // spend when the value is negative — is generic, not vendor-specific.
+    case "signedCurrency":
+      return value.kind === "number" ? (
+        <span className={value.raw < 0 ? "text-positive" : "font-medium"}>
+          {formatCurrency(value.raw)}
+        </span>
       ) : (
         renderScalarValue(value, "list")
       );
@@ -253,6 +287,149 @@ export function EntityBasicInfo<TRecord extends object>({
   );
 }
 
+/** The concrete value shapes a generic `EditableCell` config can save. */
+type EditableFieldValue = string | number | null;
+const editableFieldValue = z.union([z.string(), z.number()]).nullable();
+
+/**
+ * A field's editable control, derived from its declared `control.kind` and
+ * `display.format` — the same generic mapping `editableFieldOverrides` below
+ * uses for every field in its `keys`. Only the plain scalar shapes: a
+ * boolean (`checkbox`) has no `EditableCell` config, and `specialized`
+ * controls are, by definition, hand-rendered.
+ */
+function renderEditableField(
+  control: NonNullable<DisplayField["control"]>,
+  format: DisplayField["display"]["format"],
+  value: EditableFieldValue,
+  save: (next: EditableFieldValue) => Promise<void>,
+): ReactNode {
+  switch (control.kind) {
+    case "text":
+    case "textarea": {
+      const text = value === null ? null : String(value);
+      return (
+        <EditableCell
+          value={text}
+          config={
+            control.kind === "textarea"
+              ? { type: "text", multiline: true, rows: 4 }
+              : { type: "text" }
+          }
+          onSave={save}
+          renderValue={(v) =>
+            format === "external-link" || control.renderer === "url" ? (
+              v ? (
+                <ExternalLinkText href={v} />
+              ) : (
+                <NoneValue />
+              )
+            ) : (
+              (v ?? <NoneValue />)
+            )
+          }
+        />
+      );
+    }
+    case "number": {
+      const num = value === null ? null : Number(value);
+      if (
+        format === "currency" ||
+        format === "signedCurrency" ||
+        control.renderer === "money"
+      ) {
+        return (
+          <EditableCell
+            value={num}
+            config={{ type: "currency" }}
+            onSave={save}
+            renderValue={(v) =>
+              v === null ? <NoneValue /> : formatCurrency(v)
+            }
+          />
+        );
+      }
+      return (
+        <EditableCell
+          value={num}
+          config={{ type: "number" }}
+          onSave={save}
+          renderValue={(v) => v ?? <NoneValue />}
+        />
+      );
+    }
+    case "date":
+      return (
+        <EditableCell
+          value={value === null ? null : String(value)}
+          config={{ type: "date" }}
+          onSave={save}
+          renderValue={(v) => v ?? <NoneValue />}
+        />
+      );
+    case "select": {
+      const options: FilterableComboboxItem[] = [...(control.options ?? [])];
+      return (
+        <EditableCell
+          value={value === null ? null : String(value)}
+          config={{ type: "select", options }}
+          onSave={save}
+          renderValue={(v) => renderOptionCell(v, options)}
+        />
+      );
+    }
+    case "checkbox":
+    case "specialized":
+      throw new Error(
+        `Editable control kind "${control.kind}" needs a hand-written override`,
+      );
+  }
+}
+
+/**
+ * `entityMutationOptionsFactory(entity, "update")`-bound scalar-field
+ * `EditableCell` overrides for `EntityBasicInfo`. Belongs only in a page's
+ * `overrides` for a field whose editor is a plain scalar update — text,
+ * textarea, number, currency, date, or select with no Badge, `filterAction`,
+ * conditional visibility, or entity-reference picker; a block with any of
+ * that extra logic stays hand-written next to this call.
+ */
+export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
+  entity: Entity,
+  record: TRecord,
+  keys: readonly string[],
+  mutate: (variables: {
+    id: string;
+    data: Record<string, EditableFieldValue>;
+  }) => Promise<TResult>,
+): Record<string, () => { value: ReactNode }> {
+  const fields = entityDisplayFields(entity, "detail");
+  return Object.fromEntries(
+    keys.map((key) => {
+      const field = fields.find((candidate) => candidate.key === key);
+      if (!field?.control || field.readKey === null) {
+        throw new Error(`${entity}.${key} has no editable scalar control`);
+      }
+      const control = field.control;
+      // SAFETY: `readKey` names a declared read projection on this same
+      // record shape — the manifest is the contract this file already
+      // trusts throughout (see `readScalarField` above); the parse turns
+      // the untyped indexed read into the concrete `EditableFieldValue`
+      // every generic control branch renders.
+      const value = editableFieldValue.parse(
+        record[field.readKey as keyof TRecord],
+      );
+      const save = async (next: EditableFieldValue): Promise<void> => {
+        await mutate({ id: record.id, data: { [key]: next } });
+      };
+      const override = () => ({
+        value: renderEditableField(control, field.display.format, value, save),
+      });
+      return [key, override] as const;
+    }),
+  );
+}
+
 /**
  * The copy/paste descriptor for a generated column, keyed off the same
  * `display.format` the cell renderer switches on — `external-link` copies
@@ -261,6 +438,7 @@ export function EntityBasicInfo<TRecord extends object>({
 function cellDataForField<TRecord extends object>(field: DisplayField) {
   switch (field.display.format) {
     case "currency":
+    case "signedCurrency":
       return numberCellData<TRecord>("currency", (record) => {
         const value = readScalarField(record, field);
         return value.kind === "number" ? value.raw : null;
@@ -356,7 +534,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
           enableSorting: defaultEnableSorting,
           meta: attachCubbyColumnMeta({
             className: widthClassName(field.display.width),
-            numeric: format === "currency" ? true : undefined,
+            numeric:
+              format === "currency" || format === "signedCurrency"
+                ? true
+                : undefined,
             mobile: toMobileColumnMeta(field.display.mobile),
             cellData: cellDataForField<TRecord>(field),
           }),

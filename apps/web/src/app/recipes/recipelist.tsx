@@ -15,7 +15,10 @@ import { Button } from "~/components/ui/button";
 import type { FilterableComboboxItem } from "~/components/ui/combobox";
 import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
@@ -97,15 +100,10 @@ function StuckTotalsCell({
   );
 }
 
-/**
- * `notes` is declared `list: true` (so the "Columns" menu can surface it),
- * but was never visible in this table before this migration — keep it that
- * way. Module-level: this object sits in `useEntityList`'s merged-visibility
- * memo, so an inline literal would rebuild it every render.
- */
-const RECIPE_INITIAL_COLUMN_VISIBILITY = {
-  notes: false,
-};
+// `notes` is declared `display.listHidden` on `01-recipe.entity.ts` now —
+// module-level so `useEntityList`'s merged-visibility memo (keyed on
+// referential identity) doesn't rebuild every render.
+const RECIPE_INITIAL_COLUMN_VISIBILITY = entityListHiddenColumns("recipe");
 
 interface RecipeListProps {
   /** Actions to display in the table toolbar (e.g., "Create New" button) */

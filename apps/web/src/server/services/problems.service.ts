@@ -10,9 +10,7 @@ import {
 import { CULL_PENDING_IMAGES_DEFAULT_HOURS } from "@cubby/schemas/image";
 import { measureEstimate, estimateCoverage } from "@cubby/schemas/nutrition";
 import {
-  type AllProblems,
   allProblemsSchema,
-  assembleAllProblems,
   type CoverageTotals,
   type IngredientWithPartialCoverage,
   ingredientWithPartialCoverageSchema,
@@ -99,7 +97,6 @@ import {
 import {
   countViewProblem,
   executeProblem,
-  findViewProblems,
 } from "~/server/services/problem-views.service";
 import type { UsdaFoodBatchPort } from "~/server/services/usda-helpers";
 import { batchEnrichWithFood } from "~/server/services/usda-helpers";
@@ -302,7 +299,7 @@ const findProductCoverageProblems = async (
 };
 
 /** Rebuild the persisted list-query projection using this exact detector scan. */
-export const rebuildProductConversionCoverageProjection = async (
+const rebuildProductConversionCoverageProjection = async (
   db: Database,
   usdaClient: UsdaFoodBatchPort,
 ): Promise<ProductConversionCoverageProjection[]> => {
@@ -1517,22 +1514,4 @@ export const findProblemByType = async (
     };
   }
   return { type: key, items: [...result.items], total: result.count };
-};
-
-// Combined scan for the badge/homepage/MCP — recomposed from the same groups so
-// there's one definition of each detector's membership. totalProblems is the
-// sum of every section length — derived, never hand-summed.
-export const findAllProblems = async (
-  db: Database,
-  upcLookupClient: UpcLookupBatchPort,
-  usdaClient: UsdaFoodBatchPort,
-): Promise<AllProblems> => {
-  const groups = await traceAll({
-    fast: () => findFastProblems(db),
-    coverage: () => findCoverageProblems(db, usdaClient),
-    upc: () => findUpcProblems(db, upcLookupClient),
-    tracker: () => findTrackerProblems(db),
-    views: () => findViewProblems(db),
-  });
-  return assembleAllProblems(groups);
 };

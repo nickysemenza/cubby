@@ -13,6 +13,10 @@
     {
       "name": "anti-slop",
       "specifier": "./tools/oxlint/anti-slop/index.ts"
+    },
+    {
+      "name": "cubby",
+      "specifier": "./tools/oxlint/cubby/index.ts"
     }
   ],
   "categories": {
@@ -71,6 +75,7 @@
     "anti-slop/no-unsafe-dictionary-type": "error",
     "anti-slop/no-widen-then-assert": "error",
     "anti-slop/require-safety-comment-for-type-assertion": "error",
+    "cubby/no-unsafe-identifiers": "error",
     "eslint/no-shadow": "off",
     "eslint/no-underscore-dangle": "off",
     "typescript/no-explicit-any": "error",
@@ -130,6 +135,73 @@
               {
                 "name": "~/server/db/schema",
                 "message": "Services cannot access DB schema directly. Use repo functions instead."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/*.fixtures.ts",
+        "**/*.fixtures.tsx",
+        "**/tests/**",
+        "**/test/**",
+        "**/__fixtures__/**",
+        "**/test-support/**",
+        "**/tooling/**",
+        "packages/*/src/testing.ts"
+      ],
+      "rules": {
+        "cubby/no-unsafe-identifiers": "off"
+      }
+    },
+    {
+      "files": ["apps/web/src/server/**/*.ts", "packages/*/src/**/*.ts"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "cubby/require-soft-delete-filter": "error"
+      }
+    },
+    {
+      "files": [
+        "apps/web/src/app/**/*.functions.ts",
+        "apps/web/src/entities/**/*.functions.ts",
+        "apps/web/src/lib/**/*.functions.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@tanstack/react-start",
+                "allowTypeImports": true,
+                "message": "Client operation modules (*.functions.ts) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
+              },
+              {
+                "name": "@cubby/db",
+                "allowTypeImports": true,
+                "message": "Client operation modules (*.functions.ts) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["~/server/**"],
+                "allowTypeImports": true,
+                "message": "Client operation modules (*.functions.ts) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
+              },
+              {
+                "group": [
+                  "~/server-functions/**",
+                  "!~/server-functions/start-operation-dispatch.functions"
+                ],
+                "allowTypeImports": true,
+                "message": "Client operation modules (*.functions.ts) must stay free of eager server/runtime imports. Import types only, and dispatch through ~/server-functions/start-operation-dispatch.functions."
               }
             ]
           }

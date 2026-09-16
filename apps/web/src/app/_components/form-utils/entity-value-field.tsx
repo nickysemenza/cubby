@@ -63,7 +63,9 @@ export function EntityValueField<
               >
                 <EntityPicker
                   entity={entity}
-                  label={entity}
+                  // The field label is the picker's accessible name ("Parent
+                  // location", not "location") and names its clear button.
+                  label={label ?? entity}
                   placeholder={placeholder}
                   items={items}
                   value={selected}

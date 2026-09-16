@@ -58,7 +58,7 @@ describe("ExpenseDetail filter links", () => {
       productQuantity: 2,
     };
     const { container, rerender } = render(
-      <ExpenseDetail expense={linkedExpense} />,
+      <ExpenseDetail record={linkedExpense} />,
       { wrapper: harness.wrapper },
     );
     const labels = () =>
@@ -89,7 +89,7 @@ describe("ExpenseDetail filter links", () => {
       }),
     ).toHaveAttribute("href", "/expenses?productId=PRD-4K7M");
 
-    rerender(<ExpenseDetail expense={{ ...linkedExpense, lineKind: "tax" }} />);
+    rerender(<ExpenseDetail record={{ ...linkedExpense, lineKind: "tax" }} />);
     expect(labels()).not.toContain("Product");
     expect(labels()).not.toContain("Itemization");
     expect(labels()).not.toContain("Product quantity");
@@ -101,7 +101,7 @@ describe("ExpenseDetail filter links", () => {
   });
 
   it("keeps the editable value primary and exposes a separate cohort action", async () => {
-    render(<ExpenseDetail expense={expense} />, { wrapper: harness.wrapper });
+    render(<ExpenseDetail record={expense} />, { wrapper: harness.wrapper });
 
     const edit = await screen.findByRole("button", {
       name: "Item or service",

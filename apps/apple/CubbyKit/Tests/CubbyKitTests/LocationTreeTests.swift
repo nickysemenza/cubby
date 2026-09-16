@@ -17,7 +17,9 @@ struct LocationTreeTests {
         #expect(tree.isRoot(LocationCode("LOC-2345")))
         #expect(tree.isRoot(LocationCode("LOC-9ABC")))
         #expect(!tree.isRoot(LocationCode("LOC-3456")))
-        #expect(tree[LocationCode("LOC-4567")]?.lastBulkInventoryRaw == "2026-08-01T12:00:00.000Z")
+        #expect(
+            tree[LocationCode("LOC-4567")]?.lastBulkInventory
+                == (try LenientISO8601DateTranscoder().decode("2026-08-01T12:00:00.000Z")))
     }
 
     @Test func ancestorsAndBreadcrumb() throws {

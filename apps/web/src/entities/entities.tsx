@@ -149,14 +149,6 @@ const INK = {
   },
 } satisfies Record<string, EntityColor>;
 
-const newRouteExtensions = {
-  ingredient: { new: "/ingredients/new" },
-  inventory: { new: "/inventory/new" },
-  location: { new: "/locations/new" },
-  product: { new: "/products/new" },
-  recipe: { new: "/recipes/new" },
-} as const;
-
 /**
  * Stamps every definition with the display names its own key already implies.
  *
@@ -255,13 +247,8 @@ const entityDefinitions = withEntityNames({
       text: "text-accent-foreground",
       border: "border-l-warning",
     },
-    routes: {
-      ...generatedBrowserRoutes.ingredient.routes,
-      ...newRouteExtensions.ingredient,
-    },
     // Note: ingredient uses UnitMappingsTable (different from UnitMappingDisplay),
     // so unit-mappings is handled as a custom section
-    detail: { commonSections: ["history"] },
     // Ingredient supplies its domain columns explicitly; the shared list hook
     // still appends the default-hidden Created/Updated audit pair.
     list: {
@@ -281,13 +268,9 @@ const entityDefinitions = withEntityNames({
   product: {
     ...generatedBrowserRoutes.product,
     color: INK.primary,
-    routes: {
-      ...generatedBrowserRoutes.product.routes,
-      ...newRouteExtensions.product,
-    },
     // Note: product renders unit mappings as a custom section (coverage grid +
-    // rows table, like ingredient), so unit-mappings is not a common section.
-    detail: { commonSections: ["history"] },
+    // rows table, like ingredient); unit-mappings has no capability-derived
+    // common section at all, so this has always been page-owned.
     list: {
       hasUnitMappings: true,
     },
@@ -319,11 +302,6 @@ const entityDefinitions = withEntityNames({
   recipe: {
     ...generatedBrowserRoutes.recipe,
     color: INK.primary,
-    routes: {
-      ...generatedBrowserRoutes.recipe.routes,
-      ...newRouteExtensions.recipe,
-    },
-    detail: { commonSections: ["images", "history"] },
     // Cost/calorie column IDs sort the canonical estimates' known lower amount
     // via jsonb expressions. `source` (SourceType+SourceData)
     // and `yield` (→ servings) are also special-cased there. See recipe/crud.recipeList.
@@ -337,24 +315,16 @@ const entityDefinitions = withEntityNames({
   location: {
     ...generatedBrowserRoutes.location,
     color: INK.slate,
-    routes: {
-      ...generatedBrowserRoutes.location.routes,
-      ...newRouteExtensions.location,
-    },
-    // Note: location needs images in a specific position (before child locations),
-    // so we handle it as a custom section and only use history from common
-    detail: { commonSections: ["history"] },
-    // Location supplies its domain columns explicitly; audit dates are shared.
+    // Note: location needs images in a specific position (before child
+    // locations), so it's excluded from the generic gallery-Images derivation
+    // in `useEntityDetail.ts` (`CUSTOM_IMAGE_PLACEMENT`) and handles its own
+    // placement instead. Location supplies its domain columns explicitly;
+    // audit dates are shared.
   },
   inventory: {
     ...generatedBrowserRoutes.inventory,
     color: INK.primary,
-    routes: {
-      ...generatedBrowserRoutes.inventory.routes,
-      ...newRouteExtensions.inventory,
-    },
     // Inventory items have a simple single-section detail page
-    detail: { commonSections: ["history"] },
     // Inventory list has custom columns (image from product, amount instead of name)
   },
   meal: {
@@ -364,7 +334,6 @@ const entityDefinitions = withEntityNames({
     // overdue/planned expenses inside the same planning calendar, so a meal
     // wearing it read as a warning about nothing.
     color: INK.slate,
-    detail: { commonSections: ["history"] },
     // Date/Name/Recipes/Cost columns are custom (meal-table.tsx) — Name needs
     // `emptyLabel`, which useStandardColumns's automatic "name" column
     // doesn't support. Audit dates are appended for every entity list.
@@ -374,21 +343,17 @@ const entityDefinitions = withEntityNames({
     color: INK.plum,
     // No "new" route — projects are created from a dialog on the list page
     // (mirrors meal), not a dedicated /projects/new form.
-    detail: { commonSections: ["images", "history"] },
   },
   task: {
     ...generatedBrowserRoutes.task,
     color: INK.slate,
-    detail: { commonSections: ["history"] },
   },
   vendor: {
     ...generatedBrowserRoutes.vendor,
     // A quiet roster, not a live money surface — same neutral as location/task.
     color: INK.slate,
-    detail: { commonSections: ["history"] },
     // Default sort ("spend") is declared on `model.sort` in
     // `11-vendor.entity.ts` now, not overridden here.
-    list: { defaultDensity: "dense" },
     // "fixed": the keeper is the vendor being viewed; candidates are every
     // OTHER vendor (mergeVendors has no cross-vendor refusal like
     // mergePurchases' vendor-match check — any two vendors can fold together).
@@ -418,8 +383,8 @@ const entityDefinitions = withEntityNames({
     ...generatedBrowserRoutes.purchase,
     color: INK.primary,
     // A Purchase carries its documents (invoices/receipts), like
-    // project's photos — same commonSections shape.
-    detail: { commonSections: ["images", "history"] },
+    // project's photos — both derive their generic Images section from
+    // `capabilities.images === "gallery"` in `useEntityDetail.ts`.
     // No `name` column — a purchase's identity is (vendor, orderId, date), not
     // a free-text name, so the list defines its columns explicitly (like location).
     // "fixed": the keeper is the purchase being viewed; candidates are every
@@ -452,46 +417,31 @@ const entityDefinitions = withEntityNames({
   expense: {
     ...generatedBrowserRoutes.expense,
     color: INK.primary,
-    detail: { commonSections: ["history"] },
   },
   ledgerParty: {
     ...generatedBrowserRoutes.ledgerParty,
     color: INK.slate,
-    detail: { commonSections: ["history"] },
-    list: {
-      // A name roster reads A→Z, same rationale as financialAccount below.
-      defaultSortDirection: "asc",
-    },
+    // Sort direction ("asc", a name roster reads A→Z) is declared on
+    // `model.sort` in `07-ledgerParty.entity.ts` now, not overridden here.
   },
   ledgerTransfer: {
     ...generatedBrowserRoutes.ledgerTransfer,
     color: INK.primary,
-    detail: { commonSections: ["history"] },
   },
   financialAccount: {
-    dialogLabel: "Account",
     ...generatedBrowserRoutes.financialAccount,
     color: INK.slate,
-    detail: { commonSections: ["history"] },
-    list: {
-      // A name roster reads A→Z; the table's blanket descending default was
-      // opening the account list backwards.
-      defaultSortDirection: "asc",
-    },
+    // Sort direction ("asc", a name roster reads A→Z — the table's blanket
+    // descending default was opening this list backwards) is declared on
+    // `model.sort` in `13-financialAccount.entity.ts` now, not overridden here.
   },
   financialTransaction: {
-    dialogLabel: "Transaction",
     ...generatedBrowserRoutes.financialTransaction,
     color: INK.primary,
-    detail: { commonSections: ["history"] },
-    list: {
-      defaultDensity: "dense",
-    },
   },
   wish: {
     ...generatedBrowserRoutes.wish,
     color: INK.plum,
-    detail: { commonSections: ["history"] },
   },
   "usda-food": {
     ...generatedBrowserRoutes["usda-food"],
@@ -507,7 +457,6 @@ const entityDefinitions = withEntityNames({
       text: "text-muted-foreground",
       border: "border-l-muted-foreground",
     },
-    detail: { commonSections: ["history"] },
     // Note: images use 'filename' not 'name', so we define columns explicitly in ImageList
   },
   planting: {
@@ -515,12 +464,10 @@ const entityDefinitions = withEntityNames({
     // House domain, matching project's ink — plantings and garden entries are
     // household work like projects/tasks, not a "positive" pantry-stock signal.
     color: INK.plum,
-    detail: { commonSections: ["history"] },
   },
   gardenEntry: {
     ...generatedBrowserRoutes.gardenEntry,
     color: INK.plum,
-    detail: { commonSections: ["images", "history"] },
   },
 } as const) satisfies Record<BrowserRoutedEntity, EntityDefinition>;
 
@@ -585,6 +532,17 @@ export const defaultSortFor = (entity: BrowserRoutedEntity): string =>
   generatedSortRoster(entity)?.default ?? "createdAt";
 
 /**
+ * Direction `defaultSortFor`'s field opens in. Declared alongside the field
+ * itself on `model.sort.direction` (default "desc", right for the date/amount
+ * columns most lists open on) — `ledgerParty`/`financialAccount` declare
+ * "asc" so their name roster opens A→Z instead of the table's blanket
+ * descending default.
+ */
+export const defaultSortDirectionFor = (
+  entity: BrowserRoutedEntity,
+): "asc" | "desc" => generatedSortRoster(entity)?.direction ?? "desc";
+
+/**
  * Human-readable label for any entity. `.label` is the manifest's own
  * `names.singular`, stamped from the key by `withEntityNames`, so it cannot
  * drift from the server's error prose — that derives from the same
@@ -593,12 +551,6 @@ export const defaultSortFor = (entity: BrowserRoutedEntity): string =>
  */
 export const entityLabel = (entity: Entity): string =>
   isBrowserRoutedEntity(entity) ? entities[entity].label : entity;
-
-/** Concise noun for confirmation dialogs and destructive-action feedback. */
-export const entityDialogLabel = (entity: Entity): string =>
-  isBrowserRoutedEntity(entity)
-    ? (browserEntityDefinition(entity).dialogLabel ?? entities[entity].label)
-    : entityLabel(entity);
 
 export const entityPluralLabel = (entity: Entity): string =>
   isBrowserRoutedEntity(entity)

@@ -58,9 +58,9 @@ function DeleteActionHarness({
 }
 
 describe("generated CRUD delete action", () => {
-  it("describes task dependents without hiding the destructive consequence", () => {
-    expect(deleteDescriptionForEntity("task", { subtaskCount: 1 })).toContain(
-      "deletes 1 subtask",
+  it("describes a permanent removal without a per-entity branch", () => {
+    expect(deleteDescriptionForEntity("task")).toContain(
+      "permanently remove this task",
     );
   });
 

@@ -186,10 +186,10 @@ export const postedRefundTotalSql = (purchaseAlias: string) =>
  * its refund sum — while still applying the liveness rule to coverage alone.
  *
  * `settlementReferenceAbsentSql` repeats the same condition on its JOIN. That
- * redundancy is deliberate: `scripts/check-soft-delete-filters.ts` scans raw
- * SQL text and cannot see through this function call, so without the visible
- * predicate it fails the build — correctly, since it has no way to prove the
- * filter exists. Keep both.
+ * redundancy is deliberate: the `cubby/require-soft-delete-filter` oxlint
+ * rule scans raw SQL text and cannot see through this function call, so
+ * without the visible predicate it fails the build — correctly, since it has
+ * no way to prove the filter exists. Keep both.
  */
 export const settlementReferencePredicate = (
   ftxAlias: string,

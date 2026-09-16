@@ -1,0 +1,8 @@
+import { sql } from "drizzle-orm";
+import { db } from "~/server/db/db";
+
+export function missingSqlGuard() {
+  return db.execute(
+    sql`SELECT 1 WHERE EXISTS (SELECT 1 FROM "Recipe" WHERE "Recipe"."id" = 1)`,
+  );
+}

@@ -27,8 +27,12 @@ export const productContract = defineContract("product", {
   }),
   quickCreate: mutation({ ...productWorkflowSchemas.quickCreate }),
   applyUpcData: mutation({ ...productWorkflowSchemas.applyUpcData }),
-  findOrCreateByUPC: mutation({ ...productWorkflowSchemas.findOrCreateByUPC }),
+  findOrCreateByUPC: mutation({
+    native: "Capture unknown barcode",
+    ...productWorkflowSchemas.findOrCreateByUPC,
+  }),
   findOrCreateByCode: mutation({
+    native: "Search tab create from a barcode or ISBN",
     ...productWorkflowSchemas.findOrCreateByCode,
   }),
   tagOptions: query({ ...productWorkflowSchemas.tagOptions }),

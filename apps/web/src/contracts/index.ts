@@ -3,7 +3,6 @@
  * this barrel at build time; the HTTP router imports it at runtime. A contract
  * module that is not exported here is a generator error.
  */
-export { agentContract, agentStreamsContract } from "./agent.contract";
 export { aiContract, aiStreamsContract } from "./ai.contract";
 export { auditLogContract } from "./audit-log.contract";
 export { calendarContract } from "./calendar.contract";

@@ -1,0 +1,10 @@
+import { exists, sql } from "drizzle-orm";
+import { db } from "~/server/db/db";
+import { recipe } from "~/server/db/schema";
+
+export function missingGuard() {
+  return db
+    .select()
+    .from(recipe)
+    .where(exists(db.select().from(recipe).where(sql`${recipe.id} = 1`)));
+}

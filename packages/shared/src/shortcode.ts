@@ -6,13 +6,11 @@ import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
 
 export { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "./shortcode-alphabet";
 import {
-  LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_PREFIX,
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
 
 export {
-  LEGACY_SHORTCODE_PREFIX,
   SHORTCODE_PREFIX,
   type ShortcodeType,
 } from "./generated/shortcode-registry.gen";
@@ -29,9 +27,20 @@ export const PUBLIC_SHORTCODE_PREFIXES = Object.values(SHORTCODE_PREFIX);
  *
  * INBOUND ONLY. Nothing emits these — `parseShortcode` rewrites a legacy code to
  * its canonical form because the cutover preserved each code's 4-char body
- * (`P-4K7M` became `PRD-4K7M`). The generated alias table declares the only
- * accepted swaps.
+ * (`P-4K7M` became `PRD-4K7M`). This table is the only accepted set of swaps;
+ * it is deliberately not part of the entity manifest, so no generated surface
+ * (catalog, inspector, native) advertises the legacy form.
  */
+export const LEGACY_SHORTCODE_PREFIX = {
+  "P-": "product",
+  "L-": "location",
+} as const satisfies Record<string, ShortcodeType>;
+
+const isLegacyPrefix = (
+  prefix: string,
+): prefix is keyof typeof LEGACY_SHORTCODE_PREFIX =>
+  Object.hasOwn(LEGACY_SHORTCODE_PREFIX, prefix);
+
 const PREFIX_TO_TYPE: Partial<Record<string, ShortcodeType>> = {};
 const isShortcodeType = (type: string): type is ShortcodeType =>
   Object.hasOwn(SHORTCODE_PREFIX, type);
@@ -41,9 +50,6 @@ for (const [type, prefix] of Object.entries(SHORTCODE_PREFIX)) {
     PREFIX_TO_TYPE[prefix] = type;
   }
 }
-
-const LEGACY_TO_TYPE: Record<string, ShortcodeType | undefined> =
-  LEGACY_SHORTCODE_PREFIX;
 
 const shortcodeRegex = (type: ShortcodeType) =>
   new RegExp(`^${SHORTCODE_PREFIX[type]}${BODY_PATTERN}$`);
@@ -227,8 +233,6 @@ interface ParsedShortcodeFor<T extends ShortcodeType> {
   type: T;
   /** Always the canonical form, even when `code` used a legacy prefix. */
   shortcode: ShortcodeFor<T>;
-  /** Whether `code` arrived with a legacy single-letter prefix. */
-  legacy: boolean;
 }
 
 /**
@@ -249,10 +253,9 @@ export type ParsedShortcode = {
  */
 const shortcodeParser =
   <T extends ShortcodeType>(type: T) =>
-  (code: string, legacy: boolean): ParsedShortcodeFor<T> => ({
+  (code: string): ParsedShortcodeFor<T> => ({
     type,
     shortcode: parseShortcodeFor(type, code),
-    legacy,
   });
 
 /**
@@ -287,10 +290,7 @@ const PARSE_CANONICAL_SHORTCODE = {
   vendor: shortcodeParser("vendor"),
   wish: shortcodeParser("wish"),
 } as const satisfies {
-  [T in ShortcodeType]: (
-    code: string,
-    legacy: boolean,
-  ) => ParsedShortcodeFor<T>;
+  [T in ShortcodeType]: (code: string) => ParsedShortcodeFor<T>;
 };
 
 /**
@@ -311,14 +311,12 @@ export function parseShortcode(code: string): ParsedShortcode | null {
   const body = normalized.slice(dash + 1);
   if (!BODY_RE.test(body)) return null;
 
-  const legacyType = LEGACY_TO_TYPE[prefix];
-  const type = legacyType ?? PREFIX_TO_TYPE[prefix];
+  const type = isLegacyPrefix(prefix)
+    ? LEGACY_SHORTCODE_PREFIX[prefix]
+    : PREFIX_TO_TYPE[prefix];
   if (!type) return null;
 
-  return PARSE_CANONICAL_SHORTCODE[type](
-    `${SHORTCODE_PREFIX[type]}${body}`,
-    legacyType !== undefined,
-  );
+  return PARSE_CANONICAL_SHORTCODE[type](`${SHORTCODE_PREFIX[type]}${body}`);
 }
 
 /**

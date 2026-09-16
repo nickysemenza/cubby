@@ -117,20 +117,28 @@ struct EntityRowTests {
     /// `planting` and `gardenEntry` title from the server's `displayName`
     /// (`docs/terminology.md` § Garden) rather than a raw crop or kind field — both descriptors'
     /// generated `titleField` is `"displayName"` (`EntityCatalog.swift`).
-    @Test func plantingRowTitlesFromDisplayName() {
-        let planting = EntityCatalog[.planting]
-        let object: JSONValue = [
-            "id": "PLT-2345", "ingredientId": "ING-2345", "displayName": "Tomato · San Marzano",
+    @Test(
+        arguments: [
+            (
+                EntityKey.planting,
+                [
+                    "id": "PLT-2345", "ingredientId": "ING-2345",
+                    "displayName": "Tomato · San Marzano",
+                ] as JSONValue,
+                "Tomato · San Marzano"
+            ),
+            (
+                EntityKey.gardenEntry,
+                [
+                    "id": "GDE-2345", "kind": "observation",
+                    "displayName": "Note · Jan 15 · Raised bed A",
+                ] as JSONValue,
+                "Note · Jan 15 · Raised bed A"
+            ),
         ]
-        #expect(planting.row(from: object)?.title == "Tomato · San Marzano")
-    }
-
-    @Test func gardenEntryRowTitlesFromDisplayName() {
-        let gardenEntry = EntityCatalog[.gardenEntry]
-        let object: JSONValue = [
-            "id": "GDE-2345", "kind": "observation", "displayName": "Note · Jan 15 · Raised bed A",
-        ]
-        #expect(gardenEntry.row(from: object)?.title == "Note · Jan 15 · Raised bed A")
+    )
+    func rowTitlesFromDisplayName(key: EntityKey, object: JSONValue, expectedTitle: String) {
+        #expect(EntityCatalog[key].row(from: object)?.title == expectedTitle)
     }
 
     @Test func subtitlePrefersManufacturerThenCategory() {

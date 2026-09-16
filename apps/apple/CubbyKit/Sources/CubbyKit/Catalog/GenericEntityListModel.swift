@@ -22,7 +22,7 @@ public final class GenericEntityListModel {
 
     public let descriptor: EntityDescriptor
     public private(set) var rows: [EntityRow] = []
-    public private(set) var meta: PageMeta?
+    public private(set) var meta: ListPageMeta?
     public private(set) var phase: Phase = .idle
     public private(set) var activity: Activity = .idle
     public private(set) var page = 1

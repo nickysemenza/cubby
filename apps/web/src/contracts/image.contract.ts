@@ -21,6 +21,7 @@ export const imageContract = defineContract("image", {
     output: imageBrowserListOut,
   }),
   detail: query({
+    native: "Native photo detail",
     input: z.object({ id: z.string() }),
     output: imageWithEntitySchema.nullable(),
   }),
@@ -37,10 +38,12 @@ export const imageContract = defineContract("image", {
     output: projectImageSummariesOut,
   }),
   hashIndex: query({
+    native: "Native photo deduplication index",
     input: z.undefined(),
     output: imageHashIndexSchema,
   }),
   setPerceptualHashes: mutation({
+    native: "Native legacy photo hash repair",
     input: setPerceptualHashesInputSchema,
     output: setPerceptualHashesOutputSchema,
   }),

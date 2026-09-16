@@ -43,7 +43,9 @@ export default defineConfig({
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: isCI
     ? [["github"], ["html"], ["./tests/e2e/e2e-harness-reporter.ts"]]
-    : [["html"], ["./tests/e2e/e2e-harness-reporter.ts"]],
+    : // `line` so a failing pre-push or verify run says which test failed in the
+      // terminal; the HTML report alone leaves the hook's output blank.
+      [["line"], ["html"], ["./tests/e2e/e2e-harness-reporter.ts"]],
   expect: {
     // Allow a bit more time on CI for client-side navigations
     timeout: isCI ? 15000 : 5000,
@@ -53,8 +55,9 @@ export default defineConfig({
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: "http://localhost:3001",
 
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: "on-first-retry",
+    /* retries: 0 means "on-first-retry" never fires — there is no retry to
+       collect a trace on. Record on the first (only) failure instead. */
+    trace: "retain-on-failure",
   },
 
   /* Configure projects for major browsers */

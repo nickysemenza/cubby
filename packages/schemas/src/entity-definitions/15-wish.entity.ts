@@ -5,9 +5,20 @@ import { z } from "zod";
 export default defineEntity({
   key: "wish",
   names: { singular: "Wish", plural: "Wishlist" },
-  route: { basePath: "wishes" },
+  route: {
+    basePath: "wishes",
+    create: "dialog",
+    // WishList renders its own create action in the table toolbar.
+    list: {
+      component: { module: "~/app/wishes/wish-list", export: "WishList" },
+      actions: null,
+    },
+    detail: {
+      component: { module: "~/app/wishes/wish-detail", export: "WishDetail" },
+    },
+  },
   table: "Wish",
-  identifiers: { brand: "WishId", shortcode: "WSH-", legacy: null },
+  identifiers: { brand: "WishId", shortcode: "WSH-" },
   presentation: {
     titleField: "name",
     domain: "plan",

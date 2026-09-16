@@ -9,7 +9,9 @@ based on the work that fits the moment.
 changes. **Requires database changes** is reserved for work that needs schema,
 migration, or compatibility planning. **Requires thought or evidence** holds
 unresolved decisions, investigations, external triggers, and long-term
-directions. **Operational passes** are household data work, not software
+directions. **Next pass** holds the follow-ups deferred from the last
+large refactor. **Deferred: deploy surface** holds work that changes what gets
+deployed. **Operational passes** are household data work, not software
 projects.
 
 Each item lives in one primary section based on its next blocker: an unresolved
@@ -307,7 +309,15 @@ history is the archive. Permanent product constraints live in the
 
 - (lead) **React #418 hydration error on `/garden` and `/garden-entries`.**
   Logged in production on both route loads; reproduce in dev before deciding
-  on a fix.
+  on a fix. Two related, reproducible-in-dev leads seen 2026-09-16 on `main`:
+  every sortable list header hydrates with a different dnd-kit
+  `aria-describedby="DndDescribedBy-N"` than the server rendered (dnd-kit's
+  id counter advances per SSR request in the long-lived worker), and
+  `@tanstack/react-router-ssr-query` 1.167 calls `hydrate(client, undefined)`
+  on the query stream's final `done` read, which query-core 5.102 logs as
+  "Error reading query stream … reading 'mutations'". Both are console noise
+  today; fix by seeding dnd-kit's `id` per request and upgrading the router
+  ssr-query package once it guards `done`.
 
 - **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
   `get_shopping_list` is a plain structured/text tool. The remaining USDA
@@ -397,17 +407,13 @@ history is the archive. Permanent product constraints live in the
   integration test asserting one meal holds one recipe twice at different scales with
   two independent shopping-list contributions.
 
-- **Finish `listScaffold` adoption and retire the hand-built list rosters** —
-  Promote when the next list repository is written or a hand-built list drifts
-  from its declared columns. After the entity-spine work, predicates over
-  subqueries, OR-groups and array columns stay hand-written and several
-  repositories compose lists outside `listScaffold`; one vendor combobox
-  builder also remains hand-rolled. Reconcile per repository, not with a new
-  abstraction.
-
-- **Generated eager-route filter mirrors** — Promote if a third schema mirror
-  appears; generate build-time projections rather than importing validation graphs
-  into the eager route tree.
+- **`stored` descriptor sweep per repository** — Promote when a hand-built
+  list drifts from its declared columns. Every list repository now composes
+  through `listScaffold`; what remains hand-written are predicates over
+  subqueries, OR-groups, array columns and shortcode resolution, plus single
+  stored-column `eq`/`ilike`/`inArray`/`gte`/`lte` calls that could be `stored`
+  descriptors (`product/crud.ts` and `purchase.ts` carry most). Convert per
+  repository and verify with the real-query matrix; leave joins alone.
 
 - **Harden `createDeleteProcedure`'s id contract** — Promote if a second hand-rolled
   delete procedure appears. It infers its id type from the callback and then casts
@@ -611,6 +617,12 @@ history is the archive. Permanent product constraints live in the
 - **TanStack Start observability** — Remove Cubby's observability wrapper when
   TanStack Start supplies equivalent named request/result/error events and trace
   hooks: <https://tanstack.com/start/latest/docs/framework/react/guide/observability>.
+  Checked 2026-09-16: the guide still says OpenTelemetry support is coming, and
+  Sentry's global function middleware cannot name spans per operation because
+  every operation multiplexes through one Start function
+  (`start-operation-dispatch.server.ts`); `observed-request.ts` also carries
+  DB metrics and expected-error filtering. Revisit when Start exposes the
+  dispatched operation id to a request hook.
 
 - **USDA duplicate collapsing** — Promote if repeated UPC versions return to useful
   search pages; reuse `dedupeUsdaFoodsByUpc` in the MCP handler rather than changing
@@ -674,6 +686,61 @@ history is the archive. Permanent product constraints live in the
   before durable writes.
 
 ---
+
+## Next pass
+
+Deferred from the 2026-09 code-deletion PR; unordered.
+
+- **Generic native list, detail and edit views from the manifest.** Render
+  `EntityListView`/`EntityDetailView`/`EntityFacts`/`DetailRelations` from
+  `FieldDescriptor` (`format`, `mobileSlot`, sections) and the typed
+  `<Entity>Detail` aliases instead of `EntityRow.raw` probes, so the remaining
+  product/location/inventory arms in `App/Shared/Browse/EntityFacts.swift` and
+  the product/location readers in `DetailRelations.swift` disappear. Owners:
+  `apps/apple/App/Shared/Browse`, `scripts/generator/entities/render/swift-catalog.ts`.
+
+- **Garden forms onto the generic native editor.** `App/Shared/Garden/
+  GardenForms.swift` (1.8k lines), `GardenRouteViews.swift`, `GardenModel.swift`
+  and `GardenEditEncodingMiddleware.swift` hand-code fields the manifest
+  declares; move them onto the generic edit path over the generated
+  `PlantingUpdateData`/`GardenEntryUpdateData` inputs once the item above
+  exists. Blocked on it.
+
+- **Web manifest-declared page composition.** List and detail page components
+  (`apps/web/src/app/<entity>/*list*.tsx`, `*-detail.tsx`) still hand-compose
+  sections, relation tables and actions; declare them (`presentation.detail.
+  sections`, `presentation.list.actions`) and render from one generic page with
+  explicit extension slots for recipes, cookbooks and products. Needs a design
+  pass first; it is the web twin of the native item above.
+
+- **Expose recipebridge conversion, needs, costing and nutrition via cubby-ffi**
+  only alongside the first native screen that scales a recipe or prices a meal.
+  Until then the FFI surface stays `parse_ingredient`, `size_unit_aliases`,
+  `normalize_isbn`, `scan_code_gtin14`. Owners: `cubby-ffi/src/lib.rs`,
+  `apps/apple/CubbyKit/Sources/CubbyKit/FFI`.
+
+- **Hosted macOS runner for the Apple gate.** `scripts/apple-check.sh` runs
+  only from the local pre-push gate when `apps/apple/` or `cubby-ffi/` changed;
+  a `workflow_dispatch` macOS job that caches the OpenAPI generator build and
+  the Nx `apple-ffi` output would make it hosted.
+
+- **Native image reordering from the generic edit dialog.** The generic image
+  block adds and removes photos but does not reorder them; the old per-entity
+  location form did. Extend the block when reordering is wanted.
+
+- **`resources.planting.get` name projections.** Native still joins
+  `ingredientName`/`locationName`/`sourceProductName` from `garden.options`
+  (`GardenPlantingOut(PlantingDetail, options:)` in
+  `API/GeneratedTypeExtensions.swift`); carrying them on the detail read the way
+  `GardenPlantingOut` already does deletes that join.
+
+## Deferred: deploy surface
+
+- **Fold `apps/upc-lookup` and `apps/usda-api` into the main worker.** Two
+  separate Workers with three contract packages (`packages/upc-contract`,
+  `packages/usda-contract`, `packages/usda-schemas`) exist for what are two
+  route groups; folding them removes two deploys and the cross-worker contract
+  layer. Touches `wrangler` config and the USDA data source binding.
 
 ## Operational passes
 

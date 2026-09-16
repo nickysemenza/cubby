@@ -201,7 +201,6 @@ export function ProductProjectUses({
     data: rows,
     columns,
     tableStateOptions: EMBEDDED_TABLE_STATE,
-    layoutKey: "project:product-uses",
     initialColumnVisibility: HIDDEN_RELATED_COLUMNS,
     extraActions: canEdit
       ? (row) => (
@@ -413,7 +412,6 @@ function ProjectUsesDialog({
     entity: "project",
     data: visible,
     columns,
-    layoutKey: "product:project-picker",
     isLoading,
     getRowId: (row) => row.id,
     enableRowSelection: true,

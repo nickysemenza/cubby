@@ -4,7 +4,6 @@ import type {
   LocationShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { isbn } from "@cubby/schemas/isbn";
 import { productCategory } from "@cubby/schemas/product";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
 import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
@@ -41,6 +40,7 @@ import { cn } from "~/lib/utils";
 import type { ComboboxItem } from "../combobox/combobox-types";
 import { WithEntitySearch } from "../combobox/with-search-hook";
 import {
+  isbnFormField,
   type ProductFormFieldPaths,
   ProductFormFields,
 } from "../products/product-form-fields";
@@ -89,7 +89,7 @@ const createFormSchema = z
     notes: z.string().nullable(),
     category: productCategory.nullable(),
     upc: upc.nullable(),
-    isbn: isbn.nullable(),
+    isbn: isbnFormField.nullable(),
     fdc_id: fdcId.nullable(),
     expectedQuantity: z.number().int().positive().nullable(),
     price: z.number().positive().nullable(),

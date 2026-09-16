@@ -78,11 +78,7 @@ const searchDefaults = {
   scale: undefined,
 } as const;
 
-const RecipeNotFound = notFoundPage(
-  "recipe",
-  "Recipe not found",
-  "This recipe is no longer available.",
-);
+const RecipeNotFound = notFoundPage("recipe");
 
 const RecipeDetailPage = detailPage({
   query: (shortcode) => entityDetailFor("recipe").queryOptions(shortcode),

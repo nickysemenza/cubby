@@ -3,10 +3,13 @@ import type { FinancialTransactionOut } from "@cubby/schemas/financial-transacti
 import type {
   ProductShortcode,
   ProjectShortcode,
-  VendorShortcode,
 } from "@cubby/schemas/identifiers";
+import type { IngredientWithFoodOut } from "@cubby/schemas/ingredient";
+import type { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
+import type { InfLocation } from "@cubby/schemas/location";
 import type { TaskStatus, Trade } from "@cubby/schemas/project";
 import type { WishOut } from "@cubby/schemas/wish";
+import type { z } from "zod";
 
 import type { EntityEditDraft } from "./intent-types";
 import type { EditableEntity, EntityEditRequest } from "./types";
@@ -21,12 +24,12 @@ type MutableDraft<E extends EditableEntity> = {
 
 /**
  * A create-intent "capture" dialog request with no fields beyond an optional
- * seed — the request every entity with no bespoke capture logic needs.
- * Entities whose capture request derives fields from its input (context,
- * defaulted seed values) keep their own hand-written builder below instead
- * of folding into this one.
+ * seed — the request every entity with no bespoke capture logic needs, and
+ * what the generated list routes open. Entities whose capture request
+ * derives fields from its input (context, defaulted seed values) keep their
+ * own hand-written builder below instead of folding into this one.
  */
-function captureRequest<E extends EditableEntity>(
+export function captureRequest<E extends EditableEntity>(
   entity: E,
   seed?: MutableDraft<E>,
 ): DialogRequest<E> {
@@ -34,8 +37,9 @@ function captureRequest<E extends EditableEntity>(
   // a per-entity lookup the compiler can't verify includes `"capture"` for an
   // opaque generic `E`; every caller below only ever instantiates this with
   // an entity whose editing registry declares `"capture"` as a valid create
-  // intent (the same set the hand-written builders it replaces used
-  // directly).
+  // intent: the hand-written builders below, and the generated list routes,
+  // whose `route.create: "dialog"` the entity compiler checks against
+  // `model.intents.create`.
   const request = {
     entity,
     operation: "create",
@@ -120,20 +124,6 @@ export const projectCaptureRequest = (input?: {
   };
 };
 
-export const vendorCaptureRequest = (): DialogRequest<"vendor"> =>
-  captureRequest("vendor");
-
-export const purchaseCaptureRequest = (input?: {
-  vendorId?: VendorShortcode | null;
-}): DialogRequest<"purchase"> =>
-  captureRequest(
-    "purchase",
-    input?.vendorId ? { vendorId: input.vendorId } : undefined,
-  );
-
-export const financialAccountCaptureRequest =
-  (): DialogRequest<"financialAccount"> => captureRequest("financialAccount");
-
 export const financialAccountEditRequest = (
   account: FinancialAccountOut,
 ): Omit<EntityEditRequest<"financialAccount", "update", "full">, "surface"> & {
@@ -150,10 +140,6 @@ export const financialAccountEditRequest = (
     notes: account.notes ?? null,
   },
 });
-
-export const financialTransactionCaptureRequest =
-  (): DialogRequest<"financialTransaction"> =>
-    captureRequest("financialTransaction");
 
 export const financialTransactionEditRequest = (
   transaction: FinancialTransactionOut,
@@ -205,5 +191,58 @@ export const wishEditRequest = (
     name: wish.name,
     notes: wish.notes,
     candidateProductIds: wish.candidates.map(({ id }) => id),
+  },
+});
+
+/**
+ * Every field the ingredient "full" intent edits (`name`, `aliases`,
+ * `naKinds`, `usuallyOnHand`) is already a top-level key on `ingredientOut`,
+ * so the generic per-field `initial` lookup seeds the dialog with no help —
+ * unlike location/inventory below, whose reference fields read from a
+ * relation object the record carries under a different key.
+ */
+export const ingredientEditRequest = (
+  ingredient: IngredientWithFoodOut,
+): Omit<EntityEditRequest<"ingredient", "update", "full">, "surface"> & {
+  intent: "full";
+} => ({
+  entity: "ingredient",
+  operation: "update",
+  intent: "full",
+  record: ingredient,
+});
+
+export const inventoryEditRequest = (
+  item: z.infer<typeof inventoryWithLocationAndProductOut>,
+): Omit<EntityEditRequest<"inventory", "update", "full">, "surface"> & {
+  intent: "full";
+} => ({
+  entity: "inventory",
+  operation: "update",
+  intent: "full",
+  record: item,
+  // `productId`/`locationId` project only as the nested `product`/`location`
+  // relation objects on this read shape — the generic `initial` lookup reads
+  // the record by field key, so the bare ids need an explicit seed.
+  seed: {
+    productId: item.product.id,
+    locationId: item.location.id,
+  },
+});
+
+export const locationEditRequest = (
+  location: InfLocation,
+): Omit<EntityEditRequest<"location", "update", "full">, "surface"> & {
+  intent: "full";
+} => ({
+  entity: "location",
+  operation: "update",
+  intent: "full",
+  record: location,
+  // `productId`/`parentId` project only as the nested `product`/`parent`
+  // relation objects — same reasoning as `inventoryEditRequest` above.
+  seed: {
+    productId: location.product?.id ?? null,
+    parentId: location.parent?.id ?? null,
   },
 });

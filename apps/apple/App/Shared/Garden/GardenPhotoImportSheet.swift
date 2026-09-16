@@ -76,7 +76,7 @@ struct GardenPhotoImportSheet: View {
 final class GardenPhotoImportModel {
     typealias LoadOptions = () async throws -> GardenOptions
     typealias UploadPhoto = (PhotoFile) async throws -> ImageCode
-    typealias RecordEntry = (RecordGardenEntry) async throws -> String
+    typealias RecordEntry = (GardenRecordEntryInput) async throws -> String
 
     struct Draft: Identifiable {
         let id = UUID()
@@ -210,12 +210,12 @@ final class GardenPhotoImportModel {
                 apply(resolution)
                 try Task.checkCancellation()
                 let id = try await recordEntry(
-                    RecordGardenEntry(
-                        locationID: destination.locationID, plantingID: destination.plantingID,
+                    GardenRecordEntryInput(
+                        locationId: LocationCode(destination.locationID), plantingId: destination.plantingID,
                         kind: .observation,
-                        observedAt: drafts[draftIndex].date,
+                        observedOn: PlainDate(drafts[draftIndex].date),
                         note: drafts[draftIndex].note.isEmpty ? nil : drafts[draftIndex].note,
-                        pendingImageIDs: resolution.imageIDs))
+                        pendingImageIds: resolution.imageIDs))
                 committedDestination = destination
                 confirmedEntryIDs.append(id)
                 confirmedDraftIDs.insert(drafts[draftIndex].id)

@@ -1,12 +1,42 @@
 # Generated outputs remain reviewable, but GitHub collapses their diffs by
 # default and excludes them from language statistics.
 **/*.gen.ts linguist-generated
+**/*.gen.json linguist-generated
 **/src/generated/** linguist-generated
 **/drizzle/meta/*.json linguist-generated
 **/migrations/meta/*.json linguist-generated
 **/worker-configuration.d.ts linguist-generated
 apps/web/src/routeTree.gen.ts linguist-generated
+# Generated entity route modules (`pnpm generate`); TanStack's file router
+# needs them as physical files beside the hand-written routes.
+apps/web/src/routes/_authenticated/expenses.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/financial-accounts.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/financial-accounts.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/financial-transactions.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/financial-transactions.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/images.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/images.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/ingredients.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/ingredients.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/inventory.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/inventory.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/ledger-parties.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/ledger-parties.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/ledger-transfers.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/ledger-transfers.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/locations.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/meals.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/plantings.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/products.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/purchases.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/purchases.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/tasks.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/vendors.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/vendors.index.tsx linguist-generated
+apps/web/src/routes/_authenticated/wishes.$shortcode.tsx linguist-generated
+apps/web/src/routes/_authenticated/wishes.index.tsx linguist-generated
 apps/web/src/server/db/__snapshots__/application-schema.json linguist-generated
 apps/apple/CubbyKit/Sources/CubbyKit/Generated/** linguist-generated
+apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/** linguist-generated
 apps/apple/CubbyKit/Sources/CubbyAPI/** linguist-generated
 apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift linguist-generated

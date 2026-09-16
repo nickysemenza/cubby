@@ -5,12 +5,13 @@ import SwiftUI
 /// Shared by `SearchView`'s inline code panel and `ScanLookupSheet`.
 struct ProductMatchesPanel: View {
     let rows: [EntityRow]
-    let code: ScanCode
+    /// The GTIN-14 the code is stored as.
+    let code: String
     let onSelect: (EntityRow) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow("\(rows.count) products carry \(code.value)")
+            Eyebrow("\(rows.count) products carry \(code)")
             Panel(padding: 0, spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                     if index > 0 { PanelDivider(inset: PorcelainTokens.Space.lg + 56) }
@@ -51,15 +52,16 @@ struct ProductMatchesPanel: View {
 /// upstream catalog answer when there is one) or to stock it at a location without creating
 /// anything — the same two exits the web `/scan` page offers.
 struct UnknownCodePanel: View {
-    let code: ScanCode
-    let catalog: UPCLookup?
+    /// The GTIN-14 the code is stored as.
+    let code: String
+    let catalog: UpcLookupOutput?
     var creating = false
     let onCreate: () -> Void
     let onStock: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: PorcelainTokens.Space.sm) {
-            Eyebrow("No product carries \(code.value)")
+            Eyebrow("No product carries \(code)")
             Panel {
                 if let catalog {
                     HStack(spacing: PorcelainTokens.Space.md) {
@@ -69,7 +71,7 @@ struct UnknownCodePanel: View {
                                 .font(.body.weight(.semibold))
                                 .foregroundStyle(PorcelainTokens.graphite)
                                 .lineLimit(2)
-                            if let manufacturer = catalog.manufacturer {
+                            if let manufacturer = catalog.manufacturerOrBrand {
                                 Text(manufacturer)
                                     .font(.porcelainBody)
                                     .foregroundStyle(PorcelainTokens.graphiteSecondary)
@@ -102,7 +104,7 @@ struct UnknownCodePanel: View {
 
 #Preview("Product matches") {
     ScrollView {
-        ProductMatchesPanel(rows: PreviewFixtures.sampleRows, code: .barcode("012345678905")) { _ in }
+        ProductMatchesPanel(rows: PreviewFixtures.sampleRows, code: "00012345678905") { _ in }
             .padding(PorcelainTokens.Space.lg)
     }
     .background(PorcelainTokens.canvas)
@@ -111,10 +113,11 @@ struct UnknownCodePanel: View {
 #Preview("Unknown code") {
     ScrollView {
         UnknownCodePanel(
-            code: .barcode("00012345678905"),
-            catalog: UPCLookup(
-                upc: "00012345678905", name: "LED bulbs, 4-pack", manufacturer: "Acme", category: nil,
-                priceDollars: nil, imageURL: nil, source: "upcitemdb", cached: false),
+            code: "00012345678905",
+            catalog: UpcLookupOutput(
+                upc: "00012345678905", name: "LED bulbs, 4-pack", manufacturer: "Acme", brand: nil,
+                category: nil,
+                description: nil, priceDollars: nil, imageUrl: nil, source: .upcitemdb, cached: false),
             onCreate: {}, onStock: {}
         )
         .padding(PorcelainTokens.Space.lg)
@@ -124,7 +127,7 @@ struct UnknownCodePanel: View {
 
 #Preview("Unknown code, no catalog hit") {
     ScrollView {
-        UnknownCodePanel(code: .barcode("012345678905"), catalog: nil, onCreate: {}, onStock: {})
+        UnknownCodePanel(code: "00012345678905", catalog: nil, onCreate: {}, onStock: {})
             .padding(PorcelainTokens.Space.lg)
     }
     .background(PorcelainTokens.canvas)
