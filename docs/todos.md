@@ -309,7 +309,15 @@ history is the archive. Permanent product constraints live in the
 
 - (lead) **React #418 hydration error on `/garden` and `/garden-entries`.**
   Logged in production on both route loads; reproduce in dev before deciding
-  on a fix.
+  on a fix. Two related, reproducible-in-dev leads seen 2026-09-16 on `main`:
+  every sortable list header hydrates with a different dnd-kit
+  `aria-describedby="DndDescribedBy-N"` than the server rendered (dnd-kit's
+  id counter advances per SSR request in the long-lived worker), and
+  `@tanstack/react-router-ssr-query` 1.167 calls `hydrate(client, undefined)`
+  on the query stream's final `done` read, which query-core 5.102 logs as
+  "Error reading query stream … reading 'mutations'". Both are console noise
+  today; fix by seeding dnd-kit's `id` per request and upgrading the router
+  ssr-query package once it guards `done`.
 
 - **Reconsider the remaining USDA MCP App.** The Shopping List App is gone;
   `get_shopping_list` is a plain structured/text tool. The remaining USDA

@@ -139,8 +139,11 @@ const renderDetailRoute = (
     "});\n\n" +
     `const ${name}NotFound = notFoundPage(${JSON.stringify(entity.key)});\n\n` +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/$${detailParam}`)})({\n` +
-    "  loader: ({ params, context }) =>\n" +
-    `    ensureDetailRecord(context.queryClient, ${query(`params.${detailParam}`)}),\n` +
+    "  loader: ({ params, context, location }) =>\n" +
+    `    ensureDetailRecord(context.queryClient, ${query(`params.${detailParam}`)}, {\n` +
+    `      shortcode: params.${detailParam},\n` +
+    "      href: location.href,\n" +
+    "    }),\n" +
     "  pendingComponent: DetailPagePending,\n" +
     "  errorComponent: RouteErrorComponent,\n" +
     `  notFoundComponent: ${name}NotFound,\n` +

@@ -3,7 +3,8 @@ import type {
   QueryClient,
   QueryKey,
 } from "@tanstack/react-query";
-import { notFound } from "@tanstack/react-router";
+import { notFound, redirect } from "@tanstack/react-router";
+import { z } from "zod";
 
 /**
  * Prefetch a `$shortcode` route's record, and 404 on an unknown code.
@@ -22,7 +23,23 @@ export async function ensureDetailRecord<
 >(
   queryClient: QueryClient,
   options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
+  /**
+   * The `$shortcode` as requested plus the page's href. A legacy alias
+   * (`P-`/`L-`) resolves to the same record; the route then redirects to the
+   * canonical code so links, titles and the browser history carry one spelling.
+   */
+  requested?: { shortcode: string; href: string },
 ): Promise<void> {
   const record = await queryClient.ensureQueryData(options);
   if (!record) throw notFound();
+  if (!requested) return;
+  const identified = identifiedRecord.safeParse(record);
+  if (identified.success && identified.data.id !== requested.shortcode) {
+    throw redirect({
+      href: requested.href.replace(requested.shortcode, identified.data.id),
+      replace: true,
+    });
+  }
 }
+
+const identifiedRecord = z.object({ id: z.string() });
