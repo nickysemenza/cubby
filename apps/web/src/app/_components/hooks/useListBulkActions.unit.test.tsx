@@ -75,7 +75,6 @@ describe("useListBulkActions", () => {
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
-      "ask-about",
     ]);
     // Copy alone is enough to earn the checkbox column — that's what turns
     // selection on for lists that have no bulk actions of their own.
@@ -92,7 +91,6 @@ describe("useListBulkActions", () => {
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
-      "ask-about",
       "add-to-inventory",
       "print-labels",
       "set-stock-tracking",
@@ -111,7 +109,6 @@ describe("useListBulkActions", () => {
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
-      "ask-about",
       "delete",
     ]);
   });
@@ -124,7 +121,6 @@ describe("useListBulkActions", () => {
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
-      "ask-about",
     ]);
     expect(result.current.enableRowSelection).toBe(true);
   });
@@ -167,7 +163,6 @@ describe("useListBulkActions", () => {
 
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "copy-shortcodes",
-      "ask-about",
       "print-location-labels",
       "move-location-under",
       "move",
@@ -189,7 +184,6 @@ describe("useListBulkActions", () => {
     expect(result.current.config?.actions.map((a) => a.id)).toEqual([
       "inspect",
       "copy-shortcodes",
-      "ask-about",
       "add-to-inventory",
       "print-labels",
       "set-stock-tracking",
