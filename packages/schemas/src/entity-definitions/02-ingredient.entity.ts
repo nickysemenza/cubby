@@ -7,7 +7,7 @@ export default defineEntity({
   names: { singular: "Ingredient", plural: "Ingredients" },
   route: {
     basePath: "ingredients",
-    create: "page",
+    create: "dialog",
     list: {
       component: {
         module: "~/app/ingredients/ingredientlist",
@@ -196,8 +196,8 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["name"],
-        full: ["name", "aliases", "naKinds"],
+        capture: ["name", "aliases", "usuallyOnHand"],
+        full: ["name", "aliases", "naKinds", "usuallyOnHand"],
         identity: ["name", "aliases"],
       },
       create: ["capture", "full"],

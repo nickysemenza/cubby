@@ -17,7 +17,7 @@ export default defineEntity({
   names: { singular: "Location", plural: "Locations" },
   route: {
     basePath: "locations",
-    create: "page",
+    create: "dialog",
     list: null,
     detail: {
       component: {
@@ -110,7 +110,12 @@ export default defineEntity({
         key: "type",
         kind: "enum",
         nullable: true,
-        control: { kind: "select", section: "classification" },
+        // No editor `control`: `type` needs the AI-suggest widget and to
+        // disappear entirely once a product link supplies the form factor —
+        // hand-rendered in `LocationFields` (`entities/editing/
+        // editor-presentations.tsx`), same convention as meal's
+        // `pendingImageIds` below. Still a plain field the kernel resolves —
+        // see `intents.fields` below.
         display: { list: true, detail: true, detailOrder: 1 },
         validation: {
           read: locationType.nullable(),
@@ -171,12 +176,15 @@ export default defineEntity({
         },
       },
       {
+        // No editor `control`: the generic dialog shell renders the shared
+        // photo-capture field itself for any intent whose roster includes
+        // this key (`entity-edit-dialog-content.tsx`) — same convention as
+        // meal's `pendingImageIds`.
         key: "pendingImageIds",
         kind: "identifier",
         label: "Pending Image IDs",
         readKey: null,
         reference: { entity: "image", multiple: true },
-        control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
           read: null,
           create: z.array(imageShortcode).optional(),
@@ -189,7 +197,6 @@ export default defineEntity({
         label: "Remove Image IDs",
         readKey: null,
         reference: { entity: "image", multiple: true },
-        control: { kind: "specialized", renderer: "entity-multi-select" },
         validation: {
           read: null,
           create: null,
@@ -370,13 +377,29 @@ export default defineEntity({
     },
     intents: {
       fields: {
-        capture: ["name", "type", "parentId"],
-        full: ["name", "aliases", "type", "productId", "parentId"],
+        // Quick add: alternate names, collections, and photos are filled in
+        // afterward from the location's own edit dialog (`full`, below).
+        capture: ["name", "type", "parentId", "productId"],
+        full: [
+          "name",
+          "aliases",
+          "type",
+          "productId",
+          "parentId",
+          "collections",
+          "pendingImageIds",
+          "removeImageIds",
+        ],
         identity: ["name", "aliases", "type", "productId"],
         parent: ["parentId"],
       },
       create: ["capture", "full"],
       update: ["full", "identity", "parent"],
+      // `collections` is a pure editor-only pseudo field: no model field, no
+      // stored column of its own — folded into `tags` at submit
+      // (`locationBuildData`, `entities/editing/definitions.ts`) and unfolded
+      // back out of the record's `tags` for edit-mode seeding.
+      editorFields: ["collections"],
     },
     output: [
       "id",

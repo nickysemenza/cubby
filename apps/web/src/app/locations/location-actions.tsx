@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { LayoutDashboard, Plus } from "lucide-react";
+import { LayoutDashboard } from "lucide-react";
 
 import { VerbButton } from "~/app/_components/actions/action-verb-ui";
+import { CreateDialogAction } from "~/app/_components/forms/create-dialog-action";
 import { Row } from "~/components/layout";
 import { Button } from "~/components/ui/button";
+import { captureRequest } from "~/entities/editing/editor-requests";
 
 export function LocationActions() {
   return (
@@ -19,12 +21,9 @@ export function LocationActions() {
         render={<Link to="/labels" />}
         className="gap-1"
       />
-      <Link to="/locations/new">
-        <Button className="gap-1">
-          <Plus className="size-4" />
-          New
-        </Button>
-      </Link>
+      <CreateDialogAction request={captureRequest("location")}>
+        New
+      </CreateDialogAction>
     </Row>
   );
 }

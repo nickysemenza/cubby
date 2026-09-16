@@ -3,7 +3,10 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { FormWrapper } from "~/app/_components/form-utils";
-import { PendingImageUpload } from "~/app/_components/PendingImageUpload";
+import {
+  PendingImageUpload,
+  type PendingImage,
+} from "~/app/_components/PendingImageUpload";
 import { ResponsiveDialog } from "~/components/ui/responsive-dialog";
 
 import { entityEditRegistry } from "./definitions";
@@ -41,10 +44,26 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   // fields — no per-entity Fields component needs to know about it (meal and
   // task's capture dialogs are exactly this: see `editor-presentations.tsx`).
   const resolved = resolveEntityEdit(entityEditRegistry, sessionRequest);
-  const showPendingImageUpload =
-    request.operation === "create" &&
-    isResolvedEntityEdit(resolved) &&
-    resolved.intentDefinition.fields.includes("pendingImageIds");
+  const intentFields = isResolvedEntityEdit(resolved)
+    ? resolved.intentDefinition.fields
+    : [];
+  // A create *or* update intent whose active field roster includes
+  // `pendingImageIds` gets the generic photo-capture field for free, below
+  // the presentation's own fields — no per-entity Fields component needs to
+  // know about it (meal and task's capture dialogs are exactly this: see
+  // `editor-presentations.tsx`). An update that also carries
+  // `removeImageIds` additionally lets the existing gallery be trimmed —
+  // reordering stays a `full`-page-only affordance (no generic `imageOrder`
+  // seeding from a record).
+  const showPendingImageUpload = intentFields.includes("pendingImageIds");
+  const showImageRemoval =
+    request.operation === "update" && intentFields.includes("removeImageIds");
+  // SAFETY: only reached when `showImageRemoval` is true, which only turns
+  // true for an update whose record is a gallery entity's own read shape —
+  // the one shape in this generic dialog that carries an `images` array.
+  const existingImages = showImageRemoval
+    ? ((record as { images?: PendingImage[] }).images ?? [])
+    : [];
   // Field-scoped issues render beside their control via the session's RHF
   // errors; everything else — the headline plus one line per lifecycle blocker
   // — belongs in the banner.
@@ -101,12 +120,21 @@ export function EntityEditDialogContent<E extends EditableEntity>({
             // resolved intent's field roster carries `pendingImageIds`, which
             // only an image-bearing entity declares.
             entityType={entityImageOf(request.entity as ImageEntity)}
+            existingImages={existingImages}
             onImagesChange={(images) =>
               session.form.setValue(
                 "pendingImageIds",
                 images.map((image) => image.id),
                 { shouldDirty: true },
               )
+            }
+            onExistingImagesRemove={
+              showImageRemoval
+                ? (removedImageIds) =>
+                    session.form.setValue("removeImageIds", removedImageIds, {
+                      shouldDirty: true,
+                    })
+                : undefined
             }
           />
         )}

@@ -42,7 +42,8 @@ import {
   PopoverTrigger,
 } from "~/components/ui/popover";
 import { ViewSwitcher } from "~/components/ui/view-switcher";
-import { EntityFormDialog } from "~/entities/editing/entity-form-dialog";
+import { captureRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
@@ -507,11 +508,10 @@ export function LocationContents({ location }: { location: InfLocation }) {
         </>
       )}
 
-      <EntityFormDialog
-        entity="location"
+      <EntityEditDialog
         open={createChildOpen}
         onOpenChange={setCreateChildOpen}
-        seed={{ parentLocation: location }}
+        request={captureRequest("location", { parentId: location.id })}
         onSuccess={handleChildCreated}
       />
     </Stack>

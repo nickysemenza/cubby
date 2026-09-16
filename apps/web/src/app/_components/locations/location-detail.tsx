@@ -1,12 +1,13 @@
 import type { InfLocation, LocationUpdateInput } from "@cubby/schemas/location";
 import { Eye, Info, Package } from "lucide-react";
-import type { FC } from "react";
+import { type FC, useState } from "react";
 
 import { locationGardenSections } from "~/app/garden/garden-seam-sections";
 import { Page } from "~/components/page/Page";
+import { locationEditRequest } from "~/entities/editing/editor-requests";
+import { EntityEditDialog } from "~/entities/editing/entity-edit-dialog";
 
 import { type DetailSection, DetailSections } from "../data-table/detail-page";
-import { editableDetailSection } from "../data-table/editable-detail-section";
 import { useEntityDetail } from "../hooks/useEntityDetail";
 import { AiDescriptionSection } from "./ai-description-section";
 import { LocationBasicInfo } from "./location-basic-info";
@@ -15,7 +16,6 @@ import {
   LocationContents,
   LocationContentsValuation,
 } from "./location-contents";
-import { LocationForm } from "./location-form";
 import { LocationVisual } from "./location-visual";
 
 interface LocationDetailProps {
@@ -28,8 +28,9 @@ export const LocationDetail: FC<LocationDetailProps> = ({
   const heroMedia = (
     <LocationVisual location={location} variant="hero" interactive />
   );
+  const [editOpen, setEditOpen] = useState(false);
 
-  const { commonSections, editMode } = useEntityDetail<
+  const { commonSections } = useEntityDetail<
     "location",
     InfLocation,
     LocationUpdateInput
@@ -55,18 +56,18 @@ export const LocationDetail: FC<LocationDetailProps> = ({
       headerAction: <LocationContentsValuation location={location} />,
       content: <LocationContents location={location} />,
     },
-    editableDetailSection({
+    {
       id: "basic-information",
       title: "Basic Information",
       icon: Info,
       placement: "supporting",
-      editMode,
-      Form: LocationForm,
-      entity: location,
-      children: (
-        <LocationBasicInfo location={location} onEdit={editMode.startEditing} />
+      content: (
+        <LocationBasicInfo
+          location={location}
+          onEdit={() => setEditOpen(true)}
+        />
       ),
-    }),
+    },
     {
       id: "ai-description",
       title: "AI Description",
@@ -106,6 +107,11 @@ export const LocationDetail: FC<LocationDetailProps> = ({
         sections={sections}
         rawData={location}
         heroImages={location.images}
+      />
+      <EntityEditDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        request={locationEditRequest(location)}
       />
     </Page>
   );

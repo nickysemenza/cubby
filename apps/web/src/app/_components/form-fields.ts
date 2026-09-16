@@ -65,15 +65,9 @@ export function getOptionalRecipeId(
   return item?.id ? recipeShortcode.parse(item.id) : undefined;
 }
 
-export const inventoryItemWithLocationFields = z.object({
-  product: requiredProductField,
-  location: requiredLocationField,
-  amount: positiveAmount,
-});
-
 /**
- * Variant of {@link inventoryItemWithLocationFields} carrying an optional id,
- * for bulk-edit forms that mix existing (with id) and new (without) rows.
+ * Carries an optional id, for bulk-edit forms that mix existing (with id) and
+ * new (without) rows.
  */
 export const inventoryItemWithIdFields = z.object({
   product: requiredProductField,

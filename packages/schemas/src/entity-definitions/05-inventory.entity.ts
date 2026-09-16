@@ -15,7 +15,7 @@ export default defineEntity({
   names: { singular: "Inventory Item", plural: "Inventory" },
   route: {
     basePath: "inventory",
-    create: "page",
+    create: "dialog",
     list: {
       component: {
         module: "~/app/inventory/inventoryitemlist",

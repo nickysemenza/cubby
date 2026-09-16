@@ -119,8 +119,9 @@ function verbAction(
 /**
  * The single canonical quick-action registry. Every surface derives its slice
  * from here via {@link actionsForSurface}. Entity-create actions read
- * label/route from the entities registry; New Ingredient is intentionally left
- * out of every create surface (dev-level, not a headline create).
+ * label/route from the entities registry; New Ingredient is intentionally
+ * kept off the navbar/palette (dev-level, not a headline create) but still
+ * carries an `empty-state` entry below so its list's empty state resolves.
  */
 export const actionItems: ActionItem[] = [
   // `home-quick` is deliberately only the four recurring household verbs.
@@ -174,17 +175,20 @@ export const actionItems: ActionItem[] = [
     ["navbar-create", "palette-quick"],
     ["create", "new", "cooking"],
   ),
-  entityCreate(
-    "location",
-    "add-location",
-    entities.location.lucideIcon,
-    ["navbar-create", "palette-quick"],
-    ["create", "new", "place", "room"],
-  ),
   // Dialog-created entities: no `/new` route, so the create is deep-linked with
   // `?create=true` on the index page. They still carry `entity` — the surfaces
   // read `path`/`search` off the item, so `entity` only supplies the icon and
   // the "New {label}" wording, and `createActionFor` can find them.
+  {
+    id: "add-location",
+    entity: "location",
+    name: "Add Location",
+    path: entities.location.routes.list,
+    search: { create: true },
+    icon: entities.location.lucideIcon,
+    keywords: ["create", "new", "place", "room"],
+    surfaces: ["navbar-create", "palette-quick"],
+  },
   {
     id: "add-task",
     entity: "task",
@@ -228,6 +232,15 @@ export const actionItems: ActionItem[] = [
   // Dialog-created, but deliberately not offered in the navbar or palette —
   // these are created in the flow of working a list, not from a global menu.
   // They are here so the list empty states have somewhere to point.
+  {
+    id: "add-ingredient",
+    entity: "ingredient",
+    name: "Add Ingredient",
+    path: entities.ingredient.routes.list,
+    search: { create: true },
+    icon: entities.ingredient.lucideIcon,
+    surfaces: ["empty-state"],
+  },
   {
     id: "add-vendor",
     entity: "vendor",
@@ -305,8 +318,10 @@ export const actionItems: ActionItem[] = [
   ),
   {
     id: "single-item",
+    entity: "inventory",
     name: "Single Item",
-    path: "/inventory/new",
+    path: entities.inventory.routes.list,
+    search: { create: true },
     icon: Plus,
     keywords: ["inventory", "add", "manual"],
     surfaces: ["inventory-page"],
