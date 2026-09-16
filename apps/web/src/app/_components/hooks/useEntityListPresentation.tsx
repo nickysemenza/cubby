@@ -5,7 +5,7 @@ import { useStore } from "@tanstack/react-store";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef } from "react";
 
-import { browserEntityDefinition, defaultSortFor } from "~/entities/entities";
+import { defaultSortDirectionFor, defaultSortFor } from "~/entities/entities";
 import { getEntityFilters } from "~/entities/filter-manifest";
 
 import type { EntityActionSubject } from "../actions/entity-actions";
@@ -82,14 +82,10 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
     onInspectRow,
     includeCatalogActions,
   });
-  const listConfig = useMemo(
-    () => browserEntityDefinition(entity).list,
-    [entity],
-  );
   const defaultSort = defaultSortFor(entity);
-  // The registry declares direction alongside the field, so a name-sorted
+  // The manifest declares direction alongside the field, so a name-sorted
   // roster opens A→Z instead of the table's blanket descending default.
-  const defaultSortDesc = listConfig?.defaultSortDirection !== "asc";
+  const defaultSortDesc = defaultSortDirectionFor(entity) !== "asc";
   const mergedTableStateOptions = useMemo(
     () => ({
       initialSort: defaultSort,

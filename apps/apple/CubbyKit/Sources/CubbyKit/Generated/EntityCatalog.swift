@@ -609,8 +609,7 @@ public enum EntityCatalog {
     filters: [
       FilterDescriptor(columnId: "fromPartyId", urlKey: "fromPartyId", kind: .idMulti, placeholder: "Filter by from party...", label: nil, options: nil),
       FilterDescriptor(columnId: "toPartyId", urlKey: "toPartyId", kind: .idMulti, placeholder: "Filter by to party...", label: nil, options: nil),
-      FilterDescriptor(columnId: "dateFrom", urlKey: "dateFrom", kind: .text, placeholder: "Transfer date from...", label: nil, options: nil),
-      FilterDescriptor(columnId: "dateTo", urlKey: "dateTo", kind: .text, placeholder: "Transfer date to...", label: nil, options: nil),
+      FilterDescriptor(columnId: "date", urlKey: "date", kind: .range, placeholder: "Filter by transfer date...", label: nil, options: nil),
       FilterDescriptor(columnId: "createdAt", urlKey: "createdAt", kind: .range, placeholder: "Filter by created date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")]),
       FilterDescriptor(columnId: "updatedAt", urlKey: "updatedAt", kind: .range, placeholder: "Filter by updated date...", label: nil, options: [FilterOption(value: "30d", label: "Last 30 days"), FilterOption(value: "90d", label: "Last 90 days"), FilterOption(value: "ytd", label: "Year to date"), FilterOption(value: "1y", label: "Last 12 months")])
     ],
@@ -766,13 +765,13 @@ public enum EntityCatalog {
     countable: true,
     fields: [
       FieldDescriptor(key: "name", label: "Name", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "website", label: "Website", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "website", label: "Website", kind: .text, controlKind: .text, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: "external-link", mobileSlot: "meta", mobilePriority: 30),
       FieldDescriptor(key: "orderUrlTemplate", label: "Order URL", kind: .text, controlKind: .text, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "notes", label: "Notes", kind: .text, controlKind: .textarea, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "id", label: "Id", kind: .identifier, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "purchaseCount", label: "Purchases", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "spend", label: "Spend", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
-      FieldDescriptor(key: "latestPurchaseDate", label: "Latest Purchase Date", kind: .date, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
+      FieldDescriptor(key: "purchaseCount", label: "Purchases", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: "meta", mobilePriority: 20),
+      FieldDescriptor(key: "spend", label: "Spend", kind: .number, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: "signedCurrency", mobileSlot: "trailing", mobilePriority: 5),
+      FieldDescriptor(key: "latestPurchaseDate", label: "Latest Purchase Date", kind: .date, controlKind: nil, section: "overview", showInList: true, showInDetail: true, detailOrder: nil, format: "plainDate", mobileSlot: "meta", mobilePriority: 35),
       FieldDescriptor(key: "logo", label: "Logo", kind: .json, controlKind: nil, section: "overview", showInList: false, showInDetail: false, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "createdAt", label: "Created At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),
       FieldDescriptor(key: "updatedAt", label: "Updated At", kind: .timestamp, controlKind: nil, section: "overview", showInList: false, showInDetail: true, detailOrder: nil, format: nil, mobileSlot: nil, mobilePriority: nil),

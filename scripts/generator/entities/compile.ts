@@ -138,6 +138,7 @@ const compileFieldModel = (
         listOrder: field.display.listOrder,
         list: field.display.list,
         detail: field.display.detail,
+        listHidden: field.display.listHidden ?? false,
       },
       validation: field.validation,
     };
@@ -258,6 +259,7 @@ const compileFieldModel = (
             default: sortValue.default,
             computed,
             groupable,
+            direction: sortValue.direction ?? "desc",
           };
         })();
   const compiled = {

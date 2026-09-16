@@ -16,7 +16,10 @@ import { NoneValue } from "~/components/ui/none-value";
 import { StatTile } from "~/components/ui/stat-tile";
 import { entities, entityDetailParams } from "~/entities/entities";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { dataQualityOptions } from "~/lib/data-quality-options";
 import { purchaseIdentityLabel } from "~/lib/purchase-label";
@@ -356,10 +359,13 @@ export function PurchaseList() {
     filterOptions,
     columns,
     deletable: true,
+    // `dataQuality` is declared `display.listHidden` on `12-purchase.entity.ts`
+    // now; `transactionCount`/`dataGaps` are computed columns outside the
+    // field model, so they stay hand-declared here.
     initialColumnVisibility: {
       transactionCount: false,
-      dataQuality: false,
       dataGaps: false,
+      ...entityListHiddenColumns("purchase"),
     },
   });
   const {

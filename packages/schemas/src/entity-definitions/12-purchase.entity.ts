@@ -273,7 +273,7 @@ export default defineEntity({
       {
         key: "dataQuality",
         kind: "json",
-        display: { list: true, columnId: "dataQuality" },
+        display: { list: true, columnId: "dataQuality", listHidden: true },
         validation: {
           read: dataQuality,
           create: null,

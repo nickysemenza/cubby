@@ -119,12 +119,19 @@ export type EntityField = Readonly<{
     listOrder: number | null;
     detailSection: string;
     width: "xs" | "sm" | "md" | "lg" | null;
-    format: "currency" | "plainDate" | "timestamp" | "external-link" | null;
+    format:
+      | "currency"
+      | "signedCurrency"
+      | "plainDate"
+      | "timestamp"
+      | "external-link"
+      | null;
     mobile: Readonly<{
       slot: string;
       priority: number;
       interactive?: boolean;
     }> | null;
+    listHidden: boolean;
   }>;
   validation: Readonly<{
     read: z.ZodType | null;
@@ -147,6 +154,7 @@ type EntityFieldModelSort = Readonly<{
   default: string;
   computed: readonly string[];
   groupable: readonly string[];
+  direction: "asc" | "desc";
 }>;
 type EntityEditIntents = Readonly<{
   fields: Readonly<Record<string, readonly string[]>>;

@@ -829,6 +829,7 @@ export const renderEntityArtifacts = (
               default: fieldModel.sort.default,
               computed: fieldModel.sort.computed,
               groupable: fieldModel.sort.groupable,
+              direction: fieldModel.sort.direction,
             },
           ] as const,
         ],
@@ -1024,7 +1025,7 @@ export const renderEntityArtifacts = (
         `export type GeneratedEntityFieldKind = ${fieldKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n` +
         `export type GeneratedEntityFieldControlKind = ${fieldControlKinds.map((kind) => JSON.stringify(kind)).join(" | ")};\n\n` +
         "export type GeneratedEntityFieldModel = {\n" +
-        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; detailSection: string; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "plainDate" | "timestamp" | "external-link" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null } }[];\n' +
+        '  fields: readonly { key: string; kind: GeneratedEntityFieldKind; nullable: boolean; requiredOnCreate: boolean; label: string; description: string | null; readKey: string | null; reference: { entity: string; multiple: boolean } | null; control: { kind: GeneratedEntityFieldControlKind; renderer: string | null; options: readonly { value: string; label: string }[] | null; section: string } | null; display: { list: boolean; detail: boolean; columnId: string | null; standard: "name" | "image" | null; detailOrder: number | null; listOrder: number | null; detailSection: string; width: "xs" | "sm" | "md" | "lg" | null; format: "currency" | "signedCurrency" | "plainDate" | "timestamp" | "external-link" | null; mobile: { slot: string; priority: number; interactive?: boolean } | null; listHidden: boolean } }[];\n' +
         '  storage: readonly { key: string; column: string; kind: GeneratedEntityFieldKind; nullable: boolean; default: "none" | "generated" | "now" | "literal"; defaultValue: unknown; reference: string | null; specialized: string | null }[];\n' +
         "  create: readonly string[];\n" +
         "  update: readonly string[];\n" +
@@ -1098,13 +1099,14 @@ export const renderEntityArtifacts = (
         " * `model.sort` in `packages/schemas/src/entity-definitions/*.entity.ts`.\n" +
         " * `computed` names roster entries with no `model.fields` read projection\n" +
         " * (correlated subqueries and rollups); `groupable` is the `groupBy` allowlist,\n" +
-        " * defaulting to every sortable field when empty.\n" +
+        " * defaulting to every sortable field when empty. `direction` is the list's\n" +
+        ' * opening sort direction, defaulting to "desc".\n' +
         " */\n" +
         renderRecord({
           name: "generatedEntitySort",
           entries: entitySort,
           satisfies:
-            "Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; computed: readonly string[]; groupable: readonly string[] }>>",
+            'Partial<Record<Entity, { fields: readonly [string, ...string[]]; default: string; computed: readonly string[]; groupable: readonly string[]; direction: "asc" | "desc" }>>',
           comment: "// Generated sort rosters stay one entity per line.",
         }) +
         "\n" +

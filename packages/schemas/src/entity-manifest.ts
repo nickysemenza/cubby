@@ -206,3 +206,6 @@ export type SearchableEntity = (typeof searchableEntities)[number];
 
 export const isAuditableEntity = (entity: Entity): entity is AuditableEntity =>
   entityManifest[entity].auditable;
+
+export const isGalleryEntity = (entity: Entity): entity is GalleryEntity =>
+  entityManifest[entity].imageStorage === "gallery";

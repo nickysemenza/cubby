@@ -1,19 +1,10 @@
 import type { VendorFilters, VendorOut } from "@cubby/schemas/vendor";
 import { useMemo } from "react";
 
-import {
-  createCurrencyColumn,
-  createPlainDateColumn,
-} from "~/app/_components/data-table/columnHelpers";
 import { EntityListPage } from "~/app/_components/data-table/EntityListPage";
-import {
-  createCubbyColumnCollection,
-  createCubbyColumnHelper,
-} from "~/app/_components/data-table/table-features";
-import { ExternalLinkText } from "~/app/_components/ExternalLink";
+import { createCubbyColumnHelper } from "~/app/_components/data-table/table-features";
 import { useNameEditable } from "~/app/_components/hooks/useNameEditable";
 import { useUpdateMutation } from "~/app/_components/hooks/useUpdateMutation";
-import { NoneValue } from "~/components/ui/none-value";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { createEntityDisplayColumns } from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
@@ -30,68 +21,12 @@ export function VendorList() {
     updateVendorMutation.mutateAsync,
   );
 
+  // Website (external-link), Purchases, Spend (signedCurrency, footer reads
+  // the server's exact `sums.spend` over the whole filtered set) and Latest
+  // purchase (plainDate) are all declared `display` on
+  // `11-vendor.entity.ts` now — no page-level column overrides.
   const columns = useMemo(
-    () =>
-      createEntityDisplayColumns(
-        "vendor",
-        columnHelper,
-        createCubbyColumnCollection<VendorOut>((add) => {
-          add(
-            columnHelper.accessor((row) => row.website, {
-              id: "website",
-              header: "Website",
-              enableSorting: false,
-              meta: {
-                className: "w-40",
-                mobile: { slot: "meta", priority: 30, interactive: true },
-              },
-              cell: (info) => {
-                const website = info.getValue();
-                if (!website) return <NoneValue />;
-                return <ExternalLinkText href={website} truncate />;
-              },
-            }),
-          );
-          add(
-            columnHelper.accessor((row) => row.purchaseCount, {
-              id: "purchaseCount",
-              header: "Purchases",
-              meta: {
-                numeric: true,
-                className: "w-24",
-                mobile: { slot: "meta", priority: 20 },
-              },
-              cell: (info) => (
-                <span className="font-mono tabular-nums">
-                  {info.getValue()}
-                </span>
-              ),
-            }),
-          );
-          // `signedTone` because vendor spend genuinely goes negative (a refund-only
-          // vendor, or the family wedding contributions), and a credit must not read
-          // as spend. The footer is exact: `vendorList` returns a `sums.spend` over
-          // the whole filtered set, and `createCurrencyColumn` prefers that server
-          // aggregate over reducing the loaded rows (keyed on the column id, so no
-          // wiring here beyond naming the column `spend`).
-          add(
-            createCurrencyColumn(columnHelper, "spend", {
-              header: "Spend",
-              className: "w-28",
-              decimals: 0,
-              signedTone: true,
-              mobile: { slot: "trailing", priority: 5 },
-            }),
-          );
-          add(
-            createPlainDateColumn(columnHelper, "latestPurchaseDate", {
-              header: "Latest purchase",
-              className: "w-32",
-              mobile: { slot: "meta", priority: 35 },
-            }),
-          );
-        }),
-      ),
+    () => createEntityDisplayColumns<VendorOut>("vendor", columnHelper),
     [columnHelper],
   );
 

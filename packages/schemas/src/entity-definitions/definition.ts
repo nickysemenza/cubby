@@ -158,7 +158,13 @@ const metadataSchemas = () => {
         .default(null),
       /** List cell formatter chosen by the shared column compiler. */
       format: z
-        .enum(["currency", "plainDate", "timestamp", "external-link"])
+        .enum([
+          "currency",
+          "signedCurrency",
+          "plainDate",
+          "timestamp",
+          "external-link",
+        ])
         .nullable()
         .optional()
         .default(null),
@@ -173,6 +179,16 @@ const metadataSchemas = () => {
         .nullable()
         .optional()
         .default(null),
+      /**
+       * Hidden by default in the generated column's initial visibility, but
+       * still toggleable via the View menu — the one per-field fact the old
+       * per-page `initialColumnVisibility` literal actually carried; everything
+       * else in those objects was a plain columnId echo of `display.list`.
+       */
+      listHidden: z
+        .boolean({ error: "must be a boolean" })
+        .optional()
+        .default(false),
     })
     .strict();
 
@@ -224,6 +240,13 @@ const metadataSchemas = () => {
       default: nonEmptyString(),
       computed: z.array(nonEmptyString()).optional().default([]),
       groupable: z.array(nonEmptyString()).optional().default([]),
+      /**
+       * Direction the list opens `default` in. Defaults to "desc", which is
+       * right for the date/amount columns most lists open on and wrong for a
+       * name roster — `ledgerParty`/`financialAccount` declare "asc" so a
+       * name-sorted list opens A→Z instead of Z→A.
+       */
+      direction: z.enum(["asc", "desc"]).optional().default("desc"),
     })
     .strict();
 

@@ -18,7 +18,10 @@ import { Row } from "~/components/layout";
 import { Badge } from "~/components/ui/badge";
 import { entityMutationOptionsFactory } from "~/entities/entity-contracts";
 import { entityDetailFor } from "~/entities/entity-detail.functions";
-import { createEntityDisplayColumns } from "~/entities/entity-display";
+import {
+  createEntityDisplayColumns,
+  entityListHiddenColumns,
+} from "~/entities/entity-display";
 import { entityListFor } from "~/entities/entity-list.functions";
 import { manifestFilterConfig } from "~/entities/filter-manifest";
 
@@ -49,17 +52,11 @@ const subtaskCountSuffix = (row: TaskOut): ReactNode =>
 
 const tasksRoute = getRouteApi("/_authenticated/tasks/");
 
-/**
- * `dueEndDate` and `sortOrder` are declared `list: true` (so column building
- * has somewhere to point them and the "Columns" menu can surface them), but
- * neither was ever visible in this table before this migration — keep it
- * that way. Module-level: this object sits in `useEntityList`'s merged-
- * visibility memo, so an inline literal would rebuild it every render.
- */
-const TASK_INITIAL_COLUMN_VISIBILITY = {
-  dueEndDate: false,
-  sortOrder: false,
-};
+// `dueEndDate`/`sortOrder` are declared `display.listHidden` on
+// `10-task.entity.ts` now — module-level so `useEntityList`'s merged-
+// visibility memo (keyed on referential identity) doesn't rebuild every render.
+const TASK_INITIAL_COLUMN_VISIBILITY = entityListHiddenColumns("task");
+
 interface TaskListProps {
   /** Actions to display in the table toolbar (e.g., the "New Task" button). */
   actions?: ReactNode;

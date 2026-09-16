@@ -1,9 +1,12 @@
 import { z } from "zod";
-import { auditDateFilterFields, plainDate } from "./base-entity";
+import { auditDateFilterFields } from "./base-entity";
 import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { ledgerPartyShortcode, ledgerTransferShortcode } from "./identifiers";
 import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
-import { generatedLedgerTransferFieldSchemas } from "./generated/entity-field-schemas.ledgerTransfer.gen";
+import {
+  generatedLedgerTransferFieldSchemas,
+  generatedLedgerTransferFilterFields,
+} from "./generated/entity-field-schemas.ledgerTransfer.gen";
 export {
   ledgerSourceClaimInput,
   ledgerSourceClaimNormalizedEvidence,
@@ -39,10 +42,9 @@ export type LedgerTransferUpdateInput = z.infer<
 
 export const ledgerTransferFilterFields = {
   ...auditDateFilterFields,
+  ...generatedLedgerTransferFilterFields,
   fromPartyId: oneOrMany(ledgerPartyShortcode).optional(),
   toPartyId: oneOrMany(ledgerPartyShortcode).optional(),
-  dateFrom: plainDate.optional(),
-  dateTo: plainDate.optional(),
 };
 export const ledgerTransferFiltersSchema = z.object(ledgerTransferFilterFields);
 export type LedgerTransferFilters = z.infer<typeof ledgerTransferFiltersSchema>;
