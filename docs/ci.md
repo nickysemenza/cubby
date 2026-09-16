@@ -364,6 +364,21 @@ a Drizzle transaction. Do not put a pure case back into PostgreSQL merely to
 increase database coverage, and do not replace PostgreSQL with a mock database
 interface.
 
+### Final join of the code-deletion pass (2026-09-16)
+
+Measured on the merged branch, host shared with an unrelated build (1-minute
+load 5–20 throughout), so wall clocks are pessimistic:
+
+| gate | result |
+|---|---|
+| `pnpm test:all` (sequential) | 3:13, 2:54, 2:37 — 0 failures, 0 flakes |
+| `pnpm test:e2e` alone (fresh `build:cf`) | 1:51 for 65 tests (was ~2:20 standalone) |
+| `pnpm test:postgres` | 77 files / 422 tests; median 27s vs 29s for the eight family bundles |
+| `@cubby/web` vitest duration | 24.2s |
+| `pnpm verify:local:full` (`--parallel=1`) | 6:49, all 11 targets across 14 projects |
+| `pnpm verify:local:full` (default parallelism, rejected) | 10:54 and red — unit tier 196s, timeouts |
+| `pnpm exec oxlint .` with the two new plugin rules | 1.9s |
+
 ## Operational checks
 
 Before changing CI, run:
